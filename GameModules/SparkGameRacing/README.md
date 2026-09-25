@@ -11,7 +11,11 @@ SparkGameRacing is a systems-first circuit-racing example. Loading the module cr
 - `C`: cycle camera mode
 - `R`: rebuild the roster and restart the race
 
-Vehicle input is integrated using the caller's frame time, so acceleration, braking, nitro, and drift do not depend on a fixed 60 Hz input-call rate. The template uses the engine's existing debug HUD and procedural track data instead of duplicating local art assets.
+Vehicle input is integrated using the caller's frame time, so acceleration, braking, nitro, and drift do not depend on a fixed 60 Hz input-call rate. The template uses the engine's existing debug HUD and procedural track data.
+
+## Circuit kit and music
+
+Whenever a track loads with a world, `RacingTrackSystem` dresses it with the Blender-authored Circuit Racing kit in `Assets/Models/Racing/Kit`: the start/finish gantry flanked by tyre stacks at the finish checkpoint, a checkpoint arch flanked by cones at every other checkpoint, a barrier segment on the Crossover Arena's barrier hazard, and warning cones beside the Sunset Circuit oil slick. The props are set dressing only; checkpoints stay trigger circles and no collider is attached. `RacingEngineSystems` registers the seven generated WAV music cues in `Assets/Audio/Racing/Music`. Source, provenance, and preview are in `Art/Blender/SparkGameRacing/`, and `asset-references.json` records every asset path the module source names.
 
 Checkpoint traversal must follow the authored order, and laps complete only at the checkpoint marked as the finish line. This supports both circuit and point-to-point layouts; standings are refreshed after each frame's track-distance synchronization before the HUD and minimap snapshot is published.
 

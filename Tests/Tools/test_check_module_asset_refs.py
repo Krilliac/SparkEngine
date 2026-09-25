@@ -24,7 +24,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "tools" / "check-module-asset-refs.py"
 ENFORCED = "SparkGameOpenWorld"
-REPORT_ONLY = "SparkGameRacing"
+REPORT_ONLY = "SparkGameMMOFPS"
 
 
 def _load_checker():
@@ -192,7 +192,7 @@ class CheckModuleAssetRefsTests(unittest.TestCase):
         self.repo.write_source(REPORT_ONLY, 'const char* t = "Assets/Audio/Music/race.ogg";\n')
         code, output = self.repo.run(REPORT_ONLY)
         self.assertEqual(code, 0, output)
-        self.assertIn("WARN: SparkGameRacing [report-only]", output)
+        self.assertIn(f"WARN: {REPORT_ONLY} [report-only]", output)
         self.assertIn("Assets/Audio/Music/race.ogg does not exist", output)
 
     def test_unknown_module_is_a_usage_error(self) -> None:

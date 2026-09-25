@@ -4,8 +4,17 @@
   "cmakeTarget": "SparkGameRacing",
   "sourceDirectory": "GameModules/SparkGameRacing/Source",
   "assets": {
-    "state": "none",
-    "reason": "No asset root exists for this module: the Assets/Audio/Music tracks its sources reference are not in the repository."
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/Racing",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/Racing",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
   },
   "tests": {
     "files": [

@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 1127,
+  "fileCount": 1164,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1226,6 +1226,55 @@
       "path": "Audio/RTS/Music/victory.wav",
       "sha256": "d302acf73dedbc09c84d1df21c9b3776e3db3b8653616bdf7a03c403fcd69606",
       "size": 149984,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Racing/Music/countdown.wav",
+      "sha256": "c785f237c41d9e0d0ef2026b0aa1af1d664cdd8eccee6a8a2cfe945653f97fe5",
+      "size": 121318,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Racing/Music/defeat.wav",
+      "sha256": "0bcf4ad192abb02a1302619cec790ce9e79ecec203daadd2b7bd61c9076d1de8",
+      "size": 149984,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Racing/Music/final_lap.wav",
+      "sha256": "d49a2cf098b887469422b5842474d77bc97446b9bfa6ac8c8d189d3ff02c9483",
+      "size": 513208,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Racing/Music/race_track_01.wav",
+      "sha256": "bee2006b451485f539174c33b72b411ceb1aba817ce992aeaada1eda02253187",
+      "size": 564524,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Racing/Music/race_track_02.wav",
+      "sha256": "d99d00b74b44fd367e0613adc325a60688850ac41b36595065beb6671b231131",
+      "size": 583988,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Racing/Music/racing_menu.wav",
+      "sha256": "dc086221aa1aa307da52a38f900256dcad2ed6212772a896dfa33cffcab1b502",
+      "size": 384916,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Racing/Music/victory.wav",
+      "sha256": "03d61e9f62aa1e826083c86215ea3b1ef3429dadfc7ea2c298e392f8ac2cc888",
+      "size": 137602,
       "license": "CC0-1.0",
       "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
     },
@@ -5155,6 +5204,216 @@
       "size": 8826,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/barrier_segment.mtl",
+      "sha256": "42448e4bc62d6e0681e80a167b4a97754ddc4e4ec515b4b1033a936460a9c59d",
+      "size": 810,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored barrier_segment [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/barrier_segment.obj",
+      "sha256": "868f573aee3336556ead87dcb2fe788ad687856fdbf4c7b7756c7f3b26859870",
+      "size": 42697,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored barrier_segment [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/barrier_segment_collision.mtl",
+      "sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/barrier_segment_collision.obj",
+      "sha256": "54809d75561d9bdeeb826a07369daa69a8dec14d993acee91deb84b58ccfc713",
+      "size": 1244,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/barrier_segment_lod1.mtl",
+      "sha256": "42448e4bc62d6e0681e80a167b4a97754ddc4e4ec515b4b1033a936460a9c59d",
+      "size": 810,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/barrier_segment_lod1.obj",
+      "sha256": "551c31f0d81dfed743820d1a75a9e7c92e58616e57c38089e82bf74d0a5f9287",
+      "size": 17304,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/checkpoint_arch.mtl",
+      "sha256": "42448e4bc62d6e0681e80a167b4a97754ddc4e4ec515b4b1033a936460a9c59d",
+      "size": 810,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored checkpoint_arch [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/checkpoint_arch.obj",
+      "sha256": "7c3f615af02a2811a288a22c79cd9a4be1e1c8238492f8c1535260112473b00c",
+      "size": 80943,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored checkpoint_arch [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/checkpoint_arch_collision.mtl",
+      "sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/checkpoint_arch_collision.obj",
+      "sha256": "1c52386cdb74393ca54aa2ce8d37cd1bdd82d6d3470705ae03f706e2daa98e8c",
+      "size": 15895,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/checkpoint_arch_lod1.mtl",
+      "sha256": "42448e4bc62d6e0681e80a167b4a97754ddc4e4ec515b4b1033a936460a9c59d",
+      "size": 810,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/checkpoint_arch_lod1.obj",
+      "sha256": "96511f113f76134e24c63f3f64d527604c4fc0b5edfa3588e094ca32f560cab8",
+      "size": 36642,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/start_gantry.mtl",
+      "sha256": "5a3739550090f281845f1bc6d1391321d7c61e33dfc085789a42332d3235f465",
+      "size": 1007,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored start_gantry [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/start_gantry.obj",
+      "sha256": "1fbb5fb5ba928ceb7ab0d4d520c218c4730ec0277780d37430c72bb8516693f4",
+      "size": 157867,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored start_gantry [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/start_gantry_collision.mtl",
+      "sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/start_gantry_collision.obj",
+      "sha256": "51e51f76a7a5b0dfd78a25684dba1b11ae7f3005b9e5fe825dbf2c3ada1f6905",
+      "size": 1238,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/start_gantry_lod1.mtl",
+      "sha256": "5a3739550090f281845f1bc6d1391321d7c61e33dfc085789a42332d3235f465",
+      "size": 1007,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/start_gantry_lod1.obj",
+      "sha256": "c926f639916a919b7d3af0eacc23033c56dacbf6e796c15e19650fcbcaf23070",
+      "size": 70592,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/traffic_cone.mtl",
+      "sha256": "84be3bc2f396476bac403ff21c82dab55f254a55860bd78d7a14a6de5b3fb8ee",
+      "size": 625,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored traffic_cone [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/traffic_cone.obj",
+      "sha256": "8d0c1f262e412d2839a8e4058d2959a73da95bcddfc96c692ed85c12ba193d2e",
+      "size": 20188,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored traffic_cone [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/traffic_cone_collision.mtl",
+      "sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/traffic_cone_collision.obj",
+      "sha256": "588ccc5824e418ed11e400d5d65d792b353e736ce7a808f78711986c9753dc0e",
+      "size": 5984,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/traffic_cone_lod1.mtl",
+      "sha256": "84be3bc2f396476bac403ff21c82dab55f254a55860bd78d7a14a6de5b3fb8ee",
+      "size": 625,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/traffic_cone_lod1.obj",
+      "sha256": "fc10d277e26841e40ae42bd85a477f40c34ec43ed9e1e3a51340caf8e6da464b",
+      "size": 10217,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/tyre_stack.mtl",
+      "sha256": "07268204d7d3b291cbf57e81988c1f69b5cdab470dc02306a88e42e356ef987d",
+      "size": 818,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored tyre_stack [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/tyre_stack.obj",
+      "sha256": "3298860c7a58b061a8777ce2511d8f2797e651d3c6b9e2ef4a8038e8f5256caf",
+      "size": 62430,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json: Blender-authored tyre_stack [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/tyre_stack_collision.mtl",
+      "sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/tyre_stack_collision.obj",
+      "sha256": "a482d8d4c8617a35fe839b1c78d319418035b7995f77a1a4e47b51214bb0a9ec",
+      "size": 8445,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/tyre_stack_lod1.mtl",
+      "sha256": "07268204d7d3b291cbf57e81988c1f69b5cdab470dc02306a88e42e356ef987d",
+      "size": 818,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
+    },
+    {
+      "path": "Models/Racing/Kit/tyre_stack_lod1.obj",
+      "sha256": "577f290c6077da32b11454e679a3f3310ea16a1c8b535d6528f987ad8673657e",
+      "size": 28630,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json [racing-blender-kit]"
     },
     {
       "path": "Models/Ramp.mtl",

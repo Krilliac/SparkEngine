@@ -157,9 +157,14 @@ namespace Racing
         TrackData CreatePointToPointTrack() const;
         TrackData CreateFigure8Track() const;
 
+        /// Dress the current track with the Blender circuit kit (Assets/Models/Racing/Kit) when a world exists
+        void PlaceTrackKit();
+        void RemoveTrackKit();
+
         Spark::IEngineContext* m_context{nullptr};
         std::vector<TrackData> m_tracks;
         TrackData m_currentTrack;
+        std::vector<uint32_t> m_kitEntities; ///< Trackside kit props (MeshRenderer entities) owned by this system
         bool m_initialized{false};
     };
 
