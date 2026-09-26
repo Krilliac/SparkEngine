@@ -353,6 +353,8 @@
         "Audio/MusicManager.h",
         "Engine/AI/AISystem.h",
         "Engine/AI/BehaviorTree.h",
+        "Engine/AI/NavMesh.h",
+        "Engine/AI/NavMeshTypes.h",
         "Engine/Cinematic/Sequencer.h",
         "Engine/Dialogue/DialogueSystem.h",
         "Engine/ECS/Components.h",
@@ -370,7 +372,7 @@
         "Utils/LogMacros.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 19,
+      "privateEngineHeaderCount": 21,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
       ]

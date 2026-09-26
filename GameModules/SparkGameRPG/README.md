@@ -53,6 +53,19 @@ quest chain (Shadow Wolves, Healing Herbs, The Dark Below) end to end through th
 session API with the real RPGGameplayBridge quest policy installed; run it with
 `ctest --test-dir build/linux-gcc-release -R RPGQuestSlice --output-on-failure`.
 
+## NPC navigation
+
+SparkGameRPGModule bakes one engine NavMesh per NPC area at load
+(`RPGNPCSystem::BuildAreaNavigation`: a ground quad at y = 0 over the area's XZ bounds, built by
+`Spark::AI::NavMeshBuilder`, which uses Recast when `ENABLE_RECAST` is on). When the world clock
+moves an NPC into a new schedule entry, the NPC switches behavior at once and walks to the entry's
+post at 3 m/s along a `NavMeshQuery::FindPath` route; a patrolling NPC walks to the waypoint it was
+heading for. An NPC whose post is off the NavMesh or unreachable stays where it is. Routes are not
+saved: after a load, the NPC plans a new route from its restored position. The module fails to load
+if an NPC's area cannot be baked. Patrol legs still walk in straight lines between waypoints.
+`ctest --test-dir build/linux-gcc-release -R RPGNPCNavigation --output-on-failure` runs the tests
+(Tests/TestMOD350RPGNPCNavigationReal.cpp).
+
 ## Save and load
 
 rpg_save and rpg_load go through RPGEngineSystems::SaveGame and LoadGame. The ECS

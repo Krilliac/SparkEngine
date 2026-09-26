@@ -149,6 +149,13 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Bake each NPC area's NavMesh so schedule changes walk NPCs to their posts instead of teleporting them
+    if (!m_npcSystem->BuildAreaNavigation(m_worldSetup->GetAreas()))
+    {
+        console.LogError("[RPG] Failed to build NPC area navigation");
+        return false;
+    }
+
     // Initialize engine system integrations (save, animation, AI, cinematic, etc.)
     m_engineSystems = std::make_unique<RPG::RPGEngineSystems>();
     if (!m_engineSystems->Initialize(context))

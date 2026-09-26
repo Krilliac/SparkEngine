@@ -603,6 +603,7 @@ add_executable(SparkTests
     TestMOD340PlatformerProgressReal.cpp
     TestMOD330ARPGDungeonReal.cpp
     TestMOD350RPGQuestSliceReal.cpp
+    TestMOD350RPGNPCNavigationReal.cpp
     # TERRAFRONT (SparkGameMMOFPS) — header-only wire protocol, standalone
     # rule math, and validation of the real Assets/MMOFPS/Data tables.
     # Module .cpp sources are NOT compiled into SparkTests by design.
@@ -2933,6 +2934,15 @@ if(TARGET imgui)
         LABELS "module;rpg;persistence;unit"
         RUN_SERIAL TRUE
         TIMEOUT 180)
+
+    # MOD-350: RPGNPCNavigation_* bake area NavMeshes through the engine NavMeshBuilder and require
+    # schedule changes to walk NPCs along NavMesh routes at walking speed (around blocked ground,
+    # resuming after a restore) and to leave them in place when no route exists, never teleporting.
+    add_test(NAME RPGNPCNavigation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RPGNPCNavigation PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=RPGNPCNavigation_;SPARK_TEST_EXPECT_COUNT=5"
+        LABELS "module;rpg;ai;unit"
+        TIMEOUT 120)
 
     # MOD-370: RTSSave_* save a scripted skirmish mid-match (codec and the real SaveSystem
     # through RTSEngineSystems::SaveMatch/LoadMatch), load it into rebuilt systems, and

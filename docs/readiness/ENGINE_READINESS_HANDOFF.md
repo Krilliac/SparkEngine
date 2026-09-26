@@ -3825,8 +3825,8 @@ Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestMOD350RPGQuestSliceReal.cpp`, `GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp`
    - RPGQuestSlice_* finish the quest chain in-process. RPGPersistence_* save mid-quest via the real SaveSystem, rebuild all RPG systems, restore quest, inventory, area, NPC disposition/patrol and world hour, and keep the quest reward across a second restart. RPGDEMO 2 (N-1) slots migrate to default NPC state; corrupt, truncated, v1 and future-version slots are rejected. No packaged run exists.
 2. **[unmet]** NPCs navigate/interact through runtime systems
-   - Evidence: `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp`
-   - NPCs have no NavMesh integration and no test covers NPC navigation through runtime systems.
+   - Evidence: `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp`, `Tests/TestMOD350RPGNPCNavigationReal.cpp`
+   - Schedule changes walk NPCs at 3 m/s along engine NavMesh routes (NavMeshBuilder/NavMeshQuery, one bake per NPC area at module load) instead of teleporting; RPGNPCNavigation_* cover the world bake, a detour around blocked ground, unreachable posts and resuming after a restore. Patrol legs still move in straight lines and no packaged run exists.
 3. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-RPG CI.
 
