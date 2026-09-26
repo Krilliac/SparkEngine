@@ -540,11 +540,40 @@ namespace SparkFPS
         Spark::Net::NetworkManager::GetInstance().SendToAll(message);
     }
 
-    void FPSMultiplayerSystem::ApplyClientInput(uint32_t clientId, const PlayerInput& input, float dt)
+    bool FPSMultiplayerSystem::ApplyClientInput(uint32_t clientId, const PlayerInput& rawInput, float dt)
     {
         auto it = m_playerStates.find(clientId);
         if (it == m_playerStates.end() || !it->second.isAlive)
-            return;
+            return false;
+
+        // Every input path (peer datagrams, the listen-server host, the test seam) reaches the
+        // authoritative state only through here, so hostile values are rejected here and not
+        // just in the wire decoder. A non-finite field would poison position, yaw and every
+        // projectile spawned from them, and then every snapshot that carries them.
+        if (!std::isfinite(rawInput.forward) || !std::isfinite(rawInput.strafe) || !std::isfinite(rawInput.yaw) ||
+            !std::isfinite(rawInput.pitch))
+        {
+            return false;
+        }
+
+        // Unreliable delivery can duplicate and reorder, and a hostile peer can replay: only a
+        // sequence newer than the last applied one moves the player. 0 is never assigned.
+        const auto lastIt = m_lastInputByPlayer.find(clientId);
+        if (rawInput.sequenceNumber == 0 ||
+            (lastIt != m_lastInputByPlayer.end() && rawInput.sequenceNumber <= lastIt->second.sequenceNumber))
+        {
+            return false;
+        }
+
+        // Movement axes are unit-bounded so an oversized axis cannot scale the speed. Pitch is
+        // a look angle and stops at straight up/down. Yaw is wrapped into [-pi, pi]: the value
+        // is echoed in every snapshot, and the wrap is the identity for the atan2 yaw an honest
+        // client sends, so it never causes a reconciliation correction.
+        PlayerInput input = rawInput;
+        input.forward = std::clamp(input.forward, -1.0f, 1.0f);
+        input.strafe = std::clamp(input.strafe, -1.0f, 1.0f);
+        input.pitch = std::clamp(input.pitch, -0.5f * kPi, 0.5f * kPi);
+        input.yaw = std::remainder(input.yaw, 2.0f * kPi);
 
         auto& state = it->second;
 
@@ -587,6 +616,7 @@ namespace SparkFPS
             projectile.active = true;
             m_projectiles[projectile.projectileId] = projectile;
         }
+        return true;
     }
 
     void FPSMultiplayerSystem::ValidateHit(uint32_t attackerId, uint32_t victimId, float damage)
@@ -789,7 +819,7 @@ namespace SparkFPS
     {
         if (!m_isServer)
             return;
-        ApplyClientInput(clientId, input, 1.0f / 60.0f);
+        ApplyClientInput(clientId, input, kInputStep);
     }
 
     void FPSMultiplayerSystem::OnProjectileFired(uint32_t clientId, const ProjectileData& proj)
@@ -932,30 +962,15 @@ namespace SparkFPS
         if (message.payload.size() != PlayerInput::SerializedSize)
             return;
 
-        PlayerInput input = PlayerInput::Deserialize(message.payload.data(), message.payload.size());
-        if (!std::isfinite(input.forward) || !std::isfinite(input.strafe) || !std::isfinite(input.yaw) ||
-            !std::isfinite(input.pitch))
-        {
-            return;
-        }
-
-        // Unreliable delivery can duplicate and reorder: only a newer sequence is applied.
-        const auto lastIt = m_lastInputByPlayer.find(clientId);
-        if (input.sequenceNumber == 0 ||
-            (lastIt != m_lastInputByPlayer.end() && input.sequenceNumber <= lastIt->second.sequenceNumber))
-        {
-            return;
-        }
-
         const auto budgetIt = m_inputBudget.find(clientId);
         if (budgetIt == m_inputBudget.end() || budgetIt->second + kInputBudgetEpsilon < kInputStep)
             return;
-        budgetIt->second = (std::max)(0.0f, budgetIt->second - kInputStep);
 
-        input.forward = std::clamp(input.forward, -1.0f, 1.0f);
-        input.strafe = std::clamp(input.strafe, -1.0f, 1.0f);
-        input.pitch = std::clamp(input.pitch, -0.5f * kPi, 0.5f * kPi);
-        OnPlayerInputReceived(clientId, input);
+        // ApplyClientInput rejects non-finite, replayed and zero-sequence input; only an applied
+        // input spends one step of the player's budget.
+        const PlayerInput input = PlayerInput::Deserialize(message.payload.data(), message.payload.size());
+        if (ApplyClientInput(clientId, input, kInputStep))
+            budgetIt->second = (std::max)(0.0f, budgetIt->second - kInputStep);
     }
 
     void FPSMultiplayerSystem::HandleSnapshotMessage(const Spark::Net::NetworkMessage& message)

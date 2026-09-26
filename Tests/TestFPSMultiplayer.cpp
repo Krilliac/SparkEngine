@@ -536,6 +536,101 @@ TEST(FPSMultiplayerProduction_ServerAppliesInputAndAcknowledgesSequence)
     EXPECT_EQ(state->actionFlags, static_cast<uint32_t>(ActionFire));
 }
 
+TEST(FPSMultiplayerProduction_ApplyClientInputRejectsHostileInput)
+{
+    // Hostile values are rejected at ApplyClientInput itself, so they cannot reach the
+    // authoritative state through any input path: the direct handler seam here and the
+    // listen-server host below, not only the wire decoder.
+    FPSSessionGuard guard;
+    auto& system = FPSMultiplayerSystem::GetInstance();
+    ASSERT_TRUE(StartServer(system));
+    JoinAt(system, 7, 0.0f, 1.0f, 0.0f, 0.0f);
+    const NetworkPlayerState* state = system.GetPlayerState(7);
+    ASSERT_TRUE(state != nullptr);
+
+    PlayerInput step;
+    step.forward = 1.0f;
+    step.sequenceNumber = 1;
+    Access::DeliverInput(system, 7, step);
+    const float settledX = state->posX;
+    ASSERT_TRUE(std::abs(settledX - 8.0f * kFrame) < 1e-5f);
+
+    // Every non-finite field is rejected whole, fire included: nothing moves, turns or
+    // spawns, and the sequence is not consumed.
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    const std::array<std::array<float, 4>, 5> poisoned{{
+        {nan, 0.0f, 0.0f, 0.0f},
+        {1.0f, -inf, 0.0f, 0.0f},
+        {1.0f, 0.0f, nan, 0.0f},
+        {1.0f, 0.0f, inf, 0.0f},
+        {1.0f, 0.0f, 0.0f, nan},
+    }};
+    for (const auto& fields : poisoned)
+    {
+        PlayerInput hostile;
+        hostile.forward = fields[0];
+        hostile.strafe = fields[1];
+        hostile.yaw = fields[2];
+        hostile.pitch = fields[3];
+        hostile.fire = true;
+        hostile.sequenceNumber = 2;
+        Access::DeliverInput(system, 7, hostile);
+    }
+    EXPECT_NEAR(state->posX, settledX, 1e-6f);
+    EXPECT_NEAR(state->posZ, 0.0f, 1e-6f);
+    EXPECT_TRUE(std::isfinite(state->yaw) && std::isfinite(state->pitch));
+    EXPECT_EQ(Access::ActiveProjectiles(system), static_cast<size_t>(0));
+    EXPECT_EQ(Access::LastAppliedSequence(system, 7), static_cast<uint32_t>(1));
+
+    // A replayed sequence and a sequence of 0 change nothing.
+    PlayerInput replay = step;
+    Access::DeliverInput(system, 7, replay);
+    PlayerInput zeroSequence = step;
+    zeroSequence.sequenceNumber = 0;
+    Access::DeliverInput(system, 7, zeroSequence);
+    EXPECT_NEAR(state->posX, settledX, 1e-6f);
+    EXPECT_EQ(Access::LastAppliedSequence(system, 7), static_cast<uint32_t>(1));
+
+    // Oversized axes are clamped to one full-speed step, and an out-of-range look is
+    // bounded: pitch stops at straight up, yaw wraps into [-pi, pi] as the same heading.
+    PlayerInput boosted;
+    boosted.forward = 1000.0f;
+    boosted.strafe = -1000.0f;
+    boosted.yaw = 1.0f + 2.0f * 3.14159265f * 1000.0f;
+    boosted.pitch = 50.0f;
+    boosted.sequenceNumber = 2;
+    Access::DeliverInput(system, 7, boosted);
+    EXPECT_NEAR(state->posX, settledX + 8.0f * kFrame, 1e-5f);
+    EXPECT_NEAR(state->posZ, 8.0f * kFrame, 1e-5f); // strafe -1 at yaw 0 moves along +Z
+    EXPECT_NEAR(state->pitch, 0.5f * 3.14159265f, 1e-5f);
+    EXPECT_TRUE(std::abs(state->yaw) <= 3.14159265f + 1e-6f);
+    EXPECT_NEAR(std::cos(state->yaw), std::cos(1.0f), 2e-3f);
+    EXPECT_NEAR(std::sin(state->yaw), std::sin(1.0f), 2e-3f);
+
+    // An honest atan2 yaw at the boundary is applied exactly: the wrap never perturbs it.
+    PlayerInput boundary;
+    boundary.yaw = -3.14159265f;
+    boundary.sequenceNumber = 3;
+    Access::DeliverInput(system, 7, boundary);
+    EXPECT_EQ(state->yaw, -3.14159265f);
+
+    // The listen-server host's own input goes through the same gate.
+    const NetworkPlayerState* host = system.GetPlayerState(kHostId);
+    ASSERT_TRUE(host != nullptr);
+    const float hostX = host->posX;
+    const float hostZ = host->posZ;
+    PlayerInput hostPoisoned;
+    hostPoisoned.forward = 1.0f;
+    hostPoisoned.yaw = nan;
+    hostPoisoned.fire = true;
+    system.SendInput(hostPoisoned);
+    EXPECT_NEAR(host->posX, hostX, 1e-6f);
+    EXPECT_NEAR(host->posZ, hostZ, 1e-6f);
+    EXPECT_TRUE(std::isfinite(host->yaw));
+    EXPECT_EQ(Access::ActiveProjectiles(system), static_cast<size_t>(0));
+}
+
 TEST(FPSMultiplayerProduction_ProjectileHitIsValidatedAndDamagesVictim)
 {
     FPSSessionGuard guard;

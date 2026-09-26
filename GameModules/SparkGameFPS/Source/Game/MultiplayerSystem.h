@@ -388,9 +388,9 @@ namespace SparkFPS
         /// Register this system's observers with NetworkManager. NetworkManager::Shutdown clears the
         /// message handlers; StopServer and Disconnect clear the timeout handler, which it keeps.
         void RegisterNetworkHandlers();
-        /// Server: decode one client's PlayerInput. Malformed, non-finite, replayed and
-        /// over-rate inputs are dropped; movement axes are clamped to [-1, 1]. Fire spawns at
-        /// most one projectile per server-owned fire interval.
+        /// Server: decode one client's PlayerInput. Malformed and over-rate inputs are dropped
+        /// here; ApplyClientInput rejects or sanitizes the rest, and only an applied input
+        /// spends the sender's input budget.
         void HandleInputMessage(const Spark::Net::NetworkMessage& message);
         /// Client: decode one snapshot batch. Malformed or stale batches are dropped whole;
         /// remote players absent from an accepted batch have left the session.
@@ -404,7 +404,12 @@ namespace SparkFPS
         /// current server time so ValidateHit has a server-owned world state to rewind.
         void RecordLagCompensationHistory();
         void SendStateSnapshot();
-        void ApplyClientInput(uint32_t clientId, const PlayerInput& input, float dt);
+        /// Server: the single entry point from any input to authoritative player state. Rejects
+        /// input for an absent or dead player, any non-finite field, and a sequence that is 0 or
+        /// not newer than the last applied one; clamps movement axes to [-1, 1] and pitch to
+        /// [-pi/2, pi/2] and wraps yaw into [-pi, pi]. Fire spawns at most one projectile per
+        /// server-owned fire interval. @return true when the input was applied.
+        bool ApplyClientInput(uint32_t clientId, const PlayerInput& rawInput, float dt);
         void ValidateHit(uint32_t attackerId, uint32_t victimId, float damage);
         void UpdateProjectiles(float dt);
         SpawnPoint GetRandomSpawnPoint() const;

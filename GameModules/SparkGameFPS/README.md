@@ -75,8 +75,9 @@ process: server input application, hit validation (a lag-compensated line-of-fir
 living attacker aiming at the victim, and every hit deals at most the weapon's server-owned damage), death, the respawn
 timer, scoreboard ordering, and client reconciliation after a real handshake. The system registers its handlers with
 `NetworkManager` on every host/connect: admission and disconnect/timeout spawn and remove players, clients send
-`FPSMessageType::PlayerInput` (the server drops malformed, non-finite, replayed and over-rate inputs, clamps the
-axes, and spawns at most one projectile per server-owned 0.1 s fire interval however often fire is held), and the server broadcasts one `FPSMessageType::StateSnapshot` batch (states plus scores) at 20 Hz that clients
+`FPSMessageType::PlayerInput` (the server drops malformed and over-rate inputs; `ApplyClientInput`, the one path from
+any input, including the listen-server host's, to authoritative state, rejects non-finite fields and replayed or zero
+sequences, clamps the axes and pitch, wraps yaw into [-pi, pi], and spawns at most one projectile per server-owned 0.1 s fire interval however often fire is held), and the server broadcasts one `FPSMessageType::StateSnapshot` batch (states plus scores) at 20 Hz that clients
 accept only when well-formed and newer. `FPSMultiplayerProduction_NetworkPath*` exchange real datagrams with a raw
 loopback peer on each side. `FPSLAN_ThreeProcessLoopbackConvergence` (CTest `FPSLANTwoClientConvergence`) runs one
 server and two independent client processes (`SparkFPSLANLoopbackPeer`, each with its own `NetworkManager`) over
