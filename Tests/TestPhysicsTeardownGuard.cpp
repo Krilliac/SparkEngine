@@ -20,6 +20,7 @@
 
 #include <cmath>
 #include <memory>
+#include <vector>
 
 TEST(PhysicsTeardown_RemoveBodyAfterShutdown_IsSafeNoOp)
 {
@@ -272,4 +273,67 @@ TEST(PhysicsCharacterController_RealJoltWorldExercisesRuntimeSurface)
     (void)hr;
 #endif
     physics->Shutdown();
+}
+
+TEST(PhysicsTrigger_RemovedBodyLeavesNoStaleOverlap)
+{
+#ifdef SPARK_TEST_HAS_PHYSICS
+    // A body removed while it overlaps a sensor must drop out of the trigger bookkeeping: no exit callback may
+    // hand out its (possibly freed) wrapper, and a new body entering the sensor must still report an enter.
+    auto physics = std::make_unique<PhysicsSystem>();
+    ASSERT_TRUE(SUCCEEDED(physics->Initialize()));
+
+    PhysicsBodyDesc sensorDesc;
+    sensorDesc.name = "trigger_guard_sensor";
+    sensorDesc.type = PhysicsBodyType::Static;
+    sensorDesc.mass = 0.0f;
+    sensorDesc.isTrigger = true;
+    sensorDesc.shape.type = CollisionShapeType::Box;
+    sensorDesc.shape.dimensions = {6.0f, 6.0f, 6.0f};
+    std::shared_ptr<PhysicsBody> sensor = physics->CreateBody(sensorDesc);
+    ASSERT_TRUE(sensor != nullptr);
+
+    auto makeVisitor = [&](const char* name)
+    {
+        PhysicsBodyDesc desc;
+        desc.name = name;
+        desc.shape.type = CollisionShapeType::Box;
+        desc.shape.dimensions = {1.0f, 1.0f, 1.0f};
+        desc.gravityFactor = 0.0f; // stays inside the sensor
+        return physics->CreateBody(desc);
+    };
+
+    int enters = 0;
+    std::vector<const PhysicsBody*> exited;
+    physics->SetTriggerCallback(
+        [&](PhysicsBody* first, PhysicsBody* second, bool entered)
+        {
+            if (entered)
+                ++enters;
+            else
+                exited.push_back(first == sensor.get() ? second : first); // pointer value only, never dereferenced
+        });
+
+    std::shared_ptr<PhysicsBody> visitor = makeVisitor("trigger_guard_visitor");
+    ASSERT_TRUE(visitor != nullptr);
+    physics->StepFixed(2);
+    EXPECT_EQ(enters, 1);
+
+    const PhysicsBody* removed = visitor.get();
+    physics->RemoveBody(visitor);
+    visitor.reset();
+    physics->StepFixed(2);
+    for (const PhysicsBody* body : exited)
+        EXPECT_TRUE(body != removed);
+
+    std::shared_ptr<PhysicsBody> next = makeVisitor("trigger_guard_next");
+    ASSERT_TRUE(next != nullptr);
+    physics->StepFixed(2);
+    EXPECT_EQ(enters, 2);
+
+    physics->SetTriggerCallback(nullptr);
+    physics->RemoveBody(next);
+    physics->RemoveBody(sensor);
+    physics->Shutdown();
+#endif
 }

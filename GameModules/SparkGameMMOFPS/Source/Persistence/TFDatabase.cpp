@@ -78,6 +78,10 @@ namespace Terrafront
             return true;
         }
 
+        // Bound on waiting for another authority's transaction. Transactions
+        // are a single small file rewrite, so a longer wait means a stuck peer.
+        constexpr std::chrono::milliseconds kLockTimeout{2000};
+
         int64_t NowMs()
         {
             using namespace std::chrono;
@@ -119,30 +123,26 @@ namespace Terrafront
             }
         }
 
+        // Transaction-scoped: held only while the committed file is read.
+        SavePaths::ExclusiveFileLock lock;
         std::error_code lockEc;
-        if (!m_fileLock.TryLock(m_path, lockEc))
+        if (!lock.Lock(m_path, kLockTimeout, lockEc))
         {
             m_status = TFDatabaseStatus::Locked;
             SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "[TF] db open refused for %s: another authority owns the persistence lock (%s)",
-                            SavePaths::Utf8ForLog(m_path).c_str(), lockEc.message().c_str());
+                            "[TF] db open refused for %s: persistence lock not acquired within %lld ms (%s)",
+                            SavePaths::Utf8ForLog(m_path).c_str(), static_cast<long long>(kLockTimeout.count()),
+                            lockEc.message().c_str());
             return false;
         }
-
-        m_accounts.clear();
-        m_characters.clear();
-        m_nextAccountId = 1;
-        m_nextCharId = 1;
 
         std::error_code existsEc;
         const bool dbFileExists = fs::exists(m_path, existsEc);
         if (existsEc)
         {
-            m_status = TFDatabaseStatus::Unreadable;
-            m_recoveryLatched = true;
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] db stat failed for %s: %s; retries latched off",
                             SavePaths::Utf8ForLog(m_path).c_str(), existsEc.message().c_str());
-            m_fileLock.Unlock();
+            FailClosed(LoadResult::Unreadable);
             return false;
         }
         if (!dbFileExists)
@@ -156,58 +156,32 @@ namespace Terrafront
                 SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                 "[TF] db primary %s is missing while recovery backup %s exists; recovery required",
                                 SavePaths::Utf8ForLog(m_path).c_str(), SavePaths::Utf8ForLog(recoveryBackup).c_str());
-                m_fileLock.Unlock();
                 return false;
             }
             if (recoveryEc)
             {
                 m_status = TFDatabaseStatus::Unreadable;
                 m_recoveryLatched = true;
-                m_fileLock.Unlock();
                 return false;
             }
         }
+
+        // dbFileExists == false: no prior db -> fresh, empty snapshot.
+        Snapshot loaded;
         if (dbFileExists)
         {
-            const LoadResult load = LoadFromDisk();
+            const LoadResult load = LoadFromDisk(loaded);
             if (load != LoadResult::Loaded)
             {
-                m_recoveryLatched = true;
-                if (load == LoadResult::UnsupportedVersion)
-                {
-                    // Not corrupt: a newer build owns this file. Leave it
-                    // byte-for-byte intact and refuse to serve from it.
-                    m_status = TFDatabaseStatus::UnsupportedVersion;
-                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                                    "[TF] db %s was written by a newer schema (this build reads <= v%u); "
-                                    "refusing to open so a rollback cannot rewrite it",
-                                    SavePaths::Utf8ForLog(m_path).c_str(), kSchemaVersion);
-                }
-                else if (load == LoadResult::Corrupt)
-                {
-                    m_status = TFDatabaseStatus::Corrupt;
-                    std::filesystem::path backupPath = m_path;
-                    backupPath += ".corrupt-" + std::to_string(NowMs()) + ".bak";
-                    std::error_code backupEc;
-                    fs::copy_file(m_path, backupPath, fs::copy_options::none, backupEc);
-                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                                    "[TF] corrupt db %s retained; recovery backup %s created=%d; retries latched off",
-                                    SavePaths::Utf8ForLog(m_path).c_str(), SavePaths::Utf8ForLog(backupPath).c_str(),
-                                    backupEc ? 0 : 1);
-                }
-                else
-                {
-                    m_status = TFDatabaseStatus::Unreadable;
-                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                                    "[TF] unreadable db %s left in place; retries latched off",
-                                    SavePaths::Utf8ForLog(m_path).c_str());
-                }
-                m_fileLock.Unlock();
+                FailClosed(load);
                 return false;
             }
         }
-        // dbFileExists == false: no prior db, LoadFromDisk() skipped -> fresh db.
 
+        m_snapshot = std::move(loaded);
+        m_baseRevisions.clear();
+        for (const TFCharacterRecord& character : m_snapshot.characters)
+            m_baseRevisions[character.id] = character.revision;
         m_open = true;
         m_status = dbFileExists ? TFDatabaseStatus::ReadyExisting : TFDatabaseStatus::ReadyNew;
         return true;
@@ -218,21 +192,173 @@ namespace Terrafront
         if (!m_open)
             return true;
 
-        // Every mutation is committed atomically before it reports success and
-        // is rolled back in memory on failure. Rewriting here creates a second,
+        // Every mutation is committed atomically before it reports success, and
+        // no lock outlives a call. Rewriting here would only add a second,
         // unnecessary failure point after the module's persistence checkpoint.
         m_open = false;
         m_status = TFDatabaseStatus::Closed;
-        m_fileLock.Unlock();
+        m_snapshot = Snapshot{};
+        m_baseRevisions.clear();
         return true;
     }
 
-    TFDatabase::LoadResult TFDatabase::LoadFromDisk()
+    void TFDatabase::FailClosed(LoadResult load)
+    {
+        namespace fs = std::filesystem;
+        m_open = false;
+        m_recoveryLatched = true;
+        if (load == LoadResult::UnsupportedVersion)
+        {
+            // Not corrupt: a newer build owns this file. Leave it byte-for-byte
+            // intact and refuse to serve from it.
+            m_status = TFDatabaseStatus::UnsupportedVersion;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] db %s was written by a newer schema (this build reads <= v%u); "
+                            "refusing to serve it so a rollback cannot rewrite it",
+                            SavePaths::Utf8ForLog(m_path).c_str(), kSchemaVersion);
+        }
+        else if (load == LoadResult::Corrupt)
+        {
+            m_status = TFDatabaseStatus::Corrupt;
+            std::filesystem::path backupPath = m_path;
+            backupPath += ".corrupt-" + std::to_string(NowMs()) + ".bak";
+            std::error_code backupEc;
+            fs::copy_file(m_path, backupPath, fs::copy_options::none, backupEc);
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] corrupt db %s retained; recovery backup %s created=%d; retries latched off",
+                            SavePaths::Utf8ForLog(m_path).c_str(), SavePaths::Utf8ForLog(backupPath).c_str(),
+                            backupEc ? 0 : 1);
+        }
+        else
+        {
+            m_status = TFDatabaseStatus::Unreadable;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] unreadable db %s left in place; retries latched off",
+                            SavePaths::Utf8ForLog(m_path).c_str());
+        }
+    }
+
+    bool TFDatabase::Refresh(Snapshot& fresh)
+    {
+        // Caller holds the persistence lock, so the file cannot change under us.
+        std::error_code existsEc;
+        const bool exists = std::filesystem::exists(m_path, existsEc);
+        if (existsEc)
+        {
+            FailClosed(LoadResult::Unreadable);
+            return false;
+        }
+        if (!exists)
+        {
+            // Nothing was ever committed: still a fresh database. Anything else
+            // means the committed primary vanished under a running authority;
+            // recreating it would silently drop every row.
+            if (m_snapshot.revision == 0 && m_snapshot.accounts.empty() && m_snapshot.characters.empty())
+            {
+                fresh = Snapshot{};
+                return true;
+            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] committed db %s disappeared; refusing to recreate it",
+                            SavePaths::Utf8ForLog(m_path).c_str());
+            FailClosed(LoadResult::Unreadable);
+            return false;
+        }
+
+        const LoadResult load = LoadFromDisk(fresh);
+        if (load != LoadResult::Loaded)
+        {
+            FailClosed(load);
+            return false;
+        }
+        if (fresh.revision < m_snapshot.revision)
+        {
+            // The shared file was replaced by an older copy (e.g. a restore
+            // under a running authority). Writing on top would fork history.
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] db %s revision went backwards (%llu < %llu); refusing to serve it",
+                            SavePaths::Utf8ForLog(m_path).c_str(), static_cast<unsigned long long>(fresh.revision),
+                            static_cast<unsigned long long>(m_snapshot.revision));
+            FailClosed(LoadResult::Unreadable);
+            return false;
+        }
+        return true;
+    }
+
+    bool TFDatabase::RefreshSnapshot()
+    {
+        if (!m_open)
+            return false;
+        SavePaths::ExclusiveFileLock lock;
+        std::error_code lockEc;
+        if (!lock.Lock(m_path, kLockTimeout, lockEc))
+        {
+            m_status = TFDatabaseStatus::Locked;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] db read of %s refused: lock not acquired (%s)",
+                            SavePaths::Utf8ForLog(m_path).c_str(), lockEc.message().c_str());
+            return false;
+        }
+        Snapshot fresh;
+        if (!Refresh(fresh))
+            return false;
+        m_snapshot = std::move(fresh);
+        return true;
+    }
+
+    bool TFDatabase::Transact(const char* operation, const Mutation& mutation)
+    {
+        if (!m_open)
+            return false;
+        SavePaths::ExclusiveFileLock lock;
+        std::error_code lockEc;
+        if (!lock.Lock(m_path, kLockTimeout, lockEc))
+        {
+            m_status = TFDatabaseStatus::Locked;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] %s on %s refused: lock not acquired (%s)", operation,
+                            SavePaths::Utf8ForLog(m_path).c_str(), lockEc.message().c_str());
+            return false;
+        }
+
+        Snapshot fresh;
+        if (!Refresh(fresh))
+            return false;
+        if (fresh.revision + 1 >= kExhaustedJsonId)
+        {
+            m_status = TFDatabaseStatus::WriteFailed;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] %s refused: db revision range is exhausted", operation);
+            m_snapshot = std::move(fresh);
+            return false;
+        }
+
+        const uint64_t newRevision = fresh.revision + 1;
+        Snapshot next = fresh;
+        if (!mutation(next, newRevision))
+        {
+            m_snapshot = std::move(fresh);
+            return false;
+        }
+        next.revision = newRevision;
+        if (!SaveToDisk(next))
+        {
+            m_snapshot = std::move(fresh);
+            m_status = TFDatabaseStatus::WriteFailed;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] %s failed to persist to %s; nothing was committed",
+                            operation, SavePaths::Utf8ForLog(m_path).c_str());
+            return false;
+        }
+        m_snapshot = std::move(next);
+        m_status = TFDatabaseStatus::ReadyExisting;
+        return true;
+    }
+
+    TFDatabase::LoadResult TFDatabase::LoadFromDisk(Snapshot& out) const
     {
         std::string text;
         if (!ReadAllText(m_path, text))
             return LoadResult::Unreadable;
+        return ParseSnapshot(text, out);
+    }
 
+    TFDatabase::LoadResult TFDatabase::ParseSnapshot(const std::string& text, Snapshot& out) const
+    {
         std::string lexicalError;
         if (!JsonStrict::ValidateLexemes(text, {}, lexicalError))
         {
@@ -267,6 +393,12 @@ namespace Terrafront
             if (schemaVersion > kSchemaVersion)
                 return LoadResult::UnsupportedVersion;
         }
+
+        // TF-120: absent on v0/v1 files, which load as revision 0.
+        uint64_t fileRevision = 0;
+        if (root.HasKey("revision") &&
+            (!ReadUnsigned(root["revision"], fileRevision) || fileRevision >= kExhaustedJsonId))
+            return LoadResult::Corrupt;
 
         if (!root["accounts"].IsArray() || !root["characters"].IsArray())
             return LoadResult::Corrupt;
@@ -323,6 +455,9 @@ namespace Terrafront
                 !ReadInt64(row["createdAtMs"], createdAt) || !ReadInt64(row["lastPlayedMs"], lastPlayed) ||
                 !characterIds.insert(id).second || !characterNames.insert(row["name"].AsString()).second)
                 return LoadResult::Corrupt;
+            uint64_t rowRevision = 0;
+            if (row.HasKey("revision") && (!ReadUnsigned(row["revision"], rowRevision) || rowRevision > fileRevision))
+                return LoadResult::Corrupt;
 
             if (row.HasKey("unlocks"))
             {
@@ -373,8 +508,10 @@ namespace Terrafront
             nextCharId = maxCharacterId + 1;
         if (nextAccountId <= maxAccountId || nextCharId <= maxCharacterId)
             return LoadResult::Corrupt;
-        m_nextAccountId = nextAccountId;
-        m_nextCharId = nextCharId;
+        out = Snapshot{};
+        out.revision = fileRevision;
+        out.nextAccountId = nextAccountId;
+        out.nextCharId = nextCharId;
 
         if (root.HasKey("accounts") && root["accounts"].IsArray())
         {
@@ -389,7 +526,7 @@ namespace Terrafront
                 rec.passwordHash = row["passwordHash"].AsString();
                 rec.createdAtMs = static_cast<int64_t>(row["createdAtMs"].AsNumber(0.0));
                 rec.lastLoginMs = static_cast<int64_t>(row["lastLoginMs"].AsNumber(0.0));
-                m_accounts.push_back(std::move(rec));
+                out.accounts.push_back(std::move(rec));
             }
         }
 
@@ -409,6 +546,7 @@ namespace Terrafront
                 rec.flux = static_cast<uint32_t>(row["flux"].AsNumber(0.0));
                 rec.createdAtMs = static_cast<int64_t>(row["createdAtMs"].AsNumber(0.0));
                 rec.lastPlayedMs = static_cast<int64_t>(row["lastPlayedMs"].AsNumber(0.0));
+                rec.revision = static_cast<uint64_t>(row["revision"].AsNumber(0.0));
 
                 // W6 progression expansion (additive keys; tolerant of old files)
                 if (row.HasKey("unlocks") && row["unlocks"].IsArray())
@@ -453,24 +591,25 @@ namespace Terrafront
                     }
                 }
 
-                m_characters.push_back(std::move(rec));
+                out.characters.push_back(std::move(rec));
             }
         }
 
         return LoadResult::Loaded;
     }
 
-    bool TFDatabase::SaveToDisk() const
+    bool TFDatabase::SaveToDisk(const Snapshot& snapshot) const
     {
         namespace fs = std::filesystem;
 
         Spark::Json::Value root = Spark::Json::Value::MakeObject();
         root["schemaVersion"] = Spark::Json::Value(static_cast<double>(kSchemaVersion));
-        root["nextAccountId"] = Spark::Json::Value(static_cast<double>(m_nextAccountId));
-        root["nextCharId"] = Spark::Json::Value(static_cast<double>(m_nextCharId));
+        root["revision"] = Spark::Json::Value(static_cast<double>(snapshot.revision));
+        root["nextAccountId"] = Spark::Json::Value(static_cast<double>(snapshot.nextAccountId));
+        root["nextCharId"] = Spark::Json::Value(static_cast<double>(snapshot.nextCharId));
 
         Spark::Json::Value accounts = Spark::Json::Value::MakeArray();
-        for (const auto& a : m_accounts)
+        for (const auto& a : snapshot.accounts)
         {
             Spark::Json::Value row = Spark::Json::Value::MakeObject();
             row["id"] = Spark::Json::Value(static_cast<double>(a.id));
@@ -484,7 +623,7 @@ namespace Terrafront
         root["accounts"] = std::move(accounts);
 
         Spark::Json::Value characters = Spark::Json::Value::MakeArray();
-        for (const auto& c : m_characters)
+        for (const auto& c : snapshot.characters)
         {
             Spark::Json::Value row = Spark::Json::Value::MakeObject();
             row["id"] = Spark::Json::Value(static_cast<double>(c.id));
@@ -496,6 +635,7 @@ namespace Terrafront
             row["flux"] = Spark::Json::Value(static_cast<double>(c.flux));
             row["createdAtMs"] = Spark::Json::Value(static_cast<double>(c.createdAtMs));
             row["lastPlayedMs"] = Spark::Json::Value(static_cast<double>(c.lastPlayedMs));
+            row["revision"] = Spark::Json::Value(static_cast<double>(c.revision));
 
             // W6 progression expansion (additive keys)
             Spark::Json::Value unlocks = Spark::Json::Value::MakeArray();
@@ -539,18 +679,7 @@ namespace Terrafront
             }
         }
 
-        std::filesystem::path tmpFile = m_path;
-        tmpFile += ".tmp";
-        {
-            std::ofstream out(tmpFile, std::ios::binary | std::ios::trunc);
-            if (!out.is_open())
-                return false;
-            out << Spark::Json::StringifyPretty(root);
-            if (!out.good())
-                return false;
-        }
-
-        return SavePaths::AtomicReplace(tmpFile, m_path, ec);
+        return SavePaths::WriteDurableReplace(m_path, Spark::Json::StringifyPretty(root), ec);
     }
 
     bool TFDatabase::CreateAccount(const std::string& username, const std::string& salt, const std::string& hash,
@@ -558,47 +687,47 @@ namespace Terrafront
     {
         if (!m_open || username.empty() || salt.empty() || hash.empty())
             return false;
-        TFAccountRecord existing;
-        if (FindAccountByUsername(username, existing))
-            return false; // username taken
-        if (m_nextAccountId >= kExhaustedJsonId)
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "[TF] CreateAccount refused for '%s': the exactly representable JSON id range is exhausted",
-                            username.c_str());
-            return false;
-        }
 
-        TFAccountRecord rec;
-        rec.id = m_nextAccountId++;
-        rec.username = username;
-        rec.salt = salt;
-        rec.passwordHash = hash;
-        rec.createdAtMs = NowMs();
-        rec.lastLoginMs = 0;
-        m_accounts.push_back(rec);
-
-        if (!SaveToDisk())
-        {
-            m_accounts.pop_back();
-            m_nextAccountId = rec.id;
-            m_status = TFDatabaseStatus::WriteFailed;
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] CreateAccount failed to persist account '%s' to %s",
-                            rec.username.c_str(), SavePaths::Utf8ForLog(m_path).c_str());
+        TFAccountRecord created;
+        const bool committed = Transact(
+            "CreateAccount",
+            [&](Snapshot& fresh, uint64_t)
+            {
+                // Uniqueness and id allocation run against every authority's
+                // committed rows, not this instance's last view.
+                if (std::any_of(fresh.accounts.begin(), fresh.accounts.end(),
+                                [&](const TFAccountRecord& a) { return a.username == username; }))
+                    return false; // username taken
+                if (fresh.nextAccountId >= kExhaustedJsonId)
+                {
+                    SPARK_LOG_ERROR(
+                        Spark::LogCategory::Game,
+                        "[TF] CreateAccount refused for '%s': the exactly representable JSON id range is exhausted",
+                        username.c_str());
+                    return false;
+                }
+                created.id = fresh.nextAccountId++;
+                created.username = username;
+                created.salt = salt;
+                created.passwordHash = hash;
+                created.createdAtMs = NowMs();
+                created.lastLoginMs = 0;
+                fresh.accounts.push_back(created);
+                return true;
+            });
+        if (!committed)
             return false;
-        }
-        m_status = TFDatabaseStatus::ReadyExisting;
-        out = rec;
+        out = created;
         return true;
     }
 
     bool TFDatabase::FindAccountByUsername(const std::string& username, TFAccountRecord& out)
     {
-        if (!m_open)
+        if (!RefreshSnapshot())
             return false;
-        auto it = std::find_if(m_accounts.begin(), m_accounts.end(),
+        auto it = std::find_if(m_snapshot.accounts.begin(), m_snapshot.accounts.end(),
                                [&](const TFAccountRecord& a) { return a.username == username; });
-        if (it == m_accounts.end())
+        if (it == m_snapshot.accounts.end())
             return false;
         out = *it;
         return true;
@@ -606,76 +735,71 @@ namespace Terrafront
 
     bool TFDatabase::TouchLogin(uint64_t accountId, int64_t nowMs)
     {
-        if (!m_open)
-            return false;
-        auto it = std::find_if(m_accounts.begin(), m_accounts.end(),
-                               [&](const TFAccountRecord& a) { return a.id == accountId; });
-        if (it == m_accounts.end())
-            return false;
-        const int64_t previous = it->lastLoginMs;
-        it->lastLoginMs = nowMs;
-        if (!SaveToDisk())
-        {
-            it->lastLoginMs = previous;
-            m_status = TFDatabaseStatus::WriteFailed;
-            return false;
-        }
-        m_status = TFDatabaseStatus::ReadyExisting;
-        return true;
+        return Transact("TouchLogin",
+                        [&](Snapshot& fresh, uint64_t)
+                        {
+                            auto it = std::find_if(fresh.accounts.begin(), fresh.accounts.end(),
+                                                   [&](const TFAccountRecord& a) { return a.id == accountId; });
+                            if (it == fresh.accounts.end())
+                                return false;
+                            it->lastLoginMs = nowMs;
+                            return true;
+                        });
     }
 
     bool TFDatabase::CreateCharacter(uint64_t accountId, const std::string& name, FactionId faction,
                                      TFCharacterRecord& out)
     {
-        if (!m_open || accountId == 0 || name.empty() || faction == FactionId::None || faction >= FactionId::COUNT ||
-            std::none_of(m_accounts.begin(), m_accounts.end(),
-                         [accountId](const TFAccountRecord& account) { return account.id == accountId; }))
+        if (!m_open || accountId == 0 || name.empty() || faction == FactionId::None || faction >= FactionId::COUNT)
             return false;
-        TFCharacterRecord existing;
-        if (FindCharacterByName(name, existing))
-            return false; // name taken
-        if (m_nextCharId >= kExhaustedJsonId)
-        {
-            SPARK_LOG_ERROR(
-                Spark::LogCategory::Game,
-                "[TF] CreateCharacter refused for '%s': the exactly representable JSON id range is exhausted",
-                name.c_str());
-            return false;
-        }
 
-        TFCharacterRecord rec;
-        rec.id = m_nextCharId++;
-        rec.accountId = accountId;
-        rec.name = name;
-        rec.faction = faction;
-        rec.xp = 0;
-        rec.rank = 1;
-        rec.flux = 0;
-        rec.createdAtMs = NowMs();
-        rec.lastPlayedMs = 0;
-        m_characters.push_back(rec);
-
-        if (!SaveToDisk())
-        {
-            m_characters.pop_back();
-            m_nextCharId = rec.id;
-            m_status = TFDatabaseStatus::WriteFailed;
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] CreateCharacter failed to persist '%s' to %s",
-                            rec.name.c_str(), SavePaths::Utf8ForLog(m_path).c_str());
+        TFCharacterRecord created;
+        const bool committed = Transact(
+            "CreateCharacter",
+            [&](Snapshot& fresh, uint64_t newRevision)
+            {
+                if (std::none_of(fresh.accounts.begin(), fresh.accounts.end(),
+                                 [accountId](const TFAccountRecord& account) { return account.id == accountId; }))
+                    return false;
+                if (std::any_of(fresh.characters.begin(), fresh.characters.end(),
+                                [&](const TFCharacterRecord& c) { return c.name == name; }))
+                    return false; // name taken
+                if (fresh.nextCharId >= kExhaustedJsonId)
+                {
+                    SPARK_LOG_ERROR(
+                        Spark::LogCategory::Game,
+                        "[TF] CreateCharacter refused for '%s': the exactly representable JSON id range is exhausted",
+                        name.c_str());
+                    return false;
+                }
+                created.id = fresh.nextCharId++;
+                created.accountId = accountId;
+                created.name = name;
+                created.faction = faction;
+                created.xp = 0;
+                created.rank = 1;
+                created.flux = 0;
+                created.createdAtMs = NowMs();
+                created.lastPlayedMs = 0;
+                created.revision = newRevision;
+                fresh.characters.push_back(created);
+                return true;
+            });
+        if (!committed)
             return false;
-        }
-        m_status = TFDatabaseStatus::ReadyExisting;
-        out = rec;
+        // The creator works from exactly the committed row.
+        m_baseRevisions[created.id] = created.revision;
+        out = created;
         return true;
     }
 
     bool TFDatabase::FindCharacterByName(const std::string& name, TFCharacterRecord& out)
     {
-        if (!m_open)
+        if (!RefreshSnapshot())
             return false;
-        auto it = std::find_if(m_characters.begin(), m_characters.end(),
+        auto it = std::find_if(m_snapshot.characters.begin(), m_snapshot.characters.end(),
                                [&](const TFCharacterRecord& c) { return c.name == name; });
-        if (it == m_characters.end())
+        if (it == m_snapshot.characters.end())
             return false;
         out = *it;
         return true;
@@ -684,9 +808,9 @@ namespace Terrafront
     std::vector<TFCharacterRecord> TFDatabase::ListCharacters(uint64_t accountId)
     {
         std::vector<TFCharacterRecord> result;
-        if (!m_open)
+        if (!RefreshSnapshot())
             return result;
-        for (const auto& c : m_characters)
+        for (const auto& c : m_snapshot.characters)
             if (c.accountId == accountId)
                 result.push_back(c);
         return result;
@@ -694,35 +818,37 @@ namespace Terrafront
 
     bool TFDatabase::FindCharacter(uint64_t charId, TFCharacterRecord& out)
     {
-        if (!m_open)
+        if (!RefreshSnapshot())
             return false;
-        auto it = std::find_if(m_characters.begin(), m_characters.end(),
+        auto it = std::find_if(m_snapshot.characters.begin(), m_snapshot.characters.end(),
                                [&](const TFCharacterRecord& c) { return c.id == charId; });
-        if (it == m_characters.end())
+        if (it == m_snapshot.characters.end())
             return false;
         out = *it;
         return true;
     }
 
+    bool TFDatabase::AcquireCharacter(uint64_t charId, TFCharacterRecord& out)
+    {
+        if (!FindCharacter(charId, out))
+            return false;
+        m_baseRevisions[charId] = out.revision;
+        return true;
+    }
+
     bool TFDatabase::DeleteCharacter(uint64_t charId)
     {
-        if (!m_open)
-            return false;
-        auto it = std::find_if(m_characters.begin(), m_characters.end(),
-                               [&](const TFCharacterRecord& c) { return c.id == charId; });
-        if (it == m_characters.end())
-            return false;
-        const size_t index = static_cast<size_t>(std::distance(m_characters.begin(), it));
-        const TFCharacterRecord removed = *it;
-        m_characters.erase(it);
-        if (!SaveToDisk())
-        {
-            m_characters.insert(m_characters.begin() + static_cast<std::ptrdiff_t>(index), removed);
-            m_status = TFDatabaseStatus::WriteFailed;
-            return false;
-        }
-        m_status = TFDatabaseStatus::ReadyExisting;
-        return true;
+        const bool committed =
+            Transact("DeleteCharacter",
+                     [&](Snapshot& fresh, uint64_t)
+                     {
+                         const auto removed = std::erase_if(fresh.characters,
+                                                            [&](const TFCharacterRecord& c) { return c.id == charId; });
+                         return removed != 0;
+                     });
+        if (committed)
+            m_baseRevisions.erase(charId);
+        return committed;
     }
 
     bool TFDatabase::SaveCharacterProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux,
@@ -758,6 +884,7 @@ namespace Terrafront
 
     bool TFDatabase::CommitCharacterUpdates(const std::vector<TFCharacterUpdate>& updates)
     {
+        m_conflictCharId = 0;
         if (!m_open || updates.empty())
             return false;
 
@@ -769,9 +896,6 @@ namespace Terrafront
             if (!update.writeProgress && !update.writeMeta)
                 return false;
             if (!seenCharacters.insert(update.charId).second)
-                return false;
-            if (std::none_of(m_characters.begin(), m_characters.end(),
-                             [&](const TFCharacterRecord& c) { return c.id == update.charId; }))
                 return false;
             if (update.writeProgress && (update.rank == 0 || update.rank > kTFMaxRank || update.flux > kFluxWalletCap))
                 return false;
@@ -788,40 +912,72 @@ namespace Terrafront
             }
         }
 
-        const std::vector<TFCharacterRecord> previous = m_characters;
-        for (const TFCharacterUpdate& update : updates)
-        {
-            TFCharacterRecord& row = *std::find_if(m_characters.begin(), m_characters.end(),
-                                                   [&](const TFCharacterRecord& c) { return c.id == update.charId; });
-            if (update.writeProgress)
-            {
-                row.xp = update.xp;
-                row.rank = update.rank;
-                row.flux = update.flux;
-                row.lastPlayedMs = update.lastPlayedMs;
-            }
-            if (update.writeMeta)
-            {
-                row.unlocks = update.unlocks;
-                row.loadoutPrimary = update.loadoutPrimary;
-                row.loadoutSecondary = update.loadoutSecondary;
-                row.loadoutTool = update.loadoutTool;
-                row.loadoutGrenade = update.loadoutGrenade;
-                row.loadoutSuit = update.loadoutSuit;
-                row.weaponStats = update.weaponStats;
-            }
-        }
+        uint64_t conflictCharId = 0;
+        const bool committed =
+            Transact("CommitCharacterUpdates",
+                     [&](Snapshot& fresh, uint64_t newRevision)
+                     {
+                         // These are absolute values computed from an earlier read, so
+                         // every row must still be exactly the one this instance based
+                         // them on; otherwise another authority's change would be lost.
+                         std::vector<TFCharacterRecord*> rows;
+                         rows.reserve(updates.size());
+                         for (const TFCharacterUpdate& update : updates)
+                         {
+                             auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
+                                                    [&](const TFCharacterRecord& c) { return c.id == update.charId; });
+                             if (it == fresh.characters.end())
+                                 return false;
+                             const auto base = m_baseRevisions.find(update.charId);
+                             if (base == m_baseRevisions.end() || base->second != it->revision)
+                             {
+                                 conflictCharId = update.charId;
+                                 return false;
+                             }
+                             rows.push_back(&*it);
+                         }
 
-        if (!SaveToDisk())
+                         for (size_t i = 0; i < updates.size(); ++i)
+                         {
+                             const TFCharacterUpdate& update = updates[i];
+                             TFCharacterRecord& row = *rows[i];
+                             if (update.writeProgress)
+                             {
+                                 row.xp = update.xp;
+                                 row.rank = update.rank;
+                                 row.flux = update.flux;
+                                 row.lastPlayedMs = update.lastPlayedMs;
+                             }
+                             if (update.writeMeta)
+                             {
+                                 row.unlocks = update.unlocks;
+                                 row.loadoutPrimary = update.loadoutPrimary;
+                                 row.loadoutSecondary = update.loadoutSecondary;
+                                 row.loadoutTool = update.loadoutTool;
+                                 row.loadoutGrenade = update.loadoutGrenade;
+                                 row.loadoutSuit = update.loadoutSuit;
+                                 row.weaponStats = update.weaponStats;
+                             }
+                             row.revision = newRevision;
+                         }
+                         return true;
+                     });
+
+        if (conflictCharId != 0)
         {
-            m_characters = previous;
-            m_status = TFDatabaseStatus::WriteFailed;
-            SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "[TF] character commit of %zu row(s) failed to persist to %s; rolled back", updates.size(),
-                            SavePaths::Utf8ForLog(m_path).c_str());
+            m_status = TFDatabaseStatus::Conflict;
+            m_conflictCharId = conflictCharId;
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] character commit of %zu row(s) to %s rejected: character %llu was changed by another "
+                           "authority; re-acquire it and retry",
+                           updates.size(), SavePaths::Utf8ForLog(m_path).c_str(),
+                           static_cast<unsigned long long>(conflictCharId));
             return false;
         }
-        m_status = TFDatabaseStatus::ReadyExisting;
+        if (!committed)
+            return false;
+        for (const TFCharacterUpdate& update : updates)
+            m_baseRevisions[update.charId] = m_snapshot.revision;
         return true;
     }
 

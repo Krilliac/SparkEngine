@@ -23,9 +23,16 @@
 #include <SDL2/SDL.h>
 #endif
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <cctype>
 #include <cstring>
 #include <sstream>
+#include <string_view>
+
+#if defined(__APPLE__)
+#include <dlfcn.h>
+#endif
 
 namespace Spark
 {
@@ -36,6 +43,19 @@ namespace Spark
 
             namespace
             {
+                /// @brief The backend uses GL 4.5 core entry points (DSA, KHR_debug, glGetTextureSubImage)
+                ///        unconditionally. A context below 4.5 (e.g. Windows' GDI Generic GL 1.1 on a
+                ///        GPU-less host) leaves those pointers null, so treat it as "no usable GL".
+                bool HasRequiredGLVersion()
+                {
+                    if (GLAD_GL_VERSION_4_5)
+                        return true;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "OpenGL 4.5 core is required but the current context provides %d.%d",
+                                    GLVersion.major, GLVersion.minor);
+                    return false;
+                }
+
                 GLenum ConvertCompareOp(RHICompareOp op)
                 {
                     switch (op)
@@ -1063,6 +1083,8 @@ namespace Spark
                         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GLAD loader failed");
                         return false;
                     }
+                    if (!HasRequiredGLVersion())
+                        return false; // host owns the context; leave it alone
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
@@ -1210,6 +1232,8 @@ namespace Spark
                         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GLAD loader failed");
                         return false;
                     }
+                    if (!HasRequiredGLVersion())
+                        return false; // host owns the context; leave it alone
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
@@ -1428,10 +1452,31 @@ namespace Spark
                 m_wglWindow = bootstrapWindow;
                 m_wglDC = bootstrapDC;
                 m_wglContext = bootstrapContext;
+#elif defined(__APPLE__)
+                // There is no headless CGL bootstrap on macOS. Without a current context Apple's GL
+                // dispatch dereferences null inside glGetString (so gladLoadGL crashes instead of
+                // failing); require the host (SDL2) to have made a context current first. CGL is
+                // resolved at runtime from the framework GLAD dlopens, so no extra link dependency.
+                bool hasCurrentCglContext = false;
+                if (void* openGLFramework =
+                        dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL", RTLD_LAZY | RTLD_LOCAL))
+                {
+                    using CGLGetCurrentContextFn = void* (*)();
+                    auto cglGetCurrentContext =
+                        reinterpret_cast<CGLGetCurrentContextFn>(dlsym(openGLFramework, "CGLGetCurrentContext"));
+                    hasCurrentCglContext = cglGetCurrentContext && cglGetCurrentContext() != nullptr;
+                    dlclose(openGLFramework);
+                }
+                if (!hasCurrentCglContext)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "GLDevice: no current CGL context (macOS has no headless GL bootstrap)");
+                    return false;
+                }
 #endif
 
                 // GLAD can now load OpenGL function pointers from the current context
-                if (!gladLoadGL())
+                if (!gladLoadGL() || !HasRequiredGLVersion())
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "gladLoadGL failed — no valid GL context");
 #if defined(__linux__) && defined(SPARK_EGL_SUPPORT)
@@ -1635,11 +1680,23 @@ namespace Spark
                 m_capabilities.multiDrawIndirectSupport = true; // GL 4.3+ core (GL_ARB_multi_draw_indirect)
                 m_capabilities.maxConstantBuffers = 14;
 
-                // llvmpipe/softpipe renderer strings identify software rasterizers.
-                const std::string rendererLower = m_capabilities.deviceName;
-                const bool isLlvmPipe = rendererLower.find("llvmpipe") != std::string::npos;
-                const bool isSoftPipe = rendererLower.find("softpipe") != std::string::npos;
-                m_capabilities.isSoftwareDevice = isLlvmPipe || isSoftPipe;
+                // GL_RENDERER substrings of the known CPU rasterizers: Mesa llvmpipe/softpipe/swrast
+                // ("Software Rasterizer"), the Windows 1.1 fallback ("GDI Generic"), WARP-backed GL
+                // ("Microsoft Basic Render Driver") and Apple's fallback ("Apple Software Renderer").
+                // Paravirtual GPUs (virgl, SVGA3D) forward to a host GPU and stay hardware rows.
+                std::string rendererLower = m_capabilities.deviceName;
+                std::transform(rendererLower.begin(), rendererLower.end(), rendererLower.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                static constexpr std::array<std::string_view, 7> kSoftwareRenderers = {"llvmpipe",
+                                                                                       "softpipe",
+                                                                                       "swrast",
+                                                                                       "software rasterizer",
+                                                                                       "gdi generic",
+                                                                                       "microsoft basic render driver",
+                                                                                       "apple software renderer"};
+                m_capabilities.isSoftwareDevice =
+                    std::any_of(kSoftwareRenderers.begin(), kSoftwareRenderers.end(),
+                                [&](std::string_view name) { return rendererLower.find(name) != std::string::npos; });
 
                 // OpenGL has no hardware RT pipeline; compute path can still drive SDFGI.
                 m_capabilities.rayTracing.bestBackend = m_capabilities.computeShaderSupport

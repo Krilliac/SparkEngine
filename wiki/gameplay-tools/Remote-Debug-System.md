@@ -11,14 +11,17 @@ network transport, credential protocol, or remote-administration service. The
 classes here retain local queue and dispatch plumbing for editor integration and
 testing only.
 
-`StartServer(port)` and `ConnectToTarget(address, port)` record logical state
-for a future, separately reviewed transport. They do not bind a port, open a
-socket, establish a connection, authenticate a peer, or make a remote endpoint
-available. A status such as `logical-listen` or `connecting` is an intent
-record, not a listener or transport.
+**Remote administration is permanently unavailable in stable-v1** (owner
+decision OD-05, work item SEC-100). There is no remote entry point to enable:
+`RemoteDebugSystem::StartServer(port)`, `ConnectToTarget(address, port)` and
+`RemoteDebugClient::Connect(address, port)` were removed, and
+`RemoteDebugServer::StartListening()` takes no port. It only starts a new local
+in-process authority epoch. No configuration value or command-line switch adds
+a listener. `Tests/TestSEC100RemoteAdminUnavailableReal.cpp` fails the build
+if any of those entry points returns.
 
-`RemoteSession::EnqueueReceived()` is a public raw transport-adapter hook, not
-an authentication API. It carries no principal, so the server dispatches it as
+`RemoteSession::EnqueueReceived()` is a public raw queue call, not an
+authentication API. It carries no principal, so the server dispatches it as
 anonymous and returns `{"error":"access_denied"}` before any handler runs.
 The same rule applies to public `RemoteDebugServer::ProcessCommand()` calls.
 No shipped adapter can attach a principal to either path.
@@ -58,7 +61,7 @@ roles, or capabilities.
 | Class | Description |
 |-------|-------------|
 | `RemoteDebugSystem` | Singleton owning server and client instances |
-| `RemoteDebugServer` | Logical local server state and fail-closed dispatch |
+| `RemoteDebugServer` | Local in-process authority epoch and fail-closed dispatch |
 | `RemoteDebugClient` | Local request queue and convenience methods |
 | `RemoteSession` | Thread-safe local send/receive queues; no transport |
 | `RemoteCommand` | In-memory message; no identity or credentials |
@@ -92,18 +95,6 @@ for (const auto& resp : responses)
 normal public loopback. They return `{"error":"access_denied"}` and must not
 run an engine console command or mutate a property.
 
-### Logical future-transport state
-
-```cpp
-auto& debug = Spark::RemoteDebug::RemoteDebugSystem::GetInstance();
-debug.Initialize();
-
-// These only record intent. They do not create a listener, socket,
-// authentication handshake, or remote connection.
-debug.StartServer(9090);
-debug.ConnectToTarget("192.168.1.100", 9090);
-```
-
 ### Custom Command Handlers
 
 Custom handlers must name the least privilege capability they need. A handler
@@ -133,11 +124,9 @@ server->RegisterCommandHandler("local_inspect", Spark::RemoteDebug::RemoteDebugC
 | Method | Description |
 |--------|-------------|
 | `Initialize() / Shutdown()` | Lifecycle management |
-| `StartServer(port)` | Record logical listen state; no listener or socket is created |
-| `ConnectToTarget(addr, port)` | Record connection intent; no transport or handshake exists |
 | `EnableLoopback()` | In-process observer-only queue bridge; no sockets or authority escalation |
 | `Update(float dt)` | Pump local queues and process authorized local inspection commands |
-| `IsConnected()` | True for enabled local loopback or logical connected state only |
+| `IsConnected()` | True only while local loopback is enabled |
 
 ### RemoteDebugClient
 
@@ -163,7 +152,6 @@ server->RegisterCommandHandler("local_inspect", Spark::RemoteDebug::RemoteDebugC
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Logical port | 9090 | Recorded future-adapter intent; no TCP listener exists |
 | Loopback mode | off | Enable observer-only in-process local inspection |
 
 ## Dispatch and revocation
@@ -178,14 +166,14 @@ protected handler completes and records its `Allowed` outcome before
 revoked and cannot cause another protected effect. This is synchronization,
 not a post-hoc audit correction.
 
-## What would be required before remote use
+## Remote use is unavailable
 
-Remote Debug remains unavailable for remote administration until a future
-change supplies an authenticated transport, credential enrollment and rotation,
-peer identity binding, secure key storage, protocol validation, wire-boundary
-replay and rate tests, authorization review, and an operational rollout plan.
-Adding a socket alone would be unsafe and is explicitly out of scope for this
-subsystem.
+Per OD-05 no authenticated remote channel is built for stable-v1, so Remote
+Debug stays local only. Any future remote use would need a new owner decision
+and its own reviewed work: authenticated transport, credential enrollment and
+rotation, peer identity binding, secure key storage, protocol validation,
+wire-boundary replay and rate tests, and authorization review. Adding a socket
+alone would be unsafe.
 
 ## Related Systems
 

@@ -25,6 +25,7 @@
 // Common includes (shared between all platforms)
 // ============================================================================
 #include "EngineRuntime.h"
+#include "ExecScript.h"
 #include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
 #include "ModuleManager.h"
 #include "EngineContext.h"
@@ -167,8 +168,11 @@ void InitPhysics()
  * but before module loading (so modules can register console commands).
  * ConsoleProcessManager launches the SparkConsole.exe subprocess and owns the
  * stdin/stdout pipe used for command I/O.
+ *
+ * @return false when the engine lifecycle failed to initialize. Its stages have
+ *         already been rolled back; the caller must tear down and exit non-zero.
  */
-void InitConsole()
+bool InitConsole()
 {
     // Progress breadcrumbs via SPARK_LOG_INFO (routed through Logger's
     // stderr sink) rather than SimpleConsole::LogInfo (which only writes
@@ -200,7 +204,14 @@ void InitConsole()
     if (!g_minimalInit)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitDebugSystems");
-        InitDebugSystems();
+        if (!InitDebugSystems())
+        {
+            // No EngineStartEvent and no daemon wiring: nothing may observe a
+            // started engine whose lifecycle stages were just rolled back.
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "InitConsole: engine lifecycle initialization failed; startup aborted");
+            return false;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitGameplaySystems");
         InitGameplaySystems();
 
@@ -226,6 +237,7 @@ void InitConsole()
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: complete");
     SPARK_DEBUG_HOOK(EnginePostInit, 0, 0.0f);
+    return true;
 }
 
 void ShutdownPhysics()
@@ -267,7 +279,7 @@ bool CanShutdownEngine()
     return !rt.moduleManager || rt.moduleManager->CanShutdownAll();
 }
 
-void ShutdownEngineAfterPreflight()
+bool ShutdownEngineAfterPreflight()
 {
     auto& rt = GetEngineRuntime();
 
@@ -301,8 +313,14 @@ void ShutdownEngineAfterPreflight()
         rt.moduleManager->ShutdownAllAfterPreflight();
     }
 
-    ShutdownGameplaySystems();
+    // A lifecycle teardown failure (a stage threw, or startup had already failed)
+    // does not stop the rest of teardown: modules and core services below must
+    // still be released. It is reported to the caller for the exit status.
+    const bool lifecycleTeardownClean = ShutdownGameplaySystems();
     ShutdownDebugSystems();
+    if (!lifecycleTeardownClean)
+        SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                        "Engine lifecycle teardown was not clean (a stage threw, or startup had failed)");
 
     if (rt.moduleManager)
     {
@@ -353,8 +371,10 @@ void ShutdownEngineAfterPreflight()
         {
             // Linux/headless teardown currently hits a late-shutdown crash path
             // when module-owned callbacks/channels are destroyed after dlclose().
-            // Keep modules mapped until process exit in this mode.
-            rt.moduleManager.release();
+            // Keep modules mapped until process exit in this mode. The manager
+            // destructor never runs, so publish its lifecycle evidence here.
+            rt.moduleManager->PublishLifecycleEvidence();
+            rt.residentModuleManagers.push_back(rt.moduleManager.release());
         }
         else
         {
@@ -394,14 +414,10 @@ void ShutdownEngineAfterPreflight()
     rt.audioEngine.reset();
     ShutdownPhysics(); // no-op when the module branch above already ran it
 
-    // The Windows headless host owns a real NullRHI bridge without exposing a
-    // renderer through EngineContext. Keep it alive until game-module teardown
-    // has completed, then release it before the remaining core services.
-    if (rt.headlessRhiBridge)
-    {
-        rt.headlessRhiBridge->Shutdown();
-        rt.headlessRhiBridge.reset();
-    }
+    // The Windows and Linux headless hosts own a real NullRHI bridge without
+    // exposing a renderer through EngineContext. Keep it alive until game-module
+    // teardown has completed, then release it before the remaining core services.
+    rt.ShutdownHeadlessRhi();
 
     // Shut down the job system after all subsystems that submit jobs
     Spark::JobSystem::Get().Shutdown();
@@ -413,8 +429,11 @@ void ShutdownEngineAfterPreflight()
     rt.graphics.reset();
     rt.timer.reset();
 
+#if SPARK_DEBUG_HOOKS_ENABLED
     SPARK_DEBUG_HOOK(EnginePostShutdown, GetGameplayFrameCount(), 0.0f);
     Spark::DebugHookManager::GetInstance().Clear();
+#endif
+    return lifecycleTeardownClean;
 }
 
 void ShutdownEngine()
@@ -431,6 +450,10 @@ void ShutdownEngine()
 // Test automation: exit after N frames (0 = run indefinitely).
 // Parsed from -test-frames N on the command line (both platforms).
 int g_testFrameLimit = 0;
+
+// Scripted console playback for automated runs (both platforms): -exec <file>,
+// -exec-audit <path> and -test-seconds N. Driven from the main loop only.
+Spark::ExecScriptPlayer g_execScript;
 
 // JobSystem thread pool size override from command line (-threads N) or
 // SPARK_MAX_WORKER_THREADS env var. 0 = use the default
@@ -498,8 +521,9 @@ int g_windowHeightOverride = 0;
 /**
  * @brief Configure and install the crash handler from EngineSettings + env vars.
  *
- * Settings are read from [CrashReporting] in settings.ini, with env var overrides:
- *   SPARK_GITHUB_REPO, SPARK_GITHUB_TOKEN, SPARK_CRASH_PROXY_URL, SPARK_CRASH_UPLOAD_URL
+ * Settings are read from [CrashReporting] in settings.ini. Environment overrides:
+ *   SPARK_CRASH_ON_ASSERT=1, SPARK_CRASH_HEADLESS=1, and CI detection (headless).
+ * Crash reports stay local; no transport endpoint or credential is accepted.
  */
 void SetupCrashHandler()
 {
@@ -510,55 +534,17 @@ void SetupCrashHandler()
     crashCfg.captureScreenshot = cr.captureScreenshot;
     crashCfg.captureSystemInfo = cr.captureSystemInfo;
     crashCfg.captureAllThreads = cr.captureAllThreads;
-    crashCfg.zipBeforeUpload = true;
     // Off by default: a surviving developer assertion should not manufacture a
     // crash report. SPARK_CRASH_ON_ASSERT=1 opts a run in, which is what the
     // release-assert and freeze-watchdog gates need so a fatal VERIFY or a
     // watchdog kill leaves a dump behind instead of only a log line.
     const char* envAssertCrash = std::getenv("SPARK_CRASH_ON_ASSERT");
     crashCfg.triggerCrashOnAssert = envAssertCrash != nullptr && std::string_view(envAssertCrash) == "1";
-    crashCfg.connectTimeoutSeconds = cr.timeoutSeconds;
-    crashCfg.enableCrashReporting = cr.enabled;
     crashCfg.requireConsent = cr.requireConsent;
     crashCfg.headlessMode = cr.headlessMode;
     crashCfg.promptUserDescription = cr.promptUserDescription;
     crashCfg.allowScreenshotRefusal = cr.allowScreenshotRefusal;
-    crashCfg.githubLabels = cr.githubLabels;
-    crashCfg.githubAttachDump = cr.attachDump;
-    crashCfg.smtpUser = cr.smtpUser;
-    crashCfg.smtpPass = cr.smtpPass;
-    crashCfg.emailTo = cr.emailTo;
-    crashCfg.emailFrom = cr.emailFrom;
 
-    // Settings file / local override values
-    crashCfg.uploadURL = cr.uploadURL;
-    crashCfg.proxyURL = cr.proxyURL;
-    crashCfg.githubRepo = cr.githubRepo;
-    crashCfg.githubToken = cr.githubToken;
-
-    // Env var overrides (take precedence over settings file / local override)
-    const char* envRepo = std::getenv("SPARK_GITHUB_REPO");
-    const char* envToken = std::getenv("SPARK_GITHUB_TOKEN");
-    if (envRepo && envToken)
-    {
-        crashCfg.githubRepo = envRepo;
-        crashCfg.githubToken = envToken;
-    }
-    const char* envProxy = std::getenv("SPARK_CRASH_PROXY_URL");
-    if (envProxy)
-        crashCfg.proxyURL = envProxy;
-    const char* envUpload = std::getenv("SPARK_CRASH_UPLOAD_URL");
-    if (envUpload)
-        crashCfg.uploadURL = envUpload;
-    const char* envSmtpUser = std::getenv("SPARK_SMTP_USER");
-    if (envSmtpUser)
-        crashCfg.smtpUser = envSmtpUser;
-    const char* envSmtpPass = std::getenv("SPARK_SMTP_PASS");
-    if (envSmtpPass)
-        crashCfg.smtpPass = envSmtpPass;
-    const char* envEmailTo = std::getenv("SPARK_CRASH_EMAIL_TO");
-    if (envEmailTo)
-        crashCfg.emailTo = envEmailTo;
     const char* envHeadless = std::getenv("SPARK_CRASH_HEADLESS");
     if (envHeadless && std::string(envHeadless) == "1")
         crashCfg.headlessMode = true;

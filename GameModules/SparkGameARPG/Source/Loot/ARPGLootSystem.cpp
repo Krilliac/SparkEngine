@@ -12,8 +12,11 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <random>
 #include <sstream>
+#include <utility>
 
 namespace ARPG
 {
@@ -22,6 +25,30 @@ namespace ARPG
     {
         static thread_local std::mt19937 rng{std::random_device{}()};
         return rng;
+    }
+
+    /// Inclusive affix-count range each rarity rolls; shared by generation and restore validation.
+    static std::pair<int, int> AffixCountRange(ARPGItemRarity rarity)
+    {
+        switch (rarity)
+        {
+        case ARPGItemRarity::Magic:
+            return {1, 2};
+        case ARPGItemRarity::Rare:
+            return {3, 6};
+        case ARPGItemRarity::Legendary:
+        case ARPGItemRarity::Set:
+        case ARPGItemRarity::Unique:
+            return {4, 4}; // Preset count for legendaries
+        default:
+            return {0, 0};
+        }
+    }
+
+    /// Affix values scale with item level; generation and restore validation must agree exactly.
+    static float AffixLevelScale(int itemLevel)
+    {
+        return 1.0f + static_cast<float>(itemLevel) * 0.02f;
     }
 
     bool ARPGLootSystem::Initialize(Spark::IEngineContext* context)
@@ -151,13 +178,30 @@ namespace ARPG
         {
             AffixData affix = m_affixPool[indexDist(GetLootRNG())];
 
-            // Scale affix values with item level
-            float levelScale = 1.0f + static_cast<float>(item.itemLevel) * 0.02f;
+            const float levelScale = AffixLevelScale(item.itemLevel);
             std::uniform_real_distribution<float> valueDist(affix.minValue, affix.maxValue);
             affix.rolledValue = valueDist(GetLootRNG()) * levelScale;
 
             item.affixes.push_back(affix);
         }
+    }
+
+    ItemData ARPGLootSystem::BuildBaseItem(uint32_t itemId, ARPGItemSlot slot, ARPGItemRarity rarity, int level) const
+    {
+        ItemData item;
+        item.itemId = itemId;
+        item.slot = slot;
+        item.rarity = rarity;
+        item.itemLevel = level;
+        item.name = GenerateItemName(slot, rarity);
+
+        // Base stats scale with level
+        const bool isWeapon = (slot == ARPGItemSlot::MainHand || slot == ARPGItemSlot::OffHand);
+        if (isWeapon)
+            item.baseDamage = 5.0f + static_cast<float>(level) * 2.5f;
+        else
+            item.baseArmor = 3.0f + static_cast<float>(level) * 1.5f;
+        return item;
     }
 
     ItemData ARPGLootSystem::GenerateItem(int level, ARPGItemRarity rarity)
@@ -166,53 +210,56 @@ namespace ARPG
         std::uniform_int_distribution<int> slotDist(0, static_cast<int>(ARPGItemSlot::Count) - 1);
         auto slot = static_cast<ARPGItemSlot>(slotDist(GetLootRNG()));
 
-        ItemData item;
-        item.itemId = m_nextItemId++;
-        item.slot = slot;
-        item.rarity = rarity;
-        item.itemLevel = level;
-        item.name = GenerateItemName(slot, rarity);
+        ItemData item = BuildBaseItem(m_nextItemId++, slot, rarity, level);
 
-        // Base stats scale with level
-        bool isWeapon = (slot == ARPGItemSlot::MainHand || slot == ARPGItemSlot::OffHand);
-        if (isWeapon)
-            item.baseDamage = 5.0f + static_cast<float>(level) * 2.5f;
-        else
-            item.baseArmor = 3.0f + static_cast<float>(level) * 1.5f;
-
-        // Number of affixes by rarity
-        int affixCount = 0;
-        switch (rarity)
-        {
-        case ARPGItemRarity::Normal:
-            affixCount = 0;
-            break;
-        case ARPGItemRarity::Magic:
-        {
-            std::uniform_int_distribution<int> dist(1, 2);
-            affixCount = dist(GetLootRNG());
-            break;
-        }
-        case ARPGItemRarity::Rare:
-        {
-            std::uniform_int_distribution<int> dist(3, 6);
-            affixCount = dist(GetLootRNG());
-            break;
-        }
-        case ARPGItemRarity::Legendary:
-        case ARPGItemRarity::Set:
-        case ARPGItemRarity::Unique:
-            affixCount = 4; // Preset count for legendaries
-            break;
-        default:
-            break;
-        }
+        const auto [minAffixes, maxAffixes] = AffixCountRange(rarity);
+        std::uniform_int_distribution<int> countDist(minAffixes, maxAffixes);
+        const int affixCount = minAffixes == maxAffixes ? minAffixes : countDist(GetLootRNG());
 
         RollAffixes(item, affixCount);
         m_generatedCount++;
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG item generated: %s (level %d, %d affixes)", item.name.c_str(),
                         item.itemLevel, affixCount);
         return item;
+    }
+
+    bool ARPGLootSystem::IsRestorableItem(const ItemData& item) const
+    {
+        // The maximum ID is refused so ReserveItemId can always move the cursor past a restored item.
+        if (item.itemId == 0 || item.itemId == std::numeric_limits<uint32_t>::max() ||
+            item.slot >= ARPGItemSlot::Count || item.rarity >= ARPGItemRarity::Count || item.itemLevel < 1 ||
+            item.itemLevel > MAX_RESTORABLE_ITEM_LEVEL)
+            return false;
+
+        // Name and base stats are derived, never rolled, so they must match the derivation exactly.
+        const ItemData expected = BuildBaseItem(item.itemId, item.slot, item.rarity, item.itemLevel);
+        if (item.name != expected.name || item.baseDamage != expected.baseDamage ||
+            item.baseArmor != expected.baseArmor)
+            return false;
+
+        const auto [minAffixes, maxAffixes] = AffixCountRange(item.rarity);
+        const int affixCount = static_cast<int>(item.affixes.size());
+        if (affixCount < minAffixes || affixCount > maxAffixes)
+            return false;
+
+        const float levelScale = AffixLevelScale(item.itemLevel);
+        for (const AffixData& affix : item.affixes)
+        {
+            const auto poolEntry = std::ranges::find_if(m_affixPool, [&affix](const AffixData& candidate)
+                                                        { return candidate.statType == affix.statType; });
+            if (poolEntry == m_affixPool.end() || poolEntry->name != affix.name ||
+                poolEntry->minValue != affix.minValue || poolEntry->maxValue != affix.maxValue ||
+                !std::isfinite(affix.rolledValue) || affix.rolledValue < affix.minValue * levelScale ||
+                affix.rolledValue > affix.maxValue * levelScale)
+                return false;
+        }
+        return true;
+    }
+
+    void ARPGLootSystem::ReserveItemId(uint32_t itemId)
+    {
+        if (itemId >= m_nextItemId)
+            m_nextItemId = itemId + 1;
     }
 
     ItemData ARPGLootSystem::GenerateRandomDrop(int monsterLevel, ARPGMonsterRank monsterRank)

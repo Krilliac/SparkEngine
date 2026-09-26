@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGame",
+  "author_script": {
+    "path": "tools/blender/author_showcase_kit.py",
+    "sha256": "3209ce14e4eb3f3b9a028c4f3bfa369d5e178ef9ca87175c4b4d6091217f1f4c"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGame/showcase_kit.blend",
+    "sha256": "44e68c92f8947e85c3f90a98b02c765905ce8333e58aee4e751a7d7b937df97f",
+    "scene_sha256": "91a7b3fe6ad238a12bdfcbeace046665d734d0ca4250939032a8165130826fb6"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "display_pedestal",
+      "obj_path": "Assets/Models/Showcase/Kit/display_pedestal.obj",
+      "mtl_path": "Assets/Models/Showcase/Kit/display_pedestal.mtl",
+      "bounds": {
+        "min": [
+          -0.43,
+          0.0,
+          -0.43
+        ],
+        "max": [
+          0.43,
+          1.1,
+          0.43
+        ]
+      },
+      "triangle_count": 572,
+      "obj_sha256": "6ba3a6374df480ffd8a050a6e3ee305feb8462896527472c5f251ae5e3c3a6a3",
+      "mtl_sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "triangle_budget": 900,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Showcase/Kit/display_pedestal_lod1.obj",
+          "mtl_path": "Assets/Models/Showcase/Kit/display_pedestal_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.433158,
+              0.0,
+              -0.433158
+            ],
+            "max": [
+              0.433158,
+              1.095455,
+              0.433158
+            ]
+          },
+          "triangle_count": 204,
+          "obj_sha256": "8953cd9ae997e7a65caf494cafc58c4074c8f58c1264515688e498e9c4960896",
+          "mtl_sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Showcase/Kit/display_pedestal_collision.obj",
+          "mtl_path": "Assets/Models/Showcase/Kit/display_pedestal_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.43,
+              0.0,
+              -0.43
+            ],
+            "max": [
+              0.43,
+              1.1,
+              0.43
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "2020c565e40f2ef979777943d5e1244a0eb677a7c7b06ddbd6361b3b1231c150",
+          "mtl_sha256": "c43cf022204e5d04233d4463b8c3ea11193b8f822aa682fb2603fc6cefe62ad9",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "info_signpost",
+      "obj_path": "Assets/Models/Showcase/Kit/info_signpost.obj",
+      "mtl_path": "Assets/Models/Showcase/Kit/info_signpost.mtl",
+      "bounds": {
+        "min": [
+          -0.53,
+          0.0,
+          -0.2
+        ],
+        "max": [
+          0.53,
+          2.2,
+          0.2
+        ]
+      },
+      "triangle_count": 616,
+      "obj_sha256": "2ba5226d954dd1d748b815a965eb2e519804e60f01d7553c1baaba862fefe309",
+      "mtl_sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "triangle_budget": 700,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Showcase/Kit/info_signpost_lod1.obj",
+          "mtl_path": "Assets/Models/Showcase/Kit/info_signpost_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.53,
+              0.0,
+              -0.203158
+            ],
+            "max": [
+              0.53,
+              2.2,
+              0.203158
+            ]
+          },
+          "triangle_count": 220,
+          "obj_sha256": "948577d47ce6f643afcd878ccb0f40d52e712ea4dbd435834cf29564c1bdb1cc",
+          "mtl_sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Showcase/Kit/info_signpost_collision.obj",
+          "mtl_path": "Assets/Models/Showcase/Kit/info_signpost_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.53,
+              0.0,
+              -0.20048
+            ],
+            "max": [
+              0.53,
+              2.2,
+              0.20048
+            ]
+          },
+          "triangle_count": 56,
+          "obj_sha256": "2ae46679fcfb6b3904b06c0dab813174e40c23bbe31876e144d5369bfc53125b",
+          "mtl_sha256": "c43cf022204e5d04233d4463b8c3ea11193b8f822aa682fb2603fc6cefe62ad9",
+          "kind": "hull",
+          "triangle_cap": 64
+        }
+      }
+    },
+    {
+      "name": "supply_crate",
+      "obj_path": "Assets/Models/Showcase/Kit/supply_crate.obj",
+      "mtl_path": "Assets/Models/Showcase/Kit/supply_crate.mtl",
+      "bounds": {
+        "min": [
+          -0.4,
+          0.0,
+          -0.4
+        ],
+        "max": [
+          0.4,
+          0.8,
+          0.4
+        ]
+      },
+      "triangle_count": 440,
+      "obj_sha256": "ca676c239d2f81246f84b0c0821cce731a657c374069331ddd23c627bc3f79ea",
+      "mtl_sha256": "fac1020627a308a8faf23601ebf08bea6267e0864ce2f139b86f2b75291f1e8b",
+      "triangle_budget": 600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Showcase/Kit/supply_crate_lod1.obj",
+          "mtl_path": "Assets/Models/Showcase/Kit/supply_crate_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.403158,
+              0.0,
+              -0.403158
+            ],
+            "max": [
+              0.403158,
+              0.8,
+              0.403158
+            ]
+          },
+          "triangle_count": 158,
+          "obj_sha256": "a0342441fd9ef75261341fc02a387bbd759cf9c08408a0065ce7a04f2028e47f",
+          "mtl_sha256": "fac1020627a308a8faf23601ebf08bea6267e0864ce2f139b86f2b75291f1e8b",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Showcase/Kit/supply_crate_collision.obj",
+          "mtl_path": "Assets/Models/Showcase/Kit/supply_crate_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.4,
+              0.0,
+              -0.4
+            ],
+            "max": [
+              0.4,
+              0.8,
+              0.4
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "33550dc60a4c10751a2f9b5ad9ad1dcf7b97ca8152d70305649f4154e5af817b",
+          "mtl_sha256": "c43cf022204e5d04233d4463b8c3ea11193b8f822aa682fb2603fc6cefe62ad9",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "light_pylon",
+      "obj_path": "Assets/Models/Showcase/Kit/light_pylon.obj",
+      "mtl_path": "Assets/Models/Showcase/Kit/light_pylon.mtl",
+      "bounds": {
+        "min": [
+          -0.314119,
+          0.0,
+          -0.314119
+        ],
+        "max": [
+          0.314119,
+          3.0,
+          0.314119
+        ]
+      },
+      "triangle_count": 604,
+      "obj_sha256": "13a599e13e7cfcecd07bb46cea88f897186aeb63faefe37a26a60124868cd94d",
+      "mtl_sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "triangle_budget": 1200,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Showcase/Kit/light_pylon_lod1.obj",
+          "mtl_path": "Assets/Models/Showcase/Kit/light_pylon_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.314119,
+              0.006,
+              -0.314119
+            ],
+            "max": [
+              0.314119,
+              2.986098,
+              0.314119
+            ]
+          },
+          "triangle_count": 216,
+          "obj_sha256": "bfd04f972ccf94c30efd4f36a27bf7769fcb7fe59f8bcb1a1838ee80c9755916",
+          "mtl_sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Showcase/Kit/light_pylon_collision.obj",
+          "mtl_path": "Assets/Models/Showcase/Kit/light_pylon_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.314251,
+              0.0,
+              -0.314987
+            ],
+            "max": [
+              0.314251,
+              3.0,
+              0.314987
+            ]
+          },
+          "triangle_count": 56,
+          "obj_sha256": "09eaa7704560dec1912bb136f2ea15c016933b8423f1de0f999df747986cbcba",
+          "mtl_sha256": "c43cf022204e5d04233d4463b8c3ea11193b8f822aa682fb2603fc6cefe62ad9",
+          "kind": "hull",
+          "triangle_cap": 64
+        }
+      }
+    }
+  ]
+}

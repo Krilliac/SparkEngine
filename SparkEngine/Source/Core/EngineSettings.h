@@ -473,7 +473,6 @@ class EngineSettings
         int sendBufferSize = 65536;
         int receiveBufferSize = 65536;
         bool enableCompression = false;
-        bool enableEncryption = false; // Legacy setting: prototype XOR obfuscation only, not encryption
         // Lag simulation (development only)
         float simulatedLatencyMs = 0.0f;
         float simulatedPacketLoss = 0.0f;
@@ -516,27 +515,20 @@ class EngineSettings
     // 16. CRASH REPORTING & DEBUG
     // =====================================================================
 
+    /**
+     * @brief [CrashReporting] settings. Crash reports stay local: there is deliberately no
+     *        upload URL, relay, GitHub token, or SMTP credential here (OPS-100).
+     */
     struct CrashReportingSettings
     {
-        bool enabled = true;                       ///< Master switch for crash report uploading
-        bool requireConsent = true;                ///< Show consent dialog before uploading
-        bool headlessMode = false;                 ///< Skip dialogs (CI/testing/headless — auto-consent)
-        bool promptUserDescription = true;         ///< Show "what were you doing" text input
-        bool allowScreenshotRefusal = true;        ///< Let users refuse screenshot in consent dialog
-        std::string uploadURL = "";                ///< Upload URL (auto-detects backend from prefix)
-        std::string proxyURL = "";                 ///< Proxy relay endpoint (release builds)
-        std::string githubRepo = "";               ///< GitHub "owner/repo" for direct Issue creation
-        std::string githubToken = "";              ///< GitHub PAT (dev builds only, not shipped)
-        std::string githubLabels = "crash-report"; ///< Comma-separated Issue labels
-        bool attachDump = true;                    ///< Attach zip dump to crash reports
-        bool captureScreenshot = true;             ///< Capture screenshot at crash time
-        bool captureSystemInfo = true;             ///< Collect OS/GPU/memory info
-        bool captureAllThreads = true;             ///< Dump all thread stacks
-        int timeoutSeconds = 5;                    ///< HTTP connection timeout
-        std::string smtpUser = "";                 ///< SMTP username (email backend)
-        std::string smtpPass = "";                 ///< SMTP password (email backend)
-        std::string emailTo = "";                  ///< Recipient email address
-        std::string emailFrom = "crashreporter@sparkengine.dev"; ///< Sender address
+        bool enabled = true;                ///< Legacy upload switch; local capture ignores it today
+        bool requireConsent = true;         ///< Ask before a screenshot is packaged with the report
+        bool headlessMode = false;          ///< Skip dialogs and the reporter (CI/testing/headless)
+        bool promptUserDescription = true;  ///< Show "what were you doing" text input
+        bool allowScreenshotRefusal = true; ///< Let users refuse screenshot in consent dialog
+        bool captureScreenshot = true;      ///< Capture screenshot at crash time
+        bool captureSystemInfo = true;      ///< Collect OS/GPU/memory info
+        bool captureAllThreads = true;      ///< Dump all thread stacks
     };
 
     struct DebugSettings

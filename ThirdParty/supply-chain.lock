@@ -55,7 +55,7 @@
       "file_count": 1240
     },
     "ThirdParty/Scripting/patches": {
-      "digest": "d9cc2c676d74d480816c204a2b75b7adf2af9572f160e386bf673a2d928c0e4e",
+      "digest": "b52b26d3f8b5cc3ea6a9405e430993af1dff63cd2a416a46f07792802846c4f4",
       "file_count": 3
     },
     "ThirdParty/Utils/cgltf": {
@@ -343,6 +343,12 @@
     "actions/checkout": [
       "3d3c42e5aac5ba805825da76410c181273ba90b1"
     ],
+    "actions/configure-pages": [
+      "45bfe0192ca1faeb007ade9deae92b16b8254a0d"
+    ],
+    "actions/deploy-pages": [
+      "368f82528645a54fb793d4d04e342629a3f51346"
+    ],
     "actions/download-artifact": [
       "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
     ],
@@ -352,8 +358,14 @@
     "actions/upload-artifact": [
       "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
     ],
+    "actions/upload-pages-artifact": [
+      "fc324d3547104276b827a68afc52ff2a11cc49c9"
+    ],
     "anchore/sbom-action": [
       "3ad7283483fc7af8ff2b4ea19663c2d5ca935e26"
+    ],
+    "anchore/scan-action": [
+      "27805bf3b4e84b4a5c980df22ed233c00390a439"
     ],
     "github/codeql-action": [
       "cdf488f595d80d6e07e03d4674febd5ab45fa938"

@@ -26,7 +26,10 @@
 #include "Utils/LogMacros.h" // SPARK_LOG_*
 #include "Utils/WineDetection.h"
 #include "Utils/CrashHandler.h"
+#include "Utils/MultiISA.h"
 #include <Spark/Version.h>
+#include <charconv>
+#include <cmath>
 #include <csignal>
 #include <cstring>
 #include <atomic>
@@ -36,7 +39,20 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
-#include <tuple>
+
+// LeakSanitizer runs in every ASan build (GCC defines __SANITIZE_ADDRESS__,
+// Clang reports address_sanitizer through __has_feature) and in Clang
+// standalone -fsanitize=leak builds. GCC defines no macro for -fsanitize=leak.
+#if defined(__SANITIZE_ADDRESS__)
+#define SPARK_LSAN_ACTIVE 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(leak_sanitizer)
+#define SPARK_LSAN_ACTIVE 1
+#endif
+#endif
+#ifdef SPARK_LSAN_ACTIVE
+#include <sanitizer/lsan_interface.h>
+#endif
 
 #ifndef SPARK_PLATFORM_WINDOWS
 
@@ -47,7 +63,24 @@ static void SignalHandler(int)
     g_shutdownRequested.store(true, std::memory_order_relaxed);
 }
 
-static bool ParseFlag(int argc, char* argv[], const char* flag)
+/**
+ * @brief Tell LeakSanitizer that an ownership root was released on purpose at process exit.
+ *
+ * The Linux teardown release()s the module manager, hot-reload manager and
+ * event bus instead of destroying them (see main()). LSan would otherwise see
+ * those unreachable blocks as leaks. Ignored blocks are scanned as roots, so
+ * everything they still own stays reachable, while any allocation that is not
+ * reachable from a live root is still reported. No-op without LSan.
+ */
+static void RetainRootForProcessExit([[maybe_unused]] const void* root)
+{
+#ifdef SPARK_LSAN_ACTIVE
+    if (root)
+        __lsan_ignore_object(root);
+#endif
+}
+
+bool HasLinuxCommandLineFlag(int argc, char* argv[], const char* flag)
 {
     for (int i = 1; i < argc; ++i)
     {
@@ -55,6 +88,18 @@ static bool ParseFlag(int argc, char* argv[], const char* flag)
             return true;
     }
     return false;
+}
+
+void EmitLinuxModuleLifecycleRecord()
+{
+    // Read the snapshot the owning ModuleManager published at teardown, so the
+    // record covers the manager's whole lifetime including OnUnload/Destroy.
+    const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
+    const ModuleManager::ModuleLifecycleRecord* record = evidence.FindGameModule();
+    if (!record)
+        return;
+    std::fprintf(stdout, "%s\n", ModuleManager::FormatLifecycleRecord(*record).c_str());
+    std::fflush(stdout);
 }
 
 static int ParseTestFrameLimitArgs(int argc, char* argv[])
@@ -65,6 +110,99 @@ static int ParseTestFrameLimitArgs(int argc, char* argv[])
             return std::max(0, std::atoi(argv[i + 1]));
     }
     return 0;
+}
+
+/// Value following the exact token @p flag, or nullptr when the flag is absent or last.
+static const char* FindLinuxCommandLineValue(int argc, char* argv[], const char* flag)
+{
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], flag) == 0)
+            return argv[i + 1];
+    }
+    return nullptr;
+}
+
+/**
+ * @brief Configure g_execScript from -exec <file>, -exec-audit <path> and -test-seconds N.
+ *
+ * Unlike the Windows GUI build, a malformed -test-seconds value or an
+ * unreadable -exec script fails the launch: an automated run that silently
+ * dropped its timeline would otherwise report success without doing anything.
+ *
+ * @return false (after printing the reason to stderr) when the options are invalid.
+ */
+static bool ConfigureExecScriptArgs(int argc, char* argv[])
+{
+#ifndef SPARK_SDL2_AVAILABLE
+    // RunNoSDL2Fallback stops after a fixed ten ticks and never plays a
+    // timeline, so these options would be silently ignored there.
+    bool headless = false;
+#ifdef SPARK_HEADLESS_SUPPORT
+    headless = HasLinuxCommandLineFlag(argc, argv, "-headless") || HasLinuxCommandLineFlag(argc, argv, "-dedicated");
+#endif
+    if (!headless &&
+        (HasLinuxCommandLineFlag(argc, argv, "-exec") || HasLinuxCommandLineFlag(argc, argv, "-test-seconds")))
+    {
+        std::fprintf(stderr, "SparkEngine: -exec and -test-seconds need -headless in a build without SDL2\n");
+        return false;
+    }
+#endif
+
+    if (const char* seconds = FindLinuxCommandLineValue(argc, argv, "-test-seconds"))
+    {
+        double limit = 0.0;
+        const char* end = seconds + std::strlen(seconds);
+        const auto [parsedEnd, error] = std::from_chars(seconds, end, limit);
+        // from_chars also accepts "nan", "inf" and negatives; none is a usable limit.
+        if (error != std::errc{} || parsedEnd != end || !std::isfinite(limit) || limit <= 0.0)
+        {
+            std::fprintf(stderr, "SparkEngine: -test-seconds expects a positive number, got '%s'\n", seconds);
+            return false;
+        }
+        g_execScript.SetTestSecondsLimit(limit);
+    }
+
+    if (const char* auditPath = FindLinuxCommandLineValue(argc, argv, "-exec-audit"); auditPath && *auditPath)
+        g_execScript.SetAuditPath(auditPath);
+
+    if (const char* scriptPath = FindLinuxCommandLineValue(argc, argv, "-exec"); scriptPath && *scriptPath)
+    {
+        if (!g_execScript.LoadFile(scriptPath, Spark::SimpleConsole::GetInstance()))
+        {
+            std::fprintf(stderr, "SparkEngine: cannot load -exec script '%s'\n", scriptPath);
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief Validate the -scene launch form before any subsystem starts.
+ *
+ * -scene is an engine-only run of one reflected scene. Combining it with
+ * -game or -manifest would let the module own the loop while the named scene
+ * never runs, so that launch is refused instead of silently ignoring either.
+ *
+ * @return false (after printing the reason to stderr) when the options are invalid.
+ */
+static bool ValidateSceneArgs(int argc, char* argv[])
+{
+    if (!HasLinuxCommandLineFlag(argc, argv, "-scene"))
+        return true;
+    const char* scenePath = FindLinuxCommandLineValue(argc, argv, "-scene");
+    if (!scenePath || !*scenePath)
+    {
+        std::fprintf(stderr, "SparkEngine: -scene requires a scene path\n");
+        return false;
+    }
+    if (HasLinuxCommandLineFlag(argc, argv, "-game") || HasLinuxCommandLineFlag(argc, argv, "-manifest"))
+    {
+        std::fprintf(stderr, "SparkEngine: -scene runs without a game module and cannot be combined with -game "
+                             "or -manifest\n");
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -109,7 +247,18 @@ static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-    if (ParseFlag(argc, argv, "--help") || ParseFlag(argc, argv, "-h") || ParseFlag(argc, argv, "-help"))
+    // BLD-100 / OD-04: refuse an x86-64 CPU below the SSE4.2 + POPCNT floor
+    // before anything else runs, so it gets a clear message rather than an
+    // illegal-instruction crash somewhere inside initialization.
+    if (const std::string cpuFloorFailure = Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures());
+        !cpuFloorFailure.empty())
+    {
+        std::fprintf(stderr, "SparkEngine: %s\n", cpuFloorFailure.c_str());
+        return EXIT_FAILURE;
+    }
+
+    if (HasLinuxCommandLineFlag(argc, argv, "--help") || HasLinuxCommandLineFlag(argc, argv, "-h") ||
+        HasLinuxCommandLineFlag(argc, argv, "-help"))
     {
         std::printf("SparkEngine %d.%d.%d\n"
                     "Usage: SparkEngine [options]\n\n"
@@ -118,15 +267,21 @@ int main(int argc, char* argv[])
                     "  --version                  Show the engine version and exit\n"
                     "  -game <module>             Load a game module\n"
                     "  -manifest <path>           Load a packaged runtime manifest\n"
-                    "  -scene <path>              Load a reflected-scene document\n"
+                    "  -scene <path>              Run a reflected-scene document without a game module\n"
+                    "                             (loaded into the ECS world, not drawn on Linux;\n"
+                    "                             exit 4 when it cannot be loaded)\n"
                     "  -headless, -dedicated      Run without a graphics window\n"
                     "  -threads <count>           Set the worker-thread limit\n"
                     "  -test-frames <count>       Exit after a fixed frame count\n"
+                    "  -test-seconds <seconds>    Exit after a wall-clock duration\n"
+                    "  -exec <file>               Run a scripted console timeline (frame or t<sec> entries)\n"
+                    "  -exec-audit <path>         Write the -exec audit trail here (default exec_audit.log)\n"
+                    "  -require-game              Fail (exit 2) if no game module initializes\n"
                     "  -window-size <WxH>         Override the initial window size\n",
                     SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR, SPARK_ENGINE_VERSION_PATCH);
         return 0;
     }
-    if (ParseFlag(argc, argv, "--version") || ParseFlag(argc, argv, "-version"))
+    if (HasLinuxCommandLineFlag(argc, argv, "--version") || HasLinuxCommandLineFlag(argc, argv, "-version"))
     {
         std::printf("SparkEngine %d.%d.%d\n", SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR,
                     SPARK_ENGINE_VERSION_PATCH);
@@ -172,13 +327,18 @@ int main(int argc, char* argv[])
     {
         g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
         g_maxWorkerThreads = ParseThreadCountArgs(argc, argv);
-        g_noSubprocess = ParseFlag(argc, argv, "-no-subprocess");
-        g_minimalInit = ParseFlag(argc, argv, "-minimal-init");
-        g_noJobSystem = ParseFlag(argc, argv, "-no-jobsystem");
+        g_noSubprocess = HasLinuxCommandLineFlag(argc, argv, "-no-subprocess");
+        g_minimalInit = HasLinuxCommandLineFlag(argc, argv, "-minimal-init");
+        g_noJobSystem = HasLinuxCommandLineFlag(argc, argv, "-no-jobsystem");
         ParseWindowSizeOverrideArgs(argc, argv);
+        if (!ConfigureExecScriptArgs(argc, argv))
+            return EXIT_FAILURE;
+        if (!ValidateSceneArgs(argc, argv))
+            return EXIT_FAILURE;
 
-        const bool hasExplicitLaunchRoot =
-            ParseFlag(argc, argv, "-game") || ParseFlag(argc, argv, "-manifest") || ParseFlag(argc, argv, "-scene");
+        const bool hasExplicitLaunchRoot = HasLinuxCommandLineFlag(argc, argv, "-game") ||
+                                           HasLinuxCommandLineFlag(argc, argv, "-manifest") ||
+                                           HasLinuxCommandLineFlag(argc, argv, "-scene");
         if (!hasExplicitLaunchRoot)
         {
             std::error_code packageError;
@@ -192,7 +352,8 @@ int main(int argc, char* argv[])
         }
 
 #ifdef SPARK_HEADLESS_SUPPORT
-        bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");
+        bool headless =
+            HasLinuxCommandLineFlag(argc, argv, "-headless") || HasLinuxCommandLineFlag(argc, argv, "-dedicated");
         g_headlessMode = headless;
         if (headless)
             return RunHeadlessLinux(argc, argv);
@@ -224,9 +385,15 @@ int main(int argc, char* argv[])
                 // Best-effort only during final process teardown.
             }
         }
-        std::ignore = GetEngineRuntime().moduleHotReload.release();
-        std::ignore = GetEngineRuntime().moduleManager.release();
-        std::ignore = GetEngineRuntime().eventBus.release();
+        RetainRootForProcessExit(GetEngineRuntime().moduleHotReload.release());
+        RetainRootForProcessExit(GetEngineRuntime().moduleManager.release());
+        RetainRootForProcessExit(GetEngineRuntime().eventBus.release());
+#ifdef SPARK_LSAN_ACTIVE
+        // std::_Exit skips atexit handlers, and LSan's end-of-process leak
+        // check is one of them. Run it here so sanitizer builds still get a
+        // real leak verdict; a detected leak terminates with LSan's exitcode.
+        __lsan_do_leak_check();
+#endif
         std::_Exit(result);
 #endif
 
@@ -265,8 +432,8 @@ int main(int argc, char* argv[])
             SPARK_LOG_WARN(Spark::LogCategory::Core, "Unknown exception during eventBus cleanup");
         }
     }
-    std::ignore = GetEngineRuntime().eventBus.release();
-    std::ignore = GetEngineRuntime().moduleManager.release();
+    RetainRootForProcessExit(GetEngineRuntime().eventBus.release());
+    RetainRootForProcessExit(GetEngineRuntime().moduleManager.release());
     return 1;
 }
 #endif // !SPARK_PLATFORM_WINDOWS

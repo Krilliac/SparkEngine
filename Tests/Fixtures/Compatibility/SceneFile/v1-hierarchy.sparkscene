@@ -1,0 +1,89 @@
+{
+  "sceneName": "Legacy v1 Courtyard",
+  "version": 1,
+  "description": "SceneFile v1 N-1 compatibility fixture",
+  "objectCount": 2,
+  "componentCount": 2,
+  "assetReferenceCount": 1,
+  "timestamp": 1700000000,
+  "gravity": [0, -7.5, 0.25],
+  "ambientColor": [0.25, 0.5, 0.75, 1],
+  "ambientIntensity": 1.5,
+  "objects": [
+    {
+      "id": 10,
+      "name": "Courtyard Root",
+      "tag": "Environment",
+      "layer": 3,
+      "active": true,
+      "staticObject": true,
+      "transform": {
+        "position": [1, 2, 3],
+        "rotation": [0, 0.5, 0, 0.75],
+        "scale": [2, 2, 2],
+        "parentID": 0,
+        "childIDs": [
+          11        ]      },
+      "componentTypes": [
+        "Transform"      ]    },
+    {
+      "id": 11,
+      "name": "Fountain",
+      "tag": "Prop",
+      "layer": 4,
+      "active": false,
+      "staticObject": false,
+      "transform": {
+        "position": [-4.5, 0.125, 8],
+        "rotation": [0, 0, 0, 1],
+        "scale": [0.5, 1, 0.5],
+        "parentID": 10      },
+      "componentTypes": [
+        "Transform"      ]    }  ],
+  "components": [
+    {
+      "type": "Transform",
+      "objectID": 10,
+      "enabled": true    },
+    {
+      "type": "Transform",
+      "objectID": 11,
+      "enabled": false    }  ],
+  "environment": {
+    "skyType": 1,
+    "skyColor": [0.5, 0.8, 1, 1],
+    "horizonColor": [0.9, 0.9, 0.9, 1],
+    "skyboxAssetPath": "",
+    "fogEnabled": true,
+    "fogColor": [0.7, 0.7, 0.7, 1],
+    "fogDensity": 0.05,
+    "fogStart": 5,
+    "fogEnd": 80,
+    "windDirection": [1, 0, 0],
+    "windStrength": 1,
+    "windTurbulence": 0.1,
+    "bloomEnabled": true,
+    "bloomIntensity": 0.75,
+    "bloomThreshold": 1,
+    "tonemappingEnabled": true,
+    "exposure": 1.25,
+    "gamma": 2.2  },
+  "defaultCamera": {
+    "projectionType": 0,
+    "fieldOfView": 90,
+    "orthographicSize": 5,
+    "nearPlane": 0.1,
+    "farPlane": 2500,
+    "clearColor": [0.2, 0.3, 0.5, 1],
+    "isMainCamera": true,
+    "renderTargetWidth": 1920,
+    "renderTargetHeight": 1080  },
+  "assetReferences": [
+    {
+      "assetPath": "Assets/Meshes/fountain.obj",
+      "assetType": "mesh",
+      "lastModified": 0,
+      "fileSize": 4096,
+      "checksum": "a1b2c3d4",
+      "dependencies": [
+        "Assets/Materials/stone.mat"      ]    }  ]}

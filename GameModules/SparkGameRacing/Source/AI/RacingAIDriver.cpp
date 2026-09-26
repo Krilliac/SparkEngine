@@ -233,7 +233,9 @@ namespace Racing
         state.targetWaypoint = (state.targetWaypoint + static_cast<uint32_t>(std::max(1.0f, waypointAdvance))) %
                                static_cast<uint32_t>(kSyntheticTrackWaypointCount);
 
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing AI driver %u: throttle=%.2f steer=%.2f nitro=%s",
+        // Per-driver, per-frame: Trace, not Debug. A full simulated race emits ~87k of these lines,
+        // which at Debug flooded the test console past the sanitizer lanes' 16 MiB capture cap.
+        SPARK_LOG_TRACE(Spark::LogCategory::Game, "Racing AI driver %u: throttle=%.2f steer=%.2f nitro=%s",
                         state.vehicleId, state.throttle, state.steer, state.useNitro ? "yes" : "no");
     }
 

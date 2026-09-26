@@ -126,13 +126,13 @@ namespace Racing
             music->RegisterTrack(track);
         };
 
-        registerTrack("menu_theme", "Assets/Audio/Music/racing_menu.ogg", 110.0f, true);
-        registerTrack("race_countdown", "Assets/Audio/Music/countdown.ogg", 120.0f, false);
-        registerTrack("race_music_1", "Assets/Audio/Music/race_track_01.ogg", 150.0f, true);
-        registerTrack("race_music_2", "Assets/Audio/Music/race_track_02.ogg", 145.0f, true);
-        registerTrack("final_lap", "Assets/Audio/Music/final_lap.ogg", 165.0f, true);
-        registerTrack("victory", "Assets/Audio/Music/victory.ogg", 130.0f, false);
-        registerTrack("defeat", "Assets/Audio/Music/defeat.ogg", 80.0f, false);
+        registerTrack("menu_theme", "Assets/Audio/Racing/Music/racing_menu.wav", 110.0f, true);
+        registerTrack("race_countdown", "Assets/Audio/Racing/Music/countdown.wav", 120.0f, false);
+        registerTrack("race_music_1", "Assets/Audio/Racing/Music/race_track_01.wav", 150.0f, true);
+        registerTrack("race_music_2", "Assets/Audio/Racing/Music/race_track_02.wav", 145.0f, true);
+        registerTrack("final_lap", "Assets/Audio/Racing/Music/final_lap.wav", 165.0f, true);
+        registerTrack("victory", "Assets/Audio/Racing/Music/victory.wav", 130.0f, false);
+        registerTrack("defeat", "Assets/Audio/Racing/Music/defeat.wav", 80.0f, false);
 
         // Race playlist
         Spark::Audio::Playlist racePlaylist;

@@ -10,6 +10,7 @@
 
 #include "Persistence/TFDatabase.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -50,7 +51,23 @@ namespace Terrafront
         uint64_t AccountForClient(uint32_t clientId) const; // 0 if not logged in
         void ClearSession(uint32_t clientId);
 
-        static std::string GenerateSalt(); // >=16 random bytes, hex-encoded
+        /// Random-byte source with the Spark::SecureRandom::Fill signature.
+        using RandomFillFn = bool (*)(void* buffer, size_t size) noexcept;
+
+        /**
+         * @brief Override the salt random source (nullptr restores the OS CSPRNG).
+         *
+         * Exists so tests can exercise the fail-closed registration path; production
+         * code never calls it.
+         */
+        void SetRandomSource(RandomFillFn fill) { m_randomFill = fill; }
+
+        /**
+         * @brief Generate a 16-byte hex-encoded salt from the OS CSPRNG.
+         * @param fill Random source; nullptr means Spark::SecureRandom::Fill.
+         * @return The hex salt, or an empty string when the random source fails.
+         */
+        static std::string GenerateSalt(RandomFillFn fill = nullptr);
         static std::string HashPassword(const std::string& password,
                                         const std::string& salt); // self-describing pbkdf2-sha256$iters$salt$dk string
         static bool VerifyPassword(const std::string& password,
@@ -58,6 +75,7 @@ namespace Terrafront
 
       private:
         TFDatabase* m_db = nullptr;
+        RandomFillFn m_randomFill = nullptr;               // nullptr -> Spark::SecureRandom::Fill
         std::unordered_map<uint32_t, uint64_t> m_sessions; // clientId -> accountId
     };
 

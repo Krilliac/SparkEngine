@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import functools
 import hashlib
 import html
 import re
@@ -18,6 +19,8 @@ from typing import Any, Iterable
 from assets import validate_assets
 from module_content import validate as validate_module_content
 from common import (
+    ACCEPTANCE_CI_REFERENCE,
+    ACCEPTANCE_STATES,
     METRIC_IDS,
     REPO_ROOT,
     SCHEMA_VERSION,
@@ -25,9 +28,12 @@ from common import (
     decode_json_bytes,
     load_contract,
     load_json,
+    criterion_digest,
     read_bytes_stable,
 )
-from contract_selectors import resolve_ci_job, resolve_test_selector
+from contract_selectors import (cmake_preset_index, preset_references, required_gate_jobs, resolve_ci_job,
+                                resolve_test_selector)
+from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
                             predecessor_candidate_readiness_errors)
@@ -166,53 +172,46 @@ REQUIRED_NULLRHI_CONFLICTS = {
 }
 
 # Deliberate outputs of unfinished work items. A missing path not listed here is
-# a contract error, not a soft warning.
+# a contract error, not a soft warning. The list prunes itself: an entry that now
+# exists, or that no work item or docs-catalog entry still references, is an
+# error (Validator.validate_future_acceptance_paths), and a done work item never
+# resolves a reference through it.
 FUTURE_ACCEPTANCE_PATHS = {
-    "GameModules/SparkGame/README.md",
-    "GameModules/SparkGameARPG/README.md",
-    "GameModules/SparkGameFPS/README.md",
     "GameModules/SparkGameFPS/Source/Multiplayer",
-    "GameModules/SparkGameMMO/README.md",
-    "GameModules/SparkGameOpenWorld/README.md",
-    "GameModules/SparkGamePlatformer/README.md",
-    "GameModules/SparkGameRPG/README.md",
-    "GameModules/SparkGameRTS/README.md",
     "GameModules/SparkGameRTS/Source/AI",
     "GameModules/SparkGameRTS/Source/Fog",
-    "GameModules/SparkGameRacing/README.md",
-    "GameModules/SparkGameVisualScript/README.md",
     "SparkEditor/Source/Commands",
     "SparkEngine/Source/Platform",
-    "SparkSDK/README.md",
-    "THIRD_PARTY_NOTICES",
     "Tests/Benchmarks",
-    "Tests/Fixtures/Compatibility",
-    "Tests/Fuzz",
     "Tests/ModuleKit",
-    "ThirdParty/README.md",
-    "Tools/spark-cli/README.md",
     "docs/operations/server-runbook.md",
-    "docs/specs/online-services.md",
-    "docs/specs/persistence.md",
-    "docs/specs/telemetry.md",
-    "wiki/advanced/Crash-Reporting.md",
     "wiki/gameplay-tools/Visual-Scripting.md",
     "wiki/getting-started/Building-from-Source.md",
     "wiki/subsystems/Scripting.md",
 }
 GENERATED_PATHS = {"docs/readiness/ENGINE_READINESS_HANDOFF.md"}
 
+# CMake presets a work item deliberately introduces, keyed to that owning item.
+# Only the owner's configure/build commands may name one, and never a CTest
+# test tree: an unwritten preset cannot prove it builds tests. The list prunes
+# itself (Validator.validate_work_item_presets): an entry whose preset now
+# exists, whose owner is done or missing, or that the owner no longer
+# references is an error.
+PLANNED_CMAKE_PRESETS = {
+    "macos-shipping": "PLT-220",
+}
+
 WORK_ITEM_REQUIRED_KEYS = {
     "id", "title", "priority", "status", "blocking", "wave", "area", "owner",
     "profileApplicability",
     "rationale", "dependencies", "parallelWith", "sourceContext", "entryPoints",
-    "implementationScope", "acceptanceCriteria", "commands", "testSelectors",
+    "implementationScope", "acceptanceCriteria", "acceptanceStatus", "commands", "testSelectors",
     "requiredCiJobs", "performanceBudgets", "documentationUpdates", "readinessChanges",
     "websiteImpact", "risks", "outOfScope", "definitionOfDone",
 }
 WORK_ITEM_LIST_KEYS = {
     "dependencies", "parallelWith", "sourceContext", "entryPoints", "implementationScope",
-    "acceptanceCriteria", "commands", "testSelectors", "requiredCiJobs",
+    "acceptanceCriteria", "acceptanceStatus", "commands", "testSelectors", "requiredCiJobs",
     "performanceBudgets", "documentationUpdates", "readinessChanges", "websiteImpact",
     "risks", "outOfScope", "definitionOfDone",
 }
@@ -302,6 +301,64 @@ def legal_public_wording_errors(
                 errors.append(
                     f"{location}:{number}: contains unreviewed open-source wording "
                     "while the declared license is non-OSI"
+                )
+    return errors
+
+
+# OD-08 (NET-110): identity, matchmaking, fleet, entitlement and billing services
+# are out of engine scope and the engine ships no hosted online services. These
+# surfaces describe online features directly, in addition to every governed
+# public claim surface.
+ONLINE_SERVICE_BOUNDARY_SURFACES = {
+    "docs/site/readiness.json",
+    "docs/specs/online-services.md",
+    "wiki/advanced/Online-Service-Boundary.md",
+    "wiki/gameplay-tools/Online-Services.md",
+}
+_HOSTED_SERVICE_NOUN = (
+    r"(?:online\s+services?|backend(?:\s+services?)?|identity(?:\s+services?)?|accounts?(?:\s+services?)?"
+    r"|login\s+services?|matchmak(?:ing|er)(?:\s+services?)?|lobby\s+services?|(?:server\s+)?fleets?"
+    r"|entitlements?(?:\s+services?)?|billing|payments?|leaderboards?|cloud[\s-]+saves?"
+    r"|player\s+data|live\s+services?)"
+)
+HOSTED_ONLINE_SERVICE_CLAIM = re.compile(
+    r"\b(?:hosted|managed|turnkey|cloud-hosted|built-in|out-of-the-box)\s+" + _HOSTED_SERVICE_NOUN + r"\b"
+    r"|\b(?:SparkEngine|the\s+engine)\s+(?:provides|ships|includes|offers|hosts|operates|runs)\s+"
+    r"(?:an?\s+|its\s+own\s+)?(?:hosted\s+)?(?:identity|account|login|matchmaking|lobby|fleet|entitlement"
+    r"|billing|payment|leaderboard|cloud[\s-]+save|online)\s+(?:services?|servers?|backends?)\b",
+    re.IGNORECASE,
+)
+# A sentence or table row that negates the claim ("ships no hosted
+# matchmaking", "is not a hosted service") documents the boundary instead.
+_SERVICE_CLAIM_NEGATION = re.compile(
+    r"\b(?:no|not|never|none|without|nothing|neither|nor|isn't|aren't|doesn't|don't|won't|cannot"
+    r"|out\s+of\s+(?:engine\s+)?scope|outside)\b",
+    re.IGNORECASE,
+)
+_SERVICE_CLAIM_SENTENCE_SPLIT = re.compile(r"[.;!?](?=\s|$)")
+
+
+def hosted_online_service_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject public claims that SparkEngine hosts or operates online services (OD-08).
+
+    The check is per sentence, or per row for a Markdown table row: a sentence
+    or row that also carries a negation documents the boundary and is allowed.
+    """
+
+    errors: list[str] = []
+    for location, text in sorted(surfaces.items()):
+        if not isinstance(text, str):
+            errors.append(f"{location}: online-service wording source must be text")
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            is_table_row = line.lstrip().startswith("|")
+            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+                match = HOSTED_ONLINE_SERVICE_CLAIM.search(unit)
+                if match is None or _SERVICE_CLAIM_NEGATION.search(unit):
+                    continue
+                errors.append(
+                    f"{location}:{number}: claims hosted online services ({match.group(0)!r}); "
+                    "the engine ships none (OD-08, wiki/advanced/Online-Service-Boundary.md)"
                 )
     return errors
 
@@ -420,6 +477,10 @@ def _html_accessibility_text(value: str) -> str:
     return " ".join(parser.rendered)
 
 
+# Claim normalization is a pure function of its input and one validate() pass
+# normalizes the same public strings tens of thousands of times; the cache keeps
+# the contract suite inside its CI time bound without changing any result.
+@functools.lru_cache(maxsize=65536)
 def _normalized_claim_text(value: str) -> str:
     accessibility_text = _html_accessibility_text(value)
     source = f"{value}\n{accessibility_text}" if accessibility_text else value
@@ -460,6 +521,7 @@ def _normalized_claim_text(value: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
+@functools.lru_cache(maxsize=4096)
 def _claim_phrase_pattern(value: str) -> str:
     normalized = _normalized_claim_text(value)
     tokens = [token for token in re.split(r"[\s-]+", normalized) if token]
@@ -978,6 +1040,373 @@ def validate_public_claim_text(
     return violations
 
 
+# Hand-written counts on the governed public surfaces ("50+ other subsystems",
+# "2,509 tests") go stale silently, because no generator owns them. Every such
+# claim must either sit in generator-owned text or resolve to a reviewed
+# readiness.publicNumericClaims entry.
+PUBLIC_NUMERIC_CLAIM_NOUNS = (
+    "tests", "test", "files", "file", "panels", "panel", "modules", "module",
+    "subsystems", "subsystem", "backends", "backend", "lines", "line", "nodes", "node",
+)
+PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS = {
+    # Bound to a METRIC_IDS entry and compared with the value measured from source.
+    "metric": {"metricId"},
+    # A recorded past state (changelog entry, dated audit) that is not re-measured.
+    "historical": set(),
+    # A design constant or fixed inventory, justified by the cited source path.
+    "static-fact": {"evidencePath"},
+}
+PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS = {"surface", "text", "classification", "owner"}
+# Metrics that describe a CI execution or the generated docs bundle, not the
+# source tree, so a hand-written number cannot be checked against them here.
+UNMEASURABLE_CLAIM_METRICS = {"docs.authored", "tests.executed", "tests.failed", "tests.skipped"}
+# Fully regenerated pages; `docs/update-codebase-stats.sh check` owns their numbers.
+GENERATED_CLAIM_SURFACES = {"wiki/advanced/Codebase-Statistics.md"}
+# Regex-managed count lines are owned by this script and its `check` mode.
+MANAGED_CLAIM_SCRIPT = "docs/update-readme-badges.sh"
+_CLAIM_NUMBER = r"\d{1,3}(?:,\d{3})+|\d+"
+PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
+    # Not the tail of an identifier, decimal, path, anchor, or ratio, and not a
+    # product version such as "DirectX 11" or "version 1".
+    r"(?<![\w.,/#$~-])(?<!DirectX )(?<!Direct3D )(?<!version )(?<!Windows )"
+    rf"(?P<approx>~)?(?P<value>{_CLAIM_NUMBER})(?P<plus>\+)?(?P<ratio>/(?:{_CLAIM_NUMBER})\+?)?"
+    r"[`*]{0,2}"
+    r"(?:\s+[A-Za-z][\w-]*){0,2}?\s+"
+    rf"(?:{'|'.join(PUBLIC_NUMERIC_CLAIM_NOUNS)})\b",
+    re.IGNORECASE,
+)
+# DOC-400: the hand-authored site contract files. Every mutable fact they could
+# state -- a count, a commit, a CI run, the engine version -- has a bundle
+# source (metrics, source.commit, the version single source), so a literal here
+# goes stale the moment Working moves. There is deliberately no waiver list,
+# not even publicNumericClaims: the copy must name a bundle metric identifier.
+HARDCODED_CLAIM_SURFACES = {
+    "docs/site/content.json": "content",
+    "docs/site/docs-catalog.json": "docsCatalog",
+}
+HARDCODED_CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("count claim", PUBLIC_NUMERIC_CLAIM_PATTERN),
+    # A 7-64 character lowercase hex token with at least one digit and one
+    # letter, so ordinary words such as "defaced" never match.
+    (
+        "commit SHA",
+        re.compile(r"(?<![0-9A-Za-z])(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,64}(?![0-9A-Za-z])"),
+    ),
+    # GitHub Actions run/job URLs and bare run-sized identifiers (8+ digits).
+    ("CI run ID", re.compile(r"/runs/\d+|/job/\d+|(?<![\w.])\d{8,}(?![\w.])")),
+    # A three-part release version, or any v-prefixed dotted version. IPv4
+    # addresses and two-part tool minimums such as "CMake 3.25+" do not match.
+    (
+        "version string",
+        re.compile(r"(?<![\w.])(?:v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?|v\d+\.\d+)(?![\w.])"),
+    ),
+)
+
+
+def _json_string_values(value: Any, location: str) -> Iterable[tuple[str, str]]:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield from _json_string_values(child, f"{location}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _json_string_values(child, f"{location}[{index}]")
+    elif isinstance(value, str):
+        yield location, value
+
+
+def hardcoded_site_claim_errors(documents: dict[str, Any]) -> list[str]:
+    """Return one error per mutable-claim literal in the site contract documents.
+
+    ``documents`` maps a surface path from HARDCODED_CLAIM_SURFACES to its parsed
+    JSON. Every string value is scanned, links and commands included.
+    """
+    errors: list[str] = []
+    for surface, document in sorted(documents.items()):
+        for location, text in _json_string_values(document, surface):
+            for kind, pattern in HARDCODED_CLAIM_PATTERNS:
+                for match in pattern.finditer(text):
+                    errors.append(
+                        f"{location}: hardcoded {kind} {match.group(0)!r}; reference a bundle "
+                        "metric identifier (or source.commit / the version single source) instead"
+                    )
+    return errors
+
+
+_AUTO_BLOCK_OPEN = re.compile(r"<!--\s*AUTO:(?P<name>[\w-]+)\s*-->")
+
+
+def _mask_auto_blocks(text: str) -> tuple[str, list[str]]:
+    """Blank generator-owned AUTO blocks while keeping offsets and line numbers."""
+    errors: list[str] = []
+    masked = text
+    position = 0
+    while True:
+        opening = _AUTO_BLOCK_OPEN.search(masked, position)
+        if opening is None:
+            return masked, errors
+        name = opening.group("name")
+        closing = re.compile(rf"<!--\s*/AUTO:{re.escape(name)}\s*-->").search(masked, opening.end())
+        if closing is None:
+            line = masked.count("\n", 0, opening.start()) + 1
+            errors.append(f"{line}: unterminated AUTO block {name!r}")
+            return masked, errors
+        blanked = re.sub(r"[^\n]", " ", masked[opening.start():closing.end()])
+        masked = masked[:opening.start()] + blanked + masked[closing.end():]
+        position = closing.end()
+
+
+def _sed_pattern_to_regex(pattern: str) -> re.Pattern[str]:
+    """Translate the POSIX basic regular expressions used by sed_replace."""
+    parts: list[str] = []
+    index = 0
+    while index < len(pattern):
+        character = pattern[index]
+        if character == "[":
+            end = pattern.index("]", index + 1)
+            parts.append(pattern[index:end + 1])
+            index = end + 1
+            continue
+        if character in "*.":
+            parts.append(character)
+        elif character == "\\" and index + 1 < len(pattern):
+            index += 1
+            parts.append(re.escape(pattern[index]))
+        else:
+            parts.append(re.escape(character))
+        index += 1
+    return re.compile("".join(parts))
+
+
+_SHELL_VARIABLE = re.compile(r"\$(?:\{(\w+)\}|(\w+))")
+
+
+def _managed_claim_bindings(script: str) -> dict[str, tuple[str, ...]]:
+    """Collect the values each badge-script variable can hold.
+
+    Scalars (`local x="..."`), arrays (`local x=( ... )`), and loop variables
+    (`for x in "${array[@]}"`) are recorded. A name bound to two different value
+    sets is ambiguous, so resolving it later fails closed.
+    """
+    bindings: dict[str, set[tuple[str, ...]]] = {}
+
+    def bind(name: str, values: tuple[str, ...]) -> None:
+        bindings.setdefault(name, set()).add(values)
+
+    for match in re.finditer(r'^[ \t]*(?:local[ \t]+)?(\w+)="([^"]*)"[ \t]*$', script, re.MULTILINE):
+        bind(match.group(1), (match.group(2),))
+    arrays: dict[str, tuple[str, ...]] = {}
+    for match in re.finditer(r"^[ \t]*(?:local[ \t]+)?(\w+)=\(([^)]*)\)", script, re.MULTILINE):
+        items = tuple(item.strip("\"'") for item in match.group(2).split())
+        arrays[match.group(1)] = items
+        bind(match.group(1), items)
+    for match in re.finditer(r'\bfor[ \t]+(\w+)[ \t]+in[ \t]+"\$\{(\w+)\[@\]\}"', script):
+        if match.group(2) in arrays:
+            bind(match.group(1), arrays[match.group(2)])
+    return {
+        name: next(iter(value_sets)) if len(value_sets) == 1 else ()
+        for name, value_sets in bindings.items()
+    }
+
+
+def _resolve_managed_claim_target(target: str, bindings: dict[str, tuple[str, ...]]) -> list[str]:
+    """Expand a `sed_replace` target argument into repository-relative paths."""
+    resolved: list[str] = []
+    pending = [target]
+    for _ in range(16):
+        next_pending: list[str] = []
+        for value in pending:
+            if value.startswith("$PROJECT_ROOT/"):
+                value = value.removeprefix("$PROJECT_ROOT/")
+            variable = _SHELL_VARIABLE.search(value)
+            if variable is None:
+                resolved.append(value)
+                continue
+            name = variable.group(1) or variable.group(2)
+            # $PROJECT_ROOT is only meaningful as the leading prefix stripped above.
+            values = () if name == "PROJECT_ROOT" else bindings.get(name, ())
+            if not values:
+                raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: cannot resolve sed_replace target {target!r}")
+            next_pending.extend(value[:variable.start()] + option + value[variable.end():] for option in values)
+        if not next_pending:
+            break
+        pending = next_pending
+    else:
+        raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: sed_replace target {target!r} does not terminate")
+    for path in resolved:
+        if not path or path.startswith("/") or ".." in path.split("/"):
+            raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: sed_replace target {target!r} is not a repository path")
+    return resolved
+
+
+@functools.lru_cache(maxsize=1)
+def managed_numeric_claim_patterns() -> dict[str, tuple[re.Pattern[str], ...]]:
+    """Map each surface the badge script rewrites to the count patterns it owns.
+
+    The script is the single definition: each `sed_replace` pattern exempts its
+    matches only on the file(s) that call rewrites, so a managed sentence copied
+    onto another page -- even one the script rewrites for a different pattern --
+    does not inherit the exemption. An unresolvable target fails closed.
+    """
+    script = (REPO_ROOT / MANAGED_CLAIM_SCRIPT).read_text(encoding="utf-8")
+    bindings = _managed_claim_bindings(script)
+    managed: dict[str, list[re.Pattern[str]]] = {}
+    for match in re.finditer(r"\bsed_replace[ \t]+\"([^\"]*)\"[ \t]*\\[ \t]*\n\s*'([^']*)'", script):
+        pattern = _sed_pattern_to_regex(match.group(2))
+        for path in _resolve_managed_claim_target(match.group(1), bindings):
+            managed.setdefault(path, []).append(pattern)
+    if not managed:
+        raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT} declares no managed count patterns or files")
+    return {path: tuple(patterns) for path, patterns in sorted(managed.items())}
+
+
+@functools.lru_cache(maxsize=1)
+def source_metric_values() -> dict[str, int | float]:
+    """Metric values measured from the checked-out tree, as the generator publishes them."""
+    from generate import collect_metrics, module_statistics
+
+    return {
+        row["id"]: row["value"]
+        for row in collect_metrics(0, module_statistics())
+        if row["id"] not in UNMEASURABLE_CLAIM_METRICS
+    }
+
+
+def _claim_number(value: str) -> int:
+    return int(value.replace(",", ""))
+
+
+def public_numeric_claim_errors(
+    surface_texts: dict[str, str],
+    entries: Any,
+    metric_values: Any,
+    managed_patterns: dict[str, tuple[re.Pattern[str], ...]],
+) -> list[str]:
+    """Return errors for public numeric claims that no contract entry or generator owns.
+
+    ``metric_values`` is a callable returning the measured metric map; it is only
+    invoked when an entry binds a metric, so pure-text checks stay cheap.
+    """
+    errors: list[str] = []
+    location = "readiness.publicNumericClaims"
+    if not isinstance(entries, list):
+        return [f"{location}: must be an array of objects"]
+
+    valid_entries: list[tuple[int, dict[str, Any]]] = []
+    seen: set[tuple[str, str]] = set()
+    for index, entry in enumerate(entries):
+        entry_location = f"{location}[{index}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{entry_location}: must be an object")
+            continue
+        classification = entry.get("classification")
+        if classification not in PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS:
+            errors.append(
+                f"{entry_location}: classification must be one of "
+                f"{sorted(PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS)}"
+            )
+            continue
+        extra_keys = PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS[classification]
+        missing = sorted((PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS | extra_keys) - set(entry))
+        unexpected = sorted(set(entry) - PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS - extra_keys)
+        for key in missing:
+            errors.append(f"{entry_location}: {key} is required for a {classification} claim")
+        if unexpected:
+            errors.append(f"{entry_location}: unexpected field(s) {unexpected} for a {classification} claim")
+        for key in ("surface", "text", "owner", *extra_keys):
+            if key in entry and (not isinstance(entry[key], str) or not entry[key].strip()):
+                errors.append(f"{entry_location}: {key} must be a non-empty string")
+        if missing or unexpected or any(
+            not isinstance(entry.get(key), str) or not entry[key].strip()
+            for key in ("surface", "text", "owner", *extra_keys)
+        ):
+            continue
+        surface = entry["surface"]
+        if surface not in REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES or surface in GENERATED_CLAIM_SURFACES:
+            errors.append(f"{entry_location}: {surface} is not a governed public claim surface")
+            continue
+        key = (surface, " ".join(entry["text"].split()))
+        if key in seen:
+            errors.append(f"{entry_location}: duplicate entry for {surface}: {entry['text']!r}")
+            continue
+        seen.add(key)
+        valid_entries.append((index, entry))
+
+    measured: dict[str, int | float] | None = None
+    covered: dict[str, list[tuple[int, int]]] = {}
+    for index, entry in valid_entries:
+        entry_location = f"{location}[{index}]"
+        surface = entry["surface"]
+        text = surface_texts.get(surface)
+        if text is None:
+            errors.append(f"{entry_location}: surface {surface} could not be read")
+            continue
+        claims = list(PUBLIC_NUMERIC_CLAIM_PATTERN.finditer(entry["text"]))
+        if not claims:
+            errors.append(f"{entry_location}: text {entry['text']!r} contains no numeric claim")
+            continue
+        phrase = r"\s+".join(re.escape(word) for word in entry["text"].split())
+        spans = [
+            (match.start(), match.end())
+            # The phrase must not be the tail of a larger number, approximation,
+            # ratio, anchor, or bound: "64 nodes" never covers "~64 nodes".
+            for match in re.finditer(rf"(?<![\w.,/#$~+-]){phrase}(?![\w])", text)
+        ]
+        if not spans:
+            errors.append(f"{entry_location}: text {entry['text']!r} does not occur in {surface}")
+            continue
+        covered.setdefault(surface, []).extend(spans)
+        if entry["classification"] != "metric":
+            continue
+        metric_id = entry["metricId"]
+        if metric_id not in METRIC_IDS:
+            errors.append(f"{entry_location}: unknown metric {metric_id}")
+            continue
+        if len(claims) != 1:
+            errors.append(f"{entry_location}: a metric entry must hold exactly one numeric claim")
+            continue
+        claim = claims[0]
+        if claim.group("approx") or claim.group("ratio"):
+            errors.append(
+                f"{entry_location}: approximate or ratio claims cannot bind {metric_id}; "
+                "state the exact value or an N+ lower bound"
+            )
+            continue
+        if measured is None:
+            measured = dict(metric_values())
+        if metric_id not in measured:
+            errors.append(f"{entry_location}: metric {metric_id} is not measurable from the source tree")
+            continue
+        actual = measured[metric_id]
+        claimed = _claim_number(claim.group("value"))
+        if claim.group("plus"):
+            if claimed > actual:
+                errors.append(
+                    f"{entry_location}: {surface} claims at least {claimed} but {metric_id} is {actual}"
+                )
+        elif claimed != actual:
+            errors.append(f"{entry_location}: {surface} claims {claimed} but {metric_id} is {actual}")
+
+    for surface in sorted(surface_texts):
+        if surface in GENERATED_CLAIM_SURFACES:
+            continue
+        masked, block_errors = _mask_auto_blocks(surface_texts[surface])
+        errors.extend(f"{surface}:{message}" for message in block_errors)
+        exempt = list(covered.get(surface, []))
+        for pattern in managed_patterns.get(surface, ()):
+            exempt.extend((match.start(), match.end()) for match in pattern.finditer(masked) if match.group(0))
+        for claim in PUBLIC_NUMERIC_CLAIM_PATTERN.finditer(masked):
+            # Only a claim wholly inside an owned span is exempt; an overlapping
+            # claim carries a qualifier or number the owner never reviewed.
+            if any(start <= claim.start() and claim.end() <= end for start, end in exempt):
+                continue
+            line = masked.count("\n", 0, claim.start()) + 1
+            errors.append(
+                f"{surface}:{line}: unclaimed numeric claim {claim.group(0)!r}; bind it to a metric "
+                "or add a reviewed readiness.publicNumericClaims entry"
+            )
+    return errors
+
+
 class Validator:
     def __init__(
         self,
@@ -1052,6 +1481,92 @@ class Validator:
             return
         self.error(location, f"referenced path does not exist: {value}")
 
+    def validate_acceptance_status(self, item: dict[str, Any], location: str) -> None:
+        """Per-criterion progress must line up with the criteria and never outrun the item status.
+
+        Entry i records the state of acceptanceCriteria[i]; its criterionDigest binds it to
+        that criterion's exact wording, so rewording a criterion forces a fresh assessment.
+        "implemented" needs repository evidence, "evidenced" additionally needs an
+        exact-commit CI reference, an item with any progress cannot still be "open", and a
+        "done" item must have every criterion evidenced.
+        """
+        criteria = item.get("acceptanceCriteria")
+        entries = item.get("acceptanceStatus")
+        if not isinstance(criteria, list) or not isinstance(entries, list):
+            return  # the list-type check above already reported it
+        status_location = f"{location}.acceptanceStatus"
+        if len(entries) != len(criteria):
+            self.error(
+                status_location,
+                f"must hold one entry per acceptance criterion ({len(criteria)}), found {len(entries)}",
+            )
+            return
+        states: list[str] = []
+        for index, (criterion, entry) in enumerate(zip(criteria, entries)):
+            entry_location = f"{status_location}[{index}]"
+            if not isinstance(entry, dict):
+                self.error(entry_location, "must be an object")
+                continue
+            unknown = set(entry).difference({"criterionDigest", "state", "evidence", "note"})
+            self.require(not unknown, entry_location, f"unknown fields: {', '.join(sorted(unknown))}")
+            if isinstance(criterion, str):
+                self.require(
+                    entry.get("criterionDigest") == criterion_digest(criterion),
+                    entry_location,
+                    "criterionDigest does not match acceptanceCriteria[{}]; the criterion changed, so "
+                    "re-assess it and record {}".format(index, criterion_digest(criterion)),
+                )
+            state = entry.get("state")
+            if state not in ACCEPTANCE_STATES:
+                self.error(entry_location, f"state must be one of {', '.join(ACCEPTANCE_STATES)}")
+                continue
+            states.append(state)
+            note = entry.get("note")
+            self.require(
+                isinstance(note, str) and bool(note.strip()) and len(note) <= 400,
+                entry_location,
+                "note must be a non-empty string of at most 400 characters",
+            )
+            evidence = entry.get("evidence")
+            if not isinstance(evidence, list) or not all(isinstance(value, str) for value in evidence):
+                self.error(entry_location, "evidence must be an array of strings")
+                continue
+            ci_references = [value for value in evidence if value.startswith("ci:")]
+            for value in ci_references:
+                self.require(
+                    bool(ACCEPTANCE_CI_REFERENCE.match(value)),
+                    entry_location,
+                    f"CI evidence must look like ci:<workflow>/<run id>@<40-hex commit>: {value}",
+                )
+            for evidence_index, value in enumerate(evidence):
+                if not value.startswith("ci:"):
+                    self.require_path(value, f"{entry_location}.evidence[{evidence_index}]")
+            if state != "unmet":
+                self.require(
+                    any(not value.startswith("ci:") for value in evidence),
+                    entry_location,
+                    f"a {state} criterion must cite the committed test or check that proves it",
+                )
+            if state == "evidenced":
+                self.require(
+                    bool(ci_references),
+                    entry_location,
+                    "an evidenced criterion must cite the exact-commit CI run (ci:<workflow>/<run id>@<commit>)",
+                )
+        status = item.get("status")
+        if status == "open":
+            self.require(
+                all(state == "unmet" for state in states),
+                status_location,
+                "an open work item has no implemented or evidenced criteria; set its status to in-progress",
+            )
+        if status == "done":
+            self.require(
+                bool(states) and all(state == "evidenced" for state in states),
+                status_location,
+                "a done work item must have every acceptance criterion evidenced",
+            )
+
     def validate_selectors(self, item: dict[str, Any], location: str) -> None:
         """Resolve requiredCiJobs and testSelectors, or require declared debt."""
         resolvers = {
@@ -1096,10 +1611,96 @@ class Validator:
                 f"schemaVersion must be {SCHEMA_VERSION}",
             )
 
+    def validate_work_item_presets(
+        self,
+        identifier: str,
+        commands: list[Any],
+        location: str,
+        planned_uses: dict[str, set[str]],
+    ) -> None:
+        """Resolve every preset and build tree a work item's commands name.
+
+        A ``--preset`` must exist in its CMake family, a ``build/<dir>`` tree
+        must be some configure preset's binaryDir, and a CTest run must target a
+        configure preset that builds tests. A preset that sets BUILD_TESTS=OFF
+        is accepted for CTest only when the same item configures that preset
+        with -DBUILD_TESTS=ON.
+        """
+        index = cmake_preset_index()
+        references = [
+            (command_index, reference)
+            for command_index, command in enumerate(commands)
+            if isinstance(command, str)
+            for reference in preset_references(command)
+        ]
+        test_enabled = {
+            reference.name
+            for _, reference in references
+            if reference.kind == "configure" and reference.enables_tests
+        }
+        for command_index, reference in references:
+            command_location = f"{location}.commands[{command_index}]"
+            preset_name = reference.name
+            if reference.kind == "binaryDir":
+                preset_name = reference.name.split("/", 1)[1]
+                if reference.name not in index.binary_dirs:
+                    if self._planned_preset_allowed(identifier, preset_name, reference.tool, planned_uses):
+                        continue
+                    self.error(
+                        command_location,
+                        f"build tree {reference.name!r} is not the binaryDir of any configure preset "
+                        "in CMakePresets.json",
+                    )
+                    continue
+            elif not index.exists(reference.kind, preset_name):
+                if reference.kind in {"configure", "build"} and self._planned_preset_allowed(
+                    identifier, preset_name, reference.tool, planned_uses
+                ):
+                    continue
+                self.error(
+                    command_location,
+                    f"--preset {preset_name!r} names no {reference.kind} preset in CMakePresets.json",
+                )
+                continue
+            if reference.tool != "ctest":
+                continue
+            configure_name = index.configure_for(reference)
+            if configure_name is None:
+                self.error(command_location, f"CTest target {reference.name!r} resolves to no configure preset")
+            elif not index.builds_tests(configure_name) and configure_name not in test_enabled:
+                self.error(
+                    command_location,
+                    f"CTest runs against configure preset {configure_name!r}, which sets BUILD_TESTS=OFF; "
+                    "use a validation preset or configure it with -DBUILD_TESTS=ON in this work item",
+                )
+
+    @staticmethod
+    def _planned_preset_allowed(
+        identifier: str, preset_name: str, tool: str, planned_uses: dict[str, set[str]]
+    ) -> bool:
+        if tool != "cmake" or PLANNED_CMAKE_PRESETS.get(preset_name) != identifier:
+            return False
+        planned_uses.setdefault(preset_name, set()).add(identifier)
+        return True
+
+    def validate_planned_presets(self, by_id: dict[Any, dict[str, Any]], planned_uses: dict[str, set[str]]) -> None:
+        index = cmake_preset_index()
+        for preset_name, owner in sorted(PLANNED_CMAKE_PRESETS.items()):
+            entry_location = f"PLANNED_CMAKE_PRESETS[{preset_name!r}]"
+            if index.exists("configure", preset_name) or index.exists("build", preset_name):
+                self.error(entry_location, "preset now exists in CMakePresets.json; remove the planned entry")
+            elif owner not in by_id:
+                self.error(entry_location, f"owner {owner} is not a work item")
+            elif by_id[owner].get("status") == "done":
+                self.error(entry_location, f"owner {owner} is done, so the planned preset must exist or be removed")
+            elif owner not in planned_uses.get(preset_name, set()):
+                self.error(entry_location, f"owner {owner} no longer references this preset; remove the entry")
+
     def validate_work_items(self) -> set[str]:
         items = self.contract["workItems"]
         item_ids = self.unique_ids(items, "workItems")
         by_id = {item.get("id"): item for item in items}
+        planned_preset_uses: dict[str, set[str]] = {}
         for item in items:
             identifier = item.get("id", "?")
             location = f"workItems.{identifier}"
@@ -1157,6 +1758,8 @@ class Validator:
                                 "executable CTest commands must include --no-tests=error "
                                 "unless they are --show-only=json-v1 discovery commands",
                             )
+            if isinstance(commands, list):
+                self.validate_work_item_presets(identifier, commands, location, planned_preset_uses)
             for dependency in item.get("dependencies", []):
                 self.require(dependency in item_ids, location, f"unknown dependency {dependency}")
                 self.require(dependency != identifier, location, "cannot depend on itself")
@@ -1165,10 +1768,15 @@ class Validator:
                 self.require(parallel != identifier, location, "cannot be parallel with itself")
             for index, source_path in enumerate(item.get("sourceContext", [])):
                 self.require_path(source_path, f"{location}.sourceContext[{index}]")
+            # A done item has delivered its outputs, so the future allowlist no
+            # longer excuses any of them.
+            allow_future = item.get("status") != "done"
             for key in ("entryPoints", "documentationUpdates"):
                 for index, target_path in enumerate(item.get(key, [])):
-                    self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=True)
+                    self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=allow_future)
             self.validate_selectors(item, location)
+            self.validate_acceptance_status(item, location)
+        self.validate_planned_presets(by_id, planned_preset_uses)
 
         visiting: set[str] = set()
         visited: set[str] = set()
@@ -1253,6 +1861,13 @@ class Validator:
                 ]
                 self.require(not unfinished, location, f"ready capability has unfinished blockers: {unfinished}")
                 self.require(not nonpassing, location, f"ready capability has non-passing gates: {nonpassing}")
+                # Without a gate or evidence, "ready" would rest on nothing checkable.
+                self.require(
+                    bool(capability.get("requiredGateIds")),
+                    location,
+                    "ready capability must name at least one required gate",
+                )
+                self.require(bool(capability.get("evidence")), location, "ready capability requires evidence")
                 transitive = self.unfinished_dependency_paths(capability.get("blockingWorkItemIds", []), item_by_id)
                 self.require(
                     not transitive,
@@ -1276,6 +1891,7 @@ class Validator:
                     if work_id in item_by_id and item_by_id[work_id].get("status") != "done"
                 ]
                 self.require(not unfinished, location, f"passing gate has unfinished blockers: {unfinished}")
+                self.require(bool(gate.get("evidence")), location, "passing gate requires evidence")
                 transitive = self.unfinished_dependency_paths(gate.get("blockingWorkItemIds", []), item_by_id)
                 self.require(
                     not transitive,
@@ -1951,6 +2567,43 @@ class Validator:
             )
         return profile_ids
 
+    def validate_no_hardcoded_claims(self) -> None:
+        """DOC-400: site contract copy states no count, SHA, CI run, or version literal."""
+        documents = {surface: self.contract.get(key) for surface, key in HARDCODED_CLAIM_SURFACES.items()}
+        for message in hardcoded_site_claim_errors(documents):
+            self.error("no-hardcoded-claims", message)
+
+    def validate_public_numeric_claims(self) -> None:
+        """Every hand-written count on a governed surface resolves to a contract entry."""
+        entries = self.contract["readiness"].get("publicNumericClaims")
+        if entries is None:
+            self.error("readiness.publicNumericClaims", "is required")
+            return
+        texts: dict[str, str] = {}
+        for surface in sorted(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES):
+            path = REPO_ROOT / surface
+            if path.is_file():
+                texts[surface] = path.read_text(encoding="utf-8", errors="replace")
+        if isinstance(entries, list):
+            for index, entry in enumerate(entries):
+                if isinstance(entry, dict) and entry.get("classification") == "static-fact" and "evidencePath" in entry:
+                    self.require_path(entry["evidencePath"], f"readiness.publicNumericClaims[{index}].evidencePath")
+        self.errors.extend(
+            public_numeric_claim_errors(texts, entries, source_metric_values, managed_numeric_claim_patterns())
+        )
+
+    def validate_online_service_boundary(self) -> None:
+        """No governed public surface may claim hosted online services (OD-08, NET-110)."""
+        texts: dict[str, str] = {}
+        for surface in sorted(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES | ONLINE_SERVICE_BOUNDARY_SURFACES):
+            path = REPO_ROOT / surface
+            if surface in ONLINE_SERVICE_BOUNDARY_SURFACES:
+                self.require(path.is_file(), f"onlineServiceBoundary.{surface}", "boundary surface must exist")
+            if path.is_file():
+                texts[surface] = path.read_text(encoding="utf-8", errors="replace")
+        for violation in hosted_online_service_claim_errors(texts):
+            self.error("onlineServiceBoundary", violation)
+
     def validate_build_matrix_evidence(self) -> None:
         """The build-matrix configuration evidence is part of the contract, not beside it.
 
@@ -2146,11 +2799,13 @@ class Validator:
             policy_gaps = legal.get("policyGaps")
             policy_location = "content.legal.policyGaps"
             status = gov_items[0].get("status")
-            if status == "open" or policy_gaps is not None:
+            # Any status short of done (open, in-progress, blocked) leaves the legal gaps unresolved.
+            unfinished = status != "done"
+            if unfinished or policy_gaps is not None:
                 self.require(
                     isinstance(policy_gaps, list),
                     policy_location,
-                    "must be a list of non-empty unique strings while GOV-400 is open",
+                    "must be a list of non-empty unique strings while GOV-400 is not done",
                 )
             if isinstance(policy_gaps, list):
                 all_non_empty_strings = all(
@@ -2167,11 +2822,11 @@ class Validator:
                         policy_location,
                         "must contain unique strings",
                     )
-                if status == "open":
+                if unfinished:
                     self.require(
                         bool(policy_gaps),
                         policy_location,
-                        "must contain at least one policy gap while GOV-400 is open",
+                        "must contain at least one policy gap while GOV-400 is not done",
                     )
                 if status == "done":
                     self.require(
@@ -2274,6 +2929,79 @@ class Validator:
         for path in catalog.get("routeOverrides", {}):
             self.require_path(path, f"docsCatalog.routeOverrides.{path}", allow_future=True)
 
+    def validate_prose_references(self, item_ids: set[str], gate_ids: set[str]) -> None:
+        """Require every work-item or gate ID named in contract text to be declared.
+
+        Structured ID fields are checked where they are declared; this covers the
+        free text (rationale, readinessChanges, summaries, limitations, website
+        copy) where a renamed or deleted item would otherwise linger unnoticed.
+        Work-item prefixes come from the declared IDs, so "SHA-256" or "UTF-8"
+        never read as references.
+        """
+        prefixes = sorted({identifier.split("-", 1)[0] for identifier in item_ids if "-" in identifier})
+        if not prefixes:
+            return
+        reference = re.compile(rf"\b(?:(?:{'|'.join(map(re.escape, prefixes))})-\d{{3}}|G\d{{2}})\b")
+
+        def walk(value: Any, location: str) -> None:
+            if isinstance(value, str):
+                for token in dict.fromkeys(reference.findall(value)):
+                    if "-" not in token:
+                        self.require(token in gate_ids, location, f"names unknown gate {token}")
+                    else:
+                        self.require(token in item_ids, location, f"names unknown work item {token}")
+            elif isinstance(value, list):
+                for entry in value:
+                    walk(entry, location)
+            elif isinstance(value, dict):
+                for key, entry in value.items():
+                    walk(entry, f"{location}.{key}")
+
+        for item in self.contract["workItems"]:
+            walk(item, f"workItems.{item.get('id', '?')}")
+        readiness = self.contract["readiness"]
+        for capability in readiness.get("capabilities", []):
+            walk(capability, f"capabilities.{capability.get('id', '?')}")
+        for gate in readiness.get("gates", []):
+            walk(gate, f"gates.{gate.get('id', '?')}")
+        for profile in readiness.get("releaseProfiles", []):
+            walk(profile, f"releaseProfiles.{profile.get('id', '?')}")
+        for key, value in readiness.items():
+            if key not in {"capabilities", "gates", "releaseProfiles"}:
+                walk(value, f"readiness.{key}")
+        walk(self.contract["content"], "content")
+
+    def validate_future_acceptance_paths(self) -> None:
+        """Keep FUTURE_ACCEPTANCE_PATHS limited to planned outputs that are still missing.
+
+        Mirrors the plannedTestSelectors promotion rule: once a path exists, or
+        once nothing plans it any more, its allowlist entry is stale debt that
+        would silently excuse a later deletion or a typo.
+        """
+        catalog = self.contract["docsCatalog"]
+        # A done item never resolves through the allowlist (require_path rejects
+        # it), so only unfinished work keeps an entry alive.
+        references = [
+            path
+            for item in self.contract["workItems"]
+            if item.get("status") != "done"
+            for key in ("entryPoints", "documentationUpdates")
+            for path in item.get(key, [])
+            if isinstance(path, str)
+        ]
+        references.extend(path for path in catalog.get("featuredSourcePaths", []) if isinstance(path, str))
+        references.extend(path for path in catalog.get("routeOverrides", {}) if isinstance(path, str))
+        for entry in sorted(FUTURE_ACCEPTANCE_PATHS):
+            location = f"FUTURE_ACCEPTANCE_PATHS[{entry!r}]"
+            if any(REPO_ROOT.glob(entry)):
+                self.error(location, f"{entry} now exists and must be removed from FUTURE_ACCEPTANCE_PATHS")
+            if not any(fnmatch.fnmatchcase(reference, entry) for reference in references):
+                self.error(
+                    location,
+                    "referenced by no unfinished work item entryPoints/documentationUpdates or "
+                    "docs catalog path; remove the entry",
+                )
+
     def validate_modules(self) -> None:
         discovered = sorted(
             path.name for path in (REPO_ROOT / "GameModules").glob("SparkGame*")
@@ -2288,6 +3016,85 @@ class Validator:
             self.require(len(values) == len(dimensions), f"parity.{module}", "score count differs from dimensions")
             for value in values:
                 self.require(value in {0, 1, 2, 3, "N/A"}, f"parity.{module}", f"invalid score {value!r}")
+        self.validate_parity_evidence(dimensions, scores, parity.get("parityEvidence", {}))
+
+    def validate_parity_evidence(self, dimensions: list[Any], scores: dict[str, Any], evidence: Any) -> None:
+        """A score of 3 ("validated shipping candidate") must be backed by evidence.
+
+        Hand-written scores cost nothing to raise, so a 3 is accepted only when the
+        module is included in a release profile and parityEvidence names, for that
+        module and dimension, a registered test selector and a CI job that the
+        required-ci-gate aggregate depends on. Every evidence entry must resolve,
+        whatever the score it sits under, so stale evidence cannot linger.
+        """
+        location = "parityDimensions.parityEvidence"
+        if not isinstance(evidence, dict):
+            self.error(location, "must be an object keyed by module")
+            return
+        required_jobs = required_gate_jobs()
+        manifest = load_json(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        in_profile = {
+            module
+            for profile in manifest.get("profiles", [])
+            for module in profile.get("includedModules", [])
+        }
+        resolved: dict[tuple[str, str], dict[str, list[str]]] = {}
+        for module, by_dimension in evidence.items():
+            module_location = f"{location}.{module}"
+            if module not in scores:
+                self.error(module_location, "names no scored module")
+                continue
+            if not isinstance(by_dimension, dict) or not by_dimension:
+                self.error(module_location, "must be a non-empty object keyed by dimension")
+                continue
+            for dimension, entry in by_dimension.items():
+                entry_location = f"{module_location}.{dimension}"
+                if dimension not in dimensions:
+                    self.error(entry_location, "names no parity dimension")
+                    continue
+                if not isinstance(entry, dict) or set(entry) - {"testSelectors", "requiredCiJobs"}:
+                    self.error(entry_location, "must be an object with only testSelectors and requiredCiJobs")
+                    continue
+                accepted: dict[str, list[str]] = {"testSelectors": [], "requiredCiJobs": []}
+                for key, resolves, reason in (
+                    ("testSelectors", resolve_test_selector, "no CTest test, label, or SparkTests definition matches"),
+                    ("requiredCiJobs", resolve_ci_job, "no workflow job is defined with this id"),
+                ):
+                    values = entry.get(key, [])
+                    if not isinstance(values, list):
+                        self.error(f"{entry_location}.{key}", "must be an array")
+                        continue
+                    for index, value in enumerate(values):
+                        value_location = f"{entry_location}.{key}[{index}]"
+                        if not isinstance(value, str) or not value:
+                            self.error(value_location, "must be a non-empty string")
+                        elif not resolves(value):
+                            self.error(value_location, f"{value!r} resolves to nothing: {reason}")
+                        elif key == "requiredCiJobs" and value not in required_jobs:
+                            self.error(value_location, f"{value!r} is not a need of required-ci-gate")
+                        else:
+                            accepted[key].append(value)
+                resolved[(module, dimension)] = accepted
+        for module, values in scores.items():
+            if not isinstance(values, list):
+                continue
+            for dimension, value in zip(dimensions, values):
+                if value != 3:
+                    continue
+                cell = f"parity.{module}.{dimension}"
+                self.require(
+                    module in in_profile,
+                    cell,
+                    "score 3 (validated shipping candidate) requires the module to be included in a release "
+                    "profile in tools/module-evidence/manifest.json",
+                )
+                accepted = resolved.get((module, dimension), {})
+                self.require(
+                    bool(accepted.get("testSelectors")) and bool(accepted.get("requiredCiJobs")),
+                    cell,
+                    "score 3 (validated shipping candidate) requires parityEvidence naming at least one resolving "
+                    "test selector and one required-ci-gate job",
+                )
 
     def validate(
         self,
@@ -2305,6 +3112,7 @@ class Validator:
         self.validate_modules()
         item_ids = self.validate_work_items()
         capability_ids, gate_ids = self.validate_readiness(item_ids)
+        self.validate_prose_references(item_ids, gate_ids)
         profile_ids = self.validate_release_profiles(item_ids, capability_ids, gate_ids)
         for message in finalization_contract_errors(self.contract):
             self.error("publicationFinalization", message)
@@ -2316,12 +3124,19 @@ class Validator:
                 self.error("predecessor candidate readiness", message)
         self.validate_execution(item_ids)
         self.validate_content(capability_ids, profile_ids)
+        self.validate_no_hardcoded_claims()
         for location, message in validate_assets():
             self.error(location, message)
         for location, message in validate_module_content(REPO_ROOT):
             self.error(location, message)
         self.validate_docs_catalog()
+        self.validate_future_acceptance_paths()
         self.validate_build_matrix_evidence()
+        # CI-120: README/wiki/CLAUDE.md quick starts resolve against CMakePresets.json.
+        for finding in check_documented_build_commands():
+            self.error(f"{finding.path}:{finding.line}", finding.message)
+        self.validate_public_numeric_claims()
+        self.validate_online_service_boundary()
         self.validate_legal(strict_public_wording=legal)
         if assets:
             self.validate_asset_surface()

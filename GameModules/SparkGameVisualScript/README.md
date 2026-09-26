@@ -21,6 +21,29 @@ Useful console commands:
 
 Module load is intentionally fail-fast. All five scripts must exist and compile, and all eleven script instances must
 attach successfully; otherwise the partial world is rolled back instead of presenting a silently broken example.
+Each script must also declare `uint selfEntity = 0;` exactly once. The rejection diagnostic names the script file, and
+the line when the fault has one (a compile error, a constructor fault while attaching, a duplicated placeholder).
+File paths use forward slashes on every platform, matching the AngelScript builder's compile diagnostics.
+This load, spawn and rollback path lives in `Source/Core/VisualScriptDemoWorld.cpp`, which the module shell calls from
+`OnLoad` and `vs_restart`. `Tests/TestMOD390VisualScriptDiagnosticsReal.cpp` (the `VisualScriptDiagnostics_*` tests)
+runs that file against a real `World` and `AngelScriptEngine`.
+
+`Tests/TestMOD390VisualScriptGameplayReal.cpp` (the `VisualScriptGameplay_*` tests) plays the shipped scripts headless.
+It holds W/A/S/D through a real `InputManager` in the injected `EngineContext`, where the scripts' `getKey` reads it,
+and ticks every script at the module's sanitized frame delta. The player collects all five coins and `GameManager`
+announces the win with a score of 500. Enemy contact costs 10 HP per strike, and the health pack heals 30, hides,
+and respawns after 10 seconds. The test reads outcomes only from state the scripts write: positions, health, and
+their `print` output.
+
+## Blueprint-lab kit
+
+After a successful spawn, `DemoWorld::PlaceKitProps` dresses the demo with the Blender-authored kit in
+`Assets/Models/VisualScript/Kit`: a `pressure_plate` under the player spawn with a `lever` beside it, and a
+`sliding_door` behind the coin row flanked by two `signal_lamp`s. The five `VSKit_*` entities carry only a transform
+and a mesh, no script, so the eleven-script-entity contract is unchanged; `GetKitProps()` lists them, and
+`DestroyEntities()` removes them on restart, rollback and unload. They are set dressing: the lever, plate and door do
+not drive gameplay, and nobody has reviewed them in a running engine yet. Source, provenance, and preview are in
+`Art/Blender/SparkGameVisualScript/`, and `asset-references.json` records every asset path the module source names.
 
 ## AngelScript build contract
 

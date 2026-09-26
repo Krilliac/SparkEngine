@@ -119,6 +119,18 @@ Physics -> Animation -> AI -> Scripting -> Audio -> Lifecycle -> Render
 
 Within the Scripting phase, `Start()` is called before `Update()` for any newly attached scripts. `OnCollision()` is dispatched after the Physics phase delivers collision events.
 
+## Physics and Event Bindings (AngelScriptEngine)
+
+`AngelScriptEngine::RegisterGlobalFunctions()` binds these to production subsystems (ENG-200, covered by `Tests/TestENG200ScriptBindingsReal.cpp`, CTest `ScriptBindingsReal`, label `scripting-integration`):
+
+| Script signature | Behaviour |
+|------------------|-----------|
+| `void applyForce(EntityID, const Vector3 &in)` | Adds a world-space force (N) to the entity's Dynamic Jolt body through its `RigidBodyComponent`; integrated over the next physics step and wakes the body. Static/Kinematic bodies, entities without a body yet, and non-finite forces are ignored with a one-time warning. |
+| `float getSpeed(EntityID)` | Live linear speed (m/s) of the entity's Jolt body; falls back to the component's cached velocity before the body exists, and 0 without a `RigidBodyComponent`. |
+| `void fireEvent(const string &in)` | Publishes `Spark::ScriptEvent{eventName, sourceEntity}` synchronously on `EngineContext::GetEventBus()`. `sourceEntity` is the entity whose script is executing (`AngelScriptEngine::GetExecutingEntity()`), including from the constructor. Dropped with a one-time warning when no bus is registered. |
+
+All three run on the game thread that dispatches the script callbacks and never fault the calling script.
+
 ## Engine API (Available in Scripts)
 
 The `ScriptAPIRegistry` in `ScriptHotReload.h` documents every function registered with the AngelScript VM. They are organized by category:

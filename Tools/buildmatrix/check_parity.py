@@ -385,7 +385,7 @@ def check_shipping_preset_options(
     for name, expected, detail in (
         ("SPARK_STRICT_DEPS", "ON", "Stable-v1 must fail on a missing critical dependency."),
         ("SPARK_NATIVE_ARCH", "OFF", "Distributed binaries cannot inherit the build host CPU."),
-        ("STRIP_DEBUG_SYMBOLS", "ON", "Shipping binaries must not emit debug symbols or PDB paths."),
+        ("STRIP_DEBUG_SYMBOLS", "ON", "Private symbols must stay out of the Shipping runtime package."),
         ("CMAKE_BUILD_TYPE", "MINSIZEREL", "Shipping must stay distinct from the Debug and Release configurations."),
         ("ENABLE_PROFILING", "OFF", "Profiling instrumentation is a development-only toggle."),
         ("ENABLE_CONSOLE_IN_SHIPPING", "OFF", "The developer console must not ship in stable-v1 binaries."),

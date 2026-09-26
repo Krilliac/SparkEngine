@@ -9,6 +9,7 @@
 
 #include "GameplayShowcase.h"
 
+#include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/LogMacros.h"
 #include "Engine/SaveSystem/SaveSystem.h"
@@ -17,6 +18,8 @@
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/ECS/Components.h"
 #include "Utils/SparkConsole.h"
+
+#include <algorithm>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -47,6 +50,7 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
     SpawnEntity("Player");
     SpawnEntity("Enemy_Alpha");
     SpawnEntity("Enemy_Bravo");
+    SpawnExhibit();
 
     // Kick off the coroutine demo (spawn → wait → damage → wait → heal)
     StartShowcaseCoroutine();
@@ -64,26 +68,42 @@ void GameplayShowcase::Shutdown()
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Showcase] Shutting down gameplay showcase...");
 
+    // The lifecycle coroutine's steps capture `this` and their callables live in this
+    // module image: stop it (which destroys it outside a scheduler tick) before the
+    // showcase or the image goes away.
+    if (m_coroutineScheduled)
+    {
+        if (auto* scheduler = m_context ? m_context->GetCoroutineScheduler() : nullptr)
+            scheduler->StopCoroutine(LifecycleCoroutineName);
+        m_coroutineScheduled = false;
+        m_coroutineStage = "stopped";
+    }
+    m_coroutineTarget.reset();
+
     if (m_registeredTagSerializer)
     {
         Spark::ComponentSerializerRegistry::GetInstance().Unregister("TagComponent");
         m_registeredTagSerializer = false;
     }
 
-    // Destroy spawned entities
+    // Destroy spawned entities and exhibit props
     auto* world = m_context ? m_context->GetWorld() : nullptr;
     if (world)
     {
-        for (uint32_t entityId : m_spawnedEntities)
+        for (const auto* tracked : {&m_spawnedEntities, &m_exhibitEntities})
         {
-            auto entity = static_cast<EntityID>(entityId);
-            if (world->GetRegistry().valid(entity))
+            for (uint32_t entityId : *tracked)
             {
-                world->DestroyEntity(entity);
+                auto entity = static_cast<EntityID>(entityId);
+                if (world->GetRegistry().valid(entity))
+                {
+                    world->DestroyEntity(entity);
+                }
             }
         }
     }
     m_spawnedEntities.clear();
+    m_exhibitEntities.clear();
 
     // Release RAII subscription handles (auto-unsubscribes from EventBus)
     m_subscriptions.clear();
@@ -259,12 +279,101 @@ void GameplayShowcase::RegisterCustomSerializer()
 
 void GameplayShowcase::StartShowcaseCoroutine()
 {
-    // CoroutineScheduler.h cannot be included from game module DLLs (C++20
-    // coroutine header bugs with GCC 13). The showcase lifecycle sequence
-    // (spawn → 3s → damage → 2s → heal) would be driven by the coroutine
-    // scheduler; entity management still works via World/ECS directly.
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        "[Showcase] Coroutine: lifecycle sequence configured (spawn -> damage -> heal)");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    auto* scheduler = m_context->GetCoroutineScheduler();
+    if (!scheduler)
+    {
+        m_coroutineStage = "unavailable (host exposes no CoroutineScheduler)";
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "Showcase coroutine not started: host exposes no CoroutineScheduler");
+        console.LogWarning("[Showcase] Coroutine sequence unavailable: host exposes no CoroutineScheduler");
+        return;
+    }
+
+    // spawn -> 3 s -> damage -> 2 s -> heal, ticked by the host's scheduler.
+    scheduler->StartCoroutine(LifecycleCoroutineName)
+        .Do([this]() { SpawnCoroutineTarget(); })
+        .WaitForSeconds(CoroutineDamageDelaySeconds)
+        .Do([this]() { DamageCoroutineTarget(); })
+        .WaitForSeconds(CoroutineHealDelaySeconds)
+        .Do([this]() { HealCoroutineTarget(); });
+    m_coroutineScheduled = true;
+    m_coroutineStage = "scheduled";
+    console.LogInfo("[Showcase] Coroutine sequence scheduled (spawn -> 3s -> damage -> 2s -> heal)");
+}
+
+void GameplayShowcase::AbortCoroutineSequence(const std::string& reason)
+{
+    // Record the first failure and cancel the remaining steps so a later step cannot overwrite the root
+    // cause. Called from inside a step, so the scheduler defers destruction to the end of this tick.
+    m_coroutineStage = "failed: " + reason;
+    m_coroutineScheduled = false;
+    if (auto* scheduler = m_context ? m_context->GetCoroutineScheduler() : nullptr)
+        scheduler->StopCoroutine(LifecycleCoroutineName);
+    Spark::SimpleConsole::GetInstance().LogWarning("[Showcase] Coroutine sequence aborted: " + reason);
+}
+
+HealthComponent* GameplayShowcase::FindCoroutineTargetHealth()
+{
+    auto* world = m_context ? m_context->GetWorld() : nullptr;
+    if (!world || !m_coroutineTarget)
+        return nullptr;
+
+    const auto entity = static_cast<EntityID>(*m_coroutineTarget);
+    if (!world->GetRegistry().valid(entity))
+        return nullptr;
+    return world->GetComponent<HealthComponent>(entity);
+}
+
+void GameplayShowcase::SpawnCoroutineTarget()
+{
+    const size_t before = m_spawnedEntities.size();
+    const std::string result = SpawnEntity("CoroutineTarget");
+    if (m_spawnedEntities.size() == before)
+    {
+        AbortCoroutineSequence(result);
+        return;
+    }
+
+    m_coroutineTarget = m_spawnedEntities.back();
+    m_coroutineStage = "spawned target";
+    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Coroutine: " + result);
+}
+
+void GameplayShowcase::DamageCoroutineTarget()
+{
+    auto* health = FindCoroutineTargetHealth();
+    if (!health)
+    {
+        AbortCoroutineSequence("target lost before damage");
+        return;
+    }
+
+    const float damage = std::min(CoroutineHealthDelta, health->health);
+    health->health -= damage;
+    m_coroutineStage = "damaged target";
+
+    if (auto* eventBus = m_context->GetEventBus())
+    {
+        eventBus->Publish(Spark::EntityDamagedEvent{
+            .entityId = *m_coroutineTarget, .damage = damage, .damageSource = "ShowcaseCoroutine"});
+    }
+}
+
+void GameplayShowcase::HealCoroutineTarget()
+{
+    auto* health = FindCoroutineTargetHealth();
+    if (!health)
+    {
+        AbortCoroutineSequence("target lost before heal");
+        return;
+    }
+
+    health->health = std::min(health->maxHealth, health->health + CoroutineHealthDelta);
+    m_coroutineScheduled = false;
+    m_coroutineStage = "complete";
+    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Coroutine: target healed to " +
+                                                std::to_string(static_cast<int>(health->health)) +
+                                                " HP — sequence complete");
 }
 
 // =============================================================================
@@ -279,6 +388,7 @@ std::string GameplayShowcase::GetStatus() const
     status += "Kill events: " + std::to_string(m_totalKillEvents) + "\n";
     status += "Weather changes: " + std::to_string(m_totalWeatherChanges) + "\n";
     status += "Total damage dealt: " + std::to_string(static_cast<int>(m_totalDamageDealt)) + "\n";
+    status += "Coroutine sequence: " + m_coroutineStage + "\n";
 
     // Weather info
     auto* weather = m_context ? m_context->GetWeather() : nullptr;
@@ -352,14 +462,36 @@ std::string GameplayShowcase::DoQuickLoad()
     if (!saveSystem || !world)
         return "Save system or world not available";
 
-    if (saveSystem->QuickLoad(*world))
+    if (!saveSystem->QuickLoad(*world))
+        return "QuickLoad failed — no quicksave found";
+
+    // The snapshot records world state, not the coroutine's progress, and the load renumbered
+    // every entity (including the coroutine target). Resuming the sequence would drive a stale
+    // entity id, and restarting it would spawn into the restored world, so cancel it instead.
+    if (m_coroutineScheduled)
     {
-        // Re-track entities after load (previous entity IDs are invalidated)
-        m_spawnedEntities.clear();
-        Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] QuickLoad succeeded");
-        return "QuickLoad successful";
+        if (auto* scheduler = m_context->GetCoroutineScheduler())
+            scheduler->StopCoroutine(LifecycleCoroutineName);
+        m_coroutineScheduled = false;
+        m_coroutineStage = "stopped by quickload";
     }
-    return "QuickLoad failed — no quicksave found";
+    m_coroutineTarget.reset();
+
+    // The restored world replaced every entity, so re-track the restored showcase entities.
+    // Ascending entity id is the save file's record order, which is stable for a given save.
+    m_spawnedEntities.clear();
+    for (EntityID entity : world->GetEntitiesWith<TagComponent>())
+    {
+        const auto* tag = world->GetComponent<TagComponent>(entity);
+        if (tag && tag->HasTag("showcase"))
+            m_spawnedEntities.push_back(static_cast<uint32_t>(entity));
+    }
+    std::sort(m_spawnedEntities.begin(), m_spawnedEntities.end());
+    m_exhibitEntities.clear();
+
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        "[Showcase] QuickLoad succeeded — " + std::to_string(m_spawnedEntities.size()) + " showcase entities restored");
+    return "QuickLoad successful (" + std::to_string(m_spawnedEntities.size()) + " showcase entities restored)";
 }
 
 std::string GameplayShowcase::SpawnEntity(const std::string& name)
@@ -391,6 +523,44 @@ std::string GameplayShowcase::SpawnEntity(const std::string& name)
 }
 
 // =============================================================================
+// Exhibit — Blender-authored Engine Showcase kit
+// =============================================================================
+
+void GameplayShowcase::SpawnExhibit()
+{
+    auto* world = m_context->GetWorld();
+    if (!world)
+        return;
+
+    // Props from tools/blender/author_showcase_kit.py (source Art/Blender/SparkGame/showcase_kit.blend):
+    // meters, pivot at the ground contact centre, front facing +Z. They stand in a row 4 m behind the
+    // SpawnEntity grid (x = 0, 3, 6, ...) and face it. The OBJ/MTL base colours render without a material.
+    struct ExhibitProp
+    {
+        const char* name;
+        const char* meshPath;
+        float x;
+    };
+    static constexpr ExhibitProp exhibit[] = {
+        {"Exhibit_DisplayPedestal", "Assets/Models/Showcase/Kit/display_pedestal.obj", -1.5f},
+        {"Exhibit_InfoSignpost", "Assets/Models/Showcase/Kit/info_signpost.obj", 1.5f},
+        {"Exhibit_SupplyCrate", "Assets/Models/Showcase/Kit/supply_crate.obj", 4.5f},
+        {"Exhibit_LightPylon", "Assets/Models/Showcase/Kit/light_pylon.obj", 7.5f},
+    };
+    for (const ExhibitProp& prop : exhibit)
+    {
+        EntityID entity = world->CreateEntity(prop.name);
+        world->AddComponent<Transform>(entity, Transform{{prop.x, 0.0f, -4.0f}, {0, 0, 0}, {1, 1, 1}});
+        MeshRenderer& renderer = world->AddComponent<MeshRenderer>(entity);
+        renderer.meshPath = prop.meshPath;
+        m_exhibitEntities.push_back(static_cast<uint32_t>(entity));
+    }
+
+    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Placed " + std::to_string(m_exhibitEntities.size()) +
+                                                " exhibit props from Assets/Models/Showcase/Kit");
+}
+
+// =============================================================================
 // Debug UI
 // =============================================================================
 
@@ -404,6 +574,7 @@ void GameplayShowcase::RenderDebugUI()
     ImGui::Text("Damage Events: %u (%.0f total dmg)", m_totalDamageEvents, m_totalDamageDealt);
     ImGui::Text("Kill Events: %u", m_totalKillEvents);
     ImGui::Text("Weather Changes: %u", m_totalWeatherChanges);
+    ImGui::Text("Coroutine sequence: %s", m_coroutineStage.c_str());
 
     // Weather info
     auto* weather = m_context ? m_context->GetWeather() : nullptr;

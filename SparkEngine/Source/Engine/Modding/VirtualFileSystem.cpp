@@ -66,7 +66,24 @@ namespace Spark
         if (virtualPath.front() == '/' || virtualPath.front() == '\\')
             return false;
 
-        const fs::path candidate = fs::path(virtualPath).lexically_normal();
+        // Control bytes are never part of a legitimate asset name. An embedded NUL
+        // is the dangerous one: every c_str() consumer silently truncates the path
+        // at it, so the file opened is not the one that was validated.
+        for (const char c : virtualPath)
+        {
+            const auto byte = static_cast<unsigned char>(c);
+            if (byte < 0x20 || byte == 0x7F)
+                return false;
+        }
+
+        // Decide with Windows separator semantics on every host. On POSIX a
+        // backslash is an ordinary filename byte, so "..\..\x" would otherwise
+        // normalize to one harmless component here while escaping the root when
+        // the same content is loaded on Windows, the primary platform.
+        std::string generic = virtualPath;
+        std::replace(generic.begin(), generic.end(), '\\', '/');
+
+        const fs::path candidate = fs::path(generic).lexically_normal();
         if (candidate.is_absolute() || candidate.has_root_name() || candidate.has_root_directory())
             return false;
 

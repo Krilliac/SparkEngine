@@ -114,14 +114,13 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         // the quit is actually consumed. The old `continue` skipped PeekMessage,
         // spinning forever without SPARK_HEARTBEAT until the FreezeDetector
         // killed the process (exit code 1) on every -test-frames run.
-        if (((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
-             (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit)) &&
+        if (((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) || g_execScript.TestSecondsLimitReached()) &&
             !quitPosted)
         {
             if (CanShutdownEngine())
             {
                 console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
-                                            ExecElapsedSeconds()));
+                                            g_execScript.ElapsedSeconds()));
                 PostQuitMessage(0);
                 quitPosted = true;
             }
@@ -276,7 +275,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
             // the ImGui frame, where module load + init is safe.
             ConsumeProjectSelectorChoice();
 
-            RunDueScriptedCommands(frameCount);
+            g_execScript.RunDue(frameCount, console);
             ++frameCount;
         }
     }
@@ -297,9 +296,10 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         GetEngineRuntime().graphics->SetPrePresentHook(nullptr, nullptr);
     Spark::GameImGui::Shutdown();
 
-    ShutdownEngineAfterPreflight();
+    const bool teardownClean = ShutdownEngineAfterPreflight();
 
-    return static_cast<int>(msg.wParam);
+    const int exitCode = static_cast<int>(msg.wParam);
+    return (!teardownClean && exitCode == 0) ? 1 : exitCode;
 }
 
 // ===================================================================================

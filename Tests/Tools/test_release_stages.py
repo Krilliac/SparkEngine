@@ -128,9 +128,10 @@ class ReleaseStageTests(unittest.TestCase):
             item["status"] = "done"
             item["plannedCiJobs"] = []
             item["plannedTestSelectors"] = []
-        # The predecessor has explicit equivalents, while the v1 N-1 and
-        # publication items remain unfinished and must not be silently promoted.
-        for source_id in ("INST-131", "REL-192", "REL-200"):
+        # The predecessor has explicit equivalents, while the v1 rehearsal,
+        # N-1 and publication items remain unfinished and must not be
+        # silently promoted (OD-18 substitutes REL-191 for REL-190).
+        for source_id in ("INST-131", "REL-190", "REL-192", "REL-200"):
             items[source_id]["status"] = "open" if source_id != "REL-200" else "blocked"
         items["REL-193"]["status"] = "in-progress"
         for gate in readiness["gates"]:
@@ -139,6 +140,25 @@ class ReleaseStageTests(unittest.TestCase):
         contract = predecessor_candidate()
         contract["workItems"][-1]["status"] = "done"
         self.assertTrue(predecessor_candidate_readiness_errors(contract))
+
+    def test_actual_ledger_records_owner_decisions_without_claiming_a_baseline(self):
+        # OD-18/OD-19 (docs/readiness/OWNER-DECISIONS.md): REL-191 replaces
+        # REL-190 only in the predecessor stage, Krilliac owns the stage, and
+        # the baseline SHA stays empty until a commit qualifies with evidence.
+        contract = load_contract()
+        readiness = contract["readiness"]
+        stage = readiness["predecessorRelease"]
+        profile = next(p for p in readiness["releaseProfiles"] if p["id"] == stage["profileId"])
+        self.assertEqual(stage["qualificationSubstitutions"].get("REL-190"), "REL-191")
+        self.assertEqual(stage["owner"], "Krilliac")
+        self.assertIn("REL-190", profile["blockingWorkItemIds"])
+        self.assertIn("REL-190", stage["blockingWorkItemIds"])
+        gates = {gate["id"]: gate for gate in readiness["gates"]}
+        if any(gates[gate_id]["state"] != "passing" for gate_id in stage["requiredGateIds"]
+               if gate_id != stage["publicationFinalization"]["gateId"]):
+            self.assertEqual(stage["sourceCommitEvidence"]["baselineCommit"], "")
+            self.assertEqual(stage["signOffEvidence"], [])
+            self.assertNotEqual(stage["state"], "candidate")
 
     def test_predecessor_malformed_types_fail_closed_without_exceptions(self):
         mutations = (
@@ -265,7 +285,7 @@ class ReleaseStageTests(unittest.TestCase):
         self.assertIn("REL-190", items["REL-200"]["dependencies"])
         self.assertIn("REL-190", profile["blockingWorkItemIds"])
         self.assertNotIn("REL-190", profile["publicationFinalization"]["workItemIds"])
-        self.assertIn("ReleaseProfileRehearsal_*", items["REL-190"]["plannedTestSelectors"])
+        self.assertIn("ReleaseProfileRehearsal_Qualification*", items["REL-190"]["plannedTestSelectors"])
         self.assertEqual(items["REL-200"]["plannedTestSelectors"], [])
         self.assertEqual(items["REL-200"]["plannedCiJobs"], [])
         self.assertTrue(any("REL-190" in error for error in candidate_readiness_errors(contract)))

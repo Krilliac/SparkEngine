@@ -19,9 +19,8 @@ namespace Platformer
 
     bool PlatformerLevelSystem::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
+        // The level system only stores the context; level data and platform
+        // simulation are self-contained, so a null context (tests) is valid.
         m_context = context;
 
         BuildLevelDefinitions();
@@ -60,12 +59,12 @@ namespace Platformer
         level.hasSecretArea = true;
         level.starThresholds = {120.0f, 90.0f, 60.0f, 0};
 
-        // Starting platform
-        level.platforms.push_back({PlatformType::Static, 0.0f, 0.0f, 0.0f, 8.0f, 0.5f, 4.0f});
+        // Starting platform (x -5..5)
+        level.platforms.push_back({PlatformType::Static, 0.0f, 0.0f, 0.0f, 10.0f, 0.5f, 4.0f});
 
-        // Stepping stones
+        // Stepping stones; the second one extends under the first checkpoint (25, 5)
         level.platforms.push_back({PlatformType::Static, 12.0f, 2.0f, 0.0f, 3.0f, 0.5f, 3.0f});
-        level.platforms.push_back({PlatformType::Static, 20.0f, 4.0f, 0.0f, 3.0f, 0.5f, 3.0f});
+        level.platforms.push_back({PlatformType::Static, 22.0f, 4.0f, 0.0f, 7.0f, 0.5f, 3.0f});
 
         // Moving platform section
         PlatformDef moving{};
@@ -88,7 +87,7 @@ namespace Platformer
         bouncy.posX = 48.0f;
         bouncy.posY = 2.0f;
         bouncy.posZ = 0.0f;
-        bouncy.bounceForce = 18.0f;
+        bouncy.bounceForce = 26.0f; // Peaks ~11 m above the pad: enough to reach the high platform (top 12)
         bouncy.width = 3.0f;
         bouncy.height = 0.5f;
         bouncy.depth = 3.0f;
@@ -111,6 +110,10 @@ namespace Platformer
 
         falling.posX = 72.0f;
         level.platforms.push_back(falling);
+
+        // Descent ledges bridging the falling platforms to the goal (second one holds the checkpoint at 90, 6)
+        level.platforms.push_back({PlatformType::Static, 84.0f, 9.0f, 0.0f, 6.0f, 0.5f, 4.0f});
+        level.platforms.push_back({PlatformType::Static, 92.0f, 6.0f, 0.0f, 4.0f, 0.5f, 4.0f});
 
         // Goal platform
         level.platforms.push_back({PlatformType::Static, 100.0f, 5.0f, 0.0f, 6.0f, 0.5f, 6.0f});
@@ -145,6 +148,9 @@ namespace Platformer
         conveyor.height = 0.5f;
         conveyor.depth = 4.0f;
         level.platforms.push_back(conveyor);
+
+        // Rest ledge after the conveyor (x 25..31, top 1) that holds the first checkpoint
+        level.platforms.push_back({PlatformType::Static, 28.0f, 1.0f, 0.0f, 6.0f, 0.5f, 3.0f});
 
         // Disappearing platforms over lava gap
         PlatformDef disappearing{};
@@ -207,6 +213,8 @@ namespace Platformer
         level.requiredStarsToUnlock = 3;
         level.hasSecretArea = false;
         level.starThresholds = {180.0f, 130.0f, 90.0f, 0};
+        level.killPlaneY = 30.0f; // Lowest cloud is at 48
+
 
         // Starting cloud
         level.platforms.push_back({PlatformType::Static, 0.0f, 50.0f, 0.0f, 6.0f, 0.5f, 6.0f});
@@ -272,6 +280,7 @@ namespace Platformer
         m_levelTimer = 0.0f;
         m_levelDeaths = 0;
         m_levelActive = true;
+        ResetPlatformRuntime();
 
         auto& console = Spark::SimpleConsole::GetInstance();
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer level %u loaded: %s", index, m_levels[index].name.c_str());
@@ -284,6 +293,20 @@ namespace Platformer
         if (m_currentLevel < m_levels.size())
             return m_levels[m_currentLevel].spawnPoint;
         return {0.0f, 1.0f, 0.0f};
+    }
+
+    uint32_t PlatformerLevelSystem::GetRequiredStarsToUnlock(uint32_t index) const
+    {
+        return index < m_levels.size() ? m_levels[index].requiredStarsToUnlock : 0;
+    }
+
+    bool PlatformerLevelSystem::RestoreProgress(const std::vector<LevelProgress>& progress)
+    {
+        if (progress.size() != m_levels.size())
+            return false;
+
+        m_progress = progress;
+        return true;
     }
 
     int PlatformerLevelSystem::GetTotalStarsEarned() const
@@ -390,6 +413,8 @@ namespace Platformer
     {
         m_levels.clear();
         m_progress.clear();
+        m_platformRuntime.clear();
+        m_colliders.clear();
         m_levelActive = false;
         m_initialized = false;
     }

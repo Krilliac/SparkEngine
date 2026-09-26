@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGamePlatformer",
+  "cmakeTarget": "SparkGamePlatformer",
+  "sourceDirectory": "GameModules/SparkGamePlatformer/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/Platformer",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/Platformer",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestGameModulePlatformerARPG.cpp",
+      "Tests/TestMOD340PlatformerCompletionReal.cpp",
+      "Tests/TestMOD340PlatformerProgressReal.cpp"
+    ],
+    "prefixes": [
+      {
+        "prefix": "Platformer_",
+        "count": 18
+      },
+      {
+        "prefix": "PlatformerCompletion_",
+        "count": 14
+      }
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGamePlatformer/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

@@ -93,7 +93,7 @@ When moving to another source revision:
 1. Record the target commit and check `IModule::GetSDKVersion()` against that engine
 2. Recompile all game modules and plugins against the target SDK headers
 3. Run the registered `SparkEngineTests` aggregate for that configuration:
-   `ctest --test-dir build -C Release -R "^SparkEngineTests$" --output-on-failure --no-tests=error`.
+   `ctest --test-dir build/<preset> -C Release -R "^SparkEngineTests$" --output-on-failure --no-tests=error`.
    There is no `GameModule` CTest suite name; use this registered aggregate or
    invoke `SparkTests` directly with its documented `SPARK_TEST_FILE` or
    `SPARK_TEST_NAME` filters when narrowing a diagnosis.
@@ -117,11 +117,11 @@ See `docs/specs/plugin-abi-guide.md` for the current source ABI layout, not a re
 - [ ] Fix any compilation errors from removed/changed APIs
 - [ ] Address deprecation warnings
 - [ ] Re-run `cmake --preset <your-preset>` to pick up new options
-- [ ] Rebuild: `cmake --build build --config Release`
+- [ ] Rebuild: `cmake --build build/<your-preset> --config Release`
 
 ### After upgrading
 
-- [ ] Run all tests: `ctest --test-dir build -C Release --output-on-failure --no-tests=error`
+- [ ] Run all tests: `ctest --test-dir build/<your-preset> -C Release --output-on-failure --no-tests=error`
 - [ ] Run your game module tests
 - [ ] Test asset loading — watch for migration warnings in the log
 - [ ] Verify networking compatibility if running multiplayer

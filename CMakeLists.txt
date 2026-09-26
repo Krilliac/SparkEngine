@@ -193,7 +193,7 @@ option(ENABLE_AUTOMATION_HOST "Build the standalone automation host" ON)
 # Build profile options — controls what ships in the final binary
 option(ENABLE_CONSOLE_IN_SHIPPING "Include SparkConsole in Shipping builds" OFF)
 option(ENABLE_DEVCOMMANDS_IN_SHIPPING "Include developer commands (god, noclip, etc.) in Shipping builds" OFF)
-option(STRIP_DEBUG_SYMBOLS "Strip debug symbols from the final binary" OFF)
+option(STRIP_DEBUG_SYMBOLS "Keep private symbols out of the runtime images (split to the symbols component)" OFF)
 
 # Third-party manifest audit (single source of truth lives in ThirdParty/dependencies.lock)
 include("${CMAKE_SOURCE_DIR}/cmake/SparkThirdPartyAudit.cmake")
@@ -264,16 +264,16 @@ if(MSVC)
         /wd4267  # size_t conversion warnings
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
-    # /DEBUG linker flag embeds PDB reference in the executable so SymFromAddr
-    # can locate symbols at runtime. Does not affect binary performance.
-    # STRIP_DEBUG_SYMBOLS (windows-shipping) means exactly this: no PDB, and no
-    # PDB reference in the image. Emitting it unconditionally made the option a
-    # no-op and shipped symbol paths in the Shipping product set.
-    if(STRIP_DEBUG_SYMBOLS)
-        message(STATUS "Build    : /DEBUG suppressed (STRIP_DEBUG_SYMBOLS=ON, no PDBs emitted)")
-    else()
-        add_link_options(/DEBUG)
-    endif()
+    # Every image links with /DEBUG, Shipping included (BLD-100): the PDB is the
+    # private symbol file and the image's CodeView (RSDS) record -- PDB GUID and
+    # age -- is the build ID that maps a crash back to it. Outside Debug,
+    # /PDBALTPATH:%_PDB% records only the PDB file name, so no build-machine
+    # path lands in the image. STRIP_DEBUG_SYMBOLS (windows-shipping) keeps the
+    # PDBs out of the runtime package instead of not producing them: they
+    # install only into the "symbols" component (section 17), which CPack never
+    # packages. /DEBUG would switch /OPT:REF and /OPT:ICF off; the Release /
+    # Shipping linker optimizations below restate both outside Debug.
+    add_link_options(/DEBUG $<$<NOT:$<CONFIG:Debug>>:/PDBALTPATH:%_PDB%>)
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
 
     # Conformance improvements available in VS 2017+ — enforce __cplusplus macro and
@@ -429,9 +429,44 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
         $<$<NOT:$<CONFIG:Debug>>:-fstrict-aliasing>
     )
 
-    # linux-shipping asks for STRIP_DEBUG_SYMBOLS the same way windows-shipping
-    # does; -s is the ELF equivalent of suppressing /DEBUG.
-    if(STRIP_DEBUG_SYMBOLS AND NOT APPLE)
+    # Every ELF image carries a SHA-1 GNU build-id: the key that maps a crash
+    # (OPS-100 crash logs record it per module) to the image's private symbols.
+    # Explicit because lld, unlike distribution GCC, does not emit one by default.
+    if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+        add_link_options(-Wl,--build-id=sha1)
+    endif()
+
+    # STRIP_DEBUG_SYMBOLS (linux-shipping) keeps private symbols out of the
+    # runtime images, not out of the build (BLD-100). Every target compiles
+    # with -g: the static libraries (SparkEngineLib above all) hold nearly all
+    # shipped code, so -g on the image targets alone would leave their .debug
+    # files without DWARF. Only the shipped images (SPARK_SHIPPED_IMAGE_TARGETS,
+    # section 17) link through cmake/SparkSplitDebugLink.cmake, which splits
+    # <image>.debug (same build-id) off the linked image and strips the image,
+    # leaving a .gnu_debuglink. Running inside the link step, before any
+    # POST_BUILD command, means module .sparkabi hashes and runtime copies see
+    # the final stripped image. The .debug files install only into the
+    # "symbols" component (section 17). Every other executable and shared
+    # library (SparkTests, test probes) outside Debug links with -g0 and
+    # --strip-all, as before: under LTO, link-time -g0 stops the LTRANS stage
+    # from generating debug info that the strip would discard anyway.
+    # Non-ELF GNU-style targets keep their previous behavior: MinGW PE links
+    # with -s, and Apple has no strip step.
+    set(SPARK_SPLIT_DEBUG_SYMBOLS OFF)
+    if(STRIP_DEBUG_SYMBOLS AND CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+        if(NOT CMAKE_OBJCOPY)
+            message(FATAL_ERROR "STRIP_DEBUG_SYMBOLS=ON needs objcopy to split private symbols")
+        endif()
+        add_compile_options(-g)
+        set(_spark_split_debug_launcher
+            "${CMAKE_COMMAND}" "-DSPARK_OBJCOPY=${CMAKE_OBJCOPY}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/SparkSplitDebugLink.cmake" --)
+        set(_spark_unshipped_release_link
+            "$<AND:$<NOT:$<CONFIG:Debug>>,$<NOT:$<BOOL:$<TARGET_PROPERTY:SPARK_PRIVATE_SYMBOLS>>>>")
+        add_link_options("$<${_spark_unshipped_release_link}:-g0>" "$<${_spark_unshipped_release_link}:-Wl,--strip-all>")
+        set(SPARK_SPLIT_DEBUG_SYMBOLS ON)
+        message(STATUS "Build    : private symbols split to <image>.debug (STRIP_DEBUG_SYMBOLS=ON)")
+    elseif(STRIP_DEBUG_SYMBOLS AND NOT APPLE)
         add_link_options($<$<NOT:$<CONFIG:Debug>>:-s>)
     endif()
 
@@ -486,15 +521,13 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
         $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>
     )
 
-    # Shipping: strip symbols from the final binary
-    if(NOT APPLE)
-        add_link_options(
-            $<$<CONFIG:MinSizeRel>:-Wl,--strip-all>
-        )
-    else()
-        add_link_options(
-            $<$<CONFIG:MinSizeRel>:-Wl,-S>
-        )
+    # Shipping: strip symbols from the final binary. With the private-symbol
+    # split active, the link launcher strips after keeping <image>.debug; a
+    # link-time --strip-all would discard the symbols before it can.
+    if(APPLE)
+        add_link_options($<$<CONFIG:MinSizeRel>:-Wl,-S>)
+    elseif(NOT SPARK_SPLIT_DEBUG_SYMBOLS)
+        add_link_options($<$<CONFIG:MinSizeRel>:-Wl,--strip-all>)
     endif()
 endif()
 
@@ -625,6 +658,10 @@ if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
     # import library twice and component-only installs remain self-contained.
     set(SDL2_DISABLE_INSTALL ON CACHE BOOL
         "SparkEngine provides component-aware SDL2 install rules" FORCE)
+    # SDL's own uninstall target deletes every manifest path without checking
+    # that it lies under the prefix; SparkEngine defines the guarded one below.
+    set(SDL2_DISABLE_UNINSTALL ON CACHE BOOL
+        "SparkEngine provides the manifest-driven uninstall target" FORCE)
 
     if(APPLE)
         # macOS: Cocoa + CoreAudio. X11/Wayland/ALSA etc. are irrelevant.
@@ -1094,6 +1131,28 @@ else()
     message(STATUS "Vulkan backend disabled by option")
 endif()
 
+# --- Vulkan shader toolchain (RHI-230) ---
+# VulkanDevice::CreateShader accepts SPIR-V only, and the non-Windows renderer
+# registers the SPIR-V that section 9.4 builds from Shaders/GLSL. A build that
+# compiles the Vulkan backend in without glslangValidator would ship a backend
+# that cannot load one shipped shader, so configure fails instead.
+if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
+    find_program(SPARK_GLSLANG_VALIDATOR
+        NAMES glslangValidator
+        HINTS "$ENV{VULKAN_SDK}/bin"
+        DOC "glslangValidator that compiles Shaders/GLSL to SPIR-V for the Vulkan backend")
+    if(NOT SPARK_GLSLANG_VALIDATOR)
+        message(FATAL_ERROR
+            "Vulkan backend enabled but glslangValidator was not found. The Vulkan backend loads only SPIR-V "
+            "compiled from Shaders/GLSL at build time.\n"
+            "  Ubuntu/Debian : sudo apt install glslang-tools\n"
+            "  Fedora        : sudo dnf install glslang\n"
+            "  macOS         : brew install glslang (or the LunarG Vulkan SDK)\n"
+            "Or configure with -DENABLE_VULKAN=OFF to build without the Vulkan backend.")
+    endif()
+    message(STATUS "Vulkan shader toolchain: ${SPARK_GLSLANG_VALIDATOR}")
+endif()
+
 # --- OpenGL ---
 if(ENABLE_OPENGL)
     if(NOT OpenGL_FOUND)
@@ -1357,7 +1416,6 @@ endif()
 if(NOT MINIZ_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandler\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandlerHelpers\\.cpp$")
-    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashReportUploader\\.cpp$")
     message(WARNING "MINIZ not found — using CrashHandlerStub.cpp fallback (no crash dump compression)")
 else()
     # When the real CrashHandler is built, exclude the stub
@@ -1595,6 +1653,9 @@ if(JOLT_FOUND)
 
     # Use dynamic CRT to match the rest of the engine (/MD instead of /MT)
     set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+    # BLD-100 / OD-04: hold Jolt (and its PUBLIC ISA flags) to the SSE4.2 floor.
+    include("${CMAKE_SOURCE_DIR}/cmake/SparkCpuFloor.cmake")
+    spark_configure_jolt_cpu_floor()
 
     # Jolt GPU-accelerated physics (optional)
     # Jolt can offload certain physics workloads (hair simulation, compute tests)
@@ -1797,6 +1858,69 @@ add_custom_target(SparkRuntimeShaders
 )
 add_dependencies(SparkEngine SparkRuntimeShaders)
 unset(_SPARK_SHADER_STAGE_COMMANDS)
+
+# Shipped GLSL -> SPIR-V for the Vulkan backend (RHI-230). One module per stage,
+# named <Source>.<vert|frag>.spv. Multi-stage sources select their stage with the
+# same VERTEX_SHADER / FRAGMENT_SHADER macros OpenGLDevice injects. Sampler
+# bindings shift by 14 into VulkanDevice's combined-image-sampler range
+# (descriptor bindings 14-29 after the 14 uniform-buffer bindings), so GLSL
+# "binding = N" on a sampler means texture slot N on both GL and Vulkan.
+# Utils.glsl is an include-only library with no entry point and is not listed.
+set(SPARK_SPIRV_OUTPUTS "")
+if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
+    set(_SPARK_SPIRV_STAGES
+        BasicVS:vert BasicPS:frag
+        BloomExtract:frag DebugVisualize:frag GaussianBlur:frag PBRSurface:frag PostProcess:frag SSAO:frag
+        FullscreenQuad:vert
+        EnvReflection:vert EnvReflection:frag
+        Phong:vert Phong:frag
+        Rim:vert Rim:frag
+        Water:vert Water:frag)
+    # A shipped GLSL file missing from the list above would silently never reach
+    # Vulkan, so an unlisted source is a configure error.
+    file(GLOB _spark_glsl_sources RELATIVE "${CMAKE_SOURCE_DIR}/Shaders/GLSL" "${CMAKE_SOURCE_DIR}/Shaders/GLSL/*.glsl")
+    foreach(_spark_glsl_source IN LISTS _spark_glsl_sources)
+        string(REGEX REPLACE "\\.glsl$" "" _spark_glsl_name "${_spark_glsl_source}")
+        if(NOT _spark_glsl_name STREQUAL "Utils" AND NOT "${_SPARK_SPIRV_STAGES}" MATCHES "(^|;)${_spark_glsl_name}:")
+            message(FATAL_ERROR "Shaders/GLSL/${_spark_glsl_source} has no SPIR-V stage entry in CMakeLists.txt")
+        endif()
+    endforeach()
+    set(_SPARK_SPIRV_DIR "${CMAKE_BINARY_DIR}/Shaders/SPIRV")
+    foreach(_spark_spirv_stage IN LISTS _SPARK_SPIRV_STAGES)
+        string(REPLACE ":" ";" _spark_spirv_parts "${_spark_spirv_stage}")
+        list(GET _spark_spirv_parts 0 _spark_spirv_name)
+        list(GET _spark_spirv_parts 1 _spark_spirv_kind)
+        if(_spark_spirv_kind STREQUAL "vert")
+            set(_spark_spirv_macro VERTEX_SHADER)
+        else()
+            set(_spark_spirv_macro FRAGMENT_SHADER)
+        endif()
+        set(_spark_spirv_source "${CMAKE_SOURCE_DIR}/Shaders/GLSL/${_spark_spirv_name}.glsl")
+        set(_spark_spirv_output "${_SPARK_SPIRV_DIR}/${_spark_spirv_name}.${_spark_spirv_kind}.spv")
+        add_custom_command(
+            OUTPUT "${_spark_spirv_output}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_SPARK_SPIRV_DIR}"
+            COMMAND "${SPARK_GLSLANG_VALIDATOR}" --quiet -V -S ${_spark_spirv_kind} -D${_spark_spirv_macro}
+                --shift-texture-binding 14 -o "${_spark_spirv_output}" "${_spark_spirv_source}"
+            DEPENDS "${_spark_spirv_source}"
+            COMMENT "Compiling SPIR-V ${_spark_spirv_name}.${_spark_spirv_kind}.spv"
+            VERBATIM)
+        list(APPEND SPARK_SPIRV_OUTPUTS "${_spark_spirv_output}")
+    endforeach()
+
+    # Stage beside SparkEngine so the relative "Shaders/SPIRV/..." paths the
+    # renderer registers resolve from the runtime directory, as HLSL does above.
+    add_custom_target(SparkSpirvShaders
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SPARK_SPIRV_OUTPUTS}
+            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV"
+        DEPENDS ${SPARK_SPIRV_OUTPUTS}
+        COMMENT "Staging SPIR-V shaders into the runtime output directory"
+        VERBATIM)
+    add_dependencies(SparkEngine SparkSpirvShaders)
+    unset(_SPARK_SPIRV_STAGES)
+    unset(_SPARK_SPIRV_DIR)
+endif()
 
 # ---------------------------------------------------------------------
 # 9.5) Build game modules from GameModules/ directory (auto-discovery)
@@ -2489,11 +2613,16 @@ endif()
 #   SPARK_BUILD_DEVELOPMENT — symbols + optimization, console/profiler included
 #   SPARK_BUILD_RELEASE     — optimized, optional console
 #   SPARK_BUILD_SHIPPING    — maximum optimization, no dev tools
+# Shipping also defines SPARK_SHIPPING, the switch the debug-hook and detector
+# headers (Utils/DebugHookManager.h, DeadlockDetector.h, HitchDetector.h, ...)
+# test to compile their instrumentation out. The two must travel together:
+# DebugHookManager.h refuses to compile SPARK_BUILD_SHIPPING without it.
 list(APPEND FEATURE_DEFINITIONS
     $<$<CONFIG:Debug>:SPARK_BUILD_DEBUG>
     $<$<CONFIG:RelWithDebInfo>:SPARK_BUILD_DEVELOPMENT>
     $<$<CONFIG:Release>:SPARK_BUILD_RELEASE>
     $<$<CONFIG:MinSizeRel>:SPARK_BUILD_SHIPPING>
+    $<$<CONFIG:MinSizeRel>:SPARK_SHIPPING=1>
 )
 
 # Apply feature definitions to the static library (inherited by exe and game DLL)
@@ -2553,19 +2682,27 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
             -DSPARK_TEST_OUTPUT_DIR=${CMAKE_BINARY_DIR}/spark-version-info-test
             -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkWindowsVersionInfo.cmake)
     set_tests_properties(SparkWindowsVersionInfo.Metadata PROPERTIES
-        LABELS "cmake;packaging")
+        LABELS "cmake;packaging;unit"
+        TIMEOUT 30)
     add_test(
         NAME SparkTrackedInstall.Contract
         COMMAND ${CMAKE_COMMAND}
             -DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/spark-tracked-install-test
             -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
             -DSPARK_TRACKED_INSTALL_HELPER=${CMAKE_SOURCE_DIR}/cmake/SparkTrackedInstall.cmake
+            -DSPARK_UNINSTALL_HELPER=${CMAKE_SOURCE_DIR}/cmake/SparkUninstall.cmake
             -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkTrackedInstall.cmake)
     set_tests_properties(SparkTrackedInstall.Contract PROPERTIES
         LABELS "cmake;packaging;unit"
-        TIMEOUT 30)
+        TIMEOUT 60)
     message(STATUS "Adding test suite...")
     add_subdirectory(Tests)
+endif()
+
+# libFuzzer targets and their smoke replays live in FuzzerTests/, separate from the unit suite.
+if(SPARK_ENABLE_FUZZ_TARGETS)
+    enable_testing()
+    add_subdirectory(FuzzerTests)
 endif()
 
 # ---------------------------------------------------------------------
@@ -2579,6 +2716,20 @@ endif()
 # ---------------------------------------------------------------------
 
 include("${CMAKE_SOURCE_DIR}/cmake/SparkTrackedInstall.cmake")
+
+# Uninstall: `cmake --build <build> --target uninstall` removes exactly the files
+# the last full `cmake --install` recorded in install_manifest.txt, refusing
+# links and paths outside CMAKE_INSTALL_PREFIX, and keeps anything created later
+# (user data). For an install made with --prefix or --component, run the helper
+# directly: cmake -DPREFIX=<prefix> -DMANIFEST=<build>/install_manifest[_<component>].txt
+#   -P cmake/SparkUninstall.cmake
+add_custom_target(uninstall
+    COMMAND "${CMAKE_COMMAND}"
+        "-DPREFIX=${CMAKE_INSTALL_PREFIX}"
+        "-DMANIFEST=${CMAKE_BINARY_DIR}/install_manifest.txt"
+        -P "${CMAKE_SOURCE_DIR}/cmake/SparkUninstall.cmake"
+    COMMENT "Uninstalling SparkEngine from ${CMAKE_INSTALL_PREFIX}"
+    VERBATIM)
 
 set(SPARK_INSTALL_COMPONENT_RUNTIME "runtime")
 set(SPARK_INSTALL_COMPONENT_SDK "sdk")
@@ -2896,6 +3047,14 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders")
     )
 endif()
 
+# The SPIR-V built in section 9.4 is what the packaged Vulkan backend loads; not OPTIONAL because
+# configure already fails when the Vulkan backend is compiled in without glslangValidator.
+if(SPARK_SPIRV_OUTPUTS)
+    install(FILES ${SPARK_SPIRV_OUTPUTS}
+        DESTINATION bin/Shaders/SPIRV
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME})
+endif()
+
 # The tracked-directory rules above ship source HLSL only. The DXIL/DXBC blobs
 # that dxc and fxc write beside SparkEngine at POST_BUILD live in the build
 # tree, so without these rules a packaged build carried no compiled shader and
@@ -2917,23 +3076,27 @@ endif()
 # Mirror the runtime asset set copied beside SparkEngine after a normal build.
 # MMOFPS/Data is required for TerraFront module initialization and command
 # registration, while Engine contains startup branding used before project load.
-foreach(_spark_runtime_asset_dir Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${_spark_runtime_asset_dir}")
-        spark_install_tracked_directory(
-            SOURCE "Assets/${_spark_runtime_asset_dir}"
-            DESTINATION "bin/Assets/${_spark_runtime_asset_dir}"
-            COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
-        )
-    endif()
-endforeach()
-foreach(_spark_runtime_asset_root_file IN ITEMS README.md assets.integrity.json)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${_spark_runtime_asset_root_file}")
-        install(FILES "${CMAKE_SOURCE_DIR}/Assets/${_spark_runtime_asset_root_file}"
-            DESTINATION bin/Assets
-            COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
-        )
-    endif()
-endforeach()
+# The focused FPS shipping selector is the stable-v1 package: it installs only
+# the SparkGameFPS runtime asset closure (module source references, the scenes
+# and materials they name, and the reviewed engine seeds in
+# tools/asset-integrity/package-profiles.json), rejects any NOASSERTION entry in
+# that closure (OD-09), and installs the derived stable-v1 manifest instead of
+# the full repository manifest.
+if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
+    set(_spark_runtime_asset_profile stable-v1)
+else()
+    set(_spark_runtime_asset_profile default)
+endif()
+include("${CMAKE_SOURCE_DIR}/cmake/SparkRuntimeAssets.cmake")
+spark_install_runtime_assets(
+    ROOT Assets
+    DESTINATION bin/Assets
+    COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    PROFILE ${_spark_runtime_asset_profile}
+    VERIFIER "${CMAKE_SOURCE_DIR}/tools/asset-integrity/verify_asset_integrity.py"
+    DIRECTORIES Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine
+    ROOT_FILES README.md
+)
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
     spark_install_tracked_directory(
         SOURCE SparkEngine/Resources/Config
@@ -2993,6 +3156,56 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/GameModules/SparkGame" AND
             "/CMakeLists[.]txt$"
     )
 endif()
+
+# Private symbols (BLD-100). Each shipped executable and shared library has a
+# symbol file that its build ID maps to: the linker PDB on MSVC (RSDS GUID and
+# age), or <image>.debug on ELF when STRIP_DEBUG_SYMBOLS splits it (GNU build-id
+# plus .gnu_debuglink; see section 6). They install only into the "symbols"
+# component. CPACK_COMPONENTS_ALL leaves it out, so no runtime, SDK or MSI
+# package carries symbols; `cmake --install <build> --component symbols` stages
+# them for the private symbol store, and tools/shipping_symbol_manifest.py
+# proves the image-to-symbol mapping. On ELF only these targets link through
+# the split launcher; every other image is stripped outright (section 6). This
+# list must name every image target installed to bin or lib by first-party
+# CMake; Tests/Tools/test_shipping_symbol_manifest.py checks that it does.
+set(SPARK_INSTALL_COMPONENT_SYMBOLS "symbols")
+set(SPARK_SHIPPED_IMAGE_TARGETS
+    SparkEngine SparkEditor SparkConsole SparkServer SparkGateway SparkCrashReporter
+    SparkShaderCompiler SparkDaemon SparkCollabServer SparkOrchestrator SparkCooker
+    SparkWorker SparkAutomation SparkLauncher SparkBuild SparkInstaller SDL2
+    ${_SPARK_GAME_MODULE_NAMES}
+)
+foreach(_spark_symbol_target IN LISTS SPARK_SHIPPED_IMAGE_TARGETS)
+    if(NOT TARGET ${_spark_symbol_target})
+        continue()
+    endif()
+    # An imported image (a system library) is not built here and has no split symbols.
+    get_target_property(_spark_symbol_target_type ${_spark_symbol_target} TYPE)
+    get_target_property(_spark_symbol_target_imported ${_spark_symbol_target} IMPORTED)
+    if(_spark_symbol_target_imported OR
+       NOT _spark_symbol_target_type MATCHES "^(EXECUTABLE|SHARED_LIBRARY|MODULE_LIBRARY)$")
+        continue()
+    endif()
+    if(MSVC)
+        install(FILES "$<TARGET_PDB_FILE:${_spark_symbol_target}>"
+            DESTINATION symbols
+            COMPONENT ${SPARK_INSTALL_COMPONENT_SYMBOLS})
+    elseif(SPARK_SPLIT_DEBUG_SYMBOLS)
+        # A launcher the user configured runs inside ours, as part of the link command.
+        foreach(_spark_symbol_language IN ITEMS C CXX)
+            get_target_property(_spark_user_launcher ${_spark_symbol_target} ${_spark_symbol_language}_LINKER_LAUNCHER)
+            if(NOT _spark_user_launcher)
+                set(_spark_user_launcher "")
+            endif()
+            set_property(TARGET ${_spark_symbol_target} PROPERTY ${_spark_symbol_language}_LINKER_LAUNCHER
+                ${_spark_split_debug_launcher} ${_spark_user_launcher})
+        endforeach()
+        set_property(TARGET ${_spark_symbol_target} PROPERTY SPARK_PRIVATE_SYMBOLS ON)
+        install(FILES "$<TARGET_FILE:${_spark_symbol_target}>.debug"
+            DESTINATION symbols
+            COMPONENT ${SPARK_INSTALL_COMPONENT_SYMBOLS})
+    endif()
+endforeach()
 
 message(STATUS "CMake install rules configured (use 'cmake --install' for find_package support)")
 
@@ -3249,8 +3462,8 @@ if(ENABLE_VULKAN)
             "Impact:  Vulkan renderer unavailable — D3D11 (Windows) or OpenGL (Linux) still work"
             "Install:"
             "  All platforms : https://vulkan.lunarg.com/sdk/home"
-            "  Ubuntu/Debian : sudo apt install libvulkan-dev vulkan-tools"
-            "  Fedora        : sudo dnf install vulkan-devel vulkan-tools"
+            "  Ubuntu/Debian : sudo apt install libvulkan-dev vulkan-tools glslang-tools"
+            "  Fedora        : sudo dnf install vulkan-devel vulkan-tools glslang"
             "  macOS         : brew install vulkan-sdk (MoltenVK)"
             "  Tip: Set VULKAN_SDK env var if installed to a non-standard path"
         )
@@ -3386,12 +3599,17 @@ set(CPACK_PACKAGE_INSTALL_DIRECTORY "SparkEngine")
 # cpack runs every configured generator, so listing an absent one failed the
 # whole package run - including the archive - on any machine without both.
 set(CPACK_GENERATOR "ZIP")
+# The release pipeline must never silently drop an installer because its
+# toolchain was installed after configure, so it configures with
+# SPARK_REQUIRE_WINDOWS_INSTALLERS=ON and gets a hard failure instead. Declared
+# on every platform because SparkBuild passes every option it exposes; the
+# option-guard at the end of this file would otherwise reject it off Windows.
+option(SPARK_REQUIRE_WINDOWS_INSTALLERS
+    "Fail configuration when the NSIS or WiX toolchain is missing" OFF)
+if(SPARK_REQUIRE_WINDOWS_INSTALLERS AND NOT WIN32)
+    message(FATAL_ERROR "SPARK_REQUIRE_WINDOWS_INSTALLERS=ON requires a Windows configure (NSIS and WiX are Windows-only)")
+endif()
 if(WIN32)
-    # The release pipeline must never silently drop an installer because its
-    # toolchain was installed after configure, so it configures with
-    # SPARK_REQUIRE_WINDOWS_INSTALLERS=ON and gets a hard failure instead.
-    option(SPARK_REQUIRE_WINDOWS_INSTALLERS
-        "Fail configuration when the NSIS or WiX toolchain is missing" OFF)
     find_program(SPARK_MAKENSIS_EXECUTABLE NAMES makensis)
     if(SPARK_MAKENSIS_EXECUTABLE)
         list(APPEND CPACK_GENERATOR "NSIS")
@@ -3564,3 +3782,13 @@ if(MSVC AND CMAKE_GENERATOR MATCHES "Visual Studio")
     set(SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION "${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}" CACHE INTERNAL
         "Measured Visual Studio Windows SDK version for build provenance" FORCE)
 endif()
+
+# BLD-100 / OD-04: fail when any target or global flag selects an instruction
+# set above the stable-v1 x86-64 SSE4.2 CPU floor. Runs after every subdirectory.
+include("${CMAKE_SOURCE_DIR}/cmake/SparkCpuFloor.cmake")
+spark_assert_cpu_floor()
+
+# CI-120: fail on -D ENABLE_*/SPARK_*/BUILD_* names nothing declared. Must stay
+# last so every subdirectory has had the chance to declare its options.
+include("${CMAKE_SOURCE_DIR}/cmake/SparkOptionGuard.cmake")
+spark_reject_undeclared_options()

@@ -1,8 +1,11 @@
 # Golden Image Testing
 
-The Golden Image Testing framework captures framebuffer screenshots, compares them pixel-by-pixel against stored reference images, and reports visual regressions. It supports configurable per-pixel and per-image tolerance thresholds, generates diff images highlighting changed regions, and integrates with CI pipelines for automated visual regression detection.
+The Golden Image Testing framework captures framebuffer screenshots, compares them pixel-by-pixel against committed PNG reference images, and reports visual regressions. Thresholds are not configured in code: each scene on each backend row has a reviewed entry in `Tests/GoldenImages/manifest.json` carrying its per-pixel and per-image thresholds, the reviewer, and the SHA-256 of the committed baseline. Comparisons fail closed: a missing or invalid manifest, a missing entry, a missing baseline, or a baseline hash mismatch is a failure, never a skip.
 
-**Source:** `SparkEngine/Source/Utils/GoldenImageTest.h`
+**Source:** `SparkEngine/Source/Utils/GoldenImageTest.h`, `SparkEngine/Source/Utils/GoldenImageManifest.h`, `SparkEngine/Source/Utils/GoldenImagePng.h`
+**Layout and review workflow:** `Tests/GoldenImages/README.md`
+
+> **Status (2026-09-26):** only the `vulkan-lavapipe` row has entries: `PostProcess_ACES`, `BloomExtract` and `GaussianBlur_Vertical`, the shipped SPIR-V post-process programs rendered on Mesa Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp` (RHI-230). That is software-row shader evidence, not an engine-pass golden or hardware certification. Other rows have no entries yet; D3D11 baselines land with the RHI-210 golden slices and OpenGL baselines with the RHI-240 golden work.
 
 ## Overview
 
@@ -11,25 +14,40 @@ The Golden Image Testing framework captures framebuffer screenshots, compares th
 | `GoldenImageTestRunner` | Singleton that captures screenshots, compares against golden references, and manages the test workflow |
 | `IGoldenImageCapture` | Abstract interface for framebuffer readback (one implementation per RHI backend) |
 | `ImageComparisonResult` | Detailed result of comparing a captured screenshot against a golden image |
-| `GoldenImageConfig` | Configuration for directories, tolerance thresholds, and reporting limits |
+| `GoldenImageConfig` | Directories, backend row under test, and reporting limit |
+| `GoldenManifestEntry` / `GoldenManifest::Load` | Reviewed per-scene, per-row thresholds and baseline hash; strict parser |
 | `PixelDiff` | Information about a single pixel that differs between golden and actual images |
 
 ## Key Types
 
 ### GoldenImageConfig
 
-Configuration struct controlling directories and tolerance:
-
 ```cpp
 struct GoldenImageConfig
 {
-    std::string goldenImageDir;      // Directory containing reference images
+    std::string goldenImageDir;      // manifest.json and <backendRow>/<scene>.png baselines
     std::string outputDir;           // Directory for captured / diff images
-    float tolerancePercent = 0.5f;   // Max allowed percent of differing pixels
-    float perPixelThreshold = 10.0f; // Max channel distance before a pixel counts as different
+    std::string backendRow;          // d3d11-warp, d3d11-hw, opengl-llvmpipe or vulkan-lavapipe
     uint32_t maxDiffsToReport = 100; // Cap on PixelDiff entries stored in results
 };
 ```
+
+### GoldenManifestEntry
+
+```cpp
+struct GoldenManifestEntry
+{
+    std::string scene;           // Scene id, 1-128 chars of [A-Za-z0-9_-]
+    std::string backendRow;      // One of the four rows above
+    bool software = false;       // Must agree with the row (true for WARP/llvmpipe/lavapipe)
+    float perPixelThreshold = 0; // 0-441.68
+    float tolerancePercent = 0;  // 0-100
+    std::string reviewer;        // Non-empty
+    std::string baselineSha256;  // 64 lowercase hex characters
+};
+```
+
+`GoldenManifest::Load(path, entries, error)` requires `schemaVersion: 1`, every field, and no unknown keys; one invalid entry rejects the whole manifest.
 
 ### ImageComparisonResult
 
@@ -45,6 +63,9 @@ struct ImageComparisonResult
     float percentDifferent = 0.f;     // Percentage of differing pixels
     float maxPixelDistance = 0.f;     // Maximum per-pixel distance observed
     float averagePixelDistance = 0.f; // Average distance across all pixels
+    float perPixelThreshold = 0.f;    // Reviewed threshold applied (from the manifest)
+    float tolerancePercent = 0.f;     // Reviewed tolerance applied (from the manifest)
+    std::string failureReason;        // Why the comparison failed closed; empty on a pixel verdict
     std::string diffImagePath;        // Path to the generated diff image
     std::vector<PixelDiff> diffs;     // First N differing pixels (capped)
 };
@@ -94,12 +115,11 @@ public:
 
 auto& runner = Spark::GoldenImageTestRunner::GetInstance();
 
-// Configure directories and tolerances
+// Thresholds come from Tests/GoldenImages/manifest.json, not from the config
 Spark::GoldenImageConfig config;
 config.goldenImageDir = "Tests/GoldenImages";
 config.outputDir = "Tests/Output";
-config.tolerancePercent = 0.5f;    // Allow up to 0.5% of pixels to differ
-config.perPixelThreshold = 10.0f;  // Per-pixel RGB distance threshold
+config.backendRow = "vulkan-lavapipe";
 config.maxDiffsToReport = 100;     // Report at most 100 differing pixels
 
 runner.Initialize(config);
@@ -147,7 +167,7 @@ renderEngine.RenderFrame();
 runner.CaptureGolden("Level1_Spawn");
 ```
 
-Golden images are saved to the `goldenImageDir` as `{sceneName}.png` files at a default resolution of 1920x1080.
+Captures are written as real PNGs to `{goldenImageDir}/{backendRow}/{sceneName}.png` at 1920x1080. A capture is not a baseline until a reviewer records its thresholds, name, and `sha256sum` in `manifest.json`; until then the hash check fails the comparison.
 
 ### Comparing Against Golden Images
 
@@ -159,8 +179,8 @@ auto result = runner.CompareWithGolden("MainMenu");
 
 if (!result.matched)
 {
-    std::println("Visual regression in {}: {:.2f}% pixels differ (max distance: {:.1f})",
-                 result.sceneName, result.percentDifferent, result.maxPixelDistance);
+    std::println("Visual regression in {}: {} ({:.2f}% pixels differ, max distance {:.1f})",
+                 result.sceneName, result.failureReason, result.percentDifferent, result.maxPixelDistance);
     std::println("Diff image saved to: {}", result.diffImagePath);
 
     // Inspect individual pixel differences
@@ -177,7 +197,7 @@ if (!result.matched)
 
 ### Running All Comparisons
 
-Compare every golden image in the golden directory at once:
+Compare every manifest entry for the configured backend row (a row with no entries returns one failed result):
 
 ```cpp
 auto results = runner.RunAllComparisons();
@@ -206,7 +226,7 @@ When visuals change intentionally, update the golden references:
 runner.UpdateGolden("MainMenu");  // Equivalent to CaptureGolden
 ```
 
-### Listing Available Golden Images
+### Listing Reviewed Scenes for the Row
 
 ```cpp
 auto names = runner.GetGoldenImageNames();
@@ -218,13 +238,14 @@ for (const auto& name : names)
 
 ## Configuration
 
-### Tolerance Settings
+### Reviewed Thresholds (manifest)
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `tolerancePercent` | 0.5% | Maximum percentage of pixels allowed to differ before the test fails |
-| `perPixelThreshold` | 10.0 | Per-pixel Euclidean RGB distance threshold; pixels below this are considered matching |
-| `maxDiffsToReport` | 100 | Maximum number of `PixelDiff` entries stored in results |
+| Field | Range | Description |
+|-------|-------|-------------|
+| `tolerancePercent` | 0-100 | Maximum percentage of pixels allowed to differ before the test fails |
+| `perPixelThreshold` | 0-441.68 | Per-pixel Euclidean RGB distance threshold; pixels at or below this match |
+
+`GoldenImageConfig::maxDiffsToReport` (default 100) caps the stored `PixelDiff` entries.
 
 ### Per-Pixel Distance Calculation
 
@@ -245,14 +266,14 @@ When a comparison fails, a diff image is generated showing:
 - **Red pixels**: Differing regions, with intensity proportional to the distance (brighter red = larger difference)
 - **Dark green pixels**: Matching regions
 
-The diff image is saved to `{outputDir}/{sceneName}_diff.png`.
+The diff image is saved to `{outputDir}/{backendRow}_{sceneName}_diff.png` and the actual frame to `{outputDir}/{backendRow}_{sceneName}.png`.
 
 ## Console Commands
 
 ```cpp
 std::string status = runner.Console_GetStatus();
 // Output: "[GoldenImageTest] goldenDir=Tests/GoldenImages, outputDir=Tests/Output,
-//          tolerance=0.5%, perPixel=10, capture=set"
+//          row=vulkan-lavapipe, capture=set"
 ```
 
 ## CI Integration
@@ -267,8 +288,7 @@ int main()
     Spark::GoldenImageConfig config;
     config.goldenImageDir = "Tests/GoldenImages";
     config.outputDir = "Tests/CIOutput";
-    config.tolerancePercent = 1.0f;   // Slightly relaxed for CI
-    config.perPixelThreshold = 15.0f;
+    config.backendRow = "opengl-llvmpipe"; // Thresholds are reviewed per row in the manifest
     runner.Initialize(config);
     runner.SetCapture(std::make_unique<SoftwareCapture>());
 
@@ -279,8 +299,8 @@ int main()
         auto result = runner.CompareWithGolden(scene);
         if (!result.matched)
         {
-            std::print(stderr, "VISUAL REGRESSION: {} ({:.2f}% diff)\n",
-                       result.sceneName, result.percentDifferent);
+            std::print(stderr, "VISUAL REGRESSION: {}: {} ({:.2f}% diff)\n",
+                       result.sceneName, result.failureReason, result.percentDifferent);
         }
     }
 
@@ -317,6 +337,10 @@ bool allPassed = !bench.HasRegressions(perfComparisons)
               && !Spark::GoldenImageTestRunner::HasRegressions(vizResults);
 ```
 
+### Blank-Frame Check
+
+`AnalyzeFrame(rgba)` returns the distinct colour count and the share of the most common colour; `FrameHasRenderedContent(rgba, maxDominantFraction)` rejects a uniform frame. The D3D11 golden tests use these shared functions.
+
 ### Static Comparison Utility
 
 The `CompareImages` static method can compare any two RGBA buffers without the full runner:
@@ -332,7 +356,7 @@ std::println("Diff: {} pixels ({:.2f}%), max distance: {:.1f}",
 
 ### Static PNG I/O
 
-Save and load raw RGBA images (simplified format: `[width:4][height:4][RGBA data]`):
+Encode and decode real 8-bit RGBA PNG files (`Utils/GoldenImagePng.h`: vendored miniz encoder plus a strict reader). `LoadPNG` accepts only 8-bit RGB/RGBA non-interlaced PNGs with valid chunk CRCs. It rejects everything else, including the legacy `[width:4][height:4][RGBA]` layout and images wider or taller than 16384. The bundled stb headers are API stubs and are not used:
 
 ```cpp
 // Save
@@ -350,18 +374,20 @@ auto pixels = Spark::GoldenImageTestRunner::LoadPNG("input.png", w, h);
 | Method | Description |
 |--------|-------------|
 | `GetInstance() -> GoldenImageTestRunner&` | Access the singleton |
-| `Initialize(const GoldenImageConfig&)` | Set up directories and tolerances |
+| `Initialize(const GoldenImageConfig&)` | Set directories and backend row |
 | `Shutdown()` | Release capture interface and reset config |
 | `SetCapture(unique_ptr<IGoldenImageCapture>)` | Set the framebuffer capture backend |
-| `CaptureGolden(string_view sceneName)` | Capture and save a golden reference (1920x1080) |
-| `CompareWithGolden(string_view) -> ImageComparisonResult` | Compare current framebuffer against stored golden |
-| `RunAllComparisons() -> vector<ImageComparisonResult>` | Compare all golden images in the directory |
+| `CaptureGolden(string_view sceneName) -> bool` | Write `<row>/<scene>.png` (1920x1080) for review |
+| `CompareWithGolden(string_view) -> ImageComparisonResult` | Manifest + hash gate, then pixel diff with reviewed thresholds |
+| `RunAllComparisons() -> vector<ImageComparisonResult>` | Compare every manifest entry for the row |
 | `HasRegressions(vector<ImageComparisonResult>) -> bool` | Check if any results did not match (static) |
-| `UpdateGolden(string_view sceneName)` | Overwrite golden reference with current frame |
-| `GetGoldenImageNames() -> vector<string>` | List all golden image scene names |
+| `UpdateGolden(string_view sceneName) -> bool` | Overwrite `<row>/<scene>.png` with the current frame |
+| `GetGoldenImageNames() -> vector<string>` | Scene ids the manifest lists for the row |
 | `CompareImages(golden, actual, w, h, tolerance) -> ImageComparisonResult` | Static pixel-by-pixel comparison |
-| `SavePNG(string_view, data, w, h) -> bool` | Save RGBA data to file (static) |
-| `LoadPNG(string_view, w&, h&) -> vector<uint8_t>` | Load RGBA data from file (static) |
+| `SavePNG(string_view, data, w, h) -> bool` | Encode RGBA data as PNG (static) |
+| `LoadPNG(string_view, w&, h&) -> vector<uint8_t>` | Decode a PNG to RGBA (static) |
+| `AnalyzeFrame(rgba) -> FrameContent` | Colour statistics for blank-frame rejection (static) |
+| `FrameHasRenderedContent(rgba, maxDominant) -> bool` | Reject uniform frames (static) |
 | `Console_GetStatus() -> string` | Human-readable status for console |
 
 ### IGoldenImageCapture (Interface)
@@ -373,7 +399,7 @@ auto pixels = Spark::GoldenImageTestRunner::LoadPNG("input.png", w, h);
 ## Thread Safety
 
 - `GoldenImageTestRunner` is a singleton with **no internal synchronization**. All methods must be called from the **main thread** (or a single test thread).
-- `CompareImages`, `SavePNG`, and `LoadPNG` are static methods with no shared state and are safe to call from any thread.
+- `CompareImages`, `SavePNG`, `LoadPNG`, `AnalyzeFrame`, and `GoldenManifest::Load` are static/free functions with no shared state and are safe to call from any thread.
 - `GetInstance()` uses a function-local static and is safe for concurrent first-access under C++11 magic-statics guarantees.
 - The `IGoldenImageCapture` implementation may interact with the GPU; ensure framebuffer readback happens after the frame is fully rendered.
 

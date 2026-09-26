@@ -149,6 +149,13 @@ namespace Terrafront
         if (rec.accountId != accountId)
             return false;
 
+        // The session now works from these values, so later progress/meta
+        // commits are checked against this row revision (TF-120: another
+        // continent authority may have written the character since this
+        // process last saw it).
+        if (!m_db->AcquireCharacter(charId, rec) || rec.accountId != accountId)
+            return false;
+
         out = rec;
         return true;
     }

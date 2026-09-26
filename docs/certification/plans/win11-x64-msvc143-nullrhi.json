@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "rowId": "win11-x64-msvc143-nullrhi",
+  "note": "Collector plan for the declared headless NullRHI row. It runs only on a clean Windows 11 x64 host at the exact commit under test, through a CI job that passes --from-github-env (the plan deliberately carries no provenance block, so a hand-run collection is refused), --no-gpu, --no-audio, --compiler-command cl and --windows-sdk-version. Precondition: the tree was configured at that commit with `cmake --preset windows-shipping -DBUILD_TESTS=ON`, which registers the ctest selectors below in build/windows-shipping. Probes run in category order, so 'build' rebuilds the MinSizeRel Shipping product before 'launch' uses it. Every ctest probe passes --no-tests=error so a missing test fails instead of passing vacuously. The categories in uncoveredCategories have no implementation yet; the collector does not record them, and the validator then refuses to certify the row.",
+  "probes": {
+    "build": {
+      "command": ["cmake", "--build", "--preset", "windows-shipping", "--config", "MinSizeRel"],
+      "timeoutSeconds": 7200
+    },
+    "launch": {
+      "command": [
+        "ctest", "--test-dir", "build/windows-shipping", "-C", "MinSizeRel",
+        "-R", "^NullRHI_Windows_FPSLifecycle$", "--no-tests=error", "--output-on-failure"
+      ],
+      "timeoutSeconds": 300
+    }
+  },
+  "uncoveredCategories": {
+    "install": "The stable-v1 install path is the signed Shipping MSI (.github/scripts/qualify-windows-msi.py), which needs per-run version, source SHA and package-manifest arguments that a static plan cannot carry; INST-130/REL-100 own a row-level install probe.",
+    "save": "No NullRHI save/reload proof exists: FPSPackage_InstalledRuntime proves save/reload only through D3D11 WARP processes (GameModules/SparkGameFPS/README.md).",
+    "crash": "CrashCapturePackageSecurity drives the production capture path through the SparkTests producer, not the installed Shipping runtime; a packaged-runtime crash probe is owned by OPS-100.",
+    "upgrade": "Upgrade needs a signed predecessor MSI and receipt (INST-130/REL-110); no static probe exists.",
+    "rollback": "Rollback needs a signed predecessor MSI and receipt (INST-130/REL-110); no static probe exists.",
+    "uninstall": "Uninstall runs inside the MSI transaction of .github/scripts/qualify-windows-msi.py, which needs per-run arguments; INST-130/REL-100 own a row-level probe.",
+    "dependency_closure": "collect_evidence.py --package-root now measures this category from the staged package's PE import and delay-import tables (pe_imports.py), but a plan can only declare the dependencyClosure and firstPartyImages that measurement is compared against once an MSVC v143 windows-shipping package has actually been walked; until then the real import set (including OS DLLs such as kernel32.dll that the dependency authority's platformRuntime does not yet list) is unknown, and any guess would be a typed list rather than evidence. Any third-party DLL that package ships would also need a reviewed imageNames entry in the dependency authority before it can be declared; none exists today, because every vendored library is linked statically into the Windows binaries."
+  }
+}

@@ -308,19 +308,28 @@ namespace OpenWorld
         using Spark::Audio::MusicTrack;
 
         // Exploration tracks per biome
-        music->RegisterTrack({"meadow_dawn", "Assets/Audio/Music/ow_meadow_dawn.ogg", 80.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"forest_depths", "Assets/Audio/Music/ow_forest.ogg", 70.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"mountain_winds", "Assets/Audio/Music/ow_mountain.ogg", 65.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"desert_heat", "Assets/Audio/Music/ow_desert.ogg", 75.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"tundra_silence", "Assets/Audio/Music/ow_tundra.ogg", 55.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"coastal_breeze", "Assets/Audio/Music/ow_coast.ogg", 85.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"meadow_dawn", "Assets/Audio/OpenWorld/Music/ow_meadow_dawn.wav", 80.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"forest_depths", "Assets/Audio/OpenWorld/Music/ow_forest.wav", 70.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"mountain_winds", "Assets/Audio/OpenWorld/Music/ow_mountain.wav", 65.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"desert_heat", "Assets/Audio/OpenWorld/Music/ow_desert.wav", 75.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"tundra_silence", "Assets/Audio/OpenWorld/Music/ow_tundra.wav", 55.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"coastal_breeze", "Assets/Audio/OpenWorld/Music/ow_coast.wav", 85.0f, 0.0f, -1.0f, true, ""});
 
         // Action / event tracks
-        music->RegisterTrack({"combat_tension", "Assets/Audio/Music/ow_combat.ogg", 120.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"dragon_theme", "Assets/Audio/Music/ow_dragon.ogg", 140.0f, 0.0f, -1.0f, false, ""});
+        music->RegisterTrack(
+            {"combat_tension", "Assets/Audio/OpenWorld/Music/ow_combat.wav", 120.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"dragon_theme", "Assets/Audio/OpenWorld/Music/ow_dragon.wav", 140.0f, 0.0f, -1.0f, false, ""});
 
         // Settlement / safe area
-        music->RegisterTrack({"village_hearth", "Assets/Audio/Music/ow_village.ogg", 90.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"village_hearth", "Assets/Audio/OpenWorld/Music/ow_village.wav", 90.0f, 0.0f, -1.0f, true, ""});
 
         // Dynamic music state
         Spark::Audio::DynamicMusicState dynamicState;

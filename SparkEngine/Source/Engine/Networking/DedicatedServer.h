@@ -88,12 +88,12 @@ namespace Spark::Net
         std::vector<std::string> mapRotation;
         bool randomizeMapOrder = false;
 
-        // Administration
-        // Reserved for source/config compatibility. No remote RCON transport
-        // currently consumes these fields; use ExecuteRcon only from trusted
-        // host code until an authenticated administration channel is added.
-        std::string rconPassword;
-        uint16_t rconPort = 0;
+        // Administration is trusted in-process only (ExecuteRcon from host
+        // code). Remote administration is permanently unavailable in stable-v1
+        // (OD-05), so there is deliberately no RCON password or port field that
+        // configuration could set. TestSEC100RemoteAdminUnavailableReal.cpp fails
+        // the build if rconPassword, rconPort, enableRcon or
+        // enableRemoteAdministration is added here.
         bool enableLogging = true;
         std::string logFilePath = "server.log";
 
@@ -287,13 +287,15 @@ namespace Spark::Net
                                  std::function<std::string(const std::vector<std::string>&)> handler);
 
         /// @brief Execute a trusted in-process RCON command string, e.g. "kick 3 cheating".
-        /// Network chat is intentionally not an RCON transport; a future remote
-        /// administration channel must authenticate before calling this API.
-        /// @return The command response text.
+        /// Network chat is intentionally not an RCON transport, and no remote
+        /// administration channel exists or will be added for stable-v1 (OD-05).
+        /// Every call writes exactly one audit line, including when the handler
+        /// throws; the exception text is never logged or returned.
+        /// @return The command response text, or "Command failed: <name>" when the handler threw.
         std::string ExecuteRcon(const std::string& commandLine);
 
-        /// @brief Get all registered administration commands.
-        const std::vector<RconCommand>& GetRconCommands() const { return m_rconCommands; }
+        /// @brief Snapshot of all registered administration commands, taken under the registry lock.
+        std::vector<RconCommand> GetRconCommands() const;
 
         // -- LAN Discovery --
 

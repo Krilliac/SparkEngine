@@ -4,6 +4,8 @@
  */
 #include "Persistence/TFPlayerMeta.h"
 
+#include "Utils/LogMacros.h"
+
 #include <algorithm>
 #include <vector>
 
@@ -49,6 +51,7 @@ namespace Terrafront
         Meta& meta = it->second;
         if (meta.dirty && meta.charId != 0 && (!db || !PersistOne(meta, *db)))
         {
+            meta.parkedBaseRevision = db ? db->BaselineRevision(meta.charId) : std::nullopt;
             m_pendingByCharacter[meta.charId] = std::move(meta);
             persisted = false;
         }
@@ -60,9 +63,24 @@ namespace Terrafront
     {
         if (auto pending = m_pendingByCharacter.find(rec.id); pending != m_pendingByCharacter.end())
         {
-            m_meta[player] = std::move(pending->second);
+            // TF-120: the parked values are only still valid if nobody
+            // committed the character since they were computed; otherwise
+            // re-adopting them would overwrite another authority's newer row.
+            // A row parked without a database has no baseline to check.
+            const std::optional<uint64_t>& parkedBase = pending->second.parkedBaseRevision;
+            if (!parkedBase || *parkedBase == rec.revision)
+            {
+                Meta& adopted = m_meta[player];
+                adopted = std::move(pending->second);
+                adopted.parkedBaseRevision.reset();
+                m_pendingByCharacter.erase(pending);
+                return;
+            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] discarded unsaved meta for character %llu on re-entry: another authority changed "
+                            "the character after this process's last successful save",
+                            static_cast<unsigned long long>(rec.id));
             m_pendingByCharacter.erase(pending);
-            return;
         }
 
         Meta& meta = m_meta[player];
@@ -159,11 +177,44 @@ namespace Terrafront
 
         if (batch.empty())
             return ok;
-        if (!db.CommitCharacterUpdates(batch))
-            return false;
+
+        // TF-120: a row another continent authority changed since this
+        // process's baseline fails the whole commit with Conflict. Drop that
+        // row and commit the rest, so one stale character cannot block every
+        // other player's save on this continent. Each retry removes one row,
+        // so the loop ends after at most batch.size() commits.
+        std::unordered_set<uint64_t> conflicted;
+        while (!batch.empty() && !db.CommitCharacterUpdates(batch))
+        {
+            const uint64_t charId = db.ConflictedCharacter();
+            if (db.LastStatus() != TFDatabaseStatus::Conflict || charId == 0 || !conflicted.insert(charId).second)
+                return false;
+            ok = false;
+            std::erase_if(batch, [charId](const TFCharacterUpdate& update) { return update.charId == charId; });
+        }
 
         for (Meta* meta : included)
-            meta->dirty = false;
+            if (!conflicted.contains(meta->charId))
+                meta->dirty = false;
+
+        // A parked (disconnected) row that conflicts was computed from a
+        // baseline another authority has since replaced: the character now
+        // lives there, so writing these values would overwrite its newer
+        // state. Discard it loudly. A conflicted in-world row stays dirty and
+        // keeps reporting failure; it means two authorities hold the character.
+        for (const uint64_t charId : conflicted)
+        {
+            if (m_pendingByCharacter.erase(charId) != 0)
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] discarded unsaved meta for disconnected character %llu: another authority "
+                                "changed the character after this process's last successful save",
+                                static_cast<unsigned long long>(charId));
+            else
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] character %llu is in world here but was changed by another authority; its "
+                                "progress and meta stay unsaved",
+                                static_cast<unsigned long long>(charId));
+        }
         std::erase_if(m_pendingByCharacter, [](const auto& entry) { return !entry.second.dirty; });
         return ok;
     }

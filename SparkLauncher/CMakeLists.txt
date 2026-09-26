@@ -108,6 +108,8 @@ endif()
             "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkLauncher>"
             "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkLauncher ${PROJECT_VERSION}"
             -P "${_sparklauncher_version_test_script}")
-    set_tests_properties(SparkLauncherHelp SparkLauncherVersion PROPERTIES TIMEOUT 10)
+    set_tests_properties(SparkLauncherHelp SparkLauncherVersion PROPERTIES
+        TIMEOUT 10
+        LABELS "launcher;cli;integration;process")
     unset(_sparklauncher_version_test_script)
 endif()

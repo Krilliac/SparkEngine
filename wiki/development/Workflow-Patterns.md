@@ -35,6 +35,71 @@ Do not use a single Explore agent for a broad multi-area search — it will eith
 - Use read-only exploration agents for codebase research; reserve planning agents for architectural design work after exploration.
 - 3 agents maximum per parallel batch; quality over quantity.
 
+## Shared Build Directory — Serialize With `tools/build-lock.sh`
+
+When several agents (or scripts) share one build tree, route every configure and build through the lock wrapper instead of an ad-hoc `flock`:
+
+```bash
+tools/build-lock.sh -- cmake --build build/linux-gcc-release --target SparkTests -j4
+tools/build-lock.sh --timeout 600 -- cmake --preset linux-gcc-release -DBUILD_TESTS=ON
+tools/build-lock.sh --status          # who holds it, and is the holder still alive?
+```
+
+The lock defaults to `build/.spark-build.lock` (`--lock` / `SPARK_BUILD_LOCK` override it). What the wrapper guarantees, and why each matters:
+
+- **Bounded wait.** It gives up after `--timeout` seconds (default 1800, `SPARK_BUILD_LOCK_TIMEOUT`) with exit 75 and a holder report, instead of queueing forever.
+- **Holder record.** The holder writes pid, host, start time, cwd, and command into the lock file; waiters print it every `--report-every` seconds (default 60).
+- **No inherited descriptors.** The command runs with the lock fd closed (and in its own process group via `setsid` when available), so a daemon or detached helper it spawns cannot keep the lock after the wrapper exits.
+- **Orphan detection.** If the recorded holder is dead but processes still have the lock file open, it says so and lists them. It never kills anything.
+
+Do not guard a shared lock with a detached waiter that matches processes by command line (`pgrep -f` / `pkill -f`): the waiters' own command lines match the pattern. On 2026-09-24 such a helper inherited the build lock, waited for "no `cmake --build build/...` process", and deadlocked every queued build — including itself, since `pkill -f` on the same pattern also killed the invoking shell. Wait on a PID (`kill -0 $PID`) and hold locks only in the process that took them. Regression coverage: `Tests/Tools/test_build_lock.py` (CI job `validate-ci-tools`).
+
+## Fast Local Rebuilds — LTO Off, ccache, mold
+
+`linux-gcc-release` keeps `ENABLE_LTO=ON` because shipping builds use it. With LTO every Release object carries `-flto=auto`: compiling is cheap and the optimizer runs again at link time over all of `SparkTests` (≈800 objects plus the whole-archive engine library). Every engine change repeats that link. For an iterate-and-test tree, turn it off and add a compiler cache and a faster linker:
+
+```bash
+sudo apt-get install -y ccache mold
+ccache -o max_size=8G -o base_dir="$PWD" -o hash_dir=false \
+       -o sloppiness=pch_defines,time_macros,include_file_mtime,include_file_ctime
+cmake --preset linux-gcc-release -DBUILD_TESTS=ON -DENABLE_LTO=OFF \
+      -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+      -DCMAKE_LINKER_TYPE=MOLD
+```
+
+- **LTO off** moves optimization back into each compile. Test coverage of the LTO configuration stays with the CI Release lanes.
+- **ccache** turns a snapshot switch or a reconfigure into cache hits. The `pch_defines,time_macros` sloppiness is required, or ccache refuses to cache files that use a precompiled header. CI sets the same values in `CCACHE_SLOPPINESS` (`.github/workflows/build.yml`).
+- **mold** (`CMAKE_LINKER_TYPE`, CMake 3.29+) links the large test binary in seconds instead of GNU `ld`'s tens of seconds.
+- **`SparkTests` precompiled header.** `Tests/CMakeLists.txt` precompiles `TestFramework.h` plus the standard headers the test files share. It holds no engine or platform header, so test-local `#define`s before engine includes keep their meaning. Sources compiled into `SparkTests` from outside `Tests/` skip it. Lanes configured with `-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON` (the Windows sccache lanes and clang-tidy) build without it and still catch missing `#include`s.
+
+Changing `ENABLE_LTO`, the launcher or the linker type changes every compile command, so the first build after the reconfigure is a full rebuild. Run it through `tools/build-lock.sh` when the tree is shared.
+
+## Disk Budget for Build Trees and Worktrees
+
+Cloud sessions get a fixed writable-disk allowance, and parallel agents fill it fast. Measured on 2026-09-25 (Linux GCC):
+
+| Item | Size |
+|------|------|
+| `build/linux-gcc-release` (`-DENABLE_LTO=OFF`, tests and game modules) | ≈2 GB |
+| Sanitizer Debug tree (ASan/UBSan, `-g1`) | ≈11 GiB (full `-g` is larger) |
+| ccache store | its `max_size` (3–8 GB is plenty) |
+| Detached `git worktree` of the repo (no build) | the checkout size, before any build |
+
+- **Build privately only when needed.** A private build per agent multiplies the first row. Prefer the shared tree under `tools/build-lock.sh`, restricted to the targets you need (`--target SparkTests`).
+- **Scratch locations.** Put scratch worktrees and private builds in the session scratch directory, not in the repo, and `git worktree remove` them when done.
+- **Out-of-space errors.** When "No space left on device" appears, delete regenerable outputs first: stale private builds, abandoned worktrees, then `ccache -C`. Delete a scratch folder only after proving its contents are committed.
+
+## Exploring the Codebase in 3D (Code City)
+
+`tools/architecture-viz/generate_code_city.py` renders the tracked source tree as an interactive three.js city: projects are blocks, subsystem directories are districts, and each file is a building whose footprint and height grow with its line count. Selecting a building draws its resolved includes (blue) and includers (orange) and lists the readiness work items whose entry points name it; the color modes cover project, file kind, size, 180-day churn, readiness status and include fan-in.
+
+```bash
+python3 tools/architecture-viz/generate_code_city.py          # writes build/code-city/index.html
+python3 Tests/Tools/test_code_city.py                         # layout, include resolution, embedded data
+```
+
+The page loads three.js from jsDelivr and embeds all data, so it opens straight from disk. The `Code City Pages` workflow (`.github/workflows/code-city-pages.yml`) regenerates it on pushes to `Working` and deploys it to GitHub Pages, which the README links to; Pages must be enabled with **Settings → Pages → Source: GitHub Actions**. Useful for orientation before a cross-subsystem change: search a file or class, then follow its include arcs.
+
 ## Documentation Sync After Structural Changes
 
 After any change that adds, renames, or removes public headers, ECS components, systems, editor panels, or tests — run the doc scripts before committing. The fastest reliable option is the master script:
@@ -80,10 +145,10 @@ find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkSha
 cmake --preset linux-gcc-release 2>&1 | tail -20
 
 # 3. Build (catches compile errors)
-cmake --build build --config Release --parallel $(nproc) 2>&1 | tail -30
+cmake --build build/linux-gcc-release --parallel $(nproc) 2>&1 | tail -30
 
 # 4. Tests (catches regressions)
-cd build && ctest --output-on-failure --no-tests=error && cd ..
+ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 
 # 5. Docs (catches stale auto-generated content)
 docs/update-all-docs.sh
@@ -185,6 +250,9 @@ Skipping steps 4-5 means starting each session without accumulated knowledge. Sk
 
 - Original entry: `Effective SparkEngine Development Workflows`, last updated 2026-03-14.
 - Verified against codebase 2026-06-08.
+- 2026-09-24: added the Code City section (`tools/architecture-viz`).
+- 2026-09-24: added the shared-build-directory lock section (`tools/build-lock.sh`) after a parallel-agent build deadlock.
+- 2026-09-25: added the disk-budget section after repeated out-of-space stalls during parallel readiness work.
 - Updated / found stale:
   - Doc-sync section now leads with `docs/update-all-docs.sh` (the master script), which is the current recommended one-shot; the two-script combo is kept as a faster subset.
   - Pre-push step 5 changed to `docs/update-all-docs.sh` to match current `CLAUDE.md` pre-commit guidance (was two separate scripts).

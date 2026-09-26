@@ -38,12 +38,14 @@ set_target_properties(spark_fps_module_api_consumer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 add_test(NAME SparkFPSModuleAPIConsumer COMMAND spark_fps_module_api_consumer)
+set_tests_properties(SparkFPSModuleAPIConsumer PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;integration")
 
 add_test(NAME SparkFPSModuleSourceBoundary
     COMMAND "${CMAKE_COMMAND}"
         "-DFPS_SOURCE=${_fps_source}"
         -P "${CMAKE_CURRENT_LIST_DIR}/TestModuleSourceBoundary.cmake"
 )
+set_tests_properties(SparkFPSModuleSourceBoundary PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;static;integration;process")
 
 # Compile the production FPS logic without linking an engine target: its
 # transitive include directories must never hide a private-header dependency.
@@ -63,6 +65,7 @@ target_include_directories(spark_fps_progression_consumer PRIVATE
     "${_public_sdk}"
 )
 add_test(NAME SparkFPSProgressionConsumer COMMAND spark_fps_progression_consumer)
+set_tests_properties(SparkFPSProgressionConsumer PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;integration")
 
 # Asset discovery is production FPS code too. Keep its compiler inputs just as
 # isolated; linking an engine target would mask accidental private includes.
@@ -87,6 +90,9 @@ foreach(_scenario IN LISTS _asset_scenarios)
             "-DSCENARIO=${_scenario}"
             -P "${CMAKE_CURRENT_LIST_DIR}/RunAssetsConsumer.cmake"
     )
+    set_tests_properties(SparkFPSAssets_${_scenario} PROPERTIES
+        TIMEOUT 60
+        LABELS "sdk;package;fps;asset;integration")
 endforeach()
 
 add_executable(spark_fps_weapons_consumer
@@ -99,6 +105,7 @@ set_target_properties(spark_fps_weapons_consumer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 add_test(NAME SparkFPSWeaponsConsumer COMMAND spark_fps_weapons_consumer)
+set_tests_properties(SparkFPSWeaponsConsumer PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;integration")
 
 add_test(NAME SparkSDKHeaderRefresh
     COMMAND "${CMAKE_COMMAND}"
@@ -114,7 +121,9 @@ add_test(NAME SparkSDKHeaderRefresh
         "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
         -P "${CMAKE_CURRENT_LIST_DIR}/TestSDKHeaderRefresh.cmake"
 )
-set_tests_properties(SparkSDKHeaderRefresh PROPERTIES TIMEOUT 300)
+set_tests_properties(SparkSDKHeaderRefresh PROPERTIES
+    TIMEOUT 300
+    LABELS "sdk;package;fps;integration;process")
 
 # Rebuild a copied consumer tree that contains only the FPS source slice and
 # staged Spark/ headers. This catches any target that reaches back into the
@@ -135,7 +144,9 @@ add_test(NAME SparkFPSProgressionConsumerSourceBoundary
         "-DCONSUMER_CTEST=${CMAKE_CTEST_COMMAND}"
         -P "${CMAKE_CURRENT_LIST_DIR}/TestConsumerSourceBoundary.cmake"
 )
-set_tests_properties(SparkFPSProgressionConsumerSourceBoundary PROPERTIES TIMEOUT 300)
+set_tests_properties(SparkFPSProgressionConsumerSourceBoundary PROPERTIES
+    TIMEOUT 300
+    LABELS "sdk;package;fps;integration;process")
 
 # ClassSystem and Player use this exact ability implementation in the FPS module.
 add_executable(spark_fps_abilities_consumer
@@ -148,6 +159,7 @@ set_target_properties(spark_fps_abilities_consumer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 add_test(NAME SparkFPSAbilitiesConsumer COMMAND spark_fps_abilities_consumer)
+set_tests_properties(SparkFPSAbilitiesConsumer PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;integration")
 
 # These inline mutation implementations are the same ones used by the engine event adapters.
 add_executable(spark_fps_inventory_quests_consumer inventory_quests.cpp)
@@ -157,3 +169,4 @@ set_target_properties(spark_fps_inventory_quests_consumer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 add_test(NAME SparkFPSInventoryQuestsConsumer COMMAND spark_fps_inventory_quests_consumer)
+set_tests_properties(SparkFPSInventoryQuestsConsumer PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;integration")

@@ -703,7 +703,14 @@ class SPARK_GAME_API Game
     std::vector<Spark::SubscriptionHandle> m_eventSubscriptions; ///< Keeps EventBus callbacks active
 
 #ifdef ENABLE_NETWORKING
-    bool m_networkInitialized{false}; ///< Whether networking subsystem was initialized
+    /**
+     * @brief Tick the FPS multiplayer session and send local input at its fixed 60 Hz step.
+     * @param dt Frame delta (seconds)
+     */
+    void UpdateMultiplayer(float dt);
+
+    bool m_networkInitialized{false};      ///< Whether a multiplayer session initialized NetworkManager
+    float m_networkInputAccumulator{0.0f}; ///< Unsent simulated time toward the next 60 Hz input
 #endif
 
     // Scene objects

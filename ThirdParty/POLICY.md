@@ -49,6 +49,29 @@ and an expired record is a policy violation (exit 1). Exception records document
 reviewed risk; they never waive an inventory, hash, license, action-pin, or
 manifest check. The checker bounds the collection at 256 records.
 
+The same records are the only way to accept a Critical or High vulnerability in
+a release. The release job scans the generated SPDX SBOM with grype, and
+`.github/scripts/verify_vulnerability_findings.py` blocks publication unless
+every Critical/High finding is covered by a record whose `scope` is
+`vulnerability:<package name>` (the package name as grype reports it) and whose
+`id` is the advisory id grype reports (for example `GHSA-...`) or a related id
+it lists (for example the `CVE-...` behind it). Both must match. The package
+part of the scope is any printable text without leading or trailing whitespace,
+so names such as `libstdc++`, `@scope/pkg` or a PE-derived
+`Microsoft Visual C++ ... Runtime` are written exactly as grype prints them;
+every other scope keeps the path-like form. Records are unique on the pair
+(`id`, `scope`), compared case-insensitively, so one advisory reported against
+two packages (for example `zlib` and `zlib-ng`) takes one record per package. A
+record is current through its `expires` date (UTC); `tools/check-supply-chain.py`
+uses the same UTC day. The gate also fails on an expired vulnerability record,
+on one that names a package present in the scanned SBOM but matches no
+Critical/High finding (remove it once the package is fixed), on an SBOM with no
+packages, and on a failed or incomplete scan. The stable channel scans only the
+Windows Shipping packages while nightly scans every platform, so a current
+record whose package is absent from the scanned SBOM is reported as not
+applicable to that run instead of unused; its expiry still bounds it. It validates records with the same
+`validate_exception_records` function as `tools/check-supply-chain.py`.
+
 ## Adding a New Dependency
 
 1. **Justify the addition.** A new dependency must solve a problem that cannot
@@ -131,6 +154,22 @@ Sentinel files are additionally rejected if they are hardlinked or if they
 resolve outside the repository root. The walk is bounded in depth and entry
 count and never descends through a rejected entry.
 
+Submodules are identified by their mode-160000 gitlink in the superproject
+index, which exists whether or not the submodule is initialized, so the
+verdict must not depend on `git submodule update`. Inside an initialized
+submodule whose gitlink matches the lock, one narrow allowance applies: a true
+symbolic link (never a junction or other reparse point) is accepted only if
+the *locked* upstream commit tracks it at that exact path as mode 120000, its
+on-disk target equals the tracked target, the target is relative, and it
+resolves to an existing path inside the submodule root. Untracked links, links
+added off the pin, retargeted, absolute, dangling, or escaping links, and every
+link in the superproject are still rejected. Accepted links are never
+descended into. The locked tree is read with `git --no-replace-objects`, so a
+`refs/replace/*` entry in the submodule's object store cannot substitute a
+forged tree for the pin. On Windows, the `\` separators Git for Windows writes
+into on-disk link targets are mapped back to git's `/` form before the target
+is compared with the tracked blob.
+
 Container declarations must be pairwise disjoint across
 `managed_vendored_dirs`, `project_owned_dirs`, and `submodule_gitlinks`; no
 container may be nested inside another; and case-variant aliases are rejected,
@@ -169,6 +208,33 @@ those forms can carry an unpinned reference past the check.
 
 A missing `.github/workflows` directory is an error, not a warning — a check
 that did not run is not a check that passed.
+
+## SBOM and Package Reconciliation
+
+`tools/generate-sbom.py` renders the two lockfiles as a deterministic SPDX 2.3
+JSON document: one package per `dependencies.lock` entry with its locked
+version, source location, the SPDX license resolved through `license_policy`,
+and its integrity pin (submodule gitlink or vendored tree digest). The document
+names the source commit and the SHA-256 of the committed `dependencies.lock`
+blob, the same digest REL-100 build provenance records, so an SBOM and a
+provenance record for one release join on that value. Generation refuses a
+checkout whose lockfiles differ from their committed blobs, and `--check FILE`
+regenerates and requires byte equality, which lets a consumer holding the
+source verify an SBOM it was given.
+
+`generate-sbom.py reconcile` compares a shipped package with the lock. It takes
+a CMake `install_manifest.txt` (`--install-manifest`) or a staged package tree
+(`--package-root`) and classifies each file with
+`cmake/PackageNoticeCoverageRules.json`, the rule set the package
+notice-coverage gate uses. It fails when a third-party install path maps to no
+rule, a file or rule names a component the lock does not lock, a locked
+component with install payload rules ships no file, or the package's
+`THIRD_PARTY_NOTICES.txt` inventory differs from the locked names and versions.
+A configuration that legitimately omits a component names it with
+`--not-configured NAME`; the declaration fails if that component is present,
+so it cannot outlive the configuration it describes. Header-only dependencies
+compiled into binaries install no file of their own and are reported as
+`compiledInOnly`, never as verified.
 
 ## Enforcement
 

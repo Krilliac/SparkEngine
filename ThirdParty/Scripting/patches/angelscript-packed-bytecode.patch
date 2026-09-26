@@ -264,3 +264,30 @@ index 9169d40..36759ae 100644
  	bc += asBCTypeSize[asBCInfo[asBC_OBJTYPE].type];
  	if( templateType->flags & asOBJ_VALUE )
  	{
+diff --git a/source/as_string.cpp b/source/as_string.cpp
+index 8bd3edf..9810b62 100644
+--- a/source/as_string.cpp
++++ b/source/as_string.cpp
+@@ -183,8 +183,10 @@ void asCString::Assign(const char *str, size_t len)
+ {
+ 	Allocate(len, false);
+ 
+-	// Copy the string
+-	memcpy(AddressOf(), str, length);
++	// Copy the string. An empty source may be a null pointer (e.g. an empty
++	// asCArray<char>), and memcpy with a null argument is undefined even for 0 bytes.
++	if( length > 0 )
++		memcpy(AddressOf(), str, length);
+ 	AddressOf()[length] = 0;
+ }
+ 
+@@ -246,7 +248,8 @@ void asCString::Concatenate(const char *str, size_t len)
+ 	asUINT oldLength = length;
+ 	SetLength(length + len);
+ 
+-	memcpy(AddressOf() + oldLength, str, len);
++	if( len > 0 )
++		memcpy(AddressOf() + oldLength, str, len);
+ 	AddressOf()[length] = 0;
+ }
+ 

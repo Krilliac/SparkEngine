@@ -32,6 +32,64 @@ Every profile and global state stays `candidate`, with an assigned owner and
 reviewed qualification sign-off. Nothing in this procedure promotes the current
 blocked ledger or substitutes fixture tests for real qualification evidence.
 
+## Contract reference rules
+
+`validate.py` also enforces these rules on every run. A capability can be
+`ready` only if it names at least one required gate and has evidence. A gate can
+be `passing` only if it has evidence. Every work-item ID (such as `RDY-000`) and
+gate ID (such as `G00`) named in contract text must be declared, including
+rationale, summaries, limitations and website copy. `FUTURE_ACCEPTANCE_PATHS` in
+`validate.py` may list only paths that are still missing on disk and still named
+by an unfinished work item's `entryPoints`/`documentationUpdates` or by the docs
+catalog; a reference from a `done` item does not count. When a path lands,
+delete its entry in the same change. A work item marked `done` never resolves a
+reference through that list.
+
+Work-item `commands` are resolved against `CMakePresets.json`, using the
+inheritance resolver in `Tools/buildmatrix/inventory.py`. `cmake --preset <name>`
+must name a configure preset, `cmake --build --preset <name>` a build preset, and
+`ctest --preset <name>` a test preset. Every `build/<dir>` tree passed to cmake or
+ctest must be a configure preset's binaryDir. A ctest run must target a preset
+that builds tests. A preset whose resolved `BUILD_TESTS` is false, such as
+`windows-shipping` or `linux-shipping`, is accepted only when the same item
+configures that preset with `-DBUILD_TESTS=ON` (as RDY-010 and PLT-200 do).
+Otherwise the run belongs on a validation preset such as `windows-release`
+(`-C Release`), `linux-gcc-release`, or `ci-linux-asan`. A preset an item will
+add is declared in `PLANNED_CMAKE_PRESETS` in `validate.py` and keyed to its
+owning item. Only that owner's cmake commands may name it, and never a ctest
+tree. The entry is an error once the preset exists, the owner is `done`, or the
+owner stops naming it.
+
+Hand-written counts are governed too. `validate.py` scans every file in
+`REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES` for a number followed (within two words)
+by tests, files, panels, modules, subsystems, backends, lines or nodes, including
+`N+`, `~N` and `N/M` forms and phrases wrapped across lines. `<!-- AUTO:* -->`
+blocks, the fully generated `wiki/advanced/Codebase-Statistics.md`, and the
+`sed_replace` patterns of `docs/update-readme-badges.sh` are generator-owned and
+skipped. Each pattern is skipped only on the file(s) its own `sed_replace` call
+rewrites (the validator resolves `$readme`, loop variables, and arrays; an
+unresolvable target fails validation), so `N specialized panels` is managed on
+`README.md` but must be claimed on `wiki/getting-started/FAQ.md`. Every other hit
+must lie wholly inside the `text` of a `readiness.publicNumericClaims` entry for
+that `surface`; an entry `64 nodes` does not cover `~64 nodes`, `1/64 nodes` or
+`#64 nodes`:
+
+| `classification` | Extra field | Check |
+|------------------|-------------|-------|
+| `metric` | `metricId` | Exactly one claim, compared with the value `generate.py` measures from source; `N+` passes while the metric is at least `N`, and `~N` or `N/M` is refused |
+| `static-fact` | `evidencePath` | The cited path must exist (design constants such as the 4096-node mod JSON budget) |
+| `historical` | none | A dated audit or changelog record that is not re-measured |
+
+An entry whose text no longer occurs, or holds no claim, is an error, so
+rewording a page retires its entry in the same change. Prefer removing
+per-file line counts over registering them: they drift with every edit.
+
+CTest runs the whole contract suite as `site-data-contract`. The faster
+`readiness-cross-references` runs the strict live validation plus the dependency,
+promotion, selector, future-path, prose-reference and handoff cases. Both carry
+the `readiness` and `site-data` labels and are registered on non-Windows hosts
+only; the Linux `site-data` workflow is the suite's CI home.
+
 ## Protected publication authority
 
 The repository owner must create the `stable-release` GitHub environment before
@@ -59,7 +117,25 @@ repository Actions read access for the environment and deployment-branch APIs.
 The owner must resolve a missing environment, API denial, or unavailable
 protection feature; none is treated as approval. The preflight never creates an
 environment, broadens token permissions, or supplies a substitute approval.
-Retain the actual GitHub deployment approval history alongside release evidence.
+
+Immediately after that entry check, the publisher records the actual approval
+event with `record_release_approval.py`. It reads
+`GET /repos/{repo}/actions/runs/{run_id}/approvals` (bounded, Link-paginated,
+duplicate-key-rejecting) and binds it to the run attempt, head SHA, release
+workflow path, repository, and `stable-release` environment id. It fails unless
+the history holds at least one approval, every review is `approved` by the
+repository owner `Krilliac` (login and id) for `stable-release` only, and no
+review is rejected. Each environment-bound job needs its own review, so a stable
+run normally carries more than one owner approval; all of them are recorded.
+The closed, deterministic record keeps the run id, attempt and start time, the
+environment id, the approver, and a SHA-256 of each review comment. It is
+retained as the 90-day artifact
+`stable-release-approval-<SHA>-<run>-<attempt>` and its digest becomes the
+job output `approval_record_sha256`. The approvals API exposes no review
+timestamp, so approval time is bounded by the run start and that artifact's
+upload. An owner-only approval is one person's review, not independent
+second-person review; how GitHub reports that self-approval still needs a
+hosted stable run to confirm.
 
 The separate repository `/immutable-releases` API requires **Administration
 read** permission, which `GITHUB_TOKEN` cannot provide. The owner must provision
@@ -92,6 +168,54 @@ asset only after the durable download-counter preflight; the control asset is
 not a distributable or badge-ledger entry. All existing signature, checksum,
 SBOM, scan, exact-CI, source/tag, and package qualification gates still apply.
 
+## Stable release notes
+
+The stable release body is generated, not hand-written. After the signature
+bundle is created and before the draft is staged, the `Render fail-closed stable
+release notes` step runs `tools/release_notes.py` and passes its output to the
+stable staging step as `RELEASE_BODY`. The notes contain:
+
+- the `stable-v1` support matrix, supported hosts, experimental and unsupported
+  capabilities, excluded gates, and limitations, copied from
+  `docs/site/readiness.json` at the release commit (the profile state is printed
+  as recorded, never upgraded);
+- the single `## [X.Y.Z]` section of `CHANGELOG.md`, with a `### Migration`
+  (or `Migrations`, `Migration notes`, `Upgrading`, `Upgrade notes`) subsection
+  surfaced as the Migrations section; without one the notes say that no
+  migration subsection is recorded;
+- the asset list, the `SHA256SUMS` lines, and fixed `sha256sum -c`,
+  `openssl pkey`/`openssl dgst -verify` (with the pinned signer fingerprint),
+  `gh attestation verify`, and `gh release verify` instructions.
+
+The generator exits non-zero, and staging never starts, when the version section
+is missing, duplicated, or empty; `SHA256SUMS` is empty, malformed, lists an
+unexpected asset, or misses a distributable; the SBOM or `SHA256SUMS` is absent
+from the expected asset list; or the signature control asset is missing, is not a
+flat gzip tar with a manifest, public key, and signatures, or carries a key whose
+SPKI SHA-256 differs from `SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT`. The
+output is deterministic and bounded to 120000 characters, so a resumed draft is
+patched with identical text. Nightly releases keep their short workflow body.
+`ReleaseProfileRehearsal_ReleaseNotes` (`Tests/Tools/test_release_notes.py`)
+covers the renderer and its wiring; it is not the full REL-190 rehearsal.
+
+## Channel retention and support policy
+
+Owner decision OD-17 ([owner decisions](../../docs/readiness/OWNER-DECISIONS.md),
+2026-09-24) sets the retention and support terms each channel must meet. REL-100
+owns enforcing them. They are policy targets; they do not mean any release has
+been published under them.
+
+| Channel | Retention | Support |
+|---|---|---|
+| Stable | Release assets are immutable and kept permanently | Security and critical fixes until 6 months after the next stable release |
+| Nightly | Each uniquely tagged immutable nightly is kept for 30 days | Unsupported |
+| Experimental | Artifacts are kept for 14 days | Unsupported; always labeled experimental |
+| CI build artifacts | Existing 7- and 90-day Actions retention | Not a release channel |
+
+The stable window lines up with OD-03 (saves and scenes read N-1): a user on the
+previous stable release can still load current data during its fix window.
+No stable-v1 release exists yet, so no stable support window is running.
+
 ## Immutable stable and rolling-nightly policy conflict
 
 Stable publication requires repository immutable releases enabled. All package,
@@ -121,7 +245,9 @@ The workflow never toggles the repository policy automatically.
 This remains a release blocker in REL-100 and REL-190. Both channels must not be
 described as operational together. A separately reviewed channel migration to
 unique immutable nightly tags or Actions artifacts, or an explicit owner-approved
-channel policy change, is required. That policy work is outside this change.
+channel policy change, is required. OD-17 picks the target: uniquely tagged,
+immutable nightlies kept for 30 days. The workflow has not been migrated to it,
+so the conflict and its REL-100/REL-190 blocker still stand.
 
 ## Independent verification and final readiness
 
@@ -131,7 +257,9 @@ published asset IDs through GitHub, downloads the stable assets and the
 signature control asset, checks their sizes and SHA-256 digests, extracts and
 verifies the pinned detached signatures and SBOM, compares provenance to freshly
 revalidated exact-CI evidence, verifies the GitHub release attestation, and
-rechecks the release, assets, and tag for drift.
+rechecks the release, assets, and tag for drift. Before downloading anything it
+rebuilds the approval record from the GitHub API for the publisher's attempt and
+requires the publisher's exact `approval_record_sha256`; the receipt embeds it.
 It cannot publish, edit the ledger, or turn the profile ready.
 
 Only success produces the immutable Actions artifact
@@ -201,6 +329,25 @@ its actual old-to-new upgrade/rollback transaction. The normal provisioner pins
 `v1.0.0` specifically to an immutable `v0.9.0` release; a different earlier
 version or a mutable release cannot substitute for it.
 
+### Predecessor owner, baseline rule, and REL-190 substitution
+
+Owner decisions OD-18 and OD-19 (2026-09-24) are recorded in
+`predecessorRelease` in `docs/site/readiness.json`:
+
+- In the v0.9.0 predecessor stage, REL-191 replaces REL-190 through
+  `qualificationSubstitutions`, next to the existing REL-192→REL-191 and
+  INST-131→INST-132 entries. REL-190 stays required for the stable-v1 release
+  candidate and remains in both blocking lists. REL-191 already covers every
+  common qualification gate and named sign-off without N-1 claims.
+- `owner` is `Krilliac`.
+- The baseline is not picked by hand. It is the first `Working` commit after
+  the stable-v1 release branch merges at which every
+  `predecessorRelease.requiredGateIds` gate has passing exact-SHA evidence.
+  Until then `sourceCommitEvidence.baselineCommit` and `signOffEvidence` stay
+  empty and the stage stays `blocked`; `--require-predecessor-candidate`
+  rejects the empty baseline. `test_release_stages.py` checks that these fields
+  stay empty while any required gate is not passing.
+
 ## Source & Freshness
 
 Implemented 2026-09-21. Sources: [readiness contract](../../docs/site/readiness.json),
@@ -209,5 +356,15 @@ Implemented 2026-09-21. Sources: [readiness contract](../../docs/site/readiness.
 and the [repository immutability API](https://docs.github.com/en/enterprise-cloud%40latest/rest/repos/repos#check-if-immutable-releases-are-enabled-for-a-repository).
 Predecessor identity and source-lineage review updated 2026-09-22; see the
 [release API immutable field](https://docs.github.com/en/rest/releases/releases).
+Approval-event recording added 2026-09-24 against the
+[workflow-run review history API](https://docs.github.com/en/rest/actions/workflow-runs#get-the-review-history-for-a-workflow-run).
 Recheck live environment protection, approval history, signing authority, and
 exact-SHA run/artifact identities before each release.
+Channel retention/support policy (OD-17) and the predecessor owner, baseline
+rule, and REL-190 substitution (OD-18/OD-19) recorded 2026-09-24 from
+[owner decisions](../../docs/readiness/OWNER-DECISIONS.md).
+Contract reference rules and the public numeric-claim ledger added 2026-09-24 from
+[`validate.py`](../../tools/site-data/validate.py) and
+[`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).
+Generated stable release notes (REL-190) added 2026-09-24 from
+[`tools/release_notes.py`](../../tools/release_notes.py).

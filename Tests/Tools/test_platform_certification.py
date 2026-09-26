@@ -25,7 +25,9 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -42,6 +44,7 @@ sys.path.insert(0, str(CERT_DIR))
 import bundle_verify  # noqa: E402
 import collect_evidence as collector  # noqa: E402
 import dependency_authority as da  # noqa: E402
+import pe_imports  # noqa: E402
 import safe_fs  # noqa: E402
 import validate_certification as vc  # noqa: E402
 from schema_validator import CompiledSchema, SchemaError  # noqa: E402
@@ -66,6 +69,83 @@ JOB_ID = "windows-certification"
 IDENTITY = f"https://github.com/{REPOSITORY}/actions/runs/{RUN_ID}/attempts/1"
 
 NULLRHI_CATEGORIES = vc.ALL_PROBE_CATEGORIES - {"renderer", "content", "input", "audio"}
+
+
+# ── Synthetic PE32+ images ─────────────────────────────────────────────────
+PE_OPTIONAL_HEADER_BYTES = 240
+PE_SECTION_RVA = 0x1000
+PE_SECTION_FILE_OFFSET = 0x200
+PE_IMAGE_BASE = 0x140000000
+
+
+def build_pe(
+    imports: list[str] | tuple[str, ...] = (),
+    delay_imports: list[str] | tuple[str, ...] = (),
+    *,
+    machine: int = 0x8664,
+    magic: int = 0x20B,
+) -> bytes:
+    """A minimal, loader-shaped PE32+ image with one .idata section.
+
+    The section holds the import descriptors, then the delay-import
+    descriptors (RVA-based), then the NUL-terminated DLL names they point at.
+    """
+    import_table = (len(imports) + 1) * 20 if imports else 0
+    delay_table = (len(delay_imports) + 1) * 32 if delay_imports else 0
+    names = bytearray()
+    name_rvas: list[int] = []
+    for name in list(imports) + list(delay_imports):
+        name_rvas.append(PE_SECTION_RVA + import_table + delay_table + len(names))
+        names += name.encode("ascii") + b"\x00"
+
+    section = bytearray()
+    for index in range(len(imports)):
+        section += struct.pack("<IIIII", 0, 0, 0, name_rvas[index], 0)
+    if imports:
+        section += bytes(20)
+    for index in range(len(delay_imports)):
+        section += struct.pack("<8I", 1, name_rvas[len(imports) + index], 0, 0, 0, 0, 0, 0)
+    if delay_imports:
+        section += bytes(32)
+    section += names
+    raw_size = max(0x200, (len(section) + 0x1FF) & ~0x1FF)
+    section += bytes(raw_size - len(section))
+
+    optional = bytearray(PE_OPTIONAL_HEADER_BYTES)
+    struct.pack_into("<H", optional, 0, magic)
+    struct.pack_into("<Q", optional, 24, PE_IMAGE_BASE)
+    struct.pack_into("<I", optional, 108, 16)
+    if imports:
+        struct.pack_into("<II", optional, 112 + 8 * 1, PE_SECTION_RVA, import_table)
+    if delay_imports:
+        struct.pack_into("<II", optional, 112 + 8 * 13, PE_SECTION_RVA + import_table, delay_table)
+
+    header = bytearray(64)
+    header[0:2] = b"MZ"
+    struct.pack_into("<I", header, 0x3C, 64)
+    header += b"PE\x00\x00"
+    header += struct.pack("<HHIIIHH", machine, 1, 0, 0, 0, PE_OPTIONAL_HEADER_BYTES, 0x22)
+    header += optional
+    header += struct.pack(
+        "<8sIIIIIIHHI",
+        b".idata",
+        len(section),
+        PE_SECTION_RVA,
+        raw_size,
+        PE_SECTION_FILE_OFFSET,
+        0,
+        0,
+        0,
+        0,
+        0xC0000040,
+    )
+    header += bytes(PE_SECTION_FILE_OFFSET - len(header))
+    return bytes(header) + bytes(section)
+
+
+def pe_directory_offset(index: int) -> int:
+    """File offset of data directory `index` in an image from build_pe."""
+    return 64 + 4 + 20 + 112 + 8 * index
 
 
 def iso(moment: datetime) -> str:
@@ -212,6 +292,8 @@ class Bundle:
                 "completedAt": iso(PROBE_END),
                 "artifacts": [artifact],
             }
+        if "dependency_closure" in probes:
+            probes["dependency_closure"]["artifacts"].append(self._import_graph(row_id))
 
         closure = []
         for name, source in self._required_dependencies(row_id):
@@ -283,6 +365,28 @@ class Bundle:
         self.reseal(record)
         return record
 
+    def _import_graph(self, row_id: str) -> dict[str, Any]:
+        """Stage a synthetic package importing exactly the row's closure, and walk it."""
+        package = self.root / "packages" / row_id
+        package.mkdir(parents=True, exist_ok=True)
+        required = [name for name, _source in self._required_dependencies(row_id)]
+        delayed = [name for name in required if name == "d3dcompiler_47.dll"]
+        direct = [name for name in required if name not in delayed]
+        (package / "SparkEngine.exe").write_bytes(
+            build_pe(direct + ["api-ms-win-crt-runtime-l1-1-0.dll"], delayed)
+        )
+        (package / "SparkGameFPS.dll").write_bytes(
+            build_pe(["SparkEngine.exe", "vcruntime140.dll"])
+        )
+        graph = pe_imports.walk_package(
+            package, self.authority, ["SparkEngine.exe", "SparkGameFPS.dll"]
+        )
+        payload = pe_imports.encode_graph(graph)
+        digest = hashlib.sha256(payload).hexdigest()
+        return self._write_artifact(
+            row_id, f"dependency_closure/{digest}{pe_imports.GRAPH_SUFFIX}", payload
+        )
+
     def _required_dependencies(self, row_id: str) -> list[tuple[str, str]]:
         return [
             (self.authority.by_identity[key]["name"], key[1])
@@ -339,6 +443,20 @@ def _load_authority() -> da.Authority:
 
 
 AUTHORITY = _load_authority()
+
+
+def authority_with_images(images: dict[str, list[str]]) -> da.Authority:
+    """The committed authority with reviewed imageNames added to thirdParty entries."""
+    document = copy.deepcopy(AUTHORITY.document)
+    for entry in document["thirdParty"]:
+        if entry["name"] in images:
+            entry["imageNames"] = images[entry["name"]]
+    da.validate_authority_document(document)
+    return da.Authority(document)
+
+
+SDL2_AUTHORITY = authority_with_images({"SDL2": ["sdl2.dll"]})
+SDL2_VERSION = SDL2_AUTHORITY.lookup("SDL2", "bundled")["version"]
 
 
 class BundleTestCase(unittest.TestCase):
@@ -1460,6 +1578,658 @@ class TestDependencyBinding(BundleTestCase):
         )
 
 
+class TestPeImportReader(unittest.TestCase):
+    """The bounded PE32+ reader, on images built byte by byte in-test."""
+
+    def test_plain_imports_are_read_and_normalised(self) -> None:
+        parsed = pe_imports.parse_imports(build_pe(["KERNEL32.dll", "msvcp140.dll"]))
+        self.assertEqual(parsed.machine, "amd64")
+        self.assertEqual(parsed.imports, ("kernel32.dll", "msvcp140.dll"))
+        self.assertEqual(parsed.delay_imports, ())
+
+    def test_delay_imports_are_read(self) -> None:
+        parsed = pe_imports.parse_imports(build_pe(["vcruntime140.dll"], ["D3DCompiler_47.dll"]))
+        self.assertEqual(parsed.imports, ("vcruntime140.dll",))
+        self.assertEqual(parsed.delay_imports, ("d3dcompiler_47.dll",))
+
+    def test_an_image_without_imports_has_none(self) -> None:
+        parsed = pe_imports.parse_imports(build_pe())
+        self.assertEqual((parsed.imports, parsed.delay_imports), ((), ()))
+
+    def test_an_extensionless_import_gets_the_loaders_dll_suffix(self) -> None:
+        self.assertEqual(pe_imports.parse_imports(build_pe(["USER32"])).imports, ("user32.dll",))
+
+    def test_api_set_names_are_recognised(self) -> None:
+        self.assertTrue(pe_imports.is_api_set("API-MS-WIN-CRT-RUNTIME-L1-1-0.dll"))
+        self.assertTrue(pe_imports.is_api_set("ext-ms-win-ntuser-window-l1-1-0.dll"))
+        self.assertFalse(pe_imports.is_api_set("api-ms-win-crt-runtime-l1-1-0.exe"))
+        self.assertFalse(pe_imports.is_api_set("kernel32.dll"))
+
+    def assertMalformed(self, data: bytes, needle: str) -> None:
+        with self.assertRaises(pe_imports.PEFormatError) as raised:
+            pe_imports.parse_imports(data)
+        self.assertIn(needle, str(raised.exception))
+
+    def test_truncated_headers_are_refused(self) -> None:
+        image = build_pe(["kernel32.dll"])
+        self.assertMalformed(image[:0x160], "section table is truncated")
+        self.assertMalformed(image[:0x100], "data directory at offset 0x100 is truncated")
+        self.assertMalformed(image[:0x50], "COFF header at offset 0x44 is truncated")
+        self.assertMalformed(image[:0x42], "missing PE signature")
+        self.assertMalformed(image[:0x30], "missing DOS header")
+
+    def test_an_rva_outside_every_section_is_refused(self) -> None:
+        image = bytearray(build_pe(["kernel32.dll"]))
+        struct.pack_into("<I", image, pe_directory_offset(1), 0x9000)
+        self.assertMalformed(bytes(image), "is outside every section")
+
+    def test_a_name_rva_outside_every_section_is_refused(self) -> None:
+        image = bytearray(build_pe(["kernel32.dll"]))
+        struct.pack_into("<I", image, PE_SECTION_FILE_OFFSET + 12, 0x7FFF0000)
+        self.assertMalformed(bytes(image), "is outside every section")
+
+    def test_a_section_past_the_end_of_the_file_is_refused(self) -> None:
+        image = build_pe(["kernel32.dll"])
+        self.assertMalformed(image[:-16], "raw data extends past the end of the image")
+
+    def test_an_out_of_range_e_lfanew_is_refused(self) -> None:
+        image = bytearray(build_pe(["kernel32.dll"]))
+        struct.pack_into("<I", image, 0x3C, 0xFFFFFFF0)
+        self.assertMalformed(bytes(image), "e_lfanew")
+
+    def test_pe32_images_are_refused(self) -> None:
+        self.assertMalformed(build_pe(["kernel32.dll"], magic=0x10B), "PE32 (32-bit)")
+
+    def test_foreign_machines_are_refused(self) -> None:
+        self.assertMalformed(build_pe(["kernel32.dll"], machine=0x14C), "unsupported machine")
+
+    def test_an_oversized_section_count_is_refused(self) -> None:
+        image = bytearray(build_pe(["kernel32.dll"]))
+        struct.pack_into("<H", image, 64 + 4 + 2, 97)
+        self.assertMalformed(bytes(image), "section count 97")
+
+    def test_an_oversized_directory_count_is_refused(self) -> None:
+        image = bytearray(build_pe(["kernel32.dll"]))
+        struct.pack_into("<I", image, 64 + 4 + 20 + 108, 17)
+        self.assertMalformed(bytes(image), "NumberOfRvaAndSizes 17")
+
+    def test_a_sized_directory_without_an_address_is_refused(self) -> None:
+        image = bytearray(build_pe(["kernel32.dll"]))
+        struct.pack_into("<II", image, pe_directory_offset(1), 0, 40)
+        self.assertMalformed(bytes(image), "has a size but no address")
+
+    def test_too_many_descriptors_are_refused(self) -> None:
+        names = ["kernel32.dll"] * (pe_imports.MAX_IMPORT_DESCRIPTORS + 1)
+        self.assertMalformed(build_pe(names), "more than 4096 descriptors")
+
+    def test_an_unterminated_name_is_refused(self) -> None:
+        image = bytearray(build_pe(["kernel32.dll"]))
+        start = PE_SECTION_FILE_OFFSET + 40
+        image[start:] = b"A" * (len(image) - start)
+        self.assertMalformed(bytes(image), "is unterminated")
+
+    def test_a_path_in_an_import_name_is_refused(self) -> None:
+        self.assertMalformed(build_pe(["..\\evil.dll"]), "path or control character")
+        self.assertMalformed(build_pe(["C:evil.dll"]), "path or control character")
+
+
+class PackageTestCase(unittest.TestCase):
+    """A staged package on disk, walked against the committed authority."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="plt200-pe-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.package = self.tmp / "package"
+        self.package.mkdir()
+
+    def stage(self, relative: str, image: bytes) -> None:
+        target = self.package / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(image)
+
+    def walk(self, first_party: list[str] | None = None) -> dict[str, Any]:
+        return pe_imports.walk_package(
+            self.package, AUTHORITY, first_party or ["SparkEngine.exe"]
+        )
+
+    @staticmethod
+    def closure(*entries: tuple[str, str]) -> list[dict[str, str]]:
+        return [{"name": name, "version": "14.42.34438.0", "source": source} for name, source in entries]
+
+    @staticmethod
+    def resolution(graph: dict[str, Any], name: str) -> dict[str, Any]:
+        return next(dep for dep in graph["dependencies"] if dep["name"] == name)
+
+
+class TestPackageWalk(PackageTestCase):
+    def test_imports_are_classified_by_where_they_resolve(self) -> None:
+        self.stage(
+            "SparkEngine.exe",
+            build_pe(["msvcp140.dll", "API-MS-WIN-CRT-HEAP-L1-1-0.dll", "Helper.dll"], ["dxgi.dll"]),
+        )
+        self.stage("Helper.dll", build_pe(["vcruntime140.dll"]))
+        graph = self.walk(["SparkEngine.exe", "Helper.dll"])
+
+        self.assertEqual(self.resolution(graph, "helper.dll")["resolution"], "package")
+        self.assertEqual(self.resolution(graph, "helper.dll")["packagePath"], "Helper.dll")
+        self.assertEqual(self.resolution(graph, "api-ms-win-crt-heap-l1-1-0.dll")["resolution"], "api-set")
+        self.assertEqual(self.resolution(graph, "dxgi.dll"), {
+            "name": "dxgi.dll",
+            "importedBy": ["SparkEngine.exe"],
+            "resolution": "platform",
+            "source": "system",
+        })
+        image = next(i for i in graph["images"] if i["path"] == "Helper.dll")
+        self.assertEqual(image["sha256"], hashlib.sha256((self.package / "Helper.dll").read_bytes()).hexdigest())
+        self.assertEqual(pe_imports.validate_graph(graph), graph)
+        self.assertEqual(
+            pe_imports.closure_errors(
+                graph,
+                self.closure(("msvcp140.dll", "vcredist"), ("vcruntime140.dll", "vcredist"), ("dxgi.dll", "system")),
+                AUTHORITY,
+            ),
+            [],
+        )
+
+    def test_a_missing_dll_is_unresolved(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "SparkMissing.dll"]))
+        graph = self.walk()
+        self.assertEqual(self.resolution(graph, "sparkmissing.dll")["resolution"], "unresolved")
+        errors = pe_imports.closure_errors(graph, self.closure(("msvcp140.dll", "vcredist")), AUTHORITY)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'sparkmissing.dll' (imported by SparkEngine.exe) is neither in the package", errors[0])
+
+    def test_an_undeclared_bundled_sdl2_import_is_rejected(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "SDL2.dll"]))
+        self.stage("SDL2.dll", build_pe())
+        graph = self.walk()
+        self.assertEqual(self.resolution(graph, "sdl2.dll")["resolution"], "package")
+        self.assertEqual(
+            pe_imports.closure_errors(graph, self.closure(("msvcp140.dll", "vcredist")), AUTHORITY),
+            [
+                "package-local 'sdl2.dll' (imported by SparkEngine.exe) is neither a first-party "
+                "image nor a reviewed thirdParty imageNames entry of the dependency authority"
+            ],
+        )
+
+    def test_a_declared_entry_nothing_imports_is_rejected(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
+        errors = pe_imports.closure_errors(
+            self.walk(),
+            self.closure(("msvcp140.dll", "vcredist"), ("vcruntime140_1.dll", "vcredist")),
+            AUTHORITY,
+        )
+        self.assertEqual(
+            errors,
+            ["declared dependency 'vcruntime140_1.dll' is not imported by any image in the package"],
+        )
+
+    def test_a_platform_import_declared_from_the_wrong_source_is_rejected(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
+        errors = pe_imports.closure_errors(self.walk(), self.closure(("msvcp140.dll", "system")), AUTHORITY)
+        self.assertIn("declared from 'system' but the authority resolves it from 'vcredist'", errors[0])
+
+    def test_a_declared_api_set_is_rejected(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["api-ms-win-crt-heap-l1-1-0.dll"]))
+        errors = pe_imports.closure_errors(
+            self.walk(), self.closure(("api-ms-win-crt-heap-l1-1-0.dll", "system")), AUTHORITY
+        )
+        self.assertEqual(
+            errors,
+            ["'api-ms-win-crt-heap-l1-1-0.dll' is an operating-system API set and must not be declared"],
+        )
+
+    def test_an_import_cycle_terminates_and_resolves_locally(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["A.dll"]))
+        self.stage("A.dll", build_pe(["B.dll", "msvcp140.dll"]))
+        self.stage("B.dll", build_pe(["A.dll"]))
+        graph = self.walk(["SparkEngine.exe", "A.dll", "B.dll"])
+        self.assertEqual(self.resolution(graph, "a.dll")["importedBy"], ["B.dll", "SparkEngine.exe"])
+        self.assertEqual(self.resolution(graph, "b.dll")["importedBy"], ["A.dll"])
+        self.assertEqual(
+            pe_imports.closure_errors(graph, self.closure(("msvcp140.dll", "vcredist")), AUTHORITY), []
+        )
+
+    def test_a_dll_outside_the_application_directory_is_not_package_local(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["Plugin.dll"]))
+        self.stage("plugins/Plugin.dll", build_pe(["msvcp140.dll"]))
+        graph = self.walk()
+        self.assertEqual(self.resolution(graph, "plugin.dll")["resolution"], "unresolved")
+        self.assertIn("plugins/Plugin.dll", [image["path"] for image in graph["images"]])
+
+    def test_a_first_party_image_missing_from_the_package_is_rejected(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
+        errors = pe_imports.closure_errors(
+            self.walk(["SparkEngine.exe", "SparkGameFPS.dll"]),
+            self.closure(("msvcp140.dll", "vcredist")),
+            AUTHORITY,
+        )
+        self.assertEqual(errors, ["first-party image 'sparkgamefps.dll' is not in the package root"])
+
+    def test_a_malformed_image_fails_the_walk_closed(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
+        self.stage("Broken.dll", build_pe(["msvcp140.dll"])[:0x160])
+        with self.assertRaises(pe_imports.ClosureError) as raised:
+            self.walk()
+        self.assertIn("Broken.dll: section table is truncated", str(raised.exception))
+
+    def test_a_package_without_an_executable_is_refused(self) -> None:
+        self.stage("Only.dll", build_pe(["msvcp140.dll"]))
+        with self.assertRaises(pe_imports.ClosureError) as raised:
+            self.walk()
+        self.assertIn("holds no executable image", str(raised.exception))
+
+    @unittest.skipIf(os.name == "nt", "case-insensitive filesystem cannot hold both names")
+    def test_case_aliased_images_are_refused(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
+        self.stage("helper.dll", build_pe())
+        self.stage("HELPER.dll", build_pe())
+        with self.assertRaises(pe_imports.ClosureError) as raised:
+            self.walk()
+        self.assertIn("same file name on Windows", str(raised.exception))
+
+    def test_a_reclassified_import_is_caught_against_the_authority(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "SDL2.dll"]))
+        graph = self.walk()
+        forged = self.resolution(graph, "sdl2.dll")
+        forged["resolution"] = "platform"
+        forged["source"] = "system"
+        self.assertEqual(
+            pe_imports.graph_authority_errors(graph, AUTHORITY),
+            [
+                "import graph classifies 'sdl2.dll' as 'platform', but the dependency "
+                "authority makes it 'unresolved'"
+            ],
+        )
+
+    def test_a_graph_whose_dependencies_disagree_with_its_images_is_refused(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "SDL2.dll"]))
+        graph = self.walk()
+        graph["dependencies"] = [dep for dep in graph["dependencies"] if dep["name"] != "sdl2.dll"]
+        with self.assertRaises(pe_imports.ClosureError) as raised:
+            pe_imports.validate_graph(graph)
+        self.assertIn("do not match the images' imports", str(raised.exception))
+
+    def test_a_package_local_third_party_dll_is_declared_by_its_authority_identity(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "vcruntime140_1.dll", "SDL2.dll"]))
+        self.stage("SDL2.dll", build_pe(["vcruntime140.dll"]))
+        graph = pe_imports.walk_package(self.package, SDL2_AUTHORITY, ["SparkEngine.exe"])
+        closure = self.closure(
+            ("msvcp140.dll", "vcredist"), ("vcruntime140.dll", "vcredist"), ("vcruntime140_1.dll", "vcredist")
+        ) + [
+            {"name": "SDL2", "version": SDL2_VERSION, "source": "bundled"}
+        ]
+        self.assertEqual(pe_imports.closure_errors(graph, closure, SDL2_AUTHORITY), [])
+        self.assertEqual(bundle_verify.check_dependency_closure(NULLRHI_ID, closure, SDL2_AUTHORITY), [])
+
+        by_file_name = closure[:3] + [{"name": "sdl2.dll", "version": SDL2_VERSION, "source": "bundled"}]
+        self.assertEqual(
+            pe_imports.closure_errors(graph, by_file_name, SDL2_AUTHORITY),
+            [
+                "measured import 'sdl2.dll' (imported by SparkEngine.exe) (package-local image "
+                "of 'SDL2') is not declared in the dependency closure",
+                "declared dependency 'sdl2.dll' is an image file name; declare the authority "
+                "identity 'SDL2' instead",
+            ],
+        )
+
+    def test_an_app_local_redistributable_is_declared_under_its_runtime_source(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
+        self.stage("msvcp140.dll", build_pe())
+        graph = self.walk()
+        self.assertEqual(self.resolution(graph, "msvcp140.dll")["resolution"], "package")
+        self.assertEqual(pe_imports.closure_errors(graph, self.closure(("msvcp140.dll", "vcredist")), AUTHORITY), [])
+        self.assertIn(
+            "declared from 'bundled' but the authority resolves it from 'vcredist'",
+            pe_imports.closure_errors(graph, self.closure(("msvcp140.dll", "bundled")), AUTHORITY)[0],
+        )
+
+    def test_an_app_local_system_library_is_rejected(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "d3d11.dll"]))
+        self.stage("d3d11.dll", build_pe())
+        errors = pe_imports.closure_errors(
+            self.walk(), self.closure(("msvcp140.dll", "vcredist"), ("d3d11.dll", "system")), AUTHORITY
+        )
+        self.assertIn(
+            "package-local 'd3d11.dll' is a 'system' platformRuntime library that must come from the OS; "
+            "the package must not ship it",
+            errors,
+        )
+
+    def test_a_shipped_known_dll_does_not_excuse_the_os_import(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "KERNEL32.dll"]))
+        self.stage("kernel32.dll", build_pe())
+        graph = self.walk(["SparkEngine.exe", "kernel32.dll"])
+        self.assertEqual(self.resolution(graph, "kernel32.dll")["resolution"], "unresolved")
+        errors = pe_imports.closure_errors(graph, self.closure(("msvcp140.dll", "vcredist")), AUTHORITY)
+        self.assertEqual(
+            errors,
+            [
+                "first-party image 'kernel32.dll' is a KnownDLL the loader always maps from the "
+                "system directory, not a product image",
+                "'kernel32.dll' (imported by SparkEngine.exe) is neither in the package nor a "
+                "platformRuntime entry of the dependency authority",
+            ],
+        )
+
+    def test_a_runtime_or_third_party_name_is_not_a_first_party_image(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
+        self.stage("msvcp140.dll", build_pe())
+        self.stage("sdl2.dll", build_pe())
+        graph = pe_imports.walk_package(
+            self.package, SDL2_AUTHORITY, ["SparkEngine.exe", "msvcp140.dll", "sdl2.dll"]
+        )
+        errors = pe_imports.closure_errors(graph, [], SDL2_AUTHORITY)
+        self.assertIn(
+            "first-party image 'msvcp140.dll' is the 'vcredist' platformRuntime library of that name, "
+            "not a product image",
+            errors,
+        )
+        self.assertIn(
+            "first-party image 'sdl2.dll' is the image of third-party dependency 'SDL2', not a product image",
+            errors,
+        )
+
+    def test_a_graph_forged_to_ship_a_known_dll_is_refused(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "kernel32.dll"]))
+        graph = self.walk()
+        forged_image = dict(graph["images"][0], path="kernel32.dll", sha256="0" * 64, imports=[])
+        graph["images"].append(forged_image)
+        graph["firstPartyImages"].append("kernel32.dll")
+        dep = self.resolution(graph, "kernel32.dll")
+        dep["resolution"] = "package"
+        dep["packagePath"] = "kernel32.dll"
+        pe_imports.validate_graph(graph)
+        self.assertEqual(
+            pe_imports.graph_authority_errors(graph, AUTHORITY),
+            [
+                "import graph resolves 'kernel32.dll' to the package, but the loader never takes "
+                "that name from the application directory"
+            ],
+        )
+        self.assertIn(
+            "first-party image 'kernel32.dll' is a KnownDLL the loader always maps from the "
+            "system directory, not a product image",
+            pe_imports.closure_errors(graph, self.closure(("msvcp140.dll", "vcredist")), AUTHORITY),
+        )
+
+    def test_a_package_resolution_to_another_image_is_refused(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "SDL2.dll"]))
+        self.stage("SDL2.dll", build_pe())
+        self.stage("plugins/sdl2.dll", build_pe())
+        for path in ("SparkEngine.exe", "plugins/sdl2.dll"):
+            graph = self.walk()
+            self.resolution(graph, "sdl2.dll")["packagePath"] = path
+            with self.assertRaises(pe_imports.ClosureError) as raised:
+                pe_imports.validate_graph(graph)
+            self.assertIn("does not resolve to the package-root image of its name", str(raised.exception))
+
+    def test_a_declaration_carrying_measured_fields_is_refused(self) -> None:
+        with self.assertRaises(pe_imports.ClosureError) as raised:
+            pe_imports.parse_declaration(
+                {"dependencyClosure": [{"name": "msvcp140.dll", "version": "14.0.0.0",
+                                        "source": "vcredist", "sha256": "0" * 64}]}
+            )
+        self.assertIn("measured, not declared", str(raised.exception))
+
+
+class TestPeImportsCli(PackageTestCase):
+    SCRIPT = CERT_DIR / "pe_imports.py"
+
+    def run_cli(self, plan: dict[str, Any]) -> subprocess.CompletedProcess[bytes]:
+        plan_path = self.tmp / "plan.json"
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(self.SCRIPT), "--package-root", str(self.package), "--plan", str(plan_path)],
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+
+    def test_a_consistent_package_exits_zero_with_the_canonical_graph(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
+        result = self.run_cli({"firstPartyImages": ["SparkEngine.exe"],
+                               "dependencyClosure": self.closure(("msvcp140.dll", "vcredist"))})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, pe_imports.encode_graph(self.walk()))
+
+    def test_an_undeclared_import_exits_one_but_still_prints_the_graph(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "SDL2.dll"]))
+        self.stage("SDL2.dll", build_pe())
+        result = self.run_cli({"dependencyClosure": self.closure(("msvcp140.dll", "vcredist"))})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(b"package-local 'sdl2.dll' (imported by SparkEngine.exe) is neither", result.stderr)
+        pe_imports.validate_graph(pe_imports.load_json_bytes(result.stdout, "stdout"))
+
+    def test_a_malformed_image_exits_two_with_nothing_on_stdout(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"])[:0x160])
+        result = self.run_cli({"dependencyClosure": self.closure(("msvcp140.dll", "vcredist"))})
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, b"")
+        self.assertIn(b"section table is truncated", result.stderr)
+
+
+class TestMeasuredClosureBinding(BundleTestCase):
+    """The validator re-checks the record's closure against its import graph."""
+
+    def _graph_artifact(self, record: dict[str, Any]) -> dict[str, Any]:
+        return next(
+            artifact
+            for artifact in record["probes"]["dependency_closure"]["artifacts"]
+            if artifact["path"].endswith(pe_imports.GRAPH_SUFFIX)
+        )
+
+    def test_a_closure_without_an_import_graph_cannot_certify(self) -> None:
+        """The old collector copied the plan's closure; that record must now fail."""
+
+        def mutate(record: dict[str, Any]) -> None:
+            artifacts = record["probes"]["dependency_closure"]["artifacts"]
+            graph = self._graph_artifact(record)
+            artifacts.remove(graph)
+            (self.bundle.artifact_root / record["rowId"] / graph["path"]).unlink()
+            self.bundle.reseal(record)
+
+        self.rejectRecord(mutate, "must carry exactly one PE import graph")
+
+    def test_a_closure_that_omits_a_measured_import_is_rejected(self) -> None:
+        def mutate(record: dict[str, Any]) -> None:
+            dropped = next(d for d in record["dependencyClosure"] if d["name"] == "dxgi.dll")
+            record["dependencyClosure"].remove(dropped)
+            (self.bundle.artifact_root / record["rowId"] / dropped["path"]).unlink()
+            self.bundle.reseal(record)
+
+        self.rejectRecord(
+            mutate,
+            "dependency closure: measured import 'dxgi.dll' (imported by SparkEngine.exe) "
+            "is not declared in the dependency closure",
+        )
+
+    def test_a_graph_rewritten_to_launder_an_import_is_rejected(self) -> None:
+        def mutate(record: dict[str, Any]) -> None:
+            graph_artifact = self._graph_artifact(record)
+            path = self.bundle.artifact_root / record["rowId"] / graph_artifact["path"]
+            graph = json.loads(path.read_bytes())
+            dep = next(d for d in graph["dependencies"] if d["name"] == "dxgi.dll")
+            dep["resolution"] = "api-set"
+            del dep["source"]
+            payload = pe_imports.encode_graph(graph)
+            path.write_bytes(payload)
+            graph_artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+            graph_artifact["sizeBytes"] = len(payload)
+            self.bundle.reseal(record)
+
+        self.rejectRecord(
+            mutate,
+            "import graph classifies 'dxgi.dll' as 'api-set', but the dependency "
+            "authority makes it 'platform'",
+        )
+
+    def test_a_malformed_graph_is_rejected(self) -> None:
+        def mutate(record: dict[str, Any]) -> None:
+            graph_artifact = self._graph_artifact(record)
+            path = self.bundle.artifact_root / record["rowId"] / graph_artifact["path"]
+            payload = b'{"schemaVersion": 1, "schemaVersion": 1}'
+            path.write_bytes(payload)
+            graph_artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+            graph_artifact["sizeBytes"] = len(payload)
+            self.bundle.reseal(record)
+
+        self.rejectRecord(mutate, "PE import graph is malformed")
+
+
+class TestPackageLocalThirdPartyCertifies(BundleTestCase):
+    """A package shipping a reviewed vendored DLL certifies end to end."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.bundle = Bundle(self.tmp, SDL2_AUTHORITY)
+
+    def _ship_sdl2(self, record: dict[str, Any], declared_name: str) -> None:
+        row_id = record["rowId"]
+        package = self.tmp / "packages" / f"{row_id}-sdl2"
+        package.mkdir(parents=True)
+        probe = record["probes"]["dependency_closure"]
+        old = next(a for a in probe["artifacts"] if a["path"].endswith(pe_imports.GRAPH_SUFFIX))
+        old_graph = json.loads((self.bundle.artifact_root / row_id / old["path"]).read_bytes())
+        for image in old_graph["images"]:
+            # Rebuild each image from its measured imports; the exe gains SDL2.dll.
+            imports = image["imports"] + (["SDL2.dll"] if image["path"] == "SparkEngine.exe" else [])
+            (package / image["path"]).write_bytes(build_pe(imports, image["delayImports"]))
+        (package / "SDL2.dll").write_bytes(build_pe(["vcruntime140.dll"]))
+        graph = pe_imports.walk_package(package, SDL2_AUTHORITY, old_graph["firstPartyImages"])
+        payload = pe_imports.encode_graph(graph)
+        digest = hashlib.sha256(payload).hexdigest()
+        probe["artifacts"].remove(old)
+        (self.bundle.artifact_root / row_id / old["path"]).unlink()
+        probe["artifacts"].append(
+            self.bundle._write_artifact(row_id, f"dependency_closure/{digest}{pe_imports.GRAPH_SUFFIX}", payload)
+        )
+        artifact = self.bundle._write_artifact(row_id, "deps/SDL2", b"binary image of SDL2\n")
+        record["dependencyClosure"].append(
+            {"name": declared_name, "version": SDL2_VERSION, "source": "bundled", **artifact}
+        )
+        self.bundle.reseal(record)
+
+    def test_a_package_with_a_reviewed_sdl2_dll_certifies(self) -> None:
+        self._ship_sdl2(self.bundle.primary, "SDL2")
+        self.assertCertified(self.bundle.validate(authority=SDL2_AUTHORITY))
+
+    def test_declaring_the_dll_file_name_instead_of_the_identity_is_rejected(self) -> None:
+        self._ship_sdl2(self.bundle.primary, "sdl2.dll")
+        self.assertRejected(
+            self.bundle.validate(authority=SDL2_AUTHORITY),
+            "declare the authority identity 'SDL2' instead",
+        )
+
+
+class TestCollectorMeasuresTheClosure(PackageTestCase):
+    """collect_evidence records what the walk measured, never the plan's list."""
+
+    def _plan(self, **extra: Any) -> Path:
+        plan = {
+            "schemaVersion": 1,
+            "rowId": NULLRHI_ID,
+            "probes": {"launch": {"command": [sys.executable, "-c", "pass"]}},
+            "firstPartyImages": ["SparkEngine.exe"],
+            "dependencyClosure": self.closure(
+                ("msvcp140.dll", "vcredist"), ("vcruntime140.dll", "vcredist")
+            ),
+        }
+        plan.update(extra)
+        path = self.tmp / "plan.json"
+        path.write_text(json.dumps(plan), encoding="utf-8")
+        return path
+
+    def _measure(self, plan: Path) -> tuple[dict[str, Any], list[dict[str, Any]] | None, Path]:
+        artifact_dir = self.tmp / "artifacts" / NULLRHI_ID
+        artifact_dir.mkdir(parents=True)
+        probe, closure = collector.measure_dependency_closure(
+            plan,
+            self.package,
+            pe_imports.parse_declaration(collector.load_plan(plan)),
+            repo_root=REPO_ROOT,
+            artifact_dir=artifact_dir,
+        )
+        return probe, closure, artifact_dir
+
+    def test_a_consistent_package_yields_a_measured_passing_probe(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "vcruntime140.dll"]))
+        probe, closure, artifact_dir = self._measure(self._plan())
+
+        self.assertEqual((probe["status"], probe["exitCode"]), ("pass", 0))
+        graph_paths = [a["path"] for a in probe["artifacts"] if a["path"].endswith(pe_imports.GRAPH_SUFFIX)]
+        self.assertEqual(len(graph_paths), 1)
+        graph_bytes = (artifact_dir / graph_paths[0]).read_bytes()
+        self.assertEqual(graph_bytes, pe_imports.encode_graph(self.walk()))
+        self.assertEqual(
+            graph_paths[0], f"dependency_closure/{hashlib.sha256(graph_bytes).hexdigest()}.imports.json"
+        )
+
+        self.assertEqual([entry["name"] for entry in closure], ["msvcp140.dll", "vcruntime140.dll"])
+        finding = json.loads((artifact_dir / closure[0]["path"]).read_bytes())
+        self.assertEqual(
+            finding["imports"],
+            [{"name": "msvcp140.dll", "resolution": "platform", "importedBy": ["SparkEngine.exe"]}],
+        )
+        self.assertEqual(finding["importGraphSha256"], hashlib.sha256(graph_bytes).hexdigest())
+
+        record = {"probes": {"dependency_closure": probe}, "dependencyClosure": closure}
+        errors, digest = bundle_verify.verify_bundle(
+            record, artifact_root=self.tmp / "artifacts", row_id=NULLRHI_ID
+        )
+        self.assertEqual(errors, [])
+        self.assertIsNotNone(digest)
+        self.assertEqual(
+            bundle_verify.check_measured_closure(
+                record, artifact_root=self.tmp / "artifacts", row_id=NULLRHI_ID, authority=AUTHORITY
+            ),
+            [],
+        )
+
+    def test_an_undeclared_import_makes_the_probe_fail(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "vcruntime140.dll", "SDL2.dll"]))
+        self.stage("SDL2.dll", build_pe())
+        probe, closure, _artifact_dir = self._measure(self._plan())
+        self.assertEqual((probe["status"], probe["exitCode"]), ("fail", 1))
+        self.assertIn("package-local 'sdl2.dll' (imported by SparkEngine.exe) is neither", probe["detail"])
+        self.assertIsNotNone(closure)
+
+    def test_an_unmeasurable_package_records_no_closure(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"])[:0x80])
+        probe, closure, _artifact_dir = self._measure(self._plan())
+        self.assertEqual((probe["status"], probe["exitCode"]), ("fail", 2))
+        self.assertIsNone(closure)
+
+    def _args(self, plan: Path, package_root: Path | None) -> argparse.Namespace:
+        return argparse.Namespace(
+            repo_root=REPO_ROOT, plan=plan, row_id=None, package_root=package_root
+        )
+
+    def test_a_declared_closure_without_a_package_is_refused(self) -> None:
+        with self.assertRaises(collector.CollectionError) as raised:
+            collector.collect(self._args(self._plan(), None))
+        self.assertIn("can only be recorded from a measured package", str(raised.exception))
+
+    def test_a_package_root_alongside_a_closure_probe_is_refused(self) -> None:
+        plan = self._plan(probes={"dependency_closure": {"command": [sys.executable, "-c", "pass"]}})
+        with self.assertRaises(collector.CollectionError) as raised:
+            collector.collect(self._args(plan, self.package))
+        self.assertIn("must not also declare a dependency_closure probe", str(raised.exception))
+
+    def test_a_package_root_without_a_declared_closure_is_refused(self) -> None:
+        plan = self._plan(dependencyClosure=[])
+        with self.assertRaises(collector.CollectionError) as raised:
+            collector.collect(self._args(plan, self.package))
+        self.assertIn("needs the plan to declare the dependencyClosure", str(raised.exception))
+
+    def test_a_plan_declaring_measured_fields_is_refused(self) -> None:
+        closure = self.closure(("msvcp140.dll", "vcredist"))
+        closure[0]["path"] = "deps/msvcp140.dll"
+        with self.assertRaises(collector.CollectionError) as raised:
+            collector.load_plan(self._plan(dependencyClosure=closure))
+        self.assertIn("measured, not declared", str(raised.exception))
+
+
 class TestDependencyAuthority(unittest.TestCase):
     def test_committed_authority_matches_the_manifest(self) -> None:
         authority = vc.load_authority(REPO_ROOT)
@@ -1547,6 +2317,37 @@ class TestDependencyAuthority(unittest.TestCase):
                     ],
                 }
             )
+
+    def test_image_names_map_a_package_dll_to_its_identity(self) -> None:
+        self.assertEqual(SDL2_AUTHORITY.package_images, {"sdl2.dll": ("SDL2", "bundled")})
+        self.assertEqual(AUTHORITY.package_images, {})
+
+    def test_malformed_image_names_are_refused(self) -> None:
+        for images, needle in (
+            (["SDL2.dll"], "not a lower-case .dll file name"),
+            (["bin/sdl2.dll"], "not a lower-case .dll file name"),
+            (["sdl2.exe"], "not a lower-case .dll file name"),
+            (["api-ms-win-core-file-l1-1-0.dll"], "API set"),
+            ([], "non-empty list"),
+            (["b.dll", "a.dll"], "sorted and unique"),
+        ):
+            with self.assertRaises(da.AuthorityError) as raised:
+                authority_with_images({"SDL2": images})
+            self.assertIn(needle, str(raised.exception))
+
+    def test_an_image_name_mapped_twice_is_refused(self) -> None:
+        with self.assertRaises(da.AuthorityError) as raised:
+            authority_with_images({"SDL2": ["shared.dll"], "zstd": ["shared.dll"]})
+        self.assertIn("maps image 'shared.dll' to more than one dependency", str(raised.exception))
+        with self.assertRaises(da.AuthorityError):
+            authority_with_images({"SDL2": ["msvcp140.dll"]})
+
+    def test_image_names_on_a_platform_runtime_entry_are_refused(self) -> None:
+        document = copy.deepcopy(AUTHORITY.document)
+        document["platformRuntime"][0]["imageNames"] = ["msvcp140.dll"]
+        with self.assertRaises(da.AuthorityError) as raised:
+            da.validate_authority_document(document)
+        self.assertIn("imageNames belongs to thirdParty entries only", str(raised.exception))
 
     def test_drift_from_the_manifest_is_detected(self) -> None:
         document = json.loads(
@@ -2062,6 +2863,199 @@ class TestShippedArtefacts(unittest.TestCase):
                 if relative.endswith("/"):
                     continue
                 self.assertIn(relative, tracked, f"{relative} is not a tracked path")
+
+
+_ANCHORED_SELECTOR_RE = re.compile(r"^\^([A-Za-z0-9_]+)\$$")
+_ADD_TEST_NAME_RE = re.compile(r"add_test\(\s*NAME\s+([A-Za-z0-9_]+)\s")
+
+
+def _registered_ctest_names() -> set[str]:
+    """Every literal `add_test(NAME ...)` in the test tree's CMakeLists."""
+    text = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+    return set(_ADD_TEST_NAME_RE.findall(text))
+
+
+def _preset_configurations() -> tuple[set[str], dict[str, str]]:
+    """Configure preset names, and build preset name -> its configuration."""
+    presets = vc.load_strict_json(REPO_ROOT / "CMakePresets.json")
+    configure = {preset["name"] for preset in presets["configurePresets"]}
+    build = {
+        preset["name"]: preset.get("configuration", "")
+        for preset in presets.get("buildPresets", [])
+    }
+    return configure, build
+
+
+def _flag_value(command: list[str], flag: str) -> str | None:
+    if flag not in command:
+        return None
+    index = command.index(flag)
+    return command[index + 1] if index + 1 < len(command) else ""
+
+
+def _row_plan_errors(
+    plan: dict[str, Any],
+    row: dict[str, Any],
+    test_names: set[str],
+    configure_presets: set[str],
+    build_presets: dict[str, str],
+) -> list[str]:
+    """Why a row plan could pass vacuously or run a command that does not exist."""
+    errors: list[str] = []
+    required = set(row["evidenceRequired"])
+    probes = set(plan["probes"])
+    uncovered = plan.get("uncoveredCategories", {})
+
+    for name in sorted(probes - required):
+        errors.append(f"probe {name!r} is not in the row's evidenceRequired")
+    for name in sorted(set(uncovered) - required):
+        errors.append(f"uncovered category {name!r} is not in the row's evidenceRequired")
+    for name in sorted(probes & set(uncovered)):
+        errors.append(f"category {name!r} is both probed and declared uncovered")
+    for name in sorted(required - probes - set(uncovered)):
+        errors.append(f"category {name!r} is neither probed nor declared uncovered")
+    for name, reason in uncovered.items():
+        if not isinstance(reason, str) or not reason.strip():
+            errors.append(f"uncovered category {name!r} has no reason")
+    if "provenance" in plan:
+        errors.append("a row plan must take provenance from CI, not declare it")
+
+    declared_level = plan.get("hostOverrides", {}).get("gpu", {}).get("featureLevel")
+    if declared_level is not None and declared_level != row["gpu"]["featureLevel"]:
+        errors.append(
+            f"hostOverrides.gpu.featureLevel {declared_level!r} is not the row's "
+            f"{row['gpu']['featureLevel']!r}"
+        )
+
+    for name, spec in sorted(plan["probes"].items()):
+        command = spec["command"]
+        if command[0] == "ctest":
+            if "--no-tests=error" not in command:
+                errors.append(f"probe {name!r}: ctest must pass --no-tests=error")
+            selector = _flag_value(command, "-R")
+            match = _ANCHORED_SELECTOR_RE.match(selector or "")
+            if match is None:
+                errors.append(f"probe {name!r}: -R selector {selector!r} is not ^Name$")
+            elif match.group(1) not in test_names:
+                errors.append(
+                    f"probe {name!r}: -R selector {selector!r} names no add_test in "
+                    "Tests/CMakeLists.txt"
+                )
+            test_dir = _flag_value(command, "--test-dir") or ""
+            if not test_dir.startswith("build/") or test_dir[6:] not in configure_presets:
+                errors.append(
+                    f"probe {name!r}: --test-dir {test_dir!r} is not a configure preset's tree"
+                )
+            if not _flag_value(command, "-C"):
+                errors.append(f"probe {name!r}: ctest must select a configuration with -C")
+        elif command[0] == "cmake" and "--preset" in command:
+            preset = _flag_value(command, "--preset") or ""
+            if "--build" in command:
+                if preset not in build_presets:
+                    errors.append(f"probe {name!r}: build preset {preset!r} does not exist")
+                elif _flag_value(command, "--config") not in (None, build_presets[preset]):
+                    errors.append(
+                        f"probe {name!r}: --config disagrees with build preset {preset!r}"
+                    )
+            elif preset not in configure_presets:
+                errors.append(f"probe {name!r}: configure preset {preset!r} does not exist")
+    return errors
+
+
+class TestRowProbePlans(unittest.TestCase):
+    """The collector plans for the two declared Windows rows run real commands."""
+
+    PLANS = REPO_ROOT / "docs" / "certification" / "plans"
+    MATRIX = REPO_ROOT / "docs" / "certification" / "support-matrix.json"
+
+    def setUp(self) -> None:
+        self.rows = {row["id"]: row for row in vc.load_strict_json(self.MATRIX)["rows"]}
+        self.test_names = _registered_ctest_names()
+        self.configure_presets, self.build_presets = _preset_configurations()
+
+    def _plan(self, row_id: str) -> dict[str, Any]:
+        return collector.load_plan(self.PLANS / f"{row_id}.json")
+
+    def _errors(self, plan: dict[str, Any]) -> list[str]:
+        return _row_plan_errors(
+            plan,
+            self.rows[plan["rowId"]],
+            self.test_names,
+            self.configure_presets,
+            self.build_presets,
+        )
+
+    def test_every_declared_row_has_a_plan(self) -> None:
+        for row_id in self.rows:
+            self.assertTrue((self.PLANS / f"{row_id}.json").is_file(), row_id)
+
+    def test_every_row_plan_names_its_own_row(self) -> None:
+        for path in sorted(self.PLANS.glob("*.json")):
+            if path.stem == "ci-selfcheck":
+                continue
+            self.assertIn(path.stem, self.rows, f"{path.name} names no matrix row")
+            self.assertEqual(collector.load_plan(path)["rowId"], path.stem)
+
+    def test_row_plans_load_through_the_collector(self) -> None:
+        for row_id in self.rows:
+            self.assertTrue(self._plan(row_id)["probes"], row_id)
+
+    def test_row_plans_meet_the_contract(self) -> None:
+        for row_id in self.rows:
+            self.assertEqual(self._errors(self._plan(row_id)), [], row_id)
+
+    def test_the_selector_parser_sees_the_real_registrations(self) -> None:
+        """A parser that found nothing would make every selector check vacuous."""
+        for name in ("NullRHI_Windows_FPSLifecycle", "FPSPackage_InstalledRuntime"):
+            self.assertIn(name, self.test_names)
+
+    def test_a_misspelt_selector_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(NULLRHI_ID))
+        command = plan["probes"]["launch"]["command"]
+        command[command.index("-R") + 1] = "^NullRHI_Windows_FPSLifecycl$"
+        self.assertIn(
+            "probe 'launch': -R selector '^NullRHI_Windows_FPSLifecycl$' names no "
+            "add_test in Tests/CMakeLists.txt",
+            self._errors(plan),
+        )
+
+    def test_an_unanchored_selector_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(D3D11_ID))
+        command = plan["probes"]["save"]["command"]
+        command[command.index("-R") + 1] = "FPSPackage"
+        self.assertIn(
+            "probe 'save': -R selector 'FPSPackage' is not ^Name$", self._errors(plan)
+        )
+
+    def test_a_ctest_probe_that_could_match_nothing_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(D3D11_ID))
+        plan["probes"]["content"]["command"].remove("--no-tests=error")
+        self.assertIn(
+            "probe 'content': ctest must pass --no-tests=error", self._errors(plan)
+        )
+
+    def test_an_unknown_preset_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(NULLRHI_ID))
+        command = plan["probes"]["build"]["command"]
+        command[command.index("--preset") + 1] = "windows-shiping"
+        self.assertIn(
+            "probe 'build': build preset 'windows-shiping' does not exist",
+            self._errors(plan),
+        )
+
+    def test_a_probe_outside_the_rows_evidence_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(NULLRHI_ID))
+        plan["probes"]["renderer"] = copy.deepcopy(plan["probes"]["launch"])
+        self.assertIn(
+            "probe 'renderer' is not in the row's evidenceRequired", self._errors(plan)
+        )
+
+    def test_a_silently_dropped_category_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(D3D11_ID))
+        del plan["uncoveredCategories"]["crash"]
+        self.assertIn(
+            "category 'crash' is neither probed nor declared uncovered", self._errors(plan)
+        )
 
 
 class TestLedgerConsistency(BundleTestCase):

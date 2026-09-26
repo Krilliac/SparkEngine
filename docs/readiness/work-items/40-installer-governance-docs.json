@@ -5,12 +5,12 @@
       "id": "INST-130",
       "title": "Make installer clean-install, repair, and uninstall behavior verified and recoverable",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "installer",
       "owner": "unassigned",
-      "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. 2026-09-12 progress: InstallState now flushes to a same-directory temporary marker before replacement, loads into a temporary object with required-field validation, and treats malformed state as invalid; focused round-trip/replacement/recovery tests pass. The installer CI job now explicitly builds SparkInstallerInstallStateTests before invoking CTest, closing a hosted registration/build omission found on the prior exact-SHA run. 2026-09-13 progress: final installed-commit verification now fails closed and invokes rollback when the recorded commit cannot be verified; installer transaction selectors are explicitly labeled and the native selector suite is green. Local process fixtures verify orchestration; hosted native results are pending. 2026-09-13 additional progress: updates now refuse to fetch or replace an existing checkout when tracked or untracked local changes are present, or when the status query itself fails; focused GitRunner regression coverage passes. 2026-09-13 further progress: InstallState::Save now rejects invalid state before creating or replacing its temporary marker; the valid-marker preservation regression passes in a fresh MSVC build. 2026-09-21 progress: 24 local transaction tests now cover owned old-to-new upgrade, repair, rollback, uninstall, registration/residue cleanup, and preservation of external user data. 2026-09-21 further progress: INST-130 resolver tests now provision the greatest-lower immutable published stable MSI and Shipping manifest by asset ID, binding tag, commit, digest, and pre/post metadata. Nine resolver tests plus workflow/release suites pass. The resolver implementation is complete locally, but a real published predecessor release asset and hosted Windows execution are still required. These local contracts establish the intended transaction semantics, but formal hosted/native signed Windows 11 proof for upgrade, rollback, repair, and user-data retention remains open.",
+      "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. 2026-09-12 progress: InstallState now flushes to a same-directory temporary marker before replacement, loads into a temporary object with required-field validation, and treats malformed state as invalid; focused round-trip/replacement/recovery tests pass. The installer CI job now explicitly builds SparkInstallerInstallStateTests before invoking CTest, closing a hosted registration/build omission found on the prior exact-SHA run. 2026-09-13 progress: final installed-commit verification now fails closed and invokes rollback when the recorded commit cannot be verified; installer transaction selectors are explicitly labeled and the native selector suite is green. Local process fixtures verify orchestration; hosted native results are pending. 2026-09-13 additional progress: updates now refuse to fetch or replace an existing checkout when tracked or untracked local changes are present, or when the status query itself fails; focused GitRunner regression coverage passes. 2026-09-13 further progress: InstallState::Save now rejects invalid state before creating or replacing its temporary marker; the valid-marker preservation regression passes in a fresh MSVC build. 2026-09-21 progress: 24 local transaction tests now cover owned old-to-new upgrade, repair, rollback, uninstall, registration/residue cleanup, and preservation of external user data. 2026-09-21 further progress: INST-130 resolver tests now provision the greatest-lower immutable published stable MSI and Shipping manifest by asset ID, binding tag, commit, digest, and pre/post metadata. Nine resolver tests plus workflow/release suites pass. The resolver implementation is complete locally, but a real published predecessor release asset and hosted Windows execution are still required. These local contracts establish the intended transaction semantics, but formal hosted/native signed Windows 11 proof for upgrade, rollback, repair, and user-data retention remains open. 2026-09-25 progress: SparkBuild Downloader::ExtractVerifiedArchive now selects ZIP or gzip-tar by magic bytes and refuses a mismatch with the URL-stated format, validates every member name before extraction (in-process ZIP central-directory listing cross-checked against local headers; tar -tzf on Unix), extracts synchronously into a unique staging directory inside the destination (same volume even through a symlinked destination), requires a ZIP extraction to produce exactly the listed members, rejects absolute or climbing symlink targets, symlinks resolving outside staging and special files, and commits top-level entries with no-replace renames so an existing tree is never overwritten; the unzip -o overwrite and silent python fallback are gone. Windows ZIP extraction now runs System32 tar.exe to completion instead of the asynchronous Shell CopyHere. SparkBuildDownloaderTests generates hostile fixtures at test time (including local/central name mismatch, ZIP64 offsets, malformed EOCD, overrunning entries, and hand-built staged trees) and passes locally on Linux; the Windows tar.exe path is not compiled or run here and still needs native Windows evidence.",
       "dependencies": [
         "ASSET-220",
         "REL-100",
@@ -48,8 +48,44 @@
         "Only signed artifacts can enter the stable channel",
         "Experimental platform installers remain owned by their platform work"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:517f9a784d85",
+          "state": "unmet",
+          "evidence": [
+            "SparkInstaller/tests/PortableGitCacheTests.cpp",
+            "SparkInstaller/tests/InstallerTransactionTests.cpp",
+            "SparkInstaller/src/GitBootstrap.cpp"
+          ],
+          "note": "Partial only. Cache tamper and update rollback are tested; a tampered download, failed fetch or wrong archive for the engine install is not."
+        },
+        {
+          "criterionDigest": "sha256:b2d639655345",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs Windows 11 x64 fresh-install, repair and uninstall runs. None are recorded."
+        },
+        {
+          "criterionDigest": "sha256:6ced6ba5de16",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No checker ties installer capabilities to documentation claims."
+        },
+        {
+          "criterionDigest": "sha256:637a4f03b8d7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs signed published artifacts and a stable-channel signing gate."
+        },
+        {
+          "criterionDigest": "sha256:77a7f9025620",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No validator enforces the ownership boundary."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Installer_Tamper",
@@ -105,19 +141,39 @@
       "id": "INST-131",
       "title": "Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 6,
       "area": "installer",
       "owner": "unassigned",
-      "rationale": "N-1 upgrade and rollback are distinct from fresh-install correctness and cannot be used to qualify the first immutable predecessor. This item owns the stable-v1-only transaction proof against a previously published signed MSI and manifest.",
+      "rationale": "N-1 upgrade and rollback are distinct from fresh-install correctness and cannot be used to qualify the first immutable predecessor. This item owns the stable-v1-only transaction proof against a previously published signed MSI and manifest. 2026-09-24 progress: qualify-windows-msi.py now requires --previous-receipt (the provisioner's provisioning-receipt.json, wired in release.yml) and, before any Windows Installer command, binds its schema, candidate version, predecessor version and tag, tag commit, immutable release id, and MSI/manifest asset ids, sizes and digests to the private predecessor copy and the parsed manifest bytes; it records the tag, commit, release id, asset ids and receipt SHA-256 in previous-release.json and the failure report. It also fails closed when the predecessor version is not strictly lower than the candidate, when the predecessor manifest commitSHA equals --source-sha, or when the predecessor MSI digest equals the candidate digest. Covered by fake-runner cases in .github/scripts/test_qualify_windows_msi.py; no published predecessor or native run exists yet, so no criterion changes.",
       "dependencies": ["INST-130", "REL-100", "REL-110"],
       "parallelWith": ["REL-190"],
       "sourceContext": ["SparkInstaller/src/Installer.cpp", ".github/scripts/provision-previous-windows-msi.py", ".github/workflows/release.yml"],
       "entryPoints": ["SparkInstaller/src/Installer.cpp", ".github/scripts/qualify-windows-msi.py"],
       "implementationScope": ["Verify the greatest-lower immutable signed MSI and shipping manifest", "Exercise upgrade, rollback, interruption, and external user-data retention on Windows 11 x64"],
       "acceptanceCriteria": ["A real published signed predecessor is selected by exact tag, commit, digest, and asset identity", "Upgrade and rollback pass on a clean supported Windows host", "Failure or interruption never replaces the working install"],
-      "commands": ["ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:522a2161563c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a real published and signed predecessor release. None exists."
+        },
+        {
+          "criterionDigest": "sha256:9253a832b311",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs upgrade and rollback runs on a clean Windows host."
+        },
+        {
+          "criterionDigest": "sha256:536c5bfd873e",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No upgrade-interruption test against a real predecessor installer."
+        }
+      ],
+      "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Upgrade", "Installer_Rollback", "Installer_Interrupted"],
       "requiredCiJobs": ["installer-windows"],
       "performanceBudgets": [],
@@ -135,19 +191,41 @@
       "id": "INST-132",
       "title": "Qualify predecessor bootstrap recovery without an N-1 dependency",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 6,
       "area": "installer",
       "owner": "unassigned",
-      "rationale": "The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage.",
+      "rationale": "The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage. 2026-09-24 progress: qualify-windows-msi.py --bootstrap-repair now requires --reviewed-baseline-commit and, before any Windows Installer command, requires the source SHA to have exactly one parent equal to that baseline, reusing validate_baseline_parent/resolve_parents from verify_v090_source_seal.py (the publication seal rule, now single-sourced). Both SHAs are recorded in bootstrap-baseline.json and the qualification report. release.yml reads the baseline from docs/site/readiness.json predecessorRelease.sourceCommitEvidence.baselineCommit (checkout fetch-depth 2), so the v0.9.0 qualification fails closed while that baseline is empty. Covered by fake-git cases in .github/scripts/test_qualify_windows_msi.py; the baseline is not yet recorded and no hosted run exists, so no criterion changes.",
       "dependencies": ["INST-130"],
       "parallelWith": ["INST-131"],
       "sourceContext": ["SparkInstaller/src/Installer.cpp", "SparkInstaller/tests/InstallerTransactionTests.cpp"],
       "entryPoints": ["SparkInstaller/src/Installer.cpp"],
       "implementationScope": ["Exercise bootstrap activation and recovery with no predecessor input", "Retain user data across repair and uninstall"],
       "acceptanceCriteria": ["Fresh predecessor installation and interrupted activation recover without replacing user data", "Repair and uninstall pass with no N-1 claim", "Evidence is bound to the reviewed v0.9.0 source commit"],
-      "commands": ["ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:e4d717d6251d",
+          "state": "unmet",
+          "evidence": [
+            "SparkInstaller/tests/InstallerTransactionTests.cpp"
+          ],
+          "note": "Transaction tests exist. No Windows run shows a fresh predecessor install and an interrupted activation recovering with user data kept."
+        },
+        {
+          "criterionDigest": "sha256:6f6b2bb4602c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs Windows repair and uninstall qualification runs."
+        },
+        {
+          "criterionDigest": "sha256:0c8b27a63fd0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs evidence bound to the reviewed v0.9.0 commit."
+        }
+      ],
+      "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Tamper", "Installer_AtomicUpdate", "Installer_Interrupted", "Installer_Uninstall"],
       "requiredCiJobs": ["installer-windows"],
       "performanceBudgets": [],
@@ -166,12 +244,12 @@
       "id": "GOV-400",
       "title": "Resolve licensing, third-party notices, trademark, contribution, security, and support policy",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 6,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
+      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. 2026-09-24 progress: the staged-package notice-coverage gate (cmake/ValidateStagedPackageNotices.cmake, rule set cmake/PackageNoticeCoverageRules.json shared with tools/governance/generate_third_party_notices.py --check-package) requires every shipped font to be named, with reproduced license text, in the package THIRD_PARTY_NOTICES.txt and every ThirdParty-derived install path to map to a licensed inventory entry; LicenseInventory_PackageNoticeCoverage and LicenseInventory_ThirdPartyNotices cover it. A real local install reports exactly the 7 SparkEditor/Fonts files as uncovered, so ValidateStagedPackageExecutables.cmake runs the gate in report mode until the D8 font license texts land and enforcement is coordinated. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
       "dependencies": [
         "RDY-000",
         "SEC-110",
@@ -210,6 +288,43 @@
         "Packages include root license, notices, and required third-party texts",
         "Security/support policy names actually published versions/channels",
         "Legal/maintainer sign-off is release evidence"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:6e03a612fb80",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_third_party_notices.py",
+            "cmake/ValidateStagedPackageNotices.cmake"
+          ],
+          "note": "The notice gate exists, but the editor fonts are not covered. Notice obligations also need legal review."
+        },
+        {
+          "criterionDigest": "sha256:a2569b9a17e2",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a legal classification that someone has reviewed."
+        },
+        {
+          "criterionDigest": "sha256:6b0f854510e7",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_third_party_notices.py"
+          ],
+          "note": "The package does not include the editor-font texts yet."
+        },
+        {
+          "criterionDigest": "sha256:451e0e4cba68",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs versions and channels that are actually published."
+        },
+        {
+          "criterionDigest": "sha256:f5a3e0f81d56",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs legal and maintainer sign-off."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --legal",
@@ -255,7 +370,6 @@
       "plannedCiJobs": [
       ],
       "plannedTestSelectors": [
-        "LicenseInventory_*",
         "PublicWording_*"
       ]
     },
@@ -263,7 +377,7 @@
       "id": "DOC-410",
       "title": "Repair and enforce deterministic repository documentation generation",
       "priority": "P0",
-      "status": "done",
+      "status": "in-progress",
       "blocking": true,
       "wave": 0,
       "area": "documentation",
@@ -309,6 +423,57 @@
         "Health contains every expected generator exactly once with exit and failure counts consistent",
         "Hostile stale-doc, symbol, macro, health, link, anchor, route, and confinement fixtures pass",
         "A stale generator, missing result, or broken link blocks CI"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:dab94757cd15",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_docs_health.py"
+          ],
+          "note": "The double isolated generation is tested. Being green at the exact commit needs an exact-SHA CI run."
+        },
+        {
+          "criterionDigest": "sha256:59ac611c1455",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff."
+        },
+        {
+          "criterionDigest": "sha256:ccd94aacef95",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate_docs_links.py"
+          ],
+          "note": "The link validator reports errors on the HEAD tree, including a missing heading anchor and stale line anchors."
+        },
+        {
+          "criterionDigest": "sha256:d72cef64ec82",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_docs_health.py",
+            "tools/docs_currentness.py",
+            "tools/site-data/generate.py"
+          ],
+          "note": "Tests drive production write_health and summarize_documentation_health. Missing or duplicate generators and inconsistent exit or failure counts are rejected. RepositoryEvidenceTests pins the generator manifest."
+        },
+        {
+          "criterionDigest": "sha256:e20216dba74e",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_docs_health.py",
+            "tools/docs_contract.py",
+            "tools/site-data/validate_docs_links.py",
+            "tools/docs_currentness.py"
+          ],
+          "note": "Two hostile test classes (docs generation, docs links) cover stale docs, symbols, macros, health, links, anchors, route collisions and repository escape against production code."
+        },
+        {
+          "criterionDigest": "sha256:e03b1b3590ef",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Proving it blocks CI needs a hosted CI run. No local check can show that."
+        }
       ],
       "commands": [
         "bash docs/update-all-docs.sh update",
@@ -366,7 +531,7 @@
       "wave": 6,
       "area": "website",
       "owner": "unassigned",
-      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. site-runtime-contract and the runtime-side selectors remain planned.",
+      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. 2026-09-24 progress: tools/site-data/runtime adds a dependency-free reference verifier (verifyBundle.mjs: 32 KiB/5 MiB/2 MiB budgets, schemaVersion, WebCrypto SHA-256 per pointer, unsafe-path refusal, displayed SHA bound to latest.source.commit) and a freshness classifier (freshness.mjs: 300 s max-age plus stale-while-revalidate mapped to current/syncing/blocked/stale/unavailable). Its node:test suite runs over a generate.py publication and hash-flip, oversize, malformed, and path-escape variants, feeding each variant to validate_published_bundle so the two validators cannot drift; it runs as the runtime-bundle-validation CTest and the site-runtime-contract job. This is a contract only: the owner-deployed site has not adopted it, so no criterion changes. 2026-09-25 progress: validate.py now rejects, by default and with no waiver list (a publicNumericClaims entry does not exempt it), any count-with-unit, 7-64 hex commit SHA, CI run ID, or release version literal in docs/site/content.json and docs/site/docs-catalog.json, so repository site copy must reference bundle metric identifiers; the no-hardcoded-claims CTest runs its fixtures. The external site's own copy is outside this repository and remains unaudited. live-docs-parity remains planned.",
       "dependencies": [
         "RDY-000"
       ],
@@ -406,11 +571,63 @@
         "Fallback is visibly stale/unavailable",
         "All docs routes/search/source links resolve"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:e87c2575b050",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs the live, owner-deployed site to use the bundle. It has not adopted it."
+        },
+        {
+          "criterionDigest": "sha256:ee89c98da46a",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/runtime/verifyBundle.mjs"
+          ],
+          "note": "The reference verifier binds the SHA, but the live site has not adopted it."
+        },
+        {
+          "criterionDigest": "sha256:a9886368fcde",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a hosted failed-CI run that switches the live site to blocked."
+        },
+        {
+          "criterionDigest": "sha256:21906cf1ffbd",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The claim audit covers repository JSON only. The external site copy has not been audited."
+        },
+        {
+          "criterionDigest": "sha256:1f175ad88fc6",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/runtime/verifyBundle.mjs"
+          ],
+          "note": "The reference verifier is tested, but the live site runtime does not use it."
+        },
+        {
+          "criterionDigest": "sha256:cb55308f2aaa",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/runtime/freshness.mjs"
+          ],
+          "note": "The freshness classifier exists. Visible stale labelling on the live site is unproven."
+        },
+        {
+          "criterionDigest": "sha256:83f4372345f3",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate_docs_links.py"
+          ],
+          "note": "The link validator fails at HEAD, and the live-docs parity check does not exist."
+        }
+      ],
       "commands": [
         "python3 tools/site-data/validate.py",
         "python3 tools/site-data/generate.py --output .site-data",
         "python3 tools/site-data/render_handoff.py --check",
-        "npm test"
+        "npm test --prefix tools/site-data/runtime"
       ],
       "testSelectors": [
         "site-data-contract",
@@ -459,14 +676,9 @@
       "profileApplicability": {
         "stable-v1": "shared"
       },
-      "plannedCiJobs": [
-        "site-runtime-contract"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": [
-        "site-data-contract",
-        "runtime-bundle-validation",
-        "live-docs-parity",
-        "no-hardcoded-claims"
+        "live-docs-parity"
       ]
     }
   ]

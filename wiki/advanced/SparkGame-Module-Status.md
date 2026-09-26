@@ -25,13 +25,13 @@ This page inventories selected source surfaces in the FPS module, standalone deb
 
 ### Game.cpp / Game.h Source Surface
 
-- `Game.cpp` has 855 physical lines and `Game.h` has 668 in the current source inventory. The older audit recorded a 2,042-line `Game.cpp`; the current source is split into `GameSetup.cpp`, `GameConsoleOps.cpp`, `GameEngineSystems.cpp`, `GameMechanics.cpp`, and `GameMode.cpp`.
+- The older audit recorded a 2,042-line `Game.cpp`; the current `Game.cpp` is smaller because the source is split into `GameSetup.cpp`, `GameConsoleOps.cpp`, `GameEngineSystems.cpp`, `GameMechanics.cpp`, and `GameMode.cpp`.
 - Sets up camera, player, projectile pool, scene manager, vehicle system, gravity, interaction, game mode, HUD, inventory, quests.
 - Console command source includes teleport, spawn, clear-scene, and time-scale operations.
 
 ### Player.cpp / Player.h Source Surface
 
-- `Player.h` has 795 physical lines and `Player.cpp` has 1,084 in the current source inventory.
+- `Player.h` / `Player.cpp` hold the player controller; measure current sizes from the source tree rather than this page.
 - Input and movement source covers WASD movement, jumping, crouching, and sprinting.
 - Physics-related source includes gravity, friction, and stamina paths.
 - Weapon source exposes `Fire()`, `Reload()`, and `ChangeWeapon()` with ammunition state.
@@ -52,7 +52,7 @@ This page inventories selected source surfaces in the FPS module, standalone deb
 
 ### Vehicles Source Surface
 
-- `VehicleSystem.h` / `VehicleSystem.cpp` (~1,009 lines).
+- `VehicleSystem.h` / `VehicleSystem.cpp`.
 - Ground (Buggy, Tank, APC, Motorcycle, Truck) + aerial (Helicopter, Jet, Dropship, Drone).
 - Multi-seat system (Driver / Gunner / Passenger).
 - Vehicle physics (acceleration, steering, aerial stabilization).
@@ -132,8 +132,8 @@ This correction enumerated the module directories, checked the named entry point
 Source observations retained or corrected:
 
 - **Module renamed/split:** the FPS source is now `GameModules/SparkGameFPS/`; the repository contains 11 module directories, each with `CMakeLists.txt` and `Source/`.
-- **`Game.cpp` is 855 physical lines** — split alongside `GameSetup.cpp`, `GameConsoleOps.cpp`, `GameEngineSystems.cpp`, `GameMechanics.cpp`, and `GameMode.cpp`.
-- **`VehicleSystem.cpp` is 1,009 physical lines**, not the 10,000+ stated in the original audit.
+- **`Game.cpp` is split** alongside `GameSetup.cpp`, `GameConsoleOps.cpp`, `GameEngineSystems.cpp`, `GameMechanics.cpp`, and `GameMode.cpp`.
+- **`VehicleSystem.cpp` is roughly a tenth of the size stated in the original audit** (that audit claimed more than ten thousand lines).
 - **NavMesh gap persists** for FPS enemies (verified: no NavMesh/pathfind references in the FPS module source).
 - SparkConsole and SparkShaderCompiler entry points remain present; this review produced no build, test, or packaged-runtime evidence for either tool.
 

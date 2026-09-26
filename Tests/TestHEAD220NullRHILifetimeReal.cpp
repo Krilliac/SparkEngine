@@ -23,6 +23,7 @@
 #include "TestFramework.h"
 
 #include "Graphics/RHI/NullRHIDevice.h"
+#include "Graphics/RHI/RHIBridge.h"
 
 #include <cstdint>
 #include <memory>
@@ -217,4 +218,59 @@ TEST(NullRHI_Lifetime_ResourceMayOutliveDevice)
     orphanTexture.reset();
     EXPECT_TRUE(orphanBuffer == nullptr);
     EXPECT_TRUE(orphanTexture == nullptr);
+}
+
+TEST(NullRHI_Lifetime_ShutdownReportsResourcesHeldPastTeardown)
+{
+    // The headless host prints GetLiveResourceCountAtShutdown() as its
+    // leak-at-teardown record; the device's own transient buffers must not
+    // count, and a resource a caller still holds must.
+    NullRHIDevice device;
+    Spark::RHI::RHIDeviceDesc deviceDesc;
+    ASSERT_TRUE(device.Initialize(deviceDesc));
+    EXPECT_EQ(device.GetLiveResourceCount(), 2u); // transient vertex + index buffers
+    {
+        auto released = device.CreateTexture(SmallTextureDesc());
+        EXPECT_EQ(device.GetLiveResourceCount(), 3u);
+    }
+    device.Shutdown();
+    EXPECT_EQ(device.GetLiveResourceCountAtShutdown(), 0u);
+
+    ASSERT_TRUE(device.Initialize(deviceDesc));
+    auto heldBuffer = device.CreateBuffer(SmallBufferDesc());
+    auto heldSampler = device.CreateSampler(Spark::RHI::RHISamplerDesc{});
+    ASSERT_TRUE(heldBuffer && heldSampler);
+    device.Shutdown();
+    EXPECT_EQ(device.GetLiveResourceCountAtShutdown(), 2u);
+    EXPECT_EQ(device.GetLiveResourceCount(), 0u); // pools are cleared by Shutdown
+}
+
+TEST(NullRHI_Lifetime_BridgeShutdownReportsHeadlessLeaks)
+{
+    // RHIBridge is the headless host's owner of the NullRHIDevice; its
+    // Shutdown must carry the device's leak-at-teardown count out.
+    Spark::RHI::RHIBridge cleanBridge;
+    ASSERT_TRUE(cleanBridge.Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false));
+    ASSERT_TRUE(cleanBridge.IsHeadless());
+    EXPECT_FALSE(cleanBridge.GetNullResourcesLiveAtShutdown().has_value());
+    cleanBridge.Shutdown();
+    ASSERT_TRUE(cleanBridge.GetNullResourcesLiveAtShutdown().has_value());
+    EXPECT_EQ(*cleanBridge.GetNullResourcesLiveAtShutdown(), 0u);
+
+    Spark::RHI::RHIBridge leakingBridge;
+    ASSERT_TRUE(leakingBridge.Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false));
+    auto leaked = leakingBridge.GetDevice()->CreateTexture(SmallTextureDesc());
+    ASSERT_TRUE(leaked != nullptr);
+    leakingBridge.Shutdown();
+    ASSERT_TRUE(leakingBridge.GetNullResourcesLiveAtShutdown().has_value());
+    EXPECT_EQ(*leakingBridge.GetNullResourcesLiveAtShutdown(), 1u);
+
+    // Re-initializing the bridge starts a new device lifetime, so the previous
+    // run's count must not be reported as the current one.
+    leaked.reset();
+    ASSERT_TRUE(leakingBridge.Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false));
+    EXPECT_FALSE(leakingBridge.GetNullResourcesLiveAtShutdown().has_value());
+    leakingBridge.Shutdown();
+    ASSERT_TRUE(leakingBridge.GetNullResourcesLiveAtShutdown().has_value());
+    EXPECT_EQ(*leakingBridge.GetNullResourcesLiveAtShutdown(), 0u);
 }

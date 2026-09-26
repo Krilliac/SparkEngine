@@ -19,7 +19,7 @@ SparkEngine contains **11 in-tree game-module directories** with differing proto
 | [SparkGameOpenWorld](#sparkgameopenworld)   | ~4.9K  | Large-world exploration | Seamless streaming, origin rebasing, weather |
 | [SparkGamePlatformer](#sparkgameplatformer) | ~4.1K  | 3D platformer | Player controller, destruction, audio, save |
 | [SparkGameRTS](#sparkgamerts)               | ~5.0K  | Real-time strategy | Unit roster, selection and move/stop/hold commands, buildings, economy, fog; no acting AI opponent and no damage resolution yet |
-| [SparkGameRacing](#sparkgameracing)         | ~3.8K  | Vehicle racing | Kinematic showcase vehicles (no Jolt), WASD input, waypoint AI, camera, audio, cinematic |
+| [SparkGameRacing](#sparkgameracing)         | ~3.8K  | Vehicle racing | Jolt vehicles on the shared PhysicsSystem, WASD input, waypoint AI, camera, audio, cinematic |
 | [SparkGameVisualScript](#sparkgamevisualscript) | ~370 | Script-only module | Visual scripting graphs, zero C++ game logic |
 
 The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled (ON by default); this target inventory is not a claim that every module is playable or release-ready.
@@ -61,6 +61,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 
 - **Source:** `GameModules/SparkGameRPG/Source/`
 - **Wires:** [Save System](../gameplay-tools/Save-System.md), [Animation](../subsystems/Animation.md), [AI](../subsystems/AI-and-Navigation.md), [Cinematic Sequencer](../gameplay-tools/Cinematic-Sequencer.md), [Dialogue System](../subsystems/Dialogue-System.md), [Gameplay Systems](../gameplay-tools/Gameplay-Systems.md) (quests, abilities, conditions).
+- **Save/load:** `rpg_save`/`rpg_load` store an `RPGDEMO 3` snapshot as `SaveSystem` custom state. It holds character, area, pack, equipment and quest progress, plus the NPC world clock and each NPC's disposition, behavior, position and patrol waypoint. `RPGDEMO 2` saves (N-1, per OD-03) still load: their character, pack and quests are kept and the NPCs and world clock start from a new world's defaults. `RPGDEMO 1` or older, newer versions, truncated or out-of-range snapshots and damaged slots are rejected before the ECS world is replaced. Covered by the `RPGPersistence_*` restart tests in `Tests/TestMOD350RPGQuestSliceReal.cpp`.
 
 ## SparkGameARPG
 
@@ -69,6 +70,8 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 - **Source:** `GameModules/SparkGameARPG/Source/`
 - **Notable:** `Combat/ARPGCombatSystem.h`, `Dungeon/ARPGDungeonSystem.h`, `Hero/ARPGHeroSystem.h`, `Loot/ARPGLootSystem.h`.
 - **Wires:** [Loot and Crafting](../gameplay-tools/Loot-And-Crafting-System.md), ability system, procedural dungeon generation.
+- **Playable loop:** `Demo/ARPGDemoEncounter` runs a finite dungeon: three kills clear each regular floor, and defeating the boss on the first boss floor (`ARPGDungeonSystem::BOSS_FLOOR_INTERVAL`, floor 5) completes the run. Loot rolls on the defeated monster's rank table, so the boss drops Boss-rank loot. `arpg_save`/`arpg_load` persist an `ARPGDEMO 4` snapshot through `SaveSystem` custom state. It stores the current target in full (name, rank, affixes, stats), every learned skill with its remaining cooldown, and the carried loot (up to 64 items, kept across `R` restarts). A reload restores that exact boss through `ARPGMonsterSystem::RestoreMonster` instead of rolling a new one. Restored loot keeps its item IDs, and new drops are numbered after them. Older `ARPGDEMO` versions, truncated snapshots, and loot or skill state the generators could not have produced are rejected, and a rejected load leaves the run unchanged. The module registers no `ComponentSerializerRegistry` entries, because no ARPG component is attached to an ECS entity. Covered by the `ARPGDungeon_*`/`ARPGBoss_*` tests in `Tests/TestMOD330ARPGDungeonReal.cpp`.
+- **Art kit:** `ARPGDungeonSystem` places the Blender Action RPG Dungeon kit (`Assets/Models/ARPG/Kit`: spike trap, destructible urns, loot pile, portal gate) in the crypt entry room as set dressing. Source and provenance are in `Art/Blender/SparkGameARPG/`, authored by `tools/blender/author_arpg_kit.py`.
 
 ## SparkGameOpenWorld
 
@@ -95,7 +98,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 
 ## SparkGameRacing
 
-**Purpose:** systems-first circuit racing with one player car and five waypoint-following AI opponents. Vehicles are **kinematic showcase vehicles** (hand-rolled speed/heading integration, radius-check checkpoints) -- Jolt vehicle physics is not used; the camera system's output is internal and is not pushed to the renderer; the ImGui HUD/minimap is compiled out (`ENABLE_EDITOR` is never defined). WASD/nitro/drift input is real.
+**Purpose:** systems-first circuit racing with one player car and five waypoint-following AI opponents. Vehicles are **Jolt vehicles** (`PhysicsSystem::CreateVehicle` chassis driving on per-track road colliders; the module is the process's single `StepFixed()` owner, one tick per engine fixed step), checkpoints are radius checks; the camera system's output is internal and is not pushed to the renderer; the ImGui HUD/minimap is compiled out (`ENABLE_EDITOR` is never defined). WASD/nitro/drift input is real.
 
 - **Source:** `GameModules/SparkGameRacing/Source/`
 - **Wires:** [Physics](../subsystems/Physics.md) (vehicle subsystem), [Camera System](../subsystems/Camera-System.md) (chase/cockpit), [Audio](../subsystems/Audio.md), [Cinematic Sequencer](../gameplay-tools/Cinematic-Sequencer.md).

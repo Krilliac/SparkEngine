@@ -27,6 +27,26 @@ TOOL = ROOT / "tools" / "release_build_provenance.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 VERSION = "7.8.9"
 LOCK_REL = "ThirdParty/dependencies.lock"
+MSVC_BIN = "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64"
+# What windows-shipping (Visual Studio generator, SPARK_NATIVE_ARCH=OFF) leaves in
+# CMakeCache.txt: the root CMakeLists.txt SDK entry, CMake's own instance,
+# linker and archiver entries, and cmake/SparkCpuFloor.cmake's Jolt options.
+WINDOWS_SHIPPING_CACHE = {
+    "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION:INTERNAL": "10.0.26100.0",
+    "CMAKE_GENERATOR_INSTANCE:INTERNAL": "C:/Program Files/Microsoft Visual Studio/2022/Enterprise",
+    "CMAKE_LINKER:FILEPATH": f"{MSVC_BIN}/link.exe",
+    "CMAKE_AR:FILEPATH": f"{MSVC_BIN}/lib.exe",
+    "SPARK_NATIVE_ARCH:BOOL": "OFF",
+    "USE_SSE4_1:BOOL": "ON",
+    "USE_SSE4_2:BOOL": "ON",
+    "USE_AVX:BOOL": "OFF",
+    "USE_AVX2:BOOL": "OFF",
+    "USE_AVX512:BOOL": "OFF",
+    "USE_LZCNT:BOOL": "OFF",
+    "USE_TZCNT:BOOL": "OFF",
+    "USE_F16C:BOOL": "OFF",
+    "USE_FMADD:BOOL": "OFF",
+}
 
 
 def run_tool(*args: str) -> subprocess.CompletedProcess[str]:
@@ -46,7 +66,8 @@ def sha256(path: Path) -> str:
 class Fixture:
     """A committed source tree, a configured build tree, and CPack outputs."""
 
-    def __init__(self, base: Path, *, multi_config: bool = True) -> None:
+    def __init__(self, base: Path, *, multi_config: bool = True,
+                 cache_overrides: dict[str, str | None] | None = None) -> None:
         self.source = base / "source"
         self.build = base / "build"
         self.packages = self.build / "packages"
@@ -63,6 +84,8 @@ class Fixture:
         compiler_dir.mkdir(parents=True)
         config_line = ("CMAKE_CONFIGURATION_TYPES:STRING=Debug;Release;MinSizeRel;RelWithDebInfo"
                        if multi_config else "CMAKE_BUILD_TYPE:STRING=MinSizeRel")
+        platform_cache = dict(WINDOWS_SHIPPING_CACHE)
+        platform_cache.update(cache_overrides or {})
         (self.build / "CMakeCache.txt").write_text("\n".join([
             "# This is the CMakeCache file.",
             config_line,
@@ -73,10 +96,11 @@ class Fixture:
             "CMAKE_CACHE_MAJOR_VERSION:INTERNAL=3",
             "CMAKE_CACHE_MINOR_VERSION:INTERNAL=30",
             "CMAKE_CACHE_PATCH_VERSION:INTERNAL=2",
+            *(f"{key}={value}" for key, value in platform_cache.items() if value is not None),
             "",
         ]), encoding="utf-8")
         (compiler_dir / "CMakeCXXCompiler.cmake").write_text("\n".join([
-            'set(CMAKE_CXX_COMPILER "C:/VS/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe")',
+            f'set(CMAKE_CXX_COMPILER "{MSVC_BIN}/cl.exe")',
             'set(CMAKE_CXX_COMPILER_ID "MSVC")',
             'set(CMAKE_CXX_COMPILER_VERSION "19.44.35228.0")',
             'set(CMAKE_CXX_COMPILER_ARCHITECTURE_ID "x64")',
@@ -134,7 +158,7 @@ class RecordTests(unittest.TestCase):
         result = self.fx.record()
         self.assertEqual(result.returncode, 0, result.stderr)
         record = json.loads(self.fx.out.read_text(encoding="utf-8"))
-        self.assertEqual(record["schemaVersion"], "spark-build-provenance-v1")
+        self.assertEqual(record["schemaVersion"], "spark-build-provenance-v2")
         self.assertEqual(record["sourceSHA"], self.fx.sha)
         self.assertEqual(record["version"], VERSION)
         self.assertEqual(record["profile"], "stable-v1")
@@ -154,6 +178,21 @@ class RecordTests(unittest.TestCase):
         self.assertEqual(toolchain["compilers"]["CXX"]["id"], "MSVC")
         self.assertEqual(toolchain["compilers"]["CXX"]["version"], "19.44.35228.0")
         self.assertEqual(toolchain["compilers"]["CXX"]["architecture"], "x64")
+        self.assertEqual(record["platformToolchain"], {
+            "windowsSdkVersion": "10.0.26100.0",
+            "msvcToolsVersion": "14.44.35207",
+            "visualStudioInstance": "C:/Program Files/Microsoft Visual Studio/2022/Enterprise",
+            "linker": f"{MSVC_BIN}/link.exe",
+            "archiver": f"{MSVC_BIN}/lib.exe",
+        })
+        self.assertEqual(record["isaBaseline"], {
+            "stableFloor": "x86-64-v2",
+            "nativeArch": False,
+            "joltInstructionSets": {"USE_SSE4_1": True, "USE_SSE4_2": True, "USE_AVX": False,
+                                    "USE_AVX2": False, "USE_AVX512": False, "USE_LZCNT": False,
+                                    "USE_TZCNT": False, "USE_F16C": False, "USE_FMADD": False},
+            "meetsStableFloor": True,
+        })
         self.assertEqual(record["cmakeConfiguration"],
                          {"buildType": None,
                           "configurationTypes": ["Debug", "Release", "MinSizeRel", "RelWithDebInfo"]})
@@ -229,6 +268,84 @@ class RecordTests(unittest.TestCase):
         result = self.fx.record()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("1.0.0", result.stderr)
+
+    def record_with(self, overrides: dict[str, str | None],
+                    *extra: str) -> tuple[Fixture, subprocess.CompletedProcess[str]]:
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(other.cleanup)
+        fx = Fixture(Path(other.name), cache_overrides=overrides)
+        return fx, fx.record(*extra)
+
+    def test_stable_windows_record_rejects_a_missing_windows_sdk(self) -> None:
+        for sdk in (None, ""):
+            with self.subTest(sdk=sdk):
+                fx, result = self.record_with({"SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION:INTERNAL": sdk})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("windowsSdkVersion", result.stderr)
+                self.assertFalse(fx.out.exists())
+
+    def test_stable_windows_record_rejects_missing_instance_linker_or_archiver(self) -> None:
+        for key, field in (("CMAKE_GENERATOR_INSTANCE:INTERNAL", "visualStudioInstance"),
+                           ("CMAKE_LINKER:FILEPATH", "linker"), ("CMAKE_AR:FILEPATH", "archiver")):
+            with self.subTest(field=field):
+                fx, result = self.record_with({key: None})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(field, result.stderr)
+                self.assertFalse(fx.out.exists())
+
+    def test_stable_windows_record_rejects_a_compiler_outside_an_msvc_tools_directory(self) -> None:
+        compiler = self.fx.build / "CMakeFiles" / "3.30.2" / "CMakeCXXCompiler.cmake"
+        compiler.write_text(compiler.read_text(encoding="utf-8").replace(MSVC_BIN, "C:/tools/bin"), encoding="utf-8")
+        result = self.fx.record()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("msvcToolsVersion", result.stderr)
+
+    def test_stable_windows_record_rejects_a_native_arch_build(self) -> None:
+        # SPARK_NATIVE_ARCH=ON restores Jolt's AVX2 defaults (cmake/SparkCpuFloor.cmake).
+        native = {"SPARK_NATIVE_ARCH:BOOL": "ON", "USE_AVX:BOOL": "ON", "USE_AVX2:BOOL": "ON",
+                  "USE_LZCNT:BOOL": "ON", "USE_TZCNT:BOOL": "ON", "USE_F16C:BOOL": "ON", "USE_FMADD:BOOL": "ON"}
+        fx, result = self.record_with(native)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("host-tuned", result.stderr)
+        self.assertFalse(fx.out.exists())
+
+    def test_stable_windows_record_rejects_an_isa_baseline_above_the_floor(self) -> None:
+        for option in ("USE_AVX2:BOOL", "USE_FMADD:BOOL", "USE_LZCNT:BOOL"):
+            with self.subTest(option=option):
+                fx, result = self.record_with({option: "ON"})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("disagrees with the x86-64-v2 floor", result.stderr)
+                self.assertIn(option.split(":")[0], result.stderr)
+                self.assertFalse(fx.out.exists())
+
+    def test_stable_windows_record_rejects_an_unrecorded_or_below_floor_isa_option(self) -> None:
+        for overrides in ({"USE_SSE4_2:BOOL": None}, {"USE_SSE4_2:BOOL": "OFF"}, {"SPARK_NATIVE_ARCH:BOOL": None}):
+            with self.subTest(overrides=overrides):
+                fx, result = self.record_with(overrides)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(fx.out.exists())
+
+    def test_rejects_a_non_boolean_isa_cache_value(self) -> None:
+        _, result = self.record_with({"USE_AVX2:BOOL": "maybe"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not a CMake boolean", result.stderr)
+
+    def test_non_stable_records_capture_what_the_tree_has_without_the_windows_floor(self) -> None:
+        # A Ninja/GCC nightly tree has no Windows SDK or VS instance, and a
+        # developer tree may be host-tuned: recorded as-is, never promoted.
+        fx, _ = self.record_with({"SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION:INTERNAL": None,
+                                  "CMAKE_GENERATOR_INSTANCE:INTERNAL": None,
+                                  "SPARK_NATIVE_ARCH:BOOL": "ON", "USE_AVX2:BOOL": "ON"})
+        result = run_tool(
+            "record", "--source-root", str(fx.source), "--source-sha", fx.sha, "--version", VERSION,
+            "--profile", "default", "--platform", "Windows", "--configuration", "MinSizeRel",
+            "--build-dir", str(fx.build), "--packages", str(fx.packages), "--out", str(fx.out))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads(fx.out.read_text(encoding="utf-8"))
+        self.assertIsNone(record["platformToolchain"]["windowsSdkVersion"])
+        self.assertIsNone(record["platformToolchain"]["visualStudioInstance"])
+        self.assertTrue(record["isaBaseline"]["nativeArch"])
+        self.assertFalse(record["isaBaseline"]["meetsStableFloor"])
 
     def test_never_replaces_an_existing_record(self) -> None:
         self.assertEqual(self.fx.record().returncode, 0)
@@ -330,6 +447,71 @@ class VerifyTests(unittest.TestCase):
         result = self.fx.verify(self.assets, self.listing, "--stable")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("stable", result.stderr)
+
+    def downgrade_to_v1(self, record: dict) -> None:
+        record["schemaVersion"] = "spark-build-provenance-v1"
+        record.pop("platformToolchain")
+        record.pop("isaBaseline")
+
+    def test_stable_accepts_only_a_v2_record(self) -> None:
+        self.rewrite_record(self.downgrade_to_v1)
+        result = self.fx.verify(self.assets, self.listing, "--stable")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("spark-build-provenance-v2", result.stderr)
+
+    def test_nightly_still_reads_a_v1_record(self) -> None:
+        self.rewrite_record(lambda r: (self.downgrade_to_v1(r), r.__setitem__("profile", "default")))
+        result = self.fx.verify(self.assets, self.listing)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_v1_record_may_not_carry_v2_fields_and_v2_must(self) -> None:
+        self.rewrite_record(lambda r: r.__setitem__("schemaVersion", "spark-build-provenance-v1"))
+        result = self.fx.verify(self.assets, self.listing)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("schema", result.stderr)
+        self.rewrite_record(lambda r: (r.__setitem__("schemaVersion", "spark-build-provenance-v2"),
+                                       r.pop("isaBaseline")))
+        result = self.fx.verify(self.assets, self.listing)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("schema", result.stderr)
+
+    def test_rejects_unknown_schema_version(self) -> None:
+        self.rewrite_record(lambda r: r.__setitem__("schemaVersion", "spark-build-provenance-v3"))
+        result = self.fx.verify(self.assets, self.listing)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unknown schemaVersion", result.stderr)
+
+    def test_stable_rejects_a_record_missing_the_windows_sdk(self) -> None:
+        self.rewrite_record(lambda r: r["platformToolchain"].__setitem__("windowsSdkVersion", None))
+        result = self.fx.verify(self.assets, self.listing, "--stable")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("windowsSdkVersion", result.stderr)
+
+    def test_stable_rejects_a_record_whose_isa_baseline_is_above_the_floor(self) -> None:
+        def raise_floor(record: dict) -> None:
+            record["isaBaseline"]["joltInstructionSets"]["USE_AVX2"] = True
+            record["isaBaseline"]["meetsStableFloor"] = False
+        self.rewrite_record(raise_floor)
+        result = self.fx.verify(self.assets, self.listing, "--stable")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("USE_AVX2", result.stderr)
+
+    def test_rejects_a_meets_floor_claim_that_contradicts_the_instruction_sets(self) -> None:
+        self.rewrite_record(lambda r: r["isaBaseline"]["joltInstructionSets"].__setitem__("USE_FMADD", True))
+        result = self.fx.verify(self.assets, self.listing)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("meetsStableFloor contradicts", result.stderr)
+
+    def test_rejects_unknown_platform_toolchain_or_isa_fields(self) -> None:
+        self.rewrite_record(lambda r: r["platformToolchain"].__setitem__("vsDevCmd", "x"))
+        result = self.fx.verify(self.assets, self.listing)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("platformToolchain schema", result.stderr)
+        self.rewrite_record(lambda r: (r["platformToolchain"].pop("vsDevCmd"),
+                                       r["isaBaseline"]["joltInstructionSets"].__setitem__("USE_AVX10", False)))
+        result = self.fx.verify(self.assets, self.listing)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("joltInstructionSets schema", result.stderr)
 
     def test_rejects_missing_published_file(self) -> None:
         (self.assets / "SparkEngine-Windows-x64-MinSizeRel.zip").unlink()

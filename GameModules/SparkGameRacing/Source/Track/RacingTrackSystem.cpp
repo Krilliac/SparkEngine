@@ -4,6 +4,7 @@
  */
 
 #include "RacingTrackSystem.h"
+#include "Engine/ECS/Components.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -17,6 +18,11 @@
 
 namespace Racing
 {
+
+    RacingTrackSystem::~RacingTrackSystem()
+    {
+        RemoveTrackColliders();
+    }
 
     bool RacingTrackSystem::Initialize(Spark::IEngineContext* context)
     {
@@ -44,6 +50,8 @@ namespace Racing
 
     void RacingTrackSystem::Shutdown()
     {
+        RemoveTrackColliders();
+        RemoveTrackKit();
         m_tracks.clear();
         m_currentTrack = {};
         m_initialized = false;
@@ -54,6 +62,8 @@ namespace Racing
         if (index < m_tracks.size())
         {
             m_currentTrack = m_tracks[index];
+            BuildTrackColliders();
+            PlaceTrackKit();
             auto& console = Spark::SimpleConsole::GetInstance();
             SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing track loaded: %s", m_currentTrack.name.c_str());
             console.LogInfo("[Racing Track] Loaded track: " + m_currentTrack.name + " (" +
@@ -77,20 +87,6 @@ namespace Racing
             return SurfaceType::Grass; // Off-track
 
         return projection.t < 0.5f ? from.surface : to.surface;
-    }
-
-    int RacingTrackSystem::CheckCheckpoint(float x, float z) const
-    {
-        for (size_t i = 0; i < m_currentTrack.checkpoints.size(); ++i)
-        {
-            const auto& cp = m_currentTrack.checkpoints[i];
-            float dx = x - cp.x;
-            float dz = z - cp.z;
-            float distSq = dx * dx + dz * dz;
-            if (distSq < cp.radius * cp.radius)
-                return static_cast<int>(i);
-        }
-        return -1;
     }
 
     int RacingTrackSystem::CheckHazard(float x, float z) const
@@ -227,6 +223,116 @@ namespace Racing
         outZ = end.z;
     }
 
+    float RacingTrackSystem::GetCenterlineHeight(const TrackProjection& projection) const
+    {
+        if (m_currentTrack.waypoints.empty())
+            return 0.0f;
+        const TrackWaypoint& from = GetWaypoint(projection.segment);
+        const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
+        return from.y + (to.y - from.y) * std::clamp(projection.t, 0.0f, 1.0f);
+    }
+
+    float RacingTrackSystem::GetCenterlineHeading(const TrackProjection& projection) const
+    {
+        if (m_currentTrack.waypoints.size() < 2)
+            return 0.0f;
+        const TrackWaypoint& from = GetWaypoint(projection.segment);
+        const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
+        return std::atan2(to.x - from.x, to.z - from.z);
+    }
+
+    // =========================================================================
+    // Trackside kit — Blender-authored props (tools/blender/author_racing_kit.py)
+    // =========================================================================
+
+    void RacingTrackSystem::PlaceTrackKit()
+    {
+        RemoveTrackKit();
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!world || m_currentTrack.waypoints.empty())
+            return;
+
+        // Meters, pivot at the ground-contact centre, front facing +Z (source Art/Blender/SparkGameRacing/
+        // racing_kit.blend). Each prop is posed against the centerline segment under it: yaw 0 faces the driving
+        // direction, yawOffset turns it from there, and localX offsets run across the prop's own width. The props
+        // are set dressing only: the checkpoint sensor gates and the barrier walls are generated Jolt bodies
+        // (BuildTrackColliders), and no prop carries a collider. The OBJ/MTL base colours render without a material.
+        constexpr float kFaceTraffic = 3.14159265f; // gates face oncoming cars
+        constexpr float kAlongTraffic = kFaceTraffic / 2.0f;
+        auto place = [&](const char* name, const char* meshPath, float x, float z, float localX, float yawOffset)
+        {
+            const TrackProjection projection = ProjectOntoTrack(x, z);
+            const TrackWaypoint& from = m_currentTrack.waypoints[projection.segment];
+            const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
+            const float yaw = std::atan2(to.x - from.x, to.z - from.z) + yawOffset; // driving heading, 0 = +Z
+            const float groundY = from.y + (to.y - from.y) * projection.t;
+
+            EntityID entity = world->CreateEntity(name);
+            const DirectX::XMFLOAT3 position{x + localX * std::cos(yaw), groundY, z - localX * std::sin(yaw)};
+            world->AddComponent<Transform>(entity, Transform{position, {0.0f, yaw * 57.2957795f, 0.0f}, {1, 1, 1}});
+            MeshRenderer& renderer = world->AddComponent<MeshRenderer>(entity);
+            renderer.meshPath = meshPath;
+            m_kitEntities.push_back(static_cast<uint32_t>(entity));
+        };
+
+        for (const Checkpoint& cp : m_currentTrack.checkpoints)
+        {
+            if (cp.isFinishLine)
+            {
+                place("Track_StartGantry", "Assets/Models/Racing/Kit/start_gantry.obj", cp.x, cp.z, 0.0f, kFaceTraffic);
+                place("Track_TyreStack_Left", "Assets/Models/Racing/Kit/tyre_stack.obj", cp.x, cp.z, -8.2f,
+                      kFaceTraffic);
+                place("Track_TyreStack_Right", "Assets/Models/Racing/Kit/tyre_stack.obj", cp.x, cp.z, 8.2f,
+                      kFaceTraffic);
+            }
+            else
+            {
+                place("Track_CheckpointArch", "Assets/Models/Racing/Kit/checkpoint_arch.obj", cp.x, cp.z, 0.0f,
+                      kFaceTraffic);
+                place("Track_Cone_Left", "Assets/Models/Racing/Kit/traffic_cone.obj", cp.x, cp.z, -6.8f, kFaceTraffic);
+                place("Track_Cone_Right", "Assets/Models/Racing/Kit/traffic_cone.obj", cp.x, cp.z, 6.8f, kFaceTraffic);
+            }
+        }
+        for (const TrackHazard& hazard : m_currentTrack.hazards)
+        {
+            if (hazard.type == TrackHazard::Type::Barrier)
+            {
+                // Runs along the traffic so it reads as a wall to steer around.
+                place("Track_BarrierSegment", "Assets/Models/Racing/Kit/barrier_segment.obj", hazard.x, hazard.z, 0.0f,
+                      kAlongTraffic);
+            }
+            else if (hazard.type == TrackHazard::Type::OilSlick)
+            {
+                // Warning cones either side of the slick.
+                place("Track_Cone_Slick", "Assets/Models/Racing/Kit/traffic_cone.obj", hazard.x, hazard.z,
+                      -(hazard.radius + 1.0f), 0.0f);
+                place("Track_Cone_Slick", "Assets/Models/Racing/Kit/traffic_cone.obj", hazard.x, hazard.z,
+                      hazard.radius + 1.0f, 0.0f);
+            }
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Game,
+                       "Racing track '%s': placed %zu kit props from Assets/Models/Racing/Kit",
+                       m_currentTrack.name.c_str(), m_kitEntities.size());
+        Spark::SimpleConsole::GetInstance().LogInfo("[Racing Track] Placed " + std::to_string(m_kitEntities.size()) +
+                                                    " kit props from Assets/Models/Racing/Kit");
+    }
+
+    void RacingTrackSystem::RemoveTrackKit()
+    {
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (world)
+        {
+            for (uint32_t entityId : m_kitEntities)
+            {
+                auto entity = static_cast<EntityID>(entityId);
+                if (world->GetRegistry().valid(entity))
+                    world->DestroyEntity(entity);
+            }
+        }
+        m_kitEntities.clear();
+    }
+
     std::string RacingTrackSystem::GetTrackListString() const
     {
         std::string result = "Tracks (" + std::to_string(m_tracks.size()) + "):\n";
@@ -283,8 +389,8 @@ namespace Racing
             Checkpoint cp{};
             cp.index = static_cast<uint32_t>(i);
             cp.x = track.waypoints[wpIdx].x;
+            cp.y = track.waypoints[wpIdx].y;
             cp.z = track.waypoints[wpIdx].z;
-            cp.radius = 20.0f;
             cp.isFinishLine = (i == 0);
             track.checkpoints.push_back(cp);
         }
@@ -346,8 +452,8 @@ namespace Racing
             Checkpoint cp{};
             cp.index = i;
             cp.x = track.waypoints[wpIdx].x;
+            cp.y = track.waypoints[wpIdx].y;
             cp.z = track.waypoints[wpIdx].z;
-            cp.radius = 18.0f;
             cp.isFinishLine = (i == 2);
             track.checkpoints.push_back(cp);
         }
@@ -385,7 +491,6 @@ namespace Racing
         cpCenter.index = 0;
         cpCenter.x = 0.0f;
         cpCenter.z = 0.0f;
-        cpCenter.radius = 15.0f;
         cpCenter.isFinishLine = true;
         track.checkpoints.push_back(cpCenter);
 
@@ -393,14 +498,12 @@ namespace Racing
         cpLeft.index = 1;
         cpLeft.x = -halfLength;
         cpLeft.z = 0.0f;
-        cpLeft.radius = 15.0f;
         track.checkpoints.push_back(cpLeft);
 
         Checkpoint cpRight{};
         cpRight.index = 2;
         cpRight.x = halfLength;
         cpRight.z = 0.0f;
-        cpRight.radius = 15.0f;
         track.checkpoints.push_back(cpRight);
 
         // Barrier at the crossing point

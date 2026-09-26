@@ -14,6 +14,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 
 namespace ARPG
@@ -220,6 +221,56 @@ namespace ARPG
         if (it != m_learnedSkills.end())
             return it->second;
         return {};
+    }
+
+    std::vector<SkillCooldownState> ARPGSkillSystem::GetCooldowns(uint32_t heroId) const
+    {
+        const auto it = m_cooldowns.find(heroId);
+        if (it != m_cooldowns.end())
+            return it->second;
+        return {};
+    }
+
+    bool ARPGSkillSystem::CanRestoreHeroSkills(ARPGHeroClass heroClass, int heroLevel,
+                                               const std::vector<uint32_t>& learnedSkills,
+                                               const std::vector<SkillCooldownState>& cooldowns) const
+    {
+        for (size_t i = 0; i < learnedSkills.size(); ++i)
+        {
+            const SkillData* skill = GetSkill(learnedSkills[i]);
+            if (!skill || skill->heroClass != heroClass || skill->requiredLevel > heroLevel ||
+                std::find(learnedSkills.begin() + static_cast<std::ptrdiff_t>(i) + 1, learnedSkills.end(),
+                          learnedSkills[i]) != learnedSkills.end())
+                return false;
+        }
+
+        for (size_t i = 0; i < cooldowns.size(); ++i)
+        {
+            const SkillCooldownState& cooldown = cooldowns[i];
+            const SkillData* skill = GetSkill(cooldown.skillId);
+            if (!skill || std::ranges::find(learnedSkills, cooldown.skillId) == learnedSkills.end() ||
+                !std::isfinite(cooldown.remainingCooldown) || cooldown.remainingCooldown <= 0.0f ||
+                cooldown.remainingCooldown > skill->cooldown)
+                return false;
+            for (size_t j = i + 1; j < cooldowns.size(); ++j)
+            {
+                if (cooldowns[j].skillId == cooldown.skillId)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    bool ARPGSkillSystem::RestoreHeroSkills(uint32_t heroId, const std::vector<uint32_t>& learnedSkills,
+                                            const std::vector<SkillCooldownState>& cooldowns)
+    {
+        const HeroData* hero = m_heroSystem ? m_heroSystem->GetHero(heroId) : nullptr;
+        if (!hero || !CanRestoreHeroSkills(hero->heroClass, hero->level, learnedSkills, cooldowns))
+            return false;
+
+        m_learnedSkills[heroId] = learnedSkills;
+        m_cooldowns[heroId] = cooldowns;
+        return true;
     }
 
     std::string ARPGSkillSystem::GetSkillListString() const

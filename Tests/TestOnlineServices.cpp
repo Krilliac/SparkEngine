@@ -2,6 +2,14 @@
 #include "TestFramework.h"
 #include "Engine/OnlineServices/OnlineServices.h"
 
+#include <algorithm>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
 // ============================================================================
 // Manager initialization
 // ============================================================================
@@ -168,4 +176,751 @@ TEST(OnlineServices_SetPlatform)
     EXPECT_TRUE(caps.authentication);
     EXPECT_TRUE(caps.sessions);
     mgr.Shutdown();
+}
+
+// ============================================================================
+// OnlineServices_Contract — IOnlinePlatform conformance (docs/specs/online-services.md
+// section 5.1 and the section 6 adapter register). Every adapter shipped in
+// OnlineServices.h runs the same suite: a capability reported as true must work,
+// clear GetLastError() on success, and read back where the interface has a getter
+// (friends and presence have none on the Null adapter); a capability reported as
+// false must fail every call with a non-empty GetLastError() and fabricate nothing;
+// and no failure may echo the login token. Registered under the online-services ctest label with an exact
+// count so a dropped adapter test fails the label instead of shrinking it.
+// ============================================================================
+
+namespace
+{
+    using Spark::OnlineServices::IOnlinePlatform;
+    using Spark::OnlineServices::PlatformCapabilities;
+
+    constexpr const char* kContractToken = "contract-secret-token-7f3a";
+
+    bool HasAnyCapability(const PlatformCapabilities& caps)
+    {
+        return caps.authentication || caps.sessions || caps.leaderboards || caps.achievements || caps.cloudSave ||
+               caps.friends || caps.presence;
+    }
+
+    bool SameCapabilities(const PlatformCapabilities& a, const PlatformCapabilities& b)
+    {
+        return a.authentication == b.authentication && a.sessions == b.sessions && a.leaderboards == b.leaderboards &&
+               a.achievements == b.achievements && a.cloudSave == b.cloudSave && a.friends == b.friends &&
+               a.presence == b.presence;
+    }
+
+    // A failed call must leave a human-readable, secret-free reason behind. When the
+    // adapter is capable (today only the Null adapter), expectedError is the exact reason
+    // that call must set. The Null adapter clears GetLastError() on entry to every fallible
+    // call and each failing call has its own message, so a stale error left by an earlier
+    // call cannot satisfy the check. The capability-less stubs return one constant string
+    // from GetLastError(), so for them (expectedError empty) only its presence is checked.
+    void ExpectFailureReported(const IOnlinePlatform& platform, const bool callSucceeded, const char* call,
+                               const std::string& expectedError = {})
+    {
+        const std::string error = platform.GetLastError();
+        const bool wrongReason = !expectedError.empty() && error != expectedError;
+        if (callSucceeded || error.empty() || wrongReason || error.find(kContractToken) != std::string::npos)
+        {
+            std::cerr << "  contract violation in " << platform.GetPlatformName() << "::" << call
+                      << " (succeeded=" << callSucceeded << ", lastError='" << error << "', expected='" << expectedError
+                      << "')\n";
+        }
+        EXPECT_FALSE(callSucceeded);
+        EXPECT_FALSE(error.empty());
+        EXPECT_FALSE(wrongReason);
+        EXPECT_TRUE(error.find(kContractToken) == std::string::npos);
+    }
+
+    // A successful call on a capable adapter must succeed and leave no failure reason behind.
+    void ExpectSucceeded(const IOnlinePlatform& platform, const bool callSucceeded, const char* call)
+    {
+        const std::string error = platform.GetLastError();
+        if (!callSucceeded || !error.empty())
+        {
+            std::cerr << "  contract violation in " << platform.GetPlatformName() << "::" << call
+                      << " (succeeded=" << callSucceeded << ", lastError='" << error << "')\n";
+        }
+        EXPECT_TRUE(callSucceeded);
+        EXPECT_TRUE(error.empty());
+    }
+
+    void CheckAuthentication(IOnlinePlatform& platform, const bool capable)
+    {
+        const bool loggedIn = platform.Login("ContractPlayer", kContractToken);
+        const auto player = platform.GetLocalPlayer();
+        if (capable)
+        {
+            ExpectSucceeded(platform, loggedIn, "Login");
+            EXPECT_TRUE(platform.IsLoggedIn());
+            EXPECT_FALSE(player.playerId.empty());
+            EXPECT_EQ(player.displayName, std::string("ContractPlayer"));
+            return;
+        }
+        ExpectFailureReported(platform, loggedIn, "Login");
+        EXPECT_FALSE(platform.IsLoggedIn());
+        EXPECT_TRUE(player.playerId.empty());
+        EXPECT_TRUE(player.displayName.empty());
+        EXPECT_FALSE(player.isOnline);
+    }
+
+    void CheckSessions(IOnlinePlatform& platform, const bool capable)
+    {
+        Spark::OnlineServices::SessionInfo settings;
+        settings.hostName = "ContractHost";
+        settings.mapName = "ContractMap";
+        settings.gameMode = "Contract";
+        settings.maxPlayers = 4;
+
+        const bool created = platform.CreateSession(settings);
+        if (!capable)
+        {
+            ExpectFailureReported(platform, created, "CreateSession");
+            EXPECT_TRUE(platform.GetCurrentSession().sessionId.empty());
+            EXPECT_TRUE(platform.FindSessions("").empty());
+            ExpectFailureReported(platform, platform.JoinSession("contract-session"), "JoinSession");
+            EXPECT_TRUE(platform.GetCurrentSession().sessionId.empty());
+            platform.LeaveSession();
+            EXPECT_TRUE(platform.GetCurrentSession().sessionId.empty());
+            return;
+        }
+
+        ExpectSucceeded(platform, created, "CreateSession");
+        const auto current = platform.GetCurrentSession();
+        EXPECT_FALSE(current.sessionId.empty());
+        EXPECT_EQ(current.mapName, std::string("ContractMap"));
+
+        const auto found = platform.FindSessions("");
+        const bool listed = std::any_of(found.begin(), found.end(),
+                                        [&](const auto& session) { return session.sessionId == current.sessionId; });
+        EXPECT_TRUE(listed);
+
+        ExpectFailureReported(platform, platform.JoinSession("contract-missing-session"), "JoinSession",
+                              "Session not found: contract-missing-session");
+        ExpectSucceeded(platform, platform.JoinSession(current.sessionId), "JoinSession");
+        EXPECT_EQ(platform.GetCurrentSession().sessionId, current.sessionId);
+
+        platform.LeaveSession();
+        EXPECT_TRUE(platform.GetCurrentSession().sessionId.empty());
+        platform.LeaveSession();
+        EXPECT_TRUE(platform.GetCurrentSession().sessionId.empty());
+    }
+
+    void CheckLeaderboards(IOnlinePlatform& platform, const bool capable)
+    {
+        const bool submitted = platform.SubmitScore("ContractBoard", 42);
+        if (!capable)
+        {
+            ExpectFailureReported(platform, submitted, "SubmitScore");
+            EXPECT_TRUE(platform.QueryScores("ContractBoard", 10).empty());
+            return;
+        }
+        ExpectSucceeded(platform, submitted, "SubmitScore");
+        const auto scores = platform.QueryScores("ContractBoard", 10);
+        ASSERT_EQ(scores.size(), static_cast<size_t>(1));
+        EXPECT_EQ(scores[0].score, static_cast<int64_t>(42));
+        EXPECT_EQ(scores[0].rank, static_cast<uint32_t>(1));
+        EXPECT_TRUE(platform.QueryScores("ContractBoardNeverWritten", 10).empty());
+    }
+
+    void CheckAchievements(IOnlinePlatform& platform, const bool capable)
+    {
+        const bool unlocked = platform.UnlockAchievement("contract_unlock");
+        if (!capable)
+        {
+            ExpectFailureReported(platform, unlocked, "UnlockAchievement");
+            ExpectFailureReported(platform, platform.SetAchievementProgress("contract_progress", 0.5f),
+                                  "SetAchievementProgress");
+            EXPECT_TRUE(platform.QueryAchievements().empty());
+            return;
+        }
+        ExpectSucceeded(platform, unlocked, "UnlockAchievement");
+        ExpectSucceeded(platform, platform.SetAchievementProgress("contract_progress", 0.5f), "SetAchievementProgress");
+        const auto achievements = platform.QueryAchievements();
+        EXPECT_EQ(achievements.size(), static_cast<size_t>(2));
+        for (const auto& achievement : achievements)
+        {
+            if (achievement.id == "contract_unlock")
+            {
+                EXPECT_TRUE(achievement.unlocked);
+            }
+            else
+            {
+                EXPECT_EQ(achievement.id, std::string("contract_progress"));
+                EXPECT_NEAR(achievement.progress, 0.5f, 1e-6f);
+                EXPECT_FALSE(achievement.unlocked);
+            }
+        }
+    }
+
+    void CheckCloudSave(IOnlinePlatform& platform, const bool capable)
+    {
+        const std::vector<uint8_t> payload = {1, 2, 3};
+        const bool saved = platform.SaveToCloud("contract_slot", payload);
+        if (!capable)
+        {
+            ExpectFailureReported(platform, saved, "SaveToCloud");
+            const auto loaded = platform.LoadFromCloud("contract_slot");
+            ExpectFailureReported(platform, !loaded.empty(), "LoadFromCloud");
+            ExpectFailureReported(platform, platform.DeleteCloudSave("contract_slot"), "DeleteCloudSave");
+            EXPECT_TRUE(platform.ListCloudSaves().empty());
+            return;
+        }
+        ExpectSucceeded(platform, saved, "SaveToCloud");
+        const auto loaded = platform.LoadFromCloud("contract_slot");
+        ExpectSucceeded(platform, loaded == payload, "LoadFromCloud");
+        const auto slots = platform.ListCloudSaves();
+        ASSERT_EQ(slots.size(), static_cast<size_t>(1));
+        EXPECT_EQ(slots[0].slotName, std::string("contract_slot"));
+        EXPECT_EQ(slots[0].sizeBytes, static_cast<uint64_t>(payload.size()));
+
+        ExpectSucceeded(platform, platform.DeleteCloudSave("contract_slot"), "DeleteCloudSave");
+        const auto afterDelete = platform.LoadFromCloud("contract_slot");
+        ExpectFailureReported(platform, !afterDelete.empty(), "LoadFromCloud", "Cloud slot not found: contract_slot");
+        ExpectFailureReported(platform, platform.DeleteCloudSave("contract_slot"), "DeleteCloudSave",
+                              "Cannot delete missing cloud slot: contract_slot");
+        EXPECT_TRUE(platform.ListCloudSaves().empty());
+    }
+
+    // Friends and presence have no read-back through IOnlinePlatform on the Null adapter:
+    // offline mode has an empty friends list and SetPresence has no getter. So a capable
+    // adapter is checked for SetPresence succeeding, and invites are checked to succeed only
+    // for a recipient the adapter itself lists as a friend.
+    void CheckSocial(IOnlinePlatform& platform, const PlatformCapabilities& caps)
+    {
+        const auto friends = platform.GetFriendsList();
+        if (!caps.friends)
+        {
+            EXPECT_TRUE(friends.empty());
+        }
+
+        const bool presenceSet = platform.SetPresence("In contract");
+        if (caps.presence)
+        {
+            ExpectSucceeded(platform, presenceSet, "SetPresence");
+        }
+        else
+        {
+            ExpectFailureReported(platform, presenceSet, "SetPresence");
+        }
+
+        // No session is active here (CheckSessions left it), so an invite has nothing to
+        // invite into and must fail on every adapter, capable or not.
+        const bool capable = caps.friends && caps.sessions;
+        EXPECT_TRUE(platform.GetCurrentSession().sessionId.empty());
+        ExpectFailureReported(platform, platform.InviteToSession("contract_friend"), "InviteToSession",
+                              capable ? "Invite requires an active session" : "");
+        if (!capable)
+        {
+            return;
+        }
+
+        Spark::OnlineServices::SessionInfo settings;
+        settings.mapName = "ContractInviteMap";
+        ExpectSucceeded(platform, platform.CreateSession(settings), "CreateSession");
+        ExpectFailureReported(platform, platform.InviteToSession(""), "InviteToSession", "Invite requires a friend ID");
+        ExpectFailureReported(platform, platform.InviteToSession("contract_stranger"), "InviteToSession",
+                              "Invite recipient is not a friend: contract_stranger");
+        if (!friends.empty())
+        {
+            ExpectSucceeded(platform, platform.InviteToSession(friends.front().playerId), "InviteToSession");
+        }
+        platform.LeaveSession();
+    }
+
+    void CheckManagerObservability(std::unique_ptr<IOnlinePlatform> platform, const bool capable)
+    {
+        const std::string name = platform->GetPlatformName();
+        auto& manager = Spark::OnlineServices::OnlineServiceManager::GetInstance();
+        manager.Initialize();
+        manager.SetPlatform(std::move(platform));
+        const std::string status = manager.Console_GetStatus();
+        EXPECT_STR_CONTAINS(status, name);
+        EXPECT_STR_CONTAINS(status, std::string(capable ? "Capabilities: active" : "Capabilities: none"));
+        if (!capable)
+        {
+            EXPECT_STR_CONTAINS(status, std::string("LastError: "));
+        }
+        EXPECT_TRUE(status.find(kContractToken) == std::string::npos);
+        manager.Shutdown();
+    }
+
+    // Runs the full IOnlinePlatform contract against one fresh adapter instance.
+    template <typename Adapter> void RunOnlinePlatformContract()
+    {
+        Adapter platform;
+        const std::string name = platform.GetPlatformName();
+        EXPECT_FALSE(name.empty());
+
+        const PlatformCapabilities caps = platform.GetCapabilities();
+        EXPECT_TRUE(SameCapabilities(caps, platform.GetCapabilities()));
+
+        // Adapter register (spec section 6): nothing in the tree is production. An adapter
+        // with no capability must say it is a stub; the only capable adapter is the local one.
+        EXPECT_TRUE(name.find("roduction") == std::string::npos);
+        if (HasAnyCapability(caps))
+        {
+            EXPECT_STR_CONTAINS(name, std::string("Offline"));
+        }
+        else
+        {
+            EXPECT_STR_CONTAINS(name, std::string("(Stub)"));
+        }
+
+        // Logout and LeaveSession are safe in any state, including before login.
+        platform.Logout();
+        platform.LeaveSession();
+        EXPECT_FALSE(platform.IsLoggedIn());
+        EXPECT_TRUE(platform.GetCurrentSession().sessionId.empty());
+
+        CheckAuthentication(platform, caps.authentication);
+        CheckSessions(platform, caps.sessions);
+        CheckLeaderboards(platform, caps.leaderboards);
+        CheckAchievements(platform, caps.achievements);
+        CheckCloudSave(platform, caps.cloudSave);
+        CheckSocial(platform, caps);
+
+        platform.Logout();
+        EXPECT_FALSE(platform.IsLoggedIn());
+        platform.Logout();
+        EXPECT_FALSE(platform.IsLoggedIn());
+        EXPECT_TRUE(platform.GetLastError().find(kContractToken) == std::string::npos);
+
+        CheckManagerObservability(std::make_unique<Adapter>(), HasAnyCapability(caps));
+    }
+
+    // Drives a fixed script and records every observable result, so two fresh runs can be compared.
+    std::string RecordNullPlatformTranscript()
+    {
+        Spark::OnlineServices::NullOnlinePlatform platform;
+        std::string transcript;
+        const auto record = [&](const std::string& line) { transcript += line + "\n"; };
+
+        record("login=" + std::to_string(platform.Login("Alpha", kContractToken)));
+        record("player=" + platform.GetLocalPlayer().playerId);
+
+        Spark::OnlineServices::SessionInfo settings;
+        settings.mapName = "DeterminismMap";
+        for (int i = 0; i < 3; ++i)
+        {
+            // Each call is sequenced before its read-back: operand order in one expression is unspecified.
+            const bool created = platform.CreateSession(settings);
+            record("create=" + std::to_string(created) + ":" + platform.GetCurrentSession().sessionId);
+        }
+        for (const auto& session : platform.FindSessions(""))
+        {
+            record("session=" + session.sessionId);
+        }
+        const bool joined = platform.JoinSession("local_2");
+        record("join=" + std::to_string(joined) + ":" + platform.GetCurrentSession().sessionId);
+
+        for (const int64_t score : {30, 10, 50, 20})
+        {
+            record("submit=" + std::to_string(platform.SubmitScore("Board", score)));
+        }
+        for (const auto& entry : platform.QueryScores("Board", 3))
+        {
+            record("score=" + std::to_string(entry.rank) + ":" + std::to_string(entry.score));
+        }
+
+        platform.UnlockAchievement("a");
+        platform.SetAchievementProgress("b", 0.25f);
+        platform.SetAchievementProgress("c", 2.0f);
+        for (const auto& achievement : platform.QueryAchievements())
+        {
+            record("achievement=" + achievement.id + ":" + std::to_string(achievement.progress) + ":" +
+                   std::to_string(achievement.unlocked));
+        }
+
+        platform.SaveToCloud("slot_a", {9, 8});
+        platform.SaveToCloud("slot_b", {7});
+        for (const auto& slot : platform.ListCloudSaves())
+        {
+            record("slot=" + slot.slotName + ":" + std::to_string(slot.sizeBytes));
+        }
+        const bool deletedMissing = platform.DeleteCloudSave("slot_missing");
+        record("missing=" + std::to_string(deletedMissing) + ":" + platform.GetLastError());
+        return transcript;
+    }
+} // namespace
+
+TEST(OnlineServices_Contract_NullAdapter)
+{
+    RunOnlinePlatformContract<Spark::OnlineServices::NullOnlinePlatform>();
+}
+
+TEST(OnlineServices_Contract_SteamAdapter)
+{
+    RunOnlinePlatformContract<Spark::OnlineServices::SteamPlatform>();
+}
+
+TEST(OnlineServices_Contract_EpicAdapter)
+{
+    RunOnlinePlatformContract<Spark::OnlineServices::EpicPlatform>();
+}
+
+TEST(OnlineServices_Contract_ConsoleAdapter)
+{
+    RunOnlinePlatformContract<Spark::OnlineServices::ConsolePlatform>();
+}
+
+TEST(OnlineServices_Contract_NullAdapterDeterministic)
+{
+    // The Null adapter keeps its boards, achievements and cloud slots in ordered maps and
+    // ranks ties by submission order, so its results are a fixed transcript on every
+    // standard library and every run, not just repeatable within one process.
+    const std::string expected = "login=1\n"
+                                 "player=local_Alpha\n"
+                                 "create=1:local_1\n"
+                                 "create=1:local_2\n"
+                                 "create=1:local_3\n"
+                                 "session=local_1\n"
+                                 "session=local_2\n"
+                                 "session=local_3\n"
+                                 "join=1:local_2\n"
+                                 "submit=1\n"
+                                 "submit=1\n"
+                                 "submit=1\n"
+                                 "submit=1\n"
+                                 "score=1:50\n"
+                                 "score=2:30\n"
+                                 "score=3:20\n"
+                                 "achievement=a:1.000000:1\n"
+                                 "achievement=b:0.250000:0\n"
+                                 "achievement=c:1.000000:1\n"
+                                 "slot=slot_a:2\n"
+                                 "slot=slot_b:1\n"
+                                 "missing=0:Cannot delete missing cloud slot: slot_missing\n";
+    const std::string first = RecordNullPlatformTranscript();
+    const std::string second = RecordNullPlatformTranscript();
+    if (first != expected)
+    {
+        std::cerr << "  Null adapter transcript:\n" << first;
+    }
+    EXPECT_EQ(first, expected);
+    EXPECT_EQ(second, expected);
+}
+
+// ============================================================================
+// OnlineServices_Degraded — degraded-dependency semantics in OnlineServiceManager
+// (docs/specs/online-services.md section 5.1). A fault-injecting adapter is installed
+// through SetPlatform() and driven through GetPlatform(), the same path game code uses:
+// adapter exceptions become failed calls, 5 consecutive failures of one capability open
+// its circuit for 30 s, one probe is allowed after the cooldown, and the state is
+// reported by Console_GetStatus(). Registered under the online-services ctest label.
+// ============================================================================
+
+namespace
+{
+    using Spark::OnlineServices::OnlineCapability;
+    using Spark::OnlineServices::OnlineServiceManager;
+
+    enum class Fault
+    {
+        None,
+        ReturnFailure,
+        ThrowStd,
+        ThrowNonStd
+    };
+
+    // Null adapter with injectable faults and per-call counters. Non-const: the manager owns it,
+    // and the test keeps a raw pointer to steer it.
+    class FaultInjectingPlatform final : public Spark::OnlineServices::NullOnlinePlatform
+    {
+      public:
+        std::string GetPlatformName() const override { return "FaultInjecting (Test)"; }
+        std::string GetLastError() const override
+        {
+            return fault == Fault::ReturnFailure ? "backend unreachable" : NullOnlinePlatform::GetLastError();
+        }
+
+        bool Login(const std::string& username, const std::string& token) override
+        {
+            ++loginCalls;
+            if (fault == Fault::ThrowStd)
+            {
+                throw std::runtime_error("auth backend rejected token " + token);
+            }
+            return Inject() && NullOnlinePlatform::Login(username, token);
+        }
+        void Logout() override
+        {
+            ++logoutCalls;
+            if (throwOnLogout)
+            {
+                throw std::runtime_error("logout backend down");
+            }
+            NullOnlinePlatform::Logout();
+        }
+        bool SubmitScore(const std::string& boardName, int64_t score) override
+        {
+            ++submitCalls;
+            return Inject() && NullOnlinePlatform::SubmitScore(boardName, score);
+        }
+        std::vector<Spark::OnlineServices::LeaderboardEntry> QueryScores(const std::string& boardName,
+                                                                         uint32_t maxResults) override
+        {
+            ++queryCalls;
+            if (!Inject())
+            {
+                return {};
+            }
+            return NullOnlinePlatform::QueryScores(boardName, maxResults);
+        }
+
+        Fault fault = Fault::None;
+        bool throwOnLogout = false;
+        int loginCalls = 0;
+        int logoutCalls = 0;
+        int submitCalls = 0;
+        int queryCalls = 0;
+
+      private:
+        bool Inject() const
+        {
+            if (fault == Fault::ThrowStd)
+            {
+                throw std::runtime_error("backend exploded");
+            }
+            if (fault == Fault::ThrowNonStd)
+            {
+                throw 42;
+            }
+            return fault != Fault::ReturnFailure;
+        }
+    };
+
+    // Initializes the manager with a fresh fault-injecting adapter and returns it.
+    FaultInjectingPlatform* InstallFaultInjectingPlatform()
+    {
+        auto& manager = OnlineServiceManager::GetInstance();
+        manager.Initialize();
+        auto adapter = std::make_unique<FaultInjectingPlatform>();
+        FaultInjectingPlatform* raw = adapter.get();
+        manager.SetPlatform(std::move(adapter));
+        return raw;
+    }
+
+    // Drives SubmitScore failures until the leaderboards circuit is open.
+    void OpenLeaderboardCircuit(Spark::OnlineServices::IOnlinePlatform& platform, FaultInjectingPlatform& adapter)
+    {
+        adapter.fault = Fault::ReturnFailure;
+        for (int i = 0; i < 5; ++i)
+        {
+            EXPECT_FALSE(platform.SubmitScore("Board", i));
+        }
+    }
+} // namespace
+
+TEST(OnlineServices_Degraded_AdapterExceptionBecomesFailure)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+
+    adapter->fault = Fault::ThrowStd;
+    bool loggedIn = true;
+    try
+    {
+        loggedIn = platform->Login("Alice", "degraded-secret-token");
+    }
+    catch (...)
+    {
+        EXPECT_TRUE(false); // An adapter exception must never reach the caller.
+    }
+    EXPECT_FALSE(loggedIn);
+    EXPECT_STR_CONTAINS(platform->GetLastError(), std::string("Login failed: adapter threw:"));
+    EXPECT_TRUE(platform->GetLastError().find("degraded-secret-token") == std::string::npos);
+    EXPECT_TRUE(manager.Console_GetStatus().find("degraded-secret-token") == std::string::npos);
+
+    adapter->fault = Fault::ThrowNonStd;
+    EXPECT_FALSE(platform->SubmitScore("Board", 1));
+    EXPECT_EQ(platform->GetLastError(), std::string("SubmitScore failed: adapter threw a non-standard exception"));
+    EXPECT_TRUE(platform->QueryScores("Board", 5).empty());
+    EXPECT_STR_CONTAINS(platform->GetLastError(), std::string("QueryScores failed"));
+
+    const auto& auth = manager.GetCapabilityHealth(OnlineCapability::Authentication);
+    EXPECT_EQ(auth.consecutiveFailures, 1u);
+    EXPECT_EQ(auth.totalFailures, 1u);
+    EXPECT_EQ(manager.GetCapabilityHealth(OnlineCapability::Leaderboards).consecutiveFailures, 2u);
+
+    // A throwing Logout is contained too, including during Shutdown.
+    adapter->throwOnLogout = true;
+    platform->Logout();
+    EXPECT_STR_CONTAINS(platform->GetLastError(), std::string("Logout failed: adapter threw: logout backend down"));
+    manager.Shutdown();
+    EXPECT_TRUE(manager.GetPlatform() == nullptr);
+}
+
+TEST(OnlineServices_Degraded_CircuitOpensAfterConsecutiveFailures)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+
+    OpenLeaderboardCircuit(*platform, *adapter);
+    EXPECT_EQ(adapter->submitCalls, 5);
+    const auto& board = manager.GetCapabilityHealth(OnlineCapability::Leaderboards);
+    EXPECT_TRUE(board.circuitOpen);
+    EXPECT_EQ(board.consecutiveFailures, 5u);
+
+    // Open: both leaderboard calls fail fast without reaching the adapter, even though it has recovered.
+    adapter->fault = Fault::None;
+    EXPECT_FALSE(platform->SubmitScore("Board", 99));
+    EXPECT_TRUE(platform->QueryScores("Board", 5).empty());
+    EXPECT_EQ(adapter->submitCalls, 5);
+    EXPECT_EQ(adapter->queryCalls, 0);
+    EXPECT_EQ(board.rejectedCalls, 2u);
+    EXPECT_STR_CONTAINS(platform->GetLastError(),
+                        std::string("QueryScores failed: leaderboards circuit open after 5 consecutive failures"));
+
+    // Circuits are per capability: authentication still reaches the adapter.
+    EXPECT_TRUE(platform->Login("Bob", ""));
+    EXPECT_EQ(adapter->loginCalls, 1);
+
+    const std::string status = manager.Console_GetStatus();
+    EXPECT_STR_CONTAINS(status, std::string("FaultInjecting (Test)"));
+    EXPECT_STR_CONTAINS(status,
+                        std::string("Health: leaderboards 5 consecutive failures (circuit open, retry in 30.0s)"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_ProbeAfterCooldown)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+    OpenLeaderboardCircuit(*platform, *adapter);
+    const auto& board = manager.GetCapabilityHealth(OnlineCapability::Leaderboards);
+
+    // The cooldown runs on the Update() clock; invalid frame times do not advance it.
+    manager.Update(29.0f);
+    manager.Update(-5.0f);
+    manager.Update(std::numeric_limits<float>::quiet_NaN());
+    EXPECT_FALSE(platform->SubmitScore("Board", 1));
+    EXPECT_EQ(adapter->submitCalls, 5);
+
+    // Cooldown elapsed: one probe reaches the still-failing adapter and reopens the circuit.
+    manager.Update(1.5f);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("(circuit open, probe allowed)"));
+    EXPECT_FALSE(platform->SubmitScore("Board", 2));
+    EXPECT_EQ(adapter->submitCalls, 6);
+    EXPECT_TRUE(board.circuitOpen);
+    EXPECT_FALSE(platform->SubmitScore("Board", 3));
+    EXPECT_EQ(adapter->submitCalls, 6);
+
+    // The backend recovers: the next probe succeeds and closes the circuit.
+    adapter->fault = Fault::None;
+    manager.Update(30.0f);
+    EXPECT_TRUE(platform->SubmitScore("Board", 4));
+    EXPECT_EQ(adapter->submitCalls, 7);
+    EXPECT_FALSE(board.circuitOpen);
+    EXPECT_EQ(board.consecutiveFailures, 0u);
+    EXPECT_EQ(board.totalFailures, 6u);
+    EXPECT_EQ(board.rejectedCalls, 2u);
+    EXPECT_TRUE(platform->SubmitScore("Board", 5));
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: ok"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_SuccessResetsAndQueriesNeedAReason)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+    const auto& board = manager.GetCapabilityHealth(OnlineCapability::Leaderboards);
+
+    // Failures must be consecutive: a success in between resets the count.
+    adapter->fault = Fault::ReturnFailure;
+    for (int i = 0; i < 4; ++i)
+    {
+        EXPECT_FALSE(platform->SubmitScore("Board", i));
+    }
+    adapter->fault = Fault::None;
+    EXPECT_TRUE(platform->SubmitScore("Board", 10));
+    EXPECT_EQ(board.consecutiveFailures, 0u);
+
+    // An empty board is an answer, not a failure; an empty result with a reason is a failure.
+    EXPECT_TRUE(platform->QueryScores("EmptyBoard", 5).empty());
+    EXPECT_EQ(board.consecutiveFailures, 0u);
+    adapter->fault = Fault::ReturnFailure;
+    EXPECT_TRUE(platform->QueryScores("Board", 5).empty());
+    EXPECT_EQ(platform->GetLastError(), std::string("backend unreachable"));
+    EXPECT_EQ(board.consecutiveFailures, 1u);
+    EXPECT_EQ(board.totalFailures, 5u);
+    EXPECT_FALSE(board.circuitOpen);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: leaderboards 1 consecutive failures"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_LogoutBypassesOpenCircuit)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+
+    adapter->fault = Fault::ReturnFailure;
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_FALSE(platform->Login("Carol", ""));
+    }
+    EXPECT_TRUE(manager.GetCapabilityHealth(OnlineCapability::Authentication).circuitOpen);
+    EXPECT_FALSE(platform->Login("Carol", ""));
+    EXPECT_EQ(adapter->loginCalls, 5);
+
+    // Local cleanup is never blocked by an open circuit.
+    platform->Logout();
+    platform->LeaveSession();
+    EXPECT_EQ(adapter->logoutCalls, 1);
+    EXPECT_FALSE(platform->IsLoggedIn());
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_StateResetsOnPlatformChange)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    manager.Initialize();
+    manager.SetPlatform(std::make_unique<Spark::OnlineServices::SteamPlatform>());
+    auto* platform = manager.GetPlatform();
+
+    // A fail-closed stub trips its circuits like any unavailable backend.
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_FALSE(platform->Login("Dave", ""));
+    }
+    EXPECT_TRUE(manager.GetCapabilityHealth(OnlineCapability::Authentication).circuitOpen);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("authentication 5 consecutive failures"));
+
+    manager.SetPlatform(std::make_unique<Spark::OnlineServices::EpicPlatform>());
+    EXPECT_FALSE(manager.GetCapabilityHealth(OnlineCapability::Authentication).circuitOpen);
+    EXPECT_EQ(manager.GetCapabilityHealth(OnlineCapability::Authentication).totalFailures, 0u);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: ok"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_NullAdapterNeverOpensCircuit)
+{
+    // The in-process Null adapter has no dependency to degrade: repeated caller errors are
+    // counted but must not lock out a later valid call.
+    auto& manager = OnlineServiceManager::GetInstance();
+    manager.Initialize();
+    auto* platform = manager.GetPlatform();
+    for (int i = 0; i < 7; ++i)
+    {
+        EXPECT_FALSE(platform->JoinSession("missing"));
+        EXPECT_EQ(platform->GetLastError(), std::string("Session not found: missing"));
+    }
+    const auto& sessions = manager.GetCapabilityHealth(OnlineCapability::Sessions);
+    EXPECT_EQ(sessions.totalFailures, 7u);
+    EXPECT_FALSE(sessions.circuitOpen);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(),
+                        std::string("Health: sessions 7 consecutive failures (circuit disabled: local adapter)"));
+
+    Spark::OnlineServices::SessionInfo settings;
+    settings.mapName = "DegradedMap";
+    EXPECT_TRUE(platform->CreateSession(settings));
+    EXPECT_TRUE(platform->JoinSession(platform->GetCurrentSession().sessionId));
+    EXPECT_EQ(sessions.consecutiveFailures, 0u);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: ok (circuit disabled: local adapter)"));
+    manager.Shutdown();
 }

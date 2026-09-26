@@ -125,11 +125,25 @@ namespace Spark::RemoteDebug
         static constexpr uint32_t kMaxRequestsPerWindow = 8;
         static constexpr uint64_t kRateWindowMilliseconds = 1000;
         static constexpr uint64_t kDefaultLoopbackLifetimeMilliseconds = 5 * 60 * 1000;
+        static constexpr size_t kMaxAuditEvents = 256;
 
         [[nodiscard]] std::vector<RemoteDebugAuditEvent> GetAuditEvents() const
         {
             std::lock_guard lock(m_mutex);
             return m_auditEvents;
+        }
+
+        /**
+         * @brief Number of audit events evicted from the bounded ring since construction.
+         *
+         * The ring keeps the newest kMaxAuditEvents entries. A denial flood
+         * therefore cannot silently erase history: every eviction is counted
+         * here and never reset.
+         */
+        [[nodiscard]] uint64_t GetDroppedAuditEventCount() const
+        {
+            std::lock_guard lock(m_mutex);
+            return m_droppedAuditEvents;
         }
 
       private:
@@ -311,15 +325,18 @@ namespace Spark::RemoteDebug
         void RecordLocked(const std::string& principal, const std::string& source, const std::string& commandType,
                           uint32_t requestId, RemoteDebugAuditDecision decision)
         {
-            constexpr size_t kMaxAuditEvents = 256;
             if (m_auditEvents.size() >= kMaxAuditEvents)
+            {
                 m_auditEvents.erase(m_auditEvents.begin());
+                ++m_droppedAuditEvents;
+            }
             m_auditEvents.push_back({principal, source, commandType, requestId, decision});
         }
 
         mutable std::mutex m_mutex;
         std::unordered_map<uint64_t, GrantState> m_grants;
         std::vector<RemoteDebugAuditEvent> m_auditEvents;
+        uint64_t m_droppedAuditEvents{0};
         uint64_t m_nextGrantId{1};
     };
 

@@ -1,0 +1,110 @@
+# SEC-120 scheduled fuzz campaign.
+#
+# The blocking fuzz-policy job in build.yml only replays each reviewed seed
+# once so the merge gate stays deterministic. This workflow is the exploration
+# half: every libFuzzer target registered with the ctest label 'fuzz' mutates
+# a disposable copy of its committed corpus for a fixed per-target budget.
+# Crash, leak, timeout and OOM reproducers are minimized with -minimize_crash
+# and uploaded next to the per-target run statistics (duration, executed
+# units, crash-free time, peak RSS). It is deliberately NOT a need of
+# required-ci-gate: a campaign finding is a new bug to fix with a regression
+# seed, not a reason to block unrelated merges.
+#
+# A red run means tools/fuzz-policy/run_campaign.py found a crash, hang,
+# abnormal exit or UBSan report, that a committed corpus changed, or (exit 2)
+# that the campaign or a target could not be set up. Download the
+# fuzz-campaign-<run id> artifact, reproduce with the minimized file, fix the
+# parser, and commit the minimized input to FuzzerTests/corpora/<parser>/ as a
+# regression-* seed (updating tools/fuzz-policy/corpus-manifest.json).
+#
+# FuzzerTests/generated/<parser>/ (coverage-minimized units from earlier
+# campaigns) is passed to each target as a read-only second corpus. It is not a
+# seed set: refresh it with libFuzzer -merge=1 (see FuzzerTests/README.md).
+name: Fuzz campaign
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      seconds_per_target:
+        description: "Mutation budget per fuzz target, in seconds (times the target count must not exceed 6000)"
+        required: false
+        default: "600"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-scheduled-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fuzz-scheduled:
+    name: "Fuzz scheduled campaign"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CC: clang
+      CXX: clang++
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Install Clang C++23 libc++ toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
+
+    # Same configure as the blocking fuzz-policy job, so the campaign mutates
+    # exactly the binaries and limits that the merge gate replays.
+    - name: Configure fuzz targets
+      env:
+        CXXFLAGS: "-stdlib=libstdc++"
+        LDFLAGS: "-stdlib=libstdc++"
+      run: cmake -S tools/fuzz-policy -B build/fuzz-policy
+
+    - name: Build every fuzz target
+      run: cmake --build build/fuzz-policy --parallel 4
+
+    - name: Run mutation campaign
+      env:
+        # Passed through the environment, never interpolated into the script;
+        # run_campaign.py rejects anything that is not an integer in range.
+        SECONDS_PER_TARGET: ${{ inputs.seconds_per_target || '600' }}
+      # --max-campaign-seconds keeps the whole mutation budget (per-target
+      # seconds x discovered targets) at 100 of the job's 180 minutes, leaving
+      # the rest for toolchain install, the build, minimization and hang
+      # slack; a larger request is refused before any target runs. The
+      # summary is rewritten after every target, so a cancelled job still
+      # uploads the targets that finished.
+      run: >-
+        python3 tools/fuzz-policy/run_campaign.py
+        --build-dir build/fuzz-policy
+        --output fuzz-campaign
+        --seconds "$SECONDS_PER_TARGET"
+        --minimize-seconds 120
+        --max-campaign-seconds 6000
+
+    - name: Verify committed corpora are unchanged
+      if: always()
+      run: |
+        git diff --exit-code -- FuzzerTests/corpora FuzzerTests/generated
+        untracked="$(git status --porcelain --untracked-files=all -- FuzzerTests/corpora FuzzerTests/generated)"
+        if [ -n "$untracked" ]; then
+          echo "::error::the campaign wrote into committed corpora"
+          echo "$untracked"
+          exit 1
+        fi
+
+    - name: Upload minimized reproducers and run statistics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: fuzz-campaign-${{ github.run_id }}
+        path: fuzz-campaign
+        if-no-files-found: error
+        retention-days: 90

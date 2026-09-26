@@ -54,7 +54,7 @@ CORPUS_SCAN_SECONDS = 60
 
 # Seeds live in one reviewed tree. A corpus that pointed at a source root would
 # count production .cpp files as fuzz seeds.
-CORPUS_ROOT = "Tests/fuzz-corpora"
+CORPUS_ROOT = "FuzzerTests/corpora"
 CMAKE_FILE_NAMES = {"CMakeLists.txt"}
 CMAKE_FILE_SUFFIXES = {".cmake"}
 HARNESS_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".m", ".mm"}

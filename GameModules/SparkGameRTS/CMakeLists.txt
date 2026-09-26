@@ -204,13 +204,9 @@ if(FEATURE_DEFINITIONS)
 endif()
 
 # ---------------------------------------------------------------------
-# Post-build: Asset directories
+# Post-build: runtime content, staged where the engine executable runs
 # ---------------------------------------------------------------------
-add_custom_command(TARGET SparkGameRTS POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameRTS>/Shaders"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameRTS>/Assets"
-    COMMENT "Creating SparkGameRTS asset directory structure"
-)
+spark_stage_game_module_content(SparkGameRTS DIRECTORIES Shaders Assets)
 
 # Copy shaders from engine. In-tree builds stage them once through the shared
 # SparkRuntimeShaders target: every module copying the same files into the
@@ -227,15 +223,7 @@ else()
     endif()
     if(EXISTS "${SHADER_SOURCE_DIR}")
         file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")
-        foreach(SHADER_FILE ${SHADER_FILES})
-            get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-            add_custom_command(TARGET SparkGameRTS POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    ${SHADER_FILE}
-                    "$<TARGET_FILE_DIR:SparkGameRTS>/Shaders/${SHADER_NAME}"
-                COMMENT "Copying shader ${SHADER_NAME}"
-            )
-        endforeach()
+        spark_stage_game_module_content(SparkGameRTS COPY_FILES Shaders ${SHADER_FILES})
     endif()
 endif()
 

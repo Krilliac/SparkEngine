@@ -1,0 +1,151 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameFPS",
+  "description": "Every asset path SparkGameFPS source names (arena and weapon models, the Blender training kit under Models/FPS/Kit placed by Game::CreateCombatArena, procedural materials, scene and music tracks), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. The module resolves most of these below its asset root (FPSAssets::Resolve), so its source spells them relative to Assets/. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Audio/ambient_wind.wav",
+      "sha256": "5bfc870dc202942f781447c5ab999cb29c08ce2018058e12a14582f7652e22b7",
+      "kind": "ambient loop (WAV)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Audio/music_combat.wav",
+      "sha256": "1dd1c46b7408a1a4baaf6e40c855036cde02e8ae8d187f4e8bf232ca9081c2e3",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Materials/Arena_CenterBuilding.json",
+      "sha256": "cec075631416fa25358777c3b4602bbd9c5656383e58a8827cc2927a0775322f",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Materials/Concrete.json",
+      "sha256": "1dab64caa39cc84c73a350c33d4e69b62bca779824e083f88f93e5e38103d84a",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Materials/Metal.json",
+      "sha256": "d7df87e3337b585b46a8ff0e00f4e724e37a2053bbdb433a35ebeb476c491d18",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Materials/Terrain_Dirt.json",
+      "sha256": "72c1cbbe847233c13f22d4639a94331a58fdc32037a67db9dc746b0a41db7731",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Materials/Wood.json",
+      "sha256": "fa0c6d460fa86fbf8c74f0b8ca3ba098f68cf99a2050a4c3f0046ab924ac520c",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Models/FPS/Kit/ammo_crate.obj",
+      "sha256": "e18cb025090367bdb72068503a7eec0c70a289c43dd67c280cc34283a8292fb5",
+      "kind": "training-kit static mesh (OBJ)",
+      "provenanceRule": "fps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/FPS/Kit/cover_barrier.obj",
+      "sha256": "1f912859b77c566cfefed15c17f9f785d8b358bc81f7f5e386205476477ab2eb",
+      "kind": "training-kit static mesh (OBJ)",
+      "provenanceRule": "fps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/FPS/Kit/spawn_pad.obj",
+      "sha256": "70446b036848ff0a8d3c58404df395c2cd10f1ae92559218434b428e32b59a67",
+      "kind": "training-kit static mesh (OBJ)",
+      "provenanceRule": "fps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/FPS/Kit/target_dummy.obj",
+      "sha256": "f3f7b08a76e63a4f9e2204671832344b876cdc5b4328738cad0025db5eba78c0",
+      "kind": "training-kit static mesh (OBJ)",
+      "provenanceRule": "fps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/FPS/Kit/weapon_rack.obj",
+      "sha256": "3bb3bdd2e79fa8c6e858f60b7498cc0b5df8edd427137260b55ec8d0513da359",
+      "kind": "training-kit static mesh (OBJ)",
+      "provenanceRule": "fps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/barrier.obj",
+      "sha256": "a5573c4421fe56d9775f231344556757668dd12e5dc1880d217ed49b516561f4",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/building_small.obj",
+      "sha256": "e9997aad88f8fad2cece4d070fb87ddb8f7253f5d423c3c539f5a907e58450de",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/character.obj",
+      "sha256": "74f1446c12fea14821e29b6b5d972cb577dd9757bef24cc7c5c89b1fa364bc18",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/crate.obj",
+      "sha256": "9d3d46a4991c0751736d4a6b848e2ad02b1ac2bdf1561ae2ba280169c24b721a",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/lmg.obj",
+      "sha256": "1e8cbd5b7a66073667e1164e45b6f38ae96adb1130973b2880bb1c3656b23d19",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/pistol.obj",
+      "sha256": "286fe4bdc5bbbb053a91362afb54f8bb01db4e756fed60a6281515c90fe6af5f",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/rifle.obj",
+      "sha256": "9363a679c8f54c68eea6d7776424148b019131f167256387ba548cc54694d5a0",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/shotgun.obj",
+      "sha256": "08b1a1c292da945b3b4ee76c943c04d6f051256450bf726f0c7003c4d65bbf79",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/sniper.obj",
+      "sha256": "3381d14528a3c981861ca842dd5092f706d5417e22e0d0dbae048610dd959463",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/target.obj",
+      "sha256": "3312ede718e6833d249da79f879b7d5ce56a6ea37e6d8541f7960e47909fc335",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Models/watchtower.obj",
+      "sha256": "5138037853a1df0d2286d7d7af899c887ef59f3eb6d9b1aae9a03b1c3b89f1da",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Scenes/level1.scene",
+      "sha256": "ca7dd18ff00c896623e8933fce3c8848f0b46e6900f9b6fbefa2436777257a8f",
+      "kind": "scene (Spark .scene)",
+      "provenanceRule": "repository-authored"
+    }
+  ]
+}

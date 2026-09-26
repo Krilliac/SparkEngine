@@ -207,6 +207,18 @@ namespace Spark
         std::string GetCommandOwner(const std::string& name) const;
         bool HasCommand(const std::string& name) const;
         bool ExecuteCommand(const std::string& commandLine);
+        /**
+         * @brief Form of @p commandLine that is safe to log or persist.
+         *
+         * Aliases are resolved first, so a line whose effective command is
+         * sensitive (registered with RegisterSensitiveCommand) comes back as its
+         * first typed token followed by `<arguments-redacted>`, the same form the
+         * command history records. A line whose effective command is neither a
+         * registered command nor a CVar is redacted the same way when it carries
+         * arguments (fail closed: its credential command may not be loaded yet).
+         * Any other line is returned unchanged.
+         */
+        std::string RedactSensitiveArguments(const std::string& commandLine) const;
 
         // Permission management
         void SetCurrentPermissionLevel(CommandPermission level);
@@ -234,7 +246,7 @@ namespace Spark
         SimpleConsole(const SimpleConsole&) = delete;
         SimpleConsole& operator=(const SimpleConsole&) = delete;
 
-        std::vector<std::string> ParseCommand(const std::string& commandLine);
+        std::vector<std::string> ParseCommand(const std::string& commandLine) const;
 
         /// @brief Shared registration path for every RegisterCommand overload.
         bool RegisterCommandInternal(const std::string& name, CommandHandler handler, const std::string& description,
@@ -254,7 +266,7 @@ namespace Spark
 
         std::string GetTimestamp() const;
         std::string FindClosestCommand(const std::string& input) const;
-        std::string ResolveAliases(const std::string& commandLine);
+        std::string ResolveAliases(const std::string& commandLine) const;
 
         std::unordered_map<std::string, CommandInfo> m_commands;
         // During transactional module reload, a replacement may register the

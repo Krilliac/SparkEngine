@@ -18,7 +18,7 @@
     "id": "v0.9.0-predecessor",
     "profileId": "stable-v1",
     "state": "blocked",
-    "owner": "unassigned",
+    "owner": "Krilliac",
     "signOffEvidence": [],
     "sourceCommitEvidence": {
       "baselineCommit": "",
@@ -28,6 +28,7 @@
     "blockingWorkItemIds": ["ASSET-220", "BLD-100", "CI-100", "CI-110", "CI-120", "DOC-400", "DOC-410", "EDT-210", "ENG-220", "GOV-400", "HEAD-220", "INST-130", "INST-131", "LIFE-200", "MOD-290", "MOD-310", "OPS-100", "PERF-100", "PLT-200", "RDY-000", "RDY-010", "RDY-020", "REL-100", "REL-110", "REL-190", "REL-192", "REL-193", "RHI-210", "SAVE-230", "SDK-240", "SEC-100", "SEC-110", "SEC-120"],
     "qualificationSubstitutions": {
       "INST-131": "INST-132",
+      "REL-190": "REL-191",
       "REL-192": "REL-191"
     },
     "publicationFinalization": {
@@ -45,6 +46,7 @@
     "A passing test must execute production source or a packaged binary; mirror-only, tautological, or mock-only tests cannot promote readiness.",
     "Every public numeric claim resolves through a generated metric with an evidence path.",
     "Every readiness promotion includes source, tests, CI evidence, documentation, limitations, and website impact in the same change.",
+    "Every work item records each acceptance criterion as unmet, implemented (committed code plus a committed test or check), or evidenced (additionally an exact-commit CI run); only evidenced criteria count toward release, an item with any progress is at least in-progress, and a done item has every criterion evidenced.",
     "Production-ready wording is forbidden until the global release state is ready at the displayed commit.",
     "If live publication fails, the website labels the last valid bundle stale or unavailable; it never silently calls the fallback current."
   ],
@@ -687,7 +689,8 @@
       "limitations": [
         "Credentials can cross the protocol in plaintext",
         "Transport security is placeholder-grade",
-        "Existing tests often mirror logic instead of running independent production clients"
+        "Existing tests often mirror logic instead of running independent production clients",
+        "Remote administration is unavailable (OD-05): there is no remote RCON or RemoteDebug network access, and administration is trusted local only"
       ],
       "evidence": [
         {
@@ -741,13 +744,19 @@
       "release": "blocked",
       "summary": "SparkEngine does not provide a turnkey production identity, matchmaking, fleet, transactional persistence, abuse, billing, or incident-operations service layer.",
       "limitations": [
-        "Local and reference implementations are not a production control plane"
+        "Local and reference implementations are not a production control plane",
+        "The engine ships no hosted online services; identity, matchmaking, fleet, entitlement and billing are product-owned (OD-08)"
       ],
       "evidence": [
         {
           "type": "document",
           "path": "wiki/gameplay-tools/Online-Services.md",
           "label": "Online-services documentation"
+        },
+        {
+          "type": "document",
+          "path": "wiki/advanced/Online-Service-Boundary.md",
+          "label": "Online-service boundary contract (OD-08)"
         }
       ],
       "requiredGateIds": [
@@ -761,7 +770,8 @@
         "OPS-110"
       ],
       "documentation": [
-        "wiki/gameplay-tools/Online-Services.md"
+        "wiki/gameplay-tools/Online-Services.md",
+        "wiki/advanced/Online-Service-Boundary.md"
       ],
       "website": {
         "icon": "server",
@@ -1358,7 +1368,7 @@
       "area": "security",
       "state": "blocked",
       "blocking": true,
-      "summary": "Stable-v1 remote-administration and file/package parser paths are unclosed. The structural policy inventory records 3 production-bound fuzzed parsers, 3 corpora, 102 blocked parser targets, and 151 deferred candidates; exact-SHA hosted sanitizer evidence and runtime coverage remain open. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
+      "summary": "Remote administration is permanently unavailable in stable-v1 (OD-05) and has no enabling switch, but its threat-model review and hosted evidence are unclosed, as are file/package parser paths. The structural policy inventory records 3 production-bound fuzzed parsers, 3 corpora, 102 blocked parser targets, and 151 deferred candidates; exact-SHA hosted sanitizer evidence and runtime coverage remain open. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
       "acceptanceCriteria": [
         "Threat model and security ownership are current",
         "Shipped remote administration is disabled by default and cannot expose credentials",
@@ -2541,5 +2551,167 @@
       }
     ],
     "firstUnblockedWorkItemId": "RDY-000"
-  }
+  },
+  "publicNumericClaims": [
+    {
+      "surface": "CHANGELOG.md",
+      "text": "Dear ImGui editor with 59 panels",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "CHANGELOG.md",
+      "text": "10 game modules",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "CHANGELOG.md",
+      "text": "3534 unit tests across 281 test files",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "CHANGELOG.md",
+      "text": "64 KB, depth 16, 4096 nodes",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Engine/Modding/ModSystemIO.cpp"
+    },
+    {
+      "surface": "CHANGELOG.md",
+      "text": "mirror queue is bounded at 4096 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Utils/ConsoleProcessManager.h"
+    },
+    {
+      "surface": "README.md",
+      "text": "64 node palette entries",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "visualScript.nodes"
+    },
+    {
+      "surface": "README.md",
+      "text": "34 node types",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Graphics/ShaderGraph/ShaderGraphCompiler.h"
+    },
+    {
+      "surface": "README.md",
+      "text": "11 in-tree game modules",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "README.md",
+      "text": "RHI (6 backends)",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Graphics/RHI"
+    },
+    {
+      "surface": "README.md",
+      "text": "11 in-tree module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "docs/plans/FEATURE_ROADMAP.md",
+      "text": "34 node types",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Graphics/ShaderGraph/ShaderGraphCompiler.h"
+    },
+    {
+      "surface": "docs/plans/FEATURE_ROADMAP.md",
+      "text": "64 node palette entries",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "visualScript.nodes"
+    },
+    {
+      "surface": "docs/status/PROJECT_STATUS.md",
+      "text": "34 node types",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Graphics/ShaderGraph/ShaderGraphCompiler.h"
+    },
+    {
+      "surface": "docs/tooling/README.md",
+      "text": "11 in-tree module targets",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/advanced/Codebase-Health.md",
+      "text": "5 integration tests",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/Gameplay-Systems-Status.md",
+      "text": "~1,000+ lines",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/Gameplay-Systems-Status.md",
+      "text": "337 lines",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/Gameplay-Systems-Status.md",
+      "text": "7,343 lines",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/SparkGame-Module-Status.md",
+      "text": "11 in-tree module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/advanced/SparkGame-Module-Status.md",
+      "text": "11 module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/advanced/Testing.md",
+      "text": "4,965 production-source in 411 files, 2,268 mirror in 190 files",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/gameplay-tools/SparkConsole.md",
+      "text": "mirror queue is bounded at 4096 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Utils/ConsoleProcessManager.h"
+    },
+    {
+      "surface": "wiki/getting-started/Architecture-Overview.md",
+      "text": "11 in-tree module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/getting-started/Game-Modules.md",
+      "text": "11 module targets",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    }
+  ]
 }

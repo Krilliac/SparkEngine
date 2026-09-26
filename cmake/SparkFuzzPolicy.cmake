@@ -43,14 +43,14 @@ function(spark_enable_fuzz_policy source_root)
     # so a test file dropped into a subdirectory would never run and the suite
     # would still report success. Refuse to configure in that shape.
     file(GLOB_RECURSE _spark_fuzz_policy_tests LIST_DIRECTORIES false
-        "${source_root}/Tests/fuzz-policy/test_*.py")
+        "${source_root}/FuzzerTests/policy/test_*.py")
     list(LENGTH _spark_fuzz_policy_tests _spark_fuzz_policy_test_count)
     if(_spark_fuzz_policy_test_count EQUAL 0)
-        message(FATAL_ERROR "[SEC-120] No adversarial policy tests found under Tests/fuzz-policy")
+        message(FATAL_ERROR "[SEC-120] No adversarial policy tests found under FuzzerTests/policy")
     endif()
     foreach(_spark_fuzz_policy_test IN LISTS _spark_fuzz_policy_tests)
         get_filename_component(_spark_fuzz_policy_test_dir "${_spark_fuzz_policy_test}" DIRECTORY)
-        if(NOT _spark_fuzz_policy_test_dir STREQUAL "${source_root}/Tests/fuzz-policy")
+        if(NOT _spark_fuzz_policy_test_dir STREQUAL "${source_root}/FuzzerTests/policy")
             message(FATAL_ERROR
                 "[SEC-120] ${_spark_fuzz_policy_test} sits in a subdirectory that "
                 "'unittest discover' will not recurse into; move it up or add __init__.py")
@@ -60,7 +60,7 @@ function(spark_enable_fuzz_policy source_root)
     add_test(
         NAME FuzzPolicyAdversarial
         COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover
-            -s "${source_root}/Tests/fuzz-policy"
+            -s "${source_root}/FuzzerTests/policy"
             -p "test_*.py"
             -v)
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/fuzz-policy-tmp")

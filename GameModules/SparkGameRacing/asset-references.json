@@ -1,0 +1,79 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameRacing",
+  "description": "Every asset path SparkGameRacing source names (the Blender Circuit Racing kit under Models/Racing/Kit, placed on the active track by RacingTrackSystem::PlaceTrackKit, music tracks in RacingEngineSystems), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. The racing-blender-kit and module-music-composer rules and their Assets/assets.integrity.json entries are added by the asset-integrity integrator. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Audio/Racing/Music/countdown.wav",
+      "sha256": "c785f237c41d9e0d0ef2026b0aa1af1d664cdd8eccee6a8a2cfe945653f97fe5",
+      "kind": "music stinger (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Racing/Music/defeat.wav",
+      "sha256": "0bcf4ad192abb02a1302619cec790ce9e79ecec203daadd2b7bd61c9076d1de8",
+      "kind": "music stinger (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Racing/Music/final_lap.wav",
+      "sha256": "d49a2cf098b887469422b5842474d77bc97446b9bfa6ac8c8d189d3ff02c9483",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Racing/Music/race_track_01.wav",
+      "sha256": "bee2006b451485f539174c33b72b411ceb1aba817ce992aeaada1eda02253187",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Racing/Music/race_track_02.wav",
+      "sha256": "d99d00b74b44fd367e0613adc325a60688850ac41b36595065beb6671b231131",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Racing/Music/racing_menu.wav",
+      "sha256": "dc086221aa1aa307da52a38f900256dcad2ed6212772a896dfa33cffcab1b502",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Racing/Music/victory.wav",
+      "sha256": "03d61e9f62aa1e826083c86215ea3b1ef3429dadfc7ea2c298e392f8ac2cc888",
+      "kind": "music stinger (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Models/Racing/Kit/barrier_segment.obj",
+      "sha256": "868f573aee3336556ead87dcb2fe788ad687856fdbf4c7b7756c7f3b26859870",
+      "kind": "trackside barrier prop mesh (OBJ + MTL)",
+      "provenanceRule": "racing-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Racing/Kit/checkpoint_arch.obj",
+      "sha256": "7c3f615af02a2811a288a22c79cd9a4be1e1c8238492f8c1535260112473b00c",
+      "kind": "checkpoint gate prop mesh (OBJ + MTL)",
+      "provenanceRule": "racing-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Racing/Kit/start_gantry.obj",
+      "sha256": "1fbb5fb5ba928ceb7ab0d4d520c218c4730ec0277780d37430c72bb8516693f4",
+      "kind": "start/finish gantry prop mesh (OBJ + MTL)",
+      "provenanceRule": "racing-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Racing/Kit/traffic_cone.obj",
+      "sha256": "8d0c1f262e412d2839a8e4058d2959a73da95bcddfc96c692ed85c12ba193d2e",
+      "kind": "trackside cone prop mesh (OBJ + MTL)",
+      "provenanceRule": "racing-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Racing/Kit/tyre_stack.obj",
+      "sha256": "3298860c7a58b061a8777ce2511d8f2797e651d3c6b9e2ef4a8038e8f5256caf",
+      "kind": "trackside tyre stack prop mesh (OBJ + MTL)",
+      "provenanceRule": "racing-blender-kit"
+    }
+  ]
+}

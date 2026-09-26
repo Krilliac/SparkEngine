@@ -126,9 +126,12 @@ namespace Platformer
         void UpdateProjectiles(float deltaTime);
         void UpdateLasers(float deltaTime);
         bool PointInBox(float px, float py, float pz, const HazardInstance& hazard) const;
+        void PlaceSpikeTiles();
+        void RemoveSpikeTiles();
 
         Spark::IEngineContext* m_context{nullptr};
         std::vector<HazardInstance> m_hazards;
+        std::vector<uint32_t> m_spikeTileEntities; ///< spike_hazard kit tiles (MeshRenderer entities) this system owns
         std::vector<ActiveProjectile> m_projectiles;
         uint32_t m_nextId{1};
         float m_globalTimer{0.0f};

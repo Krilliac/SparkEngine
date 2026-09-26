@@ -65,6 +65,7 @@ namespace MMO
         MMOAreaInfo town{};
         town.areaId = 1;
         town.name = "TownSquare";
+        town.sceneFile = "Assets/Scenes/MMO/town_square.scene";
         town.boundsMinX = -500.0f;
         town.boundsMinY = -50.0f;
         town.boundsMinZ = -500.0f;
@@ -82,6 +83,7 @@ namespace MMO
         MMOAreaInfo wilderness{};
         wilderness.areaId = 2;
         wilderness.name = "Wilderness";
+        wilderness.sceneFile = "Assets/Scenes/MMO/wilderness.scene";
         wilderness.boundsMinX = 500.0f;
         wilderness.boundsMinY = -100.0f;
         wilderness.boundsMinZ = -2000.0f;
@@ -99,6 +101,7 @@ namespace MMO
         MMOAreaInfo dungeon{};
         dungeon.areaId = 3;
         dungeon.name = "ShadowCrypt";
+        dungeon.sceneFile = "Assets/Scenes/MMO/shadow_crypt.scene";
         dungeon.boundsMinX = -200.0f;
         dungeon.boundsMinY = -300.0f;
         dungeon.boundsMinZ = -200.0f;
@@ -116,6 +119,7 @@ namespace MMO
         MMOAreaInfo battleground{};
         battleground.areaId = 4;
         battleground.name = "Battleground";
+        battleground.sceneFile = "Assets/Scenes/MMO/battleground.scene";
         battleground.boundsMinX = -1000.0f;
         battleground.boundsMinY = -50.0f;
         battleground.boundsMinZ = 2000.0f;
@@ -158,7 +162,7 @@ namespace MMO
             def.name = area.name;
             def.boundsMin = {area.boundsMinX, area.boundsMinY, area.boundsMinZ};
             def.boundsMax = {area.boundsMaxX, area.boundsMaxY, area.boundsMaxZ};
-            def.scenePath = "Assets/Scenes/" + area.name + ".scene";
+            def.scenePath = area.sceneFile;
             def.priority = area.isInstanced ? 0 : 1;
 
             streamingMgr->RegisterArea(def);
@@ -203,7 +207,7 @@ namespace MMO
                 Spark::Net::AreaServerConfig areaConfig{};
                 areaConfig.areaId = area.areaId;
                 areaConfig.areaName = area.name;
-                areaConfig.scenePath = "Assets/Scenes/" + area.name + ".scene";
+                areaConfig.scenePath = area.sceneFile;
                 areaConfig.port = basePort++;
                 areaConfig.interServerPort = basePort++;
                 areaConfig.tickRate = 60.0f;

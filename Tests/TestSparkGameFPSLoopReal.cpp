@@ -108,7 +108,7 @@ TEST(FPSLocalProfile_RejectsCustomStateWithoutProfileBlock)
     std::string error;
 
     EXPECT_FALSE(loaded.ReadFrom(customState, error));
-    EXPECT_STR_CONTAINS(error, "missing key");
+    EXPECT_STR_CONTAINS(error, "missing version key 'fps.profile.version'");
     // A rejected read must not partially overwrite the caller's profile.
     EXPECT_EQ(loaded.progressionXP, 99);
 }
@@ -124,7 +124,48 @@ TEST(FPSLocalProfile_RejectsProfileFromNewerModule)
     FPSLocalProfile loaded;
     std::string error;
     EXPECT_FALSE(loaded.ReadFrom(customState, error));
-    EXPECT_STR_CONTAINS(error, "newer module");
+    EXPECT_STR_CONTAINS(error, "SparkGameFPS persisted schema: data is version 2");
+    EXPECT_STR_CONTAINS(error, "load it with the newer build");
+}
+
+TEST(FPSLocalProfile_DeclaresPersistedSchemaAndStampsIt)
+{
+    // OD-03: the module declares its own persisted-schema version and writes N.
+    EXPECT_EQ(std::string(FPSLocalProfile::kSchema.moduleName), std::string("SparkGameFPS"));
+    EXPECT_EQ(std::string(FPSLocalProfile::kSchema.versionKey), std::string(FPSLocalProfile::kKeyPrefix) + "version");
+    EXPECT_EQ(static_cast<int>(FPSLocalProfile::kSchema.currentVersion), FPSLocalProfile::kVersion);
+
+    std::unordered_map<std::string, std::string> customState;
+    FPSLocalProfile{}.WriteTo(customState);
+    EXPECT_EQ(customState.at(std::string(FPSLocalProfile::kSchema.versionKey)),
+              std::to_string(FPSLocalProfile::kSchema.currentVersion));
+}
+
+TEST(FPSLocalProfile_RejectsSchemaOlderThanWindowAndMalformedVersions)
+{
+    FPSLocalProfile saved;
+    std::unordered_map<std::string, std::string> baseline;
+    saved.WriteTo(baseline);
+    const std::string versionKey(FPSLocalProfile::kSchema.versionKey);
+
+    FPSLocalProfile loaded;
+    loaded.progressionXP = 55;
+    std::string error;
+
+    auto older = baseline;
+    older[versionKey] = std::to_string(FPSLocalProfile::kSchema.OldestReadableVersion() - 1);
+    EXPECT_FALSE(loaded.ReadFrom(older, error));
+    EXPECT_STR_CONTAINS(error, "convert it with an older build");
+    EXPECT_EQ(loaded.progressionXP, 55);
+
+    for (const char* malformed : {"-1", "1x", "", " 1"})
+    {
+        auto bad = baseline;
+        bad[versionKey] = malformed;
+        EXPECT_FALSE(loaded.ReadFrom(bad, error));
+        EXPECT_STR_CONTAINS(error, "is not a version number");
+        EXPECT_EQ(loaded.progressionXP, 55);
+    }
 }
 
 TEST(FPSLocalProfile_RejectsUnparseableField)

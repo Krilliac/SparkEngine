@@ -57,6 +57,25 @@ struct DiscoveredModule
     bool kindKnown = false; ///< True when kind came from an actual ModuleInfo probe
 };
 
+struct SparkModuleCompatibilityDescriptor;
+
+/**
+ * @brief Explain why a module compatibility descriptor is rejected.
+ *
+ * The stable-v1 module ABI is exact-match only (owner decision OD-02); no
+ * N-1 module is loaded or migrated. The diagnostic names the rejected
+ * sidecar field, the value this host expects, and the value the module
+ * declares, so a rejected module can be matched to the SDK or toolchain it
+ * must be rebuilt with. ModuleManager uses it for both the pre-OS-load
+ * .sparkabi sidecar gate and the in-image descriptor re-check.
+ *
+ * @param descriptor Descriptor parsed from the sidecar or returned by the
+ *        module's SparkGetModuleCompatibility export; may be null.
+ * @return An empty string when the descriptor is compatible, otherwise the
+ *         rejection diagnostic.
+ */
+[[nodiscard]] std::string DescribeModuleCompatibilityRejection(const SparkModuleCompatibilityDescriptor* descriptor);
+
 /**
  * @brief Manages the lifecycle of multiple dynamically loaded modules
  */
@@ -67,6 +86,8 @@ class ModuleManager
     struct ModuleLifecycleRecord
     {
         std::string module;
+        std::string libraryPath;                          ///< Image path this manager last created it from
+        Spark::ModuleKind kind = Spark::ModuleKind::Game; ///< Load-policy class from ModuleInfo
         uint64_t createModule = 0;
         uint64_t onLoad = 0;
         uint64_t onUpdate = 0;
@@ -96,6 +117,21 @@ class ModuleManager
                     return &record;
             }
             return nullptr;
+        }
+
+        /** @brief The single Game-kind record, or nullptr when there is none or more than one. */
+        const ModuleLifecycleRecord* FindGameModule() const
+        {
+            const ModuleLifecycleRecord* game = nullptr;
+            for (const auto& record : modules)
+            {
+                if (record.kind != Spark::ModuleKind::Game)
+                    continue;
+                if (game)
+                    return nullptr;
+                game = &record;
+            }
+            return game;
         }
     };
 
@@ -272,6 +308,29 @@ class ModuleManager
      * teardown has completed.
      */
     static LifecycleEvidence GetLastTeardownLifecycleEvidence();
+
+    /**
+     * @brief Publish this manager's evidence as the last-teardown snapshot now.
+     *
+     * For hosts that deliberately keep module images mapped until process exit
+     * and therefore never run the destructor that normally publishes it.
+     */
+    void PublishLifecycleEvidence() const;
+
+    /**
+     * @brief Build-target name of a module image: its filename stem without the
+     *        POSIX shared-library "lib" prefix (libSparkGameRTS.so -> SparkGameRTS).
+     */
+    static std::string LibraryTargetName(std::string_view libraryPath);
+
+    /**
+     * @brief Format the host's machine-readable lifecycle record for @p record.
+     *
+     * Produces `SPARK_MODULE_LIFECYCLE module=<target> create= load= update= fixed=
+     * render= unload= destroy= faults=` (no newline), identifying the module by
+     * LibraryTargetName(record.libraryPath) rather than its display name.
+     */
+    static std::string FormatLifecycleRecord(const ModuleLifecycleRecord& record);
 
     /**
      * @brief Detailed reason from the most recent load operation.

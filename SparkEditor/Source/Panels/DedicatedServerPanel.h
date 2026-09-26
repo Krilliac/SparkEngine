@@ -94,7 +94,6 @@ namespace SparkEditor
             bool autoConnect = false;       ///< Reserved until editor client transport integration is implemented.
             std::string bindAddress = "loopback";
             bool enableRcon = false;
-            std::string rconPassword = "dev";
         };
 
         // ============================================================

@@ -200,30 +200,9 @@ namespace Terrafront::WorldSave
             }
         }
 
-        std::filesystem::path temporary = path;
-        temporary += ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-            if (!output.is_open())
-            {
-                detail = "temporary open failed";
-                return false;
-            }
-            output << Spark::Json::StringifyPretty(root);
-            if (!output.good())
-            {
-                detail = "temporary write failed";
-                output.close();
-                std::filesystem::remove(temporary, ec);
-                return false;
-            }
-        }
-
-        if (!SavePaths::AtomicReplace(temporary, path, ec))
+        if (!SavePaths::WriteDurableReplace(path, Spark::Json::StringifyPretty(root), ec))
         {
             detail = ec.message();
-            std::error_code removeEc;
-            std::filesystem::remove(temporary, removeEc);
             return false;
         }
         return true;

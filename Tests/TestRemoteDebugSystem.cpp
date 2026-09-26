@@ -2,6 +2,7 @@
 #include "TestFramework.h"
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <limits>
@@ -32,7 +33,7 @@ namespace Spark::RemoteDebug
 
         template <typename Server>
         static constexpr bool kCanMintLoopbackObserver =
-            requires(Server& server) { server.IssueLoopbackObserverPrincipal(); };
+            requires(Server& server) { server.IssueLoopbackObserverPrincipal(std::chrono::milliseconds{1}); };
 
         template <typename Server>
         static constexpr bool kCanDispatchWithPrincipal =
@@ -234,7 +235,7 @@ TEST(RemoteAdmin_AnonymousDenied)
 {
     using namespace Spark::RemoteDebug;
     RemoteDebugServer server;
-    server.StartListening(0);
+    server.StartListening();
 
     bool directHandlerCalled = false;
     server.RegisterCommandHandler("direct_probe",
@@ -431,6 +432,84 @@ TEST(RemoteAdmin_RateLimited)
     sys.Shutdown();
 }
 
+TEST(RemoteAdmin_ExpiredDenied)
+{
+    using namespace Spark::RemoteDebug;
+    auto& sys = RemoteDebugSystem::GetInstance();
+    sys.Initialize();
+    sys.EnableLoopback(std::chrono::milliseconds(1));
+
+    auto* client = sys.GetClient();
+    auto* server = sys.GetServer();
+    ASSERT_TRUE(client != nullptr);
+    ASSERT_TRUE(server != nullptr);
+    std::atomic_uint32_t effects{0};
+    server->RegisterCommandHandler("expiry_probe", RemoteDebugCapability::Inspect,
+                                   [&](const RemoteCommand& command)
+                                   {
+                                       ++effects;
+                                       return RemoteCommand{"expiry_ok", "", command.requestId, 0.0f};
+                                   });
+
+    // steady_clock is monotonic, so 20 ms is always past a 1 ms grant.
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    client->SendCommand({"expiry_probe", "", 1, 0.0f});
+    sys.Update(0.016f);
+    const auto expiredResponses = client->PollResponses();
+    EXPECT_EQ(static_cast<size_t>(1), expiredResponses.size());
+    if (!expiredResponses.empty())
+        EXPECT_TRUE(IsAccessDenied(expiredResponses.front()));
+    EXPECT_EQ(static_cast<uint32_t>(0), effects.load());
+    EXPECT_TRUE(AuditEndsWith(*server, RemoteDebugAuditDecision::ExpiredPrincipalDenied));
+
+    // Positive control: the default grant is still valid for the same command,
+    // so the denial above was caused by expiry and nothing else.
+    sys.EnableLoopback();
+    client = sys.GetClient();
+    ASSERT_TRUE(client != nullptr);
+    client->SendCommand({"expiry_probe", "", 1, 0.0f});
+    sys.Update(0.016f);
+    const auto freshResponses = client->PollResponses();
+    EXPECT_EQ(static_cast<size_t>(1), freshResponses.size());
+    if (!freshResponses.empty())
+        EXPECT_EQ(std::string("expiry_ok"), freshResponses.front().type);
+    EXPECT_EQ(static_cast<uint32_t>(1), effects.load());
+    sys.Shutdown();
+}
+
+TEST(RemoteDebugSystem_AuditEvictionIsCounted)
+{
+    using namespace Spark::RemoteDebug;
+    auto& sys = RemoteDebugSystem::GetInstance();
+    sys.Initialize();
+    sys.EnableLoopback();
+
+    auto* client = sys.GetClient();
+    auto* server = sys.GetServer();
+    ASSERT_TRUE(client != nullptr);
+    ASSERT_TRUE(server != nullptr);
+    client->SendCommand({"heartbeat", "", 1, 0.0f});
+    sys.Update(0.016f);
+    EXPECT_EQ(static_cast<size_t>(1), client->PollResponses().size());
+    const size_t retainedBeforeFlood = server->GetAuditEvents().size();
+    EXPECT_TRUE(retainedBeforeFlood < RemoteDebugAccessControl::kMaxAuditEvents);
+    EXPECT_EQ(static_cast<uint64_t>(0), server->GetDroppedAuditEventCount());
+
+    // Replays are denied before rate limiting, so every one is audited.
+    constexpr size_t flood = RemoteDebugAccessControl::kMaxAuditEvents + 44;
+    for (size_t index = 0; index < flood; ++index)
+        client->SendCommand({"heartbeat", "", 1, 0.0f});
+    sys.Update(0.016f);
+    EXPECT_EQ(flood, client->PollResponses().size());
+
+    const auto events = server->GetAuditEvents();
+    EXPECT_EQ(RemoteDebugAccessControl::kMaxAuditEvents, events.size());
+    EXPECT_EQ(static_cast<uint64_t>(retainedBeforeFlood + flood - RemoteDebugAccessControl::kMaxAuditEvents),
+              server->GetDroppedAuditEventCount());
+    EXPECT_TRUE(AuditEndsWith(*server, RemoteDebugAuditDecision::ReplayDenied));
+    sys.Shutdown();
+}
+
 TEST(RemoteDebugSystem_AuditRecordsDispositionWithoutPayloadsOrGrants)
 {
     using namespace Spark::RemoteDebug;
@@ -552,7 +631,7 @@ namespace
             [&]
             {
                 if (transition == ResponseEpochTransition::StartListening)
-                    server->StartListening(0);
+                    server->StartListening();
                 else
                     server->StopListening();
                 transitionReturned.store(true, std::memory_order_release);

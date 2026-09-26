@@ -1,0 +1,11 @@
+
+   // indented comment
+	 name	=	 Padded Name 	
+mesh=
+mesh =   
+texture	=textures/t.dds
+no equals sign here
+=orphan value
+   
+//mesh = commented.mesh
+audio = audio/a.wav

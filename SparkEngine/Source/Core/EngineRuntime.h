@@ -17,8 +17,11 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 class GraphicsEngine;
 class InputManager;
@@ -68,6 +71,14 @@ struct EngineRuntime
     std::unique_ptr<Timer> timer;
     std::unique_ptr<Spark::EventBus> eventBus;
     std::unique_ptr<ModuleManager> moduleManager;
+    /// Headless POSIX teardown keeps each manager and its module images alive
+    /// until process exit instead of unloading them. Holding the pointers here
+    /// keeps those deliberate process-lifetime objects reachable (one per
+    /// teardown, so a repeated teardown never orphans an earlier manager).
+    /// Caveat: LeakSanitizer also treats all module-owned heap reachable from
+    /// these managers as live, so it cannot see module-side leaks on this path.
+    /// Never deleted.
+    std::vector<ModuleManager*> residentModuleManagers;
     std::unique_ptr<AudioEngine> audioEngine;
     std::unique_ptr<Spark::Audio::IAudioBackend> audioBackend;
     std::unique_ptr<Spark::ModuleHotReloadManager> moduleHotReload;
@@ -103,8 +114,15 @@ struct EngineRuntime
     /** [startup thread] Create the owned NullRHI bridge for a headless host. */
     [[nodiscard]] bool InitializeHeadlessRhi();
 
-    /** [shutdown thread] Release the owned headless RHI after module teardown. */
+    /**
+     * [shutdown thread] Release the owned headless RHI after module teardown and
+     * record headlessRhiLiveResourcesAtShutdown.
+     */
     void ShutdownHeadlessRhi() noexcept;
+
+    /// NullRHI resources some owner still held when ShutdownHeadlessRhi released
+    /// the device (0 on a leak-free teardown); empty until that has happened.
+    std::optional<uint32_t> headlessRhiLiveResourcesAtShutdown;
 };
 
 /**

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameOpenWorld",
+  "cmakeTarget": "SparkGameOpenWorld",
+  "sourceDirectory": "GameModules/SparkGameOpenWorld/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/OpenWorld",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/OpenWorld",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestOpenWorldModule.cpp"
+    ],
+    "prefixes": [
+      {
+        "prefix": "OW_",
+        "count": 15
+      },
+      {
+        "prefix": "Gated_OW",
+        "count": 46
+      }
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameOpenWorld/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

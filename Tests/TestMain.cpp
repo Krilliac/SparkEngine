@@ -21,6 +21,7 @@
  *   SPARK_TEST_LIMIT=N     Stop after N tests
  *   SPARK_TEST_FILE=name   Filter tests by source file
  *   SPARK_TEST_NAME=name   Filter tests by test name
+ *   SPARK_TEST_NAME_PREFIX=p Run only tests whose name starts with p
  *   SPARK_TEST_EXPECT_COUNT=N Fail unless exactly N tests execute
  *   SPARK_TEST_EXCLUDE=pat Exclude tests whose name contains pat (comma-separated)
  */
@@ -555,6 +556,7 @@ static void PrintUsage(const char* argv0)
               << "  SPARK_TEST_LIMIT=N     Stop after N tests\n"
               << "  SPARK_TEST_FILE=name   Filter tests by source file\n"
               << "  SPARK_TEST_NAME=name   Filter tests by test name\n"
+              << "  SPARK_TEST_NAME_PREFIX=p Run only tests whose name starts with p\n"
               << "  SPARK_TEST_EXPECT_COUNT=N Fail unless exactly N tests execute\n"
               << "  SPARK_TEST_EXCLUDE=pat Exclude tests whose name contains pat (comma-separated)\n";
 }
@@ -704,6 +706,9 @@ int main(int argc, char** argv)
         testLimit = std::min(testLimit, std::atoi(limitEnv));
     const char* fileFilter = std::getenv("SPARK_TEST_FILE");
     const char* nameFilter = std::getenv("SPARK_TEST_NAME");
+    // SPARK_TEST_NAME matches anywhere in the name ("RPG_" also selects "ARPG_*");
+    // selectors that must count one family exactly use the anchored prefix filter.
+    const char* namePrefixFilter = std::getenv("SPARK_TEST_NAME_PREFIX");
     const char* expectedCountText = std::getenv("SPARK_TEST_EXPECT_COUNT");
     int expectedTestCount = 0;
     bool expectedCountValid = expectedCountText == nullptr;
@@ -753,6 +758,8 @@ int main(int argc, char** argv)
         if (fileFilter && !std::strstr(test->file, fileFilter))
             continue;
         if (nameFilter && !std::strstr(test->name, nameFilter))
+            continue;
+        if (namePrefixFilter && std::strncmp(test->name, namePrefixFilter, std::strlen(namePrefixFilter)) != 0)
             continue;
         bool excluded = false;
         for (const auto& pat : excludePatterns)
@@ -1032,7 +1039,8 @@ int main(int argc, char** argv)
 
     auto suiteEnd = std::chrono::steady_clock::now();
     double totalMs = std::chrono::duration<double, std::milli>(suiteEnd - suiteStart).count();
-    const bool filteredSelectionEmpty = ranCount == 0 && (fileFilter != nullptr || nameFilter != nullptr);
+    const bool filteredSelectionEmpty =
+        ranCount == 0 && (fileFilter != nullptr || nameFilter != nullptr || namePrefixFilter != nullptr);
     const bool expectedSelectionMismatch =
         expectedCountText != nullptr && (!expectedCountValid || ranCount != expectedTestCount);
 

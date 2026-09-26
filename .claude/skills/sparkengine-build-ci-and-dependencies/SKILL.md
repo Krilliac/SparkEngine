@@ -344,11 +344,18 @@ Advisory (job-level `continue-on-error: true`; never block merges):
 advisory, but configure/compile failures block). Canonical required-vs-advisory
 fine print: `sparkengine-validation-and-qa` §10.
 
-**Shipping symbols:** `windows-shipping` (MinSizeRel) links **without** `/DEBUG`, so it emits no PDB
-and no PDB path, and `linux-shipping` links with `-s`. Runtime `SymFromAddr` symbolication and
-post-mortem minidump analysis of a shipping build change accordingly, and `SparkCrashReporter`
-output for a shipping build is address-only. The `SPARK_STRIP_DEBUG_SYMBOLS` compile definition was
-removed (zero remaining source references) — external tooling keying on it must stop.
+**Shipping symbols (BLD-100):** `STRIP_DEBUG_SYMBOLS=ON` keeps symbols out of the runtime
+*package*, not out of the build. MSVC always links `/DEBUG` (`/PDBALTPATH:%_PDB%` outside Debug:
+the image records only the PDB name plus GUID/age). ELF images link `-Wl,--build-id=sha1`; with the
+option on everything compiles `-g`; only `SPARK_SHIPPED_IMAGE_TARGETS` get
+`cmake/SparkSplitDebugLink.cmake` as their per-target `LINKER_LAUNCHER`, which splits
+`<image>.debug` off and strips the image at link time, before any `POST_BUILD` step. Every other
+image (SparkTests, probes) links `-g0 -Wl,--strip-all` outside Debug, so no `.debug` is produced. PDBs and
+`.debug` files install only into the `symbols` component (never in `CPACK_COMPONENTS_ALL`);
+`tools/shipping_symbol_manifest.py` proves each staged image maps to exactly one symbol file. A new
+installed image target must be added to `SPARK_SHIPPED_IMAGE_TARGETS` (root CMakeLists.txt) —
+`ShippingManifest_SymbolManifestTool` fails otherwise. The `SPARK_STRIP_DEBUG_SYMBOLS` compile
+definition was removed (zero remaining source references) — external tooling keying on it must stop.
 
 **Windows installers are opt-in:** `SPARK_REQUIRE_WINDOWS_INSTALLERS` (set ON by `release.yml`)
 makes the NSIS/WiX generators mandatory. Without it a developer `cpack` on Windows produces a ZIP

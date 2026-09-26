@@ -230,6 +230,43 @@ TEST(SceneManifest_ParseDropsOutOfRootAssetPaths)
     EXPECT_EQ(manifest.audioPaths[0], std::string("audio/ok.wav"));
 }
 
+TEST(SceneManifest_ParseDropsBackslashTraversalOnEveryHost)
+{
+    // Windows is the primary platform, so a backslash must split components on
+    // every host: a manifest validated on Linux must not escape once it ships.
+    std::string content = "name = Portable\n"
+                          "mesh = models\\..\\..\\outside.mesh\n"
+                          "texture = ..\\..\\windows\\system32\\config\\sam\n"
+                          "texture = textures\\ok.dds\n"
+                          "audio = audio\\sub\\..\\ok.wav\n";
+
+    auto manifest = SceneManifest::ParseFromString(content);
+
+    EXPECT_EQ(manifest.meshPaths.size(), 0u);
+    ASSERT_EQ(manifest.texturePaths.size(), 1u);
+    EXPECT_EQ(manifest.texturePaths[0], std::string("textures\\ok.dds"));
+    ASSERT_EQ(manifest.audioPaths.size(), 1u);
+    EXPECT_EQ(manifest.audioPaths[0], std::string("audio\\sub\\..\\ok.wav"));
+}
+
+TEST(SceneManifest_ParseDropsControlBytePaths)
+{
+    // An embedded NUL would make every c_str() consumer open "models/" instead of
+    // the path that was validated.
+    std::string content = "name = Noise\n";
+    content += std::string("mesh = models/\0nul.mesh\n", 24);
+    content += "texture = textures/\x01"
+               "bell.dds\n";
+    content += "audio = audio/ok.wav\n";
+
+    auto manifest = SceneManifest::ParseFromString(content);
+
+    EXPECT_EQ(manifest.meshPaths.size(), 0u);
+    EXPECT_EQ(manifest.texturePaths.size(), 0u);
+    ASSERT_EQ(manifest.audioPaths.size(), 1u);
+    EXPECT_EQ(manifest.audioPaths[0], std::string("audio/ok.wav"));
+}
+
 TEST(SceneManifest_ParseWhitespaceHandling)
 {
     std::string content = "  name  =  Spaced Out  \n"
@@ -239,6 +276,42 @@ TEST(SceneManifest_ParseWhitespaceHandling)
     EXPECT_EQ(manifest.name, std::string("Spaced Out"));
     EXPECT_EQ(manifest.meshPaths.size(), 1u);
     EXPECT_EQ(manifest.meshPaths[0], std::string("models/test.mesh"));
+}
+
+// The two caps sit far above the SparkFuzzSceneManifest smoke's -max_len, so the
+// fuzz target cannot reach them; these pin the boundary behaviour instead.
+TEST(SceneManifest_EntryCapKeepsExactlyTheLimit)
+{
+    const size_t cap = Spark::Streaming::MAX_SCENE_MANIFEST_ENTRIES;
+    std::string content = "name = Crowd\n";
+    content.reserve(content.size() + (cap + 3) * 10);
+    for (size_t i = 0; i < cap + 3; ++i)
+    {
+        content += (i % 2 == 0) ? "mesh = m\n" : "audio = a\n";
+    }
+    ASSERT_TRUE(content.size() <= Spark::Streaming::MAX_SCENE_MANIFEST_BYTES);
+
+    const auto manifest = SceneManifest::ParseFromString(content);
+
+    EXPECT_EQ(manifest.name, std::string("Crowd"));
+    EXPECT_EQ(manifest.TotalAssetCount(), cap);
+    EXPECT_EQ(manifest.meshPaths.size() + manifest.audioPaths.size(), cap);
+}
+
+TEST(SceneManifest_ByteCapRejectsOversizedContent)
+{
+    const size_t limit = Spark::Streaming::MAX_SCENE_MANIFEST_BYTES;
+    std::string content = "name = Big\nmesh = models/a.mesh\n";
+    content.resize(limit, '\n');
+
+    const auto atLimit = SceneManifest::ParseFromString(content);
+    EXPECT_EQ(atLimit.name, std::string("Big"));
+    EXPECT_EQ(atLimit.TotalAssetCount(), 1u);
+
+    content.push_back('\n');
+    const auto overLimit = SceneManifest::ParseFromString(content);
+    EXPECT_TRUE(overLimit.name.empty());
+    EXPECT_EQ(overLimit.TotalAssetCount(), 0u);
 }
 
 // ============================================================================

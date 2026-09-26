@@ -8,6 +8,7 @@
 
 #include "SparkGamePlatformer.h"
 #include "PlatformerEngineSystems.h"
+#include "PlatformerLevelFlow.h"
 #include "Player/PlatformerPlayerController.h"
 #include "Level/PlatformerLevelSystem.h"
 #include "Collectible/PlatformerCollectibleSystem.h"
@@ -23,7 +24,6 @@
 
 #include <Spark/ModuleDllMain.h>
 
-#include <algorithm>
 #include <cmath>
 
 // =============================================================================
@@ -83,7 +83,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
 
     // Initialize player controller (movement, jumping, abilities)
     m_playerController = std::make_unique<Platformer::PlatformerPlayerController>();
-    if (!m_playerController->Initialize(context, m_checkpointSystem.get()))
+    if (!m_playerController->Initialize(context, m_checkpointSystem.get(), m_levelSystem.get()))
     {
         console.LogError("[Platformer] Failed to initialize player controller");
         return false;
@@ -115,12 +115,16 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
 
     // Wire engine subsystems (audio, events, save, destruction, replay, coroutines, localization)
     m_engineSystems = std::make_unique<Platformer::PlatformerEngineSystems>();
-    if (!m_engineSystems->Initialize(context))
+    const Platformer::PlatformerProgressSystems progressSystems{m_levelSystem.get(), m_collectibleSystem.get(),
+                                                                m_checkpointSystem.get(), m_playerController.get()};
+    if (!m_engineSystems->Initialize(context, progressSystems))
     {
         console.LogError("[Platformer] Failed to initialize engine systems");
         return false;
     }
 
+    m_levelFlow = std::make_unique<Platformer::PlatformerLevelFlow>(
+        *m_levelSystem, *m_playerController, *m_collectibleSystem, *m_hazardSystem, *m_checkpointSystem);
     if (!LoadPlayableLevel(0))
     {
         console.LogError("[Platformer] Failed to start the first playable level");
@@ -166,19 +170,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
 
 bool SparkGamePlatformerModule::LoadPlayableLevel(uint32_t index)
 {
-    if (!m_levelSystem || !m_checkpointSystem || !m_collectibleSystem || !m_playerController ||
-        !m_levelSystem->LoadLevel(index))
-    {
-        return false;
-    }
-
-    const auto spawn = m_levelSystem->GetCurrentSpawnPoint();
-    m_checkpointSystem->ResetLevel(index);
-    m_checkpointSystem->SetActiveLevel(index);
-    m_checkpointSystem->SetLevelSpawn(spawn.x, spawn.y, spawn.z);
-    m_collectibleSystem->ResetLevel(index);
-    m_playerController->Respawn();
-    return true;
+    return m_levelFlow && m_levelFlow->StartLevel(index);
 }
 
 void SparkGamePlatformerModule::OnUnload()
@@ -194,7 +186,8 @@ void SparkGamePlatformerModule::OnUnload()
     console.LogInfo("[Platformer] Unloading Spark Platformer module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module shutting down");
 
-    // Shutdown in reverse initialization order
+    // Shutdown in reverse initialization order; the flow only references the systems below.
+    m_levelFlow.reset();
     if (m_engineSystems)
     {
         m_engineSystems->Shutdown();
@@ -242,42 +235,9 @@ void SparkGamePlatformerModule::OnUpdate(float deltaTime)
     if (!m_initialized || m_paused || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
         return;
 
-    m_levelSystem->Update(deltaTime);
-    m_playerController->Update(deltaTime);
-    m_collectibleSystem->Update(deltaTime);
-    m_hazardSystem->Update(deltaTime);
-
-    const auto playerPosition = m_playerController->GetPlayerPosition();
-    for (const auto& pickup : m_collectibleSystem->CheckCollection(playerPosition.x, playerPosition.y, playerPosition.z,
-                                                                   m_playerController->IsMagnetActive()))
-    {
-        switch (pickup.type)
-        {
-        case Platformer::CollectibleType::AbilityOrb:
-            m_playerController->UnlockAbility(pickup.abilityType);
-            break;
-        case Platformer::CollectibleType::HealthPickup:
-        case Platformer::CollectibleType::ExtraLife:
-            m_playerController->GrantLives(std::max(1, pickup.value));
-            break;
-        default:
-            break;
-        }
-    }
-
-    m_checkpointSystem->CheckActivation(playerPosition.x, playerPosition.y, playerPosition.z);
-
-    float knockbackX = 0.0f;
-    float knockbackY = 0.0f;
-    const int damage = m_hazardSystem->CheckHazardCollision(playerPosition.x, playerPosition.y, playerPosition.z,
-                                                            knockbackX, knockbackY);
-    if (damage > 0 && m_playerController->TakeDamage(damage))
-        m_playerController->ApplyImpulse(knockbackX, knockbackY);
-
-    if (m_levelSystem->TryCompleteAtPosition(playerPosition.x, playerPosition.y, playerPosition.z, 0))
+    if (m_levelFlow->StepFrame(deltaTime).goalReached)
         Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Goal reached. Use platformer_next to continue.");
 
-    m_checkpointSystem->Update(deltaTime);
     m_cameraSystem->Update(deltaTime, m_playerController->GetPlayerPosition());
     m_engineSystems->Update(deltaTime);
 }
@@ -287,13 +247,7 @@ void SparkGamePlatformerModule::OnFixedUpdate(float fixedDeltaTime)
     if (!m_initialized || m_paused || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
         return;
 
-    m_playerController->FixedUpdate(fixedDeltaTime);
-
-    const auto playerPosition = m_playerController->GetPlayerPosition();
-    float windX = 0.0f;
-    float windY = 0.0f;
-    m_hazardSystem->GetWindForce(playerPosition.x, playerPosition.y, playerPosition.z, windX, windY);
-    m_playerController->ApplyImpulse(windX * fixedDeltaTime, windY * fixedDeltaTime);
+    m_levelFlow->StepFixed(fixedDeltaTime);
 }
 
 void SparkGamePlatformerModule::OnRender()

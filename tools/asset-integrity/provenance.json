@@ -68,6 +68,34 @@
       }
     },
     {
+      "id": "openworld-procedural-generator",
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural OpenWorld region ground tiles and music loops emitted by generate_openworld_assets() in tools/generate_default_assets.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound (MOD-360)",
+      "evidence": [
+        "tools/generate_default_assets.py",
+        "GameModules/SparkGameOpenWorld/asset-references.json"
+      ],
+      "files": {
+        "Audio/OpenWorld/Music/ow_coast.wav": "35897aad9aa8d2aa228c4d880d7df8c8e2f8c772e5e7eac88eacc92b2a850c94",
+        "Audio/OpenWorld/Music/ow_combat.wav": "59b1e0d60e88eeb02d5f7ac6c7b3ac9ff0d494f48b687952d79bd1fdafc00bac",
+        "Audio/OpenWorld/Music/ow_desert.wav": "93211a7ef94a9e55c2383d55397d69054c158e9b7d643ee3c302c6841a4b3b02",
+        "Audio/OpenWorld/Music/ow_dragon.wav": "be52020ce772973b82bd0e8200309dd522d919d01a228ab693a1af871cedeea6",
+        "Audio/OpenWorld/Music/ow_forest.wav": "1ed2fc47f8b2332a8e2d1de1e17d228745c3d76794b3c7d42515f22f3814adb4",
+        "Audio/OpenWorld/Music/ow_meadow_dawn.wav": "0a03345782e4ea2b2e0286d2d0688e3f3d3de7c81eb7f705aff6f27b9ebec1b9",
+        "Audio/OpenWorld/Music/ow_mountain.wav": "8da821e906bdc4a25d81e375791506882fc0f321d091e735dd1d77bb4ef9795b",
+        "Audio/OpenWorld/Music/ow_tundra.wav": "562d54abffe1b38e29efa8538150cda13f3a0bb37caadef81954d42325aa1837",
+        "Audio/OpenWorld/Music/ow_village.wav": "dc9682d02efef32c1045c5076da283225f7daeaf79a1375c6034d85e3e15f19a",
+        "Models/OpenWorld/Ground/ashwind_desert_ground.obj": "bd727a76dca8b44b605eac5e9f9daf1fbc5c2d3f586e0b97f7726ce60e0392bd",
+        "Models/OpenWorld/Ground/cinderforge_caldera_ground.obj": "c7ea061631554d9ed0d8842ed9df34828b8d3632ac24936926f3fa74fe3000ec",
+        "Models/OpenWorld/Ground/emerald_meadows_ground.obj": "70430ee1e1d001761c86ba292e842808cfc222007f5b7c9044aa425bba4344c8",
+        "Models/OpenWorld/Ground/frosthollow_tundra_ground.obj": "f08e9c4a5ae37d05fd4a8659e187584d692fbd1656a0100c0e381fad3b21a922",
+        "Models/OpenWorld/Ground/ironwood_forest_ground.obj": "2e004603e68038c59edc1030b5f603e16a414e2308bfd02f439559e1dd40becc",
+        "Models/OpenWorld/Ground/mistveil_swamp_ground.obj": "410f9ac55c3b709f65f616f254b8c79218f2a3b8c95f4da75e935d3e717de489",
+        "Models/OpenWorld/Ground/stormcrest_mountains_ground.obj": "1e970039548ae62b111503da51d8ba572194131156088bddbe4805cbd6809069",
+        "Models/OpenWorld/Ground/sunbreak_coast_ground.obj": "24f4561949aacb7b60a0bf7824b8f79c57b397543bfe1654840d6727dd34cd0d"
+      }
+    },
+    {
       "id": "mmo-legacy-generator",
       "license": "CC0-1.0",
       "provenance": "Procedural legacy MMO texture/audio output of tools/generate_mmo_assets.py, which retains CC0 for these outputs; bytes reproduce exactly and are hash-bound",
@@ -168,6 +196,271 @@
           "format": "blender-provenance"
         }
       ]
+    },
+    {
+      "id": "showcase-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGame/provenance.json",
+        "Art/Blender/SparkGame/showcase_kit.blend",
+        "tools/blender/author_showcase_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGame/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/Showcase/Kit/"
+      ]
+    },
+    {
+      "id": "fps-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameFPS/provenance.json",
+        "Art/Blender/SparkGameFPS/fps_kit.blend",
+        "tools/blender/author_fps_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameFPS/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/FPS/Kit/"
+      ]
+    },
+    {
+      "id": "mmo-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameMMO/provenance.json",
+        "Art/Blender/SparkGameMMO/mmo_kit.blend",
+        "tools/blender/author_mmo_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameMMO/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/MMO/Kit/"
+      ]
+    },
+    {
+      "id": "mmofps-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameMMOFPS/provenance.json",
+        "Art/Blender/SparkGameMMOFPS/mmofps_kit.blend",
+        "tools/blender/author_mmofps_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameMMOFPS/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/MMOFPS/Kit/"
+      ]
+    },
+    {
+      "id": "openworld-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameOpenWorld/provenance.json",
+        "Art/Blender/SparkGameOpenWorld/openworld_kit.blend",
+        "tools/blender/author_openworld_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameOpenWorld/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/OpenWorld/Kit/"
+      ]
+    },
+    {
+      "id": "rpg-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameRPG/provenance.json",
+        "Art/Blender/SparkGameRPG/rpg_kit.blend",
+        "tools/blender/author_rpg_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameRPG/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/RPG/Kit/"
+      ]
+    },
+    {
+      "id": "arpg-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameARPG/provenance.json",
+        "Art/Blender/SparkGameARPG/arpg_kit.blend",
+        "tools/blender/author_arpg_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameARPG/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/ARPG/Kit/"
+      ]
+    },
+    {
+      "id": "rts-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameRTS/provenance.json",
+        "Art/Blender/SparkGameRTS/rts_kit.blend",
+        "tools/blender/author_rts_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameRTS/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/RTS/Kit/"
+      ]
+    },
+    {
+      "id": "racing-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRacing/racing_kit.blend via tools/blender/author_racing_kit.py; hash-bound by Art/Blender/SparkGameRacing/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameRacing/provenance.json",
+        "Art/Blender/SparkGameRacing/racing_kit.blend",
+        "tools/blender/author_racing_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameRacing/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/Racing/Kit/"
+      ]
+    },
+    {
+      "id": "platformer-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGamePlatformer/provenance.json",
+        "Art/Blender/SparkGamePlatformer/platformer_kit.blend",
+        "tools/blender/author_platformer_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGamePlatformer/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/Platformer/Kit/"
+      ]
+    },
+    {
+      "id": "visualscript-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameVisualScript/provenance.json",
+        "Art/Blender/SparkGameVisualScript/visualscript_kit.blend",
+        "tools/blender/author_visualscript_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameVisualScript/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/VisualScript/Kit/"
+      ]
+    },
+    {
+      "id": "module-music-composer",
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound",
+      "evidence": [
+        "tools/audio/compose_module_music.py",
+        "Tests/Tools/test_module_music.py"
+      ],
+      "files": {
+        "Audio/Platformer/Music/boss_theme.wav": "a9900471e8d68262e22ca2dd2a1844bd60dc116565aa28e6906bcd8585031492",
+        "Audio/Platformer/Music/game_over.wav": "db0a9ba1c5fbf027914e657b27f60bb3374ac45228891d6b93d3823b9f8566a3",
+        "Audio/Platformer/Music/victory_jingle.wav": "18c841f60feb4c65dc816691b5fa0d2a2a91fddd3ef51fe7b1794959bf2d7127",
+        "Audio/Platformer/Music/world_1_theme.wav": "606b0b90442b58af9a4a910887d2b383d0e545fdfdf0f505ad04509a3260bf04",
+        "Audio/Platformer/Music/world_2_theme.wav": "b467102729977188688ca7ec60cbead55c55d97e46fe3fe0eda98fb690908f76",
+        "Audio/RPG/Music/rpg_boss.wav": "a9fa0b9478fe9378b585360c43fcbe9551faf47db69dca2843ad3250fec5fb0d",
+        "Audio/RPG/Music/rpg_dungeon.wav": "4394267ac3ef463ab3d0236f40866dfebd4b5d3aad06466d812ace0539863f04",
+        "Audio/RPG/Music/rpg_forest.wav": "b904a8b4bd8499ed928835e37b99d27df560815d6d194413ac39c8116f0e64d9",
+        "Audio/RPG/Music/rpg_victory.wav": "4124febe99eb7cad11ab606a46ab3bf88ec6f08078c88f05ebb227366aeae17a",
+        "Audio/RPG/Music/rpg_village.wav": "96fb78264a83a0995ca78bbe301690a0343a0972724c241a36e4ff26cea88d90",
+        "Audio/Racing/Music/countdown.wav": "c785f237c41d9e0d0ef2026b0aa1af1d664cdd8eccee6a8a2cfe945653f97fe5",
+        "Audio/Racing/Music/defeat.wav": "0bcf4ad192abb02a1302619cec790ce9e79ecec203daadd2b7bd61c9076d1de8",
+        "Audio/Racing/Music/final_lap.wav": "d49a2cf098b887469422b5842474d77bc97446b9bfa6ac8c8d189d3ff02c9483",
+        "Audio/Racing/Music/race_track_01.wav": "bee2006b451485f539174c33b72b411ceb1aba817ce992aeaada1eda02253187",
+        "Audio/Racing/Music/race_track_02.wav": "d99d00b74b44fd367e0613adc325a60688850ac41b36595065beb6671b231131",
+        "Audio/Racing/Music/racing_menu.wav": "dc086221aa1aa307da52a38f900256dcad2ed6212772a896dfa33cffcab1b502",
+        "Audio/Racing/Music/victory.wav": "03d61e9f62aa1e826083c86215ea3b1ef3429dadfc7ea2c298e392f8ac2cc888",
+        "Audio/RTS/Music/battle_music.wav": "33f704264b4ed14a8771ef185b21b77f93d9c2bc1fbf84ad44674ad79d24dd48",
+        "Audio/RTS/Music/defeat.wav": "d235ffac459c7167c58ee88972afa87fcb421baf61df3a36852a5cbe94c32bd5",
+        "Audio/RTS/Music/faction_1_theme.wav": "eb55a1e0047a3b057c5e2505a48b44ffd6e613bcdda829ecf50d4e2353fcf332",
+        "Audio/RTS/Music/faction_2_theme.wav": "d696b9ce18ea5ead5ec1f596b9df7f8052b7523eacfaa9525d5f83979425cb6c",
+        "Audio/RTS/Music/faction_3_theme.wav": "103abb57c61715da4242ffc6ad2296418eef8ff3b802927eacc59b4b4a129c01",
+        "Audio/RTS/Music/victory.wav": "d302acf73dedbc09c84d1df21c9b3776e3db3b8653616bdf7a03c403fcd69606"
+      }
     },
     {
       "id": "starter-model-pipeline",

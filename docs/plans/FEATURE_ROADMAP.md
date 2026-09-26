@@ -25,7 +25,8 @@ Features planned for future development cycles.
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
-| **Console Platform Support** | Medium | PlayStation and Xbox platform layers. Requires NDAs and dev kits. |
+| **Console Platform Support** | Medium | PlayStation, Xbox and Nintendo platform layers. Requires the official developer programs (PlayStation Partners, ID@Xbox, Nintendo Developer Portal), their NDA SDKs and dev kits; community/homebrew SDKs are excluded because they cannot ship. Deferred by OD-12 and gated by PLT-250. |
+| **Steam Deck / SteamOS Target** | Medium | The console-class target reachable without a platform NDA: SteamOS on AMD with Vulkan, native Linux or Proton. Future item DECK-100, outside `stable-v1`: [`steam-deck-target.md`](steam-deck-target.md). |
 | **Asset Marketplace** | Medium | Infrastructure for sharing and distributing game assets and plugins. |
 | **Full Mobile Parity** | Medium | Complete iOS/Android platform layer with build pipeline. |
 | **Advanced Audio DSP** | Low | Reverb zones, EQ, compressor, procedural audio effects. |
@@ -56,7 +57,7 @@ were not shipped as v1.0.0 and do not establish stable-v1 support or certificati
 - Mesh Shader Pipeline (meshlet clustering, amplification/mesh shaders)
 - Virtual Texturing (feedback-driven page streaming)
 - DXR 1.1 Ray Tracing (reflections, shadows, AO, GI, denoising)
-- Shader Graph (35+ nodes, HLSL generation)
+- Shader Graph (34 node types, HLSL generation)
 - Visual Scripting (64 node palette entries across 9 categories, compiles to AngelScript)
 - HeroEngine-inspired MMO networking (AreaServers, WorldServer, seamless migration)
 - 64 `*Panel.h` editor-class inventory; registration, operation coverage, and collaborative editing remain separately gated

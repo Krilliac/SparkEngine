@@ -374,6 +374,9 @@ TEST(DebugHookManager_PointToString)
 
 TEST(DebugHookManager_MacroDispatch)
 {
+    // The SPARK_DEBUG_HOOK* macros are the engine's instrumentation points.
+    // They dispatch in Debug/Release/RelWithDebInfo and must compile to nothing
+    // in Shipping (MinSizeRel defines SPARK_SHIPPING via the root CMakeLists.txt).
     ResetHookManager();
     auto& mgr = Spark::DebugHookManager::GetInstance();
     int callCount = 0;
@@ -382,7 +385,6 @@ TEST(DebugHookManager_MacroDispatch)
                                [&](const Spark::DebugHookContext&) { callCount++; });
 
     SPARK_DEBUG_HOOK(FrameBegin, 1, 0.016f);
-    EXPECT_EQ(callCount, 1);
 
     // System macro
     int sysCount = 0;
@@ -390,7 +392,25 @@ TEST(DebugHookManager_MacroDispatch)
                            [&](const Spark::DebugHookContext&) { sysCount++; });
 
     SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Physics", 0.0);
+
+#if SPARK_DEBUG_HOOKS_ENABLED
+    EXPECT_EQ(callCount, 1);
     EXPECT_EQ(sysCount, 1);
+#else
+    EXPECT_EQ(callCount, 0);
+    EXPECT_EQ(sysCount, 0);
+#endif
+}
+
+TEST(DebugHookManager_ShippingConfigurationCompilesHooksOut)
+{
+    // SPARK_BUILD_SHIPPING and SPARK_SHIPPING are defined together for
+    // MinSizeRel; the hook gate must follow the build profile, not drift.
+#if defined(SPARK_BUILD_SHIPPING)
+    EXPECT_EQ(SPARK_DEBUG_HOOKS_ENABLED, 0);
+#else
+    EXPECT_EQ(SPARK_DEBUG_HOOKS_ENABLED, 1);
+#endif
 }
 
 // ============================================================================
@@ -416,14 +436,14 @@ TEST(DebugHookManager_SystemLifecycleTrace)
                      { trace.push_back("PostShutdown:" + std::string(ctx.systemName)); });
 
     // Simulate a system lifecycle: Physics init, Audio init, Audio shutdown, Physics shutdown
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Physics", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Physics", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Audio", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Audio", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Audio", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Audio", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Physics", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Physics", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPreInit, "Physics", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostInit, "Physics", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPreInit, "Audio", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostInit, "Audio", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPreShutdown, "Audio", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostShutdown, "Audio", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPreShutdown, "Physics", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostShutdown, "Physics", 0.0);
 
     EXPECT_EQ(trace.size(), 8u);
     EXPECT_EQ(trace[0], std::string("PreInit:Physics"));
@@ -486,9 +506,9 @@ TEST(DebugHookManager_ErrorWarningHooks)
     auto h2 = mgr.Register(Spark::DebugHookPoint::WarningRaised, "WarnCollector",
                            [&](const Spark::DebugHookContext& ctx) { warnings.push_back(std::string(ctx.message)); });
 
-    SPARK_DEBUG_HOOK_MESSAGE(ErrorRaised, "GPU device lost");
-    SPARK_DEBUG_HOOK_MESSAGE(WarningRaised, "Texture pool 80% full");
-    SPARK_DEBUG_HOOK_MESSAGE(ErrorRaised, "Shader compilation failed");
+    mgr.DispatchDebugMessage(Spark::DebugHookPoint::ErrorRaised, "GPU device lost");
+    mgr.DispatchDebugMessage(Spark::DebugHookPoint::WarningRaised, "Texture pool 80% full");
+    mgr.DispatchDebugMessage(Spark::DebugHookPoint::ErrorRaised, "Shader compilation failed");
 
     EXPECT_EQ(errors.size(), 2u);
     EXPECT_EQ(warnings.size(), 1u);
@@ -526,10 +546,10 @@ TEST(DebugHookManager_ResourceLoadTracking)
                                                  std::string(ctx.resourceName), ctx.durationMs});
                            });
 
-    SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, "materials/brick.sparkmat", 0.0);
-    SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, "materials/brick.sparkmat", 12.3);
-    SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, "scripts/player.as", 0.0);
-    SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, "scripts/player.as", 2.1);
+    mgr.DispatchResource(Spark::DebugHookPoint::ResourceLoadBegin, "materials/brick.sparkmat", 0.0);
+    mgr.DispatchResource(Spark::DebugHookPoint::ResourceLoadComplete, "materials/brick.sparkmat", 12.3);
+    mgr.DispatchResource(Spark::DebugHookPoint::ResourceLoadBegin, "scripts/player.as", 0.0);
+    mgr.DispatchResource(Spark::DebugHookPoint::ResourceLoadComplete, "scripts/player.as", 2.1);
 
     EXPECT_EQ(events.size(), 4u);
     EXPECT_EQ(events[0].pointName, std::string("ResourceLoadBegin"));
@@ -561,10 +581,10 @@ TEST(DebugHookManager_SceneTransitionHooks)
         mgr.Register(Spark::DebugHookPoint::ScenePostUnload, "SceneTracker", [&](const Spark::DebugHookContext& ctx)
                      { transitions.push_back({"PostUnload", std::string(ctx.sceneName)}); });
 
-    SPARK_DEBUG_HOOK_SCENE(ScenePreLoad, "Level01");
-    SPARK_DEBUG_HOOK_SCENE(ScenePostLoad, "Level01");
-    SPARK_DEBUG_HOOK_SCENE(ScenePreUnload, "Level01");
-    SPARK_DEBUG_HOOK_SCENE(ScenePostUnload, "Level01");
+    mgr.DispatchScene(Spark::DebugHookPoint::ScenePreLoad, "Level01");
+    mgr.DispatchScene(Spark::DebugHookPoint::ScenePostLoad, "Level01");
+    mgr.DispatchScene(Spark::DebugHookPoint::ScenePreUnload, "Level01");
+    mgr.DispatchScene(Spark::DebugHookPoint::ScenePostUnload, "Level01");
 
     EXPECT_EQ(transitions.size(), 4u);
     EXPECT_EQ(transitions[0].first, std::string("PreLoad"));
@@ -597,12 +617,12 @@ TEST(DebugHookManager_FullFrameSimulation)
                            { events.push_back("FrameEnd:" + std::to_string(ctx.frameNumber)); });
 
     // Simulate a full frame
-    SPARK_DEBUG_HOOK(FrameBegin, 42, 0.016f);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Physics", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", 2.1);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "ECS.Render", 0.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.Render", 5.3);
-    SPARK_DEBUG_HOOK(FrameEnd, 42, 0.016f);
+    mgr.Dispatch(Spark::DebugHookPoint::FrameBegin, 42, 0.016f);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPreUpdate, "Physics", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "Physics", 2.1);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPreUpdate, "ECS.Render", 0.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "ECS.Render", 5.3);
+    mgr.Dispatch(Spark::DebugHookPoint::FrameEnd, 42, 0.016f);
 
     EXPECT_EQ(events.size(), 6u);
     EXPECT_EQ(events[0], std::string("FrameBegin:42"));
@@ -629,10 +649,10 @@ TEST(DebugHookManager_SelectiveSystemFilter)
                                        physicsUpdates++;
                                });
 
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", 2.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Audio", 0.5);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.AI", 1.0);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", 2.1);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "Physics", 2.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "Audio", 0.5);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "ECS.AI", 1.0);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "Physics", 2.1);
 
     EXPECT_EQ(physicsUpdates, 2);
 }

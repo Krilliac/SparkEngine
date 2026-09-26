@@ -37,6 +37,16 @@ namespace Spark
         GraphicsBackend GetRecommendedBackend();
 
         /**
+ * @brief Backend the operator named explicitly through SPARK_RHI_BACKEND, regardless of availability
+ *
+ * Unlike GetRecommendedBackend(), this never substitutes another backend when the named one is
+ * unavailable, so callers can refuse to start instead of silently degrading.
+ * @return The named GPU backend, GraphicsBackend::None for "null"/"none"/"headless", or
+ *         GraphicsBackend::Auto when the variable is unset, empty, "auto" or unrecognized
+ */
+        GraphicsBackend GetRequestedBackendOverride();
+
+        /**
  * @brief Create an RHI device for the specified backend
  * @param backend Graphics API to use (Auto will pick the best available)
  * @return Unique pointer to the created device, or nullptr on failure

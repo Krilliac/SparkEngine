@@ -348,22 +348,6 @@ namespace
         }
     }
 
-    void TestFullMemoryDumpCredentialGate()
-    {
-        using Spark::CrashHandlerDetail::CanCaptureFullMemoryDump;
-
-        Check(!CanCaptureFullMemoryDump(false, {}, {}, {}, {}), "full-memory capture remains opt-in");
-        Check(CanCaptureFullMemoryDump(true, {}, {}, {}, {}), "explicit local-only full-memory capture is permitted");
-        Check(!CanCaptureFullMemoryDump(true, "github-pat", {}, {}, {}),
-              "GitHub credentials disable full-memory capture");
-        Check(!CanCaptureFullMemoryDump(true, {}, "smtp-password", {}, {}),
-              "SMTP credentials disable full-memory capture");
-        Check(!CanCaptureFullMemoryDump(true, {}, {}, "https://crashes.example.test/upload", {}),
-              "upload endpoints disable full-memory capture because their paths may be bearer capabilities");
-        Check(!CanCaptureFullMemoryDump(true, {}, {}, {}, "https://relay.example.test/crash"),
-              "proxy endpoints disable full-memory capture because their paths may be bearer capabilities");
-    }
-
     void TestArtifactConfinementAndDisclosure(const fs::path& scratch)
     {
         const fs::path reportDirectory = scratch / "confined-report";
@@ -658,14 +642,8 @@ namespace
         Check(result == 2, "watcher reports a rejected ready manifest as a failure");
     }
 
-    void TestReadOnlyReporterLaunchPolicyAndManifestNames()
+    void TestManifestPublicationNames()
     {
-        Check(Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(false, false),
-              "read-only reporter may launch only for interactive local review");
-        Check(!Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(true, false),
-              "configured engine upload retains ownership");
-        Check(!Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(false, true),
-              "headless mode never launches reporter UI");
         Check(Spark::CrashHandlerDetail::CrashManifestReadyName("0000000000000001") ==
                       "crash_manifest_0000000000000001.json" &&
                   Spark::CrashHandlerDetail::IsCrashManifestReadyName("crash_manifest_0000000000000001.json"),
@@ -890,14 +868,13 @@ int main(int argc, char* argv[])
     TestMalformedInputRejectedWithoutPartialMutation(scratch.path);
     TestNoUploadPathIsTruthfulAndDoesNotExposeCredentials(scratch.path);
     TestConsentArchiveAllowlistAndReporterResolution(scratch.path);
-    TestFullMemoryDumpCredentialGate();
     TestArtifactConfinementAndDisclosure(scratch.path);
     TestPrivateArtifactDirectoryCreation(scratch.path);
     TestManifestAndArtifactSubstitutionRejection(scratch.path);
     TestIdentitySwapAndBoundedLogRead(scratch.path);
     TestSequentialNonfatalManifestLifecycle(scratch.path);
     TestMalformedReadyManifestFailsClosed(scratch.path);
-    TestReadOnlyReporterLaunchPolicyAndManifestNames();
+    TestManifestPublicationNames();
     TestUtf8CrashArtifactPathConversion();
     if (argc == 2)
         TestAutomaticIssuesAreOptInBoundedAndIdempotent(scratch.path, argv[1]);

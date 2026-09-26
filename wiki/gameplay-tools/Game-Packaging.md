@@ -21,6 +21,12 @@ remains empty and no manifest is published.
 > `Assets/assets.integrity.json` check must not be described as proof of the
 > packaged input. RDY-020 remains open until the in-profile package smoke and
 > verified-input handoff are implemented.
+>
+> The CMake/CPack stable-v1 runtime package installs only the SparkGameFPS
+> runtime asset closure, with no `NOASSERTION` asset (OD-09), and ships a
+> derived stable-v1 manifest; see
+> [Asset Pipeline](Asset-Pipeline.md#stable-v1-package-asset-profile-od-09).
+> `GamePackager` does not apply package profiles.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -247,7 +253,7 @@ If any step produces fatal errors, the pipeline returns early with `success = fa
 
 ```bash
 cmake --preset windows-release
-cmake --build build --config Release
+cmake --build build/windows-release --config Release
 ```
 
 ### Step 2: Package from C++

@@ -1,7 +1,7 @@
 /**
  * @file MMOEngineSystems.cpp
  * @brief Wires SparkGameMMO into engine subsystems: weather, abilities, dialogue,
- *        cinematic, AI, animation, events, and localization
+ *        cinematic, AI, animation, events, localization and the TownSquare prop kit
  */
 
 #include "MMOEngineSystems.h"
@@ -18,6 +18,7 @@
 #include "Engine/AI/BehaviorTreeNodes.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
+#include "Engine/ECS/Components.h"
 // NOTE: AbilitySystem.h and AnimationSystem.h have include-order conflicts
 // with IEngineContext.h forward declarations. Access through opaque pointers only.
 
@@ -49,10 +50,11 @@ namespace MMO
         RegisterAnimationStateMachines();
         SubscribeEvents();
         RegisterLocalization();
+        PlaceTownSquareKit();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO: Engine subsystems wired (8 integrations)");
-        console.LogInfo("[MMO] Engine subsystems wired (8 integrations)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO: Engine subsystems wired (9 integrations)");
+        console.LogInfo("[MMO] Engine subsystems wired (9 integrations)");
         return true;
     }
 
@@ -75,6 +77,7 @@ namespace MMO
 
     void MMOEngineSystems::Shutdown()
     {
+        RemoveTownSquareKit();
         m_eventHandles.clear();
         m_context = nullptr;
         m_runtimeSeconds = 0.0f;
@@ -82,6 +85,59 @@ namespace MMO
         m_sampledWorldHour = 8.0f;
         m_sampledWeatherIntensity = 0.0f;
         m_initialized = false;
+    }
+
+    // =========================================================================
+    // TownSquare kit — Blender-authored props (tools/blender/author_mmo_kit.py)
+    // =========================================================================
+
+    void MMOEngineSystems::PlaceTownSquareKit()
+    {
+        auto* world = m_context->GetWorld();
+        if (!world)
+            return;
+
+        // Meters, pivot at the ground-contact centre, front facing +Z (source Art/Blender/SparkGameMMO/mmo_kit.blend).
+        // They sit around the fountain of Assets/Scenes/MMO/town_square.scene: the quest board and vendor stall
+        // north of it between the two market stalls, facing the default spawn; the ShadowCrypt portal south of
+        // it, facing the square. The OBJ/MTL base colours render without a material.
+        struct KitProp
+        {
+            const char* name;
+            const char* meshPath;
+            DirectX::XMFLOAT3 position;
+            float yawDegrees;
+        };
+        static constexpr KitProp kit[] = {
+            {"TownSquare_QuestBoard", "Assets/Models/MMO/Kit/quest_board.obj", {7.0f, 0.0f, 12.0f}, 180.0f},
+            {"TownSquare_VendorStall", "Assets/Models/MMO/Kit/vendor_stall.obj", {-7.0f, 0.0f, 12.0f}, 180.0f},
+            {"TownSquare_ShadowCryptPortal", "Assets/Models/MMO/Kit/portal_ring.obj", {0.0f, 0.0f, -24.0f}, 0.0f},
+        };
+        for (const KitProp& prop : kit)
+        {
+            EntityID entity = world->CreateEntity(prop.name);
+            world->AddComponent<Transform>(entity, Transform{prop.position, {0.0f, prop.yawDegrees, 0.0f}, {1, 1, 1}});
+            MeshRenderer& renderer = world->AddComponent<MeshRenderer>(entity);
+            renderer.meshPath = prop.meshPath;
+            m_kitEntities.push_back(static_cast<uint32_t>(entity));
+        }
+        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] TownSquare: placed " + std::to_string(m_kitEntities.size()) +
+                                                    " kit props from Assets/Models/MMO/Kit");
+    }
+
+    void MMOEngineSystems::RemoveTownSquareKit()
+    {
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (world)
+        {
+            for (uint32_t entityId : m_kitEntities)
+            {
+                auto entity = static_cast<EntityID>(entityId);
+                if (world->GetRegistry().valid(entity))
+                    world->DestroyEntity(entity);
+            }
+        }
+        m_kitEntities.clear();
     }
 
     // =========================================================================

@@ -203,6 +203,9 @@ inline TestOutcome ClassifyTestOutcome(const TestOutcomeInputs& inputs)
 // measurement in a test is environment-sensitive — a name-pattern entry there
 // waives the entire test, including assertions that are not flaky at all.
 // --warn-is-error promotes waivers back to hard failures.
+// Every call site needs an assertionWaivers entry (file, test, sites, named
+// owner, future expiry) in Tests/test-warning-waivers.json; CI runs
+// Tools/validate_test_warnings.py and fails on unregistered or expired sites.
 // ============================================================================
 
 #define EXPECT_WARN_ONLY(expr, reason)                                                                                 \

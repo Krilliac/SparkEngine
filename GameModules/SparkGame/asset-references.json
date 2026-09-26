@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGame",
+  "description": "Every asset path SparkGame source names (the Engine Showcase exhibit props placed by GameplayShowcase::SpawnExhibit), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Models/Showcase/Kit/display_pedestal.obj",
+      "sha256": "6ba3a6374df480ffd8a050a6e3ee305feb8462896527472c5f251ae5e3c3a6a3",
+      "kind": "static mesh (OBJ + MTL)",
+      "provenanceRule": "showcase-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Showcase/Kit/info_signpost.obj",
+      "sha256": "2ba5226d954dd1d748b815a965eb2e519804e60f01d7553c1baaba862fefe309",
+      "kind": "static mesh (OBJ + MTL)",
+      "provenanceRule": "showcase-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Showcase/Kit/light_pylon.obj",
+      "sha256": "13a599e13e7cfcecd07bb46cea88f897186aeb63faefe37a26a60124868cd94d",
+      "kind": "static mesh (OBJ + MTL)",
+      "provenanceRule": "showcase-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Showcase/Kit/supply_crate.obj",
+      "sha256": "ca676c239d2f81246f84b0c0821cce731a657c374069331ddd23c627bc3f79ea",
+      "kind": "static mesh (OBJ + MTL)",
+      "provenanceRule": "showcase-blender-kit"
+    }
+  ]
+}

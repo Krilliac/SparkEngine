@@ -1,9 +1,11 @@
 /**
  * @file RPGNPCSystem.cpp
- * @brief NPC behavior, schedule updates, patrol movement, and disposition
+ * @brief NPC behavior, schedule updates, NavMesh schedule travel, patrol movement, and disposition
  */
 
 #include "RPGNPCSystem.h"
+#include "World/RPGWorldSetup.h"
+#include "Engine/AI/NavMesh.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -17,6 +19,48 @@
 
 namespace RPG
 {
+
+    namespace
+    {
+        /// NPCs stand on the module's ground plane: every NPC and schedule post is authored at y = 0.
+        constexpr float kGroundHeight = 0.0f;
+
+        /// How far off the NavMesh an NPC or its post may be and still be snapped onto it.
+        constexpr float kNavMeshSnapRadius = 5.0f;
+
+        float HorizontalDistance(float fromX, float fromZ, float toX, float toZ)
+        {
+            const float dx = toX - fromX;
+            const float dz = toZ - fromZ;
+            return std::sqrt(dx * dx + dz * dz);
+        }
+
+        /// Index of the schedule entry covering hour, or -1 when none does.
+        int FindScheduleEntry(const std::vector<NPCScheduleEntry>& schedule, float hour)
+        {
+            for (size_t index = 0; index < schedule.size(); ++index)
+            {
+                const NPCScheduleEntry& entry = schedule[index];
+                // Ranges with start > end wrap past midnight (e.g. 20-6).
+                const bool inRange = entry.startHour < entry.endHour
+                                         ? (hour >= entry.startHour && hour < entry.endHour)
+                                         : (hour >= entry.startHour || hour < entry.endHour);
+                if (inRange)
+                    return static_cast<int>(index);
+            }
+            return -1;
+        }
+    } // namespace
+
+    /// One area's baked NavMesh and the query every NPC of that area plans with.
+    struct RPGNPCSystem::AreaNavigation
+    {
+        std::unique_ptr<Spark::AI::NavMeshData> navMesh;
+        std::unique_ptr<Spark::AI::NavMeshQuery> query;
+    };
+
+    RPGNPCSystem::RPGNPCSystem() = default;
+    RPGNPCSystem::~RPGNPCSystem() = default;
 
     bool RPGNPCSystem::Initialize(Spark::IEngineContext* context)
     {
@@ -35,17 +79,156 @@ namespace RPG
 
         // Advance world time
         m_worldTime += deltaTime;
-        m_worldHour += deltaTime / SECONDS_PER_GAME_HOUR;
-        if (m_worldHour >= 24.0f)
-            m_worldHour -= 24.0f;
+        // fmod keeps the hour in [0, 24) even across a frame longer than a game day.
+        m_worldHour = std::fmod(m_worldHour + deltaTime / SECONDS_PER_GAME_HOUR, 24.0f);
 
         UpdateSchedules();
+        // Patrols skip NPCs still on a schedule route, so a route that ends this frame is not walked twice.
         UpdatePatrols(deltaTime);
+        UpdateRoutes(deltaTime);
     }
 
     void RPGNPCSystem::Shutdown()
     {
         m_npcs.clear();
+        m_areaNavigation.clear();
+    }
+
+    // === Navigation ===
+
+    bool RPGNPCSystem::BuildAreaNavigation(const std::vector<RPGAreaInfo>& areas)
+    {
+        std::vector<uint32_t> npcAreas;
+        for (const auto& [id, npc] : m_npcs)
+        {
+            if (std::find(npcAreas.begin(), npcAreas.end(), npc.areaId) == npcAreas.end())
+                npcAreas.push_back(npc.areaId);
+        }
+        std::sort(npcAreas.begin(), npcAreas.end());
+
+        bool allBuilt = true;
+        for (const uint32_t areaId : npcAreas)
+        {
+            const auto area = std::find_if(areas.begin(), areas.end(),
+                                           [areaId](const RPGAreaInfo& info) { return info.areaId == areaId; });
+            if (area == areas.end() || area->boundsMinY > kGroundHeight || area->boundsMaxY < kGroundHeight ||
+                !(area->boundsMaxX > area->boundsMinX) || !(area->boundsMaxZ > area->boundsMinZ))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "RPG NPC area %u has no ground to navigate", areaId);
+                allBuilt = false;
+                continue;
+            }
+
+            // One quad over the area footprint, wound counter-clockwise seen from above (+Y normal).
+            const std::vector<XMFLOAT3> vertices = {
+                {area->boundsMinX, kGroundHeight, area->boundsMinZ},
+                {area->boundsMinX, kGroundHeight, area->boundsMaxZ},
+                {area->boundsMaxX, kGroundHeight, area->boundsMaxZ},
+                {area->boundsMaxX, kGroundHeight, area->boundsMinZ},
+            };
+            const std::vector<uint32_t> indices = {0, 1, 2, 0, 2, 3};
+            allBuilt = BuildAreaNavMesh(areaId, vertices, indices) && allBuilt;
+        }
+        return allBuilt;
+    }
+
+    bool RPGNPCSystem::BuildAreaNavMesh(uint32_t areaId, const std::vector<XMFLOAT3>& vertices,
+                                        const std::vector<uint32_t>& indices)
+    {
+        if (vertices.empty() || indices.size() < 3)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "RPG NavMesh bake for area %u has no geometry", areaId);
+            return false;
+        }
+
+        // Area footprints span up to two kilometres. Cells grow with the footprint so the voxel grid
+        // stays near kMaxBakeCells per side (a bake takes milliseconds, not seconds), edges stay
+        // unsplit (edgeMaxLen 0) and detail heights are sampled no closer than the footprint itself.
+        // That keeps the triangle count, and with it the builder's pairwise adjacency pass and every
+        // linear query, small. The detail distance must stay >= 0.9 cells: below that the Recast
+        // backend turns sampling off, and Recast's detail pass then triangulates an empty hull.
+        float minX = vertices.front().x;
+        float maxX = minX;
+        float minZ = vertices.front().z;
+        float maxZ = minZ;
+        for (const XMFLOAT3& vertex : vertices)
+        {
+            minX = std::min(minX, vertex.x);
+            maxX = std::max(maxX, vertex.x);
+            minZ = std::min(minZ, vertex.z);
+            maxZ = std::max(maxZ, vertex.z);
+        }
+        constexpr float kMaxBakeCells = 400.0f;
+        Spark::AI::NavMeshBuildSettings settings;
+        settings.cellSize = std::max(1.0f, std::max(maxX - minX, maxZ - minZ) / kMaxBakeCells);
+        settings.cellHeight = 0.2f;
+        settings.edgeMaxLen = 0.0f;
+        settings.detailSampleDist = 4096.0f;
+
+        auto navigation = std::make_unique<AreaNavigation>();
+        navigation->navMesh = Spark::AI::NavMeshBuilder::Build(vertices, indices, settings);
+        if (!navigation->navMesh || navigation->navMesh->triangles.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "RPG NavMesh bake for area %u produced no walkable surface",
+                            areaId);
+            return false;
+        }
+        navigation->query = std::make_unique<Spark::AI::NavMeshQuery>(navigation->navMesh.get());
+
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG NavMesh for area %u: %zu triangles", areaId,
+                       navigation->navMesh->triangles.size());
+        m_areaNavigation[areaId] = std::move(navigation);
+
+        // Routes planned on the replaced NavMesh are stale: replan from where each NPC stands.
+        for (auto& [id, npc] : m_npcs)
+        {
+            if (npc.areaId != areaId)
+                continue;
+            npc.route.clear();
+            npc.routeIndex = 0;
+            npc.activeScheduleEntry = -1;
+        }
+        return true;
+    }
+
+    bool RPGNPCSystem::PlanRoute(NPCData& npc, const XMFLOAT3& destination)
+    {
+        npc.route.clear();
+        npc.routeIndex = 0;
+
+        const auto navigation = m_areaNavigation.find(npc.areaId);
+        if (navigation == m_areaNavigation.end())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "RPG NPC %s has no NavMesh in area %u; staying put",
+                           npc.name.c_str(), npc.areaId);
+            return false;
+        }
+
+        const Spark::AI::NavMeshQuery& query = *navigation->second->query;
+        const Spark::AI::NavMeshHit from = query.FindNearestPoint({npc.posX, npc.posY, npc.posZ}, kNavMeshSnapRadius);
+        const Spark::AI::NavMeshHit to = query.FindNearestPoint(destination, kNavMeshSnapRadius);
+        if (!from.hit || !to.hit)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "RPG NPC %s or its post is off the area %u NavMesh; staying put",
+                           npc.name.c_str(), npc.areaId);
+            return false;
+        }
+
+        Spark::AI::PathRequest request;
+        request.start = from.position;
+        request.end = to.position;
+        const Spark::AI::PathResult path = query.FindPath(request);
+        if (!path.found || path.path.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "RPG NPC %s has no NavMesh path to its post; staying put",
+                           npc.name.c_str());
+            return false;
+        }
+
+        npc.route.reserve(path.path.size());
+        for (const Spark::AI::PathPoint& point : path.path)
+            npc.route.push_back(point.position);
+        return true;
     }
 
     void RPGNPCSystem::RegisterDefaultNPCs()
@@ -284,38 +467,152 @@ namespace RPG
         return NPCDisposition::Friendly;
     }
 
+    // === Persistence ===
+
+    NPCSystemSnapshot RPGNPCSystem::CaptureState() const
+    {
+        NPCSystemSnapshot snapshot;
+        snapshot.worldTime = m_worldTime;
+        snapshot.worldHour = m_worldHour;
+        snapshot.npcs.reserve(m_npcs.size());
+        for (const auto& [id, npc] : m_npcs)
+        {
+            snapshot.npcs.push_back({id, npc.dispositionValue, npc.currentBehavior, npc.posX, npc.posY, npc.posZ,
+                                     npc.currentWaypointIndex, npc.waypointWaitTimer});
+        }
+        // m_npcs is unordered; sort so identical state always serializes identically.
+        std::sort(snapshot.npcs.begin(), snapshot.npcs.end(),
+                  [](const NPCPersistentState& left, const NPCPersistentState& right)
+                  { return left.npcId < right.npcId; });
+        return snapshot;
+    }
+
+    NPCSystemSnapshot RPGNPCSystem::CaptureDefaultState()
+    {
+        // Registering on a private instance yields the defaults without Initialize()'s logging or context.
+        RPGNPCSystem defaults;
+        defaults.RegisterDefaultNPCs();
+        return defaults.CaptureState();
+    }
+
+    bool RPGNPCSystem::ValidateState(const NPCSystemSnapshot& snapshot) const
+    {
+        if (!std::isfinite(snapshot.worldTime) || snapshot.worldTime < 0.0f || !std::isfinite(snapshot.worldHour) ||
+            snapshot.worldHour < 0.0f || snapshot.worldHour >= 24.0f || snapshot.npcs.size() != m_npcs.size())
+            return false;
+
+        std::vector<uint32_t> seen;
+        seen.reserve(snapshot.npcs.size());
+        for (const NPCPersistentState& state : snapshot.npcs)
+        {
+            const auto npc = m_npcs.find(state.npcId);
+            if (npc == m_npcs.end() || std::find(seen.begin(), seen.end(), state.npcId) != seen.end())
+                return false;
+            seen.push_back(state.npcId);
+
+            // A patrol index must address the NPC's own path; NPCs without a path always sit at 0.
+            const int waypointLimit = std::max(1, static_cast<int>(npc->second.patrolPath.size()));
+            if (state.dispositionValue < 0 || state.dispositionValue > 100 || state.behavior >= NPCBehavior::Count ||
+                !std::isfinite(state.posX) || !std::isfinite(state.posY) || !std::isfinite(state.posZ) ||
+                state.currentWaypointIndex < 0 || state.currentWaypointIndex >= waypointLimit ||
+                !std::isfinite(state.waypointWaitTimer) || state.waypointWaitTimer < 0.0f)
+                return false;
+        }
+        return true;
+    }
+
+    bool RPGNPCSystem::RestoreState(const NPCSystemSnapshot& snapshot)
+    {
+        if (!ValidateState(snapshot))
+            return false;
+
+        m_worldTime = snapshot.worldTime;
+        m_worldHour = snapshot.worldHour;
+        for (const NPCPersistentState& state : snapshot.npcs)
+        {
+            NPCData& npc = m_npcs.at(state.npcId);
+            npc.dispositionValue = state.dispositionValue;
+            npc.disposition = GetDispositionTier(state.dispositionValue);
+            npc.currentBehavior = state.behavior;
+            npc.posX = state.posX;
+            npc.posY = state.posY;
+            npc.posZ = state.posZ;
+            npc.currentWaypointIndex = state.currentWaypointIndex;
+            npc.waypointWaitTimer = state.waypointWaitTimer;
+            // Routes are not saved: the next update replans from the restored position toward the current post.
+            npc.route.clear();
+            npc.routeIndex = 0;
+            npc.activeScheduleEntry = -1;
+        }
+        return true;
+    }
+
     // === Internal updates ===
 
     void RPGNPCSystem::UpdateSchedules()
     {
         for (auto& [id, npc] : m_npcs)
         {
-            if (npc.schedule.empty())
+            const int entryIndex = FindScheduleEntry(npc.schedule, m_worldHour);
+            if (entryIndex < 0 || entryIndex == npc.activeScheduleEntry)
                 continue;
 
-            for (const auto& entry : npc.schedule)
+            npc.activeScheduleEntry = entryIndex;
+            const NPCScheduleEntry& entry = npc.schedule[static_cast<size_t>(entryIndex)];
+            npc.currentBehavior = entry.behavior;
+
+            // A patrolling NPC resumes its round at the waypoint it was heading for; others go to the entry's post.
+            XMFLOAT3 destination{entry.posX, entry.posY, entry.posZ};
+            if (entry.behavior == NPCBehavior::Patrol && !npc.patrolPath.empty())
             {
-                bool inRange = false;
-                if (entry.startHour < entry.endHour)
+                const PatrolWaypoint& waypoint = npc.patrolPath[static_cast<size_t>(npc.currentWaypointIndex)];
+                destination = {waypoint.x, waypoint.y, waypoint.z};
+            }
+
+            if (HorizontalDistance(npc.posX, npc.posZ, destination.x, destination.z) > ARRIVAL_DISTANCE)
+            {
+                PlanRoute(npc, destination);
+            }
+            else
+            {
+                npc.route.clear();
+                npc.routeIndex = 0;
+            }
+        }
+    }
+
+    void RPGNPCSystem::UpdateRoutes(float deltaTime)
+    {
+        for (auto& [id, npc] : m_npcs)
+        {
+            float budget = WALK_SPEED * deltaTime;
+            while (npc.routeIndex < npc.route.size())
+            {
+                const XMFLOAT3& target = npc.route[npc.routeIndex];
+                const float dx = target.x - npc.posX;
+                const float dy = target.y - npc.posY;
+                const float dz = target.z - npc.posZ;
+                const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist <= budget)
                 {
-                    // Normal range (e.g., 6-20)
-                    inRange = (m_worldHour >= entry.startHour && m_worldHour < entry.endHour);
-                }
-                else
-                {
-                    // Wrapping range (e.g., 20-6)
-                    inRange = (m_worldHour >= entry.startHour || m_worldHour < entry.endHour);
+                    npc.posX = target.x;
+                    npc.posY = target.y;
+                    npc.posZ = target.z;
+                    budget -= dist;
+                    ++npc.routeIndex;
+                    continue;
                 }
 
-                if (inRange)
-                {
-                    npc.currentBehavior = entry.behavior;
-                    // Move to schedule position (in a real game this would be pathfinding)
-                    npc.posX = entry.posX;
-                    npc.posY = entry.posY;
-                    npc.posZ = entry.posZ;
-                    break;
-                }
+                npc.posX += dx / dist * budget;
+                npc.posY += dy / dist * budget;
+                npc.posZ += dz / dist * budget;
+                break;
+            }
+
+            if (!npc.route.empty() && npc.routeIndex >= npc.route.size())
+            {
+                npc.route.clear();
+                npc.routeIndex = 0;
             }
         }
     }
@@ -324,7 +621,7 @@ namespace RPG
     {
         for (auto& [id, npc] : m_npcs)
         {
-            if (npc.currentBehavior != NPCBehavior::Patrol || npc.patrolPath.empty())
+            if (npc.currentBehavior != NPCBehavior::Patrol || npc.patrolPath.empty() || !npc.route.empty())
                 continue;
 
             auto& wp = npc.patrolPath[npc.currentWaypointIndex];
@@ -348,8 +645,7 @@ namespace RPG
             else
             {
                 // Move toward waypoint
-                float moveSpeed = 3.0f; // Units per second
-                float step = moveSpeed * deltaTime;
+                float step = WALK_SPEED * deltaTime;
                 if (step > dist)
                     step = dist;
 

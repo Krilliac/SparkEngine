@@ -9,12 +9,19 @@
  */
 #pragma once
 
+#include "Utils/LogMacros.h"
+
+#include <algorithm>
 #include <cerrno>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <system_error>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 
 #ifdef _WIN32
@@ -31,14 +38,15 @@
 namespace Terrafront::SavePaths
 {
     /**
-     * Non-blocking, process-wide ownership guard for one persistence file.
+     * Process-wide exclusive ownership guard for one persistence file.
      *
-     * The lock is held for the lifetime of an opened store, not merely around
-     * the final rename. That deliberately serializes each store's initial read,
-     * all in-memory mutations, and every commit, preventing a second authority
-     * process from loading a stale snapshot and later replacing newer data.
-     * The small `.lock` file is persistent; ownership is the OS handle/lock, so
-     * a crashed process releases it automatically without stale-lock cleanup.
+     * Ownership is the OS handle/lock on a small persistent `<target>.lock`
+     * file, so a crashed process releases it automatically without stale-lock
+     * cleanup. Locks conflict between processes and between two guards in the
+     * same process. Stores use it transaction-scoped (TFDatabase: lock,
+     * reload, validate, apply, atomic write, unlock) so several authority
+     * processes can share one TF_SAVE_ROOT, or lifetime-scoped where a store
+     * still assumes a single authority (TFOutfitStore, TFSocialSystem).
      */
     class ExclusiveFileLock
     {
@@ -92,6 +100,26 @@ namespace Terrafront::SavePaths
             return true;
         }
 
+        /**
+         * Acquire the lock, waiting up to `timeout` while another owner holds
+         * it. Errors other than contention fail immediately. On timeout `ec`
+         * carries the contention error from the last attempt.
+         */
+        bool Lock(const std::filesystem::path& target, std::chrono::milliseconds timeout, std::error_code& ec) noexcept
+        {
+            const auto deadline = std::chrono::steady_clock::now() + timeout;
+            auto backoff = std::chrono::milliseconds(1);
+            for (;;)
+            {
+                if (TryLock(target, ec))
+                    return true;
+                if (!IsContention(ec) || std::chrono::steady_clock::now() >= deadline)
+                    return false;
+                std::this_thread::sleep_for(backoff);
+                backoff = std::min(backoff * 2, std::chrono::milliseconds(16));
+            }
+        }
+
         void Unlock() noexcept
         {
 #ifdef _WIN32
@@ -121,6 +149,16 @@ namespace Terrafront::SavePaths
         }
 
       private:
+        static bool IsContention(const std::error_code& ec) noexcept
+        {
+#ifdef _WIN32
+            return ec.category() == std::system_category() &&
+                   (ec.value() == ERROR_SHARING_VIOLATION || ec.value() == ERROR_LOCK_VIOLATION);
+#else
+            return ec.category() == std::generic_category() && (ec.value() == EWOULDBLOCK || ec.value() == EAGAIN);
+#endif
+        }
+
         std::filesystem::path m_lockPath;
 #ifdef _WIN32
         HANDLE m_handle = INVALID_HANDLE_VALUE;
@@ -277,21 +315,191 @@ namespace Terrafront::SavePaths
         return false;
     }
 
-    /** Replace destination with a completed temporary file without deleting destination first. */
-    inline bool AtomicReplace(const std::filesystem::path& temporary, const std::filesystem::path& destination,
-                              std::error_code& ec)
+    /** Crash windows inside WriteDurableReplace, in commit order. */
+    enum class DurableCommitStage : uint8_t
     {
-#ifdef _WIN32
-        if (::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        StagedAndSynced, ///< staging file complete and flushed; destination still holds the previous commit
+        Renamed,         ///< staging file renamed over the destination; parent directory not yet synced
+    };
+
+    /** Observer called at each DurableCommitStage (`destination` is the path being committed). */
+    using DurableCommitStageObserver = void (*)(DurableCommitStage stage, const std::filesystem::path& destination);
+
+    /**
+     * Crash-drill seam (DATA-120 recovery drill): the observer WriteDurableReplace notifies at each
+     * DurableCommitStage. It is null in production. Tests install one in a spawned child process that
+     * _exit()s at a stage, so the parent can prove the store reopens to its last committed state after a
+     * process dies inside the commit. The observer must not throw (WriteDurableReplace is noexcept).
+     */
+    inline DurableCommitStageObserver& DurableCommitObserver() noexcept
+    {
+        static DurableCommitStageObserver observer = nullptr;
+        return observer;
+    }
+
+    /**
+     * Durably replace `destination` with `bytes`; the only commit primitive for TERRAFRONT stores.
+     *
+     * The bytes are staged in `<destination>.tmp`, forced to stable storage, and then swapped over the
+     * destination in one rename, so a crash or power loss leaves either the complete previous file or the
+     * complete new one, never an empty or truncated "committed" file:
+     *   - POSIX: any stale staging entry is unlinked (a directory there fails the write), the staging file is
+     *     created O_CREAT|O_EXCL|O_NOFOLLOW (mode 0600, the stores hold credential hashes), written in full,
+     *     fsync()ed and closed, renamed over the destination, and the parent directory is fsync()ed so the
+     *     rename itself survives power loss.
+     *   - Windows: the staging file is created CREATE_NEW, written in full, FlushFileBuffers()ed, closed, and
+     *     moved with MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), which does not return
+     *     until the rename is flushed.
+     * The caller must create the parent directory and serialize writers of one destination (ExclusiveFileLock).
+     * Return contract: false means nothing was committed; any failure before the swap removes the staging
+     * file and leaves the destination untouched. true means the destination now holds `bytes`, and callers
+     * must adopt that state. Once the rename has succeeded the commit is never reported as failed: if the
+     * POSIX parent-directory sync then fails (the rename is visible but may not survive power loss), the
+     * function still returns true, leaves that error in `ec` as a durability warning, and logs it; the next
+     * successful write re-establishes durability. `ec` is cleared on a fully durable commit.
+     */
+    inline bool WriteDurableReplace(const std::filesystem::path& destination, std::string_view bytes,
+                                    std::error_code& ec) noexcept
+    {
+        ec.clear();
+        if (destination.empty() || !destination.has_filename())
         {
-            ec.clear();
-            return true;
+            ec = std::make_error_code(std::errc::invalid_argument);
+            return false;
         }
-        ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
-        return false;
+        std::filesystem::path temporary = destination;
+        temporary += ".tmp";
+        std::error_code removeEc;
+
+#ifdef _WIN32
+        if (!::DeleteFileW(temporary.c_str()) && ::GetLastError() != ERROR_FILE_NOT_FOUND)
+        {
+            ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return false;
+        }
+        HANDLE file =
+            ::CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return false;
+        }
+        const auto failStaged = [&](DWORD error) noexcept
+        {
+            ::CloseHandle(file);
+            ec = std::error_code(static_cast<int>(error), std::system_category());
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        };
+        std::string_view remaining = bytes;
+        while (!remaining.empty())
+        {
+            const DWORD chunk = static_cast<DWORD>(std::min<size_t>(remaining.size(), 1u << 30));
+            DWORD written = 0;
+            if (!::WriteFile(file, remaining.data(), chunk, &written, nullptr))
+                return failStaged(::GetLastError());
+            if (written == 0)
+                return failStaged(ERROR_WRITE_FAULT);
+            remaining.remove_prefix(written);
+        }
+        if (!::FlushFileBuffers(file))
+            return failStaged(::GetLastError());
+        if (!::CloseHandle(file))
+        {
+            ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        }
+        if (const DurableCommitStageObserver observer = DurableCommitObserver())
+            observer(DurableCommitStage::StagedAndSynced, destination);
+        if (!::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
+            ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        }
+        if (const DurableCommitStageObserver observer = DurableCommitObserver())
+            observer(DurableCommitStage::Renamed, destination);
+        return true;
 #else
+        // A crashed writer can leave a staging file behind; the destination's writer lock is held, so it is
+        // stale. unlink() refuses directories, so an occupied staging path still fails the write.
+        if (::unlink(temporary.c_str()) != 0 && errno != ENOENT)
+        {
+            ec = std::error_code(errno, std::generic_category());
+            return false;
+        }
+        const int fd = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+        if (fd < 0)
+        {
+            ec = std::error_code(errno, std::generic_category());
+            return false;
+        }
+        const auto failStaged = [&](int error, bool closeFd) noexcept
+        {
+            if (closeFd)
+                (void)::close(fd);
+            ec = std::error_code(error, std::generic_category());
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        };
+        std::string_view remaining = bytes;
+        while (!remaining.empty())
+        {
+            const ssize_t written = ::write(fd, remaining.data(), remaining.size());
+            if (written < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                return failStaged(errno, true);
+            }
+            if (written == 0)
+                return failStaged(EIO, true);
+            remaining.remove_prefix(static_cast<size_t>(written));
+        }
+        if (::fsync(fd) != 0)
+            return failStaged(errno, true);
+        if (::close(fd) != 0)
+            return failStaged(errno, false);
+        if (const DurableCommitStageObserver observer = DurableCommitObserver())
+            observer(DurableCommitStage::StagedAndSynced, destination);
+
         std::filesystem::rename(temporary, destination, ec);
-        return !ec;
+        if (ec)
+        {
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        }
+        if (const DurableCommitStageObserver observer = DurableCommitObserver())
+            observer(DurableCommitStage::Renamed, destination);
+
+        // The new bytes are committed and visible from here on, so the result is true whatever happens next;
+        // a directory-sync failure only means the rename may not survive power loss.
+        std::filesystem::path parent = destination.parent_path();
+        if (parent.empty())
+            parent = ".";
+        int syncError = 0;
+        const int dirFd = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        if (dirFd < 0)
+        {
+            syncError = errno;
+        }
+        else
+        {
+            // EINVAL means the filesystem cannot sync a directory at all (the rename is as durable as it gets).
+            if (::fsync(dirFd) != 0 && errno != EINVAL)
+                syncError = errno;
+            (void)::close(dirFd);
+        }
+        if (syncError != 0)
+        {
+            ec = std::error_code(syncError, std::generic_category());
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] %s committed, but syncing its directory failed (%s); the commit may not survive "
+                           "power loss until the next successful write",
+                           Utf8ForLog(destination).c_str(), ec.message().c_str());
+        }
+        return true;
 #endif
     }
 

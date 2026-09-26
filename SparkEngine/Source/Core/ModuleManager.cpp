@@ -10,6 +10,7 @@
 #include "IGameModule.h"
 #include "Spark/ModuleABI.h"
 #include "Spark/Version.h"
+#include "Utils/CrashHandler.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/InvalidStateDetector.h"
 #include "Utils/LocalFileCache.h"
@@ -416,10 +417,10 @@ namespace
             return false;
         }
 
-        const Spark::ModuleCompatibilityStatus status = Spark::CheckModuleCompatibility(&descriptor);
-        if (status != Spark::ModuleCompatibilityStatus::Compatible)
+        std::string rejection = DescribeModuleCompatibilityRejection(&descriptor);
+        if (!rejection.empty())
         {
-            error = Spark::ModuleCompatibilityStatusName(status);
+            error = std::move(rejection);
             return false;
         }
 
@@ -605,6 +606,76 @@ namespace
 #endif
 } // namespace
 
+std::string DescribeModuleCompatibilityRejection(const SparkModuleCompatibilityDescriptor* descriptor)
+{
+    const Spark::ModuleCompatibilityStatus status = Spark::CheckModuleCompatibility(descriptor);
+    if (status == Spark::ModuleCompatibilityStatus::Compatible)
+        return {};
+
+    constexpr std::string_view kExactMatchPolicy =
+        "stable-v1 module ABI is exact-match only (N-1 modules are not loaded); rebuild the module against this "
+        "host's Spark SDK and toolchain";
+    const SparkModuleCompatibilityDescriptor& expected = Spark::kExpectedModuleCompatibility;
+    const std::string_view reason = Spark::ModuleCompatibilityStatusName(status);
+
+    if (status == Spark::ModuleCompatibilityStatus::MissingDescriptor)
+    {
+        return std::format("{}: host expects descriptor format {}, module declares none; {}", reason,
+                           expected.descriptorVersion, kExactMatchPolicy);
+    }
+
+    // CheckModuleCompatibility only rejects DescriptorTooSmall after reading
+    // structSize, so no field past it is inspected for a truncated descriptor.
+    if (status == Spark::ModuleCompatibilityStatus::DescriptorTooSmall)
+    {
+        return std::format("{}: field 'struct_size' host expects at least {}, module declares {}; {}", reason,
+                           expected.structSize, descriptor->structSize, kExactMatchPolicy);
+    }
+
+    // Every remaining status names one exact-match field. The field names are
+    // the .sparkabi sidecar keys so a diagnostic can be compared with the file.
+    struct FieldDiagnostic
+    {
+        Spark::ModuleCompatibilityStatus status;
+        std::string_view sidecarKey;
+        uint32_t SparkModuleCompatibilityDescriptor::*member;
+    };
+    constexpr std::array<FieldDiagnostic, 10> kFields = {{
+        {Spark::ModuleCompatibilityStatus::BadMagic, "magic", &SparkModuleCompatibilityDescriptor::magic},
+        {Spark::ModuleCompatibilityStatus::DescriptorVersionMismatch, "format",
+         &SparkModuleCompatibilityDescriptor::descriptorVersion},
+        {Spark::ModuleCompatibilityStatus::SDKVersionMismatch, "sdk_version",
+         &SparkModuleCompatibilityDescriptor::sdkVersion},
+        {Spark::ModuleCompatibilityStatus::RuntimeABIVersionMismatch, "runtime_abi_version",
+         &SparkModuleCompatibilityDescriptor::runtimeABIVersion},
+        {Spark::ModuleCompatibilityStatus::CompilerFamilyMismatch, "compiler_family",
+         &SparkModuleCompatibilityDescriptor::compilerFamily},
+        {Spark::ModuleCompatibilityStatus::CompilerABIVersionMismatch, "compiler_abi_version",
+         &SparkModuleCompatibilityDescriptor::compilerABIVersion},
+        {Spark::ModuleCompatibilityStatus::CxxLanguageLevelMismatch, "cxx_language_level",
+         &SparkModuleCompatibilityDescriptor::cxxLanguageLevel},
+        {Spark::ModuleCompatibilityStatus::RuntimeLibraryMismatch, "runtime_library",
+         &SparkModuleCompatibilityDescriptor::runtimeLibrary},
+        {Spark::ModuleCompatibilityStatus::IteratorDebugLevelMismatch, "iterator_debug_level",
+         &SparkModuleCompatibilityDescriptor::iteratorDebugLevel},
+        {Spark::ModuleCompatibilityStatus::PointerSizeMismatch, "pointer_size",
+         &SparkModuleCompatibilityDescriptor::pointerSize},
+    }};
+
+    for (const FieldDiagnostic& field : kFields)
+    {
+        if (field.status == status)
+        {
+            return std::format("{}: field '{}' host expects {}, module declares {}; {}", reason, field.sidecarKey,
+                               expected.*field.member, descriptor->*field.member, kExactMatchPolicy);
+        }
+    }
+
+    // A status added to ModuleABI.h without a field entry above still fails
+    // closed; it only loses the per-field detail.
+    return std::format("{}; {}", reason, kExactMatchPolicy);
+}
+
 void ModuleManager::SetImGuiInjection(void* context, void* allocFn, void* freeFn, void* userData)
 {
     s_imguiContext = context;
@@ -704,6 +775,36 @@ ModuleManager::LifecycleEvidence ModuleManager::GetLastTeardownLifecycleEvidence
     return s_lastTeardownLifecycleEvidence;
 }
 
+void ModuleManager::PublishLifecycleEvidence() const
+{
+    PublishTeardownLifecycleEvidence(m_lifecycleEvidence);
+}
+
+std::string ModuleManager::LibraryTargetName(std::string_view libraryPath)
+{
+    // Split on either separator so a Windows-style path is handled on POSIX too.
+    const size_t separator = libraryPath.find_last_of("/\\");
+    std::string_view filename = separator == std::string_view::npos ? libraryPath : libraryPath.substr(separator + 1);
+    const size_t extension = filename.rfind('.');
+    if (extension != std::string_view::npos && extension > 0)
+        filename = filename.substr(0, extension);
+#ifndef _WIN32
+    // CMAKE_SHARED_LIBRARY_PREFIX is "lib" on Linux and macOS; the Windows
+    // record names the bare target, so strip it to keep one identity.
+    if (filename.size() > 3 && filename.starts_with("lib"))
+        filename.remove_prefix(3);
+#endif
+    return std::string(filename);
+}
+
+std::string ModuleManager::FormatLifecycleRecord(const ModuleLifecycleRecord& record)
+{
+    return std::format("SPARK_MODULE_LIFECYCLE module={} create={} load={} update={} fixed={} render={} unload={} "
+                       "destroy={} faults={}",
+                       LibraryTargetName(record.libraryPath), record.createModule, record.onLoad, record.onUpdate,
+                       record.onFixedUpdate, record.onRender, record.onUnload, record.destroyModule, record.faults);
+}
+
 bool ModuleManager::LoadModule(const std::string& path)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -711,6 +812,9 @@ bool ModuleManager::LoadModule(const std::string& path)
 
     const auto failLoad = [&](std::string message)
     {
+        // A rejection after dlopen has already unmapped the image; drop its
+        // recorded range so a later crash never attributes frames to it.
+        RefreshCrashModuleIdentities();
         m_lastLoadError = std::move(message);
         console.LogError(m_lastLoadError);
         return false;
@@ -792,6 +896,9 @@ bool ModuleManager::LoadModule(const std::string& path)
         return failLoad(std::format("Failed to load module '{}' (staged as '{}') with dlopen(RTLD_NOW): {}", path,
                                     loadPath, err ? err : "unknown dynamic-loader error"));
     }
+    // Record the module's build-id before any export is called, so a crash in
+    // it symbolicates from the symbol store (tools/ops/symbolicate_crash.py).
+    RefreshCrashModuleIdentities();
 #endif
 
     // Re-read the in-image descriptor as defense in depth after the sidecar
@@ -810,14 +917,12 @@ bool ModuleManager::LoadModule(const std::string& path)
         return failLoad(message);
     }
 
-    const SparkModuleCompatibilityDescriptor* compatibility = compatibilityFn();
-    const Spark::ModuleCompatibilityStatus compatibilityStatus = Spark::CheckModuleCompatibility(compatibility);
-    if (compatibilityStatus != Spark::ModuleCompatibilityStatus::Compatible)
+    const std::string compatibilityRejection = DescribeModuleCompatibilityRejection(compatibilityFn());
+    if (!compatibilityRejection.empty())
     {
         const std::string message =
-            std::format("Module '{}' rejected before injection/factory: {}. Rebuild it with the same "
-                        "Spark SDK, compiler ABI, C++ mode, architecture, and runtime configuration.",
-                        path, Spark::ModuleCompatibilityStatusName(compatibilityStatus));
+            std::format("Module '{}' in-image compatibility descriptor rejected before injection/factory: {}", path,
+                        compatibilityRejection);
         CloseModuleLibrary(handle);
         return failLoad(message);
     }
@@ -899,11 +1004,15 @@ bool ModuleManager::LoadModule(const std::string& path)
 
         auto info = instance->GetModuleInfo();
 
-        // SDK version compatibility check
+        // Defense in depth: the sidecar and in-image descriptor already pinned
+        // sdk_version before OS load, so this only fires for a module whose
+        // hand-written ModuleInfo contradicts its own compatibility descriptor.
         if (!Spark::IsSDKCompatible(info.sdkVersion))
         {
-            const std::string message = std::format("Module '{}' SDK version mismatch (module={}, engine={})",
-                                                    info.name, info.sdkVersion, SPARK_SDK_VERSION);
+            const std::string message =
+                std::format("Module '{}' ('{}') rejected: ModuleInfo field 'sdkVersion' host expects {}, module "
+                            "declares {}; stable-v1 module ABI is exact-match only (N-1 modules are not loaded)",
+                            info.name, path, SPARK_SDK_VERSION, info.sdkVersion);
             destroyFn(instance);
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));
@@ -954,7 +1063,14 @@ bool ModuleManager::LoadModule(const std::string& path)
         console.LogSuccess(std::format("Loaded module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
         if (!m_modules.back().isLegacyAdapter)
-            ++FindOrCreateLifecycleRecord(m_modules.back().name).createModule;
+        {
+            ModuleLifecycleRecord& record = FindOrCreateLifecycleRecord(m_modules.back().name);
+            ++record.createModule;
+            // A hot-reload replacement is created by a staged manager from a
+            // shadow copy; merging its evidence keeps this live-manager path.
+            record.libraryPath = path;
+            record.kind = info.kind;
+        }
 #ifndef _WIN32
         stagedImage.Disarm();
 #endif
@@ -1997,6 +2113,9 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
         dlclose(entry.libraryHandle);
 #endif
         entry.libraryHandle = nullptr;
+        // The unmapped range may be reused by a later mapping; forget it so
+        // crash frames there are never resolved against this module.
+        RefreshCrashModuleIdentities();
     }
 
     if (!entry.transientImagePath.empty())

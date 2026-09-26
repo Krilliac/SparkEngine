@@ -5,12 +5,12 @@
       "id": "SEC-100",
       "title": "Close critical remote-administration and runtime security paths",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. 2026-09-13 progress: the local area-control HMAC replay ledger now fails closed at the existing 4,096-entry bound on Windows and POSIX, with a capacity regression. 2026-09-14 progress: the Multiplayer Quick Start now labels administration as trusted local-only, removes the sample password, and states that remote RCON is unavailable. 2026-09-14 additional progress: stale Memory Integrity documentation now names the trusted local administration boundary and is protected by a site-contract regression against chat/remote RCON wording. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.",
+      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. 2026-09-13 progress: the local area-control HMAC replay ledger now fails closed at the existing 4,096-entry bound on Windows and POSIX, with a capacity regression. 2026-09-14 progress: the Multiplayer Quick Start now labels administration as trusted local-only, removes the sample password, and states that remote RCON is unavailable. 2026-09-14 additional progress: stale Memory Integrity documentation now names the trusted local administration boundary and is protected by a site-contract regression against chat/remote RCON wording. 2026-09-24 progress: gateway area-control writes one bounded, secret-free audit record per frame (reason, phase, epoch, sanitized session prefix, outcome) with per-reason counters, SparkServer now initializes Spark::Logger with a stderr sink at Start() so those records leave the process (SparkServerApplication_StartInstallsLogSinkWhenHostHasNone), and live loopback regressions prove wrong-key MAC, stale/future timestamp and replayed-nonce frames are rejected before the epoch fence; ExecuteRcon audits handler exceptions as disposition=failed without exception text, GetRconCommands returns a locked snapshot, and the inactive rconPassword is securely cleared at startup; RemoteAdmin_ExpiredDenied exercises a bounded loopback lifetime and RemoteDebug counts audit-ring evictions; SECURITY.md now lists remote-administration trust boundaries and audit record formats with the security owner and reviewer explicitly unassigned. 2026-09-24 OD-05 progress: the owner decided remote administration stays permanently unavailable in stable-v1 and no authenticated remote-admin channel is built. Every remote entry point is now compiled out rather than reserved: ServerConfig no longer has rconPassword/rconPort, RemoteDebugSystem no longer has StartServer(port)/ConnectToTarget, RemoteDebugClient no longer has Connect(address, port), and RemoteDebugServer::StartListening() takes no port, so no config value or CLI switch can enable remote administration. Tests/TestSEC100RemoteAdminUnavailableReal.cpp holds this with compile-time requires-expression checks on those named entry points and on the ServerConfig field names rconPassword/rconPort/enableRcon/enableRemoteAdministration (verified to fail all six against the prior headers; a differently named field would not be detected) plus runtime selectors proving a raw principal-less queue call is denied and audited as AnonymousDenied and the only local grant cannot reach console_cmd/property_set (AuthorizationDenied); the ENABLE_NETWORKING=OFF contract fixture now fails to compile if DedicatedServer or ServerConfig is declared in a networking-off configuration; it is a local compile contract only, because no hosted CI lane configures a networking-off tree with tests enabled. Gateway area control is same-user SparkServer/SparkGateway IPC, not remote administration, and neither process ships in stable-v1. SECURITY.md, the wiki and site-data label remote administration unavailable. These are local results only. 2026-09-26 progress: .github/workflows/build.yml now defines the security-runtime and network-integration jobs, both configured with the linux-shipping preset and BUILD_TESTS=ON. security-runtime runs -R RemoteAdmin and then each of the remote-admin, gateway and crash-security labels as a separate CTest call. network-integration builds only the process targets and runs SparkServerGatewayProcessSmoke and SparkOrchestrationProcessSmoke under exact selectors. Every CTest call uses --no-tests=error, both jobs feed report-ci-errors, and .github/scripts/test-workflow-failure-propagation.py rejects hostile mutations of either lane. They are not yet dependencies of required-ci-gate. SEC-100 remains open because the reviewed threat model with a named security owner and reviewer, and exact-SHA hosted security-runtime/network-integration evidence, are still absent.",
       "dependencies": [],
       "parallelWith": [
         "CI-100",
@@ -19,6 +19,7 @@
       ],
       "sourceContext": [
         "SparkEngine/Source/Engine/Networking/DedicatedServer.cpp",
+        "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h",
         "SparkEngine/Source/Engine/Networking/NetworkSecurity.h",
         "SECURITY.md"
       ],
@@ -27,7 +28,7 @@
       ],
       "implementationScope": [
         "Disable chat-triggered RCON immediately",
-        "Create a separate authenticated admin channel",
+        "Keep remote administration permanently unavailable in stable-v1 (OD-05): no remote-admin channel, entry point, or enabling config/CLI switch",
         "Validate tokens/secrets in constant time",
         "Add roles, least privilege, expiry, replay protection, rate limits, and audit logs",
         "Separate local console and remotely invocable command registries",
@@ -37,17 +38,63 @@
         "Anonymous and normal clients cannot invoke any administrative command",
         "Invalid, expired, replayed, downgraded, or rate-limited credentials fail closed",
         "Every attempt is auditable without logging reusable secrets",
-        "Remote administration is disabled by default"
+        "Remote administration is permanently unavailable in stable-v1 and no configuration or command-line switch enables it (OD-05)"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1ecbff731c6f",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRemoteDebugSystem.cpp",
+            "Tests/TestDedicatedServerRuntime.cpp",
+            "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h",
+            "SparkEngine/Source/Engine/Networking/DedicatedServer.cpp"
+          ],
+          "note": "RemoteAdmin_AnonymousDenied, RemoteAdmin_RoleMatrix and DedicatedServerRuntime_ChatCannotInvokeRcon run production code compiled into SparkTests. They deny anonymous, observer and chat-slash admin dispatch."
+        },
+        {
+          "criterionDigest": "sha256:b8429c15a3e3",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRemoteDebugSystem.cpp",
+            "Tests/TestGatewayAreaControl.cpp",
+            "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h",
+            "SparkGateway/src/GatewayAreaControl.cpp"
+          ],
+          "note": "Malformed, expired, replayed, rate-limited and reserved-command-rebind (downgrade) denials are tested, plus gateway wrong-key MAC, stale timestamp and replayed nonce rejection. These run against production code linked into SparkTests."
+        },
+        {
+          "criterionDigest": "sha256:cc7d31770b8e",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRemoteDebugSystem.cpp",
+            "Tests/TestDedicatedServerRuntime.cpp",
+            "Tests/TestGatewayAreaControl.cpp",
+            "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h"
+          ],
+          "note": "Audit disposition and eviction-count tests, RconAuditRedactsArgumentsAndResponses and GatewayAreaControl_AuditRecordOmitsSecrets check that each attempt is audited and secrets are absent."
+        },
+        {
+          "criterionDigest": "sha256:d945d445bf2a",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestSEC100RemoteAdminUnavailableReal.cpp",
+            "SparkEngine/Source/Engine/Networking/DedicatedServer.h"
+          ],
+          "note": "Downgraded: the compile-time checks catch only the named entry points and fields. Nothing tests that no command-line switch enables it, and the networking-off Shipping contract is not built by any lane."
+        }
       ],
       "commands": [
         "rg -n \"RCON|rconPassword|ExecuteCommand\" SparkEngine/Source/Engine/Networking",
-        "ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -R RemoteAdmin --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "RemoteAdmin_AnonymousDenied",
         "RemoteAdmin_RoleMatrix",
         "RemoteAdmin_ReplayDenied",
         "RemoteAdmin_RateLimited",
+        "RemoteAdmin_ExpiredDenied",
+        "RemoteAdmin_Unavailable*",
         "GatewayAreaControl_*"
       ],
       "requiredCiJobs": [
@@ -61,7 +108,8 @@
         "SECURITY.md",
         "wiki/subsystems/Dedicated-Server.md",
         "wiki/subsystems/Memory-Integrity.md",
-        "wiki/advanced/Memory-Integrity-System.md"
+        "wiki/advanced/Memory-Integrity-System.md",
+        "wiki/gameplay-tools/Remote-Debug-System.md"
       ],
       "readinessChanges": [
         "G07",
@@ -84,10 +132,7 @@
       "profileApplicability": {
         "stable-v1": "shared"
       },
-      "plannedCiJobs": [
-        "security-runtime",
-        "network-integration"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -99,7 +144,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open.",
+      "rationale": "Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open. 2026-09-24 progress: tools/generate-sbom.py generates a deterministic, --check-reproducible SPDX 2.3 SBOM from dependencies.lock and supply-chain.lock (license_policy SPDX, gitlinks, vendored tree digests), bound to the source SHA and the committed dependency-lock digest that REL-100 provenance records; its reconcile mode classifies an install manifest or staged package with the GOV-400 package rule set and fails on unmapped or unlocked third-party payload, a locked shipped dependency that is absent, or a notice inventory from a different lock. A local Linux GCC Release install (2515 files) reconciles; Windows and hosted package reconciliation evidence and release.yml wiring remain open. 2026-09-25 progress: tools/check-secret-scan.py scans every git-tracked regular file with the OPS-100 secret_policy detectors and fails on any finding not covered by an exact, owned, unexpired <rule>:<path> exception that reuses the supply-chain exception schema plus a required reviewed finding count (a new finding in an excepted file fails; a lower count must be ratcheted down); the new required secret-scan job in build.yml runs it with its adversarial tests. The gate narrows the structured-credential lexer (credential-naming last key segment, :: scope operators and $VAR/${..}/%s-style references excluded, quoted literals only in programming-language source while scripts, Dockerfiles, dotfile/suffixless credential stores, Markdown and configs also flag unquoted values) and applies only the PEM and self-identifying token detectors to NUL-containing binary files; SECURITY.md documents the narrowing. Hosted exact-SHA evidence for the job is still open.",
       "dependencies": [
         "CI-100"
       ],
@@ -140,6 +185,40 @@
         "Final package inventory reconciles with source lock",
         "Release artifacts include verifiable supply-chain evidence"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1d1411824831",
+          "state": "unmet",
+          "evidence": [
+            "Tests/test_check_supply_chain.py",
+            "tools/check-supply-chain.py"
+          ],
+          "note": "Action pins and the ThirdParty lock are enforced. There is still no policy for third-party code outside ThirdParty/, so unmanaged dependencies are not ruled out."
+        },
+        {
+          "criterionDigest": "sha256:1fa25e25f1e1",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/verify_vulnerability_findings.py"
+          ],
+          "note": "The gate covers only the release SBOM. Dependency-level scanning is still a listed blocker, and whether syft catalogs statically linked ThirdParty code is unverified."
+        },
+        {
+          "criterionDigest": "sha256:b70931523204",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_generate_sbom.py",
+            "tools/generate-sbom.py"
+          ],
+          "note": "Reconcile mode is tested but not wired into the release.yml package jobs. There is no final Windows or hosted package reconciliation evidence."
+        },
+        {
+          "criterionDigest": "sha256:a0dafc5583e3",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs published release artifacts carrying verified SBOM and provenance. No such release exists."
+        }
+      ],
       "commands": [
         "python3 tools/check-supply-chain.py",
         "python3 tools/check-supply-chain.py --json",
@@ -147,6 +226,11 @@
         "bash tools/check-thirdparty-manifest-sync.sh",
         "python3 Tests/Tools/test_check_thirdparty_manifest_sync.py",
         "syft packages dir:.",
+        "python3 tools/generate-sbom.py --out sbom.spdx.json",
+        "python3 tools/generate-sbom.py reconcile --install-manifest build/linux-gcc-release/install_manifest.txt",
+        "python3 -m unittest Tests.Tools.test_generate_sbom -v",
+        "python3 tools/check-secret-scan.py",
+        "python3 -m unittest Tests.Tools.test_check_secret_scan -v",
         "osv-scanner --lockfile ThirdParty/dependencies.lock"
       ],
       "testSelectors": [
@@ -195,13 +279,17 @@
         "cmake/SparkThirdPartyAudit.cmake — CMake-expanded dependency manifest evidence",
         ".github/workflows/build.yml — check-supply-chain is required by both gate jobs",
         "ThirdParty/POLICY.md — supply-chain policy document",
-        "SECURITY.md — supply-chain security section"
+        "SECURITY.md — supply-chain security section",
+        "tools/generate-sbom.py — lock-derived SPDX 2.3 SBOM (source-SHA and dependency-lock digest bound, --check reproducible) and package-inventory reconciliation over the GOV-400 package rule set",
+        "Tests/Tools/test_generate_sbom.py — forged, unlocked, missing, stale-declaration, and wrong-lock notice cases (ctest SupplyChain_SbomAndPackageReconciliation; build.yml check-supply-chain job)",
+        "tools/check-secret-scan.py — bounded git-index secret scan with the OPS-100 tools/ops/secret_policy.py detectors (no symlink following, oversize files fail, values never printed); exceptions in tools/secret-scan-exceptions.json reuse the supply-chain validate_exception_records schema with exact <rule>:<path> scopes, a 366-day expiry horizon, and stale-exception failure; local run 2026-09-25: 6160 files scanned, 0 unexcepted findings, 20 owned fixture exceptions",
+        "Tests/Tools/test_check_secret_scan.py — planted tokens/PEM/credentials, symlink, oversize, expired, stale, wildcard, directory-scoped, duplicate-id and schema-invalid exception cases (ctest SecretScan_RepositoryGate; required build.yml secret-scan job)"
       ],
       "remainingBlockers": [
         "CodeQL expansion across all shipped products (CI-100 and CI-110)",
-        "SBOM and provenance generation for release artifacts",
+        "Release wiring of lock-derived SBOM and package reconciliation (release.yml package jobs) with hosted Windows and Linux package evidence",
         "Vulnerability scanner integration",
-        "Secret scanning CI job",
+        "Exact-SHA hosted record of the required secret-scan job",
         "Formal exception schema with owner and expiry fields",
         "SPDX allowlist enforcement",
         "Policy for third-party code outside ThirdParty/"
@@ -211,7 +299,6 @@
       },
       "plannedCiJobs": [
         "dependency-policy",
-        "secret-scan",
         "license-scan"
       ],
       "plannedTestSelectors": [
@@ -228,7 +315,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). 2026-09-12 progress: SparkPak now rejects unsafe traversal entry names while opening the archive, with a production regression fixture. 2026-09-13 additional progress: installer state manifests now reject inputs above 64 KiB and detect shrink/growth races while reading, with focused native install-state coverage. 2026-09-14 progress: the first production-entry-point Clang/libFuzzer target exercises Spark::Json::ParseBounded with a bounded seven-seed corpus, explicit 4 KiB/32-level/256 MiB/1-second limits, a 4-second active smoke, and a 10-second CTest bound. 2026-09-20 progress: the production .nnw loader now validates bounded dimensions, connectivity, activation/optimizer values, checked parameter counts, exact payload size, and saver symmetry before allocating weight/optimizer payloads; a direct LoadWeights libFuzzer target is bound to an eight-seed corpus. 2026-09-21 progress: the production crash-manifest parser now has a direct bounded Clang/libFuzzer target and six-seed corpus. Its seed bytes are LF-pinned and independently verified in a fresh Windows-style autocrlf checkout. The structural policy gate records 3 fuzzed parsers, 3 corpora, 102 blocked parser targets, and 151 deferred candidates; exact-SHA hosted sanitizer evidence, runtime coverage, deferred-candidate closure, and scheduled campaigns remain open. Do not promote SEC-120 or parser coverage from these structural slices alone.",
+      "rationale": "Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). 2026-09-12 progress: SparkPak now rejects unsafe traversal entry names while opening the archive, with a production regression fixture. 2026-09-13 additional progress: installer state manifests now reject inputs above 64 KiB and detect shrink/growth races while reading, with focused native install-state coverage. 2026-09-14 progress: the first production-entry-point Clang/libFuzzer target exercises Spark::Json::ParseBounded with a bounded seven-seed corpus, explicit 4 KiB/32-level/256 MiB/1-second limits, a 4-second active smoke, and a 10-second CTest bound. 2026-09-20 progress: the production .nnw loader now validates bounded dimensions, connectivity, activation/optimizer values, checked parameter counts, exact payload size, and saver symmetry before allocating weight/optimizer payloads; a direct LoadWeights libFuzzer target is bound to an eight-seed corpus. 2026-09-21 progress: the production crash-manifest parser now has a direct bounded Clang/libFuzzer target and six-seed corpus. Its seed bytes are LF-pinned and independently verified in a fresh Windows-style autocrlf checkout. 2026-09-24 OD-21 triage: all 149 deferred parser candidates were classified per file by reading the code; 28 became new blocked parser boundaries (untrusted-file, untrusted-network, or untrusted-ipc, including the collaborative-edit TCP codec, editor/engine named pipe, LAN discovery beacons, game-module save-state decoders, and two tinyobj OBJ loaders), 3 joined existing blocked records, and 115 received OD-21 exemptions (68 delegating-call-site, 29 not-a-parser, 10 helper, 6 same-process-data, 2 developer-tooling) that the fuzz-policy gate now schema-checks, ties to inventoried parsers, and invalidates when a file's detector hits change. 2026-09-25 progress: the production SceneManifest::ParseFromString (.sparkscene) parser has a direct Clang/libFuzzer + ASan/UBSan target (SparkFuzzSceneManifest / FuzzSceneManifestSmoke) that aborts on any accepted path that climbs out of the root under Windows separator semantics (an independent lexical walk in the adapter, not the parser's own filter), contains a control byte, or fails IsVirtualPathSafe, or on exceeding the entry cap, with an eight-seed deterministic -runs replay corpus (valid, traversal, reserved device names, high entry count, deep path nesting, CRLF/comments, duplicate/unknown keys, binary noise); the 8 MB and 100,000-entry caps sit above the smoke's max_len and are pinned by SceneManifest_EntryCapKeepsExactlyTheLimit and SceneManifest_ByteCapRejectsOversizedContent. Spark::IsVirtualPathSafe now treats a backslash as a separator on every host and rejects control bytes, so a Linux-validated manifest can no longer carry '..\\..\\x' (which POSIX normalizes to one harmless component) or a NUL-truncated path to Windows (SceneManifest_ParseDropsBackslashTraversalOnEveryHost, SceneManifest_ParseDropsControlBytePaths). Exemption ledger since the 2026-09-24 triage (115): the RHI-210 golden-image commit replaced the GoldenImageTest.h developer-tooling exemption with GoldenImagePng.h and GoldenImageManifest.h (net +1, 116), and two new /proc/self readers (SparkEngineLinuxHeadless.cpp, ServerHealth.cpp) received not-a-parser exemptions (118). The structural policy gate records 5 fuzzed parsers, 5 corpora, 130 blocked parser targets, 0 deferred candidates, and 118 exemptions; the exemptions are recorded judgement awaiting independent security review, and exact-SHA hosted sanitizer evidence, runtime coverage, the 130 missing harnesses, and scheduled campaigns remain open. 2026-09-25 progress: a non-blocking nightly/workflow_dispatch `fuzz-scheduled` job (.github/workflows/fuzz-scheduled.yml) runs tools/fuzz-policy/run_campaign.py, which discovers every ctest `fuzz`-labelled target, mutates a disposable copy of its committed corpus for a per-target budget under the smoke's own limits (with UBSAN_OPTIONS halt_on_error=1 so SparkFuzzJsonUtils' recoverable UBSan checks also abort, plus a log scan for any 'runtime error:' report), minimizes every crash/leak/timeout/OOM reproducer with -minimize_crash, retains raw and minimized files plus per-target duration/executions/crash-free time in an uploaded artifact whose summary is rewritten after every target, exits 1 on any finding and 2 on a setup error, refuses budgets that exceed the job timeout, and fails if a committed corpus changes (FuzzerTests/policy/test_fuzz_campaign.py, run by FuzzPolicyAdversarial); no hosted campaign run is recorded yet, so this adds workflow capability, not campaign evidence. Do not promote SEC-120 or parser coverage from these structural slices alone. 2026-09-25 progress: the production SparkPak (.spk) reader has a direct Clang/libFuzzer + ASan/UBSan target (SparkFuzzArchive / FuzzArchiveSmoke, inventory sparkpak-reader now fuzzed) that places each input in a memfd, mounts it through SparkPakReader::Open and reads every listed entry through ReadFile, with miniz compiled into the target with fuzzer instrumentation and the vendored zstd decoder enabled; the adapter aborts on a listed path that escapes the root under Windows separator semantics (independent lexical walk), contains a control byte or fails IsVirtualPathSafe, on a listing that differs from the mounted entry set, on more entries than the TOC bytes can encode, or on a read above the per-entry decompression budget. Its eleven-seed deterministic -runs replay corpus (FuzzerTests/corpora/sparkpak-reader, built by tools/fuzz-policy/generate_sparkpak_corpus.py) covers mixed stored/deflate/zstd entries, a stored TOC, truncated header and TOC, a fileCount overflow, per-entry ratio bombs, traversal names in both separator forms and hostile hash collisions. The target found two reader defects, each fixed with a minimized regression seed: a deflate entry declaring zero output made ReadFile pass miniz a null destination (UBSan pointer arithmetic on null; regression-deflate-empty-output.spk fails FuzzArchiveSmoke before the fix), and ReadTOC allocated a header's tocRawSize (up to 256 MB, zero-filled) from a TOC stream of any size and mounted archives whose stream ended short of it (regression-toc-ratio-bomb.spk measured 265 MB peak RSS and a successful mount before the fix, 4 MB and a rejection after; SparkPak_ProductionRejectsTocHeaderThatOverstatesDeflateOutput). A 10-minute local mutation run (3.68M executions, peak RSS 112 MB) found nothing further. The smoke's 512 MB RSS budget covers the reader's designed 256 MB per-entry decompression ceiling. The fuzz-policy job now checks out the pinned miniz submodule. The structural gate now records 6 fuzzed parsers, 6 corpora, 129 blocked parser targets and 119 exemptions (GameModules/SparkGameFPS/Source/Core/HeadlessArena.cpp, added by MOD-310, is classified as a delegating call site into scene-serializer). This is local evidence only; exact-SHA hosted sanitizer runs and campaign history remain open.",
       "dependencies": [
         "CI-100",
         "SEC-110"
@@ -241,7 +328,7 @@
       "sourceContext": [
         "SparkEngine/Source/Utils/Serializer.h",
         "SparkEngine/Source/Utils/JsonUtils.h",
-        "Tests/Fuzz",
+        "FuzzerTests",
         "tools/fuzz-policy",
         "SparkEngine/Source/Graphics",
         "SparkShaderCompiler",
@@ -249,7 +336,7 @@
         "SparkCrashReporter"
       ],
       "entryPoints": [
-        "Tests/Fuzz",
+        "FuzzerTests",
         "CMakeLists.txt",
         "CMakePresets.json"
       ],
@@ -263,6 +350,26 @@
         "Malformed input cannot cause crash, OOB, path escape, integer overflow, or unbounded allocation/time",
         "Every found issue lands with a minimized regression fixture",
         "Required fuzz smoke is deterministic and blocking"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:cd03931e2734",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Only some parsers have bounds or libFuzzer targets. The item still lists blocked and unclassified parser candidates, so 'every parser' is not shown."
+        },
+        {
+          "criterionDigest": "sha256:f3d43da4661a",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Nothing enforces a minimized regression fixture for each found issue, and the definition of done still lists this as remaining."
+        },
+        {
+          "criterionDigest": "sha256:f4d1e4691985",
+          "state": "unmet",
+          "evidence": [],
+          "note": "A blocking fuzz-smoke gate needs hosted, exact-SHA CI evidence. The local fuzz-smoke CTest targets cover only some parsers."
+        }
       ],
       "commands": [
         "cmake --preset linux-fuzz",
@@ -314,8 +421,7 @@
         "stable-v1": "required"
       },
       "plannedCiJobs": [
-        "fuzz-smoke",
-        "fuzz-scheduled"
+        "fuzz-smoke"
       ],
       "plannedTestSelectors": [
         "FuzzSave",
@@ -330,12 +436,12 @@
       "id": "NET-100",
       "title": "Replace placeholder transport security with audited authenticated encryption",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "networking",
       "owner": "unassigned",
-      "rationale": "MMOFPS authentication fields can carry plaintext credentials, while engine networking includes XOR/MT19937/FNV placeholder security that cannot support a secure-networking claim. 2026-09-05 progress (no promotion): PacketValidator string screening is now enforced through schema-declared stringFieldOffset/NO_STRING_FIELDS (the sanitizeStrings flag was removed), ChatMessage is one NetBuffer string at offset 0, UTF-8 text is accepted, and the packet.stats string counter is a real count; Tests/TestPacketValidator.cpp and Tests/TestPacketValidatorReal.cpp execute the shipped validator. The transport still carries the XOR/MT19937/FNV placeholder security, so no secure-networking claim changes.",
+      "rationale": "MMOFPS authentication fields can carry plaintext credentials, while engine networking included (as of 2026-09-05) XOR/MT19937/FNV placeholder security that cannot support a secure-networking claim. 2026-09-05 progress (no promotion): PacketValidator string screening is now enforced through schema-declared stringFieldOffset/NO_STRING_FIELDS (the sanitizeStrings flag was removed), ChatMessage is one NetBuffer string at offset 0, UTF-8 text is accepted, and the packet.stats string counter is a real count; Tests/TestPacketValidator.cpp and Tests/TestPacketValidatorReal.cpp execute the shipped validator. As of 2026-09-05 the transport still carried the XOR/MT19937/FNV placeholder security, so no secure-networking claim changed. 2026-09-25 progress (no promotion): the repeating-key XOR prototype was deleted from the transport surface: NetworkSecurity is now only a single-use connection-token registry that delegates to the fail-closed CSPRNG GenerateConnectionToken and constant-time ValidateToken, NetworkStack::Encrypt/Decrypt and the enableEncryption flags (NetworkStackConfig and [Network] engine settings) are gone, and an uninitialized NetworkStack now rejects every token instead of accepting it. Tests/TestNetworkSecurity.cpp static-asserts the XOR API stays removed and SparkNetworkSecurityCsprngContract (label network-security) fails if XOR transform code returns to NetworkSecurity.h or NetworkIntegration.h. The in-tree ChaCha20-Poly1305 still has no handshake or production caller, so every acceptance criterion keeps its state. 2026-09-25 progress (no promotion): Connect now carries a handshake magic and uint16 NETWORK_PROTOCOL_VERSION ahead of the name, NetworkManager::HandleConnect rejects a missing, older, newer or malformed handshake with a typed ConnectRejected before any client slot is considered, ConnectAccepted echoes the version and the client refuses a mismatched echo (ProtocolMismatch), and the PacketValidator Connect/ConnectAccepted schemas match the new layouts. CTest NetworkSessionCompatibility (Tests/TestSessionCompatibilityReal.cpp, labels network and network-security) runs the production NetworkManager in both roles over loopback UDP. This is protocol negotiation only, not authentication or encryption: the downgrade/malformed-handshake criterion stays unmet until a key-agreement handshake binds into it.",
       "dependencies": [
         "SEC-100",
         "SEC-110",
@@ -374,9 +480,35 @@
         "Authentication and gameplay share the production encrypted path",
         "No custom cryptographic primitive remains in the advertised transport"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1a190dffcb31",
+          "state": "unmet",
+          "evidence": [],
+          "note": "GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocolOnboarding.h still sends a plaintext password field (char pass[64]) at login."
+        },
+        {
+          "criterionDigest": "sha256:1294cd87e10f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No tamper, replay, downgrade or key-rotation suite runs through a production authenticated transport."
+        },
+        {
+          "criterionDigest": "sha256:c7a82159fc73",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Authentication and gameplay do not share an audited encrypted path."
+        },
+        {
+          "criterionDigest": "sha256:04b666ab668b",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The custom XOR/FNV NetworkEncryption and TFCrypto primitives are still in the tree, and no independent review is recorded."
+        }
+      ],
       "commands": [
         "rg -n \"mt19937|FNV|XOR|placeholder for DTLS|placeholder for AES|char pass\" SparkEngine/Source GameModules/SparkGameMMOFPS",
-        "ctest --test-dir build/linux-shipping -L network-security --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L network-security --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Transport_Tamper",
@@ -441,12 +573,12 @@
       "id": "NET-110",
       "title": "Define and implement the production online-service boundary",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "services",
       "owner": "unassigned",
-      "rationale": "Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services.",
+      "rationale": "Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services. Owner decision OD-08 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): identity, matchmaking, fleet, entitlement and billing services are out of engine scope; the engine ships no hosted online services. This item owns documenting that service boundary. 2026-09-24 progress: wiki/advanced/Online-Service-Boundary.md (in wiki/_Sidebar.md) is the service-boundary contract: it lists what the engine provides (UDP transport, the IGatewayAuthenticator/KeyFileAuthenticator admission hook, sensitive-handler and PBKDF2 helpers, the SparkServer/SparkGateway/SparkDaemon/SparkCollabServer processes, and the IOnlinePlatform interface with its in-memory NullOnlinePlatform and compile-only platform stubs), what it does not provide (identity, matchmaking, fleet, entitlement, billing, hosted player data, operations), and the trust boundaries between them. wiki/gameplay-tools/Online-Services.md no longer claims nonexistent ENABLE_STEAM/ENABLE_EOS options or local-storage cloud saves. tools/site-data/validate.py now rejects (hosted_online_service_claim_errors) any non-negated claim of hosted, managed, or turnkey online services on every governed public claim surface, the two online-service pages, and docs/site/readiness.json; Tests/Tools/test_site_data_contract.py OnlineServiceBoundaryTests covers claims, negations, cross-sentence negation, and the live repository surfaces. 2026-09-25 progress: docs/specs/online-services.md (contract version 1.0) is the boundary specification. It separates the engine SDK interfaces (IOnlinePlatform/OnlineServiceManager, NetworkManager, DedicatedServer, SparkServer, the SparkGateway admission and area-control plane, SparkDaemon) from product-owned identity, matchmaking, fleet, moderation, entitlement, billing, player-data and operations services, and draws them in a Mermaid deployment diagram. It names trust boundaries B1-B9, gives per-call timeout/retry/circuit-breaker budgets and failure semantics, and labels every shipped adapter local/deterministic, local reference, or stub, never production. The spec states which budgets the code does not enforce yet (the IOnlinePlatform game-thread limit and circuit breaker). It is a governed surface of validate_online_service_boundary (ONLINE_SERVICE_BOUNDARY_SURFACES) and was removed from FUTURE_ACCEPTANCE_PATHS. 2026-09-25 conformance progress: Tests/TestOnlineServices.cpp OnlineServices_Contract_* (ctest OnlineServicesContract, label online-services, SPARK_TEST_EXPECT_COUNT=5) runs one templated IOnlinePlatform contract against NullOnlinePlatform, SteamPlatform, EpicPlatform and ConsolePlatform. A capability reported false must fail every call with a non-empty GetLastError() and leave no fabricated login, session, score, achievement, cloud slot or presence behind; the Steam, Epic and Console stubs return one constant GetLastError() string, so for them only its presence is checked. A capability reported true must succeed and be observable on read-back where the interface has a getter; friends and presence have none on the Null adapter, so they are checked for success and failure only. On the Null adapter every fallible call clears GetLastError() on entry, each failure sets its own exact reason and the suite compares against that exact reason, so an error left by an earlier call cannot satisfy a later check. Failures never echo the login token, Logout/LeaveSession are safe in any state, a capability-less adapter must be named (Stub), no adapter may call itself production, and Console_GetStatus() reports the adapter, its capability state and its last error. The suite does not test the spec's no-throw and no-local-corruption rules. A fifth test compares two fresh NullOnlinePlatform runs against one fixed expected transcript; the adapter now keeps boards, achievements and cloud slots in ordered maps and ranks score ties by submission order, so the transcript does not depend on the standard library. The suite found two Null adapter violations of the spec section 5.1 failure semantics, now fixed in OnlineServices.h: DeleteCloudSave of a missing slot returned false with no GetLastError(), and InviteToSession reported success with no recipient, no active session, or a recipient outside the (offline, always empty) friends list. 2026-09-25 degraded-dependency progress: OnlineServiceManager::GetPlatform() now returns GuardedOnlinePlatform, a front over the active adapter that enforces the spec section 5.1 failure semantics for every caller. An adapter exception (std::exception or any other type) becomes a failed call with a reason, a throwing Login never surfaces its token, and Logout/LeaveSession/Shutdown cannot be aborted by a throwing adapter. Each capability counts consecutive and total failures; after 5 consecutive failures its circuit opens and calls fail immediately without reaching the adapter for 30 s on the Update() clock, then one probe is allowed (success closes the circuit, failure reopens it). Logout and LeaveSession bypass open circuits. The circuit is disabled for the in-process NullOnlinePlatform, whose failures are caller errors, but its failures are still counted. Console_GetStatus() reports per-capability consecutive failures and circuit state (Health: ...), and GetCapabilityHealth() exposes the counters. Tests/TestOnlineServices.cpp OnlineServices_Degraded_* (ctest OnlineServicesDegraded, label online-services, SPARK_TEST_EXPECT_COUNT=7) drives a fault-injecting adapter through SetPlatform()/GetPlatform(); with the threshold mutated from 5 to 6, 4 of the 7 tests fail. The 5 ms game-thread and 10 s remote-request budgets are still adapter responsibilities with no watchdog, and no production adapter exists to measure them against. Still open: the SessionCompatibility_* tests, deterministic local adapters for identity/match/fleet/admin/moderation/entitlement, safe and observable failure of production adapters, and the service-contract CI job. The network-integration job now exists for SEC-100 (Linux Shipping SparkServer/SparkGateway and orchestration process smokes), but it selects none of the online-services tests, so it is not evidence for this item.",
       "dependencies": [
         "NET-100",
         "SEC-100"
@@ -460,7 +592,9 @@
         "wiki/gameplay-tools/Online-Services.md",
         "SparkEngine/Source/Engine/OnlineServices",
         "SparkDaemon",
-        "SparkEngine/Source/Engine/Networking"
+        "SparkEngine/Source/Engine/Networking",
+        "wiki/advanced/Online-Service-Boundary.md",
+        "tools/site-data/validate.py"
       ],
       "entryPoints": [
         "docs/specs",
@@ -479,13 +613,40 @@
         "Production adapters fail safely and are observable",
         "No local JSON/demo service is marketed as production infrastructure"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1bdf18cdc828",
+          "state": "unmet",
+          "evidence": [],
+          "note": "docs/specs/online-services.md has a diagram and boundaries B1-B9, but no check requires that content. The validator only checks the file exists and its wording."
+        },
+        {
+          "criterionDigest": "sha256:70dbbe77ed6e",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Only NullOnlinePlatform is deterministic. Local adapters for identity, match, fleet, moderation and entitlement are still open."
+        },
+        {
+          "criterionDigest": "sha256:5f2ff3eec738",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No production adapter exists. GuardedOnlinePlatform is tested only against a fault-injecting test adapter."
+        },
+        {
+          "criterionDigest": "sha256:dbc290e08ea2",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Downgraded. validate.py only catches hosted/managed/turnkey phrasing on a fixed set of pages. A 'production' claim about a local JSON or demo store (TFDatabase, MMO modules) elsewhere would pass."
+        }
+      ],
       "commands": [
         "python3 tools/site-data/validate.py --capability services.production",
-        "ctest --test-dir build/linux-shipping -L online-services --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure --no-tests=error",
+        "python3 -m unittest Tests.Tools.test_site_data_contract -k OnlineServiceBoundary -v"
       ],
       "testSelectors": [
-        "OnlineServices_Contract",
-        "OnlineServices_Degraded",
+        "OnlineServices_Contract_*",
+        "OnlineServices_Degraded_*",
         "SessionCompatibility_*"
       ],
       "requiredCiJobs": [
@@ -497,7 +658,8 @@
       ],
       "documentationUpdates": [
         "wiki/gameplay-tools/Online-Services.md",
-        "docs/specs/online-services.md"
+        "docs/specs/online-services.md",
+        "wiki/advanced/Online-Service-Boundary.md"
       ],
       "readinessChanges": [
         "G12"
@@ -509,7 +671,8 @@
         "Expanding engine scope into a hosted SaaS product"
       ],
       "outOfScope": [
-        "Operating a public production service during engine release"
+        "Operating a public production service during engine release",
+        "Engine-owned identity, matchmaking, fleet, entitlement or billing services; the engine ships no hosted online services (OD-08)"
       ],
       "definitionOfDone": [
         "Boundaries are explicit",
@@ -520,25 +683,20 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "service-contract",
-        "network-integration"
+        "service-contract"
       ],
-      "plannedTestSelectors": [
-        "OnlineServices_Contract",
-        "OnlineServices_Degraded",
-        "SessionCompatibility_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "DATA-120",
       "title": "Make multiplayer persistence transactional, migratable, backed up, and recoverable",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "persistence",
       "owner": "unassigned",
-      "rationale": "MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic ownership, schema migration, concurrent writes, backups, restore, or disaster recovery. 2026-09-05 progress: AsyncDatabase's key-value store no longer truncates the live file on every write, so the interrupted-write acceptance now also covers that store (Tests/TestSaveSystemRoundTripReal.cpp, AsyncDatabaseReal_*); MMO/MMOFPS module persistence is unchanged and the item stays open. 2026-09-13 progress: AsyncDatabase now explicitly durably flushes its completed sibling revision before atomic replacement on Windows and POSIX, with a production round-trip regression and a source policy contract; concurrent module writes, migrations, backup/restore, and disaster-recovery evidence remain open.",
+      "rationale": "MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic ownership, schema migration, concurrent writes, backups, restore, or disaster recovery. 2026-09-05 progress: AsyncDatabase's key-value store no longer truncates the live file on every write, so the interrupted-write acceptance now also covers that store (Tests/TestSaveSystemRoundTripReal.cpp, AsyncDatabaseReal_*); MMO/MMOFPS module persistence is unchanged and the item stays open. 2026-09-13 progress: AsyncDatabase now explicitly durably flushes its completed sibling revision before atomic replacement on Windows and POSIX, with a production round-trip regression and a source policy contract; concurrent module writes, migrations, backup/restore, and disaster-recovery evidence remain open. 2026-09-24 progress (OD-22): Tests/TestDATA120SecretsAtRest.cpp (Persistence_Secrets_*) drives the production TERRAFRONT account store (TFAccountSystem over TFDatabase) and the MMO AsyncDatabase key-value store (MMOPersistenceSystem) against real files, with a structural guard for the MMO account system (it has no persistence path; the written store holds no password, hash, or token and a restarted account system rejects the old token), and scans the shipped config trees (SparkEngine/Resources/Config, the runtime Assets directories, and the SparkServer/SparkGateway operator example configs), asserting that only salted PBKDF2 hashes are persisted (account-row column allowlist, distinct salts, restart re-login from the hash), that no plaintext or hex-encoded password or session token reaches either store, and that no credential-shaped key or user:password@ URL appears in shipped config; no violation was found, so no production fix was needed. Host full-disk encryption is documented as the operator responsibility in wiki/gameplay-tools/Persistence-System.md and SECURITY.md. This covers the secrets half of the encrypt-and-separate-secrets scope only; the transactional, migration, backup/restore, and recovery acceptance criteria remain open. 2026-09-25 progress: every TERRAFRONT store writer (TFDatabase, TFOutfitStore, TFSocialSystem, WorldSave::WriteJson) now commits through SavePaths::WriteDurableReplace (TFSavePaths.h), which stages <store>.tmp with O_EXCL|O_NOFOLLOW (mode 0600), fsyncs it, renames it, and fsyncs the parent directory on POSIX, and calls FlushFileBuffers before MoveFileExW(MOVEFILE_WRITE_THROUGH) on Windows; the ofstream+AtomicReplace path is deleted. Once the rename succeeds the commit is reported as committed; a later POSIX directory-sync failure is returned in ec and logged as a durability warning, so TFDatabase never rolls back a revision that is already on disk. Evidence: Persistence_Durable_* (4 cases in Tests/TestDATA120PersistenceReal.cpp: byte-exact commit, failed staging leaves the committed file untouched, a stale staging symlink is unlinked rather than followed with an owner-only committed file on POSIX, and a forced directory-sync failure after the rename that still reports the commit, which runs only as a non-root user and was run locally as nobody) and the extended AsyncDatabaseDurabilityContract source policy, which fails if any TERRAFRONT source writes or renames a file outside the primitive or reports failure after the rename. No test plants an entry between the stale-staging unlink and open(), so O_EXCL|O_NOFOLLOW is pinned only by the source contract. The owner-only file mode is POSIX-only; on Windows the committed file inherits the parent directory's ACL. The Windows branch is not yet compiled or run locally (needs the MinGW preset or hosted Windows CI). This removes the power-loss torn-commit gap only; no forced-failure recovery drill exists, so no criterion changes state. 2026-09-25 progress (backup/restore + recovery drill): TFDatabase::CreateBackup copies one committed revision under the authority lock into a durable, re-verified backup plus a sha256sum-format sidecar, and RestoreFromBackup verifies the digest and full load validation (newer schema refused, N-1 migrated), keeps the displaced primary as <db>.pre-restore-<ms>.bak, and stamps a revision above the backup's and, when readable, the displaced primary's, so a running authority gets Conflict instead of overwriting restored rows; with no primary or a torn one the displaced revision is unknown, info.supersedesPrimaryRevision is false, a warning is logged, and operators must restart every authority (TFDatabaseBackup.cpp). The recovery point is documented in docs/specs/persistence.md. Evidence (local, Linux): Persistence_BackupRestore_* (7) and the POSIX-only Persistence_RecoveryDrill_* (4: a spawned SparkTests child process _exit()s at the staged and renamed commit stages via the SavePaths::DurableCommitObserver seam, dies mid-restore, or is SIGKILLed while committing), under CTest labels persistence;recovery-drill. Power loss is not simulated, the Windows drill does not exist, only TFDatabase has backup/restore, and no scheduled recovery-drill CI job exists, so criteria 3 and 4 stay unmet (partial progress recorded in their notes).",
       "dependencies": [
         "SAVE-230",
         "NET-100"
@@ -571,15 +729,52 @@
         "Forced process/database failure recovers to a documented point",
         "Backup restore is regularly rehearsed"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:25b8b24da1b3",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The Persistence_Transaction tests cover only single-writer atomicity in TFDatabase. No concurrent-writer or territory-store test exists."
+        },
+        {
+          "criterionDigest": "sha256:f67e46df6e00",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The N-1 migration tests cover only the TFDatabase character store. No rollback or downgrade fixture exists, and no economy or territory store is migrated."
+        },
+        {
+          "criterionDigest": "sha256:824bc738ee74",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestDATA120BackupRestore.cpp",
+            "docs/specs/persistence.md"
+          ],
+          "note": "Partial, local POSIX only: Persistence_RecoveryDrill_* kill a spawned writer process inside a TFDatabase commit or restore and reopen at the recovery point in docs/specs/persistence.md. Missing: power-loss simulation, a Windows drill, drills for the outfit/social/world stores, and CI evidence."
+        },
+        {
+          "criterionDigest": "sha256:d2d86202a7f2",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestDATA120BackupRestore.cpp",
+            "docs/specs/persistence.md"
+          ],
+          "note": "Partial: TFDatabase CreateBackup/RestoreFromBackup exist with digest and schema gates, and Persistence_BackupRestore_* rehearse them under ctest -L recovery-drill. 'Regularly' needs the planned scheduled recovery-drill CI job and its history; other stores have no backup."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L persistence --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-shipping -R BackupRestore --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L persistence --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -R BackupRestore --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -L recovery-drill --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -R PersistenceSecretsAtRest --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Persistence_Transaction",
         "Persistence_Idempotency",
         "Persistence_Migration",
-        "Persistence_BackupRestore",
+        "Persistence_Durable_*",
+        "Persistence_BackupRestore_*",
+        "Persistence_RecoveryDrill_*",
+        "Persistence_Secrets_*",
         "AsyncDatabaseReal_*"
       ],
       "requiredCiJobs": [
@@ -622,20 +817,19 @@
       "plannedTestSelectors": [
         "Persistence_Transaction",
         "Persistence_Idempotency",
-        "Persistence_Migration",
-        "Persistence_BackupRestore"
+        "Persistence_Migration"
       ]
     },
     {
       "id": "OPS-100",
       "title": "Secure and complete crash reporting, telemetry delivery, and symbol operations",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "operations",
       "owner": "unassigned",
-      "rationale": "Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. 2026-09-12 progress: crash-upload proxy and FTP endpoint logs now retain only scheme and host, with Dropbox capability URLs fully redacted; production-linked regressions cover credentials, paths, queries, fragments, malformed URLs, and bearer data. 2026-09-13 progress: CrashHandler no longer invokes the legacy in-process uploader or archive/consent fallback; it always publishes a local manifest and launches the read-only reporter for interactive processes, with a source-policy regression. OPS-100 remains open because the standalone uploader/configuration compatibility surface, controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.",
+      "rationale": "Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. 2026-09-12 progress (superseded 2026-09-24): crash-upload proxy and FTP endpoint logs were reduced to scheme and host; that uploader code and its endpoint-redaction regressions were deleted with the in-process uploader below. 2026-09-13 progress: CrashHandler no longer invokes the legacy in-process uploader or archive/consent fallback; it always publishes a local manifest and launches the read-only reporter for interactive processes, with a source-policy regression. 2026-09-24 progress (local only): the unreferenced in-process CrashReportUploader (GitHub PAT/SMTP/FTP/Dropbox/HTTP/proxy transport) was deleted; CrashConfig, [CrashReporting] settings and SetupCrashHandler no longer carry or read any upload URL, relay URL, GitHub token or SMTP credential; EngineSettings::Load drops the retired keys from settings.ini/settings.local.ini so Save() cannot write them back; both shipped settings.ini files no longer contain them; the uploader-only ComputeStackHash dedup parser was deleted with it, since nothing else called it; SparkCrashReporter.ManifestCompatibility now carries the crash-security label. 2026-09-25 progress (local only): the production crash-capture producer test now also runs on POSIX, where the ungated assertion report is log-only with an empty dumpFile, and CrashCapturePackageSecurity is registered on native Linux/macOS hosts that build SparkCrashReporter; ctest -L crash-security passes 4/4 on Linux. The POSIX report still carries unredacted absolute module paths and no module build-id. 2026-09-25 progress (local only, symbolication): InstallCrashHandler on Linux now records each loaded ELF module's GNU build-id, load bias and address range with dl_iterate_phdr (refreshed by ModuleManager after each game-module dlopen and dlclose, including rejected loads; libraries dlopened later by other code, such as Vulkan/GL driver ICDs and SDL or audio plugins, are not recorded, so their frames are written as unmapped addresses and stay unresolved), and the signal handler writes a SYMBOLIC FRAMES section of build-id MODULE records and module-relative SYMFRAME offsets from that precomputed data with no allocation or ELF parsing; tools/ops/symbolicate_crash.py files split debug info in a .build-id store and resolves the section with addr2line, refusing build-id mismatches, symlinked entries and malformed or unbounded input; the CrashReporter_Symbolication canary resolves a -g probe's fault to its function and file:line. OPS-100 remains open because controlled relay delivery, scoped authorization, private symbol publication, a split-debug release build policy, module-table coverage of libraries dlopened outside ModuleManager, privacy/retention review, and exact-SHA crash evidence are absent.",
       "dependencies": [],
       "parallelWith": [
         "SEC-100",
@@ -667,9 +861,53 @@
         "A synthetic release crash reaches the test relay and symbolicates to source",
         "Endpoint outage recovers within documented spool/drop bounds"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:71c492c4e794",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Full-memory dumps can still hold in-process secrets, as the consent text itself says. The privacy review is still pending."
+        },
+        {
+          "criterionDigest": "sha256:2f215b96fa7c",
+          "state": "implemented",
+          "evidence": [
+            "SparkCrashReporter/tests/CrashReporterManifestTests.cpp",
+            "SparkCrashReporter/src/CrashReporterApp.cpp",
+            "SparkCrashReporter/CMakeLists.txt",
+            "Tests/Tools/test_ops100_crash_security.py"
+          ],
+          "note": "CTest SparkCrashReporter.ManifestCompatibility builds the production reporter. It rejects traversal, symlinks, junctions, hardlinks and file swaps, and checks outside sentinel files survive."
+        },
+        {
+          "criterionDigest": "sha256:fbf020452e6c",
+          "state": "implemented",
+          "evidence": [
+            "SparkCrashReporter/tests/CrashReporterConsentTests.cpp",
+            "SparkCrashReporter/src/CrashReporterApp.cpp",
+            "Tests/TestTelemetrySpool.cpp",
+            "SparkEngine/Source/Utils/Telemetry.h"
+          ],
+          "note": "CTest CrashReporter_Consent: declined or unanswered prompts make zero fake-gh calls, and an explicit yes makes one. Telemetry_SpoolRecovery_ConsentRevocation: no backend call after revocation."
+        },
+        {
+          "criterionDigest": "sha256:3a1537530a6f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no relay and no private symbol publication. The canary only symbolicates a -g probe offline."
+        },
+        {
+          "criterionDigest": "sha256:7ab0f4aa3ffc",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No network endpoint exists. Spool bounds are proven only against a test backend, and telemetry.md lists this as a blocker."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L crash-security --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-shipping -R TelemetrySpool --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L crash-security --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -R TelemetrySpool --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -L crash-canary --output-on-failure --no-tests=error",
+        "python3 -m unittest discover -s Tests/Tools -p 'test_ops100_symbolication.py'"
       ],
       "testSelectors": [
         "CrashManifest_PathEscape",
@@ -678,7 +916,6 @@
         "CrashReporter_Symbolication",
         "Telemetry_SpoolRecovery",
         "CrashRedaction_*",
-        "CrashHash_*",
         "FreezeDetector_*"
       ],
       "requiredCiJobs": [
@@ -722,7 +959,8 @@
           "tools/ops/secret_policy.py: JSON-aware recursive redaction (structural parse, redact sensitive values at any depth/type, re-serialize valid JSON); bounded linear lexer for generic-text credentials (multiword/quoted/escaped, per-line/document/secret ceilings); single-pass bounded PEM parser for RSA/EC/DSA/OPENSSH/ENCRYPTED/generic PRIVATE KEY families with label matching; location sanitization via keyed hashes to suppress secret-bearing paths; archive detection by ZIP magic bytes (not suffix) with minidump structure validation; explicit size/depth/count ceilings throughout",
           "tools/ops/validate_crash_package.py validates strict bounded manifests and referenced artifacts through a pinned authoritative root without modifying them",
           "tools/ops/validate_telemetry_spool.py validates all spool entries, strict event JSON, timestamps, names, retention observations, and offline resource bounds",
-          "tools/ops/redact_secrets.py applies the shared bounded secret policy, scans directories with post-scan re-enumeration and identity comparison to detect concurrent additions/replacements, and only redacts to stdout"
+          "tools/ops/redact_secrets.py applies the shared bounded secret policy, scans directories with post-scan re-enumeration and identity comparison to detect concurrent additions/replacements, and only redacts to stdout",
+          "tools/ops/symbolicate_crash.py splits debug info into a local .build-id/xx/yyyy.debug store (refusing binaries without a GNU build-id or DWARF, never overwriting an entry) and resolves a Linux crash log's SYMBOLIC FRAMES section with addr2line on a descriptor opened without following symlinks; it bounds the log (8 MiB, 512 modules, 256 frames), accepts only the exact record grammar, reports absent symbols as missing-symbols, and refuses (exit 2) a store entry whose build-id differs from the recorded one. No relay, upload, or symbol publication is involved."
         ],
         "tests": [
           "Tests/Tools/test_ops100_crash_security.py covers cross-platform path spellings, junction/hardlink rejection, referenced artifacts, strict JSON, opaque binaries, and archive policy",
@@ -730,14 +968,19 @@
           "Tests/Tools/test_ops100_redaction.py covers credential families, binary/ZIP handling, missing and unreadable inputs, stdout-only redaction, and performance regression",
           "Tests/Tools/test_ops100_adversarial.py covers: (1) JSON structural parse/recursive redact with nested/brace/escaped/empty/oversized/adjacent-safe/malformed inputs; (2) bounded linear lexer with multiword/quoted/escaped/comma/semicolon/brace/oversized/backtracking/ceiling tests; (3) location safety with keyed-hash suppression of secret-bearing paths; (4) PEM single-pass parser for RSA/EC/DSA/OPENSSH/ENCRYPTED/generic/mismatched/unmatched/32MB-linear inputs; (5) archive magic detection for renamed ZIP, minidump validation, nested archive by magic; (6) scan race detection for concurrent addition/replacement, symlink/hardlink rejection; (7) CI gate registration with path coverage and required-gate inclusion; (8) docs/evidence accuracy with honest scope and open status",
           "SparkCrashReporter/tests/CrashReporterManifestTests.cpp, exercised by SparkCrashReporter.ManifestCompatibility, proves transport fields are discarded, manifests omit them, the reporter is truthful and read-only, and path/identity/size/consent defenses reject hostile artifacts",
-          "Tests/TestTelemetrySpool.cpp, exercised by TelemetrySpool, proves C++ durable spool recovery, terminal rejection, retry boundaries, bounds/drop accounting, consent revocation, and hostile artifact rejection"
+          "Tests/TestEngineSettingsReal.cpp CrashSettings_RetiredTransportCredentialsAreDroppedOnLoadAndNeverWritten (ctest CrashSettingsCredentials, label crash-security) proves retired crash-transport keys from settings.ini and settings.local.ini are dropped on load and never saved; Tests/Tools/test_ops100_crash_security.py source/settings policy checks forbid credential-bearing crash configuration, environment overrides, and transport calls in SparkEngine/Source and shipped settings",
+          "Tests/TestTelemetrySpool.cpp, exercised by TelemetrySpool, proves C++ durable spool recovery, terminal rejection, retry boundaries, bounds/drop accounting, consent revocation, and hostile artifact rejection",
+          "Tests/Tools/run_crash_capture_security.py, registered as ctest CrashCapturePackageSecurity (labels crash-security;security;integration) on every native host that builds SparkCrashReporter with miniz (stub builds and cross-compiles are excluded), runs the production producer test CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot (Tests/TestCrashHandlerGatingReal.cpp, Windows minidump path and POSIX log-only assertion path) in an isolated temporary root and validates its untouched artifacts with the native reporter and validate_crash_package.py, including traversal and legacy-transport-field copies; on POSIX the owned work root is removed through a directory fd pinned to its recorded identity (Windows retains it); 2026-09-25 local Linux run (linux-gcc-release): ctest -L crash-security passes. The linux-shipping configuration that security-runtime selects was not run locally and is unverified. No hosted record.",
+          "Tests/Tools/run_crash_symbolication_canary.py, registered as ctest CrashReporter_Symbolication (labels crash-canary;integration) on native Linux builds with miniz, objcopy and addr2line, runs SparkCrashSymbolicationProbe (Tests/Fixtures/CrashSymbolicationProbe.cpp, -g -O2 -fno-lto, --build-id=sha1) under an isolated TMPDIR, requires death by SIGSEGV and one crash log, stores the probe's split debug info by build-id, and requires frame 0 (the exact faulting pc from the signal context) to resolve to SparkSymbolicationCanaryCrashSite at the marked CrashSymbolicationProbe.cpp line and a return-address frame to resolve to main; it also requires a build-id-mismatched store entry and a symlinked entry to be refused. It proves offline symbolication of a debug-info probe only, not relay delivery or release-binary symbolication.",
+          "Tests/TestCrashSymbolication.cpp (ctest CrashSymbolicationRecords, SPARK_TEST_EXPECT_COUNT=5) covers the bounded NT_GNU_BUILD_ID note parser against truncated, hostile-length, oversized and foreign notes, and the fixed-buffer SYMBOLIC FRAMES format, including whole-line truncation without an end marker",
+          "Tests/Tools/test_ops100_symbolication.py (run by validate-ops100) covers the symbolizer grammar and bounds, store refusal of binaries without DWARF or build-id, idempotent store publication, missing-symbols reporting, build-id mismatch refusal, symlinked entry/directory/root refusal, and CLI exit codes against ELF files compiled on the host"
         ],
-        "ciGate": "validate-ops100 is a required job in .github/workflows/build.yml, running all four policy suites via unittest and included in the required-ci-gate needs list. The telemetry-integration workflow job configures Linux Shipping, builds SparkTests, and runs TelemetrySpool; neither definition substitutes for a successful exact-SHA hosted record.",
+        "ciGate": "validate-ops100 is a required job in .github/workflows/build.yml, running all five policy suites (including test_ops100_symbolication) via unittest and included in the required-ci-gate needs list. The telemetry-integration workflow job configures Linux Shipping, builds SparkTests, and runs TelemetrySpool; neither definition substitutes for a successful exact-SHA hosted record.",
         "remainingBlockers": [
-          "Crash delivery has no controlled relay, scoped ephemeral authorization, private-symbol publication, or synthetic release-crash symbolication canary",
-          "Legacy in-process fallback still permits direct GitHub/SMTP/URL configuration in networking/CURL builds, so reusable client transport configuration is not eliminated across profiles",
+          "Crash delivery has no controlled relay, scoped ephemeral authorization, private-symbol publication, split-debug release build policy, or synthetic release-crash canary through a relay; the local Linux build-id canary (CrashReporter_Symbolication) proves offline symbolication of a -g probe only and has no hosted crash-canary record",
+          "Reusable client crash-transport configuration is removed from engine source and shipped settings (local tests and source-policy checks only); this removal has no exact-SHA hosted CI record yet",
           "C++ telemetry spool/retry/drop accounting is locally tested, but no hosted outage/recovery evidence establishes documented end-to-end delivery and drop bounds",
-          "crash-security and crash-canary CI jobs are not defined; telemetry-integration is defined but lacks a successful exact-SHA hosted record",
+          "The security-runtime job selects the crash-security label on Linux Shipping but has no successful exact-SHA hosted record; no crash-canary job is defined; telemetry-integration is defined but lacks a successful exact-SHA hosted record",
           "Privacy/retention policy and operations runbook still require review"
         ]
       },
@@ -751,20 +994,19 @@
       "plannedTestSelectors": [
         "CrashManifest_PathEscape",
         "CrashManifest_SecretRedaction",
-        "CrashReporter_Consent",
-        "CrashReporter_Symbolication"
+        "CrashReporter_Consent"
       ]
     },
     {
       "id": "OPS-110",
       "title": "Add production server observability, load, soak, backup, and incident gates",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "operations",
       "owner": "unassigned",
-      "rationale": "Profiling utilities and local chaos scripts do not substitute for externally consumable health/readiness, SLOs, alerts, long soaks, backup/restore, and incident response evidence.",
+      "rationale": "Profiling utilities and local chaos scripts do not substitute for externally consumable health/readiness, SLOs, alerts, long soaks, backup/restore, and incident response evidence. 2026-09-25 progress (no promotion): tools/ops/server_soak.py soaks the real SparkServer with one game module. It samples the health file and /proc/<pid>/status and fails on an RSS slope or in-window growth over its ceiling, health tickP95Us/tickP99Us over budget, or ticks that go backwards, stall, or run below half the requested rate. It then sends SIGTERM and requires a live draining ready=false snapshot before any stopping snapshot, a final live=false snapshot, exit status 0, and no process left in the server's session. It writes a spark-server-soak-summary/1 JSON labelled with the externally supplied --expected-sha, which must equal the server's reported commit. CTest Server_Soak (label server-soak, Linux, 60 s) runs it against SparkServer + SparkGame, and ServerSoak_Harness proves each failure mode against a stand-in server. One local 1800 s run at 3711fd497c7312b11ad8435a453956e1835c5093 (dirty tree) passed: RSS slope 0.72 MB/h, growth 340 KB, tick p95/p99 500/500 us, drain and exit 0. That is local precursor evidence only. The budgets are provisional harness guards, not SLOs, and the health surface has no queue metrics. The 30-minute and scheduled soak criterion stays unmet until versioned budgets and a hosted server-soak job exist.",
       "dependencies": [
         "OPS-100",
         "HEAD-220",
@@ -800,15 +1042,42 @@
         "Backup/restore and alert/runbook drills are recorded",
         "Telemetry is externally consumable and exact-SHA labeled"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:23354f02da27",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The Server_Health tests cover health JSON and drain signalling only. Restarting and recovering a failing server is not tested."
+        },
+        {
+          "criterionDigest": "sha256:3d3d8ebe5028",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no soak, load or p95/p99 budget runs. The smoke and scheduled soaks need hosted or history evidence."
+        },
+        {
+          "criterionDigest": "sha256:6a1b58381966",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No backup/restore or alert/runbook drills are recorded."
+        },
+        {
+          "criterionDigest": "sha256:6a4de067db5d",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No telemetry export exists that outside tools can consume with exact-SHA labels, and it would need hosted evidence."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L server-soak --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-shipping -L recovery-drill --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L server-soak --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -L recovery-drill --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -L observability --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Server_Load",
         "Server_Soak",
         "Server_Chaos",
-        "Server_Health",
+        "Server_Health_*",
         "Server_BackupRestore"
       ],
       "requiredCiJobs": [
@@ -853,9 +1122,7 @@
       ],
       "plannedTestSelectors": [
         "Server_Load",
-        "Server_Soak",
         "Server_Chaos",
-        "Server_Health",
         "Server_BackupRestore"
       ]
     },
@@ -913,12 +1180,38 @@
         "Required soak completes without leak, crash, deadlock, or unbounded queue growth",
         "Results attach to exact commit and certified hardware row"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:3950e9bda498",
+          "state": "unmet",
+          "evidence": [],
+          "note": "All metrics are pending_measurement and none has an accepted baseline, so no budget can block a regression."
+        },
+        {
+          "criterionDigest": "sha256:f4be3e4b59ef",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No reviewed golden baselines are committed, and no approval gate exists for baseline changes."
+        },
+        {
+          "criterionDigest": "sha256:4570b349bbe5",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No required long soak exists or has been run."
+        },
+        {
+          "criterionDigest": "sha256:aa587eb5dfef",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no certified hardware rows, and this needs exact-commit results on certified hardware."
+        }
+      ],
       "commands": [
         "python3 -m unittest Tests.Tools.test_perf_budget Tests.Tools.test_perf_budget_adversarial Tests.Tools.test_perf_budget_hardening -v",
         "python3 tools/perf-budget/validate_budget.py perf-budgets/v1",
-        "ctest --test-dir build/windows-shipping -L benchmark --output-on-failure --no-tests=error",
-        "ctest --test-dir build/windows-shipping -L golden --output-on-failure --no-tests=error",
-        "ctest --test-dir build/windows-shipping -L nullrhi-soak --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L benchmark --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-release -C Release -L golden --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-release -C Release -L nullrhi-soak --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Benchmark_*",
@@ -965,9 +1258,7 @@
         "soak-scheduled"
       ],
       "plannedTestSelectors": [
-        "Benchmark_*",
-        "GoldenImage_*",
-        "Soak_*"
+        "GoldenImage_*"
       ]
     }
   ]

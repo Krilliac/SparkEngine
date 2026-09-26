@@ -5,12 +5,16 @@ versioned `.spark_save` binary file. The supported reader window is explicit:
 
 | Contract | Version |
 |---|---:|
-| Oldest readable format | `kOldestSupportedSaveVersion` = 1 |
-| Format written by this build | `kCurrentSaveVersion` = 3 |
+| Oldest readable format (N-1) | `kOldestSupportedSaveVersion` = `kCurrentSaveVersion - 1` = 3 |
+| Format written by this build (N) | `kCurrentSaveVersion` = 4 |
 
-Writers emit v3 only. Readers accept v1, v2, and v3. A v1 or v2 file is migrated
-in memory (`MigrateToCurrentVersion` runs real v1->v2 and v2->v3 steps) and is
-never rewritten merely because it was loaded.
+Owner decision OD-03 fixes the window at exactly N and N-1. Writers emit v4 only.
+Readers accept v3 and v4; a v3 file is migrated in memory (`MigrateToCurrentVersion`
+runs the v3->v4 step) and is never rewritten merely because it was loaded. v1, v2,
+and any version newer than v4 fail closed with a log line naming the file's version
+and the supported window. Game modules version their own custom-state blocks the
+same way through `Spark::ModulePersistedSchema` (see
+[Module persisted schemas](#module-persisted-schemas)).
 
 **Primary sources:**
 
@@ -47,7 +51,7 @@ more component types than one written before the change.
 
 A serialized `Transform` carries a `parent` property holding the parent's index in
 the saved entity list, or `"-1"` for a root. Loading rebuilds the edges through
-`World::SetParent`. The v2->v3 migration marks every pre-v3 `Transform` as a root.
+`World::SetParent`.
 
 ### Core API
 
@@ -88,9 +92,8 @@ The save system stores `screenshotPath` but does not capture the image. The game
 or editor must capture the thumbnail before saving and provide the path.
 
 `GetSaveMetadata()` and `GetSaveSlots()` read only the versioned metadata block.
-They do not parse the entity payload. Metadata returned from a supported v1 file
-has already passed the v1-to-v2 in-memory migration, so its version is current and
-its screenshot path is empty.
+They do not parse the entity payload. Metadata returned from a supported v3 file
+has already passed the v3-to-v4 in-memory migration, so its version is current.
 
 ## Binary format
 
@@ -128,16 +131,13 @@ snapshot before parsing or returning metadata, and reject missing, extended, or
 mismatched trailers. CRC-32 detects accidental corruption; it is not keyed and
 does not authenticate a save against a malicious editor.
 
-### Metadata layouts
+### Metadata layout
 
-v1 and v2 share the same outer binary layout. Their metadata blocks differ:
+Both readable versions (v3 and v4) use the same metadata block:
 
 ```text
-v1: saveName, sceneName, playerClass, timestamp, playTime, health,
-    armor, position, kills, deaths
-
-v2-v4: saveName, sceneName, playerClass, screenshotPath, timestamp, playTime,
-       health, armor, position, kills, deaths
+saveName, sceneName, playerClass, screenshotPath, timestamp, playTime,
+health, armor, position, kills, deaths
 ```
 
 Each listed field is newline-delimited except the three position coordinates,
@@ -157,23 +157,31 @@ aggregate accounting. Oversize values are rejected instead of truncated.
 `SaveSystem::MigrateToCurrentVersion(SaveData&)` is the authoritative in-memory
 migration entry point. It is transactional and idempotent:
 
-- v1 -> v2 sets `screenshotPath` to the defined empty value and updates the
-  format version;
-- v2 -> v3 adds `Transform.parent = -1` for every serialized transform and
-  updates the format version;
 - v3 -> v4 retains the same semantic payload and moves it into the checksummed
   v4 disk envelope;
 - v4 -> v4 is a no-op;
-- versions below 1 or above 4 are rejected without changing the input.
-
-The v1 reader uses the v1 metadata layout before applying the migration. This
-ordering matters: treating a v1 timestamp line as a v2 screenshot line would
-shift every remaining field.
+- versions below 3 (N-1) or above 4 (N) are rejected without changing the input.
 
 Unsupported files log the source version, the supported inclusive range, and
-whether a newer or compatible older build is required. There is no unlimited
-backward-compatibility promise; widening or retiring the reader window requires a
-separate migration change and fixture.
+whether a newer or compatible older build is required. OD-03 forbids unlimited
+backward compatibility: the next format bump (v5) moves the window to v4-v5, drops
+the v3->v4 step, and must ship a real v4 fixture that migrates.
+
+### Module persisted schemas
+
+SaveSystem versions the envelope; each game module owns the meaning of the
+custom-state entries it writes. A module declares one
+`Spark::ModulePersistedSchema` from the public SDK header
+`SparkSDK/Include/Spark/PersistedSchema.h`: its name, the custom-state key that
+holds its version, and the version it writes (N). `WriteModuleSchemaVersion`
+stamps N; `CheckModuleSchemaVersion` accepts exactly N and N-1 and otherwise
+returns a versioned, actionable error (missing key, malformed number, older than
+N-1, or newer than N). The module migrates N-1 data to N itself.
+
+SparkGameFPS declares `FPSLocalProfile::kSchema{"SparkGameFPS",
+"fps.profile.version", 1}` and uses it in the quicksave/quickload path
+(`FPSLocalProfile::WriteTo` / `ReadFrom`). Schema 1 is its first schema, so its
+window is 1-1 until a schema 2 adds a migration.
 
 ## Transaction and rollback behavior
 
@@ -298,34 +306,37 @@ live-world update.
 
 ## Compatibility evidence
 
-The immutable v1 source fixture is:
+The N-1 fixture that must migrate is the production-generated v3 FPS save:
+
+`Tests/Fixtures/Compatibility/SaveSystem/v3-fps-profile.spark_save.hex`
+
+The v1 and v2 fixtures stay committed as real pre-window files:
 
 `Tests/Fixtures/Compatibility/SaveSystem/v1-screenshotless.spark_save.hex`
-
-The immutable v2 source fixture is:
-
 `Tests/Fixtures/Compatibility/SaveSystem/v2-screenshot-without-hierarchy.spark_save.hex`
 
-The fixture was emitted through the pre-v2 writer path with a non-default
-`Transform`; the test asserts every serialized metadata/Transform field and
-byte-for-byte immutability of both source fixtures and copied slots. The v2
-fixture carries a screenshot path but omits the v3 hierarchy property, proving
-the on-disk v2-to-v3 root migration. Focused compatibility tests use the
-`SaveMigration_` selector and are registered with CTest labels
-`compatibility;save;unit`:
+Under OD-03 every read path (`GetSaveMetadata`, `Load`) must refuse them without
+changing the caller's metadata, world, or custom state, and without rewriting the
+copied slot or the fixture. The v3 test also reads the FPS module's own
+`fps.profile.*` block through the production `FPSLocalProfile::ReadFrom`.
+Focused compatibility tests use the `SaveMigration_` selector (CTest
+`SparkSaveCompatibilityTests`, labels `compatibility;save;unit`); editor scene
+compatibility uses `SceneMigration_` (`SparkSceneCompatibilityTests`, labels
+`compatibility;scene;unit`, fixtures under `Tests/Fixtures/Compatibility/SceneFile/`):
 
 ```bash
-ctest --test-dir build -C Release -L compatibility --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L compatibility --output-on-failure --no-tests=error
 ```
 
 The compatibility-labeled coverage includes:
 
-- v2 writer/header and screenshot-path round trip;
-- exact, idempotent v1-to-v2 in-memory migration;
-- immutable v1 read compatibility without source or slot rewrite;
-- immutable v2 read compatibility with screenshot preservation and hierarchy-root migration;
+- current-writer header and screenshot-path round trip;
+- exact, idempotent v3-to-v4 (N-1 to N) in-memory migration, with v2 and v5
+  snapshots rejected unchanged;
+- immutable v1 and v2 fixtures refused on every read path without mutation;
 - immutable production-generated v3 FPS-profile compatibility without source or
-  slot rewrite;
+  slot rewrite, including the module-owned profile schema;
+- module persisted-schema declarations accepting exactly N and N-1;
 - v4 writer/trailer round-trip and exact CRC verification;
 - payload, trailer, and version-field corruption rejection before metadata or
   world mutation, including cache-fresh external replacement;
@@ -358,13 +369,15 @@ The same production-linked SaveSystem test file also retains the malformed-tail,
 oversize-file, custom-state, and atomic slot-replacement regressions.
 
 SAVE-230 remains broader than this save-format slice. Local production-linked
-tests now cover the v4 CRC envelope, immutable v1-v3 save migration, transactional
-corruption rejection, cache freshness, and primary-to-backup recovery. The staged
-MinSizeRel FPS smoke separately demonstrates same-version progression XP
-persistence across two fresh D3D11 WARP processes. Still open: the rest of
-`FPSLocalProfile`, forced process-interruption rehearsal, scene/prefab/asset/editor
-migrations, per-module schema declarations, clean-machine installation, and
-hosted exact-SHA evidence. CRC-32 is not an authenticity control. The ordinary
+tests now cover the v4 CRC envelope, the OD-03 N/N-1 window (v3 migrates; v1/v2
+fixtures fail closed), SceneFile v1-to-v2 migration from real v1 fixtures, the
+module persisted-schema mechanism used by SparkGameFPS, transactional corruption
+rejection, cache freshness, and primary-to-backup recovery. The staged MinSizeRel
+FPS smoke separately demonstrates same-version progression XP persistence across
+two fresh D3D11 WARP processes. Still open: the rest of `FPSLocalProfile`, forced
+process-interruption rehearsal, prefab/asset/editor-state migrations, schema
+declarations for the other game modules, clean-machine installation, and hosted
+exact-SHA evidence. CRC-32 is not an authenticity control. The ordinary
 build workflows run compatibility tests serially with the rest of the suite; no
 dedicated compatibility CI job is claimed.
 

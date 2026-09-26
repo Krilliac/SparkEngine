@@ -161,7 +161,8 @@ class RepositoryInventoryTests(unittest.TestCase):
 
     def test_live_configures_are_expanded_per_matrix_leg_with_owners(self) -> None:
         configs = self.data["workflowCmakeConfigs"]
-        self.assertEqual(len(configs), 26)
+        # reproducibility-windows (BLD-100) configures windows-shipping twice.
+        self.assertEqual(len(configs), 31)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -178,7 +179,11 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "build-windows-vs2026",
                 "clang-tidy",
                 "coverage",
+                "experimental-module-lifecycle",
                 "fuzz-policy",
+                "network-integration",
+                "reproducibility-windows",
+                "security-runtime",
                 "telemetry-integration",
             ],
         )
@@ -223,7 +228,7 @@ class RepositoryInventoryTests(unittest.TestCase):
         gating = {job["id"]: job["gating"] for job in workflow["jobs"]}
         self.assertEqual(gating["build-windows-vs2022"], "blocking")
         self.assertEqual(gating["build-linux-msan"], "advisory")
-        self.assertEqual(gating["build-linux-mingw-wine"], "conditional")
+        self.assertEqual(gating["build-linux-mingw-wine"], "advisory")
 
     def test_current_debt_is_blocking_not_baseline_masked(self) -> None:
         report = check_parity.build_report(copy.deepcopy(self.data))

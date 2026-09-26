@@ -311,6 +311,8 @@ def build_check_report(
                 "candidate_count",
                 "scanned_file_count",
                 "deferred_candidate_count",
+                "exempt_candidate_count",
+                "exempt_by_classification",
                 "unclassified_candidate_count",
                 "scan_roots",
                 "excluded_subtrees",
@@ -407,7 +409,8 @@ def main(argv: list[str] | None = None) -> int:
             "fuzz policy: structural gate PASS "
             f"({report['inventory']['parser_count']} parsers, "
             f"{report['inventory']['fuzzed_count']} fuzzed, "
-            f"{report['inventory']['deferred_candidate_count']} deferred candidates); "
+            f"{report['inventory']['deferred_candidate_count']} deferred candidates, "
+            f"{report['inventory']['exempt_candidate_count']} OD-21 exemptions); "
             f"SEC-120 closure blockers: {len(report['closure_blockers'])}"
         )
     if args.require_closure and report["closure_blockers"]:

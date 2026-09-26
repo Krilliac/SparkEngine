@@ -342,6 +342,44 @@ Neither system depends on or communicates with the other. A game can use both si
 | `GetInt()`/`GetDouble()`/`GetString()` type mismatch | Throws `std::bad_variant_access` |
 | Column index out of range | `GetInt()`/`GetDouble()`/`GetString()` throw `std::out_of_range`; `IsNull()` returns true |
 
+## Durable Commit (TERRAFRONT stores)
+
+Every TERRAFRONT JSON store -- `TFDatabase` (accounts/characters), `TFOutfitStore`, `TFSocialSystem`, and the `WorldSave::WriteJson` world/progression files -- commits through one primitive, `Terrafront::SavePaths::WriteDurableReplace(destination, bytes, ec)` in `GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h`. A crash or power loss leaves either the complete previous file or the complete new one, never an empty or truncated committed file.
+
+| Step | POSIX | Windows |
+|------|-------|---------|
+| Stage | Unlink a stale `<store>.tmp` file (a directory there fails the write), create `<store>.tmp` with `O_CREAT\|O_EXCL\|O_NOFOLLOW\|O_CLOEXEC`, mode `0600` | `DeleteFileW` a stale staging file, `CreateFileW(CREATE_NEW)` |
+| Write | Loop `write()` until every byte lands (retries `EINTR`) | Loop `WriteFile()` |
+| Flush staging | `fsync()` then `close()`, both checked | `FlushFileBuffers()` then `CloseHandle()`, both checked |
+| Swap | `rename()` over the destination | `MoveFileExW(MOVEFILE_REPLACE_EXISTING \| MOVEFILE_WRITE_THROUGH)` |
+| Flush rename | `fsync()` the parent directory (`EINVAL`, "cannot sync a directory", is tolerated) | Covered by `MOVEFILE_WRITE_THROUGH` |
+
+`false` means nothing was committed: any failure before the swap removes the staging file and leaves the destination untouched. `true` means the destination holds the new bytes and the caller must adopt them (TFDatabase keeps the new revision in memory). Once the swap has succeeded the commit is never reported as failed, because rolling the in-memory state back while the disk holds the new revision would make a purchase, account creation or transfer that the caller was told failed reappear on the next reload. If the POSIX parent-directory sync fails after the swap, the function still returns `true`, leaves the error in `ec` as a durability warning, and logs a `[TF] ... committed, but syncing its directory failed` warning; the next successful write restores durability. Callers must create the parent directory and hold the store's `ExclusiveFileLock` so there is one writer per destination.
+
+Permissions: the owner-only (`0600`) committed file applies on POSIX only. On Windows the committed file inherits the parent directory's ACL, so the save root's ACL is the operator's responsibility.
+
+Enforced by `Persistence_Durable_*` in `Tests/TestDATA120PersistenceReal.cpp` (byte-exact commit, stale staging discarded, failed staging leaves the committed file untouched, a stale symlink left at the staging path is unlinked rather than followed, committed files are owner-only on POSIX, and a directory-sync failure after the swap still reports the commit so TFDatabase keeps the new revision). The `O_EXCL|O_NOFOLLOW` create flags guard only an entry planted between that unlink and `open()`, which no test schedules; the source contract below pins that the flags stay present and by `Tests/Tools/test_async_database_durability.py` (CTest `AsyncDatabaseDurabilityContract`), which fails if the flush-before-swap and directory-sync ordering changes or any TERRAFRONT source writes or renames a file without the primitive.
+
+## Backup, Restore and Recovery Drill (TFDatabase)
+
+`TFDatabase::CreateBackup(dbPath, backupPath, info)` copies one committed revision under the authority lock (safe while authorities run) into a durable backup plus a `sha256sum`-format `<backup>.sha256` sidecar, then re-reads and verifies both; it never overwrites an existing backup. `TFDatabase::RestoreFromBackup(backupPath, dbPath, info)` refuses a backup whose digest, load validation or schema gate fails (newer schema refused, N-1 migrated), keeps the replaced primary as `<db>.pre-restore-<ms>.bak`, and stamps a revision above the backup's and, when it can be read, the displaced primary's (`info.supersedesPrimaryRevision`), so a still-running authority gets `Conflict` instead of overwriting restored rows. Restore is also how a quarantined `.corrupt-*.bak` primary is recovered; with no primary or a torn one the displaced revision is unknown, later revisions can repeat lost ones, and the restore logs a warning. Stop every authority before restoring and restart them after.
+
+The recovery point (the last commit whose rename completed; a crash loses at most the one unacknowledged commit in flight) and the per-crash-point table are specified in `docs/specs/persistence.md`. Rehearse with `ctest -L recovery-drill`: `Persistence_BackupRestore_*` (7) and the POSIX-only `Persistence_RecoveryDrill_*` (4), which spawn a fresh `SparkTests` process that `_exit()`s at a `SavePaths::DurableCommitStage` (via the test-only `DurableCommitObserver()` seam), dies mid-restore, or is SIGKILLed while committing. Only `TFDatabase` has backup/restore; power loss and Windows crash recovery are not drilled.
+
+## Secrets and Encryption at Rest (OD-22)
+
+Owner decision OD-22 (`docs/readiness/OWNER-DECISIONS.md`, work item DATA-120) sets the stable-v1 rules for anything these stores write:
+
+| Rule | How the tree meets it | Enforced by |
+|------|-----------------------|-------------|
+| Passwords are stored only as salted PBKDF2 hashes | TERRAFRONT `TFAccountSystem::Register` writes `pbkdf2-sha256$<iterations>$<saltHex>$<dkHex>` (150k iterations, 128-bit per-account salt) through `TFDatabase::CreateAccount`; the MMO account system uses `Spark::PasswordHash::Create` and keeps accounts in memory | `Persistence_Secrets_TFAccountStoreHoldsOnlySaltedPbkdf2Hashes` (row-column allowlist, no plaintext or hex-encoded password in the file, distinct salts for equal passwords, restart re-login from the hash alone) |
+| Session tokens are never persisted | TERRAFRONT sessions are an in-memory client-id -> account-id map; MMO bearer tokens live only in `MMOAccountSystem`'s session table. Neither the TERRAFRONT JSON store nor the MMO key-value store (`MMOPersistenceSystem` over `AsyncDatabasePool`) has a session column | `Persistence_Secrets_TFLoginAndSessionBindingPersistOnlyLoginTime`, `Persistence_Secrets_MMOKeyValueStoreNeverReceivesPasswordOrSessionToken` (structural guard: `MMOAccountSystem` has no persistence path; the test confirms the written store holds no password, hash, or token and that a restarted account system rejects the old token) |
+| No database secret in committed or shipped config | The only backend is the file-based `SQLiteConnection`; its "connection string" is a file path, and the TERRAFRONT store path comes from the `TF_SAVE_ROOT` environment variable (`TFSavePaths.h`). No persistence code reads a credential from a config file | `Persistence_Secrets_ShippedConfigCarriesNoDatabaseCredential` scans every config-like file under the trees the install rules ship config from (`SparkEngine/Resources/Config`, the runtime `Assets/` directories, and the `SparkServer/config` / `SparkGateway/config` operator examples installed to `share/SparkEngine/examples`); `Persistence_Secrets_CredentialScannerDetectsPlantedSecrets` proves the matcher catches planted keys and `user:password@` URLs |
+
+**Operator responsibility -- encryption at rest.** stable-v1 does not encrypt database files itself (no SQLCipher or in-database encryption). Account stores hold usernames, salts, and PBKDF2 hashes; character stores hold gameplay state. Operators running a server must put the save directory (`TF_SAVE_ROOT`, default `<working-directory>/Saves`, and `mmo_data.db`, and their `.tmp`, `.bak`, and `.corrupt-*` siblings) on a volume protected by host full-disk encryption (BitLocker, LUKS/dm-crypt, FileVault, or the cloud provider's encrypted block storage), restrict the directory to the server account, and treat backups of it as sensitive.
+
+**Adding a networked backend.** A future MySQL/PostgreSQL `IDatabaseConnection` must take its credential from the environment or the OS credential store at runtime, never from a shipped config file or source, and must not log the connection string (`AsyncDatabasePool` and `MMOPersistenceSystem` currently log the path they open, which is safe only because it is a file path).
+
 ## Implementing a New Backend
 
 To add a real SQLite, MySQL, or PostgreSQL backend:

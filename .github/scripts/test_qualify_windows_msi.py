@@ -20,7 +20,20 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 SOURCE_SHA = "0123456789abcdef0123456789abcdef01234567"
+PREVIOUS_SOURCE_SHA = "fedcba9876543210fedcba9876543210fedcba98"
 PREVIOUS_SIGNER_THUMBPRINT = "A" * 40
+REVIEWED_BASELINE_SHA = "b" * 40
+
+
+def fake_git(parents, *, returncode=0, calls=None):
+    """Answer only ``git rev-list --parents -n 1 <sha>`` with the given parents."""
+    def git_runner(argv, **kwargs):
+        if calls is not None:
+            calls.append(list(argv))
+        if argv[:5] != ["git", "rev-list", "--parents", "-n", "1"] or len(argv) != 6:
+            raise AssertionError(f"unexpected git command {argv!r}")
+        return subprocess.CompletedProcess(argv, returncode, stdout=" ".join([argv[5], *parents]) + "\n", stderr="")
+    return git_runner
 
 
 def write_shipping_package_manifest(path, msi, *, source_sha=SOURCE_SHA, version="1.2.3"):
@@ -33,6 +46,35 @@ def write_shipping_package_manifest(path, msi, *, source_sha=SOURCE_SHA, version
         "msi": msi.name,
         "sha256": hashlib.sha256(msi.read_bytes()).hexdigest(),
     }), encoding="utf-8")
+
+
+def write_previous_receipt(path, old_msi, old_manifest, *, current_version="1.2.3", previous_version="1.2.2",
+                           tag_commit_sha=PREVIOUS_SOURCE_SHA, **overrides):
+    """Mirror the provision-previous-windows-msi.py receipt for the fixture predecessor."""
+    msi_bytes = old_msi.read_bytes()
+    manifest_bytes = old_manifest.read_bytes()
+    receipt = {
+        "schema": "spark-previous-windows-msi-v1",
+        "repository": "fixture-owner/SparkEngine",
+        "current_version": current_version,
+        "previous_version": previous_version,
+        "tag": f"v{previous_version}",
+        "tag_commit_sha": tag_commit_sha,
+        "release_id": 4101,
+        "release_immutable": True,
+        "msi": {
+            "id": 5101, "name": old_msi.name, "size": len(msi_bytes),
+            "digest": hashlib.sha256(msi_bytes).hexdigest(),
+            "downloaded_sha256": hashlib.sha256(msi_bytes).hexdigest(),
+            "path": "packages/" + old_msi.name,
+        },
+        "manifest": {
+            "id": 5102, "name": "shipping-package-manifest.json", "size": len(manifest_bytes),
+            "digest": hashlib.sha256(manifest_bytes).hexdigest(), "path": "shipping-package-manifest.json",
+        },
+    }
+    receipt.update(overrides)
+    path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
 class WindowsMSILifecycleTests(unittest.TestCase):
@@ -48,8 +90,9 @@ class WindowsMSILifecycleTests(unittest.TestCase):
         new_msi.write_bytes(b"new fixture MSI")
         old_manifest = root / "old-shipping-package-manifest.json"
         new_manifest = root / "new-shipping-package-manifest.json"
-        write_shipping_package_manifest(old_manifest, old_msi, version="1.2.2")
+        write_shipping_package_manifest(old_manifest, old_msi, source_sha=PREVIOUS_SOURCE_SHA, version="1.2.2")
         write_shipping_package_manifest(new_manifest, new_msi, version="1.2.3")
+        write_previous_receipt(root / "old-provisioning-receipt.json", old_msi, old_manifest)
         module_manifest = root / "SparkEngineGameModules.cmake"
         module_manifest.write_text("fixture manifest", encoding="utf-8")
         return old_packages, new_packages, old_manifest, new_manifest, module_manifest
@@ -57,7 +100,9 @@ class WindowsMSILifecycleTests(unittest.TestCase):
     def _run_transaction_contract(self, *, root, old_packages, new_packages,
                                   old_manifest, new_manifest, module_manifest,
                                   logs, runner, previous_signer_thumbprint=PREVIOUS_SIGNER_THUMBPRINT,
-                                  powershell="powershell.exe", bootstrap=False):
+                                  powershell="powershell.exe", bootstrap=False, previous_receipt=None,
+                                  previous_version="1.2.2", reviewed_baseline_commit=REVIEWED_BASELINE_SHA,
+                                  git_runner=None):
         """Exercise the old->new contract with generated native-process fixtures."""
         def copy_private_verified_file(source, private_directory, destination_name):
             destination = private_directory / destination_name
@@ -84,12 +129,17 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 if not bootstrap:
                     kwargs.update(
                         previous_packages=old_packages,
-                        previous_version="1.2.2",
+                        previous_version=previous_version,
                         previous_package_manifest=old_manifest,
                         previous_signer_thumbprint=previous_signer_thumbprint,
+                        previous_receipt=previous_receipt or root / "old-provisioning-receipt.json",
                     )
                 else:
-                    kwargs["bootstrap_repair"] = True
+                    kwargs.update(
+                        bootstrap_repair=True,
+                        reviewed_baseline_commit=reviewed_baseline_commit,
+                        git_runner=git_runner or fake_git([REVIEWED_BASELINE_SHA]),
+                    )
                 return MODULE._qualify_impl(
                     new_packages,
                     "1.2.3",
@@ -431,6 +481,17 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue(signature_report["passed"])
             self.assertEqual(signature_report["sha256"], hashlib.sha256(b"old fixture MSI").hexdigest())
             self.assertEqual(signature_report["publisher_thumbprint"], PREVIOUS_SIGNER_THUMBPRINT)
+            receipt_bytes = (root / "old-provisioning-receipt.json").read_bytes()
+            release_report = json.loads((logs / "previous-release.json").read_text(encoding="utf-8"))
+            self.assertEqual(release_report, {
+                "scope": "previous-windows-msi-provisioning-receipt", "previous_version": "1.2.2",
+                "msi": "SparkEngine-1.2.2-Windows-AMD64-MinSizeRel-Runtime.msi",
+                "sha256": hashlib.sha256(b"old fixture MSI").hexdigest(),
+                "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+                "repository": "fixture-owner/SparkEngine", "tag": "v1.2.2",
+                "tag_commit_sha": PREVIOUS_SOURCE_SHA, "release_id": 4101,
+                "msi_asset_id": 5101, "manifest_asset_id": 5102, "passed": True,
+            })
             first_install = next(index for index, call in enumerate(calls) if call[0] == "msiexec.exe")
             self.assertLess(state["signature_call_index"], first_install)
             self.assertIsNone(state["version"])
@@ -674,6 +735,137 @@ class WindowsMSILifecycleTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         qualify.assert_not_called()
 
+    def test_main_requires_previous_receipt_with_predecessor_inputs(self):
+        argv = [
+            "qualify-windows-msi.py", "--packages", "packages", "--version", "1.2.3",
+            "--manifest", "modules.cmake", "--package-manifest", "package.json",
+            "--runner-temp", "runner-temp", "--logs", "logs", "--source-sha", SOURCE_SHA,
+            "--previous-packages", "previous", "--previous-version", "1.2.2",
+            "--previous-package-manifest", "previous.json",
+            "--previous-signer-thumbprint", PREVIOUS_SIGNER_THUMBPRINT,
+        ]
+        with mock.patch.object(sys, "argv", argv), \
+                mock.patch.object(MODULE, "qualify") as qualify, \
+                contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                MODULE.main()
+        self.assertEqual(raised.exception.code, 2)
+        qualify.assert_not_called()
+
+    def _assert_rejected_before_native_commands(self, root, logs, expected_error, **kwargs):
+        old_packages, new_packages, old_manifest, new_manifest, module_manifest = (
+            kwargs.pop("fixture") if "fixture" in kwargs else self._transaction_fixture(root)
+        )
+        calls = []
+        state = {"installed": False, "version": None, "repaired": False,
+                 "install_root": str(root / "install")}
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state), **kwargs,
+            )
+        self.assertNotEqual(result, 0)
+        self.assertEqual(calls, [])
+        self.assertFalse((logs / "package-smoke.log").exists())
+        self.assertFalse((logs / "previous-release.json").exists())
+        report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+        self.assertFalse(report["passed"])
+        self.assertTrue(any(expected_error in error for error in report["errors"]), report["errors"])
+        return report
+
+    def test_predecessor_version_must_be_strictly_lower_than_candidate(self):
+        for previous_version in ("1.2.3", "1.3.0", "2.0.0"):
+            with self.subTest(previous_version=previous_version), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                old_msi = next(old_packages.iterdir())
+                renamed = old_packages / f"SparkEngine-{previous_version}-Windows-AMD64-MinSizeRel-Runtime.msi"
+                old_msi.rename(renamed)
+                write_shipping_package_manifest(old_manifest, renamed, source_sha=PREVIOUS_SOURCE_SHA,
+                                                version=previous_version)
+                write_previous_receipt(root / "old-provisioning-receipt.json", renamed, old_manifest,
+                                       previous_version=previous_version)
+                self._assert_rejected_before_native_commands(
+                    root, root / "logs", "strictly lower than the candidate version",
+                    fixture=(old_packages, new_packages, old_manifest, new_manifest, module_manifest),
+                    previous_version=previous_version,
+                )
+
+    def test_predecessor_with_candidate_commit_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            fixture = self._transaction_fixture(root)
+            old_packages, _, old_manifest, _, _ = fixture
+            old_msi = next(old_packages.iterdir())
+            write_shipping_package_manifest(old_manifest, old_msi, source_sha=SOURCE_SHA, version="1.2.2")
+            write_previous_receipt(root / "old-provisioning-receipt.json", old_msi, old_manifest,
+                                   tag_commit_sha=SOURCE_SHA)
+            self._assert_rejected_before_native_commands(
+                root, root / "logs", "commitSHA equals the candidate source SHA", fixture=fixture,
+            )
+
+    def test_predecessor_with_candidate_msi_digest_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            fixture = self._transaction_fixture(root)
+            old_packages, _, old_manifest, _, _ = fixture
+            old_msi = next(old_packages.iterdir())
+            old_msi.write_bytes(b"new fixture MSI")
+            write_shipping_package_manifest(old_manifest, old_msi, source_sha=PREVIOUS_SOURCE_SHA, version="1.2.2")
+            write_previous_receipt(root / "old-provisioning-receipt.json", old_msi, old_manifest)
+            self._assert_rejected_before_native_commands(
+                root, root / "logs", "previous MSI digest equals the candidate MSI digest", fixture=fixture,
+            )
+
+    def test_receipt_mismatch_is_rejected_before_any_native_command(self):
+        other_digest = "b" * 64
+        cases = {
+            "candidate version": ({"current_version": "1.2.4"}, "different candidate version"),
+            "previous version": ({"previous_version": "1.2.1"}, "version or tag does not match"),
+            "tag": ({"tag": "v1.2.1"}, "version or tag does not match"),
+            "tag commit": ({"tag_commit_sha": "1" * 40}, "tag commit does not match the predecessor manifest"),
+            "candidate commit": ({"tag_commit_sha": SOURCE_SHA}, "tag commit does not match the predecessor manifest"),
+            "mutable release": ({"release_immutable": False}, "does not identify an immutable release"),
+            "release id": ({"release_id": 0}, "does not identify an immutable release"),
+            "schema": ({"schema": "spark-previous-windows-msi-v0"}, "schema or repository is invalid"),
+            "extra key": ({"unexpected": True}, "closed required schema"),
+            "msi digest": ({"msi": "digest"}, "MSI identity does not match"),
+            "msi asset id": ({"msi": "id"}, "asset id or size is invalid"),
+            "manifest digest": ({"manifest": "digest"}, "manifest identity does not match"),
+        }
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                fixture = self._transaction_fixture(root)
+                old_packages, _, old_manifest, _, _ = fixture
+                old_msi = next(old_packages.iterdir())
+                receipt_path = root / "old-provisioning-receipt.json"
+                receipt_path.unlink()
+                if override in ({"msi": "digest"}, {"manifest": "digest"}, {"msi": "id"}):
+                    (asset_key, field), = override.items()
+                    write_previous_receipt(receipt_path, old_msi, old_manifest)
+                    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                    receipt[asset_key][field] = other_digest if field == "digest" else -1
+                    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+                else:
+                    write_previous_receipt(receipt_path, old_msi, old_manifest, **override)
+                self._assert_rejected_before_native_commands(root, root / "logs", expected_error, fixture=fixture)
+
+    def test_malformed_or_missing_receipt_is_rejected_before_any_native_command(self):
+        for payload in (None, "not JSON", '{"schema":"a","schema":"b"}', "[]"):
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                fixture = self._transaction_fixture(root)
+                receipt_path = root / "old-provisioning-receipt.json"
+                receipt_path.unlink()
+                if payload is not None:
+                    receipt_path.write_text(payload, encoding="utf-8")
+                self._assert_rejected_before_native_commands(
+                    root, root / "logs", "previous-release provisioning receipt", fixture=fixture,
+                )
+
     def test_repair_preserves_user_data_after_upgrade(self):
         """Repair must restore product files without deleting user-owned data."""
         with tempfile.TemporaryDirectory() as raw:
@@ -713,6 +905,85 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue(state["repaired"])
             self.assertTrue(state.get("user_data_preserved"))
             self.assertTrue(any("/fvomus" in call for call in calls if call))
+            binding = json.loads((logs / "bootstrap-baseline.json").read_text(encoding="utf-8"))
+            self.assertEqual(binding["source_sha"], SOURCE_SHA)
+            self.assertEqual(binding["reviewed_baseline_commit"], REVIEWED_BASELINE_SHA)
+            self.assertTrue(binding["passed"])
+
+    def test_bootstrap_rejects_missing_or_malformed_baseline_before_native_commands(self):
+        """An unreviewed baselineCommit ("" in readiness.json today) must fail closed."""
+        for baseline in (None, "", "B" * 40, "b" * 39, "not-a-sha"):
+            with self.subTest(baseline=baseline), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                logs = root / "bootstrap-baseline-logs"
+                calls = []
+                state = {"installed": False, "version": None, "repaired": False,
+                         "install_root": str(root / "install")}
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs,
+                    runner=self._identity_runner(calls, state), bootstrap=True,
+                    reviewed_baseline_commit=baseline,
+                )
+                self.assertEqual(result, 1)
+                self.assertEqual(calls, [])
+                self.assertFalse((logs / "bootstrap-baseline.json").exists())
+                report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+                self.assertFalse(report["passed"])
+                self.assertRegex(" ".join(report["errors"]), "baseline commit")
+
+    def test_bootstrap_rejects_source_whose_parent_is_not_the_reviewed_baseline(self):
+        for parents, returncode in (([], 0), (["c" * 40], 0), ([REVIEWED_BASELINE_SHA, "c" * 40], 0),
+                                    ([REVIEWED_BASELINE_SHA], 128)):
+            with self.subTest(parents=parents, returncode=returncode), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                logs = root / "bootstrap-parent-logs"
+                calls = []
+                git_calls = []
+                state = {"installed": False, "version": None, "repaired": False,
+                         "install_root": str(root / "install")}
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs,
+                    runner=self._identity_runner(calls, state), bootstrap=True,
+                    git_runner=fake_git(parents, returncode=returncode, calls=git_calls),
+                )
+                self.assertEqual(result, 1)
+                self.assertEqual(calls, [])
+                self.assertEqual(git_calls, [["git", "rev-list", "--parents", "-n", "1", SOURCE_SHA]])
+                self.assertFalse((logs / "bootstrap-baseline.json").exists())
+                report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+                self.assertFalse(report["passed"])
+                self.assertNotIn("reviewed_baseline_commit", report)
+
+    def test_reviewed_baseline_requires_bootstrap_mode(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            new_packages = root / "packages"
+            new_packages.mkdir()
+            with self.assertRaisesRegex(ValueError, "only to bootstrap_repair"):
+                MODULE._qualify_impl(
+                    new_packages, "1.2.3", root / "manifest.cmake", root, root / "logs",
+                    runner=lambda *args, **kwargs: self.fail("native command executed"),
+                    msiexec="msiexec.exe", powershell="powershell.exe", cmake="cmake",
+                    source_sha=SOURCE_SHA, reviewed_baseline_commit=REVIEWED_BASELINE_SHA,
+                )
+
+    def test_cli_requires_reviewed_baseline_with_bootstrap_repair(self):
+        base = ["qualify-windows-msi.py", "--packages", "p", "--version", "0.9.0", "--manifest", "m",
+                "--package-manifest", "pm", "--runner-temp", "t", "--logs", "l", "--source-sha", SOURCE_SHA]
+        for extra in (["--bootstrap-repair"], ["--reviewed-baseline-commit", REVIEWED_BASELINE_SHA]):
+            with self.subTest(extra=extra), mock.patch.object(sys, "argv", base + extra), \
+                    contextlib.redirect_stderr(io.StringIO()) as stderr, \
+                    mock.patch.object(MODULE, "qualify", side_effect=AssertionError("qualified")):
+                with self.assertRaises(SystemExit) as raised:
+                    MODULE.main()
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn("--reviewed-baseline-commit must be supplied together", stderr.getvalue())
 
     @unittest.skipUnless(os.name == "nt", "Windows sharing-mode mutation protection")
     def test_repair_keeps_verified_msi_locked_against_write_replace_and_parent_rename(self):

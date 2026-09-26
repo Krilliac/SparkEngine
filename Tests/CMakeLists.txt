@@ -126,6 +126,7 @@ add_executable(SparkTests
     TestMMOCredentialSecurity.cpp
     TestSecureRandom.cpp
     TestSparkConsoleConcurrency.cpp
+    TestExecScript.cpp
     TestScopeGuard.cpp
     TestSerializer.cpp
     TestEventBus.cpp
@@ -149,6 +150,8 @@ add_executable(SparkTests
     TestModuleDependency.cpp
     TestModuleDiscovery.cpp
     TestModuleABI.cpp
+    TestModuleABIDiagnostics.cpp
+    TestSparkGameShowcase.cpp
     TestPluginABI.cpp
     TestReflection.cpp
     TestPathCache.cpp
@@ -175,6 +178,7 @@ add_executable(SparkTests
     TestGraphicsEngine.cpp
     TestGraphicsBenchmarkStats.cpp
     TestProcessDrawListLinux.cpp
+    TestGraphicsEngineLinuxPassTruthReal.cpp
     TestRenderGraph.cpp
     TestTerrainRenderer.cpp
     TestMaterialEffects.cpp
@@ -240,6 +244,8 @@ add_executable(SparkTests
     TestJsonStrict.cpp
     TestThirdPartyIntegration.cpp
     TestGLTFStaticMeshLoader.cpp
+    TestGLTFSkinnedMeshLoader.cpp
+    TestGLTFAnimationImport.cpp
     TestNetworkStress.cpp
     TestNetworkMMOIntegration.cpp
     TestAnimationStress.cpp
@@ -264,6 +270,7 @@ add_executable(SparkTests
     TestPacketValidator.cpp
     TestPacketValidatorReal.cpp
     TestNET100TransportReal.cpp
+    TestSessionCompatibilityReal.cpp
     TestLogger.cpp
     TestProfiler.cpp
     TestStackTrace.cpp
@@ -317,6 +324,7 @@ add_executable(SparkTests
     TestRHI230VulkanValidationReal.cpp
     TestMSanCanary.cpp
     TestWARPRendering.cpp
+    TestRHI230VulkanGoldenReal.cpp
     # Hardware acceleration tests
     TestGPUParticleSystem.cpp
     TestGPUSkinning.cpp
@@ -365,12 +373,21 @@ add_executable(SparkTests
     TestMusicManager.cpp
     TestAngelScriptEngine.cpp
     TestENG200ScriptFaultsReal.cpp
+    TestENG200ScriptBindingsReal.cpp
     TestScriptHotReload.cpp
     TestVRSystem.cpp
     TestSeamlessAreaManager.cpp
     TestAreaAssetLoader.cpp
     TestEventResponseSystem.cpp
     TestVisualScriptCompiler.cpp
+    # MOD-390: the SparkGameVisualScript demo world builder (the module's real
+    # OnLoad/vs_restart load, spawn and rollback path) driven against a live
+    # World and AngelScriptEngine.
+    TestMOD390VisualScriptDiagnosticsReal.cpp
+    # MOD-390: the shipped scripts played headless to the five-pickup win, with
+    # scripted key input through a real InputManager in the injected EngineContext.
+    TestMOD390VisualScriptGameplayReal.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp"
     TestEntityPresetManager.cpp
     TestGamePackager.cpp
     TestASSET220GamePackagerReal.cpp
@@ -500,8 +517,6 @@ add_executable(SparkTests
     TestSparkGameRTS.cpp
     TestSparkGameRacing.cpp
     TestSparkGamePlatformer.cpp
-    # Crash reporting
-    TestCrashReportUploader.cpp
     # Security
     TestMemoryIntegrity.cpp
     TestMemoryIntegrityLifecycle.cpp
@@ -578,11 +593,19 @@ add_executable(SparkTests
     TestOpenWorldModule.cpp
     TestGameModuleRTS.cpp
     TestMOD370SkirmishDeterminismReal.cpp
+    TestMOD370RTSSaveReal.cpp
     TestGameModuleMMO.cpp
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
     TestMOD380RacingCompleteRaceReal.cpp
+    TestMOD380VehiclePhysicsReal.cpp
     TestGameModulePlatformerARPG.cpp
+    TestMOD340PlatformerCompletionReal.cpp
+    TestMOD340PlatformerProgressReal.cpp
+    TestMOD330ARPGDungeonReal.cpp
+    TestMOD330ARPGWorldActors.cpp
+    TestMOD350RPGQuestSliceReal.cpp
+    TestMOD350RPGNPCNavigationReal.cpp
     # TERRAFRONT (SparkGameMMOFPS) — header-only wire protocol, standalone
     # rule math, and validation of the real Assets/MMOFPS/Data tables.
     # Module .cpp sources are NOT compiled into SparkTests by design.
@@ -606,11 +629,21 @@ add_executable(SparkTests
     TestTFOnboarding.cpp
     # DATA-120 atomic multi-row character commits + schema versioning (TFDatabase above)
     TestDATA120PersistenceReal.cpp
+    # DATA-120 TFDatabase backup/restore + forced-failure recovery drill
+    TestDATA120BackupRestore.cpp
+    # TF-120 transaction-scoped locking: shared TF_SAVE_ROOT across authorities
+    TestTF120SharedSaveRoot.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseBackup.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp"
+    # DATA-120 / OD-22: no plaintext password, session token, or DB credential
+    # at rest (TF account store above + MMO KV store + shipped config scan).
+    TestDATA120SecretsAtRest.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp"
     # W7/W8 outfit persistence + secondary-motion chain math — both module
     # .cpps are deliberately minimal-dependency and link standalone into
     # SparkTests (the TFDatabase.cpp pattern above).
@@ -643,6 +676,9 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Core/EngineWeatherAdapter.cpp"
+    # MOD-315: FPSMultiplayerProduction_ tests (TestFPSMultiplayer.cpp) drive the real
+    # FPSMultiplayerSystem; it depends only on NetworkManager, ClientPrediction and SimpleConsole.
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp"
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
@@ -707,7 +743,8 @@ if(NOT ENABLE_NETWORKING)
         Fixtures/NetworkingDisabledCompileContract.cpp)
     target_compile_features(SparkNetworkingDisabledCompileContract PRIVATE cxx_std_23)
     target_include_directories(SparkNetworkingDisabledCompileContract PRIVATE
-        "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+        "${CMAKE_SOURCE_DIR}/SparkSDK/Include")
 endif()
 
 if(TARGET SparkGatewayCore)
@@ -1015,9 +1052,11 @@ target_sources(SparkTests PRIVATE
     TestBuildInfraReal.cpp
     TestConsoleProcessPipeReal.cpp
     TestCrashHandlerGatingReal.cpp
+    TestCrashSymbolication.cpp
     TestEditorCrashHandlerFilterReal.cpp
     TestEditorRecovery.cpp
     TestEngineWiringReal.cpp
+    TestLifecycleCompositionRootFailure.cpp
     TestD3D11DeviceContractsReal.cpp
     TestRHI210D3D11GoldenReal.cpp
     TestEditorGizmoTransformReal.cpp
@@ -1029,8 +1068,10 @@ target_sources(SparkTests PRIVATE
     TestModuleLifecycleReal.cpp
     TestRunnerSemanticsReal.cpp
     TestSEC100ChatAuditLogReal.cpp
+    TestSEC100RemoteAdminUnavailableReal.cpp
     TestSaveSystemRoundTripReal.cpp
     TestSAVE230NewerFormatSlotReal.cpp
+    TestMOD360OpenWorldPersistenceReal.cpp
     TestSecurityParsersReal.cpp
     TestTextureStexBoundsReal.cpp
     TestShaderCompilerReal.cpp
@@ -1038,10 +1079,12 @@ target_sources(SparkTests PRIVATE
     TestSparkGameFPSLoopReal.cpp
     TestSparkGameFPSMirrorCompanionsReal.cpp
     TestMOD310FPSSceneReloadRespawnReal.cpp
+    TestAssetManifestReal.cpp
     TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
     TestHEAD220NullRHILifetimeReal.cpp
+    TestHeadlessTickStats.cpp
     TestSceneManagerUnicodeReal.cpp
     TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
@@ -1082,9 +1125,12 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistence.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Navigation/RTSGridPathfinder.cpp"
     )
 
     # MMO module sources
@@ -1096,6 +1142,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Dungeon/MMODungeonSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/WorldBoss/MMOWorldBossSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/UI/MMOLoginUI.cpp"
@@ -1118,13 +1165,14 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Quest/RPGQuestSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/World/RPGWorldSetup.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Gameplay/RPGGameplayBridge.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
     )
 
     # Racing module sources
     target_sources(SparkTests PRIVATE
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp"
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Track/RacingTrackSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp" "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleChassis.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Track/RacingTrackSystem.cpp" "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Track/RacingTrackColliders.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Race/RacingRaceManager.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/AI/RacingAIDriver.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Camera/RacingCameraSystem.cpp"
@@ -1136,8 +1184,15 @@ if(TARGET imgui)
     # Platformer module sources
     target_sources(SparkTests PRIVATE
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerCollision.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Level/PlatformerPlatformSimulation.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Collectible/PlatformerCollectibleSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerLevelFlow.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerProgress.cpp"
     )
 
     # ARPG module sources
@@ -1149,6 +1204,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Skill/ARPGSkillSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Demo/ARPGActorPresentation.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp"
     )
 
@@ -1220,12 +1276,50 @@ if(ENABLE_NETWORKING)
         TestNetworkSecurity.cpp
         TestNetworkSecurityPhaseHH.cpp
         harden/Test_net-world_migration.cpp)
+
+    # MOD-315: three-process FPSLAN loopback harness. Each peer process runs the production
+    # FPSMultiplayerSystem against its own NetworkManager; TestFPSLANLoopback.cpp launches one
+    # server and two clients and requires both clients to converge on the server's
+    # spawn-move-kill-respawn-score round.
+    add_executable(SparkFPSLANLoopbackPeer
+        Fixtures/FPSLANLoopbackPeer.cpp
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp")
+    target_compile_features(SparkFPSLANLoopbackPeer PRIVATE cxx_std_23)
+    target_include_directories(SparkFPSLANLoopbackPeer PRIVATE
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source")
+    target_link_libraries(SparkFPSLANLoopbackPeer PRIVATE SparkEngineLib)
+    add_dependencies(SparkTests SparkFPSLANLoopbackPeer)
+    target_sources(SparkTests PRIVATE TestFPSLANLoopback.cpp)
+    target_compile_definitions(SparkTests PRIVATE
+        SPARK_TEST_FPSLAN_PEER_PATH="$<TARGET_FILE:SparkFPSLANLoopbackPeer>")
+    add_test(NAME FPSLANTwoClientConvergence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(FPSLANTwoClientConvergence PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=FPSLAN_;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "fps;multiplayer;network;integration;process"
+        TIMEOUT 180)
 endif()
 if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_PHYSICS)
+    # ENG-200: script physics/event bindings against the real AngelScript VM and
+    # Jolt world (TestENG200ScriptBindingsReal.cpp); the count pins all five.
+    if(SPARK_ANGELSCRIPT_AVAILABLE)
+        add_test(NAME ScriptBindingsReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(ScriptBindingsReal PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_;SPARK_TEST_EXPECT_COUNT=5"
+            LABELS "scripting;scripting-integration;physics;integration"
+            TIMEOUT 120)
+    endif()
 endif()
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_VULKAN)
+endif()
+# RHI-230: the SPIR-V built from Shaders/GLSL (root CMakeLists.txt section 9.4).
+# TestRHI230VulkanValidationReal.cpp loads every module from here.
+if(TARGET SparkSpirvShaders)
+    add_dependencies(SparkTests SparkSpirvShaders)
+    target_compile_definitions(SparkTests PRIVATE
+        SPARK_TEST_SPIRV_DIR="$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV")
 endif()
 if(SPARK_OPENGL_SUPPORT OR ENABLE_OPENGL)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_OPENGL)
@@ -1246,7 +1340,7 @@ set_target_properties(SparkTests PROPERTIES
 # Standalone process cores remain independently testable while their thin
 # executable entry points are covered by --help CTests in each subtree.
 if(TARGET SparkServerCore)
-    target_sources(SparkTests PRIVATE TestSparkServerApplication.cpp)
+    target_sources(SparkTests PRIVATE TestSparkServerApplication.cpp TestSparkServerHealth.cpp)
     target_link_libraries(SparkTests PRIVATE SparkServerCore)
     if(NOT WIN32)
         # SparkServerCore carries SparkEngineLib as WHOLE_ARCHIVE while other
@@ -1410,7 +1504,9 @@ set_tests_properties(SparkEngineLoadTests PROPERTIES
 # RHI-240: real OpenGL backend under KHR_debug (llvmpipe on Linux hosts). The
 # lane requires a GL context (SPARK_REQUIRE_OPENGL=1) so it cannot pass by
 # skipping; llvmpipe evidence is software-rasterizer only, not driver certification.
-if(SPARK_OPENGL_AVAILABLE AND NOT WIN32)
+# The dedicated real-GL lane needs Mesa (EGL/llvmpipe or GLX) and a 4.5 core context: Linux only.
+# macOS caps at GL 4.1 core without KHR_debug/DSA and has no headless context bootstrap.
+if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(
         NAME SparkOpenGLTests
         COMMAND ${CMAKE_COMMAND}
@@ -1423,15 +1519,53 @@ if(SPARK_OPENGL_AVAILABLE AND NOT WIN32)
             -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
     )
     set_tests_properties(SparkOpenGLTests PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLReal.cpp;SPARK_TEST_EXPECT_COUNT=11;SPARK_REQUIRE_OPENGL=1"
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLReal.cpp;SPARK_TEST_EXPECT_COUNT=13;SPARK_REQUIRE_OPENGL=1;SPARK_GL_EXPECT_ROW=software"
         LABELS "opengl;llvmpipe"
         TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+
+    # RHI-240: the production SDL2 host must honor SPARK_RHI_BACKEND=opengl
+    # (initialize OpenGL, never NullRHI) and must exit non-zero when that
+    # explicit request cannot be met. PLT-210: it also runs SparkGameFPS on the
+    # OpenGL window for 30 frames, and a windowed run whose window cannot be
+    # created must exit non-zero rather than continue on NullRHI. Uses DISPLAY
+    # or wraps itself in xvfb-run; having neither fails the lane rather than
+    # skipping it.
+    if(SPARK_PACKAGE_HAS_SDL2 AND TARGET SparkEngine)
+        find_program(SPARK_XVFB_RUN_EXECUTABLE xvfb-run)
+        add_dependencies(SparkTests SparkEngine)
+        set(_spark_opengl_startup_game_arg)
+        if(TARGET SparkGameFPS)
+            add_dependencies(SparkTests SparkGameFPS)
+            set(_spark_opengl_startup_game_arg "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>")
+        endif()
+        add_test(
+            NAME SparkEngineExplicitOpenGLStartup
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+                "-DSPARK_WORKING_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/opengl-explicit-startup"
+                "-DSPARK_XVFB_RUN=${SPARK_XVFB_RUN_EXECUTABLE}"
+                ${_spark_opengl_startup_game_arg}
+                -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkOpenGLExplicitStartup.cmake
+        )
+        set_tests_properties(SparkEngineExplicitOpenGLStartup PROPERTIES
+            LABELS "opengl;llvmpipe;linux;sdl2;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 240)
+    endif()
 endif()
 add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=SaveMigration_"
     LABELS "compatibility;save;unit"
     RUN_SERIAL TRUE
+    TIMEOUT 30)
+
+# SAVE-230 / OD-03: SceneFile reads v2 (N) and v1 (N-1) from committed fixtures,
+# writes v2 only, and rejects older/newer versions with a versioned error.
+add_test(NAME SparkSceneCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
+set_tests_properties(SparkSceneCompatibilityTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=SceneMigration_;SPARK_TEST_EXPECT_COUNT=4"
+    LABELS "compatibility;scene;unit"
     TIMEOUT 30)
 
 add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
@@ -1441,19 +1575,231 @@ set_tests_properties(TelemetrySpool PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 30)
 
-add_test(NAME LifecyclePartialInit COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
-set_tests_properties(LifecyclePartialInit PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=PartialInit_EngineContext;SPARK_TEST_EXPECT_COUNT=4"
+# OPS-100: retired crash-transport credentials are dropped on settings load and never saved.
+add_test(NAME CrashSettingsCredentials COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(CrashSettingsCredentials PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=CrashSettings_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "crash-security;security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 30)
+
+# OPS-100: signal-path build-id records (bounded ELF note parsing, fixed-buffer
+# SYMBOLIC FRAMES section) that tools/ops/symbolicate_crash.py consumes.
+add_test(NAME CrashSymbolicationRecords COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(CrashSymbolicationRecords PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=CrashSymbolication_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "crash-canary;unit"
+    TIMEOUT 30)
+
+# DATA-120 (OD-22): no plaintext password, session token, or database credential
+# reaches a persistence store or a shipped config file.
+add_test(NAME PersistenceSecretsAtRest COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(PersistenceSecretsAtRest PROPERTIES
+    ENVIRONMENT "SPARK_TEST_FILE=TestDATA120SecretsAtRest.cpp;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "persistence;security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 60)
+
+# DATA-120: TFDatabase multi-row transactions, schema migration, the TERRAFRONT
+# durable-commit primitive (SavePaths::WriteDurableReplace), and the real
+# AsyncDatabase KV flush run under the persistence label, so `ctest -L persistence`
+# executes the C++ evidence and not only the static Python durability contract.
+# Counts are exact per family: a dropped or renamed case fails its CTest instead
+# of shrinking the evidence. RUN_SERIAL because the fixtures reuse fixed paths
+# (Saves/test_data120_*.db, <tmp>/spark_save_roundtrip_kv_store) that SparkEngineTests
+# also writes, so a parallel ctest run would let one process delete the other's files.
+# Persistence_Durable_DirectorySyncFailureAfterRenameStillReportsCommit is POSIX-only
+# (it skips, but still counts, as root), so Windows builds register one case fewer.
+if(WIN32)
+    set(_spark_data120_durable_count 3)
+else()
+    set(_spark_data120_durable_count 4)
+endif()
+set(_spark_data120_persistence_selectors
+    "Persistence_Transaction_=3"
+    "Persistence_Migration_=2"
+    "Persistence_Durable_=${_spark_data120_durable_count}"
+    "AsyncDatabaseReal_=1")
+foreach(_spark_data120_selector IN LISTS _spark_data120_persistence_selectors)
+    string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")
+    list(GET _spark_data120_parts 0 _spark_data120_prefix)
+    list(GET _spark_data120_parts 1 _spark_data120_count)
+    string(REGEX REPLACE "_$" "" _spark_data120_name "${_spark_data120_prefix}")
+    add_test(NAME ${_spark_data120_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(${_spark_data120_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_data120_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_data120_count}"
+        LABELS "persistence;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endforeach()
+
+# DATA-120: TFDatabase backup/restore and the forced-failure recovery drill run
+# under persistence;recovery-drill, so `ctest -L recovery-drill` rehearses a
+# verified backup, a restore, and reopening after a writer dies inside a commit.
+# The drill cases exec a fresh SparkTests child that _exit()s mid-commit or is
+# SIGKILLed, so they exist only on POSIX; Windows crash recovery needs its own
+# hosted run.
+set(_spark_data120_recovery_selectors "Persistence_BackupRestore_=7")
+if(NOT WIN32)
+    list(APPEND _spark_data120_recovery_selectors "Persistence_RecoveryDrill_=4")
+endif()
+foreach(_spark_data120_selector IN LISTS _spark_data120_recovery_selectors)
+    string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")
+    list(GET _spark_data120_parts 0 _spark_data120_prefix)
+    list(GET _spark_data120_parts 1 _spark_data120_count)
+    string(REGEX REPLACE "_$" "" _spark_data120_name "${_spark_data120_prefix}")
+    add_test(NAME ${_spark_data120_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(${_spark_data120_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_data120_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_data120_count}"
+        LABELS "persistence;recovery-drill;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endforeach()
+
+# OPS-110: SparkServer operator health (build identity, tick percentiles, RSS, drain ordering).
+if(TARGET SparkServerCore)
+    add_test(NAME ServerHealth COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(ServerHealth PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=Server_Health_;SPARK_TEST_EXPECT_COUNT=6"
+        LABELS "server;observability"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
+
+# NET-100: SecureChannel (ChaCha20-Poly1305) transport families run under the
+# network-security label, so `ctest -L network-security` executes the C++ suite and
+# not only the static Python checks. Counts are exact per family: a dropped or
+# renamed case fails its CTest instead of shrinking the evidence. This covers
+# SecureChannel in isolation; it is not evidence of production wiring.
+set(_spark_net100_transport_selectors
+    "Transport_KnownAnswer_=2"
+    "Transport_Tamper_=3"
+    "Transport_Replay_=4"
+    "Transport_Downgrade_=2"
+    "Transport_KeyRotation_=3"
+    "Transport_FuzzPacket_=1"
+    "Transport_Capture_=1"
+    "Transport_KeyGeneration_=1")
+foreach(_spark_net100_selector IN LISTS _spark_net100_transport_selectors)
+    string(REPLACE "=" ";" _spark_net100_parts "${_spark_net100_selector}")
+    list(GET _spark_net100_parts 0 _spark_net100_prefix)
+    list(GET _spark_net100_parts 1 _spark_net100_count)
+    string(REGEX REPLACE "_$" "" _spark_net100_name "${_spark_net100_prefix}")
+    add_test(NAME NetworkSecurity_${_spark_net100_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetworkSecurity_${_spark_net100_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_net100_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_net100_count}"
+        LABELS "network-security;security;unit"
+        TIMEOUT 30)
+endforeach()
+
+# NET-100: protocol-version negotiation in Connect/ConnectAccepted over real loopback UDP.
+# The server must reject missing/older/newer/malformed handshakes with a typed ConnectRejected
+# before allocating a slot, and the client must refuse a mismatched ConnectAccepted echo.
+if(ENABLE_NETWORKING)
+    add_test(NAME NetworkSessionCompatibility COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetworkSessionCompatibility PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestSessionCompatibilityReal.cpp;SPARK_TEST_EXPECT_COUNT=10"
+        LABELS "network-security;network;security;unit"
+        TIMEOUT 60)
+endif()
+
+# NET-110: IOnlinePlatform conformance (docs/specs/online-services.md 5.1, 6) across
+# every adapter in OnlineServices.h (Null, Steam, Epic, Console) plus the Null
+# adapter's fixed-transcript determinism check. Exact count: a dropped adapter test fails.
+add_test(NAME OnlineServicesContract COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(OnlineServicesContract PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Contract_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "online-services;unit"
+    TIMEOUT 30)
+
+# NET-110: degraded-dependency semantics in OnlineServiceManager (docs/specs/online-services.md
+# 5.1): adapter exceptions become failures, per-capability circuit breaker (5 failures, 30 s,
+# one probe), state reported by Console_GetStatus. Exact count: a dropped test fails.
+add_test(NAME OnlineServicesDegraded COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(OnlineServicesDegraded PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Degraded_;SPARK_TEST_EXPECT_COUNT=7"
+    LABELS "online-services;unit"
+    TIMEOUT 30)
+
+# LIFE-200: the production LifecycleCompositionRoot fails closed on injected
+# stage failures (false return, std::exception, unknown throw, throwing shutdown).
+add_test(NAME LifecycleCompositionRootFailure COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(LifecycleCompositionRootFailure PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=PartialInit_CompositionRoot;SPARK_TEST_EXPECT_COUNT=8"
     LABELS "lifecycle;unit"
     TIMEOUT 30)
 
+# LIFE-200: every in-process lifecycle selector family runs under the lifecycle
+# label, so `ctest -L lifecycle` (and the sanitizer presets' build dirs) cover the
+# work item's selectors. Counts are exact per platform: a family that silently
+# loses tests fails its CTest instead of shrinking the evidence.
+#   ModuleABI_: 27 cross-platform, plus 2 Windows-only (wide-path loader, reload
+#   parent-directory cleanup) or 3 POSIX-only (verified shadow, read-only
+#   install, private stage), plus 1 POSIX test that needs the SparkGame module.
+#   EngineLifecycle_: the whole family is compiled only on non-Windows hosts.
+set(_spark_life_module_abi_count 27)
+if(WIN32)
+    math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 2")
+else()
+    math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 3")
+    if(TARGET SparkGame)
+        math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 1")
+    endif()
+endif()
+set(_spark_life_selectors
+    "ModuleLifecycle_=6"
+    "ModuleABI_=${_spark_life_module_abi_count}"
+    "EngineWiring_=9"
+    "ModuleHotReload_=15")
+if(NOT WIN32)
+    list(APPEND _spark_life_selectors "EngineLifecycle_=22")
+endif()
+foreach(_spark_life_selector IN LISTS _spark_life_selectors)
+    string(REPLACE "=" ";" _spark_life_parts "${_spark_life_selector}")
+    list(GET _spark_life_parts 0 _spark_life_prefix)
+    list(GET _spark_life_parts 1 _spark_life_count)
+    string(REGEX REPLACE "_$" "" _spark_life_name "${_spark_life_prefix}")
+    add_test(NAME Lifecycle_${_spark_life_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(Lifecycle_${_spark_life_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_life_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_life_count}"
+        LABELS "lifecycle;module;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endforeach()
+
+# MOD-300: the real SparkGame image runs its spawn -> damage -> heal coroutine on the
+# host CoroutineScheduler, stops and destroys it before unload, cancels on a lost target,
+# and reports a missing scheduler. Exact count so a dropped case fails the lane.
+if(TARGET SparkGame AND NOT WIN32)
+    add_test(NAME SparkGameShowcase_CoroutineSequence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SparkGameShowcase_CoroutineSequence PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SparkGameShowcase_Coroutine;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "module;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+    # Quickload restores the exact showcase entities (name, Transform, Health, tags), re-tracks
+    # them for status/spawn/shutdown, and cancels the in-flight coroutine.
+    add_test(NAME SparkGameShowcase_QuickLoadRestoresExactState COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SparkGameShowcase_QuickLoadRestoresExactState PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=SparkGameShowcase_QuickLoadRestoresExactState;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "module;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
+
 # RHI-230: Vulkan backend under VK_LAYER_KHRONOS_validation (Lavapipe on CI).
 # Lavapipe proves API-usage correctness only, not hardware certification.
-if(SPARK_VULKAN_AVAILABLE)
+# SPARK_REQUIRE_VULKAN_VALIDATION turns a missing ICD or validation layer into a
+# failure: SPARK_TEST_EXPECT_COUNT counts skipped tests, so without it the lane
+# would pass with all 18 tests skipped. Linux only, like SparkOpenGLTests: the
+# Linux CI jobs install mesa-vulkan-drivers (Lavapipe), vulkan-validationlayers
+# and glslang-tools (configure requires glslangValidator with Vulkan enabled).
+if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(NAME VulkanValidation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(VulkanValidation PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestRHI230VulkanValidationReal.cpp;SPARK_TEST_EXPECT_COUNT=16"
-        LABELS "vulkan;rendering;unit"
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI230VulkanValidationReal.cpp;SPARK_TEST_EXPECT_COUNT=18;SPARK_REQUIRE_VULKAN_VALIDATION=1"
+        LABELS "vulkan;vulkan-lavapipe;rendering;unit"
         RUN_SERIAL TRUE
         TIMEOUT 120)
 endif()
@@ -1464,7 +1810,11 @@ foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_RoleMatrix
         RemoteAdmin_ReplayDenied
         RemoteAdmin_RateLimited
-        RemoteAdmin_ReservedCommandsCannotBeRebound)
+        RemoteAdmin_ExpiredDenied
+        RemoteAdmin_ReservedCommandsCannotBeRebound
+        # OD-05: remote administration is permanently unavailable in stable-v1.
+        RemoteAdmin_UnavailableRawTransportDeniedAndAudited
+        RemoteAdmin_UnavailableLocalGrantCannotAdminister)
     add_test(NAME ${_remote_admin_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(${_remote_admin_selector} PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=${_remote_admin_selector};SPARK_TEST_EXPECT_COUNT=1"
@@ -1484,6 +1834,24 @@ foreach(_remote_debug_epoch_selector IN ITEMS
         TIMEOUT 30)
 endforeach()
 
+# SEC-100: gateway area-control fail-closed and audit cases, one selector each
+# so a hostile-frame regression names the exact rejection that stopped holding.
+if(TARGET SparkGatewayCore)
+    foreach(_gateway_area_control_selector IN ITEMS
+            GatewayAreaControl_RejectsWrongKeyMac
+            GatewayAreaControl_RejectsStaleAndFutureTimestamp
+            GatewayAreaControl_RejectsReplayedNonce
+            GatewayAreaControl_RejectsNewNoncesWhenReplayLedgerIsFull
+            GatewayAreaControl_AuditRecordOmitsSecrets)
+        add_test(NAME ${_gateway_area_control_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(${_gateway_area_control_selector} PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME=${_gateway_area_control_selector};SPARK_TEST_EXPECT_COUNT=1"
+            LABELS "gateway;security;network"
+            RUN_SERIAL TRUE
+            TIMEOUT 30)
+    endforeach()
+endif()
+
 # RHI-210: D3D11 golden-frame and render-target resource contracts. Exact
 # counts so a filter that silently selects nothing (or a skip) cannot pass.
 if(WIN32)
@@ -1491,6 +1859,23 @@ if(WIN32)
     set_tests_properties(D3D11_Golden PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=D3D11_Golden_;SPARK_TEST_EXPECT_COUNT=2"
         LABELS "d3d11-golden;d3d11;stable-v1"
+# RHI-230: shipped-shader goldens on the vulkan-lavapipe row. Renders the
+# FullscreenQuad post-process programs from the SPIR-V the build compiles
+# (SparkSpirvShaders) through VulkanDevice under the validation layer, and
+# compares each frame with the committed baseline under the reviewed thresholds
+# and SHA-256 in Tests/GoldenImages/manifest.json. Software-row shader evidence
+# only, not engine-pass goldens or hardware certification; the device must be
+# Lavapipe. The exact count fails the lane if a scene test stops being compiled.
+if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET SparkSpirvShaders)
+    add_test(NAME VulkanGoldenTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(VulkanGoldenTests PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI230VulkanGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=4;SPARK_REQUIRE_VULKAN_VALIDATION=1;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "vulkan;vulkan-lavapipe;vulkan-golden;rendering"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
         RUN_SERIAL TRUE
         TIMEOUT 60)
     add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
@@ -1546,6 +1931,71 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
         TIMEOUT 45)
 endif()
 
+# RDY-015: the Linux hosts honor -require-game (exit 2 when no game module
+# initialized) and print one post-teardown SPARK_MODULE_LIFECYCLE record named
+# after the loaded library. Host evidence only; it promotes no module profile.
+add_test(NAME ModuleLifecycleRecordHost COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(ModuleLifecycleRecordHost PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=ModuleLifecycleRecord_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "lifecycle;module;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 60)
+if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
+   TARGET SparkEngine AND TARGET SparkGame)
+    add_dependencies(SparkTests SparkEngine SparkGame SparkCompatibleModuleFixture)
+    if(SPARK_HEADLESS_SUPPORT)
+        set(_spark_lifecycle_record_headless ON)
+    else()
+        set(_spark_lifecycle_record_headless OFF)
+    endif()
+    add_test(
+        NAME LinuxHostModuleLifecycleRecord
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGame>"
+            "-DSPARK_FAILING_MODULE=$<TARGET_FILE:SparkCompatibleModuleFixture>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_CHECK_HEADLESS=${_spark_lifecycle_record_headless}"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkLinuxModuleLifecycleRecord.cmake
+    )
+    set_tests_properties(LinuxHostModuleLifecycleRecord PROPERTIES
+        LABELS "lifecycle;module;linux;sdl2;integration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 240)
+endif()
+
+# EDT-210: the Linux host runs `-scene <path>` engine-only. An editor-saved
+# reflected scene must load into the engine ECS world (one SPARK_SCENE_LOADED
+# record with the fixture's counts, no game module), and a missing or rejected
+# scene must exit 4 instead of running an empty engine. Loading only: the Linux
+# basic draw path is a no-op, so this is not rendering evidence.
+if(UNIX AND NOT APPLE AND TARGET SparkEngine AND (SPARK_HEADLESS_SUPPORT OR SPARK_PACKAGE_HAS_SDL2))
+    add_dependencies(SparkTests SparkEngine)
+    set(_spark_scene_preview_headless OFF)
+    set(_spark_scene_preview_sdl OFF)
+    if(SPARK_HEADLESS_SUPPORT)
+        set(_spark_scene_preview_headless ON)
+    endif()
+    if(SPARK_PACKAGE_HAS_SDL2)
+        set(_spark_scene_preview_sdl ON)
+    endif()
+    add_test(
+        NAME LinuxScenePreview
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_SCENE_FIXTURE=${CMAKE_SOURCE_DIR}/Tests/Fixtures/EditorScene/Scenes/EditorSeeded.sparkscene"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_SCENE_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/linux-scene-preview"
+            "-DSPARK_CHECK_HEADLESS=${_spark_scene_preview_headless}"
+            "-DSPARK_CHECK_SDL=${_spark_scene_preview_sdl}"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkLinuxScenePreview.cmake
+    )
+    set_tests_properties(LinuxScenePreview PROPERTIES
+        LABELS "editor;scene;linux;integration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
+endif()
+
 add_test(
     NAME NullRHIWindowsLifecycleParserContract
     COMMAND ${CMAKE_COMMAND}
@@ -1556,13 +2006,235 @@ set_tests_properties(NullRHIWindowsLifecycleParserContract PROPERTIES
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 10)
 
+# PLT-210: the production Linux headless host runs the real SparkGameFPS module
+# on the EngineRuntime-owned NullRHI bridge and must print exactly one
+# SPARK_MODULE_READY, SPARK_HEADLESS_RHI and SPARK_HEADLESS_LIFECYCLE record, in
+# that order, with rendered=0 and faults=0. It reuses the strict parser of
+# NullRHI_Windows_FPSLifecycle so the Linux sanitizer lanes exercise the shared
+# FPS/NullRHI lifecycle. Source-tree evidence only; no packaged certification.
+if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+   TARGET SparkEngine AND TARGET SparkGameFPS)
+    add_dependencies(SparkTests SparkEngine SparkGameFPS)
+    add_test(
+        NAME NullRHI_Linux_FPSLifecycle
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            -DSPARK_RHI_BACKEND=null
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessNullRHILifecycle.cmake
+    )
+    set_tests_properties(NullRHI_Linux_FPSLifecycle PROPERTIES
+        LABELS "nullrhi-headless;linux;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
+# HEAD-220: graceful (SIGTERM), forced-kill-then-restart and kill-during-boot
+# scenarios against the production headless FPS host on NullRHI, each accepted
+# by the strict parser of RunSparkHeadlessNullRHILifecycle. Linux only: the
+# Windows host is a GUI-subsystem executable with no console when its output is
+# redirected, so CTRL_BREAK_EVENT cannot reach it. Source-tree evidence only,
+# not packaged Windows certification.
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME HeadlessShutdown_HarnessContract
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/run_headless_shutdown_recovery.py --self-test)
+    set_tests_properties(HeadlessShutdown_HarnessContract PROPERTIES
+        LABELS "nullrhi-headless;unit;python"
+        TIMEOUT 30)
+    if(UNIX AND NOT APPLE AND NOT CMAKE_CROSSCOMPILING AND SPARK_HEADLESS_SUPPORT AND
+       BUILD_GAME_MODULES AND TARGET SparkEngine AND TARGET SparkGameFPS)
+        add_dependencies(SparkTests SparkEngine SparkGameFPS)
+        foreach(_spark_headless_shutdown_case
+                "Graceful:graceful" "ForcedRecovery:forced-recovery" "BootInterrupted:boot-interrupted")
+            string(REPLACE ":" ";" _spark_headless_shutdown_pair "${_spark_headless_shutdown_case}")
+            list(GET _spark_headless_shutdown_pair 0 _spark_headless_shutdown_name)
+            list(GET _spark_headless_shutdown_pair 1 _spark_headless_shutdown_scenario)
+            add_test(
+                NAME HeadlessShutdown_${_spark_headless_shutdown_name}
+                COMMAND ${Python3_EXECUTABLE} -B
+                    ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/run_headless_shutdown_recovery.py
+                    --scenario ${_spark_headless_shutdown_scenario}
+                    --engine $<TARGET_FILE:SparkEngine>
+                    --module $<TARGET_FILE:SparkGameFPS>
+                    --source-root ${CMAKE_SOURCE_DIR}
+                    --cmake ${CMAKE_COMMAND})
+            set_tests_properties(HeadlessShutdown_${_spark_headless_shutdown_name} PROPERTIES
+                LABELS "nullrhi-headless;linux;integration;process"
+                RUN_SERIAL TRUE
+                TIMEOUT 300)
+        endforeach()
+    endif()
+endif()
+
+# RDY-015: real-source lifecycle evidence for every experimental game module.
+# The parser contract is deterministic and runs in every lane; the per-module
+# runs launch the production Linux SDL host with -require-game and carry the
+# experimental-modules label, which every full-ctest lane excludes (-LE) and
+# only the advisory experimental-module-lifecycle job selects. The module list
+# is every tools/module-evidence/manifest.json entry tracked under RDY-015, so
+# these tests never carry a stable-v1 or module-profile label.
+add_test(
+    NAME ExperimentalModuleLifecycleParserContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_EXPERIMENTAL_LIFECYCLE_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkExperimentalModuleLifecycle.cmake
+)
+set_tests_properties(ExperimentalModuleLifecycleParserContract PROPERTIES
+    LABELS "prototype;lifecycle;unit"
+    TIMEOUT 10)
+if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND TARGET SparkEngine)
+    set(_spark_module_evidence_manifest "${CMAKE_SOURCE_DIR}/tools/module-evidence/manifest.json")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_spark_module_evidence_manifest}")
+    file(READ "${_spark_module_evidence_manifest}" _spark_module_evidence_json)
+    string(JSON _spark_manifest_module_count LENGTH "${_spark_module_evidence_json}" modules)
+    math(EXPR _spark_manifest_module_last "${_spark_manifest_module_count} - 1")
+    foreach(_spark_manifest_index RANGE ${_spark_manifest_module_last})
+        string(JSON _spark_experimental_tracker ERROR_VARIABLE _spark_not_experimental
+            GET "${_spark_module_evidence_json}" modules ${_spark_manifest_index} experimentalSeparation trackedUnder)
+        if(_spark_not_experimental OR NOT _spark_experimental_tracker STREQUAL "RDY-015")
+            continue()
+        endif()
+        string(JSON _spark_experimental_module GET "${_spark_module_evidence_json}"
+            modules ${_spark_manifest_index} cmakeTarget)
+        # SPARK_GAME_MODULES may select a subset (e.g. the stable-v1 FPS-only
+        # profile); the advisory job asserts the full set is registered.
+        if(NOT TARGET ${_spark_experimental_module})
+            continue()
+        endif()
+        add_test(
+            NAME ExperimentalModuleLifecycle_${_spark_experimental_module}
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+                "-DSPARK_GAME_MODULE=$<TARGET_FILE:${_spark_experimental_module}>"
+                "-DSPARK_MODULE_TARGET=${_spark_experimental_module}"
+                "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+                -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkExperimentalModuleLifecycle.cmake
+        )
+        set_tests_properties(ExperimentalModuleLifecycle_${_spark_experimental_module} PROPERTIES
+            LABELS "experimental-modules;prototype"
+            RUN_SERIAL TRUE
+            TIMEOUT 60)
+    endforeach()
+endif()
+
 # HEAD-220: NullRHIDevice live-resource accounting follows resource lifetime
 # (leak/soak signal for packaged headless runs).
 add_test(NAME NullRHIResourceLifetime COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
 set_tests_properties(NullRHIResourceLifetime PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=NullRHI_Lifetime_;SPARK_TEST_EXPECT_COUNT=6"
+    ENVIRONMENT "SPARK_TEST_NAME=NullRHI_Lifetime_;SPARK_TEST_EXPECT_COUNT=8"
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 30)
+
+# ENG-220: fail-closed glTF skin import (JOINTS_0/WEIGHTS_0, inverse binds, joint
+# tree, 256-joint GPU palette). CPU importer coverage only: no skinned rendering,
+# animation clips or Blender-authored skinned asset. Exact count: a dropped test fails.
+add_test(NAME GLTFSkinnedMeshImport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(GLTFSkinnedMeshImport PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=GLTF_Skinning_;SPARK_TEST_EXPECT_COUNT=19"
+    LABELS "assets;gltf;unit"
+    TIMEOUT 30)
+
+# ENG-220: glTF skeletons and LINEAR TRS joint animations through AnimationManager
+# (LoadSkeleton/LoadAnimations) and skin influences in the portable (non-Windows)
+# MeshAsset. CPU import only: no skinned rendering, and the Windows D3D11 MeshAsset
+# still rejects skinned glTF. Exact count: a dropped test fails. The three portable
+# MeshAsset tests are compiled out on Windows (the D3D11 MeshAsset needs a device).
+if(WIN32)
+    set(_gltf_animation_test_count 16)
+else()
+    set(_gltf_animation_test_count 19)
+endif()
+add_test(NAME GLTFAnimationImport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(GLTFAnimationImport PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=GLTF_Animation_;SPARK_TEST_EXPECT_COUNT=${_gltf_animation_test_count}"
+    LABELS "assets;gltf;unit"
+    TIMEOUT 30)
+
+# PERF-100: the bounded tick work-time histogram both headless hosts feed, then
+# the producer end to end: the real headless host on NullRHI with the SparkGame
+# module, its SPARK_HEADLESS_TICK_STATS record (incl. self-read peak RSS), and a result JSON that
+# passes validate_result and stays NON-AUTHORITATIVE on the uncertified row.
+add_test(NAME HeadlessTickStats COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
+set_tests_properties(HeadlessTickStats PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=HeadlessTickStats_;SPARK_TEST_EXPECT_COUNT=7"
+    LABELS "benchmark;nullrhi-headless;unit"
+    TIMEOUT 30)
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME HeadlessTickCollector_Parser
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_collect_headless_result.py ParserTests CollectorGuardTests)
+    set_tests_properties(HeadlessTickCollector_Parser PROPERTIES
+        LABELS "benchmark;perf-budget;unit;python"
+        TIMEOUT 60)
+    # PERF-100 soak harness: leak fit, result schema, and every failure mode
+    # (leak, crash, deadlock, spin, never-ready) against a stand-in host. Not
+    # labelled nullrhi-soak: only a real-host soak may satisfy that label.
+    add_test(
+        NAME NullRHISoak_Harness
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py LeakFitTests ResultTests HarnessTests)
+    set_tests_properties(NullRHISoak_Harness PROPERTIES
+        LABELS "perf-budget;unit;python"
+        TIMEOUT 120)
+    # Under ASan, freed blocks sit in a 256 MiB allocator quarantine that fills
+    # for minutes and reads as RSS growth. The soaks bound it to 1 MiB so the
+    # slope measures engine memory; leak detection stays on. Other builds
+    # ignore ASAN_OPTIONS.
+    set(_spark_soak_asan_quarantine "ASAN_OPTIONS=string_append::quarantine_size_mb=1")
+    if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+       TARGET SparkEngine AND TARGET SparkGame)
+        add_dependencies(SparkTests SparkEngine SparkGame)
+        add_test(
+            NAME Benchmark_HeadlessTickLoop
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_collect_headless_result.py HeadlessTickLoopBenchmark)
+        set_tests_properties(Benchmark_HeadlessTickLoop PROPERTIES
+            ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGame>"
+            LABELS "benchmark;nullrhi-headless;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 180)
+        # ~120 s real-host soak; scheduled long soaks run
+        # tools/perf-budget/run_nullrhi_soak.py --duration directly.
+        add_test(
+            NAME Soak_NullRHIHeadlessSmoke
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py SoakNullRHIHeadlessSmoke)
+        set_tests_properties(Soak_NullRHIHeadlessSmoke PROPERTIES
+            ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGame>"
+            ENVIRONMENT_MODIFICATION "${_spark_soak_asan_quarantine}"
+            LABELS "nullrhi-soak;nullrhi-headless;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 480)
+    endif()
+    # HEAD-220: ten-minute bounded soak of the shared headless FPS/NullRHI path
+    # (SparkGameFPS, 36000 ticks): VmRSS sampled from /proc, the provisional
+    # leak-slope ceiling, and zero NullRHI resources live at device shutdown.
+    # Too slow for the default lanes, so it is opt-in:
+    #   cmake -B build -DSPARK_ENABLE_SOAK_TESTS=ON
+    #   ctest --test-dir build -L soak --no-tests=error
+    # Linux shared-code evidence only; not the Windows package soak.
+    option(SPARK_ENABLE_SOAK_TESTS "Register the ten-minute headless FPS/NullRHI soak (label soak)" OFF)
+    if(SPARK_ENABLE_SOAK_TESTS AND UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+       TARGET SparkEngine AND TARGET SparkGameFPS)
+        add_dependencies(SparkTests SparkEngine SparkGameFPS)
+        add_test(
+            NAME Soak_FPSHeadlessNullRHI
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py SoakNullRHIHeadlessSmoke)
+        set_tests_properties(Soak_FPSHeadlessNullRHI PROPERTIES
+            ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGameFPS>;SPARK_SOAK_DURATION=600"
+            ENVIRONMENT_MODIFICATION "${_spark_soak_asan_quarantine}"
+            LABELS "soak;linux;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 1500)
+    endif()
+endif()
 
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)
@@ -1719,6 +2391,40 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             RUN_SERIAL TRUE
             TIMEOUT 600)
     endif()
+endif()
+
+# MOD-310: headless arena simulation. The parser contract is deterministic and
+# runs everywhere. The Linux run launches the production headless host on
+# NullRHI with the real SparkGameFPS module, which must load the authored
+# level1 arena, bind RespawnSystem and GameMode to its default spawns and tick
+# the match; the runner fails closed unless the SPARK_FPS_HEADLESS_ARENA record
+# matches an independent parse of the staged scene. Source-tree evidence only.
+add_test(
+    NAME FPSHeadlessArenaParserContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_FPS_HEADLESS_ARENA_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkFPSHeadlessArena.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(FPSHeadlessArenaParserContract PROPERTIES
+    LABELS "module;fps;nullrhi-headless;unit"
+    TIMEOUT 10)
+if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+   TARGET SparkEngine AND TARGET SparkGameFPS)
+    add_dependencies(SparkTests SparkEngine SparkGameFPS)
+    add_test(
+        NAME FPSSinglePlayerSlice_HeadlessArenaLinux
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_ARENA_SCENE=$<TARGET_FILE_DIR:SparkEngine>/Assets/Scenes/level1.scene"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkFPSHeadlessArena.cmake
+    )
+    set_tests_properties(FPSSinglePlayerSlice_HeadlessArenaLinux PROPERTIES
+        LABELS "module;fps;nullrhi-headless;linux;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
 endif()
 
 add_test(
@@ -1879,6 +2585,98 @@ if(SPARK_ENABLE_INSTALLED_SDK_TESTS)
         TIMEOUT 3600)
 endif()
 
+# ----------------------------------------------------------------------------
+# ASSET-220 installed-package consumer (Linux, opt-in, local evidence)
+# ----------------------------------------------------------------------------
+# Installs this build into a build-owned prefix, then configures, builds and
+# ctests Tests/PackageSmoke against only that prefix -- the Linux counterpart of
+# build.yml's per-PR Windows installed-SDK consumer step -- and fails if the
+# consumer resolved any header or library from the source or build tree. The
+# engine tree may use any generator; the consumer always uses Unix Makefiles
+# (needs `make`), whose depfiles and link.txt the boundary proof reads.
+# It needs a complete build and takes minutes, so it is off by default:
+#   cmake -B build -DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON
+#   ctest --test-dir build -L package-consumer-linux --no-tests=error
+# Its result is local, non-hosted evidence. The leak detector it relies on is
+# always tested by PackageConsumer_SourceTreeBoundaryDetection below.
+option(SPARK_ENABLE_PACKAGE_CONSUMER_TESTS
+    "Register the slow Linux installed-package consumer test (PackageConsumer_*)" OFF)
+if(SPARK_ENABLE_PACKAGE_CONSUMER_TESTS)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_CROSSCOMPILING)
+        message(FATAL_ERROR
+            "SPARK_ENABLE_PACKAGE_CONSUMER_TESTS registers the native Linux consumer lane only; "
+            "the Windows installed-SDK consumer runs in .github/workflows/build.yml")
+    endif()
+    # A single-config tree configured without CMAKE_BUILD_TYPE has an empty
+    # $<CONFIG>; the consumer then builds as Release. Four stages (install,
+    # configure, build, ctest) each get SPARK_STAGE_TIMEOUT; 4 x 800 s plus
+    # slack stays inside the 3600 s CTest TIMEOUT (the CI-110 policy ceiling),
+    # so a stage limit with its log, not a CTest kill, reports a hang.
+    set(_spark_consumer_config "$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Release>")
+    set(_spark_consumer_stage_timeout 800)
+    add_test(NAME PackageConsumer_LinuxInstalledSDK
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_CONFIG=${_spark_consumer_config}"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/package-consumer-linux/${_spark_consumer_config}"
+            "-DSPARK_STAGE_TIMEOUT=${_spark_consumer_stage_timeout}"
+            "-DSPARK_CONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+            "-DSPARK_CONSUMER_CTEST=${CMAKE_CTEST_COMMAND}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunInstalledPackageConsumer.cmake")
+    set_tests_properties(PackageConsumer_LinuxInstalledSDK PROPERTIES
+        LABELS "package-consumer-linux"
+        RUN_SERIAL TRUE
+        TIMEOUT 3600)
+endif()
+add_test(NAME PackageConsumer_SourceTreeBoundaryDetection
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/package-consumer-boundary-ctest"
+        -P "${CMAKE_SOURCE_DIR}/cmake/TestPackageConsumerBoundary.cmake")
+set_tests_properties(PackageConsumer_SourceTreeBoundaryDetection PROPERTIES
+    LABELS "package;sdk;unit"
+    TIMEOUT 60)
+
+# ----------------------------------------------------------------------------
+# PLT-210 installed Linux tree runtime closure
+# ----------------------------------------------------------------------------
+# Installs this build into a build-owned prefix, then fails on any RUNPATH or
+# NEEDED that reaches the source/build tree or leaves the prefix for anything
+# but a host system library, on any module sidecar that no longer hashes its
+# installed image, and on an installed SparkEngine -headless + SparkGameFPS run
+# (cwd=/, empty environment, fresh HOME/XDG) without clean lifecycle records.
+# The same script verifies a linux-shipping install standalone (see its header).
+# LinuxInstalledRuntime_ClosureDetection proves each rule on real defective
+# copies of the build-tree images.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND SPARK_HEADLESS_SUPPORT AND
+   TARGET SparkEngine AND TARGET SparkGameFPS)
+    set(_spark_linux_runtime_config "$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Release>")
+    add_test(NAME VerifyLinuxInstalledRuntime
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/linux-installed-runtime/${_spark_linux_runtime_config}"
+            -P "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake")
+    set_tests_properties(VerifyLinuxInstalledRuntime PROPERTIES
+        LABELS "package;linux;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
+
+    add_test(NAME LinuxInstalledRuntime_ClosureDetection
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST=ON
+            "-DSPARK_FIXTURE_ENGINE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_FIXTURE_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_FORBIDDEN_ROOTS=${CMAKE_BINARY_DIR}"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/linux-installed-runtime-detection/${_spark_linux_runtime_config}"
+            -P "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake")
+    set_tests_properties(LinuxInstalledRuntime_ClosureDetection PROPERTIES
+        LABELS "package;linux;unit"
+        TIMEOUT 120)
+endif()
+
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(
@@ -1888,6 +2686,227 @@ add_test(
 set_tests_properties(FPSSceneMaterialContract PROPERTIES
     LABELS "module;stable-v1;fps;asset;unit"
     TIMEOUT 30)
+
+# RDY-020: every asset the FPS module source and level1.scene reference is
+# declared in Assets/assets.integrity.json with exact case and resolves through
+# the production FPSAssets root; case-altered and traversal spellings fail.
+add_test(NAME AssetManifest_FPSReferences COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(AssetManifest_FPSReferences PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=AssetManifest_;SPARK_TEST_EXPECT_COUNT=2"
+    LABELS "module;stable-v1;fps;asset;unit"
+    TIMEOUT 60)
+add_test(NAME PathCase_FPSReferences COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(PathCase_FPSReferences PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=PathCase_;SPARK_TEST_EXPECT_COUNT=2"
+    LABELS "module;stable-v1;fps;asset;unit"
+    TIMEOUT 60)
+
+# RDY-020 / OD-09: the stable-v1 package derives its asset manifest without any
+# NOASSERTION entry, installs only that set, and the package check rejects a
+# manifest that ships, relabels, or adds an unreviewed asset.
+add_test(
+    NAME PackageAssets_StableV1ExcludesNoAssertion
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_asset_package_profile.py)
+set_tests_properties(PackageAssets_StableV1ExcludesNoAssertion PROPERTIES
+    LABELS "stable-v1;asset;packaging;unit;python"
+    TIMEOUT 300)
+
+# MOD-360: tools/check-module-asset-refs.py fails closed on a missing, case-altered,
+# run-time-composed or unrecorded asset reference in an enforced module, and every
+# asset SparkGameOpenWorld source names resolves (Tests/Tools/test_check_module_asset_refs.py).
+add_test(
+    NAME OpenWorldAssets_ReferenceCheckFailsClosed
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_check_module_asset_refs.py)
+set_tests_properties(OpenWorldAssets_ReferenceCheckFailsClosed PROPERTIES
+    LABELS "module;openworld;asset;unit;python"
+    TIMEOUT 60)
+# MOD-360: the real OWEngineSystems music tracks and OWWorldSetup area manifests name existing files.
+add_test(NAME OpenWorldAssets_RegisteredAssetsExist COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(OpenWorldAssets_RegisteredAssetsExist PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=OpenWorldAssets_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "module;openworld;asset;unit"
+    TIMEOUT 60)
+
+# GOV-400 LicenseInventory_*: the staged-package notice-coverage gate
+# (cmake/ValidateStagedPackageNotices.cmake) against fixture packages, and the
+# notices generator's shared rule set, parity with the CMake gate, and the real
+# packaged notice file (Tests/Tools/test_third_party_notices.py).
+add_test(
+    NAME LicenseInventory_PackageNoticeCoverage
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_VALIDATOR=${CMAKE_SOURCE_DIR}/cmake/ValidateStagedPackageNotices.cmake
+        -DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/package-notice-validator-ctest
+        -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/TestValidateStagedPackageNotices.cmake)
+set_tests_properties(LicenseInventory_PackageNoticeCoverage PROPERTIES
+    LABELS "package;governance;unit"
+    TIMEOUT 120)
+add_test(
+    NAME LicenseInventory_ThirdPartyNotices
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_third_party_notices.py)
+set_tests_properties(LicenseInventory_ThirdPartyNotices PROPERTIES
+    LABELS "governance;unit;python"
+    TIMEOUT 300)
+
+# SEC-110: lock-derived SPDX 2.3 SBOM generation (commit and dependency-lock
+# binding, --check reproducibility) and package-inventory reconciliation
+# against forged, unlocked, and missing third-party payload.
+add_test(
+    NAME SupplyChain_SbomAndPackageReconciliation
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_generate_sbom -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(SupplyChain_SbomAndPackageReconciliation PROPERTIES
+    LABELS "governance;security;unit;python"
+    TIMEOUT 300)
+
+# SEC-110: repository secret scan (tools/check-secret-scan.py) against planted
+# tokens, PEM keys and credentials, symlinks, oversize files, and exceptions that
+# are expired, stale, wildcarded, directory-scoped, count-exceeded or invalid. The
+# full-tree scan itself runs in build.yml's required secret-scan job.
+add_test(
+    NAME SecretScan_RepositoryGate
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_check_secret_scan -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(SecretScan_RepositoryGate PROPERTIES
+    LABELS "governance;security;unit;python"
+    TIMEOUT 300)
+
+# BLD-100 / OD-04: the stable-v1 x86-64 CPU floor is SSE4.2 + POPCNT.
+# CpuFloor_IsaBaselineChecker proves tools/check_isa_baseline.py rejects
+# AVX/AVX2/AVX-512/FMA/F16C/BMI/LZCNT/MOVBE and the legacy-encoded AES-NI,
+# PCLMULQDQ, SHA, GFNI, RDRAND, RDSEED and ADX instructions in real ELF and PE
+# fixtures and passes floor-only builds. CpuFloor_IsaBaseline disassembles this
+# tree's linked engine, editor, server and game-module images and fails on any
+# above-floor instruction that reached them (SparkCpuFloor.cmake only sees flags).
+# The image scan is ELF-only: MSVC links the STL's CPUID-dispatched AVX2
+# vector_algorithms code statically into every image, and an MSVC PE carries no
+# COFF symbol table, so --allow-symbol cannot exempt that code without a
+# PDB-aware lookup. Windows images are not scanned until one exists.
+add_test(
+    NAME CpuFloor_IsaBaselineChecker
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_check_isa_baseline -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
+    LABELS "build;shipping;unit;python"
+    TIMEOUT 300)
+
+include("${CMAKE_SOURCE_DIR}/cmake/SparkCpuFloor.cmake")
+spark_cpu_floor_enforced(_spark_isa_floor_enforced)
+if(_spark_isa_floor_enforced AND CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+    find_program(SPARK_ISA_DISASSEMBLER NAMES objdump llvm-objdump)
+    set(_spark_isa_images "")
+    foreach(_spark_isa_target IN ITEMS SparkEngine SparkEditor SparkServer ${_SPARK_GAME_MODULE_NAMES})
+        if(TARGET ${_spark_isa_target})
+            list(APPEND _spark_isa_images "$<TARGET_FILE:${_spark_isa_target}>")
+        endif()
+    endforeach()
+    if(SPARK_ISA_DISASSEMBLER AND _spark_isa_images)
+        add_test(
+            NAME CpuFloor_IsaBaseline
+            COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/check_isa_baseline.py
+                --objdump ${SPARK_ISA_DISASSEMBLER} ${_spark_isa_images})
+        set_tests_properties(CpuFloor_IsaBaseline PROPERTIES
+            LABELS "build;shipping;integration"
+            TIMEOUT 600)
+    else()
+        message(STATUS "CpuFloor_IsaBaseline not registered: no objdump/llvm-objdump or no shipped image target")
+    endif()
+endif()
+
+# BLD-100: ShippingManifest_SymbolManifestTool proves tools/shipping_symbol_manifest.py
+# on real fixtures: gcc ELF images split by the production link launcher
+# (cmake/SparkSplitDebugLink.cmake) and clang/lld-link PE DLLs with PDBs,
+# cross-checked against llvm-readobj and llvm-pdbutil, and every rejection
+# (missing, mismatched, duplicate or orphaned symbols, unstripped images,
+# absolute PDB paths, symbols in the runtime tree). It also keeps the root
+# SPARK_SHIPPED_IMAGE_TARGETS list in step with the install(TARGETS) rules.
+add_test(
+    NAME ShippingManifest_SymbolManifestTool
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_shipping_symbol_manifest -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(ShippingManifest_SymbolManifestTool PROPERTIES
+    LABELS "build;shipping;unit;python"
+    TIMEOUT 300)
+
+# BLD-100: ReproducibleBuild_CompareTool proves tools/compare_build_outputs.py
+# on real gcc ELF, crafted PE and ar fixtures (build-directory DWARF leaks,
+# code and timestamp differences, closed manifest schema, failure codes).
+# ReproducibleBuild_LinuxToolTargets copies this source tree to two
+# differently named and nested directories, configures each with the
+# linux-shipping settings (MinSizeRel, LTO, split private symbols) and this
+# tree's compiler, builds SparkCooker without any compiler cache, and requires
+# equivalent bin/ outputs: the stripped image and its .debug file. lib/ is not
+# compared: GCC's LTO IR in static-library members records the build
+# directory whatever the prefix maps say, so those members differ between
+# trees (they do not reach the linked image). The copies carry no .git, so
+# SPARK_STRICT_DEPS stays OFF: its third-party audit resolves submodule
+# gitlinks through git. It runs two clean builds, serially.
+add_test(
+    NAME ReproducibleBuild_CompareTool
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_compare_build_outputs -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(ReproducibleBuild_CompareTool PROPERTIES
+    LABELS "build;reproducibility;unit;python"
+    TIMEOUT 300)
+if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF" AND CMAKE_OBJCOPY)
+    add_test(
+        NAME ReproducibleBuild_LinuxToolTargets
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/compare_build_outputs.py two-tree
+            --source ${CMAKE_SOURCE_DIR}
+            --work ${CMAKE_BINARY_DIR}/reproducible-build-trees
+            --exclude ${CMAKE_SOURCE_DIR}/build
+            --exclude ${CMAKE_BINARY_DIR}
+            --cmake ${CMAKE_COMMAND}
+            --jobs 4
+            --target SparkCooker
+            --scan bin
+            --
+            -G ${CMAKE_GENERATOR}
+            -DCMAKE_BUILD_TYPE=MinSizeRel
+            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+            -DSTRIP_DEBUG_SYMBOLS=ON
+            -DSPARK_NATIVE_ARCH=OFF
+            -DENABLE_EDITOR=OFF
+            -DENABLE_PROFILING=OFF
+            -DENABLE_CONSOLE_IN_SHIPPING=OFF
+            -DENABLE_DEVCOMMANDS_IN_SHIPPING=OFF
+            -DENABLE_ANGELSCRIPT=OFF
+            -DBUILD_GAME_MODULES=OFF
+            -DBUILD_TESTS=OFF)
+    set_tests_properties(ReproducibleBuild_LinuxToolTargets PROPERTIES
+        LABELS "build;reproducibility;shipping;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 3600)
+endif()
+
+# In a STRIP_DEBUG_SYMBOLS ELF tree the packaged components (runtime, tools,
+# samples) and the private "symbols" component install to separate roots, as
+# a release stages them; every installed image must be stripped and map by
+# build-id to exactly one installed .debug file. Only shipped images are split,
+# so the test installs rather than scanning the output directories, and it
+# needs every installed target built.
+if(SPARK_SPLIT_DEBUG_SYMBOLS)
+    add_test(
+        NAME ShippingManifest_PrivateSymbols
+        COMMAND /bin/sh -c [=[
+set -e
+rm -rf "$1"
+for component in runtime tools samples; do
+    "$2" --install "$3" --config "$4" --component "$component" --prefix "$1/runtime"
+done
+"$2" --install "$3" --config "$4" --component symbols --prefix "$1/private"
+exec "$5" -B "$6" --images "$1/runtime" --symbols "$1/private/symbols" --output "$1/shipping-symbol-manifest.json"
+]=] spark-private-symbols
+            ${CMAKE_BINARY_DIR}/shipping-symbol-stage ${CMAKE_COMMAND} ${CMAKE_BINARY_DIR} $<CONFIG>
+            ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/shipping_symbol_manifest.py)
+    set_tests_properties(ShippingManifest_PrivateSymbols PROPERTIES
+        LABELS "build;shipping;integration"
+        TIMEOUT 600)
+endif()
 
 # RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
 # fixture DLL. The exact count fails closed if the family stops being compiled
@@ -1906,7 +2925,181 @@ set_tests_properties(ModuleDiscoveryProductionSourceContract PROPERTIES
     LABELS "module;module-profile;stable-v1;unit"
     TIMEOUT 30)
 
-if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
+# MOD-350: RPGQuestSlice_* drive the real RPGDemoSession with the RPGGameplayBridge
+# quest policy installed (Talk -> AcceptQuest -> Travel -> Attack -> loot -> reward).
+# The module sources compile into SparkTests only when ImGui is available.
+if(TARGET imgui)
+    add_test(NAME RPGQuestSlice COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RPGQuestSlice PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=RPGQuestSlice_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "module;rpg;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+
+    # MOD-350: RPGPersistence_* save mid-quest through RPGEngineSystems::SaveGame into the real
+    # SaveSystem, rebuild every RPG system (and the QuestSystem) as a restart would, and require
+    # LoadGame to restore quest, inventory, area, NPC disposition/patrol and world-hour state.
+    # RPGDEMO 2 (N-1) migrates to default NPC state; RPGDEMO 1, future, truncated, non-finite and out-of-range
+    # snapshots and damaged slots leave the session unchanged.
+    add_test(NAME RPGPersistence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RPGPersistence PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=RPGPersistence_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "module;rpg;persistence;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 180)
+
+    # MOD-350: RPGNPCNavigation_* bake area NavMeshes through the engine NavMeshBuilder and require
+    # schedule changes to walk NPCs along NavMesh routes at walking speed (around blocked ground,
+    # resuming after a restore) and to leave them in place when no route exists, never teleporting.
+    add_test(NAME RPGNPCNavigation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RPGNPCNavigation PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=RPGNPCNavigation_;SPARK_TEST_EXPECT_COUNT=5"
+        LABELS "module;rpg;ai;unit"
+        TIMEOUT 120)
+
+    # MOD-370: RTSSave_* save a scripted skirmish mid-match (codec and the real SaveSystem
+    # through RTSEngineSystems::SaveMatch/LoadMatch), load it into rebuilt systems, and
+    # require the uninterrupted run's per-tick state hash; v1 and truncated saves are rejected.
+    add_test(NAME RTSSave COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RTSSave PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=RTSSave_;SPARK_TEST_EXPECT_COUNT=3"
+        LABELS "module;rts;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+endif()
+
+# RDY-010: no stable-v1/module-profile CTest that runs SparkTests may select a
+# mirror-file or tautological TEST. Checks every platform branch of this file
+# statically and this configured tree's own CTest inventory, plus the mutations.
+add_test(
+    NAME TestSourceCensus_ProfileSelectors
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_source_census_profile.py)
+set_tests_properties(TestSourceCensus_ProfileSelectors PROPERTIES
+    ENVIRONMENT "SPARK_CENSUS_CTEST=${CMAKE_CTEST_COMMAND};SPARK_CENSUS_BUILD_DIR=${CMAKE_BINARY_DIR};SPARK_CENSUS_CONFIG=$<CONFIG>"
+    LABELS "module;readiness;unit;python"
+    TIMEOUT 180)
+
+# MOD-290: every discovered module's GameModules/<Name>/module.json must name
+# existing source, assets, registered tests with live TEST prefixes, a README,
+# and the parity N/A cells it declares; the mutations must each fail by name.
+add_test(
+    NAME ModuleManifest_Contract
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_manifest.py)
+set_tests_properties(ModuleManifest_Contract PROPERTIES
+    LABELS "module;module-kit;readiness;unit;python"
+    TIMEOUT 120)
+
+# MOD-295: each prototype module's engine-private headers and copied
+# *EngineSystems.cpp files must match its committed module-content inventory
+# entry; the shared include resolver and the ratchet mutations must fail by name.
+add_test(
+    NAME PrototypeModuleKit_PrivateDependencyRatchet
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_private_dependencies.py)
+set_tests_properties(PrototypeModuleKit_PrivateDependencyRatchet PROPERTIES
+    LABELS "module;module-kit;prototype-module-kit;readiness;unit;python"
+    TIMEOUT 120)
+
+# MOD-290: per-module test registration is generated from each module's
+# module.json rather than hand-written. Every declared {prefix, count} selector
+# becomes ModuleManifest_<Module>_<Prefix>, which runs SparkTests filtered to
+# names that start with that prefix (SPARK_TEST_NAME_PREFIX, so RPG_ does not
+# also select ARPG_*) and fails unless exactly `count` tests run, each asserting
+# something. A selector that names a missing, renamed or emptied test family
+# therefore fails ctest. The module sources these tests exercise compile into
+# SparkTests only when ImGui is available (see the feature-gated block above).
+if(TARGET imgui)
+    file(GLOB _spark_module_kit_cmake_files "${CMAKE_SOURCE_DIR}/GameModules/*/CMakeLists.txt")
+    foreach(_spark_module_kit_cmake IN LISTS _spark_module_kit_cmake_files)
+        get_filename_component(_spark_module_kit_dir "${_spark_module_kit_cmake}" DIRECTORY)
+        get_filename_component(_spark_module_kit_name "${_spark_module_kit_dir}" NAME)
+        set(_spark_module_kit_manifest "${_spark_module_kit_dir}/module.json")
+        if(NOT EXISTS "${_spark_module_kit_manifest}")
+            message(FATAL_ERROR
+                "MOD-290: game module ${_spark_module_kit_name} has no module.json; "
+                "see GameModules/README.md for the per-module manifest contract.")
+        endif()
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_spark_module_kit_manifest}")
+        file(READ "${_spark_module_kit_manifest}" _spark_module_kit_json)
+        string(JSON _spark_module_kit_selector_count LENGTH "${_spark_module_kit_json}" tests prefixes)
+        if(_spark_module_kit_selector_count EQUAL 0)
+            message(FATAL_ERROR "MOD-290: ${_spark_module_kit_manifest} declares no tests.prefixes selectors.")
+        endif()
+        math(EXPR _spark_module_kit_last "${_spark_module_kit_selector_count} - 1")
+        foreach(_spark_module_kit_index RANGE ${_spark_module_kit_last})
+            string(JSON _spark_module_kit_prefix GET "${_spark_module_kit_json}"
+                tests prefixes ${_spark_module_kit_index} prefix)
+            # count is one integer, or {windows, other} when a family has
+            # Windows-only (or non-Windows-only) TEST( definitions.
+            string(JSON _spark_module_kit_count_type TYPE "${_spark_module_kit_json}"
+                tests prefixes ${_spark_module_kit_index} count)
+            if(_spark_module_kit_count_type STREQUAL "OBJECT")
+                if(WIN32)
+                    set(_spark_module_kit_platform windows)
+                else()
+                    set(_spark_module_kit_platform other)
+                endif()
+                string(JSON _spark_module_kit_count GET "${_spark_module_kit_json}"
+                    tests prefixes ${_spark_module_kit_index} count ${_spark_module_kit_platform})
+            else()
+                string(JSON _spark_module_kit_count GET "${_spark_module_kit_json}"
+                    tests prefixes ${_spark_module_kit_index} count)
+            endif()
+            if(NOT _spark_module_kit_prefix MATCHES "^[A-Za-z][A-Za-z0-9_]*$" OR
+               NOT _spark_module_kit_count MATCHES "^[1-9][0-9]*$")
+                message(FATAL_ERROR
+                    "MOD-290: ${_spark_module_kit_manifest} tests.prefixes[${_spark_module_kit_index}] "
+                    "needs a TEST-name prefix and a positive count "
+                    "(got '${_spark_module_kit_prefix}', '${_spark_module_kit_count}').")
+            endif()
+            # Optional requires: build features without which the family is not
+            # compiled into SparkTests (count is the feature-on count), so the
+            # exact-count CTest is not registered when one of them is off.
+            string(JSON _spark_module_kit_requires ERROR_VARIABLE _spark_module_kit_requires_error
+                GET "${_spark_module_kit_json}" tests prefixes ${_spark_module_kit_index} requires)
+            set(_spark_module_kit_missing_feature "")
+            if(NOT _spark_module_kit_requires_error)
+                string(JSON _spark_module_kit_requires_count LENGTH "${_spark_module_kit_requires}")
+                math(EXPR _spark_module_kit_requires_last "${_spark_module_kit_requires_count} - 1")
+                foreach(_spark_module_kit_requires_index RANGE ${_spark_module_kit_requires_last})
+                    string(JSON _spark_module_kit_feature GET "${_spark_module_kit_requires}"
+                        ${_spark_module_kit_requires_index})
+                    if(_spark_module_kit_feature STREQUAL "angelscript")
+                        if(NOT SPARK_ANGELSCRIPT_AVAILABLE)
+                            set(_spark_module_kit_missing_feature "${_spark_module_kit_feature}")
+                        endif()
+                    else()
+                        message(FATAL_ERROR
+                            "MOD-290: ${_spark_module_kit_manifest} tests.prefixes[${_spark_module_kit_index}] "
+                            "requires unknown feature '${_spark_module_kit_feature}'.")
+                    endif()
+                endforeach()
+            endif()
+            string(REGEX REPLACE "_+$" "" _spark_module_kit_suffix "${_spark_module_kit_prefix}")
+            set(_spark_module_kit_test "ModuleManifest_${_spark_module_kit_name}_${_spark_module_kit_suffix}")
+            if(_spark_module_kit_missing_feature)
+                message(STATUS "${_spark_module_kit_test}: not registered (requires "
+                    "${_spark_module_kit_missing_feature}, which this build disables)")
+                continue()
+            endif()
+            add_test(NAME ${_spark_module_kit_test} COMMAND $<TARGET_FILE:SparkTests> --quiet --empty-is-error)
+            # RUN_SERIAL: several families open loopback UDP listeners or write
+            # save/database files under shared per-user roots.
+            set_tests_properties(${_spark_module_kit_test} PROPERTIES
+                ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_module_kit_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_module_kit_count}"
+                LABELS "module;module-kit;unit"
+                RUN_SERIAL TRUE
+                TIMEOUT 300)
+        endforeach()
+    endforeach()
+endif()
+
+# OPS-100: the isolated production crash-capture producer runs on every native
+# host that builds the reporter (Windows minidump path, POSIX assertion path).
+# Without miniz the engine links CrashHandlerStub.cpp, which has no producer.
+if(NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND AND TARGET SparkCrashReporter)
     add_dependencies(SparkTests SparkCrashReporter)
     add_test(
         NAME CrashCapturePackageSecurity
@@ -1918,6 +3111,37 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
         LABELS "crash-security;security;integration"
         RUN_SERIAL TRUE
         TIMEOUT 180)
+endif()
+
+# OPS-100: build-id symbolication canary (Linux, local symbol store, no relay).
+# The probe crashes through the production signal handler; it is compiled with
+# -g (RelWithDebInfo-style) and an explicit GNU build-id so its split debug
+# info can be filed in a .build-id store and the fault resolved to file:line.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND
+   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE)
+    add_executable(SparkCrashSymbolicationProbe Fixtures/CrashSymbolicationProbe.cpp)
+    target_compile_features(SparkCrashSymbolicationProbe PRIVATE cxx_std_23)
+    # -fno-lto: an LTO-compiled unit reports its DWARF file as <artificial>.
+    target_compile_options(SparkCrashSymbolicationProbe PRIVATE -g -O2 -fno-lto)
+    target_link_options(SparkCrashSymbolicationProbe PRIVATE -Wl,--build-id=sha1)
+    # Shipping presets strip every link (-s); the probe must keep its DWARF so
+    # the canary can split it into the symbol store.
+    get_target_property(_spark_probe_link_options SparkCrashSymbolicationProbe LINK_OPTIONS)
+    list(FILTER _spark_probe_link_options EXCLUDE REGEX ":-s>$")
+    set_property(TARGET SparkCrashSymbolicationProbe PROPERTY LINK_OPTIONS ${_spark_probe_link_options})
+    target_link_libraries(SparkCrashSymbolicationProbe PRIVATE SparkEngineLib)
+    add_dependencies(SparkTests SparkCrashSymbolicationProbe)
+    add_test(
+        NAME CrashReporter_Symbolication
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/run_crash_symbolication_canary.py
+            --probe $<TARGET_FILE:SparkCrashSymbolicationProbe>
+            --probe-source ${CMAKE_CURRENT_SOURCE_DIR}/Fixtures/CrashSymbolicationProbe.cpp
+            --objcopy ${CMAKE_OBJCOPY}
+            --addr2line ${CMAKE_ADDR2LINE})
+    set_tests_properties(CrashReporter_Symbolication PROPERTIES
+        LABELS "crash-canary;integration"
+        TIMEOUT 300)
 endif()
 
 # CI-110: exercise the shipped SparkCooker binary against real nested assets.
@@ -1938,11 +3162,30 @@ if(TARGET SparkCooker)
         TIMEOUT 30)
 endif()
 
-# CI-110: execute the shipped editor against an isolated project.  This is a
-# Windows-only gate because the stable-v1 editor backend is Win32/D3D11; Linux
-# editor builds require an X11/GL display and are covered by the live-editor
-# lane instead of reporting a misleading headless pass.
-if(WIN32 AND TARGET SparkEditor)
+# CI-110 / EDT-210: execute the shipped editor against an isolated project.
+# On Windows this is the stable-v1 Win32/D3D11 editor. On Linux the editor needs
+# an X11/GL display, so every editor run is wrapped in xvfb-run (Mesa llvmpipe):
+# that proves the Linux executable starts, loads a project, saves/reopens a
+# scene and shuts down cleanly. It is not D3D11 editor certification. Without
+# xvfb-run the test is still registered and fails, so the lane cannot pass by
+# skipping.
+if(TARGET SparkEditor AND (WIN32 OR (UNIX AND NOT APPLE)))
+    set(_spark_editor_smoke_launcher_arg)
+    set(_spark_editor_smoke_labels "release;editor;editor-integration;process")
+    set(_spark_editor_smoke_timeout 45)
+    if(NOT WIN32)
+        find_program(SPARK_XVFB_RUN_EXECUTABLE xvfb-run)
+        if(NOT SPARK_XVFB_RUN_EXECUTABLE)
+            message(WARNING
+                "xvfb-run was not found: SparkEditorExecutableSmoke is registered but will fail "
+                "until xvfb is installed (the Linux editor needs an X server).")
+        endif()
+        set(_spark_editor_smoke_launcher_arg
+            "-DSPARK_EDITOR_REQUIRE_XVFB=ON" "-DSPARK_EDITOR_XVFB_RUN=${SPARK_XVFB_RUN_EXECUTABLE}")
+        set(_spark_editor_smoke_labels "editor;editor-integration;process;linux")
+        # Four editor launches, each starting its own Xvfb server.
+        set(_spark_editor_smoke_timeout 180)
+    endif()
     add_dependencies(SparkTests SparkEditor)
     add_test(
         NAME SparkEditorExecutableSmoke
@@ -2022,17 +3265,31 @@ if(Python3_Interpreter_FOUND)
         LABELS "network-security;security;static;python"
         TIMEOUT 30)
 
-    if(TARGET SparkShaderCompiler AND TARGET SparkCooker AND
-       TARGET SparkAutomation AND TARGET SparkCrashReporter)
+    # REL-100: one executable-level --version contract for every non-test
+    # stable-v1 product. The script also fails if the stable-v1 build-product
+    # contract gains an executable its table does not cover.
+    set(_spark_stable_version_products
+        SparkEngine SparkEditor SparkConsole SparkShaderCompiler SparkCrashReporter
+        SparkCooker SparkAutomation SparkLauncher SparkBuild SparkInstaller)
+    set(_spark_stable_version_products_built TRUE)
+    foreach(_spark_product IN LISTS _spark_stable_version_products)
+        if(NOT TARGET ${_spark_product})
+            set(_spark_stable_version_products_built FALSE)
+        endif()
+    endforeach()
+    if(_spark_stable_version_products_built)
         add_test(
-            NAME SparkStableProductVersions
+            NAME VersionConsistency_StableProducts
             COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_SOURCE_DIR}/Tests/Tools/test_rel100_product_versions.py
-                --bin-dir $<TARGET_FILE_DIR:SparkShaderCompiler>)
-        set_tests_properties(SparkStableProductVersions PROPERTIES
+                --bin-dir $<TARGET_FILE_DIR:SparkEngine>)
+        set_tests_properties(VersionConsistency_StableProducts PROPERTIES
             LABELS "release;version;integration"
-            TIMEOUT 60)
+            TIMEOUT 120)
     endif()
+    unset(_spark_product)
+    unset(_spark_stable_version_products_built)
+    unset(_spark_stable_version_products)
 
     add_test(
         NAME BlenderMMOAssetSourceContract
@@ -2049,12 +3306,120 @@ if(Python3_Interpreter_FOUND)
         LABELS "asset;cpu;unit;python"
         TIMEOUT 30)
 
+    # Per-module Blender kits (tools/blender/spark_kit.py): validator unit tests, plus one
+    # source/export contract per committed Art/Blender/<Module>/provenance.json record.
+    add_test(
+        NAME BlenderKitValidatorRegression
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_blender_kit.py)
+    set_tests_properties(BlenderKitValidatorRegression PROPERTIES
+        LABELS "asset;cpu;unit;python"
+        TIMEOUT 30)
+    file(GLOB _spark_blender_kit_records "${CMAKE_SOURCE_DIR}/Art/Blender/SparkGame*/provenance.json")
+    foreach(_spark_blender_kit_record IN LISTS _spark_blender_kit_records)
+        get_filename_component(_spark_blender_kit_dir "${_spark_blender_kit_record}" DIRECTORY)
+        get_filename_component(_spark_blender_kit_module "${_spark_blender_kit_dir}" NAME)
+        add_test(
+            NAME BlenderKitSourceContract_${_spark_blender_kit_module}
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/blender/validate_kit.py
+                "${_spark_blender_kit_record}" --root ${CMAKE_SOURCE_DIR})
+        set_tests_properties(BlenderKitSourceContract_${_spark_blender_kit_module} PROPERTIES
+            LABELS "asset;cpu;static;python"
+            TIMEOUT 30)
+    endforeach()
+    unset(_spark_blender_kit_records)
+
     add_test(
         NAME SparkRunSparkTestsHarness
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test-run-spark-tests.py)
     set_tests_properties(SparkRunSparkTestsHarness PROPERTIES
         LABELS "ci;test-evidence;unit"
         TIMEOUT 30)
+
+    # REL-110: release SBOM vulnerability gate (stdlib; runs on every lane). Its release.yml
+    # wiring cases need PyYAML: skipped without it here, enforced in the supply-chain CI job.
+    add_test(
+        NAME ArtifactIntegrity_VulnerabilityGate
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_vulnerability_findings.py)
+    set_tests_properties(ArtifactIntegrity_VulnerabilityGate PROPERTIES
+        LABELS "release;security;supply-chain;unit;python"
+        TIMEOUT 60)
+
+    # REL-110: the existing release integrity suites (stable-publication
+    # consumer verifier, detached-signature bundle verify/extract, release
+    # asset boundary, build provenance). They exercise POSIX publication
+    # boundaries and the openssl CLI, so they run in the Linux ctest lanes;
+    # Windows keeps its native Authenticode gate in the release workflow.
+    if(NOT WIN32)
+        add_test(
+            NAME ArtifactIntegrity_PublishedStableRelease
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_published_stable_release.py)
+        set_tests_properties(ArtifactIntegrity_PublishedStableRelease PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+        add_test(
+            NAME ArtifactIntegrity_ReleaseBundle
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_release_bundle.py)
+        set_tests_properties(ArtifactIntegrity_ReleaseBundle PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120
+            # Every case needs the openssl CLI; a host without it reports the
+            # suite as skipped rather than as a passing cryptographic check.
+            SKIP_REGULAR_EXPRESSION "OK \\(skipped=")
+        add_test(
+            NAME ArtifactIntegrity_SignatureBundleExtract
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_extract_release_signature_bundle.py)
+        set_tests_properties(ArtifactIntegrity_SignatureBundleExtract PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+        add_test(
+            NAME ArtifactIntegrity_ReleaseAssetBoundary
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_release_asset_boundary.py)
+        set_tests_properties(ArtifactIntegrity_ReleaseAssetBoundary PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+        add_test(
+            NAME ArtifactIntegrity_BuildProvenance
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_release_build_provenance.py)
+        set_tests_properties(ArtifactIntegrity_BuildProvenance PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+        # REL-190: fail-closed stable release notes generator and its
+        # release.yml wiring. This is only the notes check; it does not satisfy
+        # the full ReleaseProfileRehearsal_Qualification* rehearsal selector.
+        add_test(
+            NAME ReleaseProfileRehearsal_ReleaseNotes
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_release_notes.py)
+        set_tests_properties(ReleaseProfileRehearsal_ReleaseNotes PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+    endif()
+
+    # REL-110: protected stable-release approval event recorder, its consumer
+    # digest binding, and the release.yml wiring.
+    add_test(
+        NAME ReleaseApproval_Record
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_record_release_approval.py)
+    set_tests_properties(ReleaseApproval_Record PROPERTIES
+        LABELS "release;security;unit;python"
+        TIMEOUT 60)
+
+    # CI-120: the root option guard rejects undeclared -D ENABLE_*/SPARK_*/BUILD_*
+    # names (fixture configures of cmake/SparkOptionGuard.cmake + preset audit).
+    add_test(
+        NAME BuildOptions_UnknownOptionRejected
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_build_option_guard.py)
+    set_tests_properties(BuildOptions_UnknownOptionRejected PROPERTIES
+        LABELS "build-contract;ci;governance;unit;python"
+        TIMEOUT 120)
+
+    # CI-120: documented cmake/ctest/cpack commands (README, CLAUDE.md, wiki,
+    # docs) resolve against CMakePresets.json trees, configurations and pins.
+    add_test(
+        NAME BuildOptions_DocumentedCommandsMatchPresets
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_documented_build_commands.py)
+    set_tests_properties(BuildOptions_DocumentedCommandsMatchPresets PROPERTIES
+        LABELS "build-contract;ci;governance;docs;unit;python"
+        TIMEOUT 120)
 
     add_test(
         NAME SparkNetworkBoundaryStatic
@@ -2186,6 +3551,34 @@ if(Python3_Interpreter_FOUND)
             LABELS "server;gateway;integration;network;process"
             TIMEOUT 105)
     endif()
+    # OPS-110 server soak (tools/ops/server_soak.py reads /proc, so Linux only).
+    # ServerSoak_Harness proves every failure mode against a stand-in server;
+    # it is not labelled server-soak because only a real-server soak may
+    # satisfy that label. Server_Soak runs the real SparkServer with SparkGame
+    # for 60 s under provisional budgets; the 30-minute release smoke and
+    # longer scheduled soaks run tools/ops/server_soak.py --duration directly.
+    if(UNIX AND NOT APPLE)
+        add_test(
+            NAME ServerSoak_Harness
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_soak.py
+                FitTests DrainSequenceTests ConfigTests SummaryTests HarnessTests)
+        set_tests_properties(ServerSoak_Harness PROPERTIES
+            LABELS "ops;server;unit;python"
+            TIMEOUT 180)
+        if(TARGET SparkServer AND TARGET SparkGame)
+            add_dependencies(SparkTests SparkServer SparkGame)
+            add_test(
+                NAME Server_Soak
+                COMMAND ${Python3_EXECUTABLE} -B
+                    ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_soak.py ServerSoakProcess)
+            set_tests_properties(Server_Soak PROPERTIES
+                ENVIRONMENT "SPARK_SERVER=$<TARGET_FILE:SparkServer>;SPARK_SERVER_MODULE=$<TARGET_FILE:SparkGame>;SPARK_SERVER_SOAK_REQUIRED=1;SPARK_SERVER_SOAK_SUMMARY=${CMAKE_BINARY_DIR}/server-soak-summary.json"
+                LABELS "server-soak;server;integration;process"
+                RUN_SERIAL TRUE
+                TIMEOUT 300)
+        endif()
+    endif()
     add_test(
         NAME SparkTemplateRuntimeSheets
         COMMAND ${Python3_EXECUTABLE}
@@ -2205,6 +3598,78 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(SparkCTestTimeoutPolicy PROPERTIES
         LABELS "ci;test-policy;unit;python"
         TIMEOUT 60)
+
+    # RDY-000: the whole fail-closed site-data/readiness contract suite (about one
+    # minute locally). Its CI home is the Linux site-data workflow; it drives git
+    # and POSIX path handling that no Windows lane has qualified, so it is not
+    # registered there.
+    if(NOT WIN32)
+        add_test(
+            NAME site-data-contract
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_contract.py)
+        set_tests_properties(site-data-contract PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            TIMEOUT 300)
+
+        # RDY-000: the fast cross-reference subset -- the checked-in contract under
+        # the strict validator, dependency closure, promotion evidence, selector and
+        # future-path resolution, prose ID references, and the handoff being current.
+        add_test(
+            NAME readiness-cross-references
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_contract.py
+                LiveContractTests
+                TransitiveDependencyTests
+                ReadyPromotionTests
+                ReadyAndPassingEvidenceTests
+                SelectorResolutionTests
+                FutureAcceptancePathTests
+                ProseCrossReferenceTests
+                GenerationAndCiTests)
+        set_tests_properties(readiness-cross-references PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            TIMEOUT 180)
+
+        # DOC-400: docs/site/content.json and docs-catalog.json carry no hardcoded
+        # count, commit SHA, CI run ID, or version literal; mutable claims must
+        # reference bundle metric identifiers. validate.py enforces the same rule.
+        add_test(
+            NAME no-hardcoded-claims
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_contract.py
+                NoHardcodedClaimsTests)
+        set_tests_properties(no-hardcoded-claims PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            TIMEOUT 180)
+
+        # DOC-400: the reference site runtime verifier (tools/site-data/runtime)
+        # checked against a bundle generate.py produces here plus tampered,
+        # oversize, malformed, and path-escaping variants, each also fed to
+        # validate.py validate_published_bundle so the two validators cannot
+        # drift. Needs Node.js 20+ (WebCrypto, node:test); the site-runtime-contract
+        # job in site-data.yml is its CI home.
+        find_program(SPARK_NODE_EXECUTABLE NAMES node)
+        if(SPARK_NODE_EXECUTABLE)
+            execute_process(
+                COMMAND ${SPARK_NODE_EXECUTABLE} -p "process.versions.node.split('.')[0]"
+                OUTPUT_VARIABLE _spark_node_major
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                RESULT_VARIABLE _spark_node_result)
+        endif()
+        if(SPARK_NODE_EXECUTABLE AND _spark_node_result EQUAL 0 AND _spark_node_major GREATER_EQUAL 20)
+            add_test(
+                NAME runtime-bundle-validation
+                COMMAND ${SPARK_NODE_EXECUTABLE} --test
+                    test/verifyBundle.test.mjs
+                    test/freshness.test.mjs
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/site-data/runtime)
+            set_tests_properties(runtime-bundle-validation PROPERTIES
+                LABELS "readiness;site-data;unit;node"
+                ENVIRONMENT "PYTHON=${Python3_EXECUTABLE}"
+                TIMEOUT 600)
+        else()
+            message(STATUS "runtime-bundle-validation not registered: Node.js 20+ was not found")
+        endif()
+    endif()
+
     add_test(
         NAME SparkCliContract
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
@@ -2277,6 +3742,48 @@ endif()
 # Actual FPS mutation adapters and engine event publication, without module rendering dependencies.
 add_subdirectory(FPSGameplayEvents)
 
-if(SPARK_ENABLE_FUZZ_TARGETS)
-    add_subdirectory(Fuzz)
-endif()
+# ---------------------------------------------------------------------
+# SparkTests precompiled header
+# ---------------------------------------------------------------------
+# Every test translation unit includes TestFramework.h and most pull in the same
+# standard headers; parsing them is the bulk of a test file's compile time. The
+# PCH holds only TestFramework.h and standard-library headers: no engine or
+# platform header, so tests that define WIN32_LEAN_AND_MEAN, _XM_NO_INTRINSICS_
+# or `private public` before an engine include keep their current meaning.
+# Engine, editor, module and launcher sources compiled into SparkTests are
+# excluded so their include order is exactly what their own targets use.
+# Lanes configured with CMAKE_DISABLE_PRECOMPILE_HEADERS=ON (Windows sccache,
+# clang-tidy) build without it, which keeps missing-include regressions visible.
+target_precompile_headers(SparkTests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/TestFramework.h"
+    <algorithm>
+    <array>
+    <atomic>
+    <chrono>
+    <cmath>
+    <cstdint>
+    <cstring>
+    <filesystem>
+    <fstream>
+    <functional>
+    <limits>
+    <memory>
+    <sstream>
+    <string>
+    <thread>
+    <unordered_map>
+    <vector>
+)
+get_target_property(_spark_tests_sources SparkTests SOURCES)
+foreach(_spark_tests_source IN LISTS _spark_tests_sources)
+    cmake_path(ABSOLUTE_PATH _spark_tests_source BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE _spark_tests_source_abs)
+    cmake_path(IS_PREFIX CMAKE_CURRENT_SOURCE_DIR "${_spark_tests_source_abs}" NORMALIZE _spark_tests_source_is_test)
+    if(NOT _spark_tests_source_is_test OR NOT _spark_tests_source MATCHES "\\.cpp$")
+        set_source_files_properties("${_spark_tests_source}" PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+    endif()
+endforeach()
+unset(_spark_tests_sources)
+unset(_spark_tests_source)
+unset(_spark_tests_source_abs)
+unset(_spark_tests_source_is_test)

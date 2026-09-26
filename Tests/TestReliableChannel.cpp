@@ -557,7 +557,7 @@ namespace TestReliablePerPeer
         bool Connect(Net::NetworkManager& server, const std::string& name)
         {
             Net::NetBuffer payload;
-            payload.WriteString(name);
+            Net::WriteConnectRequest(payload, name);
             for (int attempt = 0; attempt < 50; ++attempt)
             {
                 Send(Net::MessageType::Connect, Net::ChannelType::Reliable, 0, payload.GetData());

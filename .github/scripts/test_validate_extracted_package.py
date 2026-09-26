@@ -306,6 +306,82 @@ class ExtractedPackageValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.ValidationError, "Asset integrity"):
                 MODULE.validate_package(package, None, None)
 
+    def _stable_package(self, root: Path, license_filter: str) -> tuple[Path, str]:
+        """Package holding real repository assets chosen by license kind.
+
+        "asserted" ships the derived stable-v1 runtime asset closure (RDY-020);
+        "NOASSERTION" ships one repository entry that has no license record.
+        """
+        source = json.loads((ROOT / "Assets" / "assets.integrity.json").read_text(encoding="utf-8"))
+        if license_filter == "NOASSERTION":
+            entries = [next(item for item in source["entries"] if item["license"] == "NOASSERTION")]
+        else:
+            verifier_path = ROOT / "tools" / "asset-integrity" / "verify_asset_integrity.py"
+            verifier_spec = importlib.util.spec_from_file_location("verify_asset_integrity_stable", verifier_path)
+            assert verifier_spec is not None and verifier_spec.loader is not None
+            verifier = importlib.util.module_from_spec(verifier_spec)
+            verifier_spec.loader.exec_module(verifier)
+            closure, _ = verifier.derive_profile_closure(ROOT, source, "stable-v1")
+            entries = [item for item in source["entries"] if item["path"] in closure]
+        package = self._package(root)
+        runtime_assets = package / "bin" / "Assets"
+        (runtime_assets / "fixture.bin").unlink()
+        for entry in entries:
+            target = runtime_assets / entry["path"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / "Assets" / entry["path"]).read_bytes())
+        manifest = {**source, "fileCount": len(entries), "entries": entries}
+        (runtime_assets / "assets.integrity.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        return package, entries[0]["path"]
+
+    def test_stable_v1_profile_accepts_reviewed_asserted_asset(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            package, _ = self._stable_package(Path(temporary), "asserted")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                MODULE.validate_package(package, None, None, "stable-v1")
+            self.assertIn("(stable-v1 profile)", output.getvalue())
+
+    def test_stable_v1_profile_rejects_noassertion_asset(self) -> None:
+        # OD-09: the default profile still accepts this package; stable-v1 must not.
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            package, relative = self._stable_package(Path(temporary), "NOASSERTION")
+            with contextlib.redirect_stdout(io.StringIO()):
+                MODULE.validate_package(package, None, None)
+            with self.assertRaisesRegex(MODULE.ValidationError, rf"\[profile-excluded\] {relative}"):
+                MODULE.validate_package(package, None, None, "stable-v1")
+
+    def test_stable_v1_profile_rejects_asset_outside_the_closure(self) -> None:
+        # RDY-020: an asserted asset that no in-profile module loads must not ship.
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            package, _ = self._stable_package(Path(temporary), "asserted")
+            runtime_assets = package / "bin" / "Assets"
+            manifest = json.loads((runtime_assets / "assets.integrity.json").read_text(encoding="utf-8"))
+            source = json.loads((ROOT / "Assets" / "assets.integrity.json").read_text(encoding="utf-8"))
+            extra = next(item for item in source["entries"] if item["path"].startswith("MMOFPS/Data/"))
+            target = runtime_assets / extra["path"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / "Assets" / extra["path"]).read_bytes())
+            manifest["entries"] = sorted([*manifest["entries"], extra], key=lambda item: item["path"])
+            manifest["fileCount"] = len(manifest["entries"])
+            (runtime_assets / "assets.integrity.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                MODULE.validate_package(package, None, None)
+            with self.assertRaisesRegex(
+                MODULE.ValidationError, rf"\[profile-outside-closure\] {extra['path']}"
+            ):
+                MODULE.validate_package(package, None, None, "stable-v1")
+
+    def test_stable_v1_profile_rejects_manifest_without_licenses(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            package = self._package(Path(temporary))
+            with self.assertRaisesRegex(MODULE.ValidationError, "provenance-missing"):
+                MODULE.validate_package(package, None, None, "stable-v1")
+
+    def test_cli_rejects_unknown_package_profile(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            MODULE._parse_args(["--package-root", "x", "--package-profile", "nightly"])
+
     def test_rejects_any_sibling_outside_selected_extracted_package(self) -> None:
         for sibling_kind in ("file", "directory", "link-like"):
             with self.subTest(sibling_kind=sibling_kind), tempfile.TemporaryDirectory(
@@ -478,10 +554,21 @@ class ShippingPackageBomTests(unittest.TestCase):
               "compiler_family=1\ncompiler_abi_version=1944\ncxx_language_level=202400\n"
               "runtime_library=1\niterator_debug_level=0\npointer_size=8\n"
               f"binary_sha256={hashlib.sha256(module.read_bytes()).hexdigest()}\n")
+        # The validator's GOV-400 notice-coverage gate parses the generated
+        # notice layout (cmake/SparkThirdPartyAudit.cmake).
+        write("THIRD_PARTY_NOTICES.txt",
+              "SparkEngine Third-Party Notices\n\nDependency inventory\n--------------------\n\n"
+              "Fixture Library\n  Source: https://example.invalid/fixture\n  Version: 1.0\n  License: MIT\n"
+              "  Notice files: ThirdParty/Fixture/LICENSE\n  Files: fixture.h\n\n"
+              "Complete license and notice texts\n=================================\n\n"
+              "----- ThirdParty/Fixture/LICENSE -----\n\nMIT License\n\n"
+              "Copyright (c) 2026 Fixture Library Author\n\n"
+              "Permission is hereby granted, free of charge, to any person obtaining a copy of this\n"
+              "software and associated documentation files, to deal in the Software without restriction.\n")
         for name in (
-            "LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "bin/Shaders/BasicVS.hlsl",
+            "LICENSE.txt", "bin/Shaders/BasicVS.hlsl",
             "bin/Shaders/ForwardPlus/DepthPrepass.hlsl", "bin/Shaders/HLSL/BasicVS.hlsl",
-            "bin/Shaders/HLSL/Compute/GPUCull.hlsl", "bin/Assets/MMOFPS/Data/continents.json",
+            "bin/Shaders/HLSL/Compute/GPUCull.hlsl", "bin/Assets/Scenes/level1.scene",
             "bin/Assets/Engine/Branding/sparkengine_wordmark.svg", "bin/Resources/Config/settings.ini",
             "bin/Resources/Config/controls.cfg",
         ):
@@ -510,6 +597,19 @@ class ShippingPackageBomTests(unittest.TestCase):
                 result = self.validate(root, "stable-v1")
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(name + ".exe", result.stderr)
+
+    def test_stable_bom_requires_the_fps_entry_scene_not_terrafront_data(self) -> None:
+        # RDY-020: stable-v1 ships the SparkGameFPS asset closure, so its entry
+        # scene is required and the TERRAFRONT data tables are not.
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.fixture(root)
+            self.assertFalse((root / "bin/Assets/MMOFPS").exists())
+            (root / "bin/Assets/Scenes/level1.scene").unlink()
+            result = self.validate(root, "stable-v1")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing required runtime content", result.stderr)
+            self.assertIn("bin/Assets/Scenes/level1.scene", result.stderr)
 
     def test_default_bom_still_requires_services_and_unknown_profile_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

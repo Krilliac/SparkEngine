@@ -295,7 +295,7 @@ The safety utilities have dedicated tests:
 
 Run with:
 ```bash
-cd build && ctest --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 ```
 
 ---

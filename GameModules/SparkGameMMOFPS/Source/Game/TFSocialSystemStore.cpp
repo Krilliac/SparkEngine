@@ -493,8 +493,7 @@ namespace Terrafront
         {
             if (charId == 0 || charId > kMaxExactJsonInteger ||
                 std::any_of(rec.recent.begin(), rec.recent.end(),
-                            [](const RecentRec& recent)
-                            {
+                            [](const RecentRec& recent) {
                                 return recent.lastSeenMs < 0 ||
                                        recent.lastSeenMs > static_cast<int64_t>(kMaxExactJsonInteger);
                             }))
@@ -545,18 +544,7 @@ namespace Terrafront
             }
         }
 
-        std::filesystem::path tmpFile = m_storePath;
-        tmpFile += ".tmp";
-        {
-            std::ofstream out(tmpFile, std::ios::binary | std::ios::trunc);
-            if (!out.is_open())
-                return false;
-            out << Spark::Json::StringifyPretty(root);
-            if (!out.good())
-                return false;
-        }
-
-        return SavePaths::AtomicReplace(tmpFile, m_storePath, ec);
+        return SavePaths::WriteDurableReplace(m_storePath, Spark::Json::StringifyPretty(root), ec);
     }
 
     void TFSocialSystem::StoreFlushIfDue(float dt)

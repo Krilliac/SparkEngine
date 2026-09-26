@@ -10,7 +10,7 @@ on:
   push:
     branches: [ main, develop, Working ]
   pull_request:
-    branches: [ main, develop, Working ]
+    branches: [ main, develop, Working, 'claude/**' ]
   schedule:
     - cron: '35 22 * * 4'
 

@@ -20,6 +20,15 @@ class CrashCaptureDriverTests(unittest.TestCase):
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory(prefix="crash-driver-test-")
         self.root = Path(self.scratch.name).resolve()
+        self.host_fields = driver.PRODUCER_ARTIFACT_FIELDS
+        # Host-independent: exercise the Windows minidump contract by default;
+        # POSIX-specific tests switch to the log-only producer contract.
+        self.use_producer_fields(driver.WINDOWS_PRODUCER_FIELDS)
+
+    def use_producer_fields(self, fields):
+        patcher = mock.patch.object(driver, "PRODUCER_ARTIFACT_FIELDS", fields)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.scratch.cleanup()
@@ -69,6 +78,25 @@ class CrashCaptureDriverTests(unittest.TestCase):
             self.write_manifest(**change)
             with self.assertRaises(driver.CaptureError, msg=str(change)):
                 driver.read_manifest(self.root, 123)
+
+    def test_host_selects_its_production_producer_contract(self):
+        expected = driver.WINDOWS_PRODUCER_FIELDS if os.name == "nt" else driver.POSIX_PRODUCER_FIELDS
+        self.assertEqual(self.host_fields, expected)
+
+    def test_posix_manifest_requires_log_and_an_empty_dump_reference(self):
+        self.use_producer_fields(driver.POSIX_PRODUCER_FIELDS)
+        path = self.write_manifest(dumpFile="")
+        self.assertEqual(driver.read_manifest(self.root, 123)[0], path.name)
+        for change in ({"dumpFile": "crash.core"}, {"dumpFile": None}, {"logFile": ""},
+                       {"enginePID": "999"}, {"requireConsent": True}, {"zipFile": "crash.zip"}):
+            self.write_manifest(**{"dumpFile": "", **change})
+            with self.assertRaises(driver.CaptureError, msg=str(change)):
+                driver.read_manifest(self.root, 123)
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        del manifest["dumpFile"]
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaises(driver.CaptureError):
+            driver.read_manifest(self.root, 123)
 
     def test_manifest_reports_bounded_dump_failure_diagnostic(self):
         path = self.write_manifest(dumpFile="")
@@ -157,6 +185,22 @@ class CrashCaptureDriverTests(unittest.TestCase):
             self.assertFalse(driver.remove_owned_tree(owned, identity))
         self.assertTrue(original.is_dir())
         self.assertEqual((owned / "must-survive.txt").read_text(encoding="utf-8"), "foreign data")
+
+    @unittest.skipUnless(driver.posix_identity_bound_removal_available(), "requires dir_fd-relative removal")
+    def test_posix_cleanup_removes_owned_tree_without_following_symlinks(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "keep.txt").write_text("outside data", encoding="utf-8")
+        owned = self.root / "owned"
+        (owned / "tmp" / "nested").mkdir(parents=True)
+        (owned / "tmp" / "nested" / "crash.log").write_bytes(b"log")
+        (owned / "cases").mkdir()
+        (owned / "cases" / "dir-link").symlink_to(outside, target_is_directory=True)
+        (owned / "cases" / "file-link").symlink_to(outside / "keep.txt")
+        identity = driver.directory_identity(owned)
+        self.assertTrue(driver.remove_owned_tree(owned, identity))
+        self.assertFalse(owned.exists())
+        self.assertEqual((outside / "keep.txt").read_text(encoding="utf-8"), "outside data")
 
     def test_traversal_requires_the_loader_rejection_exit_not_any_failure(self):
         source = self.root / "source"
@@ -250,13 +294,15 @@ class CrashCaptureDriverTests(unittest.TestCase):
             self.assertLessEqual(call.kwargs["timeout"], 0.02)
 
     @unittest.skipUnless(shutil.which("cmake"), "CMake is required for registration semantics")
-    def test_registration_excludes_cross_compiled_windows(self):
+    def test_registration_covers_native_hosts_and_excludes_cross_compiles_and_stub_builds(self):
         source = (driver.ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
         target = source.index("NAME CrashCapturePackageSecurity")
         start = source.rfind("\nif(", 0, target) + 1
         end = source.index("\nendif()", target) + len("\nendif()")
         registration = source[start:end]
-        for label, windows, cross in (("native", True, False), ("cross", True, True), ("other", False, False)):
+        for label, windows, cross, miniz in (("native", True, False, True), ("cross", True, True, True),
+                                             ("posix", False, False, True), ("posix-cross", False, True, True),
+                                             ("native-stub", True, False, False), ("posix-stub", False, False, False)):
             with self.subTest(configuration=label):
                 project = self.root / label
                 project.mkdir()
@@ -265,6 +311,7 @@ class CrashCaptureDriverTests(unittest.TestCase):
                     "cmake_minimum_required(VERSION 3.25)\nproject(CrashRegistration NONE)\nenable_testing()\n"
                     f"set(WIN32 {'TRUE' if windows else 'FALSE'})\n"
                     f"set(CMAKE_CROSSCOMPILING {'TRUE' if cross else 'FALSE'})\n"
+                    f"set(MINIZ_FOUND {'TRUE' if miniz else 'FALSE'})\n"
                     f'set(Python3_EXECUTABLE "{executable}")\n'
                     "add_executable(SparkTests IMPORTED)\nadd_executable(SparkCrashReporter IMPORTED)\n"
                     f'set_target_properties(SparkTests SparkCrashReporter PROPERTIES IMPORTED_LOCATION "{executable}")\n'
@@ -274,7 +321,7 @@ class CrashCaptureDriverTests(unittest.TestCase):
                                         capture_output=True, text=True, timeout=30, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 generated = (project / "build" / "CTestTestfile.cmake").read_text(encoding="utf-8")
-                self.assertEqual("CrashCapturePackageSecurity" in generated, windows and not cross)
+                self.assertEqual("CrashCapturePackageSecurity" in generated, miniz and not cross)
 
     def test_integration_failure_preserves_owned_root_without_cleanup(self):
         owned = self.root / "capture"

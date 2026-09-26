@@ -67,7 +67,8 @@ namespace OpenWorld
         bool ValidateSnapshot(const OWGameSaveData& data, std::string& error) const;
         bool RestoreSnapshot(const OWGameSaveData& data, std::string& error);
         static bool IsValidSlotName(const std::string& slotName);
-        static std::filesystem::path GetModuleSavePath(const std::string& slotName);
+        /// @brief Sidecar path for @p slotName under the engine SaveSystem directory.
+        static std::filesystem::path GetModuleSavePath(const std::string& saveDirectory, const std::string& slotName);
 
         Spark::IEngineContext* m_context = nullptr;
         bool m_initialized = false;

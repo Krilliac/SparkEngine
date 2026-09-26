@@ -37,6 +37,9 @@ namespace MMO
     {
         uint32_t areaId = 0;
         std::string name;
+        /// Source-root-relative scene path with exact on-disk case (e.g. Assets/Scenes/MMO/town_square.scene).
+        /// The scene's JSON "areaId" header must equal areaId.
+        std::string sceneFile;
         float boundsMinX = 0.0f;
         float boundsMinY = 0.0f;
         float boundsMinZ = 0.0f;

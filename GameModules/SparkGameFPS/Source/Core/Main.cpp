@@ -14,6 +14,7 @@
 #include "Core/EngineWeatherAdapter.h"
 #include "Game/Game.h"
 #include "Game/GameMode.h"
+#include "Game/GameMechanics.h"
 #include "Game/InventorySystem.h"
 #include "Game/QuestSystem.h"
 #include "Game/WaveSpawner.h"
@@ -115,6 +116,14 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
             return false;
         }
 
+        // The headless lifecycle still simulates the authored arena: scene
+        // data, respawn table and match rules, all without a render path.
+        if (!LoadHeadlessArena())
+        {
+            m_context = nullptr;
+            return false;
+        }
+
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
                        "SparkGameFPS module initialized for the no-render headless lifecycle");
@@ -152,6 +161,14 @@ void SparkGameModule::OnUnload()
 
 void SparkGameModule::OnUpdate(float deltaTime)
 {
+    if (m_headlessMode && m_headlessRespawn)
+    {
+        m_headlessRespawn->Update(deltaTime);
+        m_headlessMode->Update(deltaTime);
+        ++m_headlessArenaTicks;
+        return;
+    }
+
     if (g_game && !g_game->IsPaused())
         g_game->Update(deltaTime);
 }
@@ -307,6 +324,7 @@ void SparkGameModule::Shutdown()
         delete g_game;
         g_game = nullptr;
     }
+    ShutdownHeadlessArena();
     m_weatherAdapter.reset();
     m_context = nullptr;
     m_initialized = false;

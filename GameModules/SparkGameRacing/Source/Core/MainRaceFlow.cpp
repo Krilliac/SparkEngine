@@ -17,15 +17,21 @@
 #include "Camera/RacingCameraSystem.h"
 #include "HUD/RacingHUDSystem.h"
 #include "Input/InputManager.h"
+#include "Utils/SparkConsole.h"
 #include <algorithm>
 #include <vector>
 
-void SparkGameRacingModule::SetupDefaultRaceRoster()
+bool SparkGameRacingModule::SetupDefaultRaceRoster()
 {
     if (!m_vehicleSystem || !m_trackSystem || !m_raceManager || !m_aiDriver)
-        return;
+        return false;
 
-    Racing::SetupRaceRoster({*m_vehicleSystem, *m_trackSystem, *m_raceManager, *m_aiDriver}, m_context);
+    if (!Racing::SetupRaceRoster({*m_vehicleSystem, *m_trackSystem, *m_raceManager, *m_aiDriver}, m_context))
+    {
+        Spark::SimpleConsole::GetInstance().LogError("[Racing] Could not build the race grid's Jolt vehicles");
+        return false;
+    }
+    return true;
 }
 
 void SparkGameRacingModule::StepRace(float deltaTime)

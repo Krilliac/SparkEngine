@@ -167,6 +167,7 @@ if(BUILD_TESTS)
         target_compile_options(SparkDaemonServiceTests PRIVATE -Wall -Wextra -Werror)
     endif()
     add_test(NAME SparkDaemonServiceTests COMMAND SparkDaemonServiceTests)
+    set_tests_properties(SparkDaemonServiceTests PROPERTIES TIMEOUT 60 LABELS "daemon;unit")
 endif()
 
 install(TARGETS SparkDaemon SparkCollabServer SparkOrchestrator

@@ -122,6 +122,35 @@ requires feature level 11_0 (Shader Model 5.0); adapters below that floor are
 rejected. That resilience mechanism is not release certification for the fallback
 backend or host.
 
+**Explicit requests fail closed (Linux/macOS SDL2 host).** When `SPARK_RHI_BACKEND`
+names a GPU backend (`opengl`, `vulkan`, ...), `RunSDL2Windowed` compares the
+backend graphics actually came up on with `RHIFactory::GetRequestedBackendOverride()`.
+Any mismatch — `NullRHIDevice` after a lost window, or another backend picked by the
+bridge's failover loop — logs `SPARK_RHI_BACKEND explicitly requested <X> but graphics
+came up on <Y> — refusing to start` and exits non-zero before subsystems start.
+`null`/`auto`/unset keep the normal selection and headless behavior. SDL2 is forced
+onto EGL (`SDL_HINT_VIDEO_X11_FORCE_EGL`) only in `SPARK_EGL_SUPPORT` builds, whose
+`GLDevice` reuses a host EGL context; GLX builds keep SDL2's GLX context (forcing EGL
+on a host without libEGL made `SDL_CreateWindow` fail and the OpenGL request silently
+land on NullRHI). The SDL2 window requests the same 4.5 core context `GLDevice`
+requires. `SparkEngineExplicitOpenGLStartup` (CTest label `opengl`) runs the real
+executable under `DISPLAY` or `xvfb-run` and checks both outcomes.
+
+**Lost windows fail closed too (PLT-210).** The same host fails startup whenever it
+tries to create a window, Metal view or GL context and cannot, whether or not a
+backend was named. It logs the SDL error, then `Windowed startup could not create its
+render window or context — refusing to continue on NullRHIDevice`, and exits 1.
+If the window and context exist but `GraphicsEngine::Initialize` fails for them, it
+logs `Windowed startup could not initialize a render device for its window` and
+exits 1 too (after the Vulkan-to-OpenGL rebuild, when Vulkan was tried first).
+Only runs that never try to create a window still come up on NullRHI: `-headless`,
+`SPARK_RHI_BACKEND=null`, a failed `SDL_Init`, and hosts where the RHI recommends no
+GPU backend. Debug builds are the exception: they pass `allowHeadlessFallback=true`
+to RHIBridge, so a Debug windowed run whose GPU backends all fail still comes up on
+NullRHI unless `SPARK_RHI_BACKEND` names a backend. The CTest also runs SparkGameFPS for 30 frames on the OpenGL window,
+requiring exactly one OpenGL initialization. It also requires the refusal on
+`SDL_VIDEODRIVER=dummy`, where window creation fails on every host.
+
 ### NullRHIDevice Selection and Bridge Failover
 
 When `GraphicsBackend::None` is selected, `RHIFactory::CreateDevice()` returns a
@@ -420,31 +449,42 @@ The `RenderGraphBuilder` integrates with the RHI through `RHIAdapter`, so all GP
 
 ---
 
-## Vulkan ↔ D3D11 Parity Milestones (as of April 9, 2026)
+## Vulkan ↔ D3D11 Parity Status
 
-The Vulkan backend now exposes an explicit parity milestone snapshot in `VulkanDevice::GetD3D11ParityMilestones()` and a deterministic canonical golden-scene route through `VulkanDevice::RenderCanonicalGoldenScene()`. These are validated in CI-oriented tests (`VulkanParity_*` in `Tests/TestVulkanLavapipe.cpp`).
+Vulkan is not at parity with D3D11. An earlier `VulkanDevice::GetD3D11ParityMilestones()` snapshot hard-coded its pass-route, golden-scene and CI milestones to `true`, and `VulkanDevice::RenderCanonicalGoldenScene()` synthesized a CPU image that its test compared with itself. Both were removed under RHI-230, along with the `VulkanParity_*` tests that exercised them; `VulkanParity_*` is now a planned selector in the RHI-230 work item, not existing evidence. The `build-linux-gcc` Release gate instead requires `VulkanShaderToolchain_RejectsMalformedSpirv` and `VulkanGolden_FullscreenTriangleReadback` in the JUnit report, which proves the Vulkan backend is compiled into that binary.
 
-### Milestone checklist
-
-- ✅ Frame lifecycle (`BeginFrame`/`EndFrame` fencing + submission path)
-- ✅ Resource barriers / synchronization baseline (image transitions + upload fence path)
-- ✅ Descriptor binding model parity baseline (D3D11-style fixed slots mapped to Vulkan descriptor set layout; push-descriptor fast path when available)
-- ✅ Shadow/deferred pass route declared through `StandardPipelineBuilder`
-- ✅ Post-process route declared through `StandardPipelineBuilder`
-- ✅ Canonical golden-scene render route (deterministic RGBA output for regression comparison)
-- ✅ CI assertion hooks:
-  - Vulkan preset assertion (`linux-gcc-release` configure cache must enable Vulkan)
-  - Shader compile path assertion (`VulkanParity_ShaderCompilePath_Asserted`)
+What has real test coverage today (Lavapipe, see the lane below): frame fencing and submission, image transitions, descriptor binding, constant-buffer binding, headless swapchain present/resize, GPU readback of hand-written SPIR-V draws, and golden comparisons of three shipped post-process programs built from `Shaders/GLSL`.
 
 ### Explicitly unsupported / not-yet-parity-complete features
 
-Until full Vulkan parity is completed, the following remain explicitly unsupported or incomplete versus the primary D3D11 implementation:
-
-1. Full GPU-backed golden-scene readback parity (current canonical route is deterministic and backend-owned, but not yet a full swapchain readback of the renderer in CI).
-2. End-to-end Vulkan pass execution validation for every shadow/deferred/post variant (current milestone verifies route wiring and deterministic reference output, not full feature-by-feature visual equivalence).
-3. Vulkan shader toolchain hard dependency in CI (DXC/glslang integration may still be optional; current gate asserts the path executes and reports deterministic outcome).
+1. GPU-backed golden images of the engine renderer: no engine-pass baselines and no hardware row exist. The only Vulkan baselines are the software-row shader goldens below.
+2. Production pass execution: SPIR-V is now built for every shipped shader stage (below), but the Linux engine passes still record unbound draws, so the shadow/deferred/post passes do not render on Vulkan.
+3. Shader toolchain beyond the Linux Vulkan row: glslang is a hard configure-time dependency only for non-Windows builds with the Vulkan backend. DXC HLSL-to-SPIR-V and runtime GLSL compilation remain unintegrated.
 
 These items remain documented here by design and should be removed only when the Vulkan path is verified feature-complete against D3D11.
+
+### Shipped-shader SPIR-V build (RHI-230)
+
+`VulkanDevice::CreateShader` accepts SPIR-V only, so the shipped GLSL is compiled at build time. When the Vulkan backend is compiled in on a non-Windows build, the root `CMakeLists.txt` requires `glslangValidator` (`glslang-tools` on Ubuntu, or `$VULKAN_SDK/bin`) and configure fails without it; `-DENABLE_VULKAN=OFF` is the explicit way to build without Vulkan. Section 9.4 compiles every stage of `Shaders/GLSL/*.glsl` (except the include-only `Utils.glsl`) to `<build>/Shaders/SPIRV/<Name>.<vert|frag>.spv` and the `SparkSpirvShaders` target stages them beside `SparkEngine` in `bin/Shaders/SPIRV/`. Install puts them in `bin/Shaders/SPIRV/`. A `.glsl` file with no stage entry in the list is a configure error, and a GLSL error fails the build.
+
+- Stage selection uses the same `VERTEX_SHADER` / `FRAGMENT_SHADER` macros that `OpenGLDevice` injects. glslang predefines `VULKAN`, which `FullscreenQuad.glsl` uses to read `gl_VertexIndex` and skip the OpenGL texcoord flip.
+- `--shift-texture-binding 14` moves GLSL sampler `binding = N` to descriptor binding `14 + N`. That matches `VulkanDevice`'s fixed layout (bindings 0-13 uniform buffers, 14-29 combined image samplers). Uniform blocks keep their binding numbers.
+- `GraphicsEngine::InitializeBasicShaders` (Linux) registers `Shaders/SPIRV/BasicVS.vert.spv` and `BasicPS.frag.spv` as the SPIR-V slot, so `ShaderCache` hands SPIR-V, not GLSL text, to the Vulkan backend.
+- `VulkanShaderToolchain_ShippedProgramsCreatePipelines` creates a shader module and a graphics pipeline for each of the 11 shipped programs under the validation layer. It also requires the built `.spv` set to match its program table exactly. `VulkanShaderToolchain_ShaderCacheLoadsShippedSpirv` loads the basic pair through `ShaderCache` using the renderer's relative paths, and checks that the GLSL-only fallback is refused.
+
+Only the default variant of each stage is built. Define-selected variants (`BLUR_HORIZONTAL`, `FXAA_PASS`, `TONEMAP_*`, ...) have no SPIR-V yet.
+
+### Validation-layer lane (RHI-230)
+
+The `VulkanValidation` CTest entry (labels `vulkan`, `vulkan-lavapipe`) runs the 18 `VulkanValidation_*`, `VulkanGolden_*` and `VulkanShaderToolchain_*` tests in `Tests/TestRHI230VulkanValidationReal.cpp` on a real `VulkanDevice` with `VK_LAYER_KHRONOS_validation` and an error-counting messenger. It is registered only on Linux builds with Vulkan available and sets `SPARK_REQUIRE_VULKAN_VALIDATION=1`, so a missing ICD, missing validation layer, or missing `VK_EXT_headless_surface` fails the lane instead of skipping (skips would otherwise satisfy `SPARK_TEST_EXPECT_COUNT=18`). The `build-linux-gcc` and `build-linux-clang` jobs install `mesa-vulkan-drivers` (Lavapipe) and `vulkan-validationlayers` for it, and every Linux job that installs `libvulkan-dev` also installs `glslang-tools`. Locally: `ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error`. Lavapipe proves API-usage correctness only, not hardware certification.
+
+### Shipped-shader goldens on Lavapipe (RHI-230)
+
+The `VulkanGoldenTests` CTest entry (labels `vulkan`, `vulkan-lavapipe`, `vulkan-golden`) runs the four `VulkanGolden_RHI230_*` tests in `Tests/TestRHI230VulkanGoldenReal.cpp`. Each renders a fixed input through `FullscreenQuad.vert.spv` and a shipped fragment module from the build (`PostProcess` with the default ACES tonemap, `BloomExtract`, and the default vertical `GaussianBlur`). The device is a real `VulkanDevice` under the validation layer. The test reads the target back and compares it with the committed baseline in `Tests/GoldenImages/vulkan-lavapipe/` using the manifest's reviewed thresholds and baseline SHA-256. Each scene also checks probe pixels against a CPU evaluation of the shader formula and ends with zero validation errors. `VulkanGolden_RHI230_ManifestCoversRowScenes` requires the manifest's `vulkan-lavapipe` entries to match the test's scenes exactly.
+
+- The device must be Lavapipe (`isSoftwareDevice` and an `llvmpipe` device name). Otherwise the test skips, or fails under `SPARK_REQUIRE_VULKAN_VALIDATION=1`, which the lane sets. A hardware GPU never reports under this row.
+- Thresholds are `perPixelThreshold` 2 and `tolerancePercent` 0.5. Lavapipe reproduces the baselines exactly (maximum distance 0), and the threshold allows about one 8-bit step per channel for Mesa drift. With these values, changing one constant in each shader (the ACES `a` coefficient, a bloom luma weight, the blur centre weight) fails the golden comparison as well as the formula probes.
+- Only the default variant of each stage has SPIR-V, so the define-selected variants (Reinhard/Uncharted2, FXAA, horizontal blur) have no Vulkan golden. On a mismatch the actual frame is written to `SPARK_GOLDEN_OUTPUT_DIR` (the lane uses `<build>/Tests/Output`) as `vulkan-lavapipe_<scene>.png` for review.
 
 ---
 

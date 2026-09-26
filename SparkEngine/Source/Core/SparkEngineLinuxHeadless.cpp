@@ -36,15 +36,40 @@
 #include "Utils/InvalidStateDetector.h"
 #include "Utils/Assert.h"
 #include "FixedTimestepAccumulator.h"
+#include "HeadlessTickStats.h"
 #include <chrono>
+#include <cstdio>
 #include <format>
+#include <fstream>
+#include <iterator>
 #include <memory>
-#include <string_view>
+#include <optional>
+#include <string>
 #include <thread>
 
 #ifndef SPARK_PLATFORM_WINDOWS
 
 #ifdef SPARK_HEADLESS_SUPPORT
+/**
+ * @brief This process's own peak resident set in KiB, or 0 when not measurable.
+ *
+ * Linux reads `VmHWM` from /proc/self/status (reset by exec, so it excludes
+ * the launching harness). macOS has no equivalent exec-scoped counter wired
+ * here and reports 0, which the Linux-only perf collector never accepts.
+ */
+static uint64_t ReadOwnPeakRssKib()
+{
+#ifdef __linux__
+    std::ifstream status("/proc/self/status");
+    if (!status)
+        return 0;
+    const std::string text{std::istreambuf_iterator<char>(status), std::istreambuf_iterator<char>()};
+    return Spark::HeadlessTickStats::ParseVmHwmKib(text);
+#else
+    return 0;
+#endif
+}
+
 /**
  * @brief Run the engine in headless/dedicated server mode (Linux).
  *
@@ -55,6 +80,16 @@ int RunHeadlessLinux(int argc, char* argv[])
 {
     Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server - Linux) ===");
 
+    // Parity with RunHeadlessWindows: a headless launch runs against an
+    // explicit NullRHI device owned by EngineRuntime (released by the shared
+    // ShutdownEngineAfterPreflight), so tick measurements are taken on the
+    // same no-render backend the linux-nullrhi-ci perf row names.
+    if (!GetEngineRuntime().InitializeHeadlessRhi())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Linux headless startup could not establish NullRHI");
+        return 1;
+    }
+
     GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
     GetEngineRuntime().timer = std::make_unique<Timer>();
 
@@ -62,7 +97,14 @@ int RunHeadlessLinux(int argc, char* argv[])
     InitLinuxCoreSubsystems(/*registerGameplay=*/false);
     Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(nullptr);
 
-    InitConsole();
+    if (!InitConsole())
+    {
+        // The lifecycle root already rolled its stages back. No module has been
+        // loaded yet, so the module preflight is vacuous: tear down and fail.
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "RunHeadlessLinux: engine lifecycle failed to initialize");
+        ShutdownLinuxAfterPreflight();
+        return 1;
+    }
 
     // Minimal-init mode skips module loading and all detector singletons.
     // See SparkEngine.cpp::g_minimalInit for the full rationale — on a
@@ -89,9 +131,7 @@ int RunHeadlessLinux(int argc, char* argv[])
         SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
     }
 
-    bool requireGameModule = false;
-    for (int i = 1; i < argc; ++i)
-        requireGameModule = requireGameModule || std::string_view(argv[i]) == "-require-game";
+    const bool requireGameModule = HasLinuxCommandLineFlag(argc, argv, "-require-game");
 
     int exitCode = 0;
     if (requireGameModule &&
@@ -101,6 +141,13 @@ int RunHeadlessLinux(int argc, char* argv[])
             "Required game module was not initialized; terminating with a failure status.");
         g_shutdownRequested.store(true, std::memory_order_relaxed);
         exitCode = 2;
+    }
+    // -scene: a scene that cannot load must fail the launch, not run an empty
+    // engine. Leave through the ordinary shutdown preflight like -require-game.
+    if (exitCode == 0 && !LoadLinuxLaunchScene(argc, argv))
+    {
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
+        exitCode = kLinuxSceneLoadFailedExitCode;
     }
 
     // Fixed 60 Hz server loop
@@ -113,6 +160,8 @@ int RunHeadlessLinux(int argc, char* argv[])
         console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
 
     int frameCount = 0;
+    int nullRhiFrameCount = 0;
+    Spark::HeadlessTickStats tickStats;
 
     while (true)
     {
@@ -124,11 +173,12 @@ int RunHeadlessLinux(int argc, char* argv[])
             g_shutdownRequested.store(false, std::memory_order_relaxed);
         }
 
-        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) || g_execScript.TestSecondsLimitReached())
         {
             if (CanShutdownEngine())
             {
-                console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+                console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
+                                            g_execScript.ElapsedSeconds()));
                 break;
             }
             console.LogError("[TEST] Exit postponed: a module could not checkpoint for unload");
@@ -139,6 +189,9 @@ int RunHeadlessLinux(int argc, char* argv[])
         float dt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : (1.0f / 60.0f);
 
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
+
+        if (GetEngineRuntime().headlessRhiBridge)
+            GetEngineRuntime().headlessRhiBridge->BeginFrame();
 
         SPARK_GUARDED_UPDATE("Modules", "Core", {
             if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules())
@@ -167,15 +220,60 @@ int RunHeadlessLinux(int argc, char* argv[])
             console.Update();
         });
 
+        // -exec timeline: same scheduling point as the Windows headless loop.
+        g_execScript.RunDue(frameCount, console);
+        if (GetEngineRuntime().headlessRhiBridge)
+        {
+            GetEngineRuntime().headlessRhiBridge->EndFrame();
+            ++nullRhiFrameCount;
+        }
         ++frameCount;
 
+        // Record work time only: the loop sleeps to a fixed 60 Hz cadence, so
+        // wall-clock frame time would measure the sleep, not the engine.
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
+        tickStats.Record(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()));
         if (elapsed < TICK_INTERVAL)
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
     }
 
-    ShutdownLinuxAfterPreflight();
+    const bool teardownClean = ShutdownLinuxAfterPreflight();
     Spark::SimpleConsole::GetInstance().LogInfo("Headless server shut down cleanly.");
+
+    // Same machine-readable records as RunHeadlessWindows, published only after
+    // ordinary teardown destroyed the ModuleManager and the NullRHI bridge, so
+    // they cover the whole source-host lifetime (parsed strictly by
+    // cmake/RunSparkHeadlessNullRHILifecycle.cmake).
+    const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
+    const bool nullRhiShutdown = !GetEngineRuntime().headlessRhiBridge;
+    std::fprintf(stdout, "SPARK_HEADLESS_RHI backend=null initialized=1 frames=%d shutdown=%d\n", nullRhiFrameCount,
+                 nullRhiShutdown ? 1 : 0);
+    std::fprintf(
+        stdout,
+        "SPARK_HEADLESS_LIFECYCLE initialized=%llu updated=%llu fixed=%llu rendered=%llu unloaded=%llu "
+        "faults=%llu\n",
+        static_cast<unsigned long long>(evidence.initialized), static_cast<unsigned long long>(evidence.updated),
+        static_cast<unsigned long long>(evidence.fixedUpdated), static_cast<unsigned long long>(evidence.rendered),
+        static_cast<unsigned long long>(evidence.unloaded), static_cast<unsigned long long>(evidence.faults));
+    // NullRHI resources an owner kept past device shutdown (the soak harness,
+    // tools/perf-budget/run_nullrhi_soak.py, requires live=0).
+    if (const std::optional<uint32_t> liveResources = GetEngineRuntime().headlessRhiLiveResourcesAtShutdown)
+        std::fprintf(stdout, "SPARK_HEADLESS_NULLRHI_RESOURCES live=%u\n", static_cast<unsigned>(*liveResources));
+    std::fflush(stdout);
+    if (!nullRhiShutdown && exitCode == 0)
+        exitCode = 3;
+    if (!teardownClean && exitCode == 0)
+        exitCode = 1;
+
+    // Headless teardown keeps module images mapped until process exit (see
+    // ShutdownEngineAfterPreflight), so this record reports destroy=0.
+    if (requireGameModule)
+        EmitLinuxModuleLifecycleRecord();
+
+    // One machine-readable record after full teardown, consumed by
+    // tools/perf-budget/collect_headless_result.py. Every tick ran on NullRHI
+    // unless the bridge disappeared mid-run, which the frame counts expose.
+    tickStats.EmitRecord(/*nullRhiActive=*/nullRhiFrameCount == frameCount, ReadOwnPeakRssKib());
     return exitCode;
 }
 #endif // SPARK_HEADLESS_SUPPORT
@@ -207,10 +305,21 @@ int RunNoSDL2Fallback(int argc, char* argv[])
     // Engine context, physics, core subsystems, gameplay subsystems
     InitLinuxCoreSubsystems(/*registerGameplay=*/true);
 
-    InitConsole();
+    if (!InitConsole())
+    {
+        // Lifecycle stages are already rolled back and no module is loaded yet.
+        noSdlConsole.LogError("Engine lifecycle failed to initialize; exiting with a failure status.");
+        ShutdownLinuxAfterPreflight();
+        return 1;
+    }
     Spark::SimpleConsole::GetInstance().LogWarning("No SDL2 - engine will exit after initialization.");
 
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
+
+    // -scene: fail the launch rather than validate an empty engine.
+    const bool sceneLoadFailed = !LoadLinuxLaunchScene(argc, argv);
+    if (sceneLoadFailed)
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
 
     // Minimal loop — process a few ticks to validate initialization, then
     // exit only after every module reaches a safe unload checkpoint.  Keep
@@ -238,8 +347,10 @@ int RunNoSDL2Fallback(int argc, char* argv[])
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
-    ShutdownLinuxAfterPreflight();
-    return 0;
+    const bool teardownClean = ShutdownLinuxAfterPreflight();
+    if (sceneLoadFailed)
+        return kLinuxSceneLoadFailedExitCode;
+    return teardownClean ? 0 : 1;
 }
 #endif // !SPARK_SDL2_AVAILABLE
 

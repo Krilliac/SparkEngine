@@ -60,7 +60,7 @@ else()
     set(ENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
 endif()
 
-# Only two source files — the IModule shell
+# The IModule shell (Main.cpp) plus the demo world builder (VisualScriptDemoWorld.cpp)
 file(GLOB_RECURSE SPARK_GAME_VS_SOURCES CONFIGURE_DEPENDS "Source/*.cpp" "Source/*.h")
 
 add_library(SparkGameVisualScript SHARED ${SPARK_GAME_VS_SOURCES})
@@ -165,13 +165,9 @@ else()
         "remain unavailable")
 endif()
 
-# Copy visual script assets alongside the built DLL
-add_custom_command(TARGET SparkGameVisualScript POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameVisualScript>/Assets/Scripts/Generated"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/Assets/Scripts/Generated"
-        "$<TARGET_FILE_DIR:SparkGameVisualScript>/Assets/Scripts/Generated"
-    COMMENT "Copying visual script assets for SparkGameVisualScript"
-)
+# Stage the generated visual scripts where the engine executable resolves
+# Assets/Scripts/Generated (Source/Core/Main.cpp); the module fails to load without them.
+spark_stage_game_module_content(SparkGameVisualScript
+    COPY_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/Assets/Scripts/Generated" Assets/Scripts/Generated)
 
 message(STATUS "SparkGameVisualScript configured — zero C++ game logic, all visual scripts")

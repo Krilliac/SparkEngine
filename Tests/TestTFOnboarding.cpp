@@ -350,6 +350,70 @@ TEST(TFAccountSystem_PasswordHardening)
     fs::remove(path);
 }
 
+// NET-100: salts come from the OS CSPRNG and registration fails closed (no
+// account row) when the random source is unavailable.
+TEST(TFAccountSystem_CsprngSaltsDifferAcrossAccounts)
+{
+    namespace fs = std::filesystem;
+    const std::string path = "Saves/test_tfacct_csprng_salts.db";
+    fs::remove(path);
+    TFDatabase db;
+    EXPECT_TRUE(db.Open(path));
+    TFAccountSystem acct;
+    acct.SetDatabase(&db);
+
+    constexpr int kAccounts = 8;
+    std::unordered_set<std::string> salts;
+    for (int i = 0; i < kAccounts; ++i)
+    {
+        const std::string username = "saltpilot" + std::to_string(i);
+        EXPECT_TRUE(acct.Register(username, "samepassword1").ok);
+        TFAccountRecord rec;
+        EXPECT_TRUE(db.FindAccountByUsername(username, rec));
+        EXPECT_EQ(rec.salt.size(), size_t{32}); // 16 bytes, hex-encoded
+        // The salt stored beside the row is the one embedded in the self-describing hash.
+        EXPECT_TRUE(rec.passwordHash.find("$" + rec.salt + "$") != std::string::npos);
+        salts.insert(rec.salt);
+    }
+    // Same password, distinct salts -> no two accounts share a salt.
+    EXPECT_EQ(salts.size(), static_cast<size_t>(kAccounts));
+    EXPECT_TRUE(TFAccountSystem::GenerateSalt() != TFAccountSystem::GenerateSalt());
+
+    db.Close();
+    fs::remove(path);
+}
+
+TEST(TFAccountSystem_RegisterFailsClosedWhenCsprngFails)
+{
+    namespace fs = std::filesystem;
+    const std::string path = "Saves/test_tfacct_csprng_fail.db";
+    fs::remove(path);
+    TFDatabase db;
+    EXPECT_TRUE(db.Open(path));
+    TFAccountSystem acct;
+    acct.SetDatabase(&db);
+
+    const TFAccountSystem::RandomFillFn failingFill = [](void*, size_t) noexcept { return false; };
+    EXPECT_TRUE(TFAccountSystem::GenerateSalt(failingFill).empty());
+
+    acct.SetRandomSource(failingFill);
+    auto failed = acct.Register("nocsprng", "longenough1");
+    EXPECT_FALSE(failed.ok);
+    EXPECT_TRUE(failed.err == TFAuthErr::ServerError);
+    EXPECT_EQ(failed.accountId, uint64_t{0});
+    TFAccountRecord rec;
+    EXPECT_FALSE(db.FindAccountByUsername("nocsprng", rec)); // no account row written
+    EXPECT_FALSE(acct.Login("nocsprng", "longenough1").ok);
+
+    // Restoring the OS CSPRNG lets the same registration succeed.
+    acct.SetRandomSource(nullptr);
+    EXPECT_TRUE(acct.Register("nocsprng", "longenough1").ok);
+    EXPECT_TRUE(acct.Login("nocsprng", "longenough1").ok);
+
+    db.Close();
+    fs::remove(path);
+}
+
 // ============================================================================
 // PBKDF2-HMAC-SHA256 hardening (replaces the demo iterated-std::hash scheme):
 // known-answer tests against published/authoritative vectors, plus
@@ -713,8 +777,11 @@ TEST(TFDatabase_MissingPrimaryWithRecoveryBackupFailsClosed)
     fs::remove(backup);
 }
 
-TEST(TFDatabase_ExclusivePersistenceLockRejectsSecondAuthority)
+TEST(TFDatabase_SharedRootSecondAuthorityOpensAndSeesCommits)
 {
+    // TF-120: the lock is transaction-scoped, so a second continent authority
+    // on the same TF_SAVE_ROOT opens the store and reads the first one's rows.
+    // TestTF120SharedSaveRoot.cpp covers conflicts, crashes and lock timeouts.
     namespace fs = std::filesystem;
     const fs::path path = fs::path("Saves") / "test_tfdb_exclusive_lock.db";
     fs::remove(path);
@@ -722,10 +789,13 @@ TEST(TFDatabase_ExclusivePersistenceLockRejectsSecondAuthority)
     TFDatabase first;
     TFDatabase second;
     EXPECT_TRUE(first.Open(path));
-    EXPECT_FALSE(second.Open(path));
-    EXPECT_TRUE(second.LastStatus() == TFDatabaseStatus::Locked);
-    EXPECT_TRUE(first.Close());
     EXPECT_TRUE(second.Open(path));
+    TFAccountRecord created;
+    EXPECT_TRUE(first.CreateAccount("shared_root", "salt", "hash", created));
+    TFAccountRecord loaded;
+    EXPECT_TRUE(second.FindAccountByUsername("shared_root", loaded));
+    EXPECT_EQ(loaded.id, created.id);
+    EXPECT_TRUE(first.Close());
     EXPECT_TRUE(second.Close());
 
     fs::remove(path);

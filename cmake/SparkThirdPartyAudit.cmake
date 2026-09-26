@@ -199,13 +199,19 @@ function(spark_thirdparty_generate_notice manifest_file output_file)
         list(GET _fields 1 _source)
         list(GET _fields 2 _version)
         list(GET _fields 3 _license)
+        list(GET _fields 5 _required_files_csv)
         list(GET _fields 9 _notice_files_csv)
+        # "Files:" names the shipped files each entry covers. The staged-package
+        # notice gate (cmake/ValidateStagedPackageNotices.cmake) matches shipped
+        # fonts against these names, so a font is covered only when its entry
+        # also reproduces license text below.
         file(APPEND "${output_file}"
             "${_name}\n"
             "  Source: ${_source}\n"
             "  Version: ${_version}\n"
             "  License: ${_license}\n"
-            "  Notice files: ${_notice_files_csv}\n\n")
+            "  Notice files: ${_notice_files_csv}\n"
+            "  Files: ${_required_files_csv}\n\n")
         string(REPLACE "," ";" _notice_files "${_notice_files_csv}")
         foreach(_notice_rel IN LISTS _notice_files)
             list(FIND _all_notice_files "${_notice_rel}" _notice_index)

@@ -30,8 +30,8 @@ none of the hardware guidance is `stable-v1` certification.
 |---|---|---|
 | **Release candidate OS** | Windows 11 x64 (`stable-v1` target; blocked/uncertified) | Windows 11 x64 |
 | **Development floor** | Windows 10 x64 (outside the release profile) | Windows 10/11 SDK development path |
-| **CPU Architecture** | x86-64 | x86-64 with AVX2 |
-| **CPU Baseline** | x64 baseline | AVX2 only when `SPARK_NATIVE_ARCH=ON` (default OFF; distributed builds are not forced to AVX2) |
+| **CPU Architecture** | x86-64 | x86-64 |
+| **CPU Baseline** | x86-64 with SSE4.2 (`stable-v1` floor, OD-04) | AVX2 only for host-tuned `SPARK_NATIVE_ARCH=ON` builds, which are not distributable |
 | **GPU (Primary)** | D3D11 Feature Level 10.0 | D3D11 FL 11.1 |
 | **GPU (Optional)** | D3D12 FL 12.0 (Win10+) | D3D12 FL 12.0 with DXR Tier 1.1 |
 | **Compiler** | MSVC 19.36+ (VS 2022 17.6+, v143 toolset) | MSVC v143 / v145 |
@@ -114,6 +114,56 @@ game content. Assets, entities, and game logic pile on top.
 - **Physics threads:** Jolt uses the same formula, dynamically sized pool
   (`Physics/PhysicsSystem.cpp:385`).
 - **No hard cap** on frame work — scales with content.
+
+**Instruction-set floor (BLD-100 / OD-04).** The `stable-v1` CPU floor is
+x86-64 with SSE4.2 (the x86-64-v2 level: SSE4.1, SSE4.2, POPCNT). Unless
+`SPARK_NATIVE_ARCH=ON`, `cmake/SparkCpuFloor.cmake` builds vendored Jolt with
+`USE_AVX`, `USE_AVX2`, `USE_AVX512`, `USE_FMADD`, `USE_F16C`, `USE_LZCNT` and
+`USE_TZCNT` OFF. Jolt publishes its ISA flags `PUBLIC`, so before this change
+every target linking it (including `SparkEngineLib`) also compiled with
+`-mavx2 -mfma -mf16c -mlzcnt -mbmi`. Configuration now fails when any
+target or global flag selects an instruction set above the floor.
+`Tests/Tools/test_cpu_floor.py` covers this check, including the vendored Jolt
+configuration.
+
+Two further checks cover what configure-time flag checks cannot see:
+
+- **Linked-image scan.** `tools/check_isa_baseline.py` disassembles ELF or PE
+  images with `objdump`/`llvm-objdump`. It fails on any AVX (VEX/EVEX),
+  ymm/zmm, AVX-512 opmask, FMA, F16C, BMI1/BMI2, LZCNT or MOVBE instruction,
+  and on the legacy-encoded AES-NI, PCLMULQDQ, SHA-NI, GFNI, RDRAND, RDSEED
+  and ADX instructions, outside functions exempted with `--allow-symbol`,
+  which is only for CPUID-dispatched code. Other instruction families (for
+  example XSAVE or TSX) are not classified. TZCNT is reported but allowed: it
+  has the same encoding as `REP BSF`, which GCC and Clang emit at the SSE4.2
+  floor. The configure-time check also rejects the matching `-mmovbe`,
+  `-maes`, `-mpclmul`, `-msha`, `-mgfni`, `-mrdrnd`, `-mrdseed`, `-madx`,
+  `-mvaes` and `-mvpclmulqdq` flags.
+  CTest `CpuFloor_IsaBaseline` scans the built engine, editor, server and
+  game-module images. `CpuFloor_IsaBaselineChecker` proves the scanner on ELF
+  and PE fixtures built with and without the extensions.
+  **Windows images are not scanned yet.** The image scan is registered only
+  for ELF toolchains. MSVC links the STL's CPUID-dispatched AVX2
+  `vector_algorithms` code statically into every image, and an MSVC PE has
+  no COFF symbol table. `--allow-symbol` therefore cannot exempt that code
+  until the scanner can look symbols up in the PDB.
+- **Startup check.** The `SparkEngine` (Windows and POSIX), `SparkEditor` and
+  `SparkServer` entry points call
+  `Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures())`
+  (`Utils/MultiISA.h`, CPUID + XGETBV) before logging, crash handling or
+  server startup. On a CPU missing SSE2/SSE3/SSSE3/SSE4.1/SSE4.2/POPCNT, the
+  entry point prints the missing features (the Windows engine and editor show a
+  message box when launched with no console) and exits with a failure code.
+  `MultiISADispatch` now picks its level from the same runtime detection, not
+  from compile-time macros. `GetDetectedLevel()` and `Console_GetReport()`
+  report what the CPU can do. A dispatcher reports the kernel it actually
+  runs through `SelectLevel()`. For example, a floor build of
+  `CpuNeuralInference` runs its SSE2 kernel on an AVX2 CPU.
+
+The startup check is best-effort. Static initializers run before `main` and
+may already use SSE4.2 instructions, so a CPU below the floor can still fault
+before the message appears. No Shipping binary has yet been run on an SSE4.2-only
+CPU or emulator.
 
 Core-count guidance below is an unverified planning estimate. `PERF-100` remains
 open; no same-commit benchmark artifact establishes a release minimum.

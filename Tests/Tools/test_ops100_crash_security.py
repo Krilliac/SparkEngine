@@ -74,6 +74,41 @@ class CrashSecurityTests(unittest.TestCase):
         )
         self.assertIn("if (!g_cfg.headlessMode)", source)
 
+    def test_engine_accepts_no_reusable_crash_transport_credentials(self) -> None:
+        # The in-process uploader (GitHub PAT, SMTP, FTP, Dropbox, HTTP, relay)
+        # is gone; nothing in the engine may reintroduce a credential-bearing
+        # crash configuration, environment override, or transport call.
+        utils = ROOT / "SparkEngine" / "Source" / "Utils"
+        self.assertFalse((utils / "CrashReportUploader.cpp").exists())
+        self.assertFalse((utils / "CrashReportUploader.h").exists())
+
+        forbidden = re.compile(
+            r"api\.github\.com|CURLOPT_(?:PASSWORD|USERPWD|USERNAME|MAIL_RCPT)|"
+            r"SPARK_(?:GITHUB_TOKEN|GITHUB_REPO|SMTP_USER|SMTP_PASS|CRASH_UPLOAD_URL|CRASH_PROXY_URL|CRASH_EMAIL_TO)|"
+            r"\b(?:githubToken|smtpPass|smtpUser|proxyURL|uploadURL)\b"
+        )
+        offenders = []
+        for path in sorted((ROOT / "SparkEngine" / "Source").rglob("*")):
+            if path.suffix not in {".h", ".hpp", ".cpp", ".mm"} or not path.is_file():
+                continue
+            for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                if forbidden.search(line):
+                    offenders.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
+        self.assertEqual(offenders, [])
+
+    def test_shipped_settings_carry_no_crash_transport_keys(self) -> None:
+        retired = re.compile(
+            r"^\s*(?:UploadURL|ProxyURL|GitHubRepo|GitHubToken|GitHubLabels|AttachDump|TimeoutSeconds|"
+            r"SmtpUser|SmtpPass|EmailTo|EmailFrom)\s*=",
+            re.IGNORECASE,
+        )
+        for relative in ("Resources/Config/settings.ini", "SparkEngine/Resources/Config/settings.ini"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            section = text.split("[CrashReporting]", 1)[1].split("\n[", 1)[0]
+            with self.subTest(settings=relative):
+                self.assertEqual([line for line in section.splitlines() if retired.match(line)], [])
+                self.assertNotIn("ghp_", text)
+
     def test_missing_referenced_log_is_fatal(self) -> None:
         manifest = self.write_manifest({"logFile": "missing.log"})
         validator = crash.CrashPackageValidator()

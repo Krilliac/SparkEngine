@@ -201,10 +201,10 @@ Reliable messages use a sliding-window acknowledgment scheme:
 Client                          Server
   │                               │
   │──── Connect ─────────────────>│
-  │     (token, version)          │
+  │     (magic, version, name)    │
   │                               │
   │<─── ConnectAccepted ──────────│
-  │     (clientID, serverTime)    │
+  │  (clientID, serverTime, ver)  │
   │                               │
   │<─── GameStateSync ────────────│
   │     (full world state)        │
@@ -214,7 +214,19 @@ Client                          Server
   │     (ongoing keepalive)       │
 ```
 
-If the server rejects the connection (version mismatch, server full, banned), it sends `ConnectRejected` with a reason string in the payload.
+The `Connect` payload opens with the handshake magic `0x484E5053` ("SPNH") and the `uint16`
+`NETWORK_PROTOCOL_VERSION` (currently `1`), followed by the length-prefixed player name. Before it
+considers a client slot, the server rejects a missing (`ProtocolMissing`), older (`ProtocolTooOld`),
+newer (`ProtocolTooNew`), or malformed (`MalformedHandshake`) handshake. It also rejects with
+`ServerFull` when every slot is taken. `ConnectRejected` carries the reason text, then a typed
+`uint8` reason code and the server's protocol version. `ConnectAccepted` echoes the negotiated
+version, and a client refuses (`ProtocolMismatch`) an echo that differs from its own. The exact
+layouts are in `docs/specs/networking-wire-format.md`, and the evidence is the CTest
+`NetworkSessionCompatibility` (`Tests/TestSessionCompatibilityReal.cpp`). Version negotiation is
+not authentication. A current client talking to a pre-negotiation (legacy) server gets no typed
+refusal. The legacy server admits it and replies with the old 8-byte `ConnectAccepted`, which the
+client drops as malformed. The client then fails at its connect timeout with reason `Unspecified`,
+and the legacy server holds the slot until its heartbeat timeout.
 
 ---
 
@@ -235,7 +247,7 @@ Transports implement the `ITransport` interface and are selected via `TransportT
 
 The active UDP path binds to loopback or one canonical RFC1918 interface/prefix and admits only concrete peers in the captured subnet. Missing/invalid prefixes, exact network/directed-broadcast addresses, wildcard/public/test/multicast/limited-broadcast/CGNAT values, mapped IPv6, and alternate textual encodings fail closed. Peer scope is checked before packet deserialization and again on all gameplay send/retry paths. Client traffic is bound to the configured server address and port, and server-side client identity is bound to the endpoint recorded during `Connect`. Wire-supplied sender IDs are not trusted. Undefined channels, malformed built-in payload sizes, and unauthenticated custom messages are rejected before dispatch.
 
-This endpoint boundary and tuple binding reduce accidental exposure and spoofing surface; they are not cryptographic authentication. Transparent endpoint migration is unsupported and requires reconnecting. The XOR/FNV `NetworkSecurity` and `NetworkEncryption` helpers are explicitly prototypes and provide no confidentiality, peer authentication, or attacker-resistant integrity. NET-100 and all dependent release gates remain blocked pending maintained, reviewed AEAD transport.
+This endpoint boundary and tuple binding reduce accidental exposure and spoofing surface; they are not cryptographic authentication. Transparent endpoint migration is unsupported and requires reconnecting. The legacy XOR prototype has been deleted; `NetworkSecurity` is only a single-use connection-token registry, and the in-tree ChaCha20-Poly1305 `SecureChannel` in `NetworkEncryption` has no handshake or caller on this wire path. The wire therefore has no confidentiality, peer authentication, or attacker-resistant integrity. NET-100 and all dependent release gates remain blocked pending maintained, reviewed AEAD transport (OD-06: libsodium).
 
 Planned security work includes:
 

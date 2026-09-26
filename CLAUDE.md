@@ -14,6 +14,8 @@ SparkEngine is a C++23 open-source 3D game engine (with C++26 forward-compatibil
 - **Headless/Software rendering**: NullRHIDevice fallback (no GPU) or full CPU rendering via OpenGL + Mesa llvmpipe
 - **Primary platform**: Windows 10+ (MSVC); Linux/macOS are experimental (macOS has CI job + CMake presets)
 
+Engine systems architecture is the priority, and only production-ready code lands. MSVC is the primary CI target, and the cross-platform builds must stay green.
+
 ## Session start (run at the beginning of every session)
 
 **Step 1 — Git sync** (see [Git Sync Workflow](#git-sync-workflow) below for the commands):
@@ -72,6 +74,8 @@ These are **guidelines for when to pause and think**, not absolute rules. A clea
 
 ## Coding Standards
 
+**Ground truth first.** Read the build config before assuming the C++ standard, compiler flags, platforms or graphics API: the root `CMakeLists.txt`, `CMakePresets.json`, `cmake/` and `.github/workflows/build.yml` (the build is CMake only, with no premake). Match the existing conventions, `.clang-format` and `.clang-tidy`, and do not introduce a new style.
+
 - **C++23**: `constexpr`, `enum class`, structured bindings, `std::format`, `std::expected`, `std::print`, concepts, deducing `this`, `if consteval`, `std::unreachable`
 - **Ownership**: `std::unique_ptr` owning, raw pointers non-owning. No naked `new`/`delete`
 - **RAII**: D3D11 via `ComPtr`, all resources released in destructors
@@ -82,6 +86,29 @@ These are **guidelines for when to pause and think**, not absolute rules. A clea
 - **Warnings**: root MSVC flags are `/W3 /MP /bigobj` (CMakeLists.txt; no `/W4`, no `/WX`), GCC/Clang use `-Wall -Wextra`; CI does not fail on warnings. Keep new code warning-free at those levels -- a zero-warning build is a goal, not an enforced gate
 - **Service locator**: Use `EngineContext::Get()->GetX()` for subsystem access. Engine-lifetime ownership lives in the `EngineRuntime` struct (Core-internal; `Core/EngineRuntime.h`) — do not introduce new file-scope `g_*` subsystem globals
 - **Cross-platform types**: `Core/Platform.h` (DirectXMath stubs on Linux)
+
+### Language policy
+
+Exceptions and RTTI are both ON. No flag disables them; CMake's MSVC defaults `/EHsc /GR` apply.
+
+- **Exceptions** are for unrecoverable, initialization and tooling failures. Per-frame and hot-path code stays non-throwing and `noexcept`, and expected failures there return result types (`std::expected`, `bool` + out-param) instead of throwing.
+- **Move constructors and move assignment are `noexcept`.** Containers depend on it: `std::vector` copies instead of moving on reallocation otherwise. `performance-noexcept-move-constructor` flags misses (advisory).
+- **No `dynamic_cast` or `typeid` in per-frame paths.** Both are fine in editor, tools and serialization code.
+
+### Engine systems
+
+- **Every system states its contract** in its header docs:
+  - thread affinity (game thread, render thread, or async-safe);
+  - ownership and lifetime;
+  - allocation strategy;
+  - scalability tier.
+- **Hot paths:**
+  - no hidden allocations;
+  - data-oriented layout;
+  - justify every virtual dispatch.
+- **New subsystems:**
+  - go behind an interface with a test seam;
+  - land as gated milestones with checks (a readiness work item with acceptance criteria and tests), not as one unverified drop.
 
 ## Architecture (key directories)
 
@@ -124,6 +151,7 @@ GameModules/                             — Game module directory (auto-discove
 GameModules/SparkGame/Source/            — Base game module (DLL)
 GameModules/SparkGameFPS/Source/         — FPS game module (DLL)
 GameModules/SparkGameMMO/Source/         — MMO game module (DLL)
+GameModules/SparkGameMMOFPS/Source/      — MMO-FPS game module (DLL)
 GameModules/SparkGameRPG/Source/         — RPG game module (DLL)
 GameModules/SparkGameARPG/Source/        — Action RPG game module (DLL)
 GameModules/SparkGameRTS/Source/         — RTS game module (DLL)
@@ -134,7 +162,8 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 7567 test definitions across 632 files, CTest
+FuzzerTests/                             — libFuzzer harnesses, corpora, fuzz policy (separate from Tests/)
+Tests/                                   — 7716 test definitions across 652 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -158,12 +187,24 @@ cmake --preset windows-release       # Windows MSVC
 cmake --preset linux-gcc-release     # Linux GCC
 cmake --preset macos-release         # macOS Apple Clang (experimental)
 
-# Build
-cmake --build build --config Release
-
-# Test
-cd build && ctest --output-on-failure
+# Build and test (each preset writes build/<preset>; the Visual Studio tree needs --config / -C)
+cmake --build build/windows-release --config Release && ctest --test-dir build/windows-release -C Release --output-on-failure
+cmake --build build/linux-gcc-release && ctest --test-dir build/linux-gcc-release --output-on-failure
 ```
+
+**Run a subset of `SparkTests`** while iterating. `Tests/TestMain.cpp` reads these environment variables:
+
+```bash
+SPARK_TEST_FILE=TestFPSMultiplayer.cpp build/linux-gcc-release/bin/SparkTests   # tests from one source file
+SPARK_TEST_NAME=Showcase build/linux-gcc-release/bin/SparkTests                 # name contains ("RPG_" also hits "ARPG_*")
+SPARK_TEST_NAME_PREFIX=RPG_ build/linux-gcc-release/bin/SparkTests              # anchored name prefix
+SPARK_TEST_EXCLUDE=Soak,Stress build/linux-gcc-release/bin/SparkTests           # comma-separated name substrings to skip
+SPARK_TEST_LIMIT=50 build/linux-gcc-release/bin/SparkTests                      # first N tests (bisection)
+```
+
+`SPARK_TEST_EXPECT_COUNT=N` fails the run unless exactly N tests were selected; CTest registrations use it to pin a test family. Pass `--warn-is-error` to match how those registrations run.
+
+**Fast local rebuilds:** configure an iterate-and-test tree with `-DENABLE_LTO=OFF`, ccache and mold. `SparkTests` then relinks in seconds instead of re-running LTO over the whole binary; CI Release lanes keep LTO. The exact configure line and the ccache settings the precompiled header needs are in `wiki/development/Workflow-Patterns.md` (Fast Local Rebuilds).
 
 CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR`, `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
 
@@ -183,7 +224,8 @@ git rebase origin/Working                         # if behind, rebase
 ```
 
 **Rules:**
-- **Never** commit or push while behind the base branch. Always rebase first.
+- **Never** commit or push while behind the base branch.
+- **Rebase only a branch nobody else has pulled.** Once a branch is pushed and shared (an open PR, or several agents or sessions committing to it), bring `Working` in with `git merge origin/Working` instead. Rebasing a shared branch forces a force-push, which breaks every other checkout of it. Never force-push a shared branch.
 - After rebasing, re-run `docs/sync-wiki.sh sync` to pick up upstream changes.
 - Prefer upstream changes for auto-generated content (`<!-- AUTO:* -->` sections).
 
@@ -216,7 +258,7 @@ docs/update-context.sh update          # Update CLAUDE.md counts
 git diff --name-only --diff-filter=ACMR origin/Working -- \
     SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
   | xargs -r clang-format --dry-run --Werror
 
@@ -224,7 +266,7 @@ git diff --name-only --diff-filter=ACMR origin/Working -- \
 git diff --name-only --diff-filter=ACMR origin/Working -- \
     SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
   | xargs -r clang-format -i
 
@@ -232,10 +274,10 @@ git diff --name-only --diff-filter=ACMR origin/Working -- \
 cmake --preset linux-gcc-release 2>&1 | tail -20
 
 # 4. Build
-cmake --build build --config Release 2>&1 | tail -30
+cmake --build build/linux-gcc-release 2>&1 | tail -30
 
 # 5. Tests
-cd build && ctest --output-on-failure && cd ..
+ctest --test-dir build/linux-gcc-release --output-on-failure
 
 # 6. Docs (one command updates all wikis, stats, badges, context)
 docs/update-all-docs.sh
@@ -292,6 +334,8 @@ gh run view <RUN_ID> --log-failed
 # Fix locally, commit, push, re-poll
 ```
 
+Cloud sessions have no `gh` CLI. There, use the GitHub MCP tools instead: `pull_request_read` for PR status and checks, `actions_list` for runs, and `get_job_logs` for failed-job logs.
+
 To reproduce CI failures locally, see `wiki/development/CI-Reproducible-Builds.md` for exact build commands for each job.
 
 ### CI jobs summary
@@ -307,16 +351,17 @@ To reproduce CI failures locally, see `wiki/development/CI-Reproducible-Builds.m
 | `build-linux-msan` | ubuntu-24.04 | Clang + MSan-instrumented libc++ 18.1.3 (built in-job, cached) | Debug | MSan + ignorelist, `-DENABLE_VULKAN=OFF`, `continue-on-error` |
 | `build-windows-vs2022` | windows-2022 | MSVC v143 | Debug, Release | Ninja Multi-Config + sccache (hash-pinned, `SCCACHE_DIR` restore/save), `-DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON` |
 | `build-windows-vs2026` | windows-2025-vs2026 | MSVC v145 | Debug, Release | Ninja Multi-Config + sccache, `continue-on-error` |
-| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error` |
+| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error`, experimental |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov, per-subsystem thresholds |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job; individual diagnostics advisory |
-| `todo-count` | ubuntu-24.04 | — | — | warn-only above 20 |
+| `todo-count` | ubuntu-24.04 | — | — | fails above 20 (required) |
 | `build-windows-shipping` | windows-2022 | MSVC v143 | MinSizeRel | `windows-shipping` preset (Visual Studio generator, no compiler cache), module-profile lifecycle |
+| `reproducibility-windows` | windows-2022 | MSVC v143 | MinSizeRel | two `windows-shipping` checkouts built and installed, compared by `tools/compare_build_outputs.py`, `continue-on-error` |
 
-`build-linux-msan`, `build-windows-vs2026`, `build-linux-mingw-wine` (manual `workflow_dispatch` only), and `build-macos` are job-level `continue-on-error` — failures are warnings, not blockers. `clang-tidy` is a blocking dependency of `required-ci-gate` (its configure/compile failures block; individual diagnostics are advisory).
+`build-linux-msan`, `build-windows-vs2026`, `build-linux-mingw-wine` (manual `workflow_dispatch` only), `reproducibility-windows` (until a hosted run shows equivalent trees), and `build-macos` are job-level `continue-on-error` — failures are warnings, not blockers. `clang-tidy` is a blocking dependency of `required-ci-gate` (its configure/compile failures block; individual diagnostics are advisory).
 
-Legacy branch protection is not configured on `Working` (`branches/Working/protection` is 404). The repository's `Working integrity` ruleset (21968740) is active, protects against deletion and non-fast-forward updates, and requires the GitHub Actions `Required CI Gate` check with no bypass actors. Exact-SHA evidence and controlled-failure behavior remain release gates tracked as `CI-100`; do not present a green check list alone as release proof.
+Legacy branch protection is not configured on `Working` (`branches/Working/protection` is 404). The repository's `Working integrity` ruleset (21968740) is active, protects against deletion and non-fast-forward updates, and requires the GitHub Actions `Required CI Gate` check with no bypass actors. Re-verify with `python3 .github/scripts/verify-working-ruleset.py --live` (last run 2026-09-24). Exact-SHA evidence and controlled-failure behavior remain release gates tracked as `CI-100`; do not present a green check list alone as release proof.
 
 ## Documentation
 
@@ -355,6 +400,27 @@ python3 tools/publish-wiki.py --check   # Validate the flat GitHub Wiki publicat
 3. Ensure public headers have Doxygen-style comments (`@brief`, `@param`, `@return`)
 
 Legacy Doxygen is optional: `cd docs && ./generate-docs.sh`
+
+## Readiness Contract
+
+Release readiness is tracked per work item in `docs/readiness/work-items/*.json`. Each criterion carries an `acceptanceStatus` entry, keyed by `criterionDigest` (`criterion_digest()` in `tools/site-data/common.py`):
+
+| State | Required evidence |
+|-------|-------------------|
+| `unmet` | none |
+| `implemented` | at least one repo path (code, test, doc) |
+| `evidenced` | a `ci:<workflow>/<run>@<40-hex commit>` reference from an exact-commit CI run |
+
+An item is `done` only when every criterion is `evidenced`; an `open` item records no progress. Local test passes justify `implemented`, never `evidenced`. After editing work items, run `python3 tools/site-data/validate.py` and `python3 tools/site-data/render_handoff.py`, and commit the regenerated `docs/readiness/ENGINE_READINESS_HANDOFF.md` with them.
+
+## Shared Working Tree (Multiple Agents)
+
+When several agents or sessions work in one checkout:
+
+- **Uncommitted edits may belong to a live agent.** Don't commit, revert, stash or reformat files you did not change. Commit only your own hunks, and stage them with `git apply --cached` or `git update-index --cacheinfo`, never with `git add` on a shared file.
+- **Serialize the shared build** through `tools/build-lock.sh`, and hold one commit lock (`flock <lockfile>`) around index, commit and push, so nobody else's staging lands in your commit.
+- **Never kill or `pkill` a process you did not start.** Pattern-matching `pkill -f` has killed other agents' test runs and deadlocked the build lock.
+- **Watch disk.** Keep scratch worktrees and private builds out of the repo and remove them when done. Tree sizes are in `wiki/development/Workflow-Patterns.md`.
 
 ## Wiring Things In — Functionality Is Not Optional
 
@@ -400,3 +466,7 @@ Review whether anything learned warrants a new or updated entry — especially o
 ### Asset workflow
 
 Use Blender for asset creation, repair, and export work. Preserve editable source assets and verify exported files through the engine's asset pipeline; a successful Blender export alone is not release qualification.
+
+- **Headless Blender:** `PYTHONHOME=/usr blender -b --factory-startup --python <script> -- <args>`. Add `xvfb-run` for Workbench preview renders.
+- **Audio:** the runtime decodes WAV only, so ship music and effects as `.wav`.
+- **Module asset references:** `tools/check-module-asset-refs.py` fails closed for modules in its `ENFORCED_MODULES`. Each enforced module lists every asset path its source names, with sha256 and provenance rule, in `GameModules/<Module>/asset-references.json`. Every licensed or authored source has an entry in `tools/asset-integrity/provenance.json`.

@@ -233,13 +233,16 @@ chronological entry in `sparkengine-failure-archaeology` (Era 4), which owns the
 ## 9. Visual evidence
 
 - **Golden images** — `SparkEngine/Source/Utils/GoldenImageTest.h` +
-  `Tests/GoldenImages/` (committed baselines) and `Tests/Output/` (run-time captures/diffs,
-  not committed). Files are **raw RGBA with a `.png` extension** (4-byte LE width, height,
-  then `w*h*4` bytes) — do not open in an image viewer and conclude corruption. Tolerances:
-  `perPixelThreshold` default 10, `tolerancePercent` default 0.5%. A missing baseline is
-  recorded as "no baseline", **not a failure** — so a golden test with no committed
-  reference proves nothing. Create baselines with `GoldenImageTestRunner::CaptureGolden`,
-  commit the file, and explain visual changes in the PR description.
+  `Tests/GoldenImages/` (`manifest.json` + `<backendRow>/<scene>.png` baselines) and
+  `Tests/Output/` (run-time captures/diffs, not committed). Files are **real PNGs**
+  (`Utils/GoldenImagePng.h`, miniz; the bundled stb headers are stubs). Thresholds live
+  only in the reviewed manifest entry per scene and backend row (`d3d11-warp`, `d3d11-hw`,
+  `opengl-llvmpipe`, `vulkan-lavapipe`), alongside the reviewer and the baseline SHA-256.
+  Comparisons **fail closed**: no manifest, no entry, no baseline, or a hash mismatch is a
+  failure with `failureReason` set. The manifest has no entries yet, so no scene is
+  certified. Create a capture with `GoldenImageTestRunner::CaptureGolden`, then record its
+  thresholds, reviewer and `sha256sum` in the manifest and commit both together, with the
+  visual change explained in the PR description (`Tests/GoldenImages/README.md`).
 - **Screenshots** — `tools/capture-screenshots.sh` captures editor/console/tool shots on
   Linux via Xvfb + llvmpipe into `docs/screenshots/`. It validates each capture is >1000
   bytes (a killed process still "produces" a file). The `Screenshots/` and
@@ -270,8 +273,9 @@ Verified fine print — checks whose advertised threshold is **not actually enfo
 | Test-registration guard | exists in `tools/` | Not called by any workflow or by `validate-all.sh` — manual only (§2). |
 
 Load-bearing extra gates worth knowing: `build-linux-gcc` Release **greps the test log**
-for `VulkanParity_ShaderCompilePath_Asserted` and `VulkanParity_D3D11MilestoneSnapshot` and
-asserts `ENABLE_VULKAN:BOOL=ON` in the CMake cache — renaming those tests breaks CI.
+for `VulkanShaderToolchain_RejectsMalformedSpirv` and `VulkanGolden_FullscreenTriangleReadback`
+(compiled only with `SPARK_VULKAN_SUPPORT`) and asserts `ENABLE_VULKAN:BOOL=ON` in the CMake
+cache — renaming those tests breaks CI.
 `msvc.yml` (MSVC Code Analysis → SARIF) and `codeql.yml` run separately from build.yml.
 
 `candidate` improvements (unproven, do not claim as done): wire

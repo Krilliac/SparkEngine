@@ -7,12 +7,14 @@
 
 #include "Building/RTSBuildingSystem.h"
 #include "Command/RTSCommandSystem.h"
+#include "Engine/ECS/Components.h"
 #include "FogOfWar/RTSFogOfWarSystem.h"
 #include "Input/InputManager.h"
 #include "Match/RTSMatchSystem.h"
 #include "Resource/RTSResourceSystem.h"
 #include "Simulation/RTSSkirmishSimulation.h"
 #include "Unit/RTSUnitSystem.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -28,6 +30,26 @@ namespace RTS
     {
         constexpr RTSFaction PLAYER_FACTION = RTSFaction::Human;
         constexpr int DEMO_MAP_SIZE = RTSSkirmishSimulation::MAP_SIZE;
+
+        // The RTS kit (tools/blender/author_rts_kit.py) is modelled in metres; a building's 4 x 4 cell footprint is the
+        // command center's 10 x 10 m, so one grid cell is 2.5 m. Grid (x, y) maps to world (x, 0, y).
+        constexpr float METERS_PER_CELL = 2.5f;
+
+        enum KitPropKind : uint8_t
+        {
+            KIT_STRUCTURE = 0,
+            KIT_RALLY_FLAG = 1,
+            KIT_RESOURCE_NODE = 2,
+            KIT_SELECTION_MARKER = 3,
+        };
+
+        struct KitPlacement
+        {
+            const char* meshPath;
+            float gridX;
+            float gridY;
+            float yawDegrees;
+        };
 
 #ifdef ENABLE_EDITOR
         ImU32 GetFactionColor(RTSFaction faction)
@@ -65,6 +87,7 @@ namespace RTS
 
     void RTSDemoPresentation::Shutdown()
     {
+        RemoveKitProps();
         m_context = nullptr;
         m_units = nullptr;
         m_buildings = nullptr;
@@ -188,6 +211,119 @@ namespace RTS
                 return m_buildings->StartProduction(buildingId, RTSUnitType::Marine);
         }
         return false;
+    }
+
+    void RTSDemoPresentation::SyncKitProps()
+    {
+        World* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!world || !m_units || !m_buildings || !m_resources || !m_commands)
+            return;
+
+        // The player's structures carry the Azure (faction 1) kit, every opponent the Crimson (faction 2) variants.
+        std::map<std::pair<uint8_t, uint32_t>, KitPlacement> wanted;
+        for (const RTSFaction faction : {RTSFaction::Human, RTSFaction::Sentinel, RTSFaction::Swarm})
+        {
+            const bool player = faction == PLAYER_FACTION;
+            for (uint32_t buildingId : m_buildings->GetBuildingsByFaction(faction))
+            {
+                const BuildingData* building = m_buildings->GetBuilding(buildingId);
+                if (!building)
+                    continue;
+                // Fronts (+Z) face the map centre: bases in the south half look north, the others south.
+                const float yaw = building->posY < DEMO_MAP_SIZE / 2.0f ? 0.0f : 180.0f;
+                if (building->type == RTSBuildingType::CommandCenter)
+                {
+                    wanted[{KIT_STRUCTURE, buildingId}] = {player ? "Assets/Models/RTS/Kit/command_center.obj"
+                                                                  : "Assets/Models/RTS/Kit/command_center_crimson.obj",
+                                                           building->posX, building->posY, yaw};
+                }
+                else if (building->type == RTSBuildingType::Barracks)
+                {
+                    wanted[{KIT_STRUCTURE, buildingId}] = {player ? "Assets/Models/RTS/Kit/barracks.obj"
+                                                                  : "Assets/Models/RTS/Kit/barracks_crimson.obj",
+                                                           building->posX, building->posY, yaw};
+                    // The rally flag marks the cell where RTSBuildingSystem spawns finished units (pos + 2).
+                    wanted[{KIT_RALLY_FLAG, buildingId}] = {player ? "Assets/Models/RTS/Kit/rally_flag.obj"
+                                                                   : "Assets/Models/RTS/Kit/rally_flag_crimson.obj",
+                                                            building->posX + 2.0f, building->posY + 2.0f, yaw};
+                }
+            }
+        }
+        for (const auto& [nodeId, node] : m_resources->GetNodes())
+        {
+            if (node.remaining > 0)
+                wanted[{KIT_RESOURCE_NODE, nodeId}] = {"Assets/Models/RTS/Kit/resource_node.obj", node.posX, node.posY,
+                                                       0.0f};
+        }
+        for (uint32_t unitId : m_commands->GetSelection())
+        {
+            if (const UnitData* unit = m_units->GetUnit(unitId))
+                wanted[{KIT_SELECTION_MARKER, unitId}] = {"Assets/Models/RTS/Kit/unit_marker.obj", unit->posX,
+                                                          unit->posY, 0.0f};
+        }
+
+        // Drop props whose structure, node or selection is gone, then create or move the rest.
+        size_t landmarksChanged = 0; // structures, flags and nodes (selection markers churn with every click)
+        for (auto it = m_kitProps.begin(); it != m_kitProps.end();)
+        {
+            if (wanted.contains(it->first))
+            {
+                ++it;
+                continue;
+            }
+            const auto entity = static_cast<EntityID>(it->second);
+            if (world->GetRegistry().valid(entity))
+                world->DestroyEntity(entity);
+            landmarksChanged += it->first.first != KIT_SELECTION_MARKER;
+            it = m_kitProps.erase(it);
+        }
+        for (const auto& [key, placement] : wanted)
+        {
+            auto [it, inserted] = m_kitProps.try_emplace(key, 0u);
+            auto entity = static_cast<EntityID>(it->second);
+            if (inserted || !world->GetRegistry().valid(entity))
+            {
+                entity = world->CreateEntity("RTS_KitProp");
+                world->AddComponent<Transform>(entity);
+                world->AddComponent<MeshRenderer>(entity);
+                it->second = static_cast<uint32_t>(entity);
+                landmarksChanged += key.first != KIT_SELECTION_MARKER;
+            }
+            Transform* transform = world->GetComponent<Transform>(entity);
+            MeshRenderer* renderer = world->GetComponent<MeshRenderer>(entity);
+            if (!transform || !renderer)
+                continue;
+            const DirectX::XMFLOAT3 position{placement.gridX * METERS_PER_CELL, 0.0f,
+                                             placement.gridY * METERS_PER_CELL};
+            if (renderer->meshPath != placement.meshPath || transform->position.x != position.x ||
+                transform->position.z != position.z || transform->rotation.y != placement.yawDegrees)
+            {
+                transform->position = position;
+                transform->rotation = {0.0f, placement.yawDegrees, 0.0f};
+                renderer->meshPath = placement.meshPath;
+                renderer->worldMatrixDirty = true;
+            }
+        }
+        if (landmarksChanged > 0)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS kit: %zu props staged from Assets/Models/RTS/Kit",
+                           m_kitProps.size());
+        }
+    }
+
+    void RTSDemoPresentation::RemoveKitProps()
+    {
+        World* world = m_context ? m_context->GetWorld() : nullptr;
+        if (world)
+        {
+            for (const auto& [key, entityId] : m_kitProps)
+            {
+                const auto entity = static_cast<EntityID>(entityId);
+                if (world->GetRegistry().valid(entity))
+                    world->DestroyEntity(entity);
+            }
+        }
+        m_kitProps.clear();
     }
 
     void RTSDemoPresentation::RenderUI()

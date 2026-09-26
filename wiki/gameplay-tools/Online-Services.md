@@ -8,16 +8,18 @@ Unified online platform integration with pluggable backends for authentication, 
 
 The Online Services system provides a single abstract interface (`IOnlinePlatform`) that encapsulates all platform-specific online functionality. Games code against this interface and never reference Steam, Epic, or console APIs directly. At runtime, the `OnlineServiceManager` singleton holds one active platform implementation.
 
-The default platform is `NullOnlinePlatform`, which is fully functional offline -- it stores leaderboards in memory, achievements as a set, and cloud saves to local storage. This means single-player games work out of the box without any SDK dependencies, and developers can test online flows without network connectivity.
+The default platform is `NullOnlinePlatform`, which works offline and keeps everything in process memory: leaderboards, achievements, sessions, friends, and "cloud" save slots. Nothing is written to disk, and nothing survives when the process exits. Single-player games run without any SDK dependencies, and developers can test online flows without a network connection.
 
-Adding a new platform requires implementing the `IOnlinePlatform` interface and passing it to `OnlineServiceManager::SetPlatform()`. Stub classes for Steam, Epic, and Console are included with detailed integration guides in their documentation comments.
+Adding a new platform requires implementing the `IOnlinePlatform` interface and passing it to `OnlineServiceManager::SetPlatform()`. The Steam, Epic, and Console classes are compile-only stubs. They report no capabilities, and every call fails.
+
+**Service boundary (OD-08):** this interface is an integration point, not a hosted service. SparkEngine ships no hosted identity, matchmaking, fleet, entitlement, billing, leaderboard, or cloud-save service. The game or the platform holder provides them. See [Online Service Boundary](../advanced/Online-Service-Boundary.md). The normative contract is [`docs/specs/online-services.md`](../../docs/specs/online-services.md). It holds the deployment diagram, every trust boundary, the per-call timeout, retry, and circuit-breaker budgets, the failure semantics that every adapter must follow, and the adapter status register (`NullOnlinePlatform` is local and deterministic, and the Steam, Epic, and Console classes are stubs).
 
 ## Architecture
 
 ```
 OnlineServiceManager (singleton)
   +-- IOnlinePlatform* (active platform pointer)
-        |-- NullOnlinePlatform   (default -- fully functional offline)
+        |-- NullOnlinePlatform   (default -- offline, in-memory)
         |-- SteamPlatform        (stub -- requires Steamworks SDK)
         |-- EpicPlatform         (stub -- requires EOS SDK)
         +-- ConsolePlatform      (stub -- requires NDA + dev kits)
@@ -28,7 +30,7 @@ OnlineServiceManager (singleton)
 | Class | Description |
 |-------|-------------|
 | `IOnlinePlatform` | Abstract interface defining all online service methods |
-| `NullOnlinePlatform` | Fully functional offline implementation (default) |
+| `NullOnlinePlatform` | Offline, in-memory implementation (default) |
 | `SteamPlatform` | Stub for Steamworks SDK integration |
 | `EpicPlatform` | Stub for Epic Online Services (EOS) SDK integration |
 | `ConsolePlatform` | Stub for PlayStation/Xbox/Switch (NDA-protected SDKs) |
@@ -88,10 +90,13 @@ public:
 | `GetInstance()` | Get the singleton instance |
 | `Initialize()` | Initialize with NullOnlinePlatform |
 | `Shutdown()` | Log out and release all platforms |
-| `Update(float dt)` | Per-frame update for async callbacks |
-| `GetPlatform()` | Get the active `IOnlinePlatform*` |
+| `Update(float dt)` | Per-frame update; advances the clock that open circuits cool down on |
+| `GetPlatform()` | Get the active platform through the `GuardedOnlinePlatform` front (see Degraded Dependencies) |
 | `SetPlatform(unique_ptr)` | Switch to a custom platform (takes ownership) |
 | `ResetToNullPlatform()` | Revert to the offline platform |
+| `GetCapabilityHealth(capability)` | Consecutive, total and rejected-call counters and circuit state for one capability |
+| `SetCircuitPolicy(policy)` | Replace the circuit budget (default: 5 consecutive failures, 30 s cooldown) |
+| `Console_GetStatus()` | Adapter, capabilities, last error, per-capability health, and player |
 
 ### IOnlinePlatform
 
@@ -101,18 +106,37 @@ public:
 | `FindSessions() / CreateSession() / JoinSession()` | Matchmaking |
 | `SubmitScore() / QueryScores()` | Leaderboards |
 | `UnlockAchievement() / SetAchievementProgress()` | Achievements |
-| `SaveToCloud() / LoadFromCloud()` | Cloud saves |
+| `SaveToCloud() / LoadFromCloud()` | Cloud-save slots (in memory on the Null platform) |
 | `GetFriendsList() / SetPresence() / InviteToSession()` | Social features |
+
+## Adapter Conformance
+
+Every adapter in `OnlineServices.h` runs the same `OnlineServices_Contract_*` suite in `Tests/TestOnlineServices.cpp` (ctest `OnlineServicesContract`, label `online-services`). A capability an adapter reports as unavailable must fail every call with a non-empty `GetLastError()` and change no observable state. The Steam, Epic, and Console stubs return one constant error string, so for them the suite checks only that the string is present. A capability an adapter reports as available must work and read back where the interface has a getter. Friends and presence have none on the Null platform, so they are checked for success and failure only. On the Null platform each failed call must set its own exact reason and each successful call clears it. The suite also checks that two fresh runs of the Null platform produce one fixed expected transcript. The Null platform keeps its data in ordered containers, so that transcript is the same on every standard library. On the Null platform, `DeleteCloudSave()` of a missing slot fails with an error. `InviteToSession()` needs a friend ID, an active session, and a recipient in the friends list. Offline mode has no friends, so every invite fails with a reason. A new adapter joins the suite before it ships:
+
+```bash
+ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure --no-tests=error
+```
+
+## Degraded Dependencies
+
+`GetPlatform()` returns `GuardedOnlinePlatform`, a front over the active adapter that applies the degraded-dependency rules in section 5.1 of [`docs/specs/online-services.md`](../../docs/specs/online-services.md):
+
+- An exception thrown by the adapter never reaches the caller. The call fails, and `GetLastError()` reports `<call> failed: adapter threw: <what>`. A login token in the exception text is redacted.
+- Each capability (authentication, sessions, leaderboards, achievements, cloud save, friends, presence) counts consecutive failures. After 5 of them its circuit opens, and calls fail immediately without reaching the adapter for 30 s on the `Update()` clock. The next call after that is a probe: success closes the circuit, and failure reopens it for another 30 s.
+- `Logout()` and `LeaveSession()` always reach the adapter, so local cleanup is never blocked.
+- The circuit is disabled for the in-process Null platform, because it has no remote dependency. Its failures, such as joining an unknown session, are caller errors and are only counted.
+- `Console_GetStatus()` adds `Health: ok`, or each failing capability with its count and circuit state, such as `leaderboards 5 consecutive failures (circuit open, retry in 30.0s)`.
+
+The `OnlineServices_Degraded_*` tests (ctest `OnlineServicesDegraded`, label `online-services`) drive a fault-injecting adapter through the manager to cover these rules.
 
 ## Configuration
 
-| Setting | Description |
-|---------|-------------|
-| `-DENABLE_STEAM=ON` | Enable Steam SDK (requires `ThirdParty/Steamworks/`) |
-| `-DENABLE_EOS=ON` | Enable Epic Online Services SDK (requires `ThirdParty/EOS/`) |
+There are no build options for platform SDKs. The repository does not include or link the Steamworks, EOS, or console SDKs, and CMake has no `ENABLE_STEAM` or `ENABLE_EOS` option. A platform integration is written in the game or an integration layer, against the vendor SDK and backend that the product licenses.
 
 ## Related Systems
 
+- [Online Service Boundary](../advanced/Online-Service-Boundary.md) -- what the engine provides and what a product must provide
+- [Online-Services Boundary Specification](../../docs/specs/online-services.md) -- deployment diagram, trust boundaries, call budgets, failure semantics
 - [Networking](../subsystems/Networking.md) -- UDP transport for gameplay networking
 - [Save System](Save-System.md) -- Local save/load persistence
 - [Gameplay Systems](Gameplay-Systems.md) -- Inventory, quests, achievements

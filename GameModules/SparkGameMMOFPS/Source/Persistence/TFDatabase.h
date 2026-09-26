@@ -15,10 +15,32 @@
  * mutations as successful.
  *
  * Stores accounts[] + characters[] as JSON in a single caller-selected file.
- * TerraFront authority code passes SavePaths::File("terrafront.db"). Every
- * mutating call flushes to disk immediately (tmp+rename) and rolls back its
- * in-memory change if that write fails. Close() therefore only releases the
- * authority lock; a fresh TFDatabase instance that re-Opens the same path sees
+ * TerraFront authority code passes SavePaths::File("terrafront.db").
+ *
+ * TF-120 shared-root concurrency: several continent authority processes may
+ * open the same file. There is no lifetime lock. Every call is one
+ * transaction under a short exclusive `<file>.lock` (SavePaths::
+ * ExclusiveFileLock): reload the committed file, validate it, apply the
+ * change to that fresh state, atomically write (tmp+rename), release. Reads
+ * take the same lock so they see other authorities' commits. Creates, deletes
+ * and login touches are re-applied to the fresh state, so ids and unique names
+ * are allocated against every authority's rows.
+ *
+ * Absolute character writes (progress / meta / CommitCharacterUpdates) carry
+ * values the caller computed from an earlier read, so they are optimistic:
+ * each character row stores the file revision of its last change, and this
+ * instance remembers a per-character baseline revision (set by Open, by
+ * AcquireCharacter, by CreateCharacter and by its own successful commits;
+ * plain reads never move it). A commit whose row changed since the baseline
+ * was written by another authority; it is rejected with status Conflict and
+ * nothing is written; ConflictedCharacter() names the stale row so batch
+ * callers (TFPlayerMetaStore::PersistAllDirty) can drop it and commit the
+ * rest, or re-acquire it and retry. A lock
+ * timeout (Locked), unreadable/corrupt/newer-schema file, or a vanished
+ * primary fails closed.
+ *
+ * Every mutating call is durable before it reports success; Close() only
+ * marks the instance closed. A fresh TFDatabase that Opens the same path sees
  * every mutation that previously reported success.
  *
  * DATA-120: CommitCharacterUpdates applies several character rows (e.g. an
@@ -27,6 +49,17 @@
  * "schemaVersion"; files without it are the legacy v0 shape and upgrade on
  * the next write, while a file from a newer schema fails closed so an older
  * build can never load-and-rewrite it and silently drop the newer fields.
+ * Schema v2 adds the file "revision" and per-character "revision" keys; v0/v1
+ * files load with revision 0 and upgrade on the next write.
+ *
+ * DATA-120 backup/restore (TFDatabaseBackup.cpp, recovery point documented in
+ * docs/specs/persistence.md): CreateBackup copies the committed file under the
+ * authority lock into a durable, re-verified backup plus a sha256sum-format
+ * "<backup>.sha256" sidecar. RestoreFromBackup verifies that digest and the
+ * full load validation (schema gate included) before it durably replaces the
+ * primary, keeps the displaced primary as "<db>.pre-restore-<ms>.bak", and
+ * stamps the restored file with a revision above both the backup and the
+ * displaced primary so revisions never repeat across the restore.
  */
 #pragma once
 
@@ -36,7 +69,11 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace Terrafront
@@ -51,6 +88,42 @@ namespace Terrafront
         Locked,
         WriteFailed,
         UnsupportedVersion, ///< file written by a newer schema; left untouched
+        Conflict,           ///< another authority changed a row since this instance's baseline
+    };
+
+    /// Outcome of TFDatabase::CreateBackup / RestoreFromBackup. Anything but Ok
+    /// changed nothing the caller relies on: the primary is untouched, and a
+    /// failed backup is never reported as usable.
+    enum class TFBackupStatus : uint8_t
+    {
+        Ok,
+        InvalidPath,              ///< empty path, or the backup would alias the db, its staging file or its lock
+        Locked,                   ///< the authority lock was not acquired within the timeout
+        SourceMissing,            ///< CreateBackup: no committed database file exists
+        SourceUnreadable,         ///< CreateBackup: the committed file could not be read
+        SourceCorrupt,            ///< CreateBackup: the committed file fails load validation
+        SourceUnsupportedVersion, ///< CreateBackup: the committed file is from a newer schema
+        TargetExists,             ///< CreateBackup: the backup or its sidecar exists; backups are never overwritten
+        WriteFailed,              ///< a durable write failed
+        VerifyFailed,             ///< CreateBackup: the re-read backup or sidecar did not match what was written
+        BackupMissing,            ///< RestoreFromBackup: the backup file could not be read
+        DigestMissing,            ///< RestoreFromBackup: the sidecar is absent or malformed
+        DigestMismatch,           ///< RestoreFromBackup: the backup bytes do not match the sidecar digest
+        BackupCorrupt,            ///< RestoreFromBackup: the backup fails load validation
+        BackupUnsupportedVersion, ///< RestoreFromBackup: the backup is from a newer schema
+    };
+
+    /// What a backup or restore covered, for operator logs and drills.
+    struct TFBackupInfo
+    {
+        uint64_t revision = 0;      ///< backup: revision captured; restore: revision the restored primary carries
+        uint32_t schemaVersion = 0; ///< schema of the backup file (0 == legacy unversioned)
+        uint64_t sizeBytes = 0;     ///< backup file size
+        std::string sha256;         ///< lowercase hex digest of the backup file
+        std::filesystem::path displacedPrimary; ///< restore: copy of the replaced primary (empty if none existed)
+        /// restore: true when the replaced primary's revision was read, so `revision`
+        /// is above every revision it held; false when no primary existed or it was torn
+        bool supersedesPrimaryRevision = false;
     };
 
     struct TFAccountRecord
@@ -78,6 +151,7 @@ namespace Terrafront
         uint16_t rank = 1;
         uint32_t flux = 0;
         int64_t createdAtMs = 0, lastPlayedMs = 0;
+        uint64_t revision = 0; ///< file revision of this row's last change (0 == legacy/never rewritten)
 
         // --- W6 progression expansion (additive schema; absent keys on old save
         // files simply load as the empty defaults below) -------------------------
@@ -113,16 +187,26 @@ namespace Terrafront
     {
       public:
         /// On-disk schema written by this build. Files without the key are v0.
-        static constexpr uint32_t kSchemaVersion = 1;
+        static constexpr uint32_t kSchemaVersion = 2;
 
         TFDatabase() = default;
         ~TFDatabase();
 
-        bool Open(const std::filesystem::path& path); // false on missing parent/stat/read/parse failure
-        bool Close();                                 // releases the lock; successful mutations are already durable
+        bool Open(const std::filesystem::path& path); // false on missing parent/lock/stat/read/parse failure
+        bool Close();                                 // successful mutations are already durable
         bool IsOpen() const { return m_open; }
         TFDatabaseStatus LastStatus() const { return m_status; }
         bool RecoveryLatched() const { return m_recoveryLatched; }
+        /// Character whose stale baseline made the last CommitCharacterUpdates
+        /// fail with status Conflict (0 when the last commit did not conflict).
+        uint64_t ConflictedCharacter() const { return m_conflictCharId; }
+        /// Row revision this instance's absolute writes for `charId` are checked
+        /// against, or nullopt when it has no baseline for that character.
+        std::optional<uint64_t> BaselineRevision(uint64_t charId) const
+        {
+            const auto it = m_baseRevisions.find(charId);
+            return it != m_baseRevisions.end() ? std::optional<uint64_t>(it->second) : std::nullopt;
+        }
 
         // Accounts
         bool CreateAccount(const std::string& username, const std::string& salt, const std::string& hash,
@@ -136,6 +220,10 @@ namespace Terrafront
         bool FindCharacterByName(const std::string& name, TFCharacterRecord& out);
         std::vector<TFCharacterRecord> ListCharacters(uint64_t accountId);
         bool FindCharacter(uint64_t charId, TFCharacterRecord& out);
+        /// FindCharacter that also adopts the row's current revision as this
+        /// instance's baseline. Call it where the caller starts working from
+        /// the returned values (enter world) and to retry after a Conflict.
+        bool AcquireCharacter(uint64_t charId, TFCharacterRecord& out);
         bool DeleteCharacter(uint64_t charId);
         bool SaveCharacterProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux, int64_t lastPlayedMs);
 
@@ -150,9 +238,33 @@ namespace Terrafront
                                const std::string& loadoutSuit, const std::vector<TFWeaponStatsRow>& stats);
 
         /// Apply every update in one atomic disk commit. Fails (and changes
-        /// nothing, in memory or on disk) if any row is invalid, names an
-        /// unknown character, repeats a character, or the write fails.
+        /// nothing on disk) if any row is invalid, names an unknown character,
+        /// repeats a character, the write fails, or (status Conflict) any row
+        /// changed since this instance's baseline for it.
         bool CommitCharacterUpdates(const std::vector<TFCharacterUpdate>& updates);
+
+        /// Snapshot the committed file at `dbPath` into `backupPath` plus the
+        /// digest sidecar BackupDigestPath(backupPath). Holds the authority lock
+        /// while reading, so the copy is exactly one committed revision; validates
+        /// it like Open, writes both files durably, then re-reads and verifies
+        /// them. Never overwrites an existing backup. Safe while authorities run.
+        static TFBackupStatus CreateBackup(const std::filesystem::path& dbPath, const std::filesystem::path& backupPath,
+                                           TFBackupInfo& info);
+        /// Replace the database at `dbPath` with the verified contents of
+        /// `backupPath` (digest, load validation and schema gate must all pass;
+        /// older-schema backups are migrated on write). Holds the authority lock,
+        /// preserves the displaced primary, and writes a revision above the
+        /// backup's and, when it can be read, the displaced primary's (reported
+        /// in info.supersedesPrimaryRevision). Also the recovery path for a
+        /// quarantined corrupt primary. Stop every authority on `dbPath` first
+        /// and restart them after: when the displaced revision is known a running
+        /// one fails closed rather than serving the rollback, but when it is not
+        /// (missing or torn primary) later revisions can repeat lost ones and a
+        /// running authority's stale row baseline could match them.
+        static TFBackupStatus RestoreFromBackup(const std::filesystem::path& backupPath,
+                                                const std::filesystem::path& dbPath, TFBackupInfo& info);
+        /// "<backupPath>.sha256", the sha256sum-format digest sidecar.
+        static std::filesystem::path BackupDigestPath(const std::filesystem::path& backupPath);
 
       private:
         enum class LoadResult : uint8_t
@@ -162,19 +274,38 @@ namespace Terrafront
             Corrupt,
             UnsupportedVersion,
         };
-        LoadResult LoadFromDisk();
-        bool SaveToDisk() const;
+
+        /// One committed file state. Transactions build a fresh one per call.
+        struct Snapshot
+        {
+            uint64_t revision = 0;
+            std::vector<TFAccountRecord> accounts;
+            std::vector<TFCharacterRecord> characters;
+            uint64_t nextAccountId = 1;
+            uint64_t nextCharId = 1;
+        };
+
+        /// Mutation callback: edits the fresh snapshot, stamping changed
+        /// character rows with `newRevision`. Returning false writes nothing.
+        using Mutation = std::function<bool(Snapshot& fresh, uint64_t newRevision)>;
+
+        LoadResult LoadFromDisk(Snapshot& out) const;
+        /// Validate and decode committed file bytes (LoadFromDisk after the read).
+        LoadResult ParseSnapshot(const std::string& text, Snapshot& out) const;
+        bool SaveToDisk(const Snapshot& snapshot) const;
+        bool Refresh(Snapshot& fresh);
+        void FailClosed(LoadResult load);
+        bool Transact(const char* operation, const Mutation& mutation);
+        bool RefreshSnapshot();
 
         std::filesystem::path m_path;
         bool m_open = false;
         bool m_recoveryLatched = false;
         TFDatabaseStatus m_status = TFDatabaseStatus::Closed;
-        SavePaths::ExclusiveFileLock m_fileLock;
 
-        std::vector<TFAccountRecord> m_accounts;
-        std::vector<TFCharacterRecord> m_characters;
-        uint64_t m_nextAccountId = 1;
-        uint64_t m_nextCharId = 1;
+        Snapshot m_snapshot;                                    ///< last committed state this instance saw
+        std::unordered_map<uint64_t, uint64_t> m_baseRevisions; ///< charId -> baseline row revision
+        uint64_t m_conflictCharId = 0;                          ///< see ConflictedCharacter()
     };
 
 } // namespace Terrafront

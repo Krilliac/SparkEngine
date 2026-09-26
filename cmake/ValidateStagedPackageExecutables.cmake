@@ -733,11 +733,18 @@ set(_spark_required_runtime_files
     bin/Shaders/ForwardPlus/DepthPrepass.hlsl
     bin/Shaders/HLSL/BasicVS.hlsl
     bin/Shaders/HLSL/Compute/GPUCull.hlsl
-    bin/Assets/MMOFPS/Data/continents.json
     bin/Assets/Engine/Branding/sparkengine_wordmark.svg
     bin/Resources/Config/settings.ini
     bin/Resources/Config/controls.cfg
 )
+# stable-v1 ships only the SparkGameFPS runtime asset closure (RDY-020), whose
+# entry scene is Scenes/level1.scene; the TERRAFRONT data tables belong to the
+# modules only the default profile ships.
+if(SPARK_PACKAGE_PROFILE STREQUAL "stable-v1")
+    list(APPEND _spark_required_runtime_files bin/Assets/Scenes/level1.scene)
+else()
+    list(APPEND _spark_required_runtime_files bin/Assets/MMOFPS/Data/continents.json)
+endif()
 set(_spark_missing_runtime_files "")
 foreach(_spark_relative_path IN LISTS _spark_required_runtime_files)
     set(_spark_runtime_path "${SPARK_PACKAGE_ROOT}/${_spark_relative_path}")
@@ -757,6 +764,18 @@ if(_spark_missing_runtime_files)
         "Staged SparkEngine package is missing required runtime content:\n"
         "  ${_spark_missing_runtime_report}")
 endif()
+
+# GOV-400: every shipped font and third-party payload file must be covered by the
+# package's THIRD_PARTY_NOTICES.txt. The shipped editor fonts have no license
+# text until the D8 remediation lands (docs/governance/GOV-400-DECISIONS.md), so
+# release workflows run this gate in report mode: it lists every uncovered file
+# as a warning in the package log. Pass -DSPARK_PACKAGE_NOTICE_COVERAGE=enforce
+# to fail on uncovered files; running ValidateStagedPackageNotices.cmake on its
+# own always enforces unless told otherwise.
+if(NOT DEFINED SPARK_PACKAGE_NOTICE_COVERAGE OR SPARK_PACKAGE_NOTICE_COVERAGE STREQUAL "")
+    set(SPARK_PACKAGE_NOTICE_COVERAGE report)
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/ValidateStagedPackageNotices.cmake")
 
 # Console and editor have interactive entry points; all remaining required tools
 # retain their --help smoke, including service tools in the default profile.

@@ -35,14 +35,18 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -230,10 +234,15 @@ namespace Spark::OnlineServices
         bool IsLoggedIn() const override { return m_loggedIn; }
         OnlinePlayerInfo GetLocalPlayer() const override { return m_player; }
 
-        std::vector<SessionInfo> FindSessions(const std::string& /*filter*/) override { return m_sessions; }
+        std::vector<SessionInfo> FindSessions(const std::string& /*filter*/) override
+        {
+            m_lastError.clear();
+            return m_sessions;
+        }
 
         bool CreateSession(const SessionInfo& settings) override
         {
+            m_lastError.clear();
             m_currentSession = settings;
             m_currentSession.sessionId = "local_" + std::to_string(m_nextSessionId++);
             m_sessions.push_back(m_currentSession);
@@ -242,6 +251,7 @@ namespace Spark::OnlineServices
 
         bool JoinSession(const std::string& sessionId) override
         {
+            m_lastError.clear();
             for (auto& s : m_sessions)
             {
                 if (s.sessionId == sessionId)
@@ -261,14 +271,16 @@ namespace Spark::OnlineServices
         {
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: SubmitScore '%s' = %lld (offline mode)",
                            boardName.c_str(), static_cast<long long>(score));
+            m_lastError.clear();
             auto& board = m_leaderboards[boardName];
             LeaderboardEntry entry;
             entry.playerId = m_player.playerId;
             entry.playerName = m_player.displayName;
             entry.score = score;
             board.push_back(entry);
-            // Sort by score descending and assign ranks
-            std::sort(board.begin(), board.end(), [](const auto& a, const auto& b) { return a.score > b.score; });
+            // Sort by score descending (ties keep submission order) and assign ranks
+            std::stable_sort(board.begin(), board.end(),
+                             [](const auto& a, const auto& b) { return a.score > b.score; });
             for (uint32_t i = 0; i < board.size(); ++i)
                 board[i].rank = i + 1;
             return true;
@@ -276,6 +288,7 @@ namespace Spark::OnlineServices
 
         std::vector<LeaderboardEntry> QueryScores(const std::string& boardName, uint32_t maxResults) override
         {
+            m_lastError.clear();
             auto it = m_leaderboards.find(boardName);
             if (it == m_leaderboards.end())
                 return {};
@@ -288,18 +301,21 @@ namespace Spark::OnlineServices
         {
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: UnlockAchievement '%s' (offline mode)",
                            achievementId.c_str());
+            m_lastError.clear();
             m_achievements[achievementId] = 1.0f;
             return true;
         }
 
         bool SetAchievementProgress(const std::string& id, float progress) override
         {
+            m_lastError.clear();
             m_achievements[id] = std::min(1.0f, std::max(0.0f, progress));
             return true;
         }
 
         std::vector<AchievementInfo> QueryAchievements() override
         {
+            m_lastError.clear();
             std::vector<AchievementInfo> result;
             for (const auto& [id, progress] : m_achievements)
             {
@@ -317,41 +333,81 @@ namespace Spark::OnlineServices
         {
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: SaveToCloud slot '%s' (%zu bytes, offline mode)",
                            slotName.c_str(), data.size());
+            m_lastError.clear();
             m_cloudSaves[slotName] = data;
             return true;
         }
 
         std::vector<uint8_t> LoadFromCloud(const std::string& slotName) override
         {
+            m_lastError.clear();
             auto it = m_cloudSaves.find(slotName);
             if (it == m_cloudSaves.end())
             {
                 m_lastError = "Cloud slot not found: " + slotName;
                 return {};
             }
-            m_lastError.clear();
             return it->second;
         }
 
-        bool DeleteCloudSave(const std::string& slotName) override { return m_cloudSaves.erase(slotName) > 0; }
+        bool DeleteCloudSave(const std::string& slotName) override
+        {
+            m_lastError.clear();
+            if (m_cloudSaves.erase(slotName) == 0)
+            {
+                m_lastError = "Cannot delete missing cloud slot: " + slotName;
+                return false;
+            }
+            return true;
+        }
 
         std::vector<CloudSaveInfo> ListCloudSaves() override
         {
+            m_lastError.clear();
             std::vector<CloudSaveInfo> result;
             for (const auto& [name, data] : m_cloudSaves)
                 result.push_back({name, data.size(), ""});
             return result;
         }
 
-        std::vector<FriendInfo> GetFriendsList() override { return m_friends; }
+        std::vector<FriendInfo> GetFriendsList() override
+        {
+            m_lastError.clear();
+            return m_friends;
+        }
 
         bool SetPresence(const std::string& statusText) override
         {
+            m_lastError.clear();
             m_presence = statusText;
             return true;
         }
 
-        bool InviteToSession(const std::string& /*friendId*/) override { return true; }
+        bool InviteToSession(const std::string& friendId) override
+        {
+            // An invite needs a known recipient and a session to invite into; reporting
+            // success otherwise would fabricate an outcome the caller cannot observe.
+            // Offline mode has no friends list, so every invite fails with a reason.
+            m_lastError.clear();
+            if (friendId.empty())
+            {
+                m_lastError = "Invite requires a friend ID";
+                return false;
+            }
+            if (m_currentSession.sessionId.empty())
+            {
+                m_lastError = "Invite requires an active session";
+                return false;
+            }
+            const bool isFriend = std::any_of(m_friends.begin(), m_friends.end(),
+                                              [&](const FriendInfo& f) { return f.playerId == friendId; });
+            if (!isFriend)
+            {
+                m_lastError = "Invite recipient is not a friend: " + friendId;
+                return false;
+            }
+            return true;
+        }
 
       private:
         bool m_loggedIn = false;
@@ -360,9 +416,11 @@ namespace Spark::OnlineServices
         SessionInfo m_currentSession;
         std::vector<SessionInfo> m_sessions;
         uint32_t m_nextSessionId = 1;
-        std::unordered_map<std::string, std::vector<LeaderboardEntry>> m_leaderboards;
-        std::unordered_map<std::string, float> m_achievements;
-        std::unordered_map<std::string, std::vector<uint8_t>> m_cloudSaves;
+        // Ordered containers so query and list results come back in the same (sorted-key)
+        // order on every standard library and every run.
+        std::map<std::string, std::vector<LeaderboardEntry>> m_leaderboards;
+        std::map<std::string, float> m_achievements;
+        std::map<std::string, std::vector<uint8_t>> m_cloudSaves;
         std::vector<FriendInfo> m_friends;
         std::string m_presence;
     };
@@ -553,6 +611,385 @@ namespace Spark::OnlineServices
     };
 
     // ========================================================================
+    // Degraded-dependency accounting (docs/specs/online-services.md section 5.1)
+    // ========================================================================
+
+    /** @brief Capability an IOnlinePlatform call belongs to, for failure accounting */
+    enum class OnlineCapability : uint8_t
+    {
+        Authentication,
+        Sessions,
+        Leaderboards,
+        Achievements,
+        CloudSave,
+        Friends,
+        Presence,
+        Count
+    };
+
+    /** @brief Lower-case capability name used in status output */
+    inline const char* OnlineCapabilityName(const OnlineCapability capability)
+    {
+        switch (capability)
+        {
+        case OnlineCapability::Authentication:
+            return "authentication";
+        case OnlineCapability::Sessions:
+            return "sessions";
+        case OnlineCapability::Leaderboards:
+            return "leaderboards";
+        case OnlineCapability::Achievements:
+            return "achievements";
+        case OnlineCapability::CloudSave:
+            return "cloudSave";
+        case OnlineCapability::Friends:
+            return "friends";
+        case OnlineCapability::Presence:
+            return "presence";
+        case OnlineCapability::Count:
+            break;
+        }
+        return "unknown";
+    }
+
+    /** @brief Circuit-breaker budget from the spec: 5 consecutive failures open the circuit for 30 s */
+    struct OnlineCircuitPolicy
+    {
+        uint32_t failureThreshold = 5; ///< Consecutive failures that open a capability's circuit
+        double cooldownSeconds = 30.0; ///< Time an open circuit rejects calls before one probe is allowed
+    };
+
+    /** @brief Failure accounting for one capability of the active adapter */
+    struct OnlineCapabilityHealth
+    {
+        uint32_t consecutiveFailures = 0; ///< Failures since the last success (reset by a success)
+        uint64_t totalFailures = 0;       ///< Failed or throwing calls since the adapter was attached
+        uint64_t rejectedCalls = 0;       ///< Calls failed immediately because the circuit was open
+        bool circuitOpen = false;         ///< True while calls fail fast (a probe is allowed after the cooldown)
+        double retryAtSeconds = 0.0;      ///< Manager clock time at which a probe call is allowed
+    };
+
+    /**
+     * @brief IOnlinePlatform front that OnlineServiceManager::GetPlatform() returns
+     *
+     * Forwards every call to the attached adapter and applies the section 5.1 failure
+     * semantics the adapters cannot enforce themselves:
+     * - An exception thrown by the adapter becomes a failed call with a reason; it never
+     *   reaches the caller.
+     * - Each capability counts consecutive failures. After OnlineCircuitPolicy::failureThreshold
+     *   of them its circuit opens, and calls fail immediately without reaching the adapter until
+     *   the cooldown has elapsed on the manager clock. The next call is then a probe: success
+     *   closes the circuit, failure reopens it for another cooldown.
+     * - Logout() and LeaveSession() always reach the adapter so local cleanup is never blocked.
+     *
+     * A mutation fails when it returns false. A query fails when it throws, or when it returns
+     * nothing and the adapter reports a GetLastError() reason for that call.
+     *
+     * The circuit is disabled for the built-in NullOnlinePlatform: it is in-process and has no
+     * remote dependency that can degrade, so its failures (such as an unknown session ID) are
+     * caller errors that must not lock out later valid calls. Failures are still counted.
+     */
+    class GuardedOnlinePlatform final : public IOnlinePlatform
+    {
+      public:
+        /** @brief Attach an adapter (non-owning) and reset all accounting */
+        void Attach(IOnlinePlatform* target, const bool circuitEnabled)
+        {
+            m_target = target;
+            m_circuitEnabled = circuitEnabled;
+            m_health = {};
+            m_guardError.clear();
+        }
+
+        /** @brief Advance the clock that open circuits cool down on */
+        void AdvanceTime(const float deltaSeconds)
+        {
+            if (deltaSeconds > 0.0f && std::isfinite(deltaSeconds))
+            {
+                m_nowSeconds += deltaSeconds;
+            }
+        }
+
+        void SetPolicy(const OnlineCircuitPolicy& policy) { m_policy = policy; }
+        const OnlineCircuitPolicy& GetPolicy() const { return m_policy; }
+        bool IsCircuitEnabled() const { return m_circuitEnabled; }
+        double GetNowSeconds() const { return m_nowSeconds; }
+
+        const OnlineCapabilityHealth& GetHealth(const OnlineCapability capability) const
+        {
+            return m_health[static_cast<size_t>(capability)];
+        }
+
+        std::string GetPlatformName() const override
+        {
+            return GuardConst<std::string>("GetPlatformName", {}, [&] { return m_target->GetPlatformName(); });
+        }
+        PlatformCapabilities GetCapabilities() const override
+        {
+            return GuardConst<PlatformCapabilities>("GetCapabilities", {}, [&] { return m_target->GetCapabilities(); });
+        }
+        std::string GetLastError() const override
+        {
+            if (!m_guardError.empty())
+            {
+                return m_guardError;
+            }
+            return GuardConst<std::string>("GetLastError", {}, [&] { return m_target->GetLastError(); });
+        }
+
+        bool Login(const std::string& username, const std::string& token) override
+        {
+            const bool loggedIn =
+                GuardBool(OnlineCapability::Authentication, "Login", [&] { return m_target->Login(username, token); });
+            RedactFromGuardError(token);
+            return loggedIn;
+        }
+        void Logout() override
+        {
+            GuardVoid("Logout", [&] { m_target->Logout(); });
+        }
+        bool IsLoggedIn() const override
+        {
+            return GuardConst<bool>("IsLoggedIn", false, [&] { return m_target->IsLoggedIn(); });
+        }
+        OnlinePlayerInfo GetLocalPlayer() const override
+        {
+            return GuardConst<OnlinePlayerInfo>("GetLocalPlayer", {}, [&] { return m_target->GetLocalPlayer(); });
+        }
+
+        std::vector<SessionInfo> FindSessions(const std::string& filter) override
+        {
+            return GuardQuery(OnlineCapability::Sessions, "FindSessions",
+                              [&] { return m_target->FindSessions(filter); });
+        }
+        bool CreateSession(const SessionInfo& settings) override
+        {
+            return GuardBool(OnlineCapability::Sessions, "CreateSession",
+                             [&] { return m_target->CreateSession(settings); });
+        }
+        bool JoinSession(const std::string& sessionId) override
+        {
+            return GuardBool(OnlineCapability::Sessions, "JoinSession",
+                             [&] { return m_target->JoinSession(sessionId); });
+        }
+        void LeaveSession() override
+        {
+            GuardVoid("LeaveSession", [&] { m_target->LeaveSession(); });
+        }
+        SessionInfo GetCurrentSession() const override
+        {
+            return GuardConst<SessionInfo>("GetCurrentSession", {}, [&] { return m_target->GetCurrentSession(); });
+        }
+
+        bool SubmitScore(const std::string& boardName, int64_t score) override
+        {
+            return GuardBool(OnlineCapability::Leaderboards, "SubmitScore",
+                             [&] { return m_target->SubmitScore(boardName, score); });
+        }
+        std::vector<LeaderboardEntry> QueryScores(const std::string& boardName, uint32_t maxResults) override
+        {
+            return GuardQuery(OnlineCapability::Leaderboards, "QueryScores",
+                              [&] { return m_target->QueryScores(boardName, maxResults); });
+        }
+
+        bool UnlockAchievement(const std::string& achievementId) override
+        {
+            return GuardBool(OnlineCapability::Achievements, "UnlockAchievement",
+                             [&] { return m_target->UnlockAchievement(achievementId); });
+        }
+        bool SetAchievementProgress(const std::string& id, float progress) override
+        {
+            return GuardBool(OnlineCapability::Achievements, "SetAchievementProgress",
+                             [&] { return m_target->SetAchievementProgress(id, progress); });
+        }
+        std::vector<AchievementInfo> QueryAchievements() override
+        {
+            return GuardQuery(OnlineCapability::Achievements, "QueryAchievements",
+                              [&] { return m_target->QueryAchievements(); });
+        }
+
+        bool SaveToCloud(const std::string& slotName, const std::vector<uint8_t>& data) override
+        {
+            return GuardBool(OnlineCapability::CloudSave, "SaveToCloud",
+                             [&] { return m_target->SaveToCloud(slotName, data); });
+        }
+        std::vector<uint8_t> LoadFromCloud(const std::string& slotName) override
+        {
+            return GuardQuery(OnlineCapability::CloudSave, "LoadFromCloud",
+                              [&] { return m_target->LoadFromCloud(slotName); });
+        }
+        bool DeleteCloudSave(const std::string& slotName) override
+        {
+            return GuardBool(OnlineCapability::CloudSave, "DeleteCloudSave",
+                             [&] { return m_target->DeleteCloudSave(slotName); });
+        }
+        std::vector<CloudSaveInfo> ListCloudSaves() override
+        {
+            return GuardQuery(OnlineCapability::CloudSave, "ListCloudSaves",
+                              [&] { return m_target->ListCloudSaves(); });
+        }
+
+        std::vector<FriendInfo> GetFriendsList() override
+        {
+            return GuardQuery(OnlineCapability::Friends, "GetFriendsList", [&] { return m_target->GetFriendsList(); });
+        }
+        bool SetPresence(const std::string& statusText) override
+        {
+            return GuardBool(OnlineCapability::Presence, "SetPresence",
+                             [&] { return m_target->SetPresence(statusText); });
+        }
+        bool InviteToSession(const std::string& friendId) override
+        {
+            return GuardBool(OnlineCapability::Friends, "InviteToSession",
+                             [&] { return m_target->InviteToSession(friendId); });
+        }
+
+      private:
+        OnlineCapabilityHealth& Health(const OnlineCapability capability)
+        {
+            return m_health[static_cast<size_t>(capability)];
+        }
+
+        // Runs one adapter call. Returns false (with m_guardError set) if it threw.
+        template <typename Call> bool InvokeAdapter(const char* operation, Call&& call) const
+        {
+            try
+            {
+                call();
+                return true;
+            }
+            catch (const std::exception& e)
+            {
+                m_guardError = std::format("{} failed: adapter threw: {}", operation, e.what());
+            }
+            catch (...)
+            {
+                m_guardError = std::format("{} failed: adapter threw a non-standard exception", operation);
+            }
+            return false;
+        }
+
+        // Fails the call without reaching the adapter while the capability's circuit is open.
+        bool RejectIfOpen(const OnlineCapability capability, const char* operation)
+        {
+            OnlineCapabilityHealth& health = Health(capability);
+            if (!m_circuitEnabled || !health.circuitOpen || m_nowSeconds >= health.retryAtSeconds)
+            {
+                return false;
+            }
+            ++health.rejectedCalls;
+            m_guardError = std::format("{} failed: {} circuit open after {} consecutive failures (retry in {:.1f}s)",
+                                       operation, OnlineCapabilityName(capability), health.consecutiveFailures,
+                                       health.retryAtSeconds - m_nowSeconds);
+            return true;
+        }
+
+        void RecordOutcome(const OnlineCapability capability, const bool succeeded)
+        {
+            OnlineCapabilityHealth& health = Health(capability);
+            if (succeeded)
+            {
+                if (health.circuitOpen)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: %s circuit closed after a successful probe",
+                                   OnlineCapabilityName(capability));
+                }
+                health.consecutiveFailures = 0;
+                health.circuitOpen = false;
+                return;
+            }
+
+            ++health.consecutiveFailures;
+            ++health.totalFailures;
+            if (m_circuitEnabled && health.consecutiveFailures >= m_policy.failureThreshold)
+            {
+                // Opening, or a failed probe after the cooldown: fail fast for another cooldown.
+                health.circuitOpen = true;
+                health.retryAtSeconds = m_nowSeconds + m_policy.cooldownSeconds;
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "Online: %s circuit open after %u consecutive failures, retry in %.1fs",
+                               OnlineCapabilityName(capability), health.consecutiveFailures, m_policy.cooldownSeconds);
+            }
+        }
+
+        template <typename Call> bool GuardBool(const OnlineCapability capability, const char* operation, Call&& call)
+        {
+            m_guardError.clear();
+            if (RejectIfOpen(capability, operation))
+            {
+                return false;
+            }
+            bool succeeded = false;
+            InvokeAdapter(operation, [&] { succeeded = call(); });
+            RecordOutcome(capability, succeeded);
+            return succeeded;
+        }
+
+        template <typename Call>
+        auto GuardQuery(const OnlineCapability capability, const char* operation, Call&& call) -> decltype(call())
+        {
+            m_guardError.clear();
+            decltype(call()) result{};
+            if (RejectIfOpen(capability, operation))
+            {
+                return result;
+            }
+            const bool completed = InvokeAdapter(operation, [&] { result = call(); });
+            // An empty result is a legitimate answer (an empty board) unless the adapter gave a reason.
+            const bool succeeded = completed && (!result.empty() || GetLastError().empty());
+            RecordOutcome(capability, succeeded);
+            if (!completed)
+            {
+                result = {};
+            }
+            return result;
+        }
+
+        template <typename Call> void GuardVoid(const char* operation, Call&& call)
+        {
+            m_guardError.clear();
+            InvokeAdapter(operation, std::forward<Call>(call));
+        }
+
+        template <typename Result, typename Call>
+        Result GuardConst(const char* operation, Result fallback, Call&& call) const
+        {
+            if (!m_target)
+            {
+                return fallback;
+            }
+            Result result = fallback;
+            if (!InvokeAdapter(operation, [&] { result = call(); }))
+            {
+                return fallback;
+            }
+            return result;
+        }
+
+        // A throwing Login adapter may put the token in its exception text; never surface it.
+        void RedactFromGuardError(const std::string& secret)
+        {
+            if (secret.empty())
+            {
+                return;
+            }
+            for (size_t pos = m_guardError.find(secret); pos != std::string::npos; pos = m_guardError.find(secret, pos))
+            {
+                m_guardError.replace(pos, secret.size(), "<redacted>");
+            }
+        }
+
+        IOnlinePlatform* m_target = nullptr;
+        bool m_circuitEnabled = false;
+        OnlineCircuitPolicy m_policy;
+        double m_nowSeconds = 0.0;
+        std::array<OnlineCapabilityHealth, static_cast<size_t>(OnlineCapability::Count)> m_health{};
+        // Failure raised by this front (exception or open circuit) for the most recent call;
+        // mutable because const getters convert adapter exceptions too.
+        mutable std::string m_guardError;
+    };
+
+    // ========================================================================
     // Manager singleton
     // ========================================================================
 
@@ -561,6 +998,8 @@ namespace Spark::OnlineServices
      *
      * Defaults to NullOnlinePlatform which is fully functional offline.
      * Call `SetPlatform()` to switch to Steam, Epic, or Console backends.
+     * GetPlatform() returns the GuardedOnlinePlatform front, so every caller gets the
+     * degraded-dependency semantics of docs/specs/online-services.md section 5.1.
      */
     class OnlineServiceManager
     {
@@ -575,7 +1014,9 @@ namespace Spark::OnlineServices
         void Initialize()
         {
             m_nullPlatform = std::make_unique<NullOnlinePlatform>();
+            m_customPlatform.reset();
             m_activePlatform = m_nullPlatform.get();
+            m_guard.Attach(m_activePlatform, false);
             m_initialized = true;
             SPARK_LOG_INFO(Spark::LogCategory::Core, "OnlineServiceManager initialized (Null platform)");
         }
@@ -585,21 +1026,22 @@ namespace Spark::OnlineServices
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core, "OnlineServiceManager shutting down");
             if (m_activePlatform)
-                m_activePlatform->Logout();
+                m_guard.Logout(); // Guarded: a throwing adapter cannot abort shutdown
+            m_guard.Attach(nullptr, false);
             m_activePlatform = nullptr;
             m_customPlatform.reset();
             m_nullPlatform.reset();
             m_initialized = false;
         }
 
-        /** @brief Per-frame update (for async callbacks on real platforms) */
-        void Update(float /*deltaTime*/)
-        {
-            // Real platform impls would call SteamAPI_RunCallbacks() or EOS_Platform_Tick()
-        }
+        /**
+         * @brief Per-frame update: advances the clock that open circuits cool down on
+         * @param deltaTime Frame time in seconds (non-positive or non-finite values are ignored)
+         */
+        void Update(float deltaTime) { m_guard.AdvanceTime(deltaTime); }
 
-        /** @brief Get the active platform interface */
-        IOnlinePlatform* GetPlatform() const { return m_activePlatform; }
+        /** @brief Get the active platform interface (the guarded front), or nullptr before Initialize() */
+        IOnlinePlatform* GetPlatform() { return m_activePlatform ? &m_guard : nullptr; }
 
         /**
          * @brief Set a custom platform implementation
@@ -616,8 +1058,9 @@ namespace Spark::OnlineServices
             }
             m_customPlatform = std::move(platform);
             m_activePlatform = m_customPlatform.get();
+            m_guard.Attach(m_activePlatform, true);
             SPARK_LOG_INFO(Spark::LogCategory::Core, "Online platform changed to: %s",
-                           m_activePlatform->GetPlatformName().c_str());
+                           m_guard.GetPlatformName().c_str());
         }
 
         /** @brief Reset to the default Null platform */
@@ -625,6 +1068,16 @@ namespace Spark::OnlineServices
         {
             m_customPlatform.reset();
             m_activePlatform = m_nullPlatform.get();
+            m_guard.Attach(m_activePlatform, false);
+        }
+
+        /** @brief Replace the circuit-breaker budget (defaults match the spec: 5 failures, 30 s) */
+        void SetCircuitPolicy(const OnlineCircuitPolicy& policy) { m_guard.SetPolicy(policy); }
+
+        /** @brief Failure accounting for one capability of the active adapter */
+        const OnlineCapabilityHealth& GetCapabilityHealth(const OnlineCapability capability) const
+        {
+            return m_guard.GetHealth(capability);
         }
 
         /** @brief Get console-friendly status */
@@ -633,22 +1086,23 @@ namespace Spark::OnlineServices
             if (!m_initialized)
                 return "[OnlineServices] Not initialized";
             std::string status = "[OnlineServices] Platform: ";
-            status += m_activePlatform ? m_activePlatform->GetPlatformName() : "None";
+            status += m_activePlatform ? m_guard.GetPlatformName() : "None";
             if (m_activePlatform)
             {
-                const auto caps = m_activePlatform->GetCapabilities();
+                const auto caps = m_guard.GetCapabilities();
                 const bool hasAnyCapability = caps.authentication || caps.sessions || caps.leaderboards ||
                                               caps.achievements || caps.cloudSave || caps.friends || caps.presence;
                 status += hasAnyCapability ? " | Capabilities: active" : " | Capabilities: none";
-                const std::string error = m_activePlatform->GetLastError();
+                const std::string error = m_guard.GetLastError();
                 if (!error.empty())
                 {
                     status += " | LastError: " + error;
                 }
+                status += " | Health: " + FormatHealth();
             }
-            if (m_activePlatform && m_activePlatform->IsLoggedIn())
+            if (m_activePlatform && m_guard.IsLoggedIn())
             {
-                auto player = m_activePlatform->GetLocalPlayer();
+                auto player = m_guard.GetLocalPlayer();
                 status += " | Player: " + player.displayName;
             }
             return status;
@@ -657,10 +1111,41 @@ namespace Spark::OnlineServices
       private:
         OnlineServiceManager() = default;
 
+        // "ok", or one entry per capability that has failed since its last success.
+        std::string FormatHealth() const
+        {
+            std::string health;
+            for (size_t i = 0; i < static_cast<size_t>(OnlineCapability::Count); ++i)
+            {
+                const auto capability = static_cast<OnlineCapability>(i);
+                const OnlineCapabilityHealth& entry = m_guard.GetHealth(capability);
+                if (entry.consecutiveFailures == 0 && !entry.circuitOpen)
+                {
+                    continue;
+                }
+                health += health.empty() ? "" : ", ";
+                health += std::format("{} {} consecutive failures", OnlineCapabilityName(capability),
+                                      entry.consecutiveFailures);
+                if (entry.circuitOpen)
+                {
+                    const double remaining = std::max(0.0, entry.retryAtSeconds - m_guard.GetNowSeconds());
+                    health += remaining > 0.0 ? std::format(" (circuit open, retry in {:.1f}s)", remaining)
+                                              : std::string(" (circuit open, probe allowed)");
+                }
+            }
+            if (!m_guard.IsCircuitEnabled())
+            {
+                health +=
+                    health.empty() ? "ok (circuit disabled: local adapter)" : " (circuit disabled: local adapter)";
+            }
+            return health.empty() ? "ok" : health;
+        }
+
         bool m_initialized = false;
         IOnlinePlatform* m_activePlatform = nullptr;
         std::unique_ptr<NullOnlinePlatform> m_nullPlatform;
         std::unique_ptr<IOnlinePlatform> m_customPlatform;
+        GuardedOnlinePlatform m_guard;
     };
 
 } // namespace Spark::OnlineServices

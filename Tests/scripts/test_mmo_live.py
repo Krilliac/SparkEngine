@@ -41,9 +41,15 @@ def _packet(msg_type: int, channel: int, sender: int, seq: int, ts: float, paylo
     return hdr + payload
 
 
+# Connect payload prefix: handshake magic "SPNH" + protocol version (NetworkManager.h).
+HANDSHAKE_MAGIC = 0x484E5053
+PROTOCOL_VERSION = 1
+
+
 def connect_pkt(name: str) -> bytes:
     nb = name.encode()
-    return _packet(1, 1, 0, 0, 0.0, struct.pack('<H', len(nb)) + nb)
+    payload = struct.pack('<IH', HANDSHAKE_MAGIC, PROTOCOL_VERSION) + struct.pack('<H', len(nb)) + nb
+    return _packet(1, 1, 0, 0, 0.0, payload)
 
 
 def chat_pkt(sender: int, name: str, text: str) -> bytes:

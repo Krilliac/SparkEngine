@@ -1,9 +1,15 @@
 /**
  * @file RacingVehicleSystem.cpp
- * @brief Physics-based vehicle driving model
+ * @brief Racing vehicle roster, driver input latching, the shared fixed step, and persistence restore
+ *
+ * The Jolt chassis itself (construction, per-tick drive forces, pose read-back) lives in
+ * RacingVehicleChassis.cpp.
  */
 
 #include "RacingVehicleSystem.h"
+#include "Physics/PhysicsBody.h"
+#include "Physics/PhysicsSystem.h"
+#include "Physics/VehiclePhysics.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -18,73 +24,109 @@
 
 namespace Racing
 {
+    RacingVehicleSystem::RacingVehicleSystem() = default;
+
+    RacingVehicleSystem::~RacingVehicleSystem()
+    {
+        Shutdown();
+    }
 
     bool RacingVehicleSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
-        m_initialized = true;
+        PhysicsSystem* physics = context ? context->GetPhysics() : nullptr;
+        if (!physics || !physics->GetJoltSystem())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "Racing vehicle system needs the engine's live Jolt PhysicsSystem; none is available");
+            Spark::SimpleConsole::GetInstance().LogError(
+                "[Racing Vehicle] No live Jolt physics world: Racing vehicles cannot be simulated");
+            return false;
+        }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing vehicle system initialized (6 vehicle types)");
-        console.LogInfo("[Racing Vehicle] Vehicle system initialized (6 vehicle types)");
+        m_physics = physics;
+        m_stepCount = 0;
+        m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing vehicle system initialized on the shared Jolt world");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[Racing Vehicle] Vehicle system initialized (Jolt vehicles, 6 vehicle types)");
         return true;
     }
 
     void RacingVehicleSystem::Update(float deltaTime)
     {
-        if (!m_initialized)
+        if (!m_initialized || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
             return;
 
         for (auto& vehicle : m_vehicles)
         {
-            if (vehicle.isActive)
-                UpdateVehiclePhysics(vehicle, deltaTime);
+            if (!vehicle.isActive)
+                continue;
+            if (vehicle.boostTimer > 0.0f)
+                vehicle.boostTimer = std::max(0.0f, vehicle.boostTimer - deltaTime);
+            vehicle.nitro = std::clamp(vehicle.nitro, 0.0f, 1.0f);
         }
     }
 
     void RacingVehicleSystem::FixedUpdate(float fixedDeltaTime)
     {
-        if (!m_initialized)
+        if (!m_initialized || !m_physics || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
             return;
 
-        // Fixed-step physics integration for deterministic behavior
         for (auto& vehicle : m_vehicles)
         {
-            if (!vehicle.isActive)
-                continue;
+            auto it = m_chassis.find(vehicle.id);
+            if (vehicle.isActive && it != m_chassis.end())
+                DriveChassis(vehicle, it->second);
+        }
 
-            // Apply surface-dependent grip to steering
-            float grip = GetSurfaceGrip(vehicle.currentSurface);
-            float effectiveHandling = vehicle.baseStats.handling * grip;
+        // The Racing process's single physics step (module-driven stepping contract): one tick of the
+        // engine fixed timestep, so the world advances in lockstep with the module's fixed update.
+        if (m_physics->GetTimeStep() != fixedDeltaTime)
+            m_physics->SetTimeStep(fixedDeltaTime);
+        m_stepCount += m_physics->StepFixed(1, 1.0f);
 
-            // Integrate position from speed and heading
-            float speedMs = vehicle.speed / 3.6f; // km/h to m/s
-            vehicle.positionX += std::sin(vehicle.heading) * speedMs * fixedDeltaTime;
-            vehicle.positionZ += std::cos(vehicle.heading) * speedMs * fixedDeltaTime;
-
-            // Apply steering (yaw rate inversely proportional to speed for stability)
-            float yawRate = vehicle.steerAngle * effectiveHandling * 2.0f;
-            if (vehicle.speed > 10.0f)
-                yawRate *= 50.0f / vehicle.speed; // Reduce turn rate at high speed
-            vehicle.heading += yawRate * fixedDeltaTime;
+        for (auto& vehicle : m_vehicles)
+        {
+            auto it = m_chassis.find(vehicle.id);
+            if (vehicle.isActive && it != m_chassis.end())
+                ReadBackChassis(vehicle, it->second, fixedDeltaTime);
         }
     }
 
     void RacingVehicleSystem::Shutdown()
     {
+        // Constraints go before their bodies, and both before the engine tears the world down.
+        for (auto& [id, chassis] : m_chassis)
+        {
+            chassis.vehicle.reset();
+            if (m_physics && chassis.body)
+                m_physics->RemoveBody(chassis.body);
+        }
+        m_chassis.clear();
         m_vehicles.clear();
         m_nextId = 1;
+        m_physics = nullptr;
         m_initialized = false;
     }
 
-    uint32_t RacingVehicleSystem::CreateVehicle(const std::string& name, VehicleType type, bool isPlayer)
+    uint32_t RacingVehicleSystem::CreateVehicle(const std::string& name, VehicleType type, bool isPlayer,
+                                                const VehiclePose& pose)
     {
+        if (!m_initialized)
+            return 0;
+
         VehicleInstance vehicle{};
         vehicle.id = m_nextId++;
         vehicle.name = name;
         vehicle.type = type;
         vehicle.baseStats = GetDefaultStats(type);
         vehicle.isPlayer = isPlayer;
+        if (!BuildChassis(vehicle, pose, 0.0f))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Racing vehicle %s: Jolt chassis creation failed", name.c_str());
+            return 0;
+        }
         m_vehicles.push_back(vehicle);
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing vehicle created: %s (id=%u, player=%s)", name.c_str(),
                         vehicle.id, isPlayer ? "yes" : "no");
@@ -93,6 +135,7 @@ namespace Racing
 
     void RacingVehicleSystem::RemoveVehicle(uint32_t id)
     {
+        DestroyChassis(id);
         auto it =
             std::find_if(m_vehicles.begin(), m_vehicles.end(), [id](const VehicleInstance& v) { return v.id == id; });
         if (it != m_vehicles.end())
@@ -125,12 +168,21 @@ namespace Racing
         if (!vehicle)
             return;
 
+        DestroyChassis(vehicleId);
         vehicle->speed = 0.0f;
         vehicle->rpm = 0.0f;
         vehicle->steerAngle = 0.0f;
+        vehicle->throttleInput = 0.0f;
+        vehicle->brakeInput = 0.0f;
         vehicle->driftState = DriftState::None;
         vehicle->driftCharge = 0.0f;
         vehicle->boostTimer = 0.0f;
+        vehicle->strandedTime = 0.0f;
+    }
+
+    bool RacingVehicleSystem::HasChassis(uint32_t vehicleId) const
+    {
+        return m_chassis.find(vehicleId) != m_chassis.end();
     }
 
     void RacingVehicleSystem::ApplyInputInternal(VehicleInstance& vehicle, float throttle, float brake, float steer,
@@ -140,48 +192,17 @@ namespace Racing
             return;
         deltaTime = std::min(deltaTime, 0.1f);
 
-        // Clamp inputs
-        throttle = std::clamp(throttle, 0.0f, 1.0f);
-        brake = std::clamp(brake, 0.0f, 1.0f);
-        steer = std::clamp(steer, -1.0f, 1.0f);
-
+        // Latch the command; the next fixed ticks hand it to the Jolt controller.
+        vehicle.throttleInput = std::isfinite(throttle) ? std::clamp(throttle, 0.0f, 1.0f) : 0.0f;
+        vehicle.brakeInput = std::isfinite(brake) ? std::clamp(brake, 0.0f, 1.0f) : 0.0f;
+        steer = std::isfinite(steer) ? std::clamp(steer, -1.0f, 1.0f) : 0.0f;
         vehicle.steerAngle = steer;
 
-        // Acceleration
-        float accelForce = throttle * vehicle.baseStats.acceleration * 100.0f;
-        float brakeForce = brake * vehicle.baseStats.braking * 150.0f;
-        // Off-track surfaces bleed speed on top of aero drag (SurfaceType: grass is a significant penalty,
-        // sand is heavy drag), so a car that runs wide slows enough to steer back onto the asphalt.
-        float surfaceDrag = 0.0f;
-        if (vehicle.currentSurface == SurfaceType::Grass)
-            surfaceDrag = 0.6f;
-        else if (vehicle.currentSurface == SurfaceType::Sand)
-            surfaceDrag = 0.9f;
-        float drag = vehicle.speed * (0.5f + surfaceDrag);
-
-        // Damage reduces effective acceleration
-        const float durability = std::max(vehicle.baseStats.durability, 1.0f);
-        const float damagePenalty = 1.0f - std::min(vehicle.damage / durability, 0.5f);
-        accelForce *= damagePenalty;
-
-        // Boost from nitro or drift
-        float boostMultiplier = 1.0f;
-        if (vehicle.boostTimer > 0.0f)
-            boostMultiplier = 1.3f;
-
-        vehicle.speed += (accelForce * boostMultiplier - brakeForce - drag) * deltaTime;
-        vehicle.speed = std::clamp(vehicle.speed, 0.0f, vehicle.baseStats.maxSpeed * boostMultiplier);
-
-        // Nitro
         if (nitroPressed && vehicle.nitro > 0.0f)
         {
             vehicle.nitro = std::max(0.0f, vehicle.nitro - 0.6f * deltaTime);
-            vehicle.boostTimer = 0.5f;
+            vehicle.boostTimer = std::max(vehicle.boostTimer, 0.5f);
         }
-
-        // RPM mapping (simplified: proportional to speed fraction)
-        const float maxSpeed = std::max(vehicle.baseStats.maxSpeed, 1.0f);
-        vehicle.rpm = (vehicle.speed / maxSpeed) * 8000.0f;
 
         UpdateDriftState(vehicle, steer, driftPressed, deltaTime);
     }
@@ -200,11 +221,10 @@ namespace Racing
         return it != m_vehicles.end() ? &(*it) : nullptr;
     }
 
-    bool RacingVehicleSystem::RestoreState(const std::vector<VehicleInstance>& vehicles)
+    bool RacingVehicleSystem::ValidateSnapshot(const std::vector<VehicleInstance>& vehicles)
     {
         std::unordered_set<uint32_t> ids;
         ids.reserve(vehicles.size());
-        uint32_t nextId = 1;
         size_t playerCount = 0;
         for (const VehicleInstance& vehicle : vehicles)
         {
@@ -230,10 +250,37 @@ namespace Racing
             playerCount += vehicle.isPlayer ? 1u : 0u;
             if (playerCount > 1)
                 return false;
-            nextId = std::max(nextId, vehicle.id + 1);
         }
+        return true;
+    }
+
+    bool RacingVehicleSystem::RestoreState(const std::vector<VehicleInstance>& vehicles)
+    {
+        if (!m_initialized || !ValidateSnapshot(vehicles))
+            return false;
+
+        while (!m_chassis.empty())
+            DestroyChassis(m_chassis.begin()->first);
 
         m_vehicles = vehicles;
+        uint32_t nextId = 1;
+        for (VehicleInstance& vehicle : m_vehicles)
+        {
+            nextId = std::max(nextId, vehicle.id + 1);
+            vehicle.throttleInput = 0.0f;
+            vehicle.brakeInput = 0.0f;
+            vehicle.strandedTime = 0.0f;
+            if (!vehicle.isActive)
+                continue;
+            const VehiclePose pose{vehicle.positionX, vehicle.positionY, vehicle.positionZ, vehicle.heading};
+            if (!BuildChassis(vehicle, pose, vehicle.speed))
+            {
+                while (!m_chassis.empty())
+                    DestroyChassis(m_chassis.begin()->first);
+                m_vehicles.clear();
+                return false;
+            }
+        }
         m_nextId = nextId;
         return true;
     }
@@ -302,16 +349,6 @@ namespace Racing
         return result;
     }
 
-    void RacingVehicleSystem::UpdateVehiclePhysics(VehicleInstance& vehicle, float dt)
-    {
-        // Decay boost timer
-        if (vehicle.boostTimer > 0.0f)
-            vehicle.boostTimer = std::max(0.0f, vehicle.boostTimer - dt);
-
-        // Clamp nitro
-        vehicle.nitro = std::clamp(vehicle.nitro, 0.0f, 1.0f);
-    }
-
     void RacingVehicleSystem::UpdateDriftState(VehicleInstance& vehicle, float steer, bool driftPressed, float dt)
     {
         float absSteer = std::abs(steer);
@@ -359,19 +396,14 @@ namespace Racing
         }
     }
 
-    void RacingVehicleSystem::ApplyDamage(VehicleInstance& vehicle, float amount)
-    {
-        vehicle.damage += amount;
-        vehicle.damage = std::min(vehicle.damage, vehicle.baseStats.durability);
-    }
-
     void RacingVehicleSystem::RenderDebugUI()
     {
 #ifdef ENABLE_EDITOR
         if (!ImGui::CollapsingHeader("Racing Vehicles"))
             return;
 
-        ImGui::Text("Active Vehicles: %zu", m_vehicles.size());
+        ImGui::Text("Active Vehicles: %zu | Jolt chassis: %zu | Physics ticks: %llu", m_vehicles.size(),
+                    m_chassis.size(), static_cast<unsigned long long>(m_stepCount));
         ImGui::Separator();
 
         for (const auto& v : m_vehicles)

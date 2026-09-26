@@ -279,7 +279,7 @@ config.maxClients = 24;
 config.tickRate = 64.0f;
 config.gameMode = Spark::Net::GameModeType::TeamDeathmatch;
 config.mapRotation = {"dm_arena", "dm_warehouse", "dm_rooftop"};
-// rconPassword/rconPort are reserved compatibility fields; remote RCON is disabled.
+// There is no RCON password or port field: remote RCON is permanently unavailable (OD-05).
 
 server.Start(config);  // launches tick loop on background thread
 ```
@@ -296,8 +296,9 @@ Every `SparkServer` launch must select game code with either `--manifest <path>`
 or `--module <game-library>`. See [Dedicated Server](Dedicated-Server.md) for full details.
 
 **Local administration (legacy RCON API names)** -- built-in commands: `help`, `status`, `kick`, `ban`, `map`, `say`.
-These commands are available only to trusted in-process host/control code. There is no network RCON listener;
-`rconPassword`/`rconPort` are inactive, and client chat cannot invoke administrative commands. Add custom ones:
+These commands are available only to trusted in-process host/control code. There is no network RCON listener,
+remote administration is permanently unavailable in stable-v1 (OD-05) with no config or command-line switch to
+enable it, and client chat cannot invoke administrative commands. Add custom ones:
 
 ```cpp
 server.RegisterRconCommand("restart", "Restart match",
@@ -357,7 +358,6 @@ net.SetAutoReconnect(reconnect);
 | `net_host [port] [max]` | Start server on port (default 27015) |
 | `net_connect <addr> [port]` | Connect to a server |
 | `net_disconnect` | Disconnect from current server |
-| `net_stack_status` | Show transport and legacy XOR-prototype status |
 | `prediction_status` | Show pending input count and correction magnitude |
 | `server_status` | Show DedicatedServer uptime, players, map, match state |
 | `net.lag <ms>` | Set simulated latency |

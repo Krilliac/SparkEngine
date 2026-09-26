@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import fnmatch
 import json
 import os
 import re
@@ -75,8 +76,15 @@ class ContractTestCase(unittest.TestCase):
             site_data_validate.Validator(contract).validate()
         self.assertIn(fragment, str(raised.exception))
 
-    def promote_ready(self, contract: dict[str, Any]) -> None:
-        """Create a valid ready mutation without closing excluded work or gates."""
+    def promote_ready(self, contract: dict[str, Any]) -> set[str]:
+        """Create a valid ready mutation without closing excluded work or gates.
+
+        Returns the FUTURE_ACCEPTANCE_PATHS entries the promotion delivered. A
+        done item must not reference a path that is still missing, and the suite
+        must not create repository files, so each undelivered output of a newly
+        done item is dropped here. The caller patches the returned entries out
+        of the allowlist, as the pull request that delivered them would.
+        """
         profile = self.profile_of(contract)
         profile["state"] = "ready"
         profile["owner"] = "release-engineering"
@@ -95,10 +103,31 @@ class ContractTestCase(unittest.TestCase):
         for item in contract["workItems"]:
             if item["id"] in declared:
                 item["status"] = "done"
+                for entry in item["acceptanceStatus"]:
+                    entry["state"] = "evidenced"
+                    entry["evidence"] = ["README.md", EXACT_CI_REFERENCE]
                 if item["id"] == "GOV-400":
                     contract["content"]["legal"]["policyGaps"] = []
+                for key in ("entryPoints", "documentationUpdates"):
+                    item[key] = [
+                        path for path in item[key]
+                        if (REPO_ROOT / path).exists() or not site_data_validate.Validator.is_future_path(path)
+                    ]
         contract["readiness"]["execution"]["firstUnblockedWorkItemId"] = None
         contract["readiness"]["globalRelease"]["state"] = "ready"
+        still_planned = [
+            path
+            for item in contract["workItems"]
+            if item["status"] != "done"
+            for key in ("entryPoints", "documentationUpdates")
+            for path in item[key]
+        ]
+        still_planned.extend(contract["docsCatalog"].get("featuredSourcePaths", []))
+        still_planned.extend(contract["docsCatalog"].get("routeOverrides", {}))
+        return {
+            entry for entry in site_data_validate.FUTURE_ACCEPTANCE_PATHS
+            if not any(fnmatch.fnmatchcase(path, entry) for path in still_planned)
+        }
 
     @staticmethod
     def item_text(item: dict[str, Any], *fields: str) -> str:
@@ -107,6 +136,82 @@ class ContractTestCase(unittest.TestCase):
             value = item.get(field, [])
             values.extend(value if isinstance(value, list) else [str(value)])
         return " ".join(values).lower()
+
+
+EXACT_CI_REFERENCE = "ci:build.yml/1@" + "0" * 40
+
+
+class AcceptanceStatusTests(ContractTestCase):
+    """acceptanceStatus tracks every criterion and never outruns the item status."""
+
+    def entries(self, item_id: str) -> list[dict[str, Any]]:
+        return self.items_of(self.mutable)[item_id]["acceptanceStatus"]
+
+    def test_every_work_item_tracks_every_criterion(self) -> None:
+        for item in self.contract["workItems"]:
+            with self.subTest(item=item["id"]):
+                self.assertEqual(len(item["acceptanceStatus"]), len(item["acceptanceCriteria"]))
+                for criterion, entry in zip(item["acceptanceCriteria"], item["acceptanceStatus"]):
+                    self.assertEqual(entry["criterionDigest"], site_data_common.criterion_digest(criterion))
+
+    def test_length_mismatch_is_rejected(self) -> None:
+        self.entries("CI-100").pop()
+        self.assert_rejected(self.mutable, "workItems.CI-100.acceptanceStatus")
+
+    def test_reworded_criterion_requires_reassessment(self) -> None:
+        item = self.items_of(self.mutable)["CI-100"]
+        item["acceptanceCriteria"][0] += " (reworded)"
+        self.assert_rejected(self.mutable, "criterionDigest does not match acceptanceCriteria[0]")
+
+    def test_progress_requires_real_repository_evidence(self) -> None:
+        entry = self.entries("CI-100")[0]
+        cases = (
+            ([], "must cite the committed test or check"),
+            ([EXACT_CI_REFERENCE], "must cite the committed test or check"),
+            (["Tests/DoesNotExist.cpp"], "referenced path does not exist"),
+        )
+        for evidence, fragment in cases:
+            with self.subTest(evidence=evidence):
+                mutated = copy.deepcopy(self.mutable)
+                target = self.items_of(mutated)["CI-100"]
+                target["status"] = "in-progress"
+                target["acceptanceStatus"][0] = {**entry, "state": "implemented", "evidence": evidence}
+                self.assert_rejected(mutated, fragment)
+
+    def test_evidenced_requires_a_well_formed_exact_commit_ci_reference(self) -> None:
+        for evidence, fragment in (
+            (["README.md"], "must cite the exact-commit CI run"),
+            (["README.md", "ci:build.yml/latest@main"], "CI evidence must look like"),
+        ):
+            with self.subTest(evidence=evidence):
+                mutated = copy.deepcopy(self.mutable)
+                target = self.items_of(mutated)["CI-100"]
+                target["status"] = "in-progress"
+                target["acceptanceStatus"][0].update(state="evidenced", evidence=evidence)
+                self.assert_rejected(mutated, fragment)
+
+    def test_open_item_cannot_record_progress(self) -> None:
+        target = self.items_of(self.mutable)["CI-100"]
+        target["status"] = "open"
+        target["acceptanceStatus"][0].update(state="implemented", evidence=["README.md"])
+        self.assert_rejected(self.mutable, "an open work item has no implemented or evidenced criteria")
+
+    def test_done_item_needs_every_criterion_evidenced(self) -> None:
+        target = self.items_of(self.mutable)["CI-100"]
+        target["status"] = "done"
+        for entry in target["acceptanceStatus"]:
+            entry.update(state="evidenced", evidence=["README.md", EXACT_CI_REFERENCE])
+        target["acceptanceStatus"][-1].update(state="implemented", evidence=["README.md"])
+        self.assert_rejected(self.mutable, "a done work item must have every acceptance criterion evidenced")
+
+    def test_fully_evidenced_done_item_passes_the_acceptance_rules(self) -> None:
+        target = self.items_of(self.mutable)["CI-100"]
+        target["status"] = "done"
+        for entry in target["acceptanceStatus"]:
+            entry.update(state="evidenced", evidence=["README.md", EXACT_CI_REFERENCE])
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_acceptance_status(target, "workItems.CI-100")
+        self.assertEqual(validator.errors, [])
 
 
 class ReleaseProfileShapeTests(ContractTestCase):
@@ -383,6 +488,150 @@ class WorkItemApplicabilityTests(ContractTestCase):
                 )
 
 
+class WorkItemPresetResolutionTests(ContractTestCase):
+    """Work-item commands must name presets and build trees CMakePresets.json defines."""
+
+    def preset_errors(self, identifier: str, commands: list[str]) -> list[str]:
+        validator = site_data_validate.Validator(self.mutable)
+        uses: dict[str, set[str]] = {}
+        validator.validate_work_item_presets(identifier, commands, f"workItems.{identifier}", uses)
+        return validator.errors
+
+    def test_live_work_item_commands_resolve(self) -> None:
+        for item in self.contract["workItems"]:
+            with self.subTest(work_item=item["id"]):
+                self.assertEqual(self.preset_errors(item["id"], item["commands"]), [])
+
+    def test_ctest_against_tests_off_preset_is_rejected(self) -> None:
+        for command in (
+            "ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error",
+            "ctest --test-dir build/linux-shipping -L unit --output-on-failure --no-tests=error",
+            "ctest --test-dir=build/minimal/Tests --output-on-failure --no-tests=error",
+            '"C:/Program Files/CMake/bin/ctest.exe" --test-dir build/windows-shipping --no-tests=error',
+            "ctest --show-only=json-v1 && ctest --test-dir build/linux-shipping --no-tests=error",
+        ):
+            with self.subTest(command=command):
+                errors = self.preset_errors("RDY-020", [command])
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn("sets BUILD_TESTS=OFF", errors[0])
+
+    def test_tests_off_preset_is_excused_only_by_same_item_configure(self) -> None:
+        run = "ctest --test-dir build/windows-shipping -C MinSizeRel -L module-profile --no-tests=error"
+        self.assertEqual(
+            self.preset_errors("PLT-200", ["cmake --preset windows-shipping -DBUILD_TESTS=ON", run]), []
+        )
+        self.assertEqual(
+            self.preset_errors("PLT-200", ["cmake --preset windows-shipping -D BUILD_TESTS:BOOL=TRUE", run]), []
+        )
+        for configure in (
+            "cmake --preset windows-shipping",
+            "cmake --preset windows-shipping -DBUILD_TESTS=OFF",
+            "cmake --preset windows-release -DBUILD_TESTS=ON",
+        ):
+            with self.subTest(configure=configure):
+                errors = self.preset_errors("PLT-200", [configure, run])
+                self.assertTrue(any("sets BUILD_TESTS=OFF" in error for error in errors), errors)
+
+        rdy_010 = self.items_of(self.mutable)["RDY-010"]
+        rdy_010["commands"] = [
+            " ".join(token for token in command.split(" ") if token != "-DBUILD_TESTS=ON")
+            for command in rdy_010["commands"]
+        ]
+        self.assert_rejected(self.mutable, "sets BUILD_TESTS=OFF")
+
+    def test_unknown_presets_and_build_trees_are_rejected(self) -> None:
+        cases = (
+            ("cmake --preset linux-asan", "--preset 'linux-asan' names no configure preset"),
+            ("cmake --build --preset linux-asan", "--preset 'linux-asan' names no build preset"),
+            ("ctest --preset linux-gcc-release --no-tests=error", "--preset 'linux-gcc-release' names no test preset"),
+            ("ctest --test-dir build/linux-asan -L lifecycle --no-tests=error", "build tree 'build/linux-asan'"),
+            ("cmake --build build/linux-tsan", "build tree 'build/linux-tsan'"),
+            ("cmake --install build/nope --prefix /tmp/x", "build tree 'build/nope'"),
+            ("cmake -LAH -N build/nope", "build tree 'build/nope'"),
+            ("cmake --build ./build/nope/sub", "build tree 'build/nope'"),
+        )
+        for command, fragment in cases:
+            with self.subTest(command=command):
+                errors = self.preset_errors("LIFE-200", [command])
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(fragment, errors[0])
+
+    def test_existing_presets_resolve_through_inheritance(self) -> None:
+        self.assertEqual(
+            self.preset_errors(
+                "LIFE-200",
+                [
+                    "ctest --test-dir build/ci-linux-asan -L lifecycle --output-on-failure --no-tests=error",
+                    "ctest --preset default --no-tests=error",
+                    "cmake --build --preset windows-shipping --config MinSizeRel",
+                    "cmake --install build/linux-shipping --prefix /tmp/spark-install",
+                    "ctest --test-dir /tmp/spark-consumer --no-tests=error",
+                ],
+            ),
+            [],
+        )
+        index = contract_selectors.cmake_preset_index()
+        self.assertTrue(index.builds_tests("ci-linux-asan"))
+        self.assertFalse(index.builds_tests("windows-shipping"))
+
+    def test_inherited_tests_off_is_resolved(self) -> None:
+        presets = {
+            "configurePresets": [
+                {"name": "base", "hidden": True, "binaryDir": "${sourceDir}/build/${presetName}",
+                 "cacheVariables": {"BUILD_TESTS": "ON"}},
+                {"name": "off", "hidden": True, "cacheVariables": {"BUILD_TESTS": {"type": "BOOL", "value": "OFF"}}},
+                {"name": "child", "inherits": ["off", "base"]},
+                {"name": "reset", "inherits": "child", "cacheVariables": {"BUILD_TESTS": None}},
+                {"name": "plain", "inherits": "base"},
+            ],
+            "testPresets": [{"name": "child-tests", "configurePreset": "child"}],
+        }
+        index = contract_selectors.CMakePresetIndex(presets)
+        self.assertEqual(index.binary_dirs["build/child"], "child")
+        self.assertNotIn("build/base", index.binary_dirs)
+        self.assertFalse(index.builds_tests("child"), "earlier inherits entry must win")
+        self.assertTrue(index.builds_tests("reset"), "null unsets back to the option default")
+        self.assertTrue(index.builds_tests("plain"))
+        self.assertEqual(
+            index.configure_for(contract_selectors.PresetReference("ctest", "test", "child-tests")), "child"
+        )
+
+    def test_planned_preset_is_owner_scoped_and_prunes_itself(self) -> None:
+        self.assertEqual(
+            self.preset_errors("PLT-220", ["cmake --preset macos-shipping", "cmake --build build/macos-shipping"]),
+            [],
+        )
+        for identifier, command in (
+            ("RHI-220", "cmake --preset macos-shipping"),
+            ("PLT-220", "ctest --test-dir build/macos-shipping -L metal --no-tests=error"),
+        ):
+            with self.subTest(identifier=identifier, command=command):
+                self.assertEqual(len(self.preset_errors(identifier, [command])), 1)
+
+        items = self.items_of(self.mutable)
+        cases = (
+            ({"linux-gcc-release": "PLT-220"}, "preset now exists in CMakePresets.json"),
+            ({"macos-shipping": "NOPE-000"}, "owner NOPE-000 is not a work item"),
+            ({"macos-shipping": "RHI-220"}, "owner RHI-220 no longer references this preset"),
+        )
+        for planned, fragment in cases:
+            with self.subTest(planned=planned):
+                validator = site_data_validate.Validator(self.mutable)
+                with mock.patch.object(site_data_validate, "PLANNED_CMAKE_PRESETS", planned):
+                    validator.validate_planned_presets(items, {"macos-shipping": {"PLT-220"}})
+                self.assertTrue(any(fragment in error for error in validator.errors), validator.errors)
+
+        done = copy.deepcopy(items)
+        done["PLT-220"]["status"] = "done"
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_planned_presets(done, {"macos-shipping": {"PLT-220"}})
+        self.assertTrue(any("owner PLT-220 is done" in error for error in validator.errors), validator.errors)
+
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_planned_presets(items, {"macos-shipping": {"PLT-220"}})
+        self.assertEqual(validator.errors, [])
+
+
 class LegalContractConsistencyTests(ContractTestCase):
     """GOV-400 legal data stays explicit while its policy work is open."""
 
@@ -447,6 +696,67 @@ class LegalPublicWordingTests(ContractTestCase):
             {"README.md": "A C++23 open-source game engine."},
         )
         self.assertEqual([], errors)
+
+
+class OnlineServiceBoundaryTests(unittest.TestCase):
+    """OD-08 / NET-110: public surfaces never claim hosted online services."""
+
+    def claims(self, text: str) -> list[str]:
+        return site_data_validate.hosted_online_service_claim_errors({"page.md": text})
+
+    def test_hosted_service_claims_are_rejected(self) -> None:
+        for text in (
+            "SparkEngine provides hosted matchmaking for every game.",
+            "Built-in leaderboards and managed cloud saves out of the box.",
+            "| Hosted identity | Included |",
+            "The engine operates a billing service for store purchases.",
+            "SparkEngine offers an entitlement backend.",
+            "Turnkey online services let you ship multiplayer today.",
+        ):
+            with self.subTest(text=text):
+                errors = self.claims(text)
+                self.assertEqual(1, len(errors), errors)
+                self.assertIn("page.md:1: claims hosted online services", errors[0])
+                self.assertIn("OD-08", errors[0])
+
+    def test_negated_boundary_statements_are_allowed(self) -> None:
+        for text in (
+            "The engine ships no hosted online services.",
+            "SparkEngine does not provide hosted matchmaking, fleet, or billing.",
+            "Identity, matchmaking, fleet, entitlement and billing services are out of engine scope.",
+            "| Hosted leaderboards | Not provided; the product owns them |",
+            "SparkDaemon is not a managed fleet.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual([], self.claims(text))
+
+    def test_negation_in_another_sentence_does_not_excuse_a_claim(self) -> None:
+        errors = self.claims("Accounts are not stored in plaintext. SparkEngine hosts an identity service.")
+        self.assertEqual(1, len(errors), errors)
+
+    def test_engine_interfaces_are_not_service_claims(self) -> None:
+        text = (
+            "IOnlinePlatform is an integration point. NullOnlinePlatform keeps cloud-save slots in memory. "
+            "SparkGateway authenticates admission credentials issued by the product."
+        )
+        self.assertEqual([], self.claims(text))
+
+    def test_non_text_surface_is_rejected(self) -> None:
+        errors = site_data_validate.hosted_online_service_claim_errors({"page.md": None})  # type: ignore[dict-item]
+        self.assertEqual(["page.md: online-service wording source must be text"], errors)
+
+    def test_repository_surfaces_carry_no_hosted_service_claim(self) -> None:
+        surfaces: dict[str, str] = {}
+        for surface in sorted(
+            site_data_validate.REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES
+            | site_data_validate.ONLINE_SERVICE_BOUNDARY_SURFACES
+        ):
+            path = site_data_validate.REPO_ROOT / surface
+            if path.is_file():
+                surfaces[surface] = path.read_text(encoding="utf-8", errors="replace")
+        for surface in site_data_validate.ONLINE_SERVICE_BOUNDARY_SURFACES:
+            self.assertIn(surface, surfaces)
+        self.assertEqual([], site_data_validate.hosted_online_service_claim_errors(surfaces))
 
 
 class TransitiveDependencyTests(ContractTestCase):
@@ -523,16 +833,21 @@ class ReadyPromotionTests(ContractTestCase):
     """Frozen case 5: ready derives from profiles, not every ledger gate."""
 
     def test_excluded_gates_and_work_may_remain_open_when_ready(self) -> None:
-        self.promote_ready(self.mutable)
+        delivered = self.promote_ready(self.mutable)
         gates = self.gates_of(self.mutable)
         items = self.items_of(self.mutable)
         self.assertEqual(gates["G11"]["state"], "blocked")
         self.assertEqual(gates["G12"]["state"], "blocked")
-        self.assertEqual(items["MOD-315"]["status"], "open")
-        self.assertEqual(items["NET-100"]["status"], "open")
-        site_data_validate.Validator(self.mutable, allow_legacy_contract=True).validate(
-            require_ready=True
-        )
+        self.assertNotEqual(items["MOD-315"]["status"], "done")
+        self.assertNotEqual(items["NET-100"]["status"], "done")
+        with mock.patch.object(
+            site_data_validate,
+            "FUTURE_ACCEPTANCE_PATHS",
+            site_data_validate.FUTURE_ACCEPTANCE_PATHS - delivered,
+        ):
+            site_data_validate.Validator(self.mutable, allow_legacy_contract=True).validate(
+                require_ready=True
+            )
 
     def test_a_required_gate_still_blocks_ready(self) -> None:
         self.promote_ready(self.mutable)
@@ -2091,7 +2406,7 @@ class SelectorResolutionTests(ContractTestCase):
 
     def test_glob_entry_point_must_match_a_real_file(self) -> None:
         validator = site_data_validate.Validator(self.mutable)
-        validator.require_path("GameModules/*/module.json", "probe.entryPoints[0]", allow_future=True)
+        validator.require_path("GameModules/*/probe-that-matches-nothing.json", "probe.entryPoints[0]", allow_future=True)
         self.assertEqual(1, len(validator.errors))
         self.assertIn("path pattern matches no file", validator.errors[0])
 
@@ -2153,6 +2468,521 @@ class LegacyContractDebtTests(ContractTestCase):
         self.assert_rejected(
             self.mutable, "no CTest test, label, or SparkTests definition matches"
         )
+
+
+class FutureAcceptancePathTests(ContractTestCase):
+    """FUTURE_ACCEPTANCE_PATHS excuses only paths that are planned and still missing."""
+
+    # Synthetic, never-planned paths: a real planned path would stop testing the
+    # "missing" case the moment its work item lands the file.
+    UNPLANNED_PATH = "docs/specs/never-planned-probe.md"
+
+    def with_live(self, *extra: str) -> set[str]:
+        return {*site_data_validate.FUTURE_ACCEPTANCE_PATHS, *extra}
+
+    def future_path_errors(self, allowlist: set[str]) -> list[str]:
+        with mock.patch.object(site_data_validate, "FUTURE_ACCEPTANCE_PATHS", allowlist):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_future_acceptance_paths()
+        return validator.errors
+
+    def work_item_errors(self, allowlist: set[str]) -> list[str]:
+        with mock.patch.object(site_data_validate, "FUTURE_ACCEPTANCE_PATHS", allowlist):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_work_items()
+        return validator.errors
+
+    def open_item(self) -> dict[str, Any]:
+        item = self.items_of(self.mutable)["ENG-200"]
+        self.assertNotEqual("done", item["status"])
+        return item
+
+    def test_live_allowlist_is_missing_on_disk_and_referenced(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_future_acceptance_paths()
+        self.assertEqual([], validator.errors)
+
+    def test_allowlist_entry_that_now_exists_must_be_removed(self) -> None:
+        self.open_item()["documentationUpdates"].append("README.md")
+        errors = self.future_path_errors({"README.md"})
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("README.md", errors[0])
+        self.assertIn("now exists and must be removed from FUTURE_ACCEPTANCE_PATHS", errors[0])
+
+    def test_allowlist_entry_nothing_references_is_rejected(self) -> None:
+        errors = self.future_path_errors({self.UNPLANNED_PATH})
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn(self.UNPLANNED_PATH, errors[0])
+        self.assertIn("referenced by no unfinished work item entryPoints/documentationUpdates", errors[0])
+
+    def test_reference_from_a_done_work_item_does_not_keep_an_entry(self) -> None:
+        item = self.open_item()
+        item["documentationUpdates"].append(self.UNPLANNED_PATH)
+        item["status"] = "done"
+        errors = self.future_path_errors({self.UNPLANNED_PATH})
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("referenced by no unfinished work item", errors[0])
+
+    def test_docs_catalog_reference_counts_as_a_planned_use(self) -> None:
+        self.mutable["docsCatalog"].setdefault("featuredSourcePaths", []).append(self.UNPLANNED_PATH)
+        self.assertEqual([], self.future_path_errors({self.UNPLANNED_PATH}))
+
+    def test_missing_referenced_entry_is_accepted_for_unfinished_work(self) -> None:
+        self.open_item()["documentationUpdates"].append(self.UNPLANNED_PATH)
+        self.assertEqual([], self.future_path_errors(self.with_live(self.UNPLANNED_PATH)))
+        # Only this path's resolution is under test; unrelated live-contract errors
+        # belong to LiveContractTests.
+        path_errors = [
+            error for error in self.work_item_errors(self.with_live(self.UNPLANNED_PATH))
+            if self.UNPLANNED_PATH in error
+        ]
+        self.assertEqual([], path_errors)
+
+    def test_done_work_item_cannot_resolve_through_the_future_allowlist(self) -> None:
+        item = self.open_item()
+        item["documentationUpdates"].append(self.UNPLANNED_PATH)
+        item["status"] = "done"
+        errors = self.work_item_errors(self.with_live(self.UNPLANNED_PATH))
+        self.assertTrue(
+            any(
+                "workItems.ENG-200.documentationUpdates" in error
+                and f"referenced path does not exist: {self.UNPLANNED_PATH}" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+
+class ReadyAndPassingEvidenceTests(ContractTestCase):
+    """Direct blockers and required gates stop promotion; promotion needs evidence.
+
+    These drive validate_readiness directly: validate() always runs it, and the
+    full pipeline would add seconds per case to a suite CI bounds at five minutes.
+    """
+
+    def readiness_errors(self) -> str:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_readiness({item["id"] for item in self.mutable["workItems"]})
+        return "\n".join(validator.errors)
+
+    def ready_console(self) -> dict[str, Any]:
+        """platform.console made ready with a passing gate and evidence, all else unchanged."""
+        capability = self.capabilities_of(self.mutable)["platform.console"]
+        gate = self.gates_of(self.mutable)["G00"]
+        gate["state"] = "passing"
+        gate["blockingWorkItemIds"] = []
+        gate["evidence"] = [{"type": "document", "label": "Test-only gate evidence", "path": "README.md"}]
+        capability["release"] = "ready"
+        capability["requiredGateIds"] = ["G00"]
+        capability["blockingWorkItemIds"] = []
+        capability["evidence"] = [
+            {"type": "document", "label": "Test-only capability evidence", "path": "README.md"}
+        ]
+        return capability
+
+    def test_control_ready_capability_with_gate_and_evidence_is_accepted(self) -> None:
+        self.ready_console()
+        self.assertEqual("", self.readiness_errors())
+
+    def test_ready_capability_rejects_an_open_direct_blocker(self) -> None:
+        capability = self.ready_console()
+        self.assertNotEqual("done", self.items_of(self.mutable)["RDY-000"]["status"])
+        capability["blockingWorkItemIds"] = ["RDY-000"]
+        self.assertIn(
+            "capabilities.platform.console: ready capability has unfinished blockers: ['RDY-000']",
+            self.readiness_errors(),
+        )
+
+    def test_ready_capability_rejects_a_non_passing_required_gate(self) -> None:
+        capability = self.ready_console()
+        self.assertNotEqual("passing", self.gates_of(self.mutable)["G09"]["state"])
+        capability["requiredGateIds"] = ["G00", "G09"]
+        self.assertIn(
+            "capabilities.platform.console: ready capability has non-passing gates: ['G09']",
+            self.readiness_errors(),
+        )
+
+    def test_passing_gate_rejects_an_open_direct_blocker(self) -> None:
+        self.ready_console()
+        self.gates_of(self.mutable)["G00"]["blockingWorkItemIds"] = ["RDY-000"]
+        self.assertIn("gates.G00: passing gate has unfinished blockers: ['RDY-000']", self.readiness_errors())
+
+    def test_ready_capability_requires_a_required_gate(self) -> None:
+        self.ready_console()["requiredGateIds"] = []
+        self.assertIn(
+            "capabilities.platform.console: ready capability must name at least one required gate",
+            self.readiness_errors(),
+        )
+
+    def test_ready_capability_requires_evidence(self) -> None:
+        self.ready_console()["evidence"] = []
+        self.assertIn(
+            "capabilities.platform.console: ready capability requires evidence", self.readiness_errors()
+        )
+
+    def test_passing_gate_requires_evidence(self) -> None:
+        self.ready_console()
+        self.gates_of(self.mutable)["G00"]["evidence"] = []
+        self.assertIn("gates.G00: passing gate requires evidence", self.readiness_errors())
+
+
+class LiveContractTests(ContractTestCase):
+    """The checked-in contract passes the strict validator, which runs every cross-reference check.
+
+    Each full validate() costs seconds and CI bounds this suite at five minutes,
+    so the wiring of the cross-reference checks shares one hostile run.
+    """
+
+    def test_live_contract_validates_strictly(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate()
+        self.assertEqual([], validator.legacy)
+
+    def test_validate_runs_the_future_path_and_prose_reference_checks(self) -> None:
+        unplanned = FutureAcceptancePathTests.UNPLANNED_PATH
+        self.gates_of(self.mutable)["G00"]["summary"] += " Tracked by DOC-999."
+        with mock.patch.object(
+            site_data_validate,
+            "FUTURE_ACCEPTANCE_PATHS",
+            {*site_data_validate.FUTURE_ACCEPTANCE_PATHS, unplanned},
+        ):
+            with self.assertRaises(SiteDataError) as raised:
+                site_data_validate.Validator(self.mutable).validate()
+        message = str(raised.exception)
+        self.assertIn(f"FUTURE_ACCEPTANCE_PATHS[{unplanned!r}]: referenced by no unfinished work item", message)
+        self.assertIn("gates.G00.summary: names unknown work item DOC-999", message)
+
+
+class ProseCrossReferenceTests(ContractTestCase):
+    """Work-item and gate IDs named in free text must resolve to declared records."""
+
+    def prose_errors(self) -> list[str]:
+        validator = site_data_validate.Validator(self.mutable)
+        item_ids = {item["id"] for item in self.mutable["workItems"]}
+        gate_ids = {gate["id"] for gate in self.mutable["readiness"]["gates"]}
+        validator.validate_prose_references(item_ids, gate_ids)
+        return validator.errors
+
+    def test_live_contract_prose_references_all_resolve(self) -> None:
+        self.assertEqual([], self.prose_errors())
+
+    def test_unknown_gate_in_readiness_changes_is_rejected(self) -> None:
+        self.items_of(self.mutable)["RDY-000"]["readinessChanges"].append("Moves G99 to passing.")
+        errors = self.prose_errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("workItems.RDY-000.readinessChanges", errors[0])
+        self.assertIn("unknown gate G99", errors[0])
+
+    def test_unknown_work_item_in_capability_limitations_is_rejected(self) -> None:
+        capability = self.capabilities_of(self.mutable)["platform.console"]
+        capability["limitations"].append("Waits on RDY-999 before any claim.")
+        errors = self.prose_errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("capabilities.platform.console.limitations", errors[0])
+        self.assertIn("unknown work item RDY-999", errors[0])
+
+    def test_unknown_work_item_in_gate_summary_is_rejected(self) -> None:
+        self.gates_of(self.mutable)["G00"]["summary"] += " Tracked by DOC-999."
+        errors = self.prose_errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("gates.G00.summary: names unknown work item DOC-999", errors[0])
+
+    def test_hash_names_and_unprefixed_tokens_are_not_references(self) -> None:
+        item = self.items_of(self.mutable)["RDY-000"]
+        item["risks"].append("SHA-256 digests, UTF-8 text, and X-100 are not work-item IDs; nor is G100.")
+        self.assertEqual([], self.prose_errors())
+
+
+class PublicNumericClaimTests(ContractTestCase):
+    """Hand-written counts on public surfaces must resolve to a metric or a reviewed entry."""
+
+    SURFACE = "README.md"
+
+    @staticmethod
+    def claim_errors(
+        texts: dict[str, str],
+        entries: Any,
+        metrics: dict[str, int | float] | None = None,
+        managed: dict[str, tuple[re.Pattern[str], ...]] | None = None,
+    ) -> list[str]:
+        return site_data_validate.public_numeric_claim_errors(
+            texts,
+            entries,
+            lambda: metrics or {},
+            managed or {},
+        )
+
+    @staticmethod
+    def entry(text: str, classification: str = "historical", **extra: str) -> dict[str, str]:
+        return {
+            "surface": PublicNumericClaimTests.SURFACE,
+            "text": text,
+            "classification": classification,
+            "owner": "unassigned",
+            **extra,
+        }
+
+    def test_current_public_surfaces_have_no_unclaimed_numbers(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_public_numeric_claims()
+        self.assertEqual(validator.errors, [])
+
+    def test_unclaimed_number_is_rejected(self) -> None:
+        errors = self.claim_errors({self.SURFACE: "The editor ships 12 panels.\n"}, [])
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("README.md:1", errors[0])
+        self.assertIn("unclaimed numeric claim '12 panels'", errors[0])
+
+    def test_wrapped_and_qualified_claims_are_detected(self) -> None:
+        errors = self.claim_errors(
+            {self.SURFACE: "Covers 50+ other\nsubsystems and ~1,326 lines and 2,504/2,509 tests.\n"},
+            [],
+        )
+        joined = "\n".join(errors)
+        self.assertIn("'50+ other\\nsubsystems'", joined)
+        self.assertIn("'~1,326 lines'", joined)
+        self.assertIn("'2,504/2,509 tests'", joined)
+        self.assertIn("README.md:1", joined)
+        self.assertIn("README.md:2", joined)
+
+    def test_product_versions_are_not_counts(self) -> None:
+        text = "Win32 + DirectX 11 ImGui backends; a DirectX 12 backend; version 1 files are rejected.\n"
+        self.assertEqual(self.claim_errors({self.SURFACE: text}, []), [])
+
+    def test_stale_metric_value_is_rejected(self) -> None:
+        text = "- 65 node palette entries\n"
+        entry = self.entry("65 node palette entries", "metric", metricId="visualScript.nodes")
+        errors = self.claim_errors({self.SURFACE: text}, [entry], {"visualScript.nodes": 64})
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("claims 65 but visualScript.nodes is 64", errors[0])
+        self.assertEqual(
+            self.claim_errors(
+                {self.SURFACE: "- 64 node palette entries\n"},
+                [self.entry("64 node palette entries", "metric", metricId="visualScript.nodes")],
+                {"visualScript.nodes": 64},
+            ),
+            [],
+        )
+
+    def test_lower_bound_metric_claim_tolerates_growth_only(self) -> None:
+        metrics = {"visualScript.nodes": 64}
+        accepted = self.entry("60+ nodes", "metric", metricId="visualScript.nodes")
+        self.assertEqual(self.claim_errors({self.SURFACE: "60+ nodes\n"}, [accepted], metrics), [])
+        rejected = self.entry("70+ nodes", "metric", metricId="visualScript.nodes")
+        errors = self.claim_errors({self.SURFACE: "70+ nodes\n"}, [rejected], metrics)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("claims at least 70 but visualScript.nodes is 64", errors[0])
+
+    def test_metric_claims_must_be_exact_single_and_measurable(self) -> None:
+        metrics = {"visualScript.nodes": 64}
+        cases = [
+            ("~64 nodes", "visualScript.nodes", "approximate"),
+            ("64 nodes and 64 files", "visualScript.nodes", "exactly one numeric claim"),
+            ("64 nodes", "tests.executed", "not measurable from the source tree"),
+            ("64 nodes", "made.up", "unknown metric"),
+        ]
+        for text, metric_id, fragment in cases:
+            with self.subTest(text=text, metric=metric_id):
+                entry = self.entry(text, "metric", metricId=metric_id)
+                errors = self.claim_errors({self.SURFACE: text + "\n"}, [entry], metrics)
+                self.assertTrue(any(fragment in error for error in errors), errors)
+
+    def test_claim_inside_auto_block_is_ignored(self) -> None:
+        text = "Intro.\n<!-- AUTO:stats -->\n| Tests | 9,999 tests |\n<!-- /AUTO:stats -->\nOutro.\n"
+        self.assertEqual(self.claim_errors({self.SURFACE: text}, []), [])
+        outside = text + "Also 7 panels.\n"
+        errors = self.claim_errors({self.SURFACE: outside}, [])
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("README.md:6", errors[0])
+
+    def test_unterminated_auto_block_is_rejected(self) -> None:
+        errors = self.claim_errors({self.SURFACE: "<!-- AUTO:stats -->\n| 9 tests |\n"}, [])
+        self.assertTrue(any("unterminated AUTO block 'stats'" in error for error in errors), errors)
+
+    def test_managed_line_is_exempt_only_on_its_managed_surface(self) -> None:
+        managed = site_data_validate.managed_numeric_claim_patterns()
+        text = "Tests: 7,564 test definitions across 631 files.\n"
+        self.assertEqual(self.claim_errors({self.SURFACE: text}, [], managed=managed), [])
+        errors = self.claim_errors({"wiki/Home.md": text}, [], managed=managed)
+        self.assertEqual(len(errors), 2, errors)
+
+    def test_managed_pattern_is_exempt_only_on_the_file_its_call_rewrites(self) -> None:
+        managed = site_data_validate.managed_numeric_claim_patterns()
+        text = "SparkEditor has 12 specialized panels today.\n"
+        self.assertEqual(self.claim_errors({"README.md": text}, [], managed=managed), [])
+        # The badge script rewrites FAQ.md, but only for the `*Panel.h` pattern.
+        errors = self.claim_errors({"wiki/getting-started/FAQ.md": text}, [], managed=managed)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'12 specialized panels'", errors[0])
+        self.assertEqual(
+            self.claim_errors({"wiki/getting-started/FAQ.md": "Ships 59 `*Panel.h` headers.\n"}, [], managed=managed),
+            [],
+        )
+        self.assertEqual(len(managed["wiki/getting-started/FAQ.md"]), 1)
+
+    def test_unresolvable_badge_script_target_fails_closed(self) -> None:
+        bindings = {"readme": ("$PROJECT_ROOT/README.md",)}
+        self.assertEqual(
+            site_data_validate._resolve_managed_claim_target("$readme", bindings),
+            ["README.md"],
+        )
+        for target in ("$unknown", "$PROJECT_ROOT/../outside.md", "/etc/$readme", "docs/$PROJECT_ROOT/x.md"):
+            with self.subTest(target=target):
+                with self.assertRaises(site_data_validate.SiteDataError):
+                    site_data_validate._resolve_managed_claim_target(target, bindings)
+
+    def test_entry_does_not_cover_qualified_or_overlapping_page_claims(self) -> None:
+        metrics = {"visualScript.nodes": 64}
+        entry = self.entry("64 nodes", "metric", metricId="visualScript.nodes")
+        self.assertEqual(self.claim_errors({self.SURFACE: "Has 64 nodes.\n"}, [entry], metrics), [])
+        for text in ("Has ~64 nodes.\n", "Has 1/64 nodes.\n", "Has #64 nodes\n", "Has 1+64 nodes\n"):
+            with self.subTest(text=text):
+                errors = self.claim_errors({self.SURFACE: text}, [entry], metrics)
+                self.assertTrue(any("does not occur in README.md" in error for error in errors), errors)
+        # A managed pattern that matches only part of a claim does not exempt the rest.
+        partial = {self.SURFACE: (re.compile(r"12 specialized panels"),)}
+        errors = self.claim_errors({self.SURFACE: "~12 specialized panels\n"}, [], managed=partial)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'~12 specialized panels'", errors[0])
+
+    def test_badge_script_patterns_are_parsed(self) -> None:
+        managed = site_data_validate.managed_numeric_claim_patterns()
+        self.assertIn("README.md", managed)
+        self.assertIn(".github/copilot-instructions.md", managed)
+        self.assertIn(".github/prompts/build-test.prompt.md", managed)
+        readme = "\n".join(pattern.pattern for pattern in managed["README.md"])
+        self.assertIn("panel", readme)
+        self.assertTrue(
+            any(
+                pattern.search("7,564 test definitions across 631 files")
+                for pattern in managed[".github/copilot-instructions.md"]
+            )
+        )
+
+    def test_entries_must_match_surface_text_and_claim_something(self) -> None:
+        text = "- 59 panels shipped in 0.1\n"
+        cases = [
+            (self.entry("61 panels"), "does not occur in README.md"),
+            (self.entry("shipped in"), "contains no numeric claim"),
+            (self.entry("59 panels", "rumor"), "classification must be one of"),
+            (self.entry("59 panels", "metric"), "metricId is required"),
+            (self.entry("59 panels", "static-fact"), "evidencePath is required"),
+            (self.entry("59 panels", metricId="editor.panels"), "unexpected field(s) ['metricId']"),
+            ({**self.entry("59 panels"), "owner": ""}, "owner must be a non-empty string"),
+            ({**self.entry("59 panels"), "surface": "wiki/Not-A-Surface.md"}, "not a governed public claim surface"),
+        ]
+        for entry, fragment in cases:
+            with self.subTest(fragment=fragment):
+                errors = self.claim_errors({self.SURFACE: text}, [entry])
+                self.assertTrue(any(fragment in error for error in errors), errors)
+        duplicate = self.claim_errors({self.SURFACE: text}, [self.entry("59 panels"), self.entry("59 panels")])
+        self.assertTrue(any("duplicate entry" in error for error in duplicate), duplicate)
+        self.assertTrue(
+            any("must be an array" in error for error in self.claim_errors({self.SURFACE: text}, {"not": "a list"}))
+        )
+
+    def test_entry_text_is_whitespace_insensitive_across_wrapped_lines(self) -> None:
+        text = "- Dear ImGui editor with 59\n  panels and collaborative editing\n"
+        self.assertEqual(self.claim_errors({self.SURFACE: text}, [self.entry("59 panels")]), [])
+
+    def test_removing_a_contract_entry_rejects_the_live_contract(self) -> None:
+        entries = self.mutable["readiness"]["publicNumericClaims"]
+        removed = next(entry for entry in entries if entry["classification"] == "metric")
+        entries.remove(removed)
+        self.assert_rejected(self.mutable, "unclaimed numeric claim")
+
+    def test_live_static_facts_cite_existing_evidence(self) -> None:
+        entry = next(
+            entry
+            for entry in self.mutable["readiness"]["publicNumericClaims"]
+            if entry["classification"] == "static-fact"
+        )
+        entry["evidencePath"] = "SparkEngine/Source/DoesNotExist.h"
+        self.assert_rejected(self.mutable, "referenced path does not exist: SparkEngine/Source/DoesNotExist.h")
+
+
+class NoHardcodedClaimsTests(ContractTestCase):
+    """DOC-400: site contract copy names bundle metrics, never mutable literals."""
+
+    CONTENT = "docs/site/content.json"
+    CATALOG = "docs/site/docs-catalog.json"
+
+    @staticmethod
+    def errors_for(texts: list[str]) -> list[str]:
+        return site_data_validate.hardcoded_site_claim_errors({"docs/site/content.json": {"copy": texts}})
+
+    def test_live_site_contract_has_no_hardcoded_claims(self) -> None:
+        documents = {
+            self.CONTENT: self.contract["content"],
+            self.CATALOG: self.contract["docsCatalog"],
+        }
+        self.assertEqual(site_data_validate.hardcoded_site_claim_errors(documents), [])
+
+    def test_validator_scans_both_site_contract_files(self) -> None:
+        self.assertEqual(
+            set(site_data_validate.HARDCODED_CLAIM_SURFACES),
+            {self.CONTENT, self.CATALOG},
+        )
+
+    def test_injected_test_count_is_rejected(self) -> None:
+        overview = self.mutable["content"]["home"]["overview"]
+        overview["copy"] = f"{overview['copy']} It ships 7329 tests."
+        self.assert_rejected(self.mutable, "content.json.home.overview.copy: hardcoded count claim '7329 tests'")
+
+    def test_injected_full_commit_sha_is_rejected(self) -> None:
+        sha = "3f9c2d1e4b5a69788796a5b4c3d2e1f0a9b8c7d6"
+        self.mutable["content"]["links"]["actions"] = f"https://github.com/Krilliac/SparkEngine/commit/{sha}"
+        self.assert_rejected(self.mutable, f"hardcoded commit SHA '{sha}'")
+
+    def test_injected_catalog_literal_is_rejected(self) -> None:
+        section = self.mutable["docsCatalog"]["sections"][0]
+        section["description"] = f"{section['description']} Covers 2,509 files."
+        self.assert_rejected(self.mutable, "docs-catalog.json.sections[0].description: hardcoded count claim")
+
+    def test_a_reviewed_public_numeric_entry_is_not_a_waiver(self) -> None:
+        overview = self.mutable["content"]["home"]["overview"]
+        overview["copy"] = f"{overview['copy']} It has 64 panels."
+        self.mutable["readiness"]["publicNumericClaims"].append(
+            {
+                "surface": self.CONTENT,
+                "text": "64 panels",
+                "classification": "historical",
+                "owner": "docs",
+            }
+        )
+        self.assert_rejected(self.mutable, "hardcoded count claim '64 panels'")
+
+    def test_each_mutable_claim_kind_is_rejected(self) -> None:
+        cases = {
+            "0123abc": "commit SHA",
+            "see https://github.com/o/r/actions/runs/1234567890 for proof": "CI run ID",
+            "run 17654321098 passed": "CI run ID",
+            "SparkEngine 1.4.0 is out": "version string",
+            "1.0.0-rc.1": "version string",
+            "tagged v2.1": "version string",
+            "12 source files": "count claim",
+            "~3,000 lines": "count claim",
+        }
+        for text, kind in cases.items():
+            with self.subTest(text=text):
+                errors = self.errors_for([text])
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(f"hardcoded {kind}", errors[0])
+
+    def test_stable_facts_are_not_mistaken_for_claims(self) -> None:
+        stable = [
+            "CMake 3.25+ \u00b7 C++23 \u00b7 recursive submodules",
+            "D3D11 client on Windows 11 x64",
+            'cmake -G "Visual Studio 17 2022"',
+            "stable-v1",
+            "listen on 127.0.0.1 port 7777",
+            "latest.json under 32 KiB",
+            "a defaced facade",
+            "https://discord.gg/cuJv5uWA5V",
+            "Spark Open License 1.0",
+            "\u00a9 2024\u20132026 Krilliac.",
+        ]
+        self.assertEqual(self.errors_for(stable), [])
 
 
 class PublishedMetricTests(unittest.TestCase):

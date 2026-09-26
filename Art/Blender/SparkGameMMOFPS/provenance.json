@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameMMOFPS",
+  "author_script": {
+    "path": "tools/blender/author_mmofps_kit.py",
+    "sha256": "4cfebeee062383494087a390dd16804d8ddcaf146b7c54782c6f5e095c1409b1"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameMMOFPS/mmofps_kit.blend",
+    "sha256": "4cdaf8ca419139c0ac1f3165d8b7c5ce03ea529db10310ae3b2dbf82e0698195",
+    "scene_sha256": "1611e3add5b56944b4611667bed0ed4ec365c74d7c7affec1f961ed4559e2073"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "supply_drop_pod",
+      "obj_path": "Assets/Models/MMOFPS/Kit/supply_drop_pod.obj",
+      "mtl_path": "Assets/Models/MMOFPS/Kit/supply_drop_pod.mtl",
+      "bounds": {
+        "min": [
+          -0.7,
+          -0.0,
+          -0.7
+        ],
+        "max": [
+          0.7,
+          2.4,
+          0.7
+        ]
+      },
+      "triangle_count": 1036,
+      "obj_sha256": "c2f29676190b33ac85fd8ab9dcf41a5e606a7c02938e156443e37b12e572d8c4",
+      "mtl_sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "triangle_budget": 2200,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/MMOFPS/Kit/supply_drop_pod_lod1.obj",
+          "mtl_path": "Assets/Models/MMOFPS/Kit/supply_drop_pod_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.689905,
+              -0.004,
+              -0.691793
+            ],
+            "max": [
+              0.692607,
+              2.4,
+              0.691793
+            ]
+          },
+          "triangle_count": 352,
+          "obj_sha256": "1357e9eec59a9a73ba78e65de2916ba5e2b1345184d8f94b313d4ff6597db228",
+          "mtl_sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+          "decimate_ratio": 0.34
+        },
+        "collision": {
+          "obj_path": "Assets/Models/MMOFPS/Kit/supply_drop_pod_collision.obj",
+          "mtl_path": "Assets/Models/MMOFPS/Kit/supply_drop_pod_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.7001,
+              -0.0,
+              -0.700101
+            ],
+            "max": [
+              0.7001,
+              2.4,
+              0.7001
+            ]
+          },
+          "triangle_count": 180,
+          "obj_sha256": "39634f2e65df96a1b5e86a268f439ca74229f4bf98d4aa007a29c0f0fa3bd50b",
+          "mtl_sha256": "c557449d5bf777b0ab07161d236ecfd794278347d4cee59d052b96d19cefe2dc",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "deployable_barricade",
+      "obj_path": "Assets/Models/MMOFPS/Kit/deployable_barricade.obj",
+      "mtl_path": "Assets/Models/MMOFPS/Kit/deployable_barricade.mtl",
+      "bounds": {
+        "min": [
+          -1.2,
+          0.0,
+          -0.64
+        ],
+        "max": [
+          1.2,
+          1.2,
+          0.23
+        ]
+      },
+      "triangle_count": 748,
+      "obj_sha256": "1c12a7514c1e98dc31913829f9123e3bd4fe337ba5ff60e88e807723463fe58c",
+      "mtl_sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "triangle_budget": 1200,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/MMOFPS/Kit/deployable_barricade_lod1.obj",
+          "mtl_path": "Assets/Models/MMOFPS/Kit/deployable_barricade_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.204737,
+              0.0,
+              -0.638801
+            ],
+            "max": [
+              1.204737,
+              1.186098,
+              0.234737
+            ]
+          },
+          "triangle_count": 254,
+          "obj_sha256": "0afbe34e0d13a32166f6623389d9230bbfe0ea6d437b6b1b2832ebdea3593e41",
+          "mtl_sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+          "decimate_ratio": 0.34
+        },
+        "collision": {
+          "obj_path": "Assets/Models/MMOFPS/Kit/deployable_barricade_collision.obj",
+          "mtl_path": "Assets/Models/MMOFPS/Kit/deployable_barricade_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.2,
+              0.0,
+              -0.64
+            ],
+            "max": [
+              1.2,
+              1.2,
+              0.23
+            ]
+          },
+          "triangle_count": 84,
+          "obj_sha256": "8762651f1d6c13c446865d2ae64a9aa76774271d6a5a305fac3b8d920efe7353",
+          "mtl_sha256": "c557449d5bf777b0ab07161d236ecfd794278347d4cee59d052b96d19cefe2dc",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "comms_relay",
+      "obj_path": "Assets/Models/MMOFPS/Kit/comms_relay.obj",
+      "mtl_path": "Assets/Models/MMOFPS/Kit/comms_relay.mtl",
+      "bounds": {
+        "min": [
+          -0.892724,
+          0.0,
+          -0.545
+        ],
+        "max": [
+          0.892724,
+          3.505,
+          1.02
+        ]
+      },
+      "triangle_count": 880,
+      "obj_sha256": "0cf677e573e3542bffc160151019431a0bcc3150dd6d64bfadf0aa9fd2262064",
+      "mtl_sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "triangle_budget": 1800,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/MMOFPS/Kit/comms_relay_lod1.obj",
+          "mtl_path": "Assets/Models/MMOFPS/Kit/comms_relay_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.892416,
+              0.005624,
+              -0.544588
+            ],
+            "max": [
+              0.892416,
+              3.500834,
+              1.019588
+            ]
+          },
+          "triangle_count": 298,
+          "obj_sha256": "0c7fd37cd33c1ebac5e7f7d2236c8f0bd55be27cb0b9616070bdfc16173e6a50",
+          "mtl_sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+          "decimate_ratio": 0.34
+        },
+        "collision": {
+          "obj_path": "Assets/Models/MMOFPS/Kit/comms_relay_collision.obj",
+          "mtl_path": "Assets/Models/MMOFPS/Kit/comms_relay_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.892724,
+              0.0,
+              -0.545
+            ],
+            "max": [
+              0.892724,
+              3.505,
+              1.02
+            ]
+          },
+          "triangle_count": 94,
+          "obj_sha256": "0cc9dfcb6c89da713ad19ec79ffb9adacfb4aa680c545eb7abe19ef2b5484bf8",
+          "mtl_sha256": "c557449d5bf777b0ab07161d236ecfd794278347d4cee59d052b96d19cefe2dc",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "vehicle_pad",
+      "obj_path": "Assets/Models/MMOFPS/Kit/vehicle_pad.obj",
+      "mtl_path": "Assets/Models/MMOFPS/Kit/vehicle_pad.mtl",
+      "bounds": {
+        "min": [
+          -3.0,
+          0.0,
+          -3.0
+        ],
+        "max": [
+          3.0,
+          0.175,
+          3.0
+        ]
+      },
+      "triangle_count": 276,
+      "obj_sha256": "96544a14220edfdc76ddf189c6774eca5aad3d08b674e1b7719c9a6ed9300da6",
+      "mtl_sha256": "8f2f5294444886d69051b4ef1f7e2c1996af1049c5962ca5ef738d3bf2f3667b",
+      "triangle_budget": 900,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/MMOFPS/Kit/vehicle_pad_lod1.obj",
+          "mtl_path": "Assets/Models/MMOFPS/Kit/vehicle_pad_lod1.mtl",
+          "bounds": {
+            "min": [
+              -2.998769,
+              0.0,
+              -3.006316
+            ],
+            "max": [
+              2.998769,
+              0.175,
+              3.006316
+            ]
+          },
+          "triangle_count": 84,
+          "obj_sha256": "a8c8fe017aac33322c0142a6426ce3a5ed46ce123fb7b9de47e882e0682f0a14",
+          "mtl_sha256": "8f2f5294444886d69051b4ef1f7e2c1996af1049c5962ca5ef738d3bf2f3667b",
+          "decimate_ratio": 0.34
+        },
+        "collision": {
+          "obj_path": "Assets/Models/MMOFPS/Kit/vehicle_pad_collision.obj",
+          "mtl_path": "Assets/Models/MMOFPS/Kit/vehicle_pad_collision.mtl",
+          "bounds": {
+            "min": [
+              -3.0,
+              0.0,
+              -3.0
+            ],
+            "max": [
+              3.0,
+              0.175,
+              3.0
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "58709589f30478943da8fc68f7138e56923f8d386bf2d3c914645fd444f2a78d",
+          "mtl_sha256": "c557449d5bf777b0ab07161d236ecfd794278347d4cee59d052b96d19cefe2dc",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

@@ -42,7 +42,7 @@ This page records source presence and implementation maturity only. An **Impleme
 | Mesh Shaders | Experimental | Meshlet pipeline, requires SM 6.5 / D3D12 |
 | Virtual Texturing | **Implemented** | Feedback-driven page streaming, LRU cache |
 | DXR Ray Tracing | Experimental | Reflections, shadows, AO, GI, denoising |
-| Shader Graph | **Implemented** | 35+ nodes, HLSL generation, live preview |
+| Shader Graph | **Implemented** | 34 node types, HLSL generation, live preview |
 | Cluster-Based LOD | **Implemented** | DAG hierarchy, screen-space error traversal |
 | FSR Upscaling | Experimental | AMD FidelityFX Super Resolution |
 

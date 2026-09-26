@@ -4,6 +4,10 @@ A C++23 source-available 3D game engine with multiple graphics backends behind a
 
 Website: [sparkengine.dev](https://sparkengine.dev/)
 
+[![Explore the engine in 3D](https://img.shields.io/badge/Explore-the_engine_in_3D-8a2be2?style=for-the-badge&logo=threedotjs&logoColor=white)](https://krilliac.github.io/SparkEngine/)
+
+The **Code City** is an interactive 3D map of the source tree: every source file is a building sized by its line count, grouped into subsystem districts, with include-dependency arcs, recent churn and readiness work-item overlays. It is regenerated from `Working` by the `Code City Pages` workflow and is a visualization, not readiness evidence. To build it locally: `python3 tools/architecture-viz/generate_code_city.py`, then open `build/code-city/index.html`.
+
 [![Trusted exact-source CI](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml?query=branch%3AWorking)
 [![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
 [![C++ lines of code](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Floc.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
@@ -57,8 +61,9 @@ cmake --build --preset windows-release
 ./build.sh release
 ```
 
-Visual Studio and Ninja Multi-Config builds keep binaries isolated under
-`build/bin/<Config>` (for example, `build/bin/Release/SparkEditor.exe`).
+Each preset builds into `build/<preset>`; Visual Studio and Ninja Multi-Config builds keep
+binaries isolated under `bin/<Config>` there (for example,
+`build/windows-release/bin/Release/SparkEditor.exe`).
 
 Requirements: MSVC 19.36+ / GCC 13+ / Clang 17+, CMake 3.25+.  
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
@@ -66,7 +71,9 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
 **Create a game module:**
 
 ```bash
-cmake --install build --prefix ~/SparkEngine-install
+# Install the engine you built above (pick the line for your build path)
+cmake --install build/windows-release --config Release --prefix ~/SparkEngine-install  # Windows preset
+cmake --install build --prefix ~/SparkEngine-install                                   # ./generate.sh + ./build.sh
 cp -r Templates/EmptyProject MyGame && cd MyGame
 cmake -B build -DCMAKE_PREFIX_PATH=~/SparkEngine-install
 cmake --build build --config Release
@@ -174,7 +181,7 @@ The active backend selection is XAudio2 on Windows or OpenAL on non-Windows host
 
 - **AngelScript** — hot-reload via file watcher, bindings for selected engine APIs, per-file module isolation, client/server context separation
 - **Visual scripting** — 64 node palette entries across 9 categories, compiles to AngelScript and uses the existing script runtime
-- **Shader Graph** — 35+ nodes, HLSL generation, live preview
+- **Shader Graph** — 34 node types, HLSL generation, live preview
 
 ### AI and Navigation
 
@@ -214,7 +221,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 7,567 test definitions across 632 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 7,680 test definitions across 650 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and the other engine subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -359,7 +366,7 @@ uncertified.
 | [Versioned Plugin ABI](docs/guides/plugin-abi.md) | Versioned C plugin boundary, sidecar integrity, tasks, and hot reload |
 | [Game Module Guide](Templates/README.md) | Building standalone games with the SDK |
 | [Networking Config](wiki/subsystems/Networking.md) | UDP, replication, MMO server setup |
-| [Wiki](wiki/) | 202 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
+| [Wiki](wiki/) | 203 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
 
 ---
 
@@ -383,8 +390,8 @@ SparkEngine/
 ├── SparkEditor/Source/    64 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 7,567 test definitions, 632 files
-├── wiki/                  202 Markdown pages excluding _Sidebar.md (inventory only)
+├── Tests/                 7,680 test definitions, 650 files
+├── wiki/                  203 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```
 

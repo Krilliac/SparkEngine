@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameMMO",
+  "cmakeTarget": "SparkGameMMO",
+  "sourceDirectory": "GameModules/SparkGameMMO/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/MMO",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Textures/MMO",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/MMO",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Materials/MMO",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Scenes/MMO",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestGameModuleMMO.cpp",
+      "Tests/TestMMOCredentialSecurity.cpp",
+      "Tests/harden/Test_gamemodules_mmochat_di.cpp"
+    ],
+    "prefixes": [
+      {
+        "prefix": "MMO_",
+        "count": 37
+      },
+      {
+        "prefix": "MMOCredentials_",
+        "count": 3
+      }
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameMMO/README.md"
+  },
+  "parity": {
+    "notApplicable": []
+  }
+}

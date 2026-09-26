@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameFPS",
+  "cmakeTarget": "SparkGameFPS",
+  "sourceDirectory": "GameModules/SparkGameFPS/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Models/FPS",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Scenes",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestSparkGameFPSLoopReal.cpp",
+      "Tests/TestMOD310FPSSceneReloadRespawnReal.cpp",
+      "Tests/TestFPSGameplayIntegration.cpp",
+      "Tests/TestGameModeReal.cpp",
+      "Tests/TestFPSMultiplayer.cpp",
+      "Tests/TestFPSWeatherPort.cpp"
+    ],
+    "prefixes": [
+      {
+        "prefix": "FPSAssets_",
+        "count": 6
+      },
+      {
+        "prefix": "FPSLocalProfile_",
+        "count": 7
+      },
+      {
+        "prefix": "FPSProgression_",
+        "count": 3
+      },
+      {
+        "prefix": "FPSRespawn_",
+        "count": 10
+      },
+      {
+        "prefix": "FPSScene_",
+        "count": {
+          "windows": 6,
+          "other": 5
+        }
+      },
+      {
+        "prefix": "FPSStateRules_",
+        "count": 3
+      },
+      {
+        "prefix": "FPSInteg_",
+        "count": 17
+      },
+      {
+        "prefix": "GameModeReal_",
+        "count": 11
+      },
+      {
+        "prefix": "FPSMultiplayer_",
+        "count": 3
+      },
+      {
+        "prefix": "FPSMultiplayerProduction_",
+        "count": 12
+      },
+      {
+        "prefix": "FPSWeatherPort_",
+        "count": 4
+      },
+      {
+        "prefix": "FPSWeatherIntegration_",
+        "count": 2
+      }
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameFPS/README.md"
+  },
+  "parity": {
+    "notApplicable": []
+  }
+}

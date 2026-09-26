@@ -343,11 +343,13 @@ namespace Spark::Core::Lifecycle
     // Debug system lifecycle
     // ============================================================================
 
-    void InitializeDebugSystemsImpl()
+    bool InitializeDebugSystemsImpl()
     {
+#if SPARK_DEBUG_HOOKS_ENABLED
         // Initialize the debug hook manager first so subsequent inits can be observed
         Spark::DebugHookManager::GetInstance().SetEnabled(true);
         SPARK_DEBUG_HOOK(EnginePreInit, 0, 0.0f);
+#endif
 
         // Initialize the unified Logger and install the engine's standard sink set
         // (stderr + rotating per-user log file + SparkConsole bridge). Platform entry
@@ -449,6 +451,10 @@ namespace Spark::Core::Lifecycle
 
         // Register default weapon definitions
         Spark::Gameplay::WeaponRegistry::GetInstance().RegisterDefaults();
+
+        // Every diagnostic above is optional: a detector that cannot start leaves
+        // the engine runnable, so none of them fails startup.
+        return true;
     }
 
     // ============================================================================
@@ -817,16 +823,19 @@ namespace Spark::Core::Lifecycle
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "ScriptingAndPlatform", 0.0);
     }
 
-    void InitializeNetworkingSystemsImpl()
+    bool InitializeNetworkingSystemsImpl()
     {
         auto* ctx = EngineContext::Get();
         if (!ctx)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — networking init skipped");
-            return;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — networking lifecycle cannot initialize");
+            return false;
         }
 
+        // A network service that fails to start is logged and tolerated (offline
+        // play remains valid); only a missing EngineContext is fatal.
         InitNetworkingLifecycle(ctx);
+        return true;
     }
 
     Spark::ECS::PhaseSystemManager& GetPhaseSystemManagerImpl()
@@ -852,13 +861,13 @@ namespace Spark::Core::Lifecycle
                        GetPhaseSystemManagerImpl().GetSystemCount());
     }
 
-    void InitializeGameplaySystemsImpl()
+    bool InitializeGameplaySystemsImpl()
     {
         auto* ctx = EngineContext::Get();
         if (!ctx)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — all gameplay systems skipped");
-            return;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — gameplay systems cannot initialize");
+            return false;
         }
 
         InitCoreGameplaySystems(ctx);
@@ -884,6 +893,7 @@ namespace Spark::Core::Lifecycle
         // reads from the context (physics, audio, graphics) are all set.
         // UpdateGameplaySystemsImpl pumps UpdateAll on this manager each frame.
         InitializeEcsPhaseSystemsImpl();
+        return true;
     }
 
     // ============================================================================
@@ -1332,9 +1342,11 @@ namespace Spark::Core::Lifecycle
             return;
 
         ++g_frameCounter;
+#if SPARK_DEBUG_HOOKS_ENABLED
         auto& debugHooks = Spark::DebugHookManager::GetInstance();
         debugHooks.SetFrameNumber(g_frameCounter);
         debugHooks.SetDeltaTime(dt);
+#endif
 
         // Update fault isolation auto-recovery (re-enables subsystems after cooldown)
         static float s_engineTime = 0.0f;

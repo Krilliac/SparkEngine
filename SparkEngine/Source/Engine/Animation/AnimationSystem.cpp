@@ -12,6 +12,11 @@
 #include "../../Core/Platform.h"
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/Validate.h"
+#include "../../Graphics/GLTFAnimationLoader.h"
+#include "../../Graphics/GLTFSkinnedMeshLoader.h"
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <sstream>
 #include <cmath>
 #include <fstream>
@@ -42,6 +47,15 @@ namespace Spark::Animation
             }
             return true;
         }
+
+        /// .gltf and .glb go through the fail-closed glTF importers instead of the engine binary readers.
+        bool IsGLTFPath(const std::string& filepath)
+        {
+            std::string extension = std::filesystem::path(filepath).extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return extension == ".gltf" || extension == ".glb";
+        }
     } // namespace
 
     // ============================================================================
@@ -62,6 +76,26 @@ namespace Spark::Animation
 
         auto skeleton = std::make_shared<Skeleton>();
         skeleton->name = filepath;
+
+        if (IsGLTFPath(filepath))
+        {
+            // The skin is read through the same validation as the skinned mesh, so a skeleton is
+            // only accepted from a file whose geometry and weights would also import.
+            Spark::Graphics::Detail::GLTFSkinnedMeshData imported;
+            std::string error;
+            if (!Spark::Graphics::Detail::LoadGLTFSkinnedMesh(filepath, imported, error))
+            {
+                SPARK_LOG_ERROR(LogCategory::Animation, "Failed to load glTF skeleton '%s': %s; result is not cached",
+                                filepath.c_str(), error.c_str());
+                return skeleton;
+            }
+            *skeleton = std::move(imported.skeleton);
+            skeleton->name = filepath;
+            m_skeletons[filepath] = skeleton;
+            SPARK_LOG_INFO(LogCategory::Animation, "Loaded glTF skeleton '%s' (%zu bones)", filepath.c_str(),
+                           skeleton->bones.size());
+            return skeleton;
+        }
 
         // Set by every abort path below. A failed load must not be reported as a
         // success and must not be memoised: caching it would make a later repaired
@@ -209,6 +243,27 @@ namespace Spark::Animation
     std::vector<std::shared_ptr<AnimationClip>> AnimationManager::LoadAnimations(const std::string& filepath)
     {
         std::vector<std::shared_ptr<AnimationClip>> clips;
+
+        if (IsGLTFPath(filepath))
+        {
+            std::vector<AnimationClip> imported;
+            std::string error;
+            if (!Spark::Graphics::Detail::LoadGLTFAnimationClips(filepath, imported, error))
+            {
+                SPARK_LOG_ERROR(LogCategory::Animation,
+                                "Failed to load glTF animations from '%s': %s; no clips returned", filepath.c_str(),
+                                error.c_str());
+                return clips;
+            }
+            clips.reserve(imported.size());
+            for (AnimationClip& clip : imported)
+            {
+                clips.push_back(std::make_shared<AnimationClip>(std::move(clip)));
+            }
+            SPARK_LOG_INFO(LogCategory::Animation, "Loaded %zu glTF animation clips from '%s'", clips.size(),
+                           filepath.c_str());
+            return clips;
+        }
 
         // Parse animation clips from Spark Engine binary animation format (.sanim)
         // Format: [magic:4][version:4][clipCount:4] then per clip:

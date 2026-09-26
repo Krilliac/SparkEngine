@@ -16,7 +16,7 @@ on:
       - "Tests/Tools/test_publish_wiki.py"
       - ".github/workflows/publish-wiki.yml"
   pull_request:
-    branches: [Working]
+    branches: [Working, 'claude/**']
     paths:
       - "wiki/**"
       - "docs/**"

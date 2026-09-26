@@ -11,6 +11,8 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <string>
 
 // ---------------------------------------------------------------------------
 // Default values
@@ -66,7 +68,6 @@ TEST(EngineSettingsReal_NetworkDefaults)
     EXPECT_EQ(settings.Network().maxClients, 32);
     EXPECT_NEAR(settings.Network().connectionTimeout, 10.0f, 0.001f);
     EXPECT_FALSE(settings.Network().enableCompression);
-    EXPECT_FALSE(settings.Network().enableEncryption);
 }
 
 TEST(EngineSettingsReal_PlayerDefaults)
@@ -273,6 +274,83 @@ TEST(EngineSettingsReal_LoadAndSaveFailuresAreTruthfulAndTransactional)
     EXPECT_TRUE(fs::create_directory(directoryTarget));
     EXPECT_FALSE(settings.SaveAs(directoryTarget.string()));
     EXPECT_EQ(settings.Graphics().windowWidth, 1700);
+
+    fs::remove_all(testRoot, error);
+    settings.ResetToDefaults();
+}
+
+// ---------------------------------------------------------------------------
+// OPS-100: retired crash-transport credentials must not survive a load/save
+// ---------------------------------------------------------------------------
+
+TEST(CrashSettings_RetiredTransportCredentialsAreDroppedOnLoadAndNeverWritten)
+{
+    namespace fs = std::filesystem;
+    const fs::path testRoot = fs::temp_directory_path() / "spark_engine_settings_ops100_credentials";
+    std::error_code error;
+    fs::remove_all(testRoot, error);
+    EXPECT_TRUE(fs::create_directories(testRoot));
+
+    // An install that predates the removal of the in-process uploader: both
+    // spellings the engine ever shipped, plus a secret only in the gitignored
+    // local override file (which is merged into the main config on load).
+    const fs::path settingsPath = testRoot / "settings.ini";
+    {
+        std::ofstream file(settingsPath);
+        file << "[CrashReporting]\n"
+                "Enabled = true\n"
+                "CaptureScreenshot = false\n"
+                "UploadURL = https://user:upload-secret@crash.example.invalid/capability\n"
+                "ProxyURL = https://relay.example.invalid/proxy-capability\n"
+                "GitHubRepo = owner/repo\n"
+                "GitHubToken = ghp_legacyTokenValue0123456789\n"
+                "GithubToken = ghp_reflectedTokenValue0123456789\n"
+                "GitHubLabels = crash-report\n"
+                "AttachDump = true\n"
+                "TimeoutSeconds = 5\n"
+                "SmtpUser = someone@example.invalid\n"
+                "SmtpPass = smtp-main-password\n"
+                "EmailTo = someone@example.invalid\n"
+                "EmailFrom = crashreporter@sparkengine.dev\n";
+    }
+    {
+        std::ofstream localFile(testRoot / "settings.local.ini");
+        localFile << "[CrashReporting]\nSMTPPASS = smtp-local-password\n";
+    }
+
+    auto& settings = EngineSettings::GetInstance();
+    EXPECT_TRUE(settings.Load(settingsPath.string()));
+
+    // Non-credential settings in the same section still apply.
+    EXPECT_TRUE(settings.CrashReporting().enabled);
+    EXPECT_FALSE(settings.CrashReporting().captureScreenshot);
+
+    // The retired keys are gone from the live config, whatever their casing.
+    for (const char* key : {"UploadURL", "ProxyURL", "GitHubRepo", "GitHubToken", "GithubToken", "GitHubLabels",
+                            "AttachDump", "TimeoutSeconds", "SmtpUser", "SmtpPass", "SMTPPASS", "EmailTo", "EmailFrom"})
+    {
+        EXPECT_TRUE(settings.GetValue("CrashReporting", key).empty());
+    }
+
+    // A later save must not write any of them back to disk.
+    EXPECT_TRUE(settings.Save());
+    std::string written;
+    {
+        std::ifstream file(settingsPath, std::ios::binary);
+        written.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    }
+    EXPECT_FALSE(written.empty());
+    for (const char* secret : {"ghp_", "upload-secret", "proxy-capability", "smtp-main-password", "smtp-local-password",
+                               "someone@example.invalid"})
+    {
+        EXPECT_TRUE(written.find(secret) == std::string::npos);
+    }
+    for (const char* retiredKey :
+         {"UploadURL", "ProxyURL", "GitHubToken", "GithubToken", "SmtpPass", "SmtpUser", "EmailTo", "TimeoutSeconds"})
+    {
+        EXPECT_TRUE(written.find(retiredKey) == std::string::npos);
+    }
+    EXPECT_TRUE(written.find("CaptureScreenshot") != std::string::npos);
 
     fs::remove_all(testRoot, error);
     settings.ResetToDefaults();

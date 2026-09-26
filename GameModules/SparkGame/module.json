@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGame",
+  "cmakeTarget": "SparkGame",
+  "sourceDirectory": "GameModules/SparkGame/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/Showcase",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestModuleABI.cpp"
+    ],
+    "prefixes": [
+      {
+        "prefix": "ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload",
+        "count": 1
+      }
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGame/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

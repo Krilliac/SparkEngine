@@ -9,6 +9,7 @@
 #include "Command/RTSCommandSystem.h"
 #include "FogOfWar/RTSFogOfWarSystem.h"
 #include "Match/RTSMatchSystem.h"
+#include "Navigation/RTSGridPathfinder.h"
 #include "Resource/RTSResourceSystem.h"
 #include "Unit/RTSUnitSystem.h"
 
@@ -19,6 +20,9 @@
 
 namespace RTS
 {
+    static_assert(RTSSkirmishSimulation::MAP_SIZE == RTSGridPathfinder::GRID_SIZE,
+                  "move orders are planned on the skirmish map grid");
+
     namespace
     {
         /// Buildings are hit from anywhere on their footprint, not only their centre point.
@@ -167,7 +171,7 @@ namespace RTS
         match->Shutdown();
 
         if (!units->Initialize(m_context) || !resources->Initialize(m_context, units) ||
-            !buildings->Initialize(m_context, units, resources) || !commands->Initialize(m_context, units) ||
+            !buildings->Initialize(m_context, units, resources) || !commands->Initialize(m_context, units, buildings) ||
             !fog->Initialize(m_context, MAP_SIZE, MAP_SIZE) || !match->Initialize(m_context))
         {
             return false;
@@ -266,6 +270,12 @@ namespace RTS
     {
         m_accumulatedSeconds = 0.0;
         m_tick = 0;
+    }
+
+    void RTSSkirmishSimulation::RestoreClock(uint64_t tick)
+    {
+        m_accumulatedSeconds = 0.0;
+        m_tick = tick;
     }
 
     uint64_t RTSSkirmishSimulation::GetTick() const
@@ -441,15 +451,21 @@ namespace RTS
 
         hash.U8(static_cast<uint8_t>(match->GetMatchState()));
         hash.F32(match->GetMatchTime());
+        hash.U8(static_cast<uint8_t>(match->HasWinner()));
+        hash.U8(static_cast<uint8_t>(match->GetWinner()));
+        hash.I32(match->GetPlayerCount());
         for (int playerIndex = 0; playerIndex < match->GetPlayerCount(); ++playerIndex)
         {
             const PlayerSetup* player = match->GetPlayer(playerIndex);
             hash.U8(static_cast<uint8_t>(player->faction));
+            hash.F32(player->startX);
+            hash.F32(player->startY);
+            hash.U8(static_cast<uint8_t>(player->isAI));
+            hash.U8(static_cast<uint8_t>(player->hasSurrendered));
             hash.U8(static_cast<uint8_t>(player->isEliminated));
         }
-        if (match->GetMatchState() == RTSMatchState::Victory || match->GetMatchState() == RTSMatchState::Defeat)
-            hash.U8(static_cast<uint8_t>(match->GetWinner()));
 
+        hash.U32(units->GetNextUnitId());
         for (uint32_t unitId : AllUnitIds(*units))
         {
             const UnitData* unit = units->GetUnit(unitId);
@@ -458,19 +474,41 @@ namespace RTS
             hash.U8(static_cast<uint8_t>(unit->faction));
             hash.U8(static_cast<uint8_t>(unit->state));
             hash.F32(unit->health);
+            hash.F32(unit->maxHealth);
+            hash.F32(unit->damage);
+            hash.F32(unit->attackSpeed);
+            hash.F32(unit->moveSpeed);
+            hash.F32(unit->visionRange);
             hash.F32(unit->posX);
             hash.F32(unit->posY);
             hash.U32(unit->targetId);
-            if (const UnitCommand* command = commands->GetCurrentCommand(unitId))
+        }
+
+        // Every queued order, including queues of units killed this tick that the next Update prunes.
+        hash.U64(commands->GetCommandQueues().size());
+        for (const auto& [unitId, queue] : commands->GetCommandQueues())
+        {
+            hash.U32(unitId);
+            hash.U64(queue.size());
+            for (const UnitCommand& command : queue)
             {
-                hash.U8(static_cast<uint8_t>(command->type));
-                hash.F32(command->targetX);
-                hash.F32(command->targetY);
-                hash.U32(command->targetEntity);
+                hash.U8(static_cast<uint8_t>(command.type));
+                hash.F32(command.targetX);
+                hash.F32(command.targetY);
+                hash.U32(command.targetEntity);
+                hash.U64(command.path.size());
+                for (const RTSWaypoint& waypoint : command.path)
+                {
+                    hash.F32(waypoint.x);
+                    hash.F32(waypoint.y);
+                }
             }
         }
-        hash.U64(commands->GetPendingCommandCount());
+        hash.U64(commands->GetSelection().size());
+        for (uint32_t unitId : commands->GetSelection())
+            hash.U32(unitId);
 
+        hash.U32(buildings->GetNextBuildingId());
         for (uint32_t buildingId : AllBuildingIds(*buildings))
         {
             const BuildingData* building = buildings->GetBuilding(buildingId);
@@ -478,12 +516,18 @@ namespace RTS
             hash.U8(static_cast<uint8_t>(building->type));
             hash.U8(static_cast<uint8_t>(building->faction));
             hash.F32(building->health);
+            hash.F32(building->maxHealth);
+            hash.F32(building->posX);
+            hash.F32(building->posY);
             hash.U8(static_cast<uint8_t>(building->constructionComplete));
             hash.F32(building->constructionProgress);
+            hash.F32(building->constructionTime);
+            hash.U64(building->productionQueue.size());
             for (const ProductionEntry& entry : building->productionQueue)
             {
                 hash.U8(static_cast<uint8_t>(entry.unitType));
                 hash.F32(entry.timeRemaining);
+                hash.F32(entry.totalTime);
             }
         }
 
@@ -492,6 +536,7 @@ namespace RTS
             const auto faction = static_cast<RTSFaction>(factionIndex);
             if (const PlayerResources* player = resources->GetPlayerResources(faction))
             {
+                hash.U8(static_cast<uint8_t>(faction));
                 hash.I32(player->minerals);
                 hash.I32(player->gas);
                 hash.I32(player->currentSupply);
@@ -499,15 +544,24 @@ namespace RTS
             }
             if (const FogGrid* grid = fog->GetGrid(faction))
             {
+                hash.I32(grid->width);
+                hash.I32(grid->height);
                 for (RTSVisibility cell : grid->cells)
                     hash.U8(static_cast<uint8_t>(cell));
             }
         }
 
+        hash.U32(resources->GetNextNodeId());
+        hash.F32(resources->GetGatherTimer());
         for (const auto& [nodeId, node] : resources->GetNodes())
         {
             hash.U32(nodeId);
+            hash.U8(static_cast<uint8_t>(node.type));
+            hash.F32(node.posX);
+            hash.F32(node.posY);
             hash.I32(node.remaining);
+            hash.I32(node.maxWorkers);
+            hash.U64(node.assignedWorkers.size());
             for (uint32_t workerId : node.assignedWorkers)
                 hash.U32(workerId);
         }

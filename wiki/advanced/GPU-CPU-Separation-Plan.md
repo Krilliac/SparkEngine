@@ -65,8 +65,8 @@ The per-platform split remains the enabler for backend-specific companions such 
 
 ## Verification (per phase)
 
-1. `cmake --preset linux-gcc-release && cmake --build build --config Release`
-2. `cd build && ctest --output-on-failure --no-tests=error`
+1. `cmake --preset linux-gcc-release && cmake --build build/linux-gcc-release`
+2. `ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error`
 3. `tools/validate-all.sh --warn-only`
 4. `clang-format -i` on modified files
 

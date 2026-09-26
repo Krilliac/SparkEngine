@@ -262,6 +262,44 @@ namespace ARPG
         return boss;
     }
 
+    bool ARPGMonsterSystem::IsRestorableMonster(const MonsterData& monster)
+    {
+        if (monster.name.empty() || monster.rank >= ARPGMonsterRank::Count ||
+            monster.damageType >= ARPGDamageType::Count || monster.level < 1 || monster.level > 1000 ||
+            !std::isfinite(monster.health) || !std::isfinite(monster.maxHealth) || !std::isfinite(monster.damage) ||
+            !std::isfinite(monster.moveSpeed) || !std::isfinite(monster.xpReward) ||
+            !std::isfinite(monster.lootChance) || monster.maxHealth <= 0.0f || monster.health <= 0.0f ||
+            monster.health > monster.maxHealth || monster.damage < 0.0f || monster.moveSpeed < 0.0f ||
+            monster.xpReward < 0.0f || monster.lootChance < 0.0f || monster.lootChance > 1.0f ||
+            monster.affixes.size() > static_cast<size_t>(ChampionAffix::Count))
+            return false;
+
+        for (size_t i = 0; i < monster.affixes.size(); ++i)
+        {
+            if (monster.affixes[i] >= ChampionAffix::Count)
+                return false;
+            for (size_t j = i + 1; j < monster.affixes.size(); ++j)
+            {
+                if (monster.affixes[i] == monster.affixes[j])
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    uint32_t ARPGMonsterSystem::RestoreMonster(const MonsterData& monster)
+    {
+        if (!IsRestorableMonster(monster))
+            return 0;
+
+        MonsterData restored = monster;
+        restored.monsterId = m_nextMonsterId++;
+        m_activeMonsters.push_back(restored);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG monster restored: %s (level %d, rank %d)",
+                        restored.name.c_str(), restored.level, static_cast<int>(restored.rank));
+        return restored.monsterId;
+    }
+
     MonsterData* ARPGMonsterSystem::GetMonster(uint32_t monsterId)
     {
         const auto it =

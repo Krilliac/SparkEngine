@@ -85,9 +85,9 @@ are rejected before dispatch.
 
 | Type | Value | Direction | Payload | Description |
 |------|-------|-----------|---------|-------------|
-| `Connect` | 1 | C→S | Client info (version, name) | Connection request |
-| `ConnectAccepted` | 2 | S→C | Assigned ClientID, server time | Connection accepted |
-| `ConnectRejected` | 3 | S→C | Rejection reason (string) | Connection denied |
+| `Connect` | 1 | C→S | Handshake magic, protocol version, name | Connection request |
+| `ConnectAccepted` | 2 | S→C | Assigned ClientID, server time, echoed protocol version | Connection accepted |
+| `ConnectRejected` | 3 | S→C | Reason text, typed reason code, server protocol version | Connection denied |
 | `Disconnect` | 4 | Both | None | Clean disconnect |
 | `Heartbeat` | 5 | Both | None | Keep-alive ping |
 
@@ -151,6 +151,57 @@ Client                          Server
   |--- ClientInput -------------->|  Gameplay begins
   |<-- InputAck, EntityUpdates ---|
 ```
+
+### Protocol-version negotiation
+
+The session protocol version is `NETWORK_PROTOCOL_VERSION` in `NetworkManager.h` (currently `1`).
+Bump it on every incompatible change to this document; peers must match exactly, and there is no
+silent downgrade.
+
+| Message | Payload layout (little-endian) | Size |
+|---------|--------------------------------|------|
+| `Connect` | `uint32 magic = 0x484E5053` ("SPNH"), `uint16 protocolVersion`, `uint16 nameLength`, name bytes | 8 + name, max 256 |
+| `ConnectAccepted` | `uint32 clientID`, `float serverTime`, `uint16 protocolVersion` (echo) | exactly 10 |
+| `ConnectRejected` | `uint16 textLength`, text bytes, `uint8 reason`, `uint16 serverProtocolVersion` | max 256 |
+
+Server (`NetworkManager::HandleConnect`) checks the handshake **before** it considers a client slot:
+
+| Condition | `ConnectRejectReason` |
+|-----------|-----------------------|
+| Payload below 8 bytes | none: the `PacketValidator` schema drops it before `HandleConnect`, with no reply and no slot |
+| Magic absent (a pre-negotiation client sending only its name) | `ProtocolMissing` (2) |
+| Client version older than the server's | `ProtocolTooOld` (3) |
+| Client version newer than the server's | `ProtocolTooNew` (4) |
+| Name length prefix overruns the payload, or bytes trail the name | `MalformedHandshake` (5) |
+| Every slot is occupied | `ServerFull` (1) |
+
+Each rejection is sent only to the pending endpoint, whose pre-registered address is then
+forgotten, so a rejected peer never occupies server state.
+
+Client: a `ConnectAccepted` whose echoed version differs from the client's own version is refused.
+The client records `ProtocolMismatch` (6) with `GetLastConnectRejectReason()`, returns to
+`Disconnected`, closes its socket, and discards queued lifecycle traffic, just as it does for
+`ConnectRejected`. A `ConnectRejected` without a readable typed trailer still ends the attempt,
+with reason `Unspecified` (0). The server slot that a refused client leaves behind is reclaimed
+by the heartbeat timeout.
+
+Mixed deployments do not all fail the same way. A pre-negotiation (legacy) client talking to a
+current server gets an immediate typed `ProtocolMissing`. A current client talking to a legacy
+server gets no typed refusal. The legacy server reads the magic's first two bytes as a name
+length, fails the read, admits the client as `Player_N`, and answers with the old 8-byte
+`ConnectAccepted`. The current client's validator drops that reply as malformed, so the client
+stays `Connecting` until its connect timeout and `GetLastConnectRejectReason()` stays
+`Unspecified`. The legacy server holds the admitted slot until its heartbeat timeout. This still
+fails closed, because no session forms, but the failure comes from a timeout and not from a
+`ProtocolMismatch`.
+
+This negotiation is the hook that a later key-agreement handshake binds into. It is not
+authentication: a peer can claim any version, and the negotiation only guarantees that both
+sides agree on the wire format they are about to use.
+
+Evidence: `Tests/TestSessionCompatibilityReal.cpp` (CTest `NetworkSessionCompatibility`, labels
+`network` and `network-security`) runs the production `NetworkManager` in both roles over real
+loopback UDP.
 
 ### Ingress trust boundary
 

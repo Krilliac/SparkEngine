@@ -12,6 +12,31 @@ endif()
 add_library(SparkServerCore STATIC
     src/ServerApplication.cpp
     src/ServerApplication.h
+    src/ServerHealth.cpp
+    src/ServerHealth.h
+)
+
+# Operator health carries the exact source identity. The identity header is
+# regenerated on every build (and rewritten only when it changes) so a commit
+# made after configure still stamps the binary correctly. Source archives
+# without git metadata can supply the commit through SPARK_BUILD_COMMIT; live
+# git metadata always takes precedence over it.
+set(SPARK_BUILD_COMMIT "" CACHE STRING
+    "Fallback commit hash for SparkServer health, used only when git cannot report HEAD")
+find_package(Git QUIET)
+set(_spark_server_identity_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(_spark_server_identity_header "${_spark_server_identity_dir}/SparkServerBuildIdentity.h")
+add_custom_target(SparkServerBuildIdentity
+    COMMAND "${CMAKE_COMMAND}"
+        "-DSPARK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+        "-DSPARK_OUTPUT=${_spark_server_identity_header}"
+        "-DSPARK_VERSION=${SPARK_ENGINE_VERSION}"
+        "-DSPARK_COMMIT_OVERRIDE=${SPARK_BUILD_COMMIT}"
+        "-DSPARK_GIT_EXECUTABLE=${GIT_EXECUTABLE}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/SparkServerBuildIdentity.cmake"
+    BYPRODUCTS "${_spark_server_identity_header}"
+    COMMENT "Stamping SparkServer build identity"
+    VERBATIM
 )
 
 target_compile_features(SparkServerCore PUBLIC cxx_std_23)
@@ -37,10 +62,18 @@ if(NOT TARGET SparkGatewayCore)
     message(FATAL_ERROR "SparkServer requires SparkGatewayCore; add SparkGateway before SparkServer")
 endif()
 target_link_libraries(SparkServerCore PUBLIC SparkGatewayCore)
+if(WIN32)
+    # GetProcessMemoryInfo reports the resident set published in health.
+    target_link_libraries(SparkServerCore PRIVATE psapi)
+endif()
 
 add_executable(SparkServer src/main.cpp)
 target_compile_features(SparkServer PRIVATE cxx_std_23)
 target_link_libraries(SparkServer PRIVATE SparkServerCore)
+# Only the executable's entry point consumes the stamp, so a new commit
+# recompiles main.cpp and relinks SparkServer, not SparkServerCore consumers.
+add_dependencies(SparkServer SparkServerBuildIdentity)
+target_include_directories(SparkServer PRIVATE "${_spark_server_identity_dir}")
 
 # POSIX game modules intentionally leave engine symbols unresolved until
 # dlopen(). SparkServer is a module host just like SparkEngine, so its dynamic
@@ -78,4 +111,15 @@ install(FILES config/server.example.ini DESTINATION share/SparkEngine/examples C
 if(BUILD_TESTS)
     enable_testing()
     add_test(NAME SparkServerHelp COMMAND $<TARGET_FILE:SparkServer> --help)
+    set_tests_properties(SparkServerHelp PROPERTIES TIMEOUT 10 LABELS "server;cli;integration;process")
+    # OPS-110: the stamped identity names the configured version and a full
+    # commit hash (or "unknown" without git metadata). CMake regexes have no
+    # bounded repetition; ServerHealth tests cover the exact field contract.
+    add_test(NAME SparkServerVersion COMMAND $<TARGET_FILE:SparkServer> --version)
+    string(REPLACE "." "[.]" _spark_server_version_regex "${SPARK_ENGINE_VERSION}")
+    set_tests_properties(SparkServerVersion PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "^SparkServer ${_spark_server_version_regex} ([0-9a-f]+|unknown) [(](clean|dirty|unknown)[)]"
+        LABELS "server;observability;integration;process"
+        TIMEOUT 10)
 endif()

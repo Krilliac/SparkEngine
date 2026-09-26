@@ -20,7 +20,11 @@ Rules it keeps, in the order they matter:
   4. Captured output is written content-addressed -- the file is named by the
      SHA-256 of its own bytes -- through an exclusive create, so a collector
      run cannot overwrite or follow anything already on disk.
-  5. The record is validated before it is written.  If it does not pass the
+  5. A dependency closure is never copied from the plan.  With
+     --package-root, the dependency_closure probe walks every PE image of the
+     staged package (pe_imports.py) and the closure is what that walk measured;
+     a plan that declares a closure without a package to measure is refused.
+  6. The record is validated before it is written.  If it does not pass the
      validator, nothing is emitted.
 
 If the host cannot supply what a row needs, this program fails.  It has no
@@ -44,6 +48,8 @@ from pathlib import Path
 from typing import Any
 
 import bundle_verify
+import dependency_authority as da
+import pe_imports
 import safe_fs
 import validate_certification as vc
 
@@ -555,6 +561,11 @@ def load_plan(path: Path) -> dict[str, Any]:
                 f"{path.name}: probe {name!r} timeoutSeconds must be 1..{MAX_TIMEOUT_SECONDS}"
             )
 
+    try:
+        pe_imports.parse_declaration(plan)
+    except pe_imports.ClosureError as exc:
+        raise CollectionError(f"{path.name}: {exc}") from exc
+
     provenance = plan.get("provenance")
     if provenance is not None:
         if not isinstance(provenance, dict):
@@ -577,8 +588,14 @@ def run_probe(
     *,
     repo_root: Path,
     artifact_dir: Path,
+    stdout_suffix: str | None = None,
 ) -> dict[str, Any]:
-    """Run one probe and record what actually happened."""
+    """Run one probe and record what actually happened.
+
+    With `stdout_suffix`, a probe that ran also keeps its standard output as a
+    second content-addressed artifact, byte for byte, so a document the probe
+    printed can be attested on its own.
+    """
     command = list(spec["command"])
     timeout = int(spec.get("timeoutSeconds", DEFAULT_TIMEOUT_SECONDS))
     started = _now()
@@ -603,30 +620,138 @@ def run_probe(
     relative, digest, size = write_content_addressed(
         artifact_dir / name, transcript, suffix=".log"
     )
-    artifact = {
-        "path": f"{name}/{relative}",
-        "sha256": digest,
-        "sizeBytes": size,
-    }
+    artifacts = [{"path": f"{name}/{relative}", "sha256": digest, "sizeBytes": size}]
 
     if code is None:
         return {
             "status": "error",
             "durationMs": duration_ms,
             "detail": detail[:2000],
-            "artifacts": [artifact],
+            "artifacts": artifacts,
         }
+    if stdout_suffix is not None and out:
+        payload = out.encode("utf-8")
+        if len(payload) > MAX_CAPTURE_BYTES:
+            raise CollectionError(
+                f"probe {name!r} printed {len(payload)} bytes, more than the "
+                f"{MAX_CAPTURE_BYTES} an attested document may hold"
+            )
+        relative, digest, size = write_content_addressed(
+            artifact_dir / name, payload, suffix=stdout_suffix
+        )
+        artifacts.append({"path": f"{name}/{relative}", "sha256": digest, "sizeBytes": size})
     probe: dict[str, Any] = {
         "status": "pass" if code == 0 else "fail",
         "durationMs": duration_ms,
         "exitCode": code,
         "startedAt": _iso(started),
         "completedAt": _iso(completed),
-        "artifacts": [artifact],
+        "artifacts": artifacts,
     }
     if code != 0:
         probe["detail"] = (err or out).strip()[:2000] or f"exit code {code}"
     return probe
+
+
+def measure_dependency_closure(
+    plan_path: Path,
+    package_root: Path,
+    declaration: pe_imports.Declaration,
+    *,
+    repo_root: Path,
+    artifact_dir: Path,
+) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+    """Measure the staged package's PE imports as the dependency_closure probe.
+
+    The walk runs as a real subprocess (pe_imports.py), so its verdict is an
+    exit code like every other probe's.  The import graph it prints becomes a
+    content-addressed artifact, and each declared dependency gets its own
+    evidence file recording how the graph resolved it.  The declared versions
+    come from the plan; which names belong in the closure comes only from the
+    graph, and the validator re-checks the two against each other.
+    """
+    command = [
+        sys.executable,
+        str(TOOLS_DIR / "pe_imports.py"),
+        "--package-root",
+        str(package_root),
+        "--plan",
+        str(plan_path),
+        "--authority",
+        str(repo_root / da.AUTHORITY_RELPATH),
+    ]
+    probe = run_probe(
+        "dependency_closure",
+        {"command": command, "timeoutSeconds": DEFAULT_TIMEOUT_SECONDS},
+        repo_root=repo_root,
+        artifact_dir=artifact_dir,
+        stdout_suffix=pe_imports.GRAPH_SUFFIX,
+    )
+    graphs = [
+        artifact
+        for artifact in probe["artifacts"]
+        if artifact["path"].endswith(pe_imports.GRAPH_SUFFIX)
+    ]
+    if probe.get("exitCode") not in (0, 1) or len(graphs) != 1:
+        return probe, None
+
+    graph_artifact = graphs[0]
+    raw = safe_fs.read_bounded(
+        artifact_dir / graph_artifact["path"], max_bytes=pe_imports.MAX_DOCUMENT_BYTES
+    )
+    try:
+        graph = pe_imports.validate_graph(
+            pe_imports.load_json_bytes(raw, graph_artifact["path"])
+        )
+    except pe_imports.ClosureError as exc:
+        raise CollectionError(f"the measured import graph is unusable: {exc}") from exc
+
+    try:
+        authority = pe_imports.load_authority(repo_root / da.AUTHORITY_RELPATH)
+    except (pe_imports.ClosureError, safe_fs.FileSecurityError) as exc:
+        raise CollectionError(f"the dependency authority is unusable: {exc}") from exc
+
+    images = {image["path"]: image for image in graph["images"]}
+    closure: list[dict[str, Any]] = []
+    for entry in declaration.closure:
+        # A declared identity is satisfied by the import of its own name, or,
+        # for a vendored library, by the package-local images the authority
+        # maps to it.
+        wanted = entry["name"].casefold()
+        imports: list[dict[str, Any]] = []
+        for dep in graph["dependencies"]:
+            mapped = authority.package_images.get(dep["name"])
+            if dep["name"] != wanted and (mapped is None or mapped[0].casefold() != wanted):
+                continue
+            found: dict[str, Any] = {
+                "name": dep["name"],
+                "resolution": dep["resolution"],
+                "importedBy": dep["importedBy"],
+            }
+            if dep["resolution"] == "package":
+                found["packagePath"] = dep["packagePath"]
+                found["packageSha256"] = images[dep["packagePath"]]["sha256"]
+            imports.append(found)
+        finding: dict[str, Any] = {
+            "name": entry["name"],
+            "version": entry["version"],
+            "source": entry["source"],
+            "importGraphSha256": graph_artifact["sha256"],
+            "imports": imports,
+        }
+        payload = (json.dumps(finding, indent=1, sort_keys=True) + "\n").encode("utf-8")
+        relative, digest, size = write_content_addressed(
+            artifact_dir / "dependency_closure" / "deps", payload, suffix=".json"
+        )
+        closure.append(
+            {
+                **entry,
+                "path": f"dependency_closure/deps/{relative}",
+                "sha256": digest,
+                "sizeBytes": size,
+            }
+        )
+    return probe, closure
 
 
 def collect(args: argparse.Namespace) -> dict[str, Any]:
@@ -636,6 +761,25 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     if args.row_id and args.row_id != row_id:
         raise CollectionError(
             f"--row-id {args.row_id!r} disagrees with the plan's rowId {row_id!r}"
+        )
+
+    declares_closure = "dependencyClosure" in plan or "firstPartyImages" in plan
+    if args.package_root is not None:
+        if "dependency_closure" in plan["probes"]:
+            raise CollectionError(
+                "--package-root measures dependency_closure itself; the plan must "
+                "not also declare a dependency_closure probe"
+            )
+        if not plan.get("dependencyClosure"):
+            raise CollectionError(
+                "--package-root needs the plan to declare the dependencyClosure the "
+                "measurement is compared against"
+            )
+        safe_fs.lstat_checked(args.package_root, expect="dir")
+    elif declares_closure:
+        raise CollectionError(
+            "the plan declares a dependency closure, which can only be recorded "
+            "from a measured package; pass --package-root"
         )
 
     commit = resolve_commit(repo_root, allow_dirty=args.allow_dirty)
@@ -689,6 +833,15 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         probes[name] = run_probe(
             name, spec, repo_root=repo_root, artifact_dir=artifact_dir
         )
+    closure: list[dict[str, Any]] | None = None
+    if args.package_root is not None:
+        probes["dependency_closure"], closure = measure_dependency_closure(
+            args.plan.resolve(),
+            args.package_root.resolve(),
+            pe_imports.parse_declaration(plan),
+            repo_root=repo_root,
+            artifact_dir=artifact_dir,
+        )
 
     trusted = _trusted(args, commit)
     if trusted.collector_type == "ci":
@@ -736,8 +889,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     }
     if trusted.collector_type == "ci":
         record["collector"]["runId"] = trusted.run_id
-    if plan.get("dependencyClosure"):
-        record["dependencyClosure"] = plan["dependencyClosure"]
+    if closure:
+        record["dependencyClosure"] = closure
 
     errors, digest = bundle_verify.verify_bundle(
         record, artifact_root=args.artifact_root, row_id=row_id
@@ -836,6 +989,15 @@ def main(argv: list[str] | None = None) -> int:
             "one argument of the command that prints the toolchain's version "
             "banner; repeat the flag per argument "
             "(default: --compiler-command c++ --compiler-command --version)"
+        ),
+    )
+    parser.add_argument(
+        "--package-root",
+        type=Path,
+        default=None,
+        help=(
+            "staged package to measure the dependency_closure probe from, by "
+            "walking every PE image's import and delay-import tables"
         ),
     )
     parser.add_argument("--windows-sdk-version", default=None)

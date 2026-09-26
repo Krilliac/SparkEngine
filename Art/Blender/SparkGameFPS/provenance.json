@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameFPS",
+  "author_script": {
+    "path": "tools/blender/author_fps_kit.py",
+    "sha256": "d361d182033548ab516e80e6398c25c262c154db53782ebc31ff32de803078db"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameFPS/fps_kit.blend",
+    "sha256": "34b7d5b29ab8ec75a7d9ab391045544701012ff2387a235dc38542b997cef984",
+    "scene_sha256": "05b8c4102fbb63aff0c57b8effb0edc9a88e892a066c3f23137ffc3270d0cc61"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "cover_barrier",
+      "obj_path": "Assets/Models/FPS/Kit/cover_barrier.obj",
+      "mtl_path": "Assets/Models/FPS/Kit/cover_barrier.mtl",
+      "bounds": {
+        "min": [
+          -1.0,
+          0.0,
+          -0.25
+        ],
+        "max": [
+          1.0,
+          1.0,
+          0.25
+        ]
+      },
+      "triangle_count": 296,
+      "obj_sha256": "1f912859b77c566cfefed15c17f9f785d8b358bc81f7f5e386205476477ab2eb",
+      "mtl_sha256": "2985c4b40c5cef5e5baad61f4af25c7e36c138955288bc7a408cbf18f8b891c6",
+      "triangle_budget": 800,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/FPS/Kit/cover_barrier_lod1.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/cover_barrier_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.992308,
+              0.016363,
+              -0.247051
+            ],
+            "max": [
+              0.992308,
+              0.987786,
+              0.247051
+            ]
+          },
+          "triangle_count": 104,
+          "obj_sha256": "a4b47bf05221641ccbc4d2e3d23c612ade373990edca650add37b27ba41c9369",
+          "mtl_sha256": "2985c4b40c5cef5e5baad61f4af25c7e36c138955288bc7a408cbf18f8b891c6",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/FPS/Kit/cover_barrier_collision.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/cover_barrier_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.0,
+              0.0,
+              -0.25
+            ],
+            "max": [
+              1.0,
+              1.0,
+              0.25
+            ]
+          },
+          "triangle_count": 124,
+          "obj_sha256": "03490486a0f3b3bf69e2a3e8b4e5f03a245274b6bedb8fbdd1fba47c9eb7bc27",
+          "mtl_sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "ammo_crate",
+      "obj_path": "Assets/Models/FPS/Kit/ammo_crate.obj",
+      "mtl_path": "Assets/Models/FPS/Kit/ammo_crate.mtl",
+      "bounds": {
+        "min": [
+          -0.3,
+          0.0,
+          -0.2
+        ],
+        "max": [
+          0.3,
+          0.35,
+          0.2
+        ]
+      },
+      "triangle_count": 464,
+      "obj_sha256": "e18cb025090367bdb72068503a7eec0c70a289c43dd67c280cc34283a8292fb5",
+      "mtl_sha256": "dc076a31f806be6b5f8f507179c7f13439618148397d30e7743947f86b6f56e3",
+      "triangle_budget": 700,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/FPS/Kit/ammo_crate_lod1.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/ammo_crate_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.302014,
+              0.006951,
+              -0.202014
+            ],
+            "max": [
+              0.302014,
+              0.344358,
+              0.202014
+            ]
+          },
+          "triangle_count": 166,
+          "obj_sha256": "e5c1e14b6e8ae2520e486f40d7491a242d5a44999988cc9115328dbdf4bdeb69",
+          "mtl_sha256": "dc076a31f806be6b5f8f507179c7f13439618148397d30e7743947f86b6f56e3",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/FPS/Kit/ammo_crate_collision.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/ammo_crate_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.3,
+              0.0,
+              -0.2
+            ],
+            "max": [
+              0.3,
+              0.35,
+              0.2
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "63d7b41b07cd6a3410247caf1961312b6207e2b072787c8343baa0832fa874bf",
+          "mtl_sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "spawn_pad",
+      "obj_path": "Assets/Models/FPS/Kit/spawn_pad.obj",
+      "mtl_path": "Assets/Models/FPS/Kit/spawn_pad.mtl",
+      "bounds": {
+        "min": [
+          -1.0,
+          0.0,
+          -1.0
+        ],
+        "max": [
+          1.0,
+          0.174,
+          1.0
+        ]
+      },
+      "triangle_count": 1004,
+      "obj_sha256": "70446b036848ff0a8d3c58404df395c2cd10f1ae92559218434b428e32b59a67",
+      "mtl_sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "triangle_budget": 1100,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/FPS/Kit/spawn_pad_lod1.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/spawn_pad_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.01183,
+              0.0,
+              -1.01183
+            ],
+            "max": [
+              1.01183,
+              0.174,
+              1.01183
+            ]
+          },
+          "triangle_count": 320,
+          "obj_sha256": "02d92b7fcd8a4e4646fe4a67f2fe4bdc2d378e6207f1eca8457544a953860da6",
+          "mtl_sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+          "decimate_ratio": 0.34
+        },
+        "collision": {
+          "obj_path": "Assets/Models/FPS/Kit/spawn_pad_collision.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/spawn_pad_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.0,
+              0.0,
+              -1.0
+            ],
+            "max": [
+              1.0,
+              0.17438,
+              1.0
+            ]
+          },
+          "triangle_count": 180,
+          "obj_sha256": "304248a44b43cf549a13e13671dc53b15e54e7262ed8d501533c868f2f0de4d6",
+          "mtl_sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "target_dummy",
+      "obj_path": "Assets/Models/FPS/Kit/target_dummy.obj",
+      "mtl_path": "Assets/Models/FPS/Kit/target_dummy.mtl",
+      "bounds": {
+        "min": [
+          -0.362458,
+          0.0,
+          -0.34
+        ],
+        "max": [
+          0.362458,
+          1.8,
+          0.34
+        ]
+      },
+      "triangle_count": 776,
+      "obj_sha256": "f3f7b08a76e63a4f9e2204671832344b876cdc5b4328738cad0025db5eba78c0",
+      "mtl_sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "triangle_budget": 1600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/FPS/Kit/target_dummy_lod1.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/target_dummy_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.355182,
+              0.0,
+              -0.34
+            ],
+            "max": [
+              0.355182,
+              1.803158,
+              0.34
+            ]
+          },
+          "triangle_count": 276,
+          "obj_sha256": "204fff23bc258c2f49236247f91aacc732410870a0b67860c5702bda7d0a3330",
+          "mtl_sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/FPS/Kit/target_dummy_collision.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/target_dummy_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.362458,
+              0.0,
+              -0.34
+            ],
+            "max": [
+              0.362458,
+              1.8,
+              0.34
+            ]
+          },
+          "triangle_count": 112,
+          "obj_sha256": "7d492eda120181299c751aa7e95fb645d67b88c2e6948ab4ccb8a6f9c5b74af3",
+          "mtl_sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "weapon_rack",
+      "obj_path": "Assets/Models/FPS/Kit/weapon_rack.obj",
+      "mtl_path": "Assets/Models/FPS/Kit/weapon_rack.mtl",
+      "bounds": {
+        "min": [
+          -0.8,
+          0.0,
+          -0.245
+        ],
+        "max": [
+          0.8,
+          1.2,
+          0.245
+        ]
+      },
+      "triangle_count": 888,
+      "obj_sha256": "3bb3bdd2e79fa8c6e858f60b7498cc0b5df8edd427137260b55ec8d0513da359",
+      "mtl_sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "triangle_budget": 1400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/FPS/Kit/weapon_rack_lod1.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/weapon_rack_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.8,
+              0.0,
+              -0.245
+            ],
+            "max": [
+              0.8,
+              1.2,
+              0.245
+            ]
+          },
+          "triangle_count": 318,
+          "obj_sha256": "e679b0b363d92d02f40481ad766c4855fd2cdedbace42cad3b92826226e0e0fb",
+          "mtl_sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/FPS/Kit/weapon_rack_collision.obj",
+          "mtl_path": "Assets/Models/FPS/Kit/weapon_rack_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.8,
+              0.0,
+              -0.245
+            ],
+            "max": [
+              0.8,
+              1.2,
+              0.245
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "421fa0a03ea3aba9ebabc9f0a2dc7e5217d2e3eaf2f9642df59a08af421d605e",
+          "mtl_sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

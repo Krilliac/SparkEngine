@@ -12,7 +12,11 @@ from __future__ import annotations
 import fnmatch
 import functools
 import re
+import shlex
+import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from common import REPO_ROOT, SiteDataError, read_bytes_stable
 
@@ -20,6 +24,10 @@ from common import REPO_ROOT, SiteDataError, read_bytes_stable
 WORKFLOW_ROOT = REPO_ROOT / ".github" / "workflows"
 TEST_ROOT = REPO_ROOT / "Tests"
 TEST_CMAKE = TEST_ROOT / "CMakeLists.txt"
+# The build-matrix inventory owns CMakePresets.json parsing and inheritance
+# resolution; work-item commands are resolved through the same code so the two
+# contracts cannot disagree about what a preset means.
+BUILDMATRIX_ROOT = REPO_ROOT / "Tools" / "buildmatrix"
 MAX_WORKFLOW_BYTES = 2 * 1024 * 1024
 MAX_TEST_SOURCE_BYTES = 8 * 1024 * 1024
 GLOB_CHARACTERS = "*?["
@@ -106,6 +114,54 @@ def resolve_ci_job(value: str) -> bool:
     return value in workflow_job_ids()
 
 
+REQUIRED_GATE_WORKFLOW = WORKFLOW_ROOT / "build.yml"
+REQUIRED_GATE_JOB = "required-ci-gate"
+_NEEDS_INLINE = re.compile(r"^    needs:\s*\[([^\]]*)\]\s*(?:#.*)?$")
+_NEEDS_BLOCK = re.compile(r"^    needs:\s*(?:#.*)?$")
+_NEEDS_ENTRY = re.compile(r"^      -\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:#.*)?$")
+
+
+@functools.lru_cache(maxsize=1)
+def required_gate_jobs() -> frozenset[str]:
+    """Jobs the aggregate ``required-ci-gate`` job in build.yml needs.
+
+    A job outside this set can be skipped, cancelled, or fail without turning the
+    required aggregate red, so it cannot be the CI evidence behind a claim that
+    something is release-validated.
+    """
+    if not REQUIRED_GATE_WORKFLOW.is_file():
+        raise SiteDataError(f"{REQUIRED_GATE_WORKFLOW.relative_to(REPO_ROOT).as_posix()} does not exist")
+    text = read_bytes_stable(REQUIRED_GATE_WORKFLOW, MAX_WORKFLOW_BYTES, "workflow build.yml").decode(
+        "utf-8", errors="replace"
+    )
+    lines = text.splitlines()
+    header = f"  {REQUIRED_GATE_JOB}:"
+    start = next((index for index, line in enumerate(lines) if line.split("#", 1)[0].rstrip() == header), None)
+    if start is None:
+        raise SiteDataError(f"build.yml defines no {REQUIRED_GATE_JOB} job")
+    jobs: set[str] = set()
+    in_needs = False
+    for line in lines[start + 1:]:
+        if _JOB_KEY.match(line) or _TOP_LEVEL_KEY.match(line):
+            break
+        inline = _NEEDS_INLINE.match(line)
+        if inline:
+            jobs.update(entry.strip() for entry in inline.group(1).split(",") if entry.strip())
+            break
+        if _NEEDS_BLOCK.match(line):
+            in_needs = True
+            continue
+        if in_needs:
+            entry = _NEEDS_ENTRY.match(line)
+            if entry:
+                jobs.add(entry.group(1))
+            elif line.strip() and not line.lstrip().startswith("#"):
+                break
+    if not jobs:
+        raise SiteDataError(f"{REQUIRED_GATE_JOB} in build.yml needs no jobs")
+    return frozenset(jobs)
+
+
 @functools.lru_cache(maxsize=4096)
 def resolve_test_selector(value: str) -> bool:
     """A test selector may be an exact name or a glob over selectable names.
@@ -121,11 +177,222 @@ def resolve_test_selector(value: str) -> bool:
     return any(fnmatch.fnmatchcase(target, value) for target in targets)
 
 
+_CMAKE_TOOL = re.compile(r"^(?:.*[/\\])?(cmake|ctest|cpack)(?:\.exe)?$", re.IGNORECASE)
+_BUILD_TESTS_ON = re.compile(r"^-D\s*BUILD_TESTS(?::BOOL)?=(?:ON|TRUE|YES|Y|1)$", re.IGNORECASE)
+# CMake's false constants (if() semantics); an unset BUILD_TESTS keeps the
+# option's ON default from the root CMakeLists.txt.
+_CMAKE_FALSE_VALUES = {"", "0", "OFF", "NO", "FALSE", "N", "IGNORE", "NOTFOUND"}
+_CMAKE_MODE_PRESET_KINDS = {"configure": "configure", "build": "build", "workflow": "workflow"}
+_TOOL_PRESET_KINDS = {"ctest": "test", "cpack": "package"}
+
+
+@dataclass(frozen=True)
+class PresetReference:
+    """One preset or preset build tree named by a cmake/ctest/cpack invocation.
+
+    ``kind`` is the preset family the name must resolve in (``configure``,
+    ``build``, ``test``, ``package``, ``workflow``) or ``binaryDir`` for a
+    ``build/<dir>`` tree. ``enables_tests`` marks a configure invocation that
+    forces ``-DBUILD_TESTS=ON`` over the preset's own value.
+    """
+
+    tool: str
+    kind: str
+    name: str
+    enables_tests: bool = False
+
+
+def _command_tokens(segment: str) -> list[str]:
+    try:
+        return shlex.split(segment, posix=True)
+    except ValueError:
+        return segment.split()
+
+
+def _build_tree(value: str) -> str | None:
+    """Return ``build/<dir>`` when ``value`` points into the repository build root."""
+    normalized = value.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    parts = [part for part in normalized.split("/") if part]
+    if len(parts) < 2 or parts[0] != "build":
+        return None
+    return f"build/{parts[1]}"
+
+
+def preset_references(command: str) -> list[PresetReference]:
+    """Every preset and ``build/<dir>`` tree a work-item command hands to CMake tools.
+
+    Segments are split on shell control operators like the CTest fail-on-empty
+    check, so a later invocation cannot hide behind an earlier valid one.
+    """
+    references: list[PresetReference] = []
+    for segment in re.split(r"[;&|\r\n]+", command):
+        tokens = [token.lstrip("$(!").rstrip(")") for token in _command_tokens(segment)]
+        start = next((index for index, token in enumerate(tokens) if _CMAKE_TOOL.match(token)), None)
+        if start is None:
+            continue
+        tool = _CMAKE_TOOL.match(tokens[start]).group(1).lower()
+        arguments = [token for token in tokens[start + 1:] if token]
+        if tool == "cmake":
+            mode = "configure"
+            for flag, flag_mode in (("--build", "build"), ("--install", "install"), ("--workflow", "workflow")):
+                if any(argument == flag or argument.startswith(flag + "=") for argument in arguments):
+                    mode = flag_mode
+                    break
+            preset_kind = _CMAKE_MODE_PRESET_KINDS.get(mode, "configure")
+        else:
+            mode = tool
+            preset_kind = _TOOL_PRESET_KINDS.get(tool, "test")
+        enables_tests = mode == "configure" and any(
+            _BUILD_TESTS_ON.match(argument)
+            or (argument == "-D" and index + 1 < len(arguments) and _BUILD_TESTS_ON.match("-D" + arguments[index + 1]))
+            for index, argument in enumerate(arguments)
+        )
+        for index, argument in enumerate(arguments):
+            preset_name = None
+            if argument == "--preset" and index + 1 < len(arguments):
+                preset_name = arguments[index + 1]
+            elif argument.startswith("--preset="):
+                preset_name = argument.split("=", 1)[1]
+            if preset_name:
+                references.append(PresetReference(tool, preset_kind, preset_name, enables_tests))
+                continue
+            value = argument
+            if argument.startswith("--") and "=" in argument:
+                value = argument.split("=", 1)[1]
+            elif argument.startswith("-B") and len(argument) > 2:
+                value = argument[2:]
+            tree = _build_tree(value)
+            if tree:
+                references.append(PresetReference(tool, "binaryDir", tree, enables_tests))
+    return references
+
+
+def _import_inventory() -> Any:
+    root = str(BUILDMATRIX_ROOT)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    import inventory  # noqa: PLC0415 -- resolved from Tools/buildmatrix on demand
+
+    return inventory
+
+
+class CMakePresetIndex:
+    """Visible CMake presets, their resolved build trees, and whether they build tests."""
+
+    def __init__(self, presets: dict[str, Any]) -> None:
+        inventory = _import_inventory()
+        try:
+            self.names = {
+                kind: {preset["name"] for preset in presets.get(f"{kind}Presets", []) if not preset.get("hidden")}
+                for kind in ("configure", "build", "test", "package", "workflow")
+            }
+            self._configure = {
+                name: inventory.resolve_configure_preset(presets, name) for name in self.names["configure"]
+            }
+            self._test_configure = {
+                name: inventory.resolve_dependent_preset(presets, "testPresets", name)["configurePreset"]
+                for name in self.names["test"]
+            }
+            # The configuration a configure preset's own build preset selects;
+            # multi-config trees build Debug unless told otherwise.
+            self._build_configuration: dict[str, str] = {}
+            for name in sorted(self.names["build"]):
+                resolved_build = inventory.resolve_dependent_preset(presets, "buildPresets", name)
+                configuration = resolved_build.get("configuration")
+                if isinstance(configuration, str) and configuration:
+                    self._build_configuration.setdefault(resolved_build["configurePreset"], configuration)
+        except inventory.InventoryError as error:
+            raise SiteDataError(f"CMakePresets.json: {error}") from error
+        self.binary_dirs: dict[str, str] = {}
+        for name, resolved in sorted(self._configure.items()):
+            binary_dir = resolved.get("resolvedBinaryDir")
+            if isinstance(binary_dir, str) and binary_dir.startswith("${sourceDir}/"):
+                tree = _build_tree(binary_dir[len("${sourceDir}/"):])
+                if tree and tree == binary_dir[len("${sourceDir}/"):].rstrip("/"):
+                    self.binary_dirs.setdefault(tree, name)
+
+    def exists(self, kind: str, name: str) -> bool:
+        return name in self.names.get(kind, set())
+
+    def configure_for(self, reference: PresetReference) -> str | None:
+        """The configure preset whose build tree a reference runs against."""
+        if reference.kind == "binaryDir":
+            return self.binary_dirs.get(reference.name)
+        if reference.kind == "test":
+            return self._test_configure.get(reference.name)
+        if reference.kind == "configure" and reference.name in self._configure:
+            return reference.name
+        return None
+
+    def binary_dir_of(self, configure_name: str) -> str | None:
+        """The ``build/<dir>`` tree a configure preset writes, when it resolves to one."""
+        return next((tree for tree, name in self.binary_dirs.items() if name == configure_name), None)
+
+    def is_multi_config(self, configure_name: str) -> bool:
+        """True when the preset pins a multi-config generator (Visual Studio, Ninja Multi-Config, Xcode)."""
+        generator = self._configure[configure_name].get("generator")
+        if not isinstance(generator, str):
+            return False
+        return generator.startswith("Visual Studio") or generator in {"Ninja Multi-Config", "Xcode"}
+
+    def generator_pins(self, generator: str) -> set[tuple[str | None, str | None]]:
+        """(architecture, toolset) pairs the visible presets pin for ``generator``."""
+
+        def pinned(value: Any) -> str | None:
+            if isinstance(value, dict):
+                value = value.get("value")
+            return value if isinstance(value, str) and value else None
+
+        return {
+            (pinned(resolved.get("architecture")), pinned(resolved.get("toolset")))
+            for resolved in self._configure.values()
+            if resolved.get("generator") == generator
+        }
+
+    def expected_configuration(self, configure_name: str) -> str | None:
+        """The configuration a build of this preset's tree must name.
+
+        The configure preset's own build preset wins; otherwise the configure
+        preset's CMAKE_BUILD_TYPE. None when neither states one.
+        """
+        configuration = self._build_configuration.get(configure_name)
+        if configuration:
+            return configuration
+        value = self._configure[configure_name]["cacheVariables"].get("CMAKE_BUILD_TYPE")
+        if isinstance(value, dict):
+            value = value.get("value")
+        return value if isinstance(value, str) and value else None
+
+    def builds_tests(self, configure_name: str) -> bool:
+        value = self._configure[configure_name]["cacheVariables"].get("BUILD_TESTS")
+        if isinstance(value, dict):
+            value = value.get("value")
+        if value is None:
+            return True
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().upper() not in _CMAKE_FALSE_VALUES and not str(value).upper().endswith("-NOTFOUND")
+
+
+@functools.lru_cache(maxsize=1)
+def cmake_preset_index() -> CMakePresetIndex:
+    """The repository's CMakePresets.json, resolved once per run."""
+    inventory = _import_inventory()
+    try:
+        presets = inventory.extract_cmake_presets()
+    except inventory.InventoryError as error:
+        raise SiteDataError(f"CMakePresets.json: {error}") from error
+    return CMakePresetIndex(presets)
+
+
 def reset_caches() -> None:
     """Drop cached inventories so a test can point the resolvers at new content."""
     workflow_job_ids.cache_clear()
     test_selector_targets.cache_clear()
     resolve_test_selector.cache_clear()
+    cmake_preset_index.cache_clear()
 
 
 def _report() -> int:

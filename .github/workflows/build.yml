@@ -5,10 +5,11 @@ on:
   # pull_request trigger only. Listing them under push queued the whole
   # matrix twice per push (push + pull_request) and nothing downstream
   # consumed the push copy: every workflow_run consumer filters to Working.
+  # 'claude/**' bases let PRs stacked on a release branch get the same CI.
   push:
     branches: [ main, develop, Working, 'release/**' ]
   pull_request:
-    branches: [ main, develop, Working ]
+    branches: [ main, develop, Working, 'claude/**' ]
   workflow_dispatch:
     inputs:
       simulate_required_job_failure:
@@ -57,7 +58,7 @@ jobs:
   # SparkEditor/Source and Spark{ShaderCompiler,Installer,CrashReporter,
   # AssetPipelineCore,Cooker,Worker,Build,Launcher,Console,Daemon,Server,
   # Gateway,Automation}/src, SparkSDK/Include, GameModules — plus
-  # tools/fuzz-policy/**, Tests/fuzz-policy/**, Tests/fuzz-corpora/**,
+  # tools/fuzz-policy/**, FuzzerTests/** (harnesses, policy tests, seed and generated corpora),
   # cmake/SparkFuzzPolicy.cmake and CMakeLists.txt. Do NOT add paths: or
   # paths-ignore: to this workflow without covering all of them: a skipped gate
   # reports the same green as a passing one.
@@ -79,6 +80,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
 
+    # SparkFuzzArchive compiles the vendored miniz (a pinned submodule) with
+    # fuzzer instrumentation; no other submodule is needed by this job.
+    - name: Check out the miniz submodule
+      run: git submodule update --init --depth 1 ThirdParty/Utils/miniz
+
     - name: Configure fuzz-policy checks
       env:
         CXXFLAGS: "-stdlib=libstdc++"
@@ -89,7 +95,7 @@ jobs:
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
     - name: Build production fuzz smoke target
-      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive
 
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config
@@ -131,8 +137,27 @@ jobs:
     - name: Test flaky warning ownership and expiry policy
       run: python3 Tests/Tools/test_validate_test_warnings.py
 
+    # CI-110: static view over every first-party CMakeLists.txt / *.cmake that
+    # calls add_test. The configured-tree view runs in the build lanes below.
+    - name: Validate CTest timeout and label policy
+      run: python3 Tools/validate_ctest_policy.py
+
+    - name: Test CTest timeout and label policy
+      run: python3 Tests/Tools/test_validate_ctest_policy.py
+
+    - name: Test shared build-directory lock
+      run: python3 Tests/Tools/test_build_lock.py
+
+    - name: Test code city generator
+      run: python3 Tests/Tools/test_code_city.py
+
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
+
+    # Fixture mode only. Operators re-verify the live ruleset with
+    # python3 .github/scripts/verify-working-ruleset.py --live
+    - name: Test Working ruleset verifier
+      run: python3 .github/scripts/test-verify-working-ruleset.py
 
     - name: Test exact-commit release gate
       run: python3 .github/scripts/test-verify-exact-required-gate.py
@@ -148,6 +173,7 @@ jobs:
         python3 .github/scripts/test_guard_release_mutation.py
         python3 .github/scripts/test_stage_release_draft.py
         python3 .github/scripts/test_verify_published_stable_release.py
+        python3 .github/scripts/test_record_release_approval.py
         python3 .github/scripts/test_release_stages_workflow.py
 
     - name: Test the build-matrix exact-source status gate
@@ -187,6 +213,9 @@ jobs:
     - name: Test sanitizer pipeline exit propagation
       run: bash .github/scripts/test-run-sanitizer-tests.sh
 
+    - name: Test check-format controlled failures
+      run: bash .github/scripts/test-check-format-changed.sh
+
     - name: Test workflow failure-propagation contract
       run: python3 .github/scripts/test-workflow-failure-propagation.py
 
@@ -208,8 +237,35 @@ jobs:
     - name: Verify every test source is registered
       run: bash tools/check-test-registration.sh
 
+    # The tools/validate-all.sh checks below fail this required job when they
+    # fail. test-workflow-failure-propagation.py maps every validate-all check
+    # to its required invocation (or an explicit advisory reason).
+    - name: Verify every header uses pragma once
+      run: bash tools/check-pragma-once.sh
+
+    - name: Verify every editor panel is registered
+      run: bash tools/check-editor-panels.sh
+
+    - name: Verify no deprecated submodules are referenced
+      run: bash tools/check-deprecated-submodules.sh
+
+    - name: Verify wiki pages match the sidebar
+      run: bash tools/check-wiki-nav.sh
+
+    - name: Verify initialized systems are wired in
+      run: bash tools/check-wiring.sh
+
+    - name: Verify header Doxygen coverage
+      run: bash tools/check-doxygen-coverage.sh check
+
+    - name: Verify cross-utilization boundaries
+      run: bash tools/check-cross-utilization.sh
+
+    - name: Verify DI singleton guardrails
+      run: bash tools/check-di-singletons.sh
+
     - name: Test asset integrity verifier
-      run: python3 -m unittest Tests.Tools.test_asset_integrity -v
+      run: python3 -m unittest Tests.Tools.test_asset_integrity Tests.Tools.test_asset_package_profile -v
 
     - name: Verify repository asset integrity baseline
       run: python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
@@ -234,6 +290,15 @@ jobs:
 
     - name: Test strict Shipping and reproducible-build contract
       run: python3 Tests/Tools/test_build_shipping_contract.py
+
+    - name: Test the stable-v1 x86-64 SSE4.2 CPU floor (OD-04)
+      run: python3 Tests/Tools/test_cpu_floor.py
+
+    - name: Test the Shipping private-symbol manifest (BLD-100)
+      run: python3 -B -m unittest Tests.Tools.test_shipping_symbol_manifest -v
+
+    - name: Test the build-output reproducibility comparator (BLD-100)
+      run: python3 -B -m unittest Tests.Tools.test_compare_build_outputs -v
 
     - name: Generate and compare the deterministic build-matrix inventory
       run: |
@@ -349,81 +414,10 @@ jobs:
     - name: Check formatting
       env:
         FORMAT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: |
-        set -euo pipefail
-        # Every C++ surface is in scope, but source checks are incremental so
-        # unrelated legacy formatting debt does not hide new debt. The style
-        # file itself is always validated and is part of change detection.
-        FORMAT_ROOTS=(SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests)
-        for root in "${FORMAT_ROOTS[@]}"; do
-          if [[ ! -d "$root" ]]; then
-            echo "::error::Formatting source root is missing: $root"
-            exit 1
-          fi
-        done
-        BASE_SHA="${FORMAT_BASE_SHA:-}"
-        if [[ ! "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] ||
-           [[ "$BASE_SHA" == "0000000000000000000000000000000000000000" ]] ||
-           ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-          BASE_SHA=$(git rev-parse HEAD^ 2>/dev/null || true)
-        fi
-
-        if [[ -n "$BASE_SHA" ]]; then
-          mapfile -d '' CHANGED_PATHS < <(
-            git diff --name-only --diff-filter=ACMRD -z "$BASE_SHA" HEAD -- "${FORMAT_ROOTS[@]}" .clang-format
-          )
-        else
-          mapfile -d '' CHANGED_PATHS < <(git ls-files -z -- "${FORMAT_ROOTS[@]}" .clang-format)
-        fi
-
-        FORMAT_SOURCES=()
-        FORMAT_CONFIG_CHANGED=false
-        for source in "${CHANGED_PATHS[@]}"; do
-          case "$source" in
-            .clang-format) FORMAT_CONFIG_CHANGED=true ;;
-            */Metal/*) ;;
-            *.h|*.hpp|*.inl|*.cpp)
-              if [[ -f "$source" ]]; then
-                FORMAT_SOURCES+=("$source")
-              fi
-              ;;
-          esac
-        done
-
-        if ! command -v clang-format >/dev/null 2>&1; then
-          echo "::error::clang-format is not installed."
-          exit 1
-        fi
-        if [[ ! -f .clang-format ]]; then
-          echo "::error::.clang-format is missing."
-          exit 1
-        fi
-        if ! clang-format --style=file --dump-config > /dev/null 2> check-format-output.log; then
-          cat check-format-output.log
-          echo "::error::.clang-format could not be parsed."
-          exit 1
-        fi
-        if [[ "$FORMAT_CONFIG_CHANGED" == true ]]; then
-          echo "Validated changed .clang-format configuration."
-        fi
-        if (( ${#FORMAT_SOURCES[@]} == 0 )); then
-          echo "No changed C++ sources require formatting."
-          exit 0
-        fi
-
-        set +e
-        clang-format --dry-run --Werror "${FORMAT_SOURCES[@]}" > check-format-output.log 2>&1
-        FORMAT_STATUS=$?
-        set -e
-        if (( FORMAT_STATUS != 0 )); then
-          cat check-format-output.log
-          if grep -q -- "-Wclang-format-violations" check-format-output.log; then
-            echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
-          else
-            echo "::error::clang-format failed to parse or format the changed sources (exit ${FORMAT_STATUS})."
-          fi
-          exit "$FORMAT_STATUS"
-        fi
+      # Roots check, base-SHA resolution, changed-file selection, style-file
+      # parse, and --dry-run --Werror live in the script so their failure paths
+      # are executable; validate-ci-tools runs test-check-format-changed.sh.
+      run: bash .github/scripts/check-format-changed.sh
 
     - name: Extract check-format error summary
       if: failure()
@@ -471,16 +465,19 @@ jobs:
         PYTHONDONTWRITEBYTECODE: "1"
       run: |
         set -euo pipefail
-        # The four source files are test_ops100_redaction.py,
-        # test_ops100_crash_security.py, test_ops100_telemetry_spool.py, and
-        # test_ops100_adversarial.py; unittest runs their native test classes
-        # without requiring an unpinned third-party pytest installation.
+        # The five source files are test_ops100_redaction.py,
+        # test_ops100_crash_security.py, test_ops100_telemetry_spool.py,
+        # test_ops100_adversarial.py, and test_ops100_symbolication.py (which
+        # compiles a small ELF with the runner's cc/objcopy/addr2line);
+        # unittest runs their native test classes without requiring an
+        # unpinned third-party pytest installation.
         cd Tests/Tools
         python3 -m unittest \
           test_ops100_redaction \
           test_ops100_crash_security \
           test_ops100_telemetry_spool \
           test_ops100_adversarial \
+          test_ops100_symbolication \
           -v 2>&1 | tee ops100-results.log
         echo "OPS-100 validation passed."
 
@@ -492,6 +489,32 @@ jobs:
         path: Tests/Tools/ops100-results.log
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: ignore
+
+  # ===========================================================================
+  # SEC-110 — repository secret scan with the OPS-100 detectors. Every tracked
+  # regular file is scanned (bounded, symlinks never followed); a finding
+  # passes only through an exact <rule>:<path> exception in
+  # tools/secret-scan-exceptions.json with an owner, live expiry, exact count.
+  # ===========================================================================
+  secret-scan:
+    name: "Secret Scan"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Secret-scan adversarial tests
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
+      run: python3 -m unittest Tests.Tools.test_check_secret_scan -v
+
+    - name: Scan tracked files for secrets
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
+      run: python3 tools/check-secret-scan.py
 
   check-thirdparty-manifest:
     runs-on: ubuntu-24.04
@@ -529,6 +552,24 @@ jobs:
     - name: Supply-chain adversarial tests
       run: python3 -m unittest Tests.test_check_supply_chain -v
 
+    # REL-110: the release vulnerability gate and its release.yml wiring. The
+    # CTest registration runs the gate cases on every lane; the wiring cases
+    # need PyYAML, which this job installs and asserts above, so they cannot
+    # skip here.
+    - name: Release vulnerability gate tests
+      run: python3 .github/scripts/test_verify_vulnerability_findings.py -v
+
+    # SEC-110: the lock-derived SPDX SBOM must generate from this exact commit
+    # (lockfiles equal to their committed blobs) and reproduce byte for byte.
+    - name: Generate and reproduce lock-derived SPDX SBOM
+      run: |
+        set -euo pipefail
+        python3 tools/generate-sbom.py --out "$RUNNER_TEMP/SparkEngine-lock.spdx.json"
+        python3 tools/generate-sbom.py --check "$RUNNER_TEMP/SparkEngine-lock.spdx.json"
+
+    - name: SBOM and package-reconciliation tests
+      run: python3 -m unittest Tests.Tools.test_generate_sbom -v
+
   license-compliance:
     name: "License compliance"
     runs-on: ubuntu-24.04
@@ -562,7 +603,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -710,7 +751,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -850,7 +891,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
 
     - name: Configure Linux Shipping telemetry tests
       run: |
@@ -881,6 +922,133 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-telemetry-integration
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+  # SEC-100: runtime security selectors in the Linux Shipping configuration
+  # (MinSizeRel, SPARK_SHIPPING=1), so a selector that shipping compiles out
+  # fails here instead of passing only in a development tree. Each label runs
+  # as its own CTest invocation with --no-tests=error, so an empty label
+  # cannot hide behind a non-empty one.
+  security-runtime:
+    name: "Security Runtime"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping security tests
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log
+
+    # SparkTests pulls in SparkServer, SparkGateway and SparkCrashReporter via
+    # add_dependencies; the crash-reporter unit executables selected by the
+    # crash-security label are standalone targets and are named explicitly.
+    - name: Build security runtime targets
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --parallel $(nproc) --target \
+          SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \
+          SparkCrashReporterFakeGh 2>&1 | tee security-build.log
+
+    - name: Run RemoteAdmin selectors
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R RemoteAdmin 2>&1 | tee security-remote-admin-selectors.log
+
+    - name: Run security runtime labels
+      run: |
+        set -o pipefail
+        for label in remote-admin gateway crash-security; do
+          ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+            -L "^${label}\$" 2>&1 | tee "security-${label}.log"
+        done
+
+    - name: Extract security runtime error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "security-runtime" \
+          error-summary.json \
+          security-configure.log security-build.log security-remote-admin-selectors.log \
+          security-remote-admin.log security-gateway.log security-crash-security.log
+
+    - name: Upload security runtime error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-security-runtime
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+  # SEC-100: real multi-process network integration in the Linux Shipping
+  # configuration. SparkServer, SparkGateway and the SparkGame module run as
+  # separate processes over the area-control channel, and the orchestration
+  # smoke supervises SparkServer through SparkDaemon/SparkOrchestrator. Only
+  # the process targets are built; each smoke runs under its own exact
+  # selector with --no-tests=error.
+  network-integration:
+    name: "Network Integration"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping network integration
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee network-configure.log
+
+    - name: Build network integration processes
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --parallel $(nproc) --target \
+          SparkAutomation SparkServer SparkGateway SparkGame SparkGatewayTopologyProbe \
+          SparkDaemon SparkOrchestrator SparkCollabServer 2>&1 | tee network-build.log
+
+    - name: Run server/gateway process smoke
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R '^SparkServerGatewayProcessSmoke$' 2>&1 | tee network-server-gateway.log
+
+    - name: Run orchestration process smoke
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R '^SparkOrchestrationProcessSmoke$' 2>&1 | tee network-orchestration.log
+
+    - name: Extract network integration error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "network-integration" \
+          error-summary.json \
+          network-configure.log network-build.log network-server-gateway.log network-orchestration.log
+
+    - name: Upload network integration error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-network-integration
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
@@ -950,7 +1118,7 @@ jobs:
       id: install-deps
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang clang-18 libclang-rt-18-dev cmake ninja-build ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y clang clang-18 libclang-rt-18-dev cmake ninja-build ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Pin the runner clang to the LLVM series
       id: clang
@@ -1381,6 +1549,17 @@ jobs:
           -DGENERATE_DEBUG_SYMBOLS=OFF \
           -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log
 
+    # CI-110: every test this configured tree registers (subdirectories, loops
+    # and WIN32-only branches included) must carry a positive TIMEOUT and
+    # LABELS, so one hang fails its own test and label lanes can select it.
+    - name: Enforce configured-tree CTest policy
+      shell: bash
+      run: |
+        set -euo pipefail
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-policy-inventory.json
+        python Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json
+
     - name: Build
       shell: bash
       run: |
@@ -1477,6 +1656,12 @@ jobs:
         python Tools/test_source_census.py --check \
           --json test-source-census.json \
           --minimum-production-tests "$MIN_PRODUCTION_TESTS"
+        # RDY-010: a stable-v1/module-profile selector must reach only
+        # production-source, non-tautological TESTs - in this configured
+        # Windows tree and in every platform branch of Tests/CMakeLists.txt.
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-profile-inventory.json
+        python Tools/test_source_census.py --profile-selectors build/ctest-profile-inventory.json
 
     # Named for the exact commit so a consumer (the site-data publish job) can ask
     # for the CTest report of this SHA and nothing else. generate.py publishes
@@ -1628,8 +1813,44 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
+        # REL-100: every non-test stable-v1 executable (SparkEngine, SparkEditor,
+        # SparkConsole, SparkShaderCompiler, SparkCrashReporter, SparkCooker,
+        # SparkAutomation, SparkLauncher, SparkBuild, SparkInstaller) must print
+        # its exact version line; the script fails if the stable-v1 product
+        # contract gains an executable its table does not cover.
         python Tests/Tools/test_rel100_product_versions.py \
           --bin-dir build/windows-shipping/bin/MinSizeRel
+
+    - name: Stage and map Shipping private symbols
+      shell: bash
+      run: |
+        set -euo pipefail
+        # BLD-100: the packaged components and the private "symbols" component
+        # install to separate roots. Every staged EXE/DLL must map by its RSDS
+        # PDB GUID+age to exactly one staged PDB, record a bare PDB file name,
+        # and no PDB may land in the runtime tree.
+        for component in runtime tools samples; do
+          cmake --install build/windows-shipping --config MinSizeRel \
+            --component "$component" --prefix build/shipping-runtime-stage
+        done
+        cmake --install build/windows-shipping --config MinSizeRel \
+          --component symbols --prefix build/shipping-symbols
+        python tools/shipping_symbol_manifest.py \
+          --images build/shipping-runtime-stage \
+          --symbols build/shipping-symbols/symbols \
+          --output build/shipping-symbols/shipping-symbol-manifest.json
+
+    - name: Upload Windows Shipping private symbols
+      # A separate artifact from the MSI: symbols never enter a package. Hosting
+      # them on a symbol server is OPS-100 scope.
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: shipping-symbols-${{ github.sha }}
+        path: |
+          build/shipping-symbols/symbols
+          build/shipping-symbols/shipping-symbol-manifest.json
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
     - name: Capture Windows Shipping provenance
       shell: bash
@@ -1808,6 +2029,79 @@ jobs:
           exit 1
         fi
         echo "Build-matrix evidence recorded for ${{ github.sha }}; the Build Matrix Verifier attests it from the Working checkout."
+
+  # BLD-100: two clean windows-shipping builds of this commit, from two
+  # checkouts at different paths (so different source and build directories),
+  # must install equivalent outputs. tools/compare_build_outputs.py records
+  # size, SHA-256, COFF timestamp, RSDS GUID/age/PDB name and per-section
+  # hashes of every installed EXE, DLL and static library, and fails on any
+  # missing, extra or differing output. Nothing is cached between the builds.
+  # Advisory (job-level continue-on-error, not a required-ci-gate need) until a
+  # hosted run has shown equivalent trees; promoting it is a CI-100 decision.
+  # Being advisory also keeps build-matrix parity from counting its Shipping
+  # builds as coverage for the required build-windows-shipping producer.
+  reproducibility-windows:
+    name: "Windows Shipping reproducibility (advisory)"
+    runs-on: windows-2022
+    timeout-minutes: 360
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout the first tree
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: a
+        submodules: recursive
+
+    - name: Checkout the second tree
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: tree-b/nested/src
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+
+    - name: Build and stage Shipping in the first tree
+      shell: bash
+      working-directory: a
+      run: |
+        set -euo pipefail
+        cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log
+        # --parallel 1 for the same MSBuild /m x cl /MP reason as build-windows-shipping.
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-a-build.log
+        cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-a
+
+    - name: Build and stage Shipping in the second tree
+      shell: bash
+      working-directory: tree-b/nested/src
+      run: |
+        set -euo pipefail
+        cmake --preset windows-shipping 2>&1 | tee ../../../reproducibility-b-configure.log
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../../../reproducibility-b-build.log
+        cmake --install build/windows-shipping --config MinSizeRel --prefix ../../../reproducibility-stage-b
+
+    - name: Compare the two Shipping builds
+      shell: bash
+      run: |
+        set -euo pipefail
+        python a/tools/compare_build_outputs.py manifest reproducibility-stage-a --output reproducibility/manifest-a.json
+        python a/tools/compare_build_outputs.py manifest reproducibility-stage-b --output reproducibility/manifest-b.json
+        python a/tools/compare_build_outputs.py compare \
+          reproducibility/manifest-a.json reproducibility/manifest-b.json \
+          --report reproducibility/report.json
+
+    - name: Upload reproducibility evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: reproducibility-windows-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          reproducibility/
+          reproducibility-*.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
   # ===========================================================================
   # Windows Build (Visual Studio 2026 / v145)
@@ -2085,7 +2379,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
+        # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -2136,6 +2432,16 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
+    # CI-110: every test this configured tree registers (subdirectories, loops
+    # and non-Windows branches included) must carry a positive TIMEOUT and
+    # LABELS, so one hang fails its own test and label lanes can select it.
+    - name: Enforce configured-tree CTest policy
+      run: |
+        set -euo pipefail
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-policy-inventory.json
+        python3 Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json
+
     - name: Build all targets
       run: |
         set -o pipefail
@@ -2146,10 +2452,13 @@ jobs:
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
+    # advisory experimental-module-lifecycle job; this required lane excludes it.
     - name: Run Tests
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
+          --label-exclude '^experimental-modules$' \
           --output-on-failure --no-tests=error --parallel 2 \
           --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
@@ -2195,12 +2504,16 @@ jobs:
       if: matrix.config == 'Release'
       run: grep -q "ENABLE_VULKAN:BOOL=ON" build/CMakeCache.txt
 
-    - name: Assert Vulkan shader compile parity test ran (Release gate)
+    # These tests exist only when SPARK_VULKAN_SUPPORT compiles the backend in, so their presence in the
+    # JUnit report proves the Release SparkTests binary carries the real Vulkan backend. The full run may
+    # report them as skipped; the VulkanValidation CTest entry (SPARK_REQUIRE_VULKAN_VALIDATION=1) is what
+    # makes a missing ICD or validation layer fatal.
+    - name: Assert Vulkan backend tests are compiled in (Release gate)
       if: matrix.config == 'Release'
       run: |
         echo "Test results: $(wc -l < test-results.log) lines"
-        grep -Fq 'name="VulkanParity_ShaderCompilePath_Asserted"' build/SparkTests-junit.xml
-        grep -Fq 'name="VulkanParity_D3D11MilestoneSnapshot"' build/SparkTests-junit.xml
+        grep -Fq 'name="VulkanShaderToolchain_RejectsMalformedSpirv"' build/SparkTests-junit.xml
+        grep -Fq 'name="VulkanGolden_FullscreenTriangleReadback"' build/SparkTests-junit.xml
 
     - name: Extract error summary
       if: failure()
@@ -2253,7 +2566,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
+        # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
+        # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -2328,10 +2643,13 @@ jobs:
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
+    # advisory experimental-module-lifecycle job; this required lane excludes it.
     - name: Run Tests
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
+          --label-exclude '^experimental-modules$' \
           --output-on-failure --no-tests=error --parallel 2 \
           --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
@@ -2408,9 +2726,14 @@ jobs:
   # ===========================================================================
   # Linux MinGW Cross-Compilation — Build Windows D3D11/D3D12 code on Linux
   # Runs the resulting .exe under Wine + DXVK + Lavapipe (software Vulkan)
+  # Experimental: manual dispatch only and advisory. It is not a required-ci-gate
+  # dependency; known Wine-only test failures are listed on the wiki page
+  # wiki/development/MinGW-Wine-Cross-Compilation.md.
   # ===========================================================================
   build-linux-mingw-wine:
+    name: "build-linux-mingw-wine (experimental)"
     if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
@@ -3334,6 +3657,7 @@ jobs:
       - check-format
       - validate-prompts
       - validate-ops100
+      - secret-scan
       - check-thirdparty-manifest
       - check-supply-chain
       - license-compliance
@@ -3352,6 +3676,8 @@ jobs:
       - todo-count
       - build-installer
       - aggregate-test-stats
+      - security-runtime
+      - network-integration
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -3668,7 +3994,7 @@ jobs:
   # ===========================================================================
   module-evidence:
     name: "Module evidence (RDY-010)"
-    needs: [build-linux-gcc, module-profile-lifecycle, module-profile-package-smoke]
+    needs: [build-linux-gcc, build-linux-asan, module-profile-lifecycle, module-profile-package-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -3681,7 +4007,7 @@ jobs:
       - name: Install configure dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
 
       - name: Run module evidence adversarial tests
         run: python3 -m unittest Tests.Tools.test_module_evidence -v
@@ -3701,6 +4027,30 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: test-results-linux-gcc-Release
+
+      - name: Download exact ASan evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: test-results-linux-asan
+          path: build/module-evidence/sanitizer-asan
+
+      # The full published-evidence verifier (console/report/footer/stats
+      # agreement, exact provenance) runs before the manifest consumer, which
+      # then binds metadata.json + junit.xml to the FPS production selector.
+      - name: Verify downloaded ASan evidence
+        run: |
+          python3 .github/scripts/verify-sanitizer-evidence.py verify-published \
+            --evidence-dir "$GITHUB_WORKSPACE/build/module-evidence/sanitizer-asan" \
+            --stats "$GITHUB_WORKSPACE/build/module-evidence/sanitizer-asan/test-stats-linux-asan.json" \
+            --sanitizer asan \
+            --lane linux-asan \
+            --expected-sha "${{ github.sha }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --allow-prior-attempt \
+            --job build-linux-asan \
+            --minimum-tests 6900 \
+            --timeout-seconds 900
 
       - name: Download exact lifecycle evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -3747,9 +4097,112 @@ jobs:
             build/module-evidence/module-lifecycle.json
             build/module-evidence/module-lifecycle-SparkGameFPS.log
             build/module-evidence/package-smoke.log
+            build/module-evidence/sanitizer-asan/metadata.json
+            build/module-evidence/sanitizer-asan/junit.xml
             tools/module-evidence/evidence-gaps.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
+
+  # ===========================================================================
+  # RDY-015. Real-source lifecycle evidence for every experimental game module
+  # (tools/module-evidence/manifest.json entries tracked under RDY-015): the
+  # production Linux SDL host runs each module with -require-game and every
+  # phase must report at least once with no faults. Advisory by design: a
+  # failure here never fails the workflow, the job is absent from
+  # required-ci-gate, a failing module stays visible here and in its JUnit
+  # artifact, and no result feeds the stable-v1 profile. Required full-ctest
+  # lanes exclude the label.
+  # ===========================================================================
+  experimental-module-lifecycle:
+    name: "Experimental module lifecycle (prototype, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+
+      - name: Setup ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.ccache
+          key: ccache-experimental-module-lifecycle-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-experimental-module-lifecycle-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+            ccache-experimental-module-lifecycle-
+
+      - name: Configure CMake
+        run: |
+          set -euo pipefail
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=ON \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+
+      - name: Build the host and every experimental module
+        run: |
+          set -euo pipefail
+          mapfile -t modules < <(python3 -c 'import json; [print(m["cmakeTarget"]) for m in json.load(open("tools/module-evidence/manifest.json"))["modules"] if (m.get("experimentalSeparation") or {}).get("trackedUnder") == "RDY-015"]')
+          test "${#modules[@]}" -gt 0
+          cmake --build build --parallel "$(nproc)" --target SparkEngine "${modules[@]}" 2>&1 | tee cmake-build.log
+
+      - name: Require one prototype-only test per experimental module
+        run: |
+          set -euo pipefail
+          ctest --test-dir build --no-tests=error -L '^experimental-modules$' --show-only=json-v1 \
+            > build/experimental-module-inventory.json
+          python3 - <<'PY'
+          import json
+          manifest = json.load(open("tools/module-evidence/manifest.json"))
+          expected = {
+              f"ExperimentalModuleLifecycle_{m['cmakeTarget']}"
+              for m in manifest["modules"]
+              if (m.get("experimentalSeparation") or {}).get("trackedUnder") == "RDY-015"
+          }
+          tests = json.load(open("build/experimental-module-inventory.json"))["tests"]
+          registered = {test["name"] for test in tests}
+          if registered != expected:
+              raise SystemExit(f"experimental-modules tests {sorted(registered)} != manifest {sorted(expected)}")
+          for test in tests:
+              labels = next(
+                  (p["value"] for p in test.get("properties", []) if p.get("name") == "LABELS"), []
+              )
+              promoted = {"stable-v1", "module-profile"} & set(labels)
+              if promoted:
+                  raise SystemExit(f"{test['name']} carries stable profile label(s) {sorted(promoted)}")
+          print(f"{len(registered)} experimental module lifecycle tests registered, none stable-labeled")
+          PY
+
+      - name: Run experimental module lifecycle tests
+        run: |
+          set -euo pipefail
+          ctest --test-dir build -L '^experimental-modules$' \
+            --output-on-failure --no-tests=error \
+            --output-junit experimental-module-lifecycle-junit.xml 2>&1 | tee experimental-module-lifecycle.log
+
+      - name: Upload experimental module lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: experimental-module-lifecycle-${{ github.sha }}
+          path: |
+            build/experimental-module-lifecycle-junit.xml
+            build/experimental-module-inventory.json
+            experimental-module-lifecycle.log
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: warn
 
   # ===========================================================================
   # One stable branch-protection target. A cancelled, skipped, or missing
@@ -3766,6 +4219,7 @@ jobs:
       - check-format
       - validate-prompts
       - validate-ops100
+      - secret-scan
       - check-thirdparty-manifest
       - check-supply-chain
       - license-compliance
@@ -3793,6 +4247,19 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
-        run: python3 .github/scripts/verify-required-jobs.py
+        run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
+
+      # Normalized exact-SHA gate record (sha, run id/attempt, event, ref,
+      # expected jobs, per-job results, deferred entries, verdict). Uploaded on
+      # pass and fail; a missing record means the needs evidence was invalid.
+      # Additive only: no consumer may depend on it until a hosted run proves it.
+      - name: Upload Required CI Gate record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: required-ci-gate-${{ github.sha }}-${{ github.run_attempt }}
+          path: required-ci-gate.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error

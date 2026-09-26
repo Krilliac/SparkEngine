@@ -244,9 +244,22 @@ namespace RTS
         return result;
     }
 
-    bool RTSResourceSystem::RestoreState(const std::vector<std::pair<RTSFaction, PlayerResources>>& players,
-                                         const std::vector<ResourceNode>& nodes)
+    uint32_t RTSResourceSystem::GetNextNodeId() const
     {
+        return m_nextNodeId;
+    }
+
+    float RTSResourceSystem::GetGatherTimer() const
+    {
+        return m_gatherTimer;
+    }
+
+    bool RTSResourceSystem::RestoreState(const std::vector<std::pair<RTSFaction, PlayerResources>>& players,
+                                         const std::vector<ResourceNode>& nodes, uint32_t nextNodeId, float gatherTimer)
+    {
+        if (!std::isfinite(gatherTimer) || gatherTimer < 0.0f || gatherTimer >= GATHER_INTERVAL)
+            return false;
+
         std::map<RTSFaction, PlayerResources> restoredPlayers;
         for (const auto& [faction, resources] : players)
         {
@@ -279,11 +292,17 @@ namespace RTS
                 return false;
             nextId = std::max(nextId, node.nodeId + 1);
         }
+        if (nextNodeId != 0)
+        {
+            if (nextNodeId < nextId)
+                return false;
+            nextId = nextNodeId;
+        }
 
         m_playerResources = std::move(restoredPlayers);
         m_nodes = std::move(restoredNodes);
         m_nextNodeId = nextId;
-        m_gatherTimer = 0.0f;
+        m_gatherTimer = gatherTimer;
         return true;
     }
 

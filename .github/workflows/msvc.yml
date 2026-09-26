@@ -12,7 +12,7 @@ on:
   push:
     branches: [ "Working" ]
   pull_request:
-    branches: [ "Working" ]
+    branches: [ "Working", "claude/**" ]
   schedule:
     - cron: '37 4 * * 6'
   workflow_dispatch:

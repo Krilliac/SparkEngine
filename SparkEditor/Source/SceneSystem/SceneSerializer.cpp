@@ -201,14 +201,31 @@ namespace SparkEditor
         return valid;
     }
 
-    bool SceneSerializer::HandleVersionCompatibility(uint32_t fileVersion, SceneFile& /*scene*/,
+    bool SceneSerializer::HandleVersionCompatibility(uint32_t fileVersion, SceneFile& scene,
                                                      SerializationResult& result)
     {
-        if (fileVersion != SCENE_FILE_VERSION)
+        if (fileVersion < SCENE_FILE_OLDEST_READABLE_VERSION || fileVersion > SCENE_FILE_VERSION)
         {
-            result.warnings.push_back("Scene file version " + std::to_string(fileVersion) +
-                                      " is unsupported; expected " + std::to_string(SCENE_FILE_VERSION));
+            const std::string window =
+                "this build reads scene versions " + std::to_string(SCENE_FILE_OLDEST_READABLE_VERSION) + "-" +
+                std::to_string(SCENE_FILE_VERSION) + " and writes version " + std::to_string(SCENE_FILE_VERSION);
+            result.errorMessage =
+                "Scene file version " + std::to_string(fileVersion) + " is unsupported: " + window +
+                (fileVersion > SCENE_FILE_VERSION ? "; open it with the newer SparkEngine build that wrote it"
+                                                  : "; convert it with an older build that reads version " +
+                                                        std::to_string(fileVersion) + ", then resave");
             return false;
+        }
+
+        if (fileVersion < SCENE_FILE_VERSION)
+        {
+            // v1 -> v2 keeps the document structure; the only v2 change is the
+            // schema-tagged component payload, which the loader enforces per
+            // component (v1 raw object images are rejected there, never decoded).
+            scene.header.version = SCENE_FILE_VERSION;
+            result.warnings.push_back("Scene migrated in memory from version " + std::to_string(fileVersion) + " to " +
+                                      std::to_string(SCENE_FILE_VERSION) +
+                                      "; the file on disk is unchanged until it is saved");
         }
         return true;
     }

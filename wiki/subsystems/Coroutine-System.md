@@ -6,7 +6,7 @@ All coroutines run cooperatively on the **main thread**. They yield control back
 
 **Source:** `SparkEngine/Source/Engine/Coroutine/CoroutineScheduler.h`
 **Namespace:** `Spark`
-**Tests:** `Tests/TestCoroutineScheduler.cpp` (10 test cases)
+**Tests:** `Tests/TestCoroutineScheduler.cpp` (`CoroutineSchedulerReal_*` exercise the production scheduler), `Tests/TestSparkGameShowcase.cpp` (`SparkGameShowcase_*`, Linux, real SparkGame module image)
 
 ---
 
@@ -466,7 +466,7 @@ Registers a C++20 `GameCoroutine` with the scheduler. The coroutine is wrapped i
 void StopCoroutine(const std::string& name);
 ```
 
-Cancels all coroutines (both builder and native) that match the given name. Cancelled coroutines are removed during the next `Update()` call.
+Cancels all coroutines (both builder and native) that match the given name. Called outside `Update()`, the cancelled coroutines are destroyed before it returns, so a game module can stop its coroutines in `OnUnload()`/`Shutdown()` and then be unloaded without the scheduler holding step callables that live in the unmapped image (the SparkGame showcase does this; `SparkGameShowcase_CoroutineStoppedBeforeUnload` covers it). Called from a step during `Update()`, destruction is deferred to the end of that tick, and a builder coroutine that cancels itself from a `Do()` action runs none of its later steps. Only cancelled entries are destroyed on this path: coroutines that are merely finished stay until the next `Update()`, so the reference returned by `StartCoroutine()` remains valid while its steps are still being chained (a builder with no steps yet reports `IsFinished()`).
 
 #### StopAll
 
@@ -474,7 +474,7 @@ Cancels all coroutines (both builder and native) that match the given name. Canc
 void StopAll();
 ```
 
-Cancels every active coroutine. Useful for scene transitions or shutdown.
+Cancels every active coroutine, with the same immediate-destruction rule as `StopCoroutine`. Useful for scene transitions or shutdown.
 
 #### IsRunning
 
@@ -756,7 +756,7 @@ The coroutine system is covered by `Tests/TestCoroutineScheduler.cpp` with 10 te
 Run tests with:
 
 ```bash
-cd build && ctest --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 ```
 
 ---

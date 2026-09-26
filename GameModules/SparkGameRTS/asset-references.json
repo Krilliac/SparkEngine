@@ -1,0 +1,91 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameRTS",
+  "description": "Every asset path SparkGameRTS source names (the Blender RTS kit under Models/RTS/Kit, staged on the skirmish map by RTSDemoPresentation::SyncKitProps, and the music tracks RTSEngineSystems registers), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Audio/RTS/Music/battle_music.wav",
+      "sha256": "33f704264b4ed14a8771ef185b21b77f93d9c2bc1fbf84ad44674ad79d24dd48",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RTS/Music/defeat.wav",
+      "sha256": "d235ffac459c7167c58ee88972afa87fcb421baf61df3a36852a5cbe94c32bd5",
+      "kind": "music stinger (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RTS/Music/faction_1_theme.wav",
+      "sha256": "eb55a1e0047a3b057c5e2505a48b44ffd6e613bcdda829ecf50d4e2353fcf332",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RTS/Music/faction_2_theme.wav",
+      "sha256": "d696b9ce18ea5ead5ec1f596b9df7f8052b7523eacfaa9525d5f83979425cb6c",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RTS/Music/faction_3_theme.wav",
+      "sha256": "103abb57c61715da4242ffc6ad2296418eef8ff3b802927eacc59b4b4a129c01",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RTS/Music/victory.wav",
+      "sha256": "d302acf73dedbc09c84d1df21c9b3776e3db3b8653616bdf7a03c403fcd69606",
+      "kind": "music stinger (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Models/RTS/Kit/barracks.obj",
+      "sha256": "334564540dfd18d21c7dba1f52f3adaa936bfde44409a1f42d78ea4a3d0d5ed4",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "rts-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RTS/Kit/barracks_crimson.obj",
+      "sha256": "aae6cc732e8ce6926f30e044262c062842387d54d452f79e5f9dcdabb3d6fc5c",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "rts-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RTS/Kit/command_center.obj",
+      "sha256": "a351e4b8a0003eb6e9f0784743aca4bdfb991d3b5a66e11080d4e55dbe288c92",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "rts-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RTS/Kit/command_center_crimson.obj",
+      "sha256": "728da7ed6840c996f5e1ec085eb5490080280c3a3df107ed901c3ef3f8219896",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "rts-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RTS/Kit/rally_flag.obj",
+      "sha256": "e9a25ca2756a5bfb6a90feb903e219e40540d7ad6a2155fcf68c2a285f803843",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "rts-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RTS/Kit/rally_flag_crimson.obj",
+      "sha256": "6efea6371c9a4526e32bb2f1ad4f9b868882875f8d2d82594d0694092b618553",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "rts-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RTS/Kit/resource_node.obj",
+      "sha256": "9f1a3e047d4029bb5d767da818a3a44afa8d5a52a6c29bb8ea1e5437682c70af",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "rts-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RTS/Kit/unit_marker.obj",
+      "sha256": "d7f0906691cdd8cadd9a777266420aa07b6adf3b3adad674dd3b73f71aa5e7e6",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "rts-blender-kit"
+    }
+  ]
+}

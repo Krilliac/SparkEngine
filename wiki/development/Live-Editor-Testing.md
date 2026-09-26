@@ -73,6 +73,7 @@ python3 tools/test-editor-live.py build/bin/SparkEditor
 - `--test-mode` — skips the project-browser modal, enables debug console
 - `--test-frames N` — exit after N frames (automated testing)
 - `--debug-console` — print diagnostic output to stdout
+- `--version` / `-v` — print `SparkEditor X.Y.Z` and exit 0 before any console, window, or GPU setup (needs no display; covered with every other stable-v1 product by the `VersionConsistency_StableProducts` CTest)
 
 `tools/test-editor-live.py` includes X11 screenshot capture via ctypes (no ImageMagick required).
 

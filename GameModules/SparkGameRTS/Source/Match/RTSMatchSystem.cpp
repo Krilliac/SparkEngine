@@ -7,6 +7,8 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
+#include <cmath>
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -178,6 +180,38 @@ namespace RTS
     RTSFaction RTSMatchSystem::GetWinner() const
     {
         return m_winner;
+    }
+
+    bool RTSMatchSystem::HasWinner() const
+    {
+        return m_hasWinner;
+    }
+
+    RTSMatchSnapshot RTSMatchSystem::CaptureState() const
+    {
+        return {m_state, m_matchTime, m_winner, m_hasWinner, m_players};
+    }
+
+    bool RTSMatchSystem::RestoreState(const RTSMatchSnapshot& snapshot)
+    {
+        if (snapshot.state >= RTSMatchState::Count || snapshot.winner >= RTSFaction::Count ||
+            !std::isfinite(snapshot.matchTime) || snapshot.matchTime < 0.0f ||
+            snapshot.players.size() > static_cast<size_t>(MAX_PLAYERS))
+        {
+            return false;
+        }
+        for (const PlayerSetup& player : snapshot.players)
+        {
+            if (player.faction >= RTSFaction::Count || !std::isfinite(player.startX) || !std::isfinite(player.startY))
+                return false;
+        }
+
+        m_state = snapshot.state;
+        m_matchTime = snapshot.matchTime;
+        m_winner = snapshot.winner;
+        m_hasWinner = snapshot.hasWinner;
+        m_players = snapshot.players;
+        return true;
     }
 
     std::string RTSMatchSystem::GetMatchStatusString() const

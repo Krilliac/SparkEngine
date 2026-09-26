@@ -4,6 +4,12 @@
  *
  * Routes pipeline rendering through the RHI bridge.
  * Windows counterpart lives in GraphicsRenderPipelinesWindows.cpp.
+ *
+ * Statistics contract: these passes never increment
+ * RenderStatistics::drawCalls themselves. Draws are counted by the active RHI
+ * backend as they are recorded and folded in by EndFrame, so a pass that
+ * records nothing reports nothing. None of these passes issues a draw or dispatch
+ * without a pipeline bound for it.
  */
 #include "../Core/Platform.h"
 #ifndef SPARK_PLATFORM_WINDOWS
@@ -44,7 +50,6 @@ void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& p
         if (!obj || !obj->IsActive() || !obj->IsVisible())
             continue;
         obj->Render(viewMatrix, projMatrix);
-        m_statistics.drawCalls++;
     }
 
     cmd->EndEvent();
@@ -95,34 +100,15 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
 
     cmd->BeginEvent("ForwardPlusPass");
 
-    // Depth pre-pass
-    cmd->BeginEvent("DepthPrepass");
-    for (auto* obj : objects)
-    {
-        if (!obj || !obj->IsActive() || !obj->IsVisible())
-            continue;
-        // Depth-only render handled by pipeline state
-        m_statistics.drawCalls++;
-    }
-    cmd->EndEvent();
-
-    // Light culling (compute shader)
-    cmd->BeginEvent("LightCulling");
-    // Dispatch light culling compute shader
-    constexpr uint32_t TILE_SIZE = 16;
-    uint32_t tilesX = (m_width + TILE_SIZE - 1) / TILE_SIZE;
-    uint32_t tilesY = (m_height + TILE_SIZE - 1) / TILE_SIZE;
-    cmd->Dispatch(tilesX, tilesY, 1);
-    cmd->EndEvent();
-
-    // Shading pass with per-tile light lists
+    // The Linux path has no depth-prepass or tiled light-culling compute
+    // pipeline yet, so neither is recorded: an unbound Dispatch is not a
+    // light-culling pass. Objects shade through their own Render path.
     cmd->BeginEvent("Shading");
     for (auto* obj : objects)
     {
         if (!obj || !obj->IsActive() || !obj->IsVisible())
             continue;
         obj->Render(viewMatrix, projMatrix);
-        m_statistics.drawCalls++;
     }
     cmd->EndEvent();
 
@@ -147,7 +133,6 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
         if (!obj || !obj->IsActive() || !obj->IsVisible())
             continue;
         obj->Render(viewMatrix, projMatrix);
-        m_statistics.drawCalls++;
     }
 
     cmd->EndEvent();
@@ -155,23 +140,10 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
 
 void GraphicsEngine::LightingPass(const XMMATRIX& /*viewMatrix*/, const XMMATRIX& /*projMatrix*/)
 {
-    auto& rhi = GetRHI();
-    if (!rhi.initialized)
-        return;
-
-    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd)
-        return;
-
-    cmd->BeginEvent("LightingPass");
-
-    // Full-screen quad to resolve G-Buffer with lighting
-    // Bind G-Buffer textures as shader resources and draw a full-screen triangle
-    cmd->SetPrimitiveTopology(Spark::RHI::RHIPrimitiveTopology::TriangleList);
-    cmd->Draw(3, 0); // Full-screen triangle
-    m_statistics.drawCalls++;
-
-    cmd->EndEvent();
+    // The Linux RHI path has no G-buffer lighting-resolve pipeline (shader,
+    // G-buffer SRVs, HDR target) yet. A full-screen Draw(3, 0) with nothing
+    // bound is not a lighting pass, so nothing is recorded and nothing is
+    // counted until a real resolve pipeline is bound here.
 }
 
 void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix,
@@ -273,106 +245,23 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     m_statistics.culledObjects = m_statistics.totalObjects - m_statistics.visibleObjects;
 }
 
-void GraphicsEngine::RenderGeometryPass()
-{
-    auto& rhi = GetRHI();
-    if (!rhi.initialized)
-        return;
-
-    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd)
-        return;
-
-    m_geometryStartTime = std::chrono::high_resolution_clock::now();
-    cmd->BeginEvent("GeometryPass");
-
-    // Process the ECS draw list for geometry rendering
-    for (const auto& drawCmd : m_drawList)
-    {
-        // Each draw command is handled by the asset pipeline binding
-        m_statistics.drawCalls++;
-    }
-
-    cmd->EndEvent();
-}
-
-void GraphicsEngine::RenderLightingPass()
-{
-    auto& rhi = GetRHI();
-    if (!rhi.initialized)
-        return;
-
-    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd)
-        return;
-
-    m_lightingStartTime = std::chrono::high_resolution_clock::now();
-    cmd->BeginEvent("LightingResolve");
-
-    // Resolve lighting using a full-screen pass
-    cmd->SetPrimitiveTopology(Spark::RHI::RHIPrimitiveTopology::TriangleList);
-    cmd->Draw(3, 0); // Full-screen triangle
-    m_statistics.drawCalls++;
-
-    auto endTime = std::chrono::high_resolution_clock::now();
-    m_statistics.lightCullingTime = std::chrono::duration<float, std::milli>(endTime - m_lightingStartTime).count();
-
-    cmd->EndEvent();
-}
-
 void GraphicsEngine::RenderPostProcessing()
 {
     m_postProcessStartTime = std::chrono::high_resolution_clock::now();
 
-    // Delegate to the actual PostProcessingPipeline system
+    // PostProcessingPipeline is the only post-process path on Linux. Its pass
+    // count includes only passes that actually executed (a bound shader and a
+    // recorded draw); the engine-level Bloom/SSAO/tone-mapping settings have
+    // no Linux RHI pipeline, so they add no passes of their own.
+    uint32_t executedPasses = 0;
     if (m_postProcessing)
     {
         float deltaTime = m_statistics.frameTime / 1000.0f; // ms -> seconds
         m_postProcessing->Process(deltaTime);
         m_postProcessing->Render();
+        executedPasses = static_cast<uint32_t>(m_postProcessing->GetActivePassCount());
     }
-
-    // Also dispatch through RHI path for cross-platform passes
-    auto& rhi = GetRHI();
-    if (rhi.initialized)
-    {
-        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-        if (cmd)
-        {
-            uint32_t passCount = 0;
-            cmd->BeginEvent("PostProcessing_RHI");
-
-            // Bloom pass (engine-level, not in PostProcessingPipeline)
-            if (m_settings.bloom)
-            {
-                cmd->BeginEvent("Bloom");
-                cmd->Draw(3, 0);
-                passCount++;
-                cmd->EndEvent();
-            }
-
-            // SSAO pass
-            if (m_settings.ssao)
-            {
-                cmd->BeginEvent("SSAO");
-                cmd->Draw(3, 0);
-                passCount++;
-                cmd->EndEvent();
-            }
-
-            // Tone mapping (always active when HDR is enabled)
-            if (m_hdrEnabled)
-            {
-                cmd->BeginEvent("ToneMapping");
-                cmd->Draw(3, 0);
-                passCount++;
-                cmd->EndEvent();
-            }
-
-            m_statistics.postProcessPasses = passCount + m_postProcessing->GetActivePassCount();
-            cmd->EndEvent();
-        }
-    }
+    m_statistics.postProcessPasses = executedPasses;
 
     auto endTime = std::chrono::high_resolution_clock::now();
     m_statistics.postProcessTime = std::chrono::duration<float, std::milli>(endTime - m_postProcessStartTime).count();
@@ -380,44 +269,16 @@ void GraphicsEngine::RenderPostProcessing()
 
 void GraphicsEngine::RenderTemporalEffects()
 {
-    // Delegate to the actual TemporalEffects system
+    // Keep TemporalEffects' CPU state (jitter, history) in step with the
+    // settings. Its Linux Render() records no GPU work — TAA resolve and
+    // motion blur exist only on the D3D11 path — so no pass is counted and
+    // no RHI draw is issued for them here.
     if (m_temporalEffects)
     {
         m_temporalEffects->SetTAAEnabled(m_settings.taa);
         m_temporalEffects->SetMotionBlurEnabled(m_settings.motionBlur);
-
         m_temporalEffects->Render();
-
-        if (m_settings.taa)
-            m_statistics.postProcessPasses++;
-        if (m_settings.motionBlur)
-            m_statistics.postProcessPasses++;
-    }
-
-    // Also dispatch through RHI path for cross-platform tracking
-    auto& rhi = GetRHI();
-    if (rhi.initialized)
-    {
-        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-        if (cmd)
-        {
-            cmd->BeginEvent("TemporalEffects_RHI");
-            if (m_settings.taa)
-            {
-                cmd->BeginEvent("TAA");
-                cmd->Draw(3, 0);
-                cmd->EndEvent();
-            }
-            if (m_settings.motionBlur)
-            {
-                cmd->BeginEvent("MotionBlur");
-                cmd->Draw(3, 0);
-                cmd->EndEvent();
-            }
-            cmd->EndEvent();
-        }
     }
 }
-
 
 #endif // !SPARK_PLATFORM_WINDOWS

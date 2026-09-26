@@ -162,49 +162,9 @@ Game modules must use the named `IEngineContext` getters, their own owned state,
 or an explicit public addon/event interface; they cannot downcast the public
 context and depend on this private host registry.
 
-#### Dependency-Aware Subsystem Registration
+#### Subsystem Lifecycle Ownership
 
-The `RegisterSubsystem()` method supports declaring dependencies between subsystems for ordered initialization and shutdown:
-
-```cpp
-template <typename... Deps>
-struct DependsOn {};
-
-struct SubsystemEntry
-{
-    TypeId type;
-    std::string name;
-    std::vector<TypeId> dependencies;
-    std::function<bool()> initFn;      // Called during InitializeAll()
-    std::function<void()> shutdownFn;  // Called during ShutdownAll()
-    bool initialized = false;
-};
-```
-
-Usage:
-
-```cpp
-// Register with dependencies
-ctx->RegisterSubsystem<AudioEngine>(&audio,
-    DependsOn<Timer, Spark::EventBus>{},
-    [&audio]{ return audio.Initialize(); },
-    [&audio]{ audio.Shutdown(); });
-
-ctx->RegisterSubsystem<PhysicsSystem>(&physics,
-    DependsOn<Timer>{},
-    [&physics]{ return physics.Initialize(); },
-    [&physics]{ physics.Shutdown(); });
-
-// Initialize all in topological (dependency) order
-ctx->InitializeAll();
-
-// Shutdown in reverse order
-ctx->ShutdownAll();
-```
-
-`InitializeAll()` performs a topological sort of subsystem entries based on declared dependencies. It returns `false` if a dependency cycle is detected or any subsystem fails to initialize.
-
-> **Not the production init path.** `EngineContext::InitializeAll`/`ShutdownAll` (the R1.2 dependency-ordered registry) is kept because `Tests/harden/Test_tests_enginecontext_real.cpp` and six other test files exercise it. The production order is `LifecycleCompositionRoot` (`Core/Lifecycle/`), whose `InitDebug` stage now sorts first (`LifecycleOrder::Diagnostics`); the gameplay lifecycle registers the engine-lifetime services on `EngineContext` and nulls them at shutdown.
+`EngineContext` locates subsystems; it never initializes or shuts them down. `EngineRuntime` (`Core/EngineRuntime.h`) owns every engine-lifetime subsystem (OD-01 removed the old R1.2 `RegisterSubsystem`/`DependsOn`/`InitializeAll`/`ShutdownAll` registry, and with it two `IEngineContext` vtable slots, so `SPARK_SDK_VERSION` is 5). Startup and teardown order is `LifecycleCompositionRoot` (`Core/Lifecycle/`), whose `InitDebug` stage now sorts first (`LifecycleOrder::Diagnostics`); the gameplay lifecycle registers the engine-lifetime services on `EngineContext` and nulls them at shutdown. The root fails closed (LIFE-200): a stage whose `Initialize()` returns false or throws aborts startup, the touched stages are torn down in reverse order (the teardown-only `Shutdown` stage included), and the root latches `Failed` so later update/shutdown calls are no-ops. `InitConsole()` returns false and every platform entry point exits non-zero; a stage that throws during shutdown is contained, the remaining stages still tear down, and the exit status is non-zero. Injected-failure coverage: `Tests/TestLifecycleCompositionRootFailure.cpp` (ctest `LifecycleCompositionRootFailure`, label `lifecycle`).
 
 #### Concrete EngineContext API Summary
 
@@ -217,11 +177,6 @@ module-facing `IEngineContext` contract.
 | `GetOwned()` | Access owning `unique_ptr` (init/shutdown only) |
 | `RegisterSystem<T>(ptr)` | Register subsystem in generic registry |
 | `GetSystem<T>()` | Retrieve subsystem from generic registry |
-| `RegisterSubsystem<T>(ptr, deps, init, shutdown)` | Register with dependency metadata |
-| `InitializeAll()` | Init all subsystems in topological order |
-| `ShutdownAll()` | Shut down in reverse order |
-| `GetInitOrder()` | Get computed init order (debugging) |
-| `GetSubsystemCount()` | Number of registered subsystem entries |
 | Named getters/setters | `GetGraphics()`, `SetGraphics()`, etc. |
 
 ## Subsystem Architecture
@@ -383,7 +338,7 @@ SparkEngine/
 ├── docs/                     # API docs, gap analysis, roadmap
 ├── wiki/                     # Wiki documentation pages
 ├── cmake/                    # CMake helper modules
-└── CMakeLists.txt            # Main build configuration (1000+ lines)
+└── CMakeLists.txt            # Main build configuration
 ```
 
 ## Key Architectural Patterns
@@ -398,7 +353,6 @@ SparkEngine/
 | **Object Pooling** | Resource reuse | Audio sources, particles, projectiles |
 | **Factory Pattern** | Backend instantiation | `RHIFactory`, `Primitives::Create*()` |
 | **Singleton** | Global access for managers | `AnimationManager`, `AudioEngine`, `Profiler` via `GetInstance()` |
-| **Dependency Injection** | Ordered init/shutdown | `DependsOn<>` template, topological sort in `InitializeAll()` |
 
 ## Thread Safety Rules
 

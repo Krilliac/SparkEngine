@@ -48,6 +48,8 @@ void EngineRuntime::ShutdownHeadlessAssetServices()
 
 bool EngineRuntime::InitializeHeadlessRhi()
 {
+    // A new headless RHI lifetime starts; never report an earlier run's count.
+    headlessRhiLiveResourcesAtShutdown.reset();
     if (headlessRhiBridge)
         return headlessRhiBridge->IsHeadless() && headlessRhiBridge->GetDevice() != nullptr;
 
@@ -69,6 +71,7 @@ void EngineRuntime::ShutdownHeadlessRhi() noexcept
         return;
 
     headlessRhiBridge->Shutdown();
+    headlessRhiLiveResourcesAtShutdown = headlessRhiBridge->GetNullResourcesLiveAtShutdown();
     headlessRhiBridge.reset();
 }
 

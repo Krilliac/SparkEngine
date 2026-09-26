@@ -24,20 +24,26 @@ using namespace DirectX;
 namespace Spark
 {
 
+    namespace
+    {
+        // Used only when the loaded scene carries no SpawnPoint nodes tagged
+        // wave_spawn (Assets/Scenes/level1.scene authors ten); it rings the
+        // arena perimeter so a scene without wave spawns can still run waves.
+        std::vector<XMFLOAT3> MakeFallbackWaveSpawnPoints()
+        {
+            return {
+                {20.0f, 1.0f, 20.0f}, {-20.0f, 1.0f, 20.0f}, {20.0f, 1.0f, -20.0f}, {-20.0f, 1.0f, -20.0f},
+                {25.0f, 1.0f, 0.0f},  {-25.0f, 1.0f, 0.0f},  {0.0f, 1.0f, 25.0f},   {0.0f, 1.0f, -25.0f},
+            };
+        }
+    } // namespace
+
     WaveSpawner::WaveSpawner() = default;
 
     void WaveSpawner::Initialize(const std::vector<XMFLOAT3>& spawnPoints)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing wave spawner with %zu spawn points", spawnPoints.size());
-        m_spawnPoints = spawnPoints;
-        if (m_spawnPoints.empty())
-        {
-            // Fallback spawn points around the arena perimeter
-            m_spawnPoints = {
-                {20.0f, 1.0f, 20.0f}, {-20.0f, 1.0f, 20.0f}, {20.0f, 1.0f, -20.0f}, {-20.0f, 1.0f, -20.0f},
-                {25.0f, 1.0f, 0.0f},  {-25.0f, 1.0f, 0.0f},  {0.0f, 1.0f, 25.0f},   {0.0f, 1.0f, -25.0f},
-            };
-        }
+        m_spawnPoints = spawnPoints.empty() ? MakeFallbackWaveSpawnPoints() : spawnPoints;
         m_state = WaveState::Idle;
     }
 

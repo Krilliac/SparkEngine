@@ -10,7 +10,7 @@
       "wave": 0,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim.",
+      "rationale": "Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim. 2026-09-24 local progress: validate.py now resolves every work-item --preset against its CMakePresets.json family and every build/<dir> tree against a configure preset binaryDir (inheritance resolved through Tools/buildmatrix/inventory.py), and rejects CTest runs against a preset that sets BUILD_TESTS=OFF unless the same item configures it with -DBUILD_TESTS=ON; 51 commands were moved to test-building presets (windows-release, linux-gcc-release, ci-linux-asan/tsan, macos-metal) or given -DBUILD_TESTS=ON, and macos-shipping is a self-pruning planned preset owned by PLT-220.",
       "dependencies": [],
       "parallelWith": [
         "CI-100",
@@ -44,6 +44,45 @@
         "Every referenced path, gate, work item, metric, and capability exists",
         "A capability cannot be ready while a blocker or required gate is open",
         "Two clean generations produce byte-identical content except declared timestamps"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:bf0632f5fe5f",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open."
+        },
+        {
+          "criterionDigest": "sha256:f529f9e7254b",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "Cross-references are validated, but FUTURE_ACCEPTANCE_PATHS deliberately lets unfinished items reference paths that do not exist."
+        },
+        {
+          "criterionDigest": "sha256:2c8c4a1437af",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references."
+        },
+        {
+          "criterionDigest": "sha256:7f44777314f5",
+          "state": "unmet",
+          "evidence": [
+            ".github/workflows/site-data.yml",
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "Only the hosted site-data workflow generates twice and diffs. The local test only checks the workflow text and that the handoff render is deterministic."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py",
@@ -87,11 +126,7 @@
       ],
       "profileApplicability": {
         "stable-v1": "shared"
-      },
-      "plannedTestSelectors": [
-        "site-data-contract",
-        "readiness-cross-references"
-      ]
+      }
     },
     {
       "id": "RDY-010",
@@ -102,7 +137,7 @@
       "wave": 0,
       "area": "tests",
       "owner": "unassigned",
-      "rationale": "In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and requires exact-SHA Windows lifecycle and installed-package-smoke producers before the Ubuntu consumer and aggregate gate. 2026-09-13 progress: the lifecycle consumer now rejects malformed or logger-prefixed duplicate marker lines instead of filtering them, with the full module-evidence suite green. 2026-09-14 progress: the local module-evidence wrapper now selects a runnable Python interpreter when the Windows Store python3 alias is present; its declarative/adversarial run completes with 307 tests and 12 expected skips. No hosted run has yet supplied the corresponding immutable lifecycle/package artifacts and successful required-gate evidence. Those unhosted proof gaps keep this item release-blocking.",
+      "rationale": "In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and requires exact-SHA Windows lifecycle and installed-package-smoke producers before the Ubuntu consumer and aggregate gate. 2026-09-13 progress: the lifecycle consumer now rejects malformed or logger-prefixed duplicate marker lines instead of filtering them, with the full module-evidence suite green. 2026-09-14 progress: the local module-evidence wrapper now selects a runnable Python interpreter when the Windows Store python3 alias is present; its declarative/adversarial run completes with 307 tests and 12 expected skips. No hosted run has yet supplied the corresponding immutable lifecycle/package artifacts and successful required-gate evidence. Those unhosted proof gaps keep this item release-blocking. 2026-09-24 progress (local only; no hosted run yet): sanitizer-report is now required evidence for every included module (REQUIRED_INCLUDED_EVIDENCE) and is bound for SparkGameFPS. Its producer now points at the real run-sanitizer-tests.sh layout: build/module-evidence/sanitizer-asan/metadata.json plus the sibling junit.xml, from the test-results-linux-asan artifact. The previous binding was build/asan-ubsan-lsan-results.txt, which no workflow produced. module-evidence now needs build-linux-asan, runs verify-sanitizer-evidence.py verify-published on the downloaded directory, and the manifest consumer checks that the metadata commitSha equals the revision under test, the originEvidenceDirectory matches that SHA and the recorded runId/runAttempt, the run is clean (exact-all selector, zero exit, zero failures and errors, no sanitizer signals or runtime logs), junitSha256 matches the sibling junit.xml, the junit.xml records at least the 6900-testcase SparkTests floor (pinned by a test to the workflow's verify-published --minimum-tests), and at least one FPSRespawn_* test (production-source, registered in SparkTests) executed and passed. Binding the directory to the current workflow run id/attempt is done only by the preceding verify-published step. 32 tests (golden path in path and rooted mode, the shipped binding, producer layout, floor parity and selector census, plus 26 rejection cases) cover a missing file, the wrong SHA, a foreign origin or run identity, a below-floor clean run, a selector-free junit, a skipped selector, a failed selector, a swapped junit, the TSan lane and the stale path. A hosted exact-SHA ASan artifact consumed by module-evidence has not been observed.",
       "dependencies": [
         "RDY-000",
         "CI-100"
@@ -156,6 +191,38 @@
         "Each in-profile module publishes deterministic JUnit and sanitizer evidence",
         "Experimental module evidence remains independently owned and cannot block stable-v1"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:825cc23dea53",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a hosted Windows D3D11 lifecycle run at the exact commit. None has been observed."
+        },
+        {
+          "criterionDigest": "sha256:9fe198aadd95",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_module_evidence.py"
+          ],
+          "note": "The census guards only the sanitizer FPSRespawn_* selector. Replacing mirror tests across the gates remains open."
+        },
+        {
+          "criterionDigest": "sha256:641c68cb4915",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs hosted JUnit and sanitizer artifacts at the exact commit, consumed by module-evidence. None has been observed."
+        },
+        {
+          "criterionDigest": "sha256:d891fbbdaa85",
+          "state": "implemented",
+          "evidence": [
+            "tools/module-evidence/validate_manifest.py",
+            "Tests/Tools/test_module_evidence.py",
+            "tools/module-evidence/manifest.json"
+          ],
+          "note": "_check_experimental_separation rejects experimental modules that are required or shared in a profile, or that have an unknown or missing tracker (B32*). All ten experimental modules sit outside stable-v1 under RDY-015."
+        }
+      ],
       "commands": [
         "python3 -m unittest Tests.Tools.test_module_evidence",
         "python3 tools/module-evidence/validate_manifest.py --repo-root . --policy-only",
@@ -177,6 +244,7 @@
       "requiredCiJobs": [
         "build-windows-vs2022",
         "build-windows-shipping",
+        "build-linux-asan",
         "module-evidence"
       ],
       "performanceBudgets": [
@@ -219,12 +287,12 @@
       "id": "RDY-020",
       "title": "Establish asset and package integrity manifests",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 0,
       "area": "content",
       "owner": "unassigned",
-      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked. 2026-09-12 progress: runtime packages now install Assets/assets.integrity.json under bin/Assets, and extracted-package validation rejects a missing, link-like, or tampered runtime asset manifest/payload using the repository verifier with case-correct paths. 2026-09-21 progress: the installed FPS profile-package smoke now stages the manifest's root README and verifies all 882 staged bin/Assets entries before module lifecycle and save/reload; adversarial helper tests reject missing manifests, missing or tampered payloads, exact-case mismatches, undeclared files, and link-like paths. The fail-closed module inventory covers all 11 GameModules, with FPS root Models/Scenes integrity coverage at 317/317; content outside the in-profile FPS root remains unclassified. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. Clean Windows 11/archive, profile-wide package, provenance, exact-SHA proof, and remaining module content debt still remain open.",
+      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked. 2026-09-12 progress: runtime packages now install Assets/assets.integrity.json under bin/Assets, and extracted-package validation rejects a missing, link-like, or tampered runtime asset manifest/payload using the repository verifier with case-correct paths. 2026-09-21 progress: the installed FPS profile-package smoke now stages the manifest's root README and verifies all 882 staged bin/Assets entries before module lifecycle and save/reload; adversarial helper tests reject missing manifests, missing or tampered payloads, exact-case mismatches, undeclared files, and link-like paths. The fail-closed module inventory covers all 11 GameModules, with FPS root Models/Scenes integrity coverage at 317/317; content outside the in-profile FPS root remains unclassified. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. 2026-09-24 local progress (OD-09): the stable-v1 runtime package (SparkGameFPS selector) now installs through cmake/SparkRuntimeAssets.cmake, which derives the stable-v1 manifest at configure time and excludes all 475 NOASSERTION TERRAFRONT entries (408 of 883 entries ship); verify --profile stable-v1 rejects any NOASSERTION, relabelled, unreviewed, or altered packaged entry and runs in the installed FPS package smoke and the release extracted-package check. The excluded files stay in the repository and their provenance stays open outside stable-v1. Clean Windows 11/archive, profile-wide package, provenance, exact-SHA proof, and remaining module content debt still remain open. 2026-09-24 local progress: tools/site-data/module_content.py now scans in-profile module sources (SparkGameFPS) after a single comment/literal-aware lexing pass (raw and prefixed strings included) and validate.py fails on any detected site not declared in GameModules/module-content-inventory.json fallbackSites with an intentional, gap, or tracked policy. Enforcement covers only three site shapes: calls to identifiers containing Fallback or Procedural, and LoadObj calls whose receiver names a different .obj than it loads; inline defaults without such a named helper are not detected. The WaveSpawner perimeter spawns were moved into the named MakeFallbackWaveSpawnPoints helper so they are enforced; the six current FPS sites are declared, and the shotgun/rocket/grenade rifle.obj substitutions are tracked under MOD-310, which owns the fix. 2026-09-25 local progress: Tests/TestAssetManifestReal.cpp adds the AssetManifest_* and PathCase_* selectors (CTest AssetManifest_FPSReferences and PathCase_FPSReferences, 2 tests each, --empty-is-error). The references are the asset-rooted string literals in GameModules/SparkGameFPS/Source (comment/include-aware lexing of the production files) plus every model/material the production SceneManager keeps for Scenes/level1.scene loaded through Spark::FPSAssets::Resolve; each must be declared in Assets/assets.integrity.json and resolve with byte-exact case per path component under both the repository root found by FindAssetRoot and the runtime Root(), and case-altered, traversal, absolute and drive spellings are rejected by the exact-case lookup and ResolveScenePath. Local mutation checks (a Models/Pistol.obj literal in Player.cpp, an Assets/materials/ spelling in level1.scene) fail both selectors. Coverage is the FPS module only; other modules and hosted exact-SHA evidence remain open. 2026-09-25 local progress: the stable-v1 package now installs only the SparkGameFPS runtime asset closure (40 of 883 entries) instead of every asset root. tools/asset-integrity/package_closure.py derives it from the asset-rooted string literals in the in-profile module sources (modules taken from GameModules/module-content-inventory.json and cross-checked against tools/asset-integrity/package-profiles.json) and in the reviewed engine source directory SparkEngine/Source (which adds the Models/{Cube,Plane,Sphere,Wall,Pyramid,Ramp}.obj defaults the engine primitive objects load when FPS or SceneManager creates them), the reviewed seeds there (asset README, Engine/Branding), and the scenes/materials those reference transitively. A literal counts as a reference when its first component names a top-level asset directory ignoring case (backslashes and a leading ./ or Assets/ normalised); an unresolved or case-mismatched reference, or a closure entry whose license is NOASSERTION, fails configure. The only exemptions are 13 reviewed unshippedReferences (the DecalSystem .dds names no code opens and the EntityPresetManager preset strings only the editor reads; none exists in the tree), each with a reason, and a stale or asset-shadowing exemption also fails. The closure covers literal asset paths only; paths composed at run time are not derived, so it is not yet proven to be everything the D3D11 runtime opens. verify --profile stable-v1 now also rejects a package that ships a file outside the closure (profile-outside-closure) or omits a closure file (profile-incomplete), and derives the closure from the verifier's own checkout (or fails with profile-closure) when the source manifest sits outside a tree with the profile definitions; the previous NOASSERTION-only stable-v1 layout (408 entries) fails with 368 profile-outside-closure errors. Configure re-derives the closure when the profile definition, inventory, a followed scene/material, or the set of scanned source files changes; an edit inside an existing source file does not reconfigure, and the resulting stale package is rejected by verify as profile-incomplete. check-all --profile stable-v1 --strict-provenance passes (40/40 license-asserted) while the whole-repository --strict-provenance still fails on 475 NOASSERTION entries. ValidateStagedPackageExecutables.cmake requires bin/Assets/Scenes/level1.scene for stable-v1 instead of the TERRAFRONT MMOFPS/Data/continents.json. Linux runtime proof: the closure staged by the real cmake/SparkRuntimeAssets.cmake rules plus the built SparkEngine and libSparkGameFPS.so reports SPARK_MODULE_READY count=1 and a clean SparkGameFPS lifecycle, headless and windowed under Xvfb with NullRHI, and strace shows no asset access outside the staged tree (that run used the earlier 34-entry closure, before the engine primitive OBJs were added). The Linux FPS player skips weapon and scene meshes without a D3D11 device, so NullRHI cannot show mesh loads and the Windows package smoke (MOD-310) must confirm the D3D11 model/material/texture loads match the closure; no hosted exact-SHA evidence exists.",
       "dependencies": [
         "RDY-000"
       ],
@@ -267,12 +335,57 @@
         "Tampered or traversal paths fail before package assembly",
         "Experimental modules keep their package-smoke debt outside stable-v1"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:dbf6a5ff40ba",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_asset_integrity.py",
+            "tools/asset-integrity/verify_asset_integrity.py"
+          ],
+          "note": "Downgraded. Only the root Assets manifest is checked. The rationale cites modules referencing missing assets, and content from modules outside the profile remains unclassified. Per-module manifests are not generated."
+        },
+        {
+          "criterionDigest": "sha256:5a3bf0f4851d",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists."
+        },
+        {
+          "criterionDigest": "sha256:b056e4c35794",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_asset_package_profile.py"
+          ],
+          "note": "Licenses are asserted only for the 40-entry stable-v1 closure. 475 NOASSERTION entries remain, and provenance is listed as open."
+        },
+        {
+          "criterionDigest": "sha256:3467a81033d4",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_asset_integrity.py"
+          ],
+          "note": "The verifier rejects traversal and tampering, but the configure-time package profile does not re-hash sources. Blocking before assembly relies on CI job ordering."
+        },
+        {
+          "criterionDigest": "sha256:d2fc0972e07f",
+          "state": "implemented",
+          "evidence": [
+            "tools/module-evidence/validate_manifest.py",
+            "Tests/Tools/test_module_evidence.py",
+            "Tests/Tools/test_asset_package_profile.py"
+          ],
+          "note": "Experimental modules must stay outside stable-v1 with an RDY-015 tracker (B32d). The stable-v1 closure excludes other modules' content, and experimental-profile smoke logs are rejected."
+        }
+      ],
       "commands": [
         "python3 tools/asset-integrity/verify_asset_integrity.py check-all",
+        "python3 tools/asset-integrity/verify_asset_integrity.py check-all --profile stable-v1 --strict-provenance",
         "python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json --root Assets",
         "python3 tools/site-data/validate.py --assets",
         "python3 Tests/Tools/test_asset_integrity.py",
-        "ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error"
+        "python3 Tests/Tools/test_asset_package_profile.py",
+        "ctest --test-dir build/windows-release -C Release -L profile-package --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "AssetManifest_*",
@@ -315,11 +428,7 @@
         "stable-v1": "required"
       },
       "plannedCiJobs": [],
-      "plannedTestSelectors": [
-        "AssetManifest_*",
-        "PackageAssets_*",
-        "PathCase_*"
-      ],
+      "plannedTestSelectors": [],
       "evidence": {
         "manifestGeneration": "tools/asset-integrity/verify_asset_integrity.py generate Assets produces a deterministic root manifest",
         "manifestVerification": "tools/asset-integrity/verify_asset_integrity.py verify plus check-all must pass",
@@ -331,19 +440,22 @@
         "templateCrossValidation": "Cross-validates template manifests against assets.lock.json and disk",
         "siteDataIntegration": "validate.py --assets invokes the root integrity verifier fail-closed",
         "testCoverage": "Focused asset-integrity tests cover safety categories and site-data integration",
-        "determinism": "Two clean generations produce byte-identical output"
+        "fpsProductionReferences": "Local evidence 2026-09-25 (not same-SHA hosted CI): SparkTests AssetManifest_* (2 tests, 13 assertions) and PathCase_* (2 tests, 53 assertions) pass on Linux GCC Release; FPS source literals and level1.scene model/material references are manifest-declared with exact case and resolve through Spark::FPSAssets on a case-sensitive filesystem",
+        "determinism": "Two clean generations produce byte-identical output",
+        "stableV1NoAssertionExclusion": "Superseded by stableV1AssetClosure: this 408-entry NOASSERTION-only layout is historical and now fails verify --profile stable-v1 with 368 profile-outside-closure errors. OD-09 local evidence 2026-09-24 (not same-SHA hosted CI): verify_asset_integrity.py package-profile derives the stable-v1 manifest (408/883 entries, 475 NOASSERTION excluded); an install of the real Assets tree through cmake/SparkRuntimeAssets.cmake with PROFILE stable-v1 verified 408 entries with --profile stable-v1, while the default-profile install failed it with 475 profile-excluded errors; PackageAssets_StableV1ExcludesNoAssertion (Tests/Tools/test_asset_package_profile.py) and the stable-v1 cases in .github/scripts/test_validate_extracted_package.py pass locally. The Windows installed-package smoke with the stable-v1 profile check has not run.",
+        "stableV1AssetClosure": "Local evidence 2026-09-25 (not same-SHA hosted CI): check-all --profile stable-v1 --strict-provenance prints 'package profile stable-v1: 40 entries packaged, 843 entries (475 NOASSERTION, 368 outside the profile closure) excluded' and 40/40 license-asserted; Tests/Tools/test_asset_package_profile.py (27 tests) and Tests/Tools/test_asset_integrity.py (55 tests) pass; a scratch copy installed through cmake/SparkRuntimeAssets.cmake verifies 40 entries including the six engine primitive OBJs, a source-file content edit does not reconfigure while adding a source file or editing level1.scene does, and a stale install after a new literal fails verify as profile-incomplete. The earlier 34-entry closure install, with the built SparkEngine and libSparkGameFPS.so, reported SPARK_MODULE_READY count=1 on Linux NullRHI; D3D11 mesh loads are unproven until the MOD-310 Windows smoke"
       }
     },
     {
       "id": "CI-100",
       "title": "Repair fail-closed required CI",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 0,
       "area": "ci",
       "owner": "unassigned",
-      "rationale": "ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under current triggers, and coverage, validation, format, and static-analysis surfaces are incomplete or advisory. 2026-09-05 progress: the advisory-lane derivation landed in the exact-source gate (a failed Build job is accepted only if build.yml at that exact commit declares continue-on-error; required set cross-checked against EXPECTED_REQUIRED_JOBS_JSON; a required job marked continue-on-error is rejected). 2026-09-08 read-only remote evidence for Working 891e00c1cb4a930a38e61da26e62f56d4af88de3: its Build Matrix Verifier rejected the exact producer artifact because the producer reported 3 parity errors while the Linux trusted checker reported 19. The 16-error difference is a cross-host path-semantics defect in the old checker, which interpreted Windows-recorded paths with host Path/os.path rules. Local canonical commit 9583053edabdae37af6f737132bfc50eefd92930 uses recorded Windows/POSIX path semantics and restricts verifier sources to Working push/workflow_dispatch, but has not been published or proven by an exact-SHA remote run. Verified 2026-09-12 that legacy branch protection remains absent on Working (branches/Working/protection is 404), while repository ruleset 21968740 (Working integrity) is active and requires the GitHub Actions Required CI Gate check with no bypass actors. 2026-09-13 progress: the required-job verifier now fails closed when EXPECTED_REQUIRED_JOBS_JSON is missing or empty, with focused and failure-propagation regressions green. 2026-09-13 additional progress: the TODO/FIXME threshold now emits an error and exits nonzero, and the Windows registration guard now prefers Git Bash and passes POSIX script paths; focused CI policy suites pass locally. 2026-09-14 progress: the failure-propagation contract now verifies that workflow_dispatch reaches every required job and the always-running Required CI Gate without event/ref skips or cancellation; the full local contract suite passes 78/78. 2026-09-14 additional progress: build.yml now exposes an explicit, default-off workflow_dispatch control that fails the required validate-ci-tools job, and the workflow regression suite covers its manual-only guard. 2026-09-21 further progress: exact hosted failure showed a registered fuzz test without a built executable; the workflow now builds all three fuzz targets, and structural policy enforces target completeness plus build-before-CTest across 162 tests. The same hosted run exposed Windows newline drift in the crash-manifest corpus; those exact seed bytes are now LF-pinned and pass in an isolated core.autocrlf=true checkout. Exact SHA 37a4bec5 subsequently passed Site Data, CodeQL, Microsoft C++ analysis, and Trusted Reporter, while the main Build correctly failed on a portable temporary-directory assumption, platform-native cooker fixture newlines, and non-artifact CMake target semantics; bounded local fixes are covered by focused policy suites. The corrected SHA still needs hosted proof. Item stays open until an exact-SHA hosted control run proves the required-job failure turns Required CI Gate red.",
+      "rationale": "ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under current triggers, and coverage, validation, format, and static-analysis surfaces are incomplete or advisory. 2026-09-05 progress: the advisory-lane derivation landed in the exact-source gate (a failed Build job is accepted only if build.yml at that exact commit declares continue-on-error; required set cross-checked against EXPECTED_REQUIRED_JOBS_JSON; a required job marked continue-on-error is rejected). 2026-09-08 read-only remote evidence for Working 891e00c1cb4a930a38e61da26e62f56d4af88de3: its Build Matrix Verifier rejected the exact producer artifact because the producer reported 3 parity errors while the Linux trusted checker reported 19. The 16-error difference is a cross-host path-semantics defect in the old checker, which interpreted Windows-recorded paths with host Path/os.path rules. Local canonical commit 9583053edabdae37af6f737132bfc50eefd92930 uses recorded Windows/POSIX path semantics and restricts verifier sources to Working push/workflow_dispatch, but has not been published or proven by an exact-SHA remote run. Verified 2026-09-12 that legacy branch protection remains absent on Working (branches/Working/protection is 404), while repository ruleset 21968740 (Working integrity) is active and requires the GitHub Actions Required CI Gate check with no bypass actors. 2026-09-13 progress: the required-job verifier now fails closed when EXPECTED_REQUIRED_JOBS_JSON is missing or empty, with focused and failure-propagation regressions green. 2026-09-13 additional progress: the TODO/FIXME threshold now emits an error and exits nonzero, and the Windows registration guard now prefers Git Bash and passes POSIX script paths; focused CI policy suites pass locally. 2026-09-14 progress: the failure-propagation contract now verifies that workflow_dispatch reaches every required job and the always-running Required CI Gate without event/ref skips or cancellation; the full local contract suite passes 78/78. 2026-09-14 additional progress: build.yml now exposes an explicit, default-off workflow_dispatch control that fails the required validate-ci-tools job, and the workflow regression suite covers its manual-only guard. 2026-09-21 further progress: exact hosted failure showed a registered fuzz test without a built executable; the workflow now builds all three fuzz targets, and structural policy enforces target completeness plus build-before-CTest across 162 tests. The same hosted run exposed Windows newline drift in the crash-manifest corpus; those exact seed bytes are now LF-pinned and pass in an isolated core.autocrlf=true checkout. Exact SHA 37a4bec5 subsequently passed Site Data, CodeQL, Microsoft C++ analysis, and Trusted Reporter, while the main Build correctly failed on a portable temporary-directory assumption, platform-native cooker fixture newlines, and non-artifact CMake target semantics; bounded local fixes are covered by focused policy suites. The corrected SHA still needs hosted proof. Item stays open until an exact-SHA hosted control run proves the required-job failure turns Required CI Gate red. 2026-09-24 progress (local only; no hosted run of these changes yet): (1) the exact-source verifier (verify-exact-required-gate.py) accepted a non-success Build job only if it was continue-on-error, so every Working push, where build-linux-mingw-wine and Coverage PR Comment are always skipped, would have been rejected. It now also accepts a skipped non-required job whose exact committed job-level if: is on a closed allowlist of event-only guards (workflow_dispatch-only, pull_request-only) that is false for the verified event. Real-build.yml regressions and mutations cover a skipped required job, a guard that is true for the event, an unrecognised or widened if:, and a duplicate if:. (2) build-linux-mingw-wine is now named 'build-linux-mingw-wine (experimental)' with job-level continue-on-error: true, which the docs already claimed. A structural test with mutations locks it as dispatch-only, advisory and outside the required gate. Hosted run 34983218822 (PR branch claude/stable-v1-release, 3f427dd, job 104483285541) built under MinGW, then failed Run Tests under Wine. extract-errors counted 32 test failures, including CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot (private crash-artifact directory creation failed under Wine) and an ACCESS_VIOLATION in AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat inside Wine FAudio with no ALSA card. These are recorded on the MinGW wiki page, and no tests are excluded. (3) validate-ci-tools now runs check-pragma-once, check-editor-panels, check-deprecated-submodules, check-wiki-nav, check-wiring, check-doxygen-coverage, check-cross-utilization and check-di-singletons fail-closed. test-workflow-failure-propagation.py maps every tools/validate-all.sh run_check to a required invocation or a reasoned advisory entry (check-bloat, check-wiki-quality). (4) .github/scripts/verify-working-ruleset.py checks ruleset 21968740 from a captured 2026-09-24 API fixture (tested in validate-ci-tools) or --live. A live run on 2026-09-24 returned ok: active, no bypass actors, deletion + non_fast_forward, and exactly 'Required CI Gate' from integration 15368. Still open: the Working-branch controlled red run, exact-SHA acceptance of a Working push by the verifiers, a docs-only Working gate summary, a hosted MinGW dispatch after labeling, and exact-SHA artifacts. 2026-09-24 additional progress (local only): verify-required-jobs.py gained --json-out, which writes a canonical sparkengine.required-ci-gate.v1 record (sha, run id/attempt, repository, event, ref, expected jobs, per-job results, deferred entries, verdict) on both pass and fail without changing the exit code, and writes nothing (removing any stale record) when the needs evidence or run identity is invalid. Required CI Gate uploads it under if: always() as required-ci-gate-<sha>-<attempt> with if-no-files-found: error; test-verify-required-jobs.py covers failed, skipped, missing, deferred, malformed and identity cases and test-workflow-failure-propagation.py mutation-checks that the upload survives a red gate. No hosted run has published the record yet, so no consumer depends on it.",
       "dependencies": [],
       "parallelWith": [
         "RDY-000",
@@ -375,6 +487,38 @@
         "Every Working commit receives a gate summary, including docs-only changes",
         "MinGW/Wine is either executable and labeled experimental or removed from claims",
         "Required-check policy is documented and externally verified"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:55c1cd2f8364",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a hosted, controlled red run on Working proving the Required CI Gate turns red."
+        },
+        {
+          "criterionDigest": "sha256:ae0f4962f815",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs hosted Working runs, including a docs-only commit, that publish a gate summary."
+        },
+        {
+          "criterionDigest": "sha256:709caf31c8a5",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/test-workflow-failure-propagation.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "The experimental label is structurally tested, but no hosted MinGW dispatch has run since the relabel. The last run had 32 Wine test failures."
+        },
+        {
+          "criterionDigest": "sha256:3918ed579816",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/test-verify-working-ruleset.py",
+            ".github/scripts/verify-working-ruleset.py"
+          ],
+          "note": "The offline test uses a captured fixture. External verification needs the live GitHub API."
+        }
       ],
       "commands": [
         "bash tools/validate-all.sh",
@@ -431,12 +575,12 @@
       "id": "CI-110",
       "title": "Enforce deterministic test, coverage, sanitizer, and static-analysis policy",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "tests",
       "owner": "unassigned",
-      "rationale": "One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking thresholds, missing golden baselines, and partial clang-tidy/CodeQL coverage prevent a green result from proving release quality. 2026-09-05 progress: SparkTests is split into SparkEngineTests and SparkEngineLoadTests (labels load;slow) with per-configuration timeout budgets; the runner reports [ EMPTY ] tests and flaky waivers explicitly (EXPECT_WARN_ONLY, EXPECT_NO_CRASH, SKIP_TEST) and JUnit carries flaky=/empty= attributes; SPARK_TESTS_WARN_IS_ERROR exists but defaults OFF because Tests/TestWarnings.h still holds 8 waivers documenting real non-determinism. 2026-09-12 progress: the clang-tidy lane now inventories every shipped-product source root and fails closed on missing roots or an empty translation-unit inventory instead of analyzing a capped sample. 2026-09-13 progress: coverage enforcement now requires test, generation, and threshold steps to end exactly in success and rejects skipped/cancelled evidence, with direct workflow regressions. 2026-09-13 additional progress: Tools/validate_test_warnings.py now requires exact registry/metadata parity, named owners, and future ISO expiries for all whole-test waivers; blocking CI runs the validator and 7 adversarial policy tests. 2026-09-21 further progress: the exact hosted failure was a registered fuzz test without a built executable; the workflow now builds all three fuzz targets and structural policy enforces target completeness plus build-before-CTest across 162 tests. Executable-level smokes now exercise SparkConsole batch dispatch, SparkCrashReporter failure semantics, a two-pass SparkCooker manifest, real D3D11 shader compilation, SparkAutomation through the FPS NullRHI lifecycle, SparkBuild plan generation, and SparkEditor project load/clean shutdown. The hosted MSAN static-destruction failure is fixed with lifetime-safe EventBus subscriptions and a production regression. Exact SHA 37a4bec5 exposed and now locally closes the remaining cross-platform SparkCooker smoke digest mismatch by pinning LF fixture bytes. Golden baselines, corrected-SHA hosted proof, remaining shipped-product integration depth, and static-analysis coverage are still open.",
+      "rationale": "One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking thresholds, missing golden baselines, and partial clang-tidy/CodeQL coverage prevent a green result from proving release quality. 2026-09-05 progress: SparkTests is split into SparkEngineTests and SparkEngineLoadTests (labels load;slow) with per-configuration timeout budgets; the runner reports [ EMPTY ] tests and flaky waivers explicitly (EXPECT_WARN_ONLY, EXPECT_NO_CRASH, SKIP_TEST) and JUnit carries flaky=/empty= attributes; SPARK_TESTS_WARN_IS_ERROR exists but defaults OFF because Tests/TestWarnings.h still holds 8 waivers documenting real non-determinism. 2026-09-12 progress: the clang-tidy lane now inventories every shipped-product source root and fails closed on missing roots or an empty translation-unit inventory instead of analyzing a capped sample. 2026-09-13 progress: coverage enforcement now requires test, generation, and threshold steps to end exactly in success and rejects skipped/cancelled evidence, with direct workflow regressions. 2026-09-13 additional progress: Tools/validate_test_warnings.py now requires exact registry/metadata parity, named owners, and future ISO expiries for all whole-test waivers; blocking CI runs the validator and 7 adversarial policy tests. 2026-09-21 further progress: the exact hosted failure was a registered fuzz test without a built executable; the workflow now builds all three fuzz targets and structural policy enforces target completeness plus build-before-CTest across 162 tests. Executable-level smokes now exercise SparkConsole batch dispatch, SparkCrashReporter failure semantics, a two-pass SparkCooker manifest, real D3D11 shader compilation, SparkAutomation through the FPS NullRHI lifecycle, SparkBuild plan generation, and SparkEditor project load/clean shutdown. The hosted MSAN static-destruction failure is fixed with lifetime-safe EventBus subscriptions and a production regression. Exact SHA 37a4bec5 exposed and now locally closes the remaining cross-platform SparkCooker smoke digest mismatch by pinning LF fixture bytes. 2026-09-24 local progress: Tools/validate_test_warnings.py now also inventories every per-assertion EXPECT_WARN_ONLY call site in Tests/**/*.cpp (comments and literals ignored), attributes it to its enclosing TEST/TEST_F body, and requires a schema-2 assertionWaivers entry keyed by file and test with an exact site count, named owner, and future expiry; unregistered, stale, expired, ownerless, miscounted, and out-of-body sites fail, and only the RunnerSemanticsReal_* probes are exempt. The TestEngineLoadTest.cpp LoadTest_FullEngine_3000Frames spikes10x waiver is now owned (engine-core, expires 2026-12-31); 21 adversarial policy tests pass locally, hosted proof pending. 2026-09-24 CTest policy progress: every add_test outside Tests/CMakeLists.txt (root CMakeLists, SparkConsole, SparkCrashReporter, SparkDaemon, SparkGateway, SparkServer, SparkAssetPipelineCore, SparkAutomation, SparkLauncher, SparkBuild, Tests/FPSGameplayEvents, and the installed-SDK Tests/PackageSmoke consumers) now carries a positive TIMEOUT and non-empty LABELS, and the product registrations in those files carry product plus unit/integration/process category labels (the validator enforces only a non-empty set; fuzz and policy registrations keep their fuzz/security labels); Tools/validate_ctest_policy.py's default static view scans every git-tracked first-party CMakeLists.txt and *.cmake that calls add_test (18 files) instead of Tests/CMakeLists.txt alone, validate-ci-tools runs it, and build-linux-gcc and build-windows-vs2022 pipe ctest --show-only=json-v1 into validate_ctest_policy.py --ctest-json fail-closed after configure. Locally the reconfigured build/linux-gcc-release json-v1 inventory passes with 0 violations across 117 registrations (22 before); the Windows configured tree and hosted runs are not yet proven. Golden baselines, corrected-SHA hosted proof, remaining shipped-product integration depth, and static-analysis coverage are still open.",
       "dependencies": [
         "CI-100",
         "RDY-000"
@@ -473,10 +617,49 @@
         "Every shipped binary has a smoke or integration lane",
         "Linux sanitizer evidence never promotes the Windows 11 stable-v1 certification row by itself"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:3aa012b16686",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py"
+          ],
+          "note": "Commands are resolved statically but never executed. The tests-unit and tests-integration jobs are still planned."
+        },
+        {
+          "criterionDigest": "sha256:6023a2a14b43",
+          "state": "unmet",
+          "evidence": [
+            "Tools/validate_test_warnings.py",
+            "Tests/Tools/test_validate_test_warnings.py"
+          ],
+          "note": "SKIP_TEST and EXPECT_NO_CRASH exceptions have no owner or expiry enforcement."
+        },
+        {
+          "criterionDigest": "sha256:7f52d65039aa",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Clang-tidy diagnostics are advisory. Proof that regressions block requires hosted CI."
+        },
+        {
+          "criterionDigest": "sha256:ed39e09a09dc",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Not every shipped binary has a smoke or integration lane. The item records integration depth as open."
+        },
+        {
+          "criterionDigest": "sha256:c7cfdec66128",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "The only check asserts the item's own wording, which is tautological. No validator blocks sanitizer evidence from promoting the Windows row."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/linux-shipping --show-only=json-v1",
-        "ctest --test-dir build/linux-shipping -L unit --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-shipping -L integration --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release --show-only=json-v1",
+        "ctest --test-dir build/linux-gcc-release -L unit --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -L integration --output-on-failure --no-tests=error",
         "SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml"
       ],
       "testSelectors": [
@@ -542,7 +725,7 @@
       "wave": 1,
       "area": "build",
       "owner": "unassigned",
-      "rationale": "SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open.",
+      "rationale": "SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open. 2026-09-24 progress: root CMake now ends with spark_reject_undeclared_options() (cmake/SparkOptionGuard.cmake), which fails configure on any untyped -D ENABLE_*/SPARK_*/BUILD_* entry nothing declared; SPARK_REQUIRE_WINDOWS_INSTALLERS is declared on every platform (SparkBuild passes it everywhere) and the SPARK_MODULE_CXX_LANGUAGE_ABI override is declared by SparkGameModule.cmake. BuildOptions_UnknownOptionRejected (Tests/Tools/test_build_option_guard.py, 9 cases incl. a preset audit) is green and a local linux-gcc-release configure rejects -DENABLE_TYPO_OPTION=ON; explicitly typed -DNAME:TYPE entries remain outside the guard and no Windows lane has exercised it yet. 2026-09-26 progress: tools/site-data/documented_commands.py (run by validate.py) checks documented build commands against CMakePresets.json; the 46 drifted quick-start commands it found (bare build/ trees after a preset configure, trees nothing configured, an ad-hoc configure into a preset tree, and Visual Studio configures without the presets' -A/-T pins) were aligned to the presets.",
       "dependencies": [
         "CI-100"
       ],
@@ -576,6 +759,10 @@
         "Tools/buildmatrix/verify_external_evidence.py",
         "Tools/buildmatrix/workflow.py",
         "Tests/Tools/test_build_matrix_parity.py",
+        "Tests/Tools/test_build_option_guard.py",
+        "cmake/SparkOptionGuard.cmake",
+        "tools/site-data/documented_commands.py",
+        "Tests/Tools/test_documented_build_commands.py",
         "Tests/Tools/test_build_matrix_pending_authority.py",
         "Tests/Tools/test_build_matrix_external_verifier.py",
         "docs/site/readiness.json",
@@ -604,6 +791,69 @@
         "Configured codemodel evidence is accepted only when its source tree, producer-captured commit, generator, preset build directory, cache values, and reply-file digests match the profile claiming it",
         "No same-job OIDC token, mutable workflow or checkout, provenance JSON, artifact path, or artifact hash can self-author producer-verified evidence; a protected external attestation verifier is independently evidenced"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:169f524e59c4",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs configured Windows codemodel evidence from a real MSVC configure."
+        },
+        {
+          "criterionDigest": "sha256:acca7c786544",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs independent hosted evidence for Windows Shipping, validation and the installed SDK."
+        },
+        {
+          "criterionDigest": "sha256:7acb0e5f3398",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_build_option_guard.py",
+            "cmake/SparkOptionGuard.cmake"
+          ],
+          "note": "Typed -DNAME:TYPE entries bypass the guard and unused options are not detected. No Windows lane has run it."
+        },
+        {
+          "criterionDigest": "sha256:4edcdfd4db9c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "StrictDependencies_* is still planned. No test proves that a missing dependency is fatal."
+        },
+        {
+          "criterionDigest": "sha256:06bff177aa6c",
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/documented_commands.py",
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_documented_build_commands.py"
+          ],
+          "note": "validate.py checks every cmake/ctest/cpack command in README, CLAUDE.md, wiki, docs and prompt code blocks against CMakePresets.json: preset names, build/<preset> trees (incl. cpack --config, cd), -B and configure-script trees, multi-config --config/-C and generator -A/-T pins. BuildOptions_DocumentedCommandsMatchPresets is green locally; no exact-commit CI run yet."
+        },
+        {
+          "criterionDigest": "sha256:029af64cb513",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "Only the planned macos-shipping preset is owner-scoped. linux-shipping has no enforced platform owner."
+        },
+        {
+          "criterionDigest": "sha256:78f73e6e4ef8",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_build_matrix_parity.py",
+            "Tools/buildmatrix/inventory.py",
+            "Tools/buildmatrix/capture_provenance.py"
+          ],
+          "note": "Tests drive inventory.extract_codemodel_targets and reject a mismatched source tree, build directory, generator, cache or commit, caller-asserted commits, and changed, linked or traversing reply files."
+        },
+        {
+          "criterionDigest": "sha256:588a2f8df8d0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No protected external attestation verifier has accepted a Working artifact. This needs a hosted run."
+        }
+      ],
       "commands": [
         "python3 Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json",
         "python3 Tools/buildmatrix/capture_provenance.py --profile windows-shipping --build-dir build/windows-shipping --build",
@@ -613,6 +863,9 @@
         "python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/build-matrix-inventory.json --baseline docs/readiness/build-matrix-parity-findings.json",
         "python3 Tools/buildmatrix/validate_pending_authority.py --inventory build-matrix-inventory.json --report build-matrix-parity-findings.json --output build-matrix-pending-authority.json",
         "python3 Tests/Tools/test_build_matrix_parity.py",
+        "python3 Tests/Tools/test_build_option_guard.py",
+        "python3 Tests/Tools/test_documented_build_commands.py",
+        "python3 tools/site-data/documented_commands.py",
         "python3 -m unittest Tests.Tools.test_build_matrix_pending_authority Tests.Tools.test_build_matrix_external_verifier",
         "cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel --clean-first",
@@ -657,7 +910,6 @@
         "stable-v1": "required"
       },
       "plannedTestSelectors": [
-        "BuildOptions_*",
         "StrictDependencies_*",
         "test_build_matrix_parity"
       ]
@@ -671,7 +923,7 @@
       "wave": 1,
       "area": "build",
       "owner": "unassigned",
-      "rationale": "Versioned Windows publication now selects the authoritative windows-shipping preset and MinSizeRel product tree, with separate windows-release validation. Nightly retains Debug/Release packages. Executed workflow-selection and asset-collection regressions, plus staged-package profile checks, verify the local orchestration contract. 2026-09-12 progress: the reviewed build-matrix inventory now binds stable shipping and validation profiles to matching CMake build presets/configurations and rejects drift. Runtime-only component staging now has an explicit trusted-layout preflight before CPack, retaining executable, runtime-content, and all configured module sidecar/hash checks without requiring installed SDK files. 2026-09-13 progress: the inventory retains CMake’s Visual Studio instance, archiver, and linker identities and fails closed when they are missing and disagree. It now also accepts only absolute Windows x64 C++ compiler paths, preventing relative or non-Windows spellings from being mistaken for exact MSVC provenance. Local fixture validation does not establish native installer execution. Hosted Windows Shipping packaging, reproducibility comparison, exact toolchain/dependency manifests, and private symbol retention remain unverified or unfinished; this item is not complete.",
+      "rationale": "Versioned Windows publication now selects the authoritative windows-shipping preset and MinSizeRel product tree, with separate windows-release validation. Nightly retains Debug/Release packages. Executed workflow-selection and asset-collection regressions, plus staged-package profile checks, verify the local orchestration contract. 2026-09-12 progress: the reviewed build-matrix inventory now binds stable shipping and validation profiles to matching CMake build presets/configurations and rejects drift. Runtime-only component staging now has an explicit trusted-layout preflight before CPack, retaining executable, runtime-content, and all configured module sidecar/hash checks without requiring installed SDK files. 2026-09-13 progress: the inventory retains CMake’s Visual Studio instance, archiver, and linker identities and fails closed when they are missing and disagree. It now also accepts only absolute Windows x64 C++ compiler paths, preventing relative or non-Windows spellings from being mistaken for exact MSVC provenance. Local fixture validation does not establish native installer execution. Hosted Windows Shipping packaging, reproducibility comparison, exact toolchain/dependency manifests, and private symbol retention remain unverified or unfinished; this item is not complete. 2026-09-24 progress: MinSizeRel now also defines SPARK_SHIPPING=1 on SparkEngineLib (PUBLIC, root CMakeLists.txt FEATURE_DEFINITIONS), so the SPARK_DEBUG_HOOK*, SPARK_TRACKED_LOCK and detector macros compile out of Shipping; DebugHookManager.h rejects SPARK_BUILD_SHIPPING without SPARK_SHIPPING, and test_build_shipping_contract.py rejects any first-party CMake call that gives MinSizeRel the Shipping profile without it. In a local Linux MinSizeRel tree no SparkEngineLib object except DebugHookManager.cpp.o references DebugHookManager (Release: 14), and a 60-frame headless SparkEngine run exits 0. The class stays in the executable through --whole-archive, and the lifecycle still initializes and ticks HitchDetector, AssetStallDetector, NetworkHealthMonitor, GPUResourceLeakDetector and InvalidStateDetector directly in Shipping; no hosted Windows Shipping build of this change has been observed. 2026-09-24 OD-04 CPU floor progress: vendored Jolt defaulted to USE_AVX2/AVX/FMADD/F16C/LZCNT/TZCNT=ON and publishes its ISA options PUBLIC, so the local linux-gcc-release SparkEngineLib compile carried -mavx2 -mbmi -mf16c -mfma -mlzcnt and JPH_USE_AVX2; the 'Unsupported CPU features are not silently required' criterion was violated in every non-native configuration, Shipping included. cmake/SparkCpuFloor.cmake now pins those Jolt options OFF (SSE4.1/SSE4.2 ON) unless SPARK_NATIVE_ARCH=ON, and spark_assert_cpu_floor() at the end of the root CMakeLists.txt fails configuration when any target or global flag selects AVX/AVX2/AVX-512/FMA/F16C/LZCNT/BMI, a non-floor -march, /arch:AVX* or a Jolt JPH_USE_AVX*/LZCNT/TZCNT/F16C/FMADD selector. Tests/Tools/test_cpu_floor.py (wired into build.yml) runs real CMake configurations, including vendored Jolt with upstream defaults (rejected) and through the floor (accepted). The reviewed Jolt build-matrix coordinates and inventory were regenerated. Per-source-file options are not scanned, no hosted windows-shipping configure of this change has been observed, and no Shipping binary has run on an SSE4.2-only CPU or emulator. 2026-09-25 OD-04 linked-image progress: tools/check_isa_baseline.py disassembles ELF/PE images (objdump or llvm-objdump) and fails on VEX/EVEX, ymm/zmm, AVX-512 opmask, FMA, F16C, BMI1/BMI2, LZCNT and MOVBE instructions and on the legacy-encoded AES-NI, PCLMULQDQ, SHA-NI, GFNI, RDRAND, RDSEED and ADX families outside --allow-symbol CPUID-dispatched functions; instructions outside those families (for example XSAVE or TSX) are not classified. TZCNT is reported but allowed because it shares the REP BSF encoding GCC and Clang emit at the floor. spark_cpu_floor_violations() now also rejects -mmovbe, -maes, -mpclmul, -msha, -mgfni, -mrdrnd, -mrdseed, -madx, -mvaes and -mvpclmulqdq (test_cpu_floor.py). CTest CpuFloor_IsaBaselineChecker (15 unittest cases) proves the checker on gcc ELF fixtures built at the floor (pass), with -mavx2 -mfma, -mbmi -mbmi2, -mlzcnt and -mf16c, and with each legacy-encoded family (AES-NI/PCLMULQDQ/SHA/GFNI/RDRAND/RDSEED via -m flags, ADX via inline asm), each failing by feature, on a clang/lld-link PE DLL built with and without AVX2, and rejects non-x86, missing and empty images. CTest CpuFloor_IsaBaseline scans this tree’s SparkEngine, SparkEditor, SparkServer and all game-module images and is registered for ELF toolchains only: MSVC statically links the STL’s CPUID-dispatched AVX2 vector_algorithms code into every image and an MSVC PE has no COFF symbol table, so Windows images are not scanned until a PDB-aware exemption exists. Locally, linux-gcc-release reports 0 above-floor instructions across 14 images. The ledger recorded 17192 ymm/FMA instructions in bin/SparkEngine before the Jolt pin. Utils/MultiISA.h now detects features at runtime with CPUID/XGETBV, replacing the compile-time macros and the MSVC stub that hard-coded AVX2; CpuNeuralInference reports the level of the kernel MultiISADispatch::SelectLevel() actually chose (SSE2 in floor builds, which compile no AVX2 variant), not the CPU capability. The SparkEngine (Windows and POSIX), SparkEditor and SparkServer entry points call DescribeStableCpuFloorFailure() before logging, crash handling or server startup, and exit with a message naming the missing SSE4.2/POPCNT-level features (MultiISA_CpuFloor_* SparkTests cover the check). The below-floor startup path has not been executed on real or emulated below-floor hardware, and the Windows entry-point changes have not been compiled locally. 2026-09-25 private-symbol progress: STRIP_DEBUG_SYMBOLS now keeps symbols out of the runtime package instead of never producing them. MSVC images always link with /DEBUG (/PDBALTPATH:%_PDB% outside Debug), so each carries an RSDS PDB GUID/age with a bare PDB name. ELF images link with -Wl,--build-id=sha1. With STRIP_DEBUG_SYMBOLS=ON every target compiles with -g (the static libraries hold most shipped code), and only the SPARK_SHIPPED_IMAGE_TARGETS get cmake/SparkSplitDebugLink.cmake as their per-target C/C++ LINKER_LAUNCHER; it splits <image>.debug off and strips the image with a .gnu_debuglink inside the link step, so module .sparkabi hashes see the stripped image. Every other image (SparkTests, test probes) links outside Debug with -g0 and -Wl,--strip-all and gets no .debug; under GCC 13 LTO a link-time -g0 stops LTRANS debug generation, which a probe confirmed (compile -g propagates through -flto unless the link says -g0). The global MinSizeRel -Wl,--strip-all is skipped in that mode, because it discarded the symbols before the split. PDBs and .debug files of SPARK_SHIPPED_IMAGE_TARGETS install only into a new symbols component that CPACK_COMPONENTS_ALL excludes. tools/shipping_symbol_manifest.py (stdlib only) writes a closed spark.shipping-symbol-manifest/1 JSON mapping each ELF image by build-id, debuglink name and CRC-32, and each PE image by RSDS GUID plus DBI age, to exactly one symbol file. It fails on missing, duplicate, orphaned or mismatched symbols, unstripped images, absolute PDB paths and symbols in the runtime tree. CTest ShippingManifest_SymbolManifestTool (30 cases) proves it on gcc fixtures built through the production launcher and on clang/lld-link PE+PDB fixtures cross-checked with llvm-readobj and llvm-pdbutil. It also keeps the target list in step with every install(TARGETS) rule in the root, Spark*/, GameModules/ and cmake/ CMake files, and rejects any CPACK_COMPONENTS_ALL list (root or cmake/SparkCPackOptions.cmake) that names the symbols component. ShippingManifest_PrivateSymbols, registered in STRIP_DEBUG_SYMBOLS ELF trees, installs the runtime/tools/samples and symbols components to separate roots and maps every installed image; it needs every installed target built. In a local linux-shipping MinSizeRel tree with ENABLE_LTO=OFF (SparkGameFPS), exactly the 18 shipped targets link through the split launcher, SparkBuildDownloaderTests and SparkBuildProcessRunnerTests link with -g0 and --strip-all and get no .debug, and ShippingManifest_PrivateSymbols passes: 18 installed images (libSparkGameFPS.so installs to bin and lib) map to 17 installed symbol files, and none keeps .debug_info or .symtab. The module .sparkabi hash matches the stripped module. In a preset-exact linux-shipping tree (ENABLE_LTO=ON, BUILD_TESTS=ON) only SparkDaemon, SparkOrchestrator and SparkDaemonServiceTests were built: both daemons map to DWARF .debug files and the unshipped test image is stripped with no .debug. The full LTO build with -g of SparkEngineLib and SparkTests, which the telemetry, security-runtime and network-integration jobs perform, has not been built locally, so its disk, memory and time on hosted runners are unmeasured; all SparkEngine-scale evidence here is LTO-off. A 30-frame headless SparkEngine run exits 0, and addr2line resolves main through SparkEngine.debug. build-windows-shipping now stages the components, runs the manifest tool and uploads the PDBs and manifest as a separate shipping-symbols-<sha> artifact. No hosted MSVC build of this change, no /Brepro PDB determinism evidence and no symbol-server publication (OPS-100) exist yet. The ShippingManifest_* selector covers only the private-symbol manifest: the exact MSVC, Windows SDK, dependency, CPU and configuration manifests and the two-clean-build comparison have no tests. 2026-09-25 progress: tools/compare_build_outputs.py writes a closed spark.build-output-manifest/1 (relative path, size, SHA-256, GNU build-id or COFF timestamp and RSDS, per-section hashes) and compares two, naming the first differing section. SparkReproducibleBuild.cmake now also maps the build root (-ffile-prefix-map=<build>=., after the source map; GCC LTO repeats both at link) and seeds GCC LTO objects with -frandom-seed=<OBJECT>. Fail-before: two trees built from the pre-change source differed in bin/SparkCooker (build-id), SparkCooker.debug (.debug_info comp_dir) and libSparkAssetPipelineCore.a. After: ReproducibleBuild_LinuxToolTargets passes locally (GCC 13.3, about 75 s), a single manual Clang two-tree run outside the CTest (no retained artifact) was equivalent, and a same-tree rebuild gives a byte-identical archive. GCC LTO IR in static-library members still records the build directory, so the CTest compares bin/ only. The reproducibility-windows job (two checkouts, two windows-shipping builds and installs, compared) is job-level continue-on-error and not a required-ci-gate need; it has never run, and MSVC /Z7 objects in the SDK libraries may differ.",
       "dependencies": [
         "CI-100",
         "CI-120"
@@ -702,13 +954,50 @@
         "Every artifact includes private-symbol mapping and build ID",
         "Unsupported CPU features are not silently required"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:bb21f83f989b",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_build_shipping_contract.py",
+            "CMakePresets.json"
+          ],
+          "note": "Downgraded. Tests are only static text checks of presets and CMake. No committed test builds or runs windows-shipping to show distinct output, and no hosted Windows Shipping build has been observed."
+        },
+        {
+          "criterionDigest": "sha256:fee036747503",
+          "state": "unmet",
+          "evidence": [
+            "tools/compare_build_outputs.py",
+            "Tests/Tools/test_compare_build_outputs.py"
+          ],
+          "note": "Linux only: ReproducibleBuild_LinuxToolTargets (SparkCooker, linux-shipping settings, LTO on, outer compiler) passed only locally with GCC 13.3. One manual Clang two-tree run outside the CTest (no artifact kept) was equivalent. No hosted GCC 14 or Clang lane has run it; the inner build ignores the Clang lane's LTO-off/libc++ flags. GCC LTO archive members differ. reproducibility-windows never ran."
+        },
+        {
+          "criterionDigest": "sha256:8ddf41e62b9f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Private-symbol mapping and build IDs are not implemented. ShippingManifest_* is planned."
+        },
+        {
+          "criterionDigest": "sha256:efd875760a6e",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_cpu_floor.py",
+            "Tests/Tools/test_check_isa_baseline.py"
+          ],
+          "note": "Windows PE images are not scanned and the Windows entry-point check is uncompiled. The below-floor startup path has never run."
+        }
+      ],
       "commands": [
         "cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel --clean-first"
       ],
       "testSelectors": [
         "ReproducibleBuild_*",
-        "ShippingManifest_*"
+        "ShippingManifest_*",
+        "CpuFloor_IsaBaseline*",
+        "MultiISA_CpuFloor_*"
       ],
       "requiredCiJobs": [
         "build-windows-shipping",
@@ -743,13 +1032,8 @@
       "profileApplicability": {
         "stable-v1": "required"
       },
-      "plannedCiJobs": [
-        "reproducibility-windows"
-      ],
-      "plannedTestSelectors": [
-        "ReproducibleBuild_*",
-        "ShippingManifest_*"
-      ]
+      "plannedCiJobs": [],
+      "plannedTestSelectors": []
     },
     {
       "id": "REL-100",
@@ -760,7 +1044,7 @@
       "wave": 1,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. 2026-09-12 progress: SparkConsole now receives the top-level version at configure time, rejects standalone builds without it, exposes --version/-v, and has a CTest contract that verifies the executable output. 2026-09-13 progress: SparkShaderCompiler, SparkCooker, SparkAutomation, and SparkCrashReporter now receive the authoritative CMake version and expose exact --version contracts; fresh Windows Shipping binaries pass the executable-level regression, and the required Shipping workflow runs it after build. 2026-09-14 progress: the shared executable-level regression now resolves the platform-native executable suffix, so macOS and Linux validate extensionless tool binaries while Windows retains the .exe contract; the Windows targeted CTest and Darwin suffix probe pass locally. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.",
+      "rationale": "CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. 2026-09-12 progress: SparkConsole now receives the top-level version at configure time, rejects standalone builds without it, exposes --version/-v, and has a CTest contract that verifies the executable output. 2026-09-13 progress: SparkShaderCompiler, SparkCooker, SparkAutomation, and SparkCrashReporter now receive the authoritative CMake version and expose exact --version contracts; fresh Windows Shipping binaries pass the executable-level regression, and the required Shipping workflow runs it after build. 2026-09-14 progress: the shared executable-level regression now resolves the platform-native executable suffix, so macOS and Linux validate extensionless tool binaries while Windows retains the .exe contract; the Windows targeted CTest and Darwin suffix probe pass locally. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy. Owner decision OD-17 (2026-09-24, docs/readiness/OWNER-DECISIONS.md) sets the channel retention and support semantics this item must enforce: stable release assets are immutable and kept permanently, and each stable release receives security and critical fixes until 6 months after the next stable release; each uniquely tagged immutable nightly is kept for 30 days and is unsupported; experimental artifacts are kept for 14 days, are always labeled experimental, and are never presented as supported; CI build artifacts keep their existing 7- and 90-day retention. This is recorded policy, not evidence: no stable release has been published, the unique-tag immutable nightly channel is not implemented, and the rolling-nightly/immutable-stable conflict remains a blocker here.",
       "dependencies": [
         "BLD-100",
         "CI-100"
@@ -797,6 +1081,44 @@
         "Nightly, stable, and experimental channels have explicit retention and support semantics",
         "Prove one uniquely tagged immutable nightly and the protected signed stable path independently; the repository policy and workflow topology are compatible, but live publication remains unverified"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:be5103107a9b",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_rel100_product_versions.py"
+          ],
+          "note": "No hosted package run qualifies the tag version inside packaged artifacts such as installers or the SDK ZIP."
+        },
+        {
+          "criterionDigest": "sha256:a060209998d6",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Complete per-artifact toolchain and dependency-lock manifests remain open."
+        },
+        {
+          "criterionDigest": "sha256:82f7d0d8ba4d",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_release_stages.py",
+            "tools/site-data/release_stages.py",
+            ".github/workflows/release.yml"
+          ],
+          "note": "Tests run candidate_readiness_errors and finalization_contract_errors, rejecting open technical or transitive work and non-finalizer exemptions. release.yml runs validate.py --require-candidate-ready."
+        },
+        {
+          "criterionDigest": "sha256:9f3c13d1441c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The OD-17 policy is only recorded. Retention and support semantics are not enforced."
+        },
+        {
+          "criterionDigest": "sha256:bfd70eb1bec7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a live published nightly and a signed stable publication. Neither exists."
+        }
+      ],
       "commands": [
         "git ls-remote --tags origin",
         "SparkEngine --version",
@@ -815,7 +1137,8 @@
       "documentationUpdates": [
         "CHANGELOG.md",
         "SECURITY.md",
-        "README.md"
+        "README.md",
+        "wiki/development/Release-Publication-Stages.md"
       ],
       "readinessChanges": [
         "G05",
@@ -829,7 +1152,8 @@
         "Existing 1.0.0 prose may need reclassification rather than retroactive tagging"
       ],
       "outOfScope": [
-        "Cutting the final release"
+        "Cutting the final release",
+        "Claiming that any stable, nightly, or experimental release is published or operated under the OD-17 windows before exact-SHA publication evidence exists"
       ],
       "definitionOfDone": [
         "One version source exists",
@@ -843,7 +1167,6 @@
         "release-metadata"
       ],
       "plannedTestSelectors": [
-        "VersionConsistency_*",
         "TagReleaseContract_*"
       ]
     },
@@ -851,12 +1174,12 @@
       "id": "REL-110",
       "title": "Sign, checksum, attest, scan, and approve release artifacts",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate. A bounded first slice now gates final stable Windows Runtime EXE/MSI execution and upload on native Valid embedded Authenticode, a timestamp certificate, an explicitly configured publisher certificate thumbprint, and SHA-256 continuity through native qualification. Injected-process regressions run in validate-ci-tools; real unsigned EXE/MSI fixture rejection is wired to ordinary Windows VS 2022 Release CI and the Windows stable release job. 2026-09-13 progress: native signature evidence and persisted reports now reject duplicate JSON keys instead of accepting last-write-wins contradictions. 2026-09-13 additional progress: signature report publication and hash verification now reject symlinked report paths and publish through an atomic no-replace boundary, with 7 focused signature tests. 2026-09-21 progress: stable publication now has a fail-closed consumer verifier for the exact asset set, SHA256SUMS, nonempty SPDX payload coverage, exact-CI provenance, pinned trusted-key fingerprint, and real OpenSSL detached signatures. Its externally provisioned signature archive is digest-pinned, flat regular-file-only, Windows-name-safe, and reverified before both draft creation and promotion. Local cryptographic, archive, workflow, and failure-propagation suites pass. Publisher key/signature-bundle provisioning, protected approval, artifact vulnerability scanning and exception policy, native signed-artifact success evidence, and hosted exact-SHA proof remain prerequisites; REL-110 is open.",
+      "rationale": "Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate. A bounded first slice now gates final stable Windows Runtime EXE/MSI execution and upload on native Valid embedded Authenticode, a timestamp certificate, an explicitly configured publisher certificate thumbprint, and SHA-256 continuity through native qualification. Injected-process regressions run in validate-ci-tools; real unsigned EXE/MSI fixture rejection is wired to ordinary Windows VS 2022 Release CI and the Windows stable release job. 2026-09-13 progress: native signature evidence and persisted reports now reject duplicate JSON keys instead of accepting last-write-wins contradictions. 2026-09-13 additional progress: signature report publication and hash verification now reject symlinked report paths and publish through an atomic no-replace boundary, with 7 focused signature tests. 2026-09-21 progress: stable publication now has a fail-closed consumer verifier for the exact asset set, SHA256SUMS, nonempty SPDX payload coverage, exact-CI provenance, pinned trusted-key fingerprint, and real OpenSSL detached signatures. Its externally provisioned signature archive is digest-pinned, flat regular-file-only, Windows-name-safe, and reverified before both draft creation and promotion. Local cryptographic, archive, workflow, and failure-propagation suites pass. 2026-09-24 progress: the release job now scans the generated SPDX SBOM with a SHA-pinned anchore/scan-action (grype, JSON) before asset collection and draft staging, and .github/scripts/verify_vulnerability_findings.py blocks the release on any Critical/High finding not covered by a current exception in ThirdParty/supply-chain.lock whose id names the advisory and whose scope is vulnerability:<package>, and on expired, unused, or malformed exceptions, an empty SBOM, or a failed or incomplete scan. Findings grype suppressed into ignoredMatches (a .grype.yaml ignore rule, VEX, only-fixed) are gated like matches, a scan run with only-fixed/only-notfixed/ignore-states/VEX/exclude settings, with the stock matcher's CPE matching disabled, with any of those settings absent from the report's configuration, or with a grype config file in the checkout fails, and the release.yml contract allow-lists the scan-action inputs and rejects GRYPE_* env, run defaults or working-directory on the scan/gate steps, and gate-step env, and requires the tokenized gate invocation to pass exactly --report/--sbom/--lockfile/--summary once each with the expected values, rejecting --today/--checkout, repeated options, and trailing shell; the gate CLI refuses abbreviated options. The exception schema is the one tools/check-supply-chain.py enforces (factored into validate_exception_records). CTest ArtifactIntegrity_VulnerabilityGate covers fixture reports on every lane; its release.yml wiring cases run only where PyYAML is installed and are enforced in CI by the check-supply-chain 'Release vulnerability gate tests' step; no hosted scan against the live grype database has run, and whether syft's SBOM of the packaged C++ binaries catalogs the statically linked ThirdParty components is unverified, so dependency-level scanning stays with SEC-110, which should reuse this gate. 2026-09-24 release-approval progress: the stable release job now runs .github/scripts/record_release_approval.py immediately after the environment-protection gate. It reads GET /repos/{repo}/actions/runs/{run_id}/approvals with bounded, Link-paginated, duplicate-key-rejecting, fail-closed HTTP, binds the history to the exact run attempt, head SHA, release workflow path, repository and stable-release environment id, and requires at least one approved review, every review approved by the repository owner Krilliac (login and id) for stable-release only, and no rejected review. It publishes a closed, deterministic record (run id/attempt/start, environment, approver, per-review comment SHA-256) with no-replace semantics, retains it as a 90-day workflow artifact, and exports its SHA-256 as a job output. verify_published_stable_release.py now requires that digest, independently rebuilds the record from the API, refuses on any mismatch before downloading assets, and embeds the approval in the consumer receipt. CTest ReleaseApproval_Record (17 tests, injected urlopen) and the extended consumer suite (34 tests) pass locally. The approvals API exposes no review timestamp, so the record bounds approval time by the run start and the artifact upload; how GitHub reports a sole-owner self-approval still needs a hosted stable run, and an owner-only approval is not an independent second-person review. Publisher key/signature-bundle provisioning, a hosted protected approval, native signed-artifact success evidence, a hosted vulnerability scan, and hosted exact-SHA proof remain prerequisites; REL-110 is open.",
       "dependencies": [
         "BLD-100",
         "SEC-110",
@@ -885,6 +1208,48 @@
         "Critical/high findings require owned, expiring exceptions",
         "Release approval is recorded",
         "Unsigned artifacts cannot be promoted"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:4b012ba799ce",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/test_verify_published_stable_release.py",
+            ".github/scripts/verify_published_stable_release.py"
+          ],
+          "note": "The consumer verifier is fixture-tested, but no signed stable release has been published or verified by a consumer. The publisher key and hosted provenance are not provisioned."
+        },
+        {
+          "criterionDigest": "sha256:8cde53f33d89",
+          "state": "implemented",
+          "evidence": [
+            ".github/scripts/test_verify_vulnerability_findings.py",
+            ".github/scripts/verify_vulnerability_findings.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/release.yml"
+          ],
+          "note": "CTest ArtifactIntegrity_VulnerabilityGate imports the production gate. It fails High/Critical findings with no exception, and expired, placeholder-owner or unused exceptions. release.yml runs the gate on the grype report."
+        },
+        {
+          "criterionDigest": "sha256:a71e601b54a6",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/test_record_release_approval.py",
+            ".github/scripts/record_release_approval.py"
+          ],
+          "note": "The recorder is tested only with an injected urlopen. No hosted protected stable-release approval has ever been recorded."
+        },
+        {
+          "criterionDigest": "sha256:0e3cdcb238f2",
+          "state": "implemented",
+          "evidence": [
+            ".github/scripts/test_verify_release_bundle.py",
+            ".github/scripts/verify_release_bundle.py",
+            ".github/scripts/test_verify_release_bundle_workflow.py",
+            ".github/workflows/release.yml"
+          ],
+          "note": "ArtifactIntegrity_ReleaseBundle rejects unsigned or uncovered artifacts in the real verifier. The workflow test checks release.yml re-verifies right before promotion. Windows Authenticode is not covered locally."
+        }
       ],
       "commands": [
         "sha256sum -c SHA256SUMS",
@@ -938,28 +1303,48 @@
         "attest",
         "release-approval"
       ],
-      "plannedTestSelectors": [
-        "ArtifactIntegrity_*",
-        "ReleaseApproval_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "REL-191",
       "completionPhase": "qualification",
       "title": "Rehearse the predecessor release without N-1 upgrade claims",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 6,
       "area": "release",
-      "owner": "unassigned",
-      "rationale": "The first signed predecessor needs the same exact-SHA release rehearsal, sign-off, and protected approval discipline as v1, but its rehearsal cannot invent an older stable release.",
+      "owner": "Krilliac",
+      "rationale": "The first signed predecessor needs the same exact-SHA release rehearsal, sign-off, and protected approval discipline as v1, but its rehearsal cannot invent an older stable release. Owner decisions OD-18 and OD-19 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): in the v0.9.0 predecessor stage this item substitutes for REL-190 (predecessorRelease.qualificationSubstitutions), while REL-190 stays required for the stable-v1 release candidate; Krilliac is the predecessor owner. The predecessor baseline is not picked by hand: it is the first Working commit after the stable-v1 release branch merges at which every predecessorRelease.requiredGateIds gate has passing exact-SHA evidence. Until such a commit exists, predecessorRelease.sourceCommitEvidence.baselineCommit stays empty and signOffEvidence stays empty; that SHA, its review, and the sign-off are recorded in predecessorRelease only when it qualifies.",
       "dependencies": ["REL-100", "REL-110", "PLT-200", "RHI-210", "HEAD-220", "EDT-210", "SDK-240", "PERF-100", "OPS-100", "GOV-400", "DOC-400", "INST-130", "SAVE-230", "MOD-310", "ASSET-220", "LIFE-200", "ENG-220"],
       "parallelWith": [],
       "sourceContext": [".github/workflows/release.yml", "docs/site/readiness.json"],
       "entryPoints": [".github/workflows/release.yml"],
       "implementationScope": ["Freeze and review the exact predecessor source commit", "Run all common qualification gates and protected approval checks", "Record bootstrap install, repair, retention, and uninstall evidence without N-1 claims"],
       "acceptanceCriteria": ["Every common qualification item and gate passes at the reviewed predecessor SHA", "Named sign-off and protected approval evidence are retained", "No N-1 upgrade or rollback result is presented as predecessor evidence"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:c4c9ec9526ac",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No reviewed predecessor baseline SHA exists (baselineCommit is empty), and there is no exact-SHA hosted gate evidence."
+        },
+        {
+          "criterionDigest": "sha256:3a8b9de7c83b",
+          "state": "unmet",
+          "evidence": [],
+          "note": "signOffEvidence is empty. A named sign-off and a hosted protected approval are both still needed."
+        },
+        {
+          "criterionDigest": "sha256:a94d3e17f34f",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_release_stages.py",
+            "tools/site-data/release_stages.py"
+          ],
+          "note": "No checker specifically rejects N-1 upgrade or rollback results presented as predecessor evidence. The tests only show the predecessor can pass without REL-192."
+        }
+      ],
       "commands": ["python3 tools/site-data/validate.py --require-predecessor-candidate"],
       "testSelectors": ["ReleaseProfilePredecessorRehearsal_*"],
       "requiredCiJobs": ["profile-required-gates", "release-approval"],
@@ -992,6 +1377,28 @@
       "entryPoints": [".github/workflows/release.yml"],
       "implementationScope": ["Run the stable-v1 rehearsal against a previously published signed predecessor", "Verify upgrade, rollback, save migration, and recovery evidence"],
       "acceptanceCriteria": ["Exact-SHA v1 rehearsal passes with a real immutable predecessor", "Upgrade and rollback evidence is independently retained", "The first predecessor path cannot satisfy this item"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:73cde1712dcd",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a real immutable published predecessor and a hosted exact-SHA v1 rehearsal. Neither exists."
+        },
+        {
+          "criterionDigest": "sha256:db2de60b6b17",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned."
+        },
+        {
+          "criterionDigest": "sha256:81b1fd86d0c3",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/release_stages.py"
+          ],
+          "note": "The predecessor stage is kept separate, but no validator or test stops predecessor evidence from being used to mark REL-192 satisfied."
+        }
+      ],
       "commands": ["python3 tools/site-data/validate.py --require-candidate-ready"],
       "testSelectors": ["ReleaseProfileNMinusOneRehearsal_*"],
       "requiredCiJobs": ["profile-required-gates", "release-approval"],
@@ -1023,6 +1430,26 @@
       "entryPoints": [".github/workflows/release.yml"],
       "implementationScope": ["Publish only the reviewed immutable predecessor artifacts", "Independently download and verify hashes, signatures, provenance, and exact source identity"],
       "acceptanceCriteria": ["Artifacts are immutable and signed under the disclosed project-pinned trust model", "Krilliac gives required owner approval with administrative bypass disabled", "A read-only independent consumer verifies the published predecessor before v1 uses it"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:48a246fe39b7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No predecessor artifacts have been published or signed. Needs a published immutable release."
+        },
+        {
+          "criterionDigest": "sha256:e8d601f5ec0c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs Krilliac's owner approval in a hosted protected environment with admin bypass disabled. None is recorded."
+        },
+        {
+          "criterionDigest": "sha256:21deba073030",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No independent read-only consumer verification of a published predecessor exists."
+        }
+      ],
       "commands": ["python3 tools/site-data/validate.py --require-predecessor-candidate"],
       "testSelectors": [],
       "requiredCiJobs": [],
@@ -1048,7 +1475,7 @@
       "wave": 6,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence.",
+      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence. 2026-09-24 progress: tools/release_notes.py now renders the stable RELEASE_BODY (release.yml step 'Render fail-closed stable release notes', after the signature bundle and before draft staging) from the stable-v1 profile in docs/site/readiness.json (support matrix, supported hosts, experimental/unsupported capabilities, excluded gates, limitations verbatim), the single CHANGELOG.md [X.Y.Z] section and its migration subsection, the frozen SHA256SUMS lines, and fixed sha256sum/openssl/gh attestation verification instructions with the pinned signer fingerprint. It fails closed on a missing or duplicated version section, empty or inconsistent SHA256SUMS, an SBOM or SHA256SUMS absent from the expected asset list, or a missing signature control asset whose public key does not match the pinned fingerprint. ReleaseProfileRehearsal_ReleaseNotes (Tests/Tools/test_release_notes.py, 22 cases) passes locally; it covers only the notes, so the ReleaseProfileRehearsal_Qualification* rehearsal selector stays planned. No hosted stable run has rendered these notes yet.",
       "dependencies": [
         "REL-100", "REL-110", "PLT-200", "RHI-210", "HEAD-220", "EDT-210",
         "SDK-240", "PERF-100", "OPS-100", "GOV-400", "DOC-400", "INST-130",
@@ -1056,7 +1483,7 @@
       ],
       "parallelWith": [],
       "sourceContext": [".github/workflows/release.yml", "docs/site/readiness.json", "CHANGELOG.md", "SECURITY.md"],
-      "entryPoints": [".github/workflows/release.yml", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "entryPoints": [".github/workflows/release.yml", "tools/release_notes.py", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
       "implementationScope": [
         "Freeze the exact release-candidate commit and tag",
         "Run every qualification gate required by each target release profile at the same SHA",
@@ -1072,8 +1499,55 @@
         "The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains",
         "Named qualification sign-off is retained; the protected stable-release environment requires Krilliac owner approval with administrative bypass disabled, and independent technical verification remains separate"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:c546f1e4dabe",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs passing exact-SHA hosted evidence for every required gate and dependency. Many dependencies are still open."
+        },
+        {
+          "criterionDigest": "sha256:22e8be2baa83",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "CTest site-data-contract drives the production validator. It checks gates are required or excluded with a reason, excluded gates may stay blocked, and misclassified or scope-widening support claims are rejected."
+        },
+        {
+          "criterionDigest": "sha256:d1ade2fca435",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No clean install, uninstall, repair or recovery drills have passed on supported hosts. Those need Windows or hosted runs."
+        },
+        {
+          "criterionDigest": "sha256:b83699f23d85",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_release_notes.py",
+            "tools/release_notes.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/release.yml"
+          ],
+          "note": "CTest ReleaseProfileRehearsal_ReleaseNotes runs tools/release_notes.py. It checks support, limitations, migrations, SHA256SUMS, signatures, SBOM and attestation provenance, and fail-closed errors."
+        },
+        {
+          "criterionDigest": "sha256:f24b9e8fd483",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The profile-required-gates and release-approval jobs are still in plannedCiJobs. The ReleaseProfileRehearsal_Qualification* selector is still planned."
+        },
+        {
+          "criterionDigest": "sha256:90bdc7c18dcd",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a named qualification sign-off and a hosted protected owner approval. None is retained."
+        }
+      ],
       "commands": ["python3 tools/site-data/validate.py", "sha256sum -c SHA256SUMS"],
-      "testSelectors": ["ReleaseProfileRehearsal_*"],
+      "testSelectors": ["ReleaseProfileRehearsal_ReleaseNotes", "ReleaseProfileRehearsal_Qualification*"],
       "requiredCiJobs": ["profile-required-gates", "release-approval"],
       "performanceBudgets": ["Every budget required by the target profiles passes without unreviewed exception"],
       "documentationUpdates": ["CHANGELOG.md", "SECURITY.md", "wiki/development/Release-Publication-Stages.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
@@ -1084,7 +1558,7 @@
       "definitionOfDone": ["All supported-host rehearsals pass at the candidate SHA", "Qualification sign-off and protected approval evidence are retained", "No planned qualification job or selector remains"],
       "profileApplicability": {"stable-v1": "shared"},
       "plannedCiJobs": ["profile-required-gates", "release-approval"],
-      "plannedTestSelectors": ["ReleaseProfileRehearsal_*"]
+      "plannedTestSelectors": ["ReleaseProfileRehearsal_Qualification*"]
     },
     {
       "id": "REL-200",
@@ -1121,6 +1595,39 @@
         "Excluded gates may remain blocked and cannot be presented as supported",
         "Published artifacts are immutable and independently verify against the exact qualified candidate",
         "Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:f939f3cc8af2",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs every profile gate passing at a candidate SHA. The gates are blocked and there is no hosted evidence."
+        },
+        {
+          "criterionDigest": "sha256:22e8be2baa83",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "test_excluded_gates_and_work_may_remain_open_when_ready, plus the scope-widening and capability-classification rejection tests, exercise the production validator for this rule."
+        },
+        {
+          "criterionDigest": "sha256:5bbbc4190311",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No published immutable artifacts, and no independent verification against a qualified candidate."
+        },
+        {
+          "criterionDigest": "sha256:3b70b5b3a40d",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py"
+          ],
+          "note": "The validator only tests that global ready needs every profile ready. Nothing ties ready to publication evidence, and the live-site switch needs a hosted publish."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --require-candidate-ready",

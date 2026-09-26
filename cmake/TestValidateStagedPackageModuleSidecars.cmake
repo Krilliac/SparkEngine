@@ -539,9 +539,22 @@ foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sideca
                 endif()
                 file(CHMOD "${_spark_tool}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
             endforeach()
-            foreach(_spark_file IN ITEMS LICENSE.txt THIRD_PARTY_NOTICES.txt bin/Shaders/BasicVS.hlsl
+            # The full validator runs the GOV-400 notice-coverage gate, which
+            # parses the generated notice layout (cmake/SparkThirdPartyAudit.cmake).
+            file(WRITE "${_spark_root}/THIRD_PARTY_NOTICES.txt"
+                "SparkEngine Third-Party Notices\n================================\n\n"
+                "Dependency inventory\n--------------------\n\n"
+                "Fixture Library\n  Source: https://example.invalid/fixture\n  Version: 1.0\n"
+                "  License: MIT\n  Notice files: ThirdParty/Fixture/LICENSE\n  Files: fixture.h\n\n"
+                "Complete license and notice texts\n=================================\n\n"
+                "----- ThirdParty/Fixture/LICENSE -----\n\n"
+                "MIT License\n\nCopyright (c) 2026 Fixture Library Author\n\n"
+                "Permission is hereby granted, free of charge, to any person obtaining a copy\n"
+                "of this software and associated documentation files (the \"Software\"), to deal\n"
+                "in the Software without restriction.\n")
+            foreach(_spark_file IN ITEMS LICENSE.txt bin/Shaders/BasicVS.hlsl
                     bin/Shaders/ForwardPlus/DepthPrepass.hlsl bin/Shaders/HLSL/BasicVS.hlsl
-                    bin/Shaders/HLSL/Compute/GPUCull.hlsl bin/Assets/MMOFPS/Data/continents.json
+                    bin/Shaders/HLSL/Compute/GPUCull.hlsl bin/Assets/Scenes/level1.scene
                     bin/Assets/Engine/Branding/sparkengine_wordmark.svg
                     bin/Resources/Config/settings.ini bin/Resources/Config/controls.cfg)
                 file(WRITE "${_spark_root}/${_spark_file}" "fixture runtime content\n")
@@ -565,6 +578,9 @@ foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sideca
     if(_spark_case STREQUAL "valid" OR _spark_case STREQUAL "full_valid")
         if(NOT _spark_result EQUAL 0)
             message(FATAL_ERROR "Runtime layout rejected valid SDK-free package: ${_spark_log}")
+        endif()
+        if(_spark_case STREQUAL "full_valid" AND NOT _spark_log MATCHES "Validated notice coverage for")
+            message(FATAL_ERROR "Full runtime validation did not run the notice-coverage gate: ${_spark_log}")
         endif()
     elseif(_spark_result EQUAL 0 OR NOT _spark_log MATCHES "${_spark_expected}")
         message(FATAL_ERROR "Runtime ${_spark_case} did not fail for ${_spark_expected}: ${_spark_log}")

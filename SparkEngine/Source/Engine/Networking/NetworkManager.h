@@ -92,6 +92,26 @@ namespace Spark::Net
 
     constexpr uint16_t DEFAULT_PORT = 27015;
 
+    /// Magic that opens every Connect payload ("SPNH", Spark network handshake). A Connect
+    /// without it predates protocol negotiation and is rejected as ProtocolMissing.
+    constexpr uint32_t NETWORK_HANDSHAKE_MAGIC = 0x484E5053;
+
+    /// Session protocol version carried in Connect and echoed in ConnectAccepted. Peers must
+    /// match exactly; bump it on every incompatible wire change (docs/specs/networking-wire-format.md).
+    constexpr uint16_t NETWORK_PROTOCOL_VERSION = 1;
+
+    /// Typed reason carried in the ConnectRejected trailer (and recorded for client-side refusals).
+    enum class ConnectRejectReason : uint8_t
+    {
+        Unspecified = 0,        ///< Legacy or malformed rejection with no typed trailer
+        ServerFull = 1,         ///< Every client slot is occupied
+        ProtocolMissing = 2,    ///< Connect lacks the handshake magic and version
+        ProtocolTooOld = 3,     ///< Client protocol version is older than the server's
+        ProtocolTooNew = 4,     ///< Client protocol version is newer than the server's
+        MalformedHandshake = 5, ///< Magic and version present but the rest of the payload is malformed
+        ProtocolMismatch = 6    ///< Client-side: ConnectAccepted echoed a different version
+    };
+
     enum class ChannelType
     {
         Unreliable,     ///< Fire and forget (movement, position updates)
@@ -238,6 +258,20 @@ namespace Spark::Net
         size_t m_readPos = 0;
         bool m_error = false;
     };
+
+    /**
+     * @brief Serialize a Connect request payload: handshake magic, protocol version, player name.
+     * @param buffer Destination buffer; the request is appended.
+     * @param playerName Display name the server records for the new client.
+     * @param protocolVersion Version to advertise. Production clients always send NETWORK_PROTOCOL_VERSION.
+     */
+    inline void WriteConnectRequest(NetBuffer& buffer, const std::string& playerName,
+                                    uint16_t protocolVersion = NETWORK_PROTOCOL_VERSION)
+    {
+        buffer.WriteUint32(NETWORK_HANDSHAKE_MAGIC);
+        buffer.WriteUint16(protocolVersion);
+        buffer.WriteString(playerName);
+    }
 
     // ============================================================================
     // Entity Replication
@@ -511,6 +545,12 @@ namespace Spark::Net
             std::lock_guard<std::mutex> lock(m_stateMutex);
             return m_lastConnectionError;
         }
+        /// Typed reason for the last rejected or refused connection attempt.
+        ConnectRejectReason GetLastConnectRejectReason() const
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            return m_lastConnectRejectReason;
+        }
         float GetServerTime() const
         {
             std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
@@ -699,6 +739,10 @@ namespace Spark::Net
         void UpdateHeartbeat(float deltaTime);
         ClientID PrepareNextClientID();
         ClientID HandleConnect(const NetworkMessage& msg);
+        /// Send a typed ConnectRejected to a pre-registered pending endpoint and forget that endpoint.
+        void RejectPendingConnect(ClientID pendingID, ConnectRejectReason reason, const std::string& text);
+        /// Client-side: fail a Connecting handshake closed (state, socket, and queued lifecycle traffic).
+        void AbandonClientHandshake(ConnectRejectReason reason, std::string text);
         void HandleDisconnect(const NetworkMessage& msg);
         /// Requires m_apiMutex. There is no hidden network worker; Update owns the socket pump.
         [[nodiscard]] bool IsEndpointLifecycleIdle() const;
@@ -884,12 +928,13 @@ namespace Spark::Net
 
         // Auto-reconnect state
         AutoReconnectConfig m_autoReconnect;
-        uint32_t m_reconnectAttempts = 0;                ///< Current reconnect attempt count
-        float m_reconnectNextRetryTime = 0.0f;           ///< Server time when next reconnect allowed
-        std::string m_lastServerAddress;                 ///< Last server address for reconnect
-        uint16_t m_lastServerPort = 0;                   ///< Last server port for reconnect
-        std::string m_lastPlayerName;                    ///< Last player name for reconnect
-        std::string m_lastConnectionError;               ///< Last ConnectRejected reason
+        uint32_t m_reconnectAttempts = 0;      ///< Current reconnect attempt count
+        float m_reconnectNextRetryTime = 0.0f; ///< Server time when next reconnect allowed
+        std::string m_lastServerAddress;       ///< Last server address for reconnect
+        uint16_t m_lastServerPort = 0;         ///< Last server port for reconnect
+        std::string m_lastPlayerName;          ///< Last player name for reconnect
+        std::string m_lastConnectionError;     ///< Last ConnectRejected reason
+        ConnectRejectReason m_lastConnectRejectReason = ConnectRejectReason::Unspecified; ///< Typed form of the above
         bool m_wasConnected = false;                     ///< True if we were connected before disconnect
         std::function<void()> m_reconnectFailedCallback; ///< Called when max attempts exhausted
 

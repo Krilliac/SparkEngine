@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Strict parser and runner for the production source-host headless NullRHI
+# lifecycle records (SPARK_MODULE_READY, SPARK_HEADLESS_RHI,
+# SPARK_HEADLESS_LIFECYCLE). RunHeadlessWindows and RunHeadlessLinux emit the
+# identical record grammar, so NullRHI_Windows_FPSLifecycle and
+# NullRHI_Linux_FPSLifecycle share this one acceptance contract.
+
 function(_spark_validate_headless_nullrhi_result child_result child_stdout child_stderr out_ok out_reason)
     set(_ok TRUE)
     set(_reason "")
@@ -186,7 +192,7 @@ if(SPARK_HEADLESS_NULLRHI_PARSER_SELF_TEST)
         "" FALSE)
     _spark_expect_headless_case(d3d11-device 0
         "SPARK_D3D11_DEVICE driver=warp certification=software-only\n${_valid}" "" FALSE)
-    message(STATUS "SparkGameFPS Windows NullRHI source-headless parser contract passed")
+    message(STATUS "SparkGameFPS NullRHI source-headless parser contract passed")
     return()
 endif()
 
@@ -197,7 +203,7 @@ foreach(_required SPARK_ENGINE_EXECUTABLE SPARK_GAME_MODULE SPARK_WORKING_DIRECT
 endforeach()
 
 if(NOT SPARK_RHI_BACKEND STREQUAL "null")
-    message(FATAL_ERROR "The Windows source-headless lifecycle gate requires SPARK_RHI_BACKEND=null")
+    message(FATAL_ERROR "The source-headless NullRHI lifecycle gate requires SPARK_RHI_BACKEND=null")
 endif()
 if(NOT EXISTS "${SPARK_ENGINE_EXECUTABLE}")
     message(FATAL_ERROR "SparkEngine executable is missing: ${SPARK_ENGINE_EXECUTABLE}")
@@ -230,9 +236,9 @@ execute_process(
 _spark_validate_headless_nullrhi_result("${_result}" "${_stdout}" "${_stderr}" _ok _reason)
 if(NOT _ok)
     message(FATAL_ERROR
-        "SparkGameFPS Windows NullRHI source-headless evidence failed: ${_reason}.\n"
+        "SparkGameFPS NullRHI source-headless evidence failed (${CMAKE_HOST_SYSTEM_NAME} host): ${_reason}.\n"
         "stdout:\n${_stdout}\n"
         "stderr:\n${_stderr}")
 endif()
 
-message(STATUS "SparkGameFPS Windows NullRHI source-headless lifecycle completed with exact evidence")
+message(STATUS "SparkGameFPS NullRHI source-headless lifecycle completed with exact evidence (${CMAKE_HOST_SYSTEM_NAME} host)")

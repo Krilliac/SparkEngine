@@ -16,6 +16,7 @@
 #include "Engine/Gameplay/QuestSystem.h"
 #include "Engine/Persistence/AsyncDatabase.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Spark/PersistedSchema.h"
 
 #include <filesystem>
 #include <fstream>
@@ -379,8 +380,10 @@ TEST(SaveSystemRoundTripReal_TransientComponentsAreExcludedFromTheSnapshot)
     std::filesystem::remove_all(dir);
 }
 
-TEST(SaveMigration_VersionTwoSnapshotGainsExplicitTransformRoots)
+TEST(SaveMigration_VersionTwoSnapshotIsOutsideTheCompatibilityWindow)
 {
+    // OD-03: this build reads N (v4) and N-1 (v3) only. A v2 snapshot is refused
+    // before any migration step runs, so no parent edge is invented for it.
     SaveData legacy;
     legacy.metadata.version = 2;
     legacy.metadata.saveName = "Legacy v2 snapshot";
@@ -390,18 +393,17 @@ TEST(SaveMigration_VersionTwoSnapshotGainsExplicitTransformRoots)
     entity.components.push_back(MakeTransformRecord(""));
     legacy.entities.push_back(std::move(entity));
 
-    ASSERT_TRUE(SaveSystem::MigrateToCurrentVersion(legacy));
-    EXPECT_EQ(legacy.metadata.version, kCurrentSaveVersion);
+    ASSERT_TRUE(legacy.metadata.version < kOldestSupportedSaveVersion);
+    EXPECT_FALSE(SaveSystem::MigrateToCurrentVersion(legacy));
+    EXPECT_EQ(legacy.metadata.version, 2u);
     ASSERT_EQ(legacy.entities.size(), 1u);
     ASSERT_EQ(legacy.entities[0].components.size(), 1u);
-    const auto& properties = legacy.entities[0].components[0].properties;
-    ASSERT_EQ(properties.count("parent"), 1u);
-    EXPECT_EQ(properties.at("parent"), std::string("-1"));
+    EXPECT_EQ(legacy.entities[0].components[0].properties.count("parent"), 0u);
 
-    // Migrating an already-current snapshot must not change it.
-    const std::string once = properties.at("parent");
-    EXPECT_TRUE(SaveSystem::MigrateToCurrentVersion(legacy));
-    EXPECT_EQ(legacy.entities[0].components[0].properties.at("parent"), once);
+    World live;
+    live.CreateEntity("live-sentinel");
+    EXPECT_FALSE(SaveSystem::GetInstance().DeserializeWorld(legacy, live));
+    EXPECT_EQ(live.GetEntityCount(), 1u);
 }
 
 TEST(SaveMigration_OutOfRangeParentIndexIsRejectedWithoutTouchingTheWorld)
@@ -620,4 +622,50 @@ TEST(AsyncDatabaseReal_KeyValueFlushReplacesTheStoreWithoutResidue)
     }
 
     std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_ModuleSchemaReadsCurrentAndPreviousOnly)
+{
+    // A module on schema 3 reads 3 (current) and 2 (N-1) and refuses the rest.
+    constexpr Spark::ModulePersistedSchema schema{"TestModule", "test.module.schemaVersion", 3};
+    static_assert(schema.OldestReadableVersion() == 2);
+
+    std::unordered_map<std::string, std::string> customState = {{"unrelated", "kept"}};
+    Spark::WriteModuleSchemaVersion(schema, customState);
+    EXPECT_EQ(customState.at("test.module.schemaVersion"), std::string("3"));
+    EXPECT_EQ(customState.at("unrelated"), std::string("kept"));
+
+    uint32_t version = 0;
+    std::string error = "stale";
+    EXPECT_TRUE(Spark::CheckModuleSchemaVersion(schema, customState, version, error));
+    EXPECT_EQ(version, 3u);
+    EXPECT_TRUE(error.empty());
+
+    customState["test.module.schemaVersion"] = "2";
+    EXPECT_TRUE(Spark::CheckModuleSchemaVersion(schema, customState, version, error));
+    EXPECT_EQ(version, 2u);
+
+    const auto rejects = [&](const char* stored, const char* expected)
+    {
+        customState["test.module.schemaVersion"] = stored;
+        uint32_t untouched = 77;
+        std::string reason;
+        EXPECT_FALSE(Spark::CheckModuleSchemaVersion(schema, customState, untouched, reason));
+        EXPECT_EQ(untouched, 77u);
+        EXPECT_TRUE(reason.find("TestModule persisted schema") != std::string::npos);
+        EXPECT_TRUE(reason.find(expected) != std::string::npos);
+    };
+    rejects("1", "data is version 1, but this build reads versions 2-3 and writes version 3");
+    rejects("4", "data is version 4, but this build reads versions 2-3 and writes version 3");
+    rejects("abc", "is not a version number");
+    rejects("", "is not a version number");
+
+    customState.erase("test.module.schemaVersion");
+    uint32_t missing = 5;
+    EXPECT_FALSE(Spark::CheckModuleSchemaVersion(schema, customState, missing, error));
+    EXPECT_TRUE(error.find("missing version key 'test.module.schemaVersion'") != std::string::npos);
+
+    // The first schema of a module has no earlier version to read.
+    constexpr Spark::ModulePersistedSchema firstSchema{"FirstModule", "first.version", 1};
+    static_assert(firstSchema.OldestReadableVersion() == 1);
 }

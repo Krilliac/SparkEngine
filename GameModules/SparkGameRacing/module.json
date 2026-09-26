@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameRacing",
+  "cmakeTarget": "SparkGameRacing",
+  "sourceDirectory": "GameModules/SparkGameRacing/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/Racing",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/Racing",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestGameModuleRacing.cpp",
+      "Tests/TestMOD380RacingCompleteRaceReal.cpp"
+    ],
+    "prefixes": [
+      {
+        "prefix": "Racing_",
+        "count": 33
+      },
+      {
+        "prefix": "RacingCompleteRace_",
+        "count": 10
+      }
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameRacing/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

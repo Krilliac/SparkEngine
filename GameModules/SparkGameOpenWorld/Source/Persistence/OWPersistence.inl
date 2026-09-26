@@ -113,7 +113,7 @@ namespace OpenWorld
         if (payload.empty() || payload.size() > kMaxSaveBytes)
             return "Open world state is too large to save";
 
-        const auto finalPath = GetModuleSavePath(slotName);
+        const auto finalPath = GetModuleSavePath(saveSystem->GetSaveDirectory(), slotName);
         auto temporaryPath = finalPath;
         temporaryPath += ".tmp";
         auto backupPath = finalPath;
@@ -208,7 +208,7 @@ namespace OpenWorld
         if (!saveSystem->SaveExists(slotName))
             return "No save found in slot '" + slotName + "'";
 
-        const auto modulePath = GetModuleSavePath(slotName);
+        const auto modulePath = GetModuleSavePath(saveSystem->GetSaveDirectory(), slotName);
         std::error_code filesystemError;
         const auto byteCount = std::filesystem::file_size(modulePath, filesystemError);
         if (filesystemError)
@@ -288,9 +288,13 @@ namespace OpenWorld
             { return std::isalnum(static_cast<unsigned char>(character)) || character == '_' || character == '-'; });
     }
 
-    std::filesystem::path OWEngineSystems::GetModuleSavePath(const std::string& slotName)
+    std::filesystem::path OWEngineSystems::GetModuleSavePath(const std::string& saveDirectory,
+                                                             const std::string& slotName)
     {
-        return std::filesystem::path("Saves") / "OpenWorld" / (slotName + ".ow_save");
+        // The sidecar lives beside the engine slot it pairs with. SaveSystem resolves its
+        // directory from UserPaths at startup, so a CWD-relative path would split one save
+        // across two locations (and fail in read-only install directories).
+        return std::filesystem::path(saveDirectory) / "OpenWorld" / (slotName + ".ow_save");
     }
 
     std::string OWEngineSystems::SerializeSnapshot(const OWGameSaveData& data)

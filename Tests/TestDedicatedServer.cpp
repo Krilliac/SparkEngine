@@ -55,8 +55,6 @@ namespace
         bool autoBalanceTeams = true;
         std::vector<std::string> mapRotation;
         bool randomizeMapOrder = false;
-        std::string rconPassword;
-        uint16_t rconPort = 0;
         bool enableLogging = true;
         std::string logFilePath = "server.log";
         bool enableLanBroadcast = false;
@@ -299,7 +297,6 @@ TEST(DedicatedServer_DefaultConfig)
     EXPECT_EQ(config.friendlyFire, false);
     EXPECT_EQ(config.autoBalanceTeams, true);
     EXPECT_TRUE(config.mapRotation.empty());
-    EXPECT_TRUE(config.rconPassword.empty());
     EXPECT_EQ(config.enableLanBroadcast, false);
     EXPECT_EQ(config.lanBroadcastPort, static_cast<uint16_t>(27016));
     EXPECT_EQ(config.snapshotHistorySize, 64);
@@ -318,7 +315,6 @@ TEST(DedicatedServer_CustomConfig)
     config.roundCount = 5;
     config.friendlyFire = true;
     config.mapRotation = {"ctf_bridge", "ctf_harbor", "ctf_ruins"};
-    config.rconPassword = "secret123";
     config.bindAddress = "192.168.1.20";
 
     EXPECT_EQ(config.serverName, std::string("Test Server"));
@@ -331,7 +327,6 @@ TEST(DedicatedServer_CustomConfig)
     EXPECT_EQ(config.friendlyFire, true);
     EXPECT_EQ(config.mapRotation.size(), static_cast<size_t>(3));
     EXPECT_EQ(config.mapRotation[0], std::string("ctf_bridge"));
-    EXPECT_EQ(config.rconPassword, std::string("secret123"));
     EXPECT_EQ(config.bindAddress, std::string("192.168.1.20"));
 }
 

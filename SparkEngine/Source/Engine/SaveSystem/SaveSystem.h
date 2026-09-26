@@ -25,8 +25,8 @@
  *
  * Save files use a custom, uncompressed binary layout (extension `.spark_save`):
  * - A 4-byte `"SPRK"` magic followed by a `uint32` format version.
- * - A length-prefixed newline-delimited **metadata** text block (SaveMetadata fields;
- *   v2 adds `screenshotPath` after `playerClass`).
+ * - A length-prefixed newline-delimited **metadata** text block (SaveMetadata fields,
+ *   with `screenshotPath` after `playerClass`).
  * - A `uint32` entity count, then each **entity** as a length-prefixed name plus its
  *   components (each a length-prefixed type name and a set of length-prefixed
  *   key/value property strings).
@@ -43,8 +43,15 @@
  *
  * A serialized `Transform` carries a `parent` property holding the parent's index in
  * the saved entity list, or `-1` for a root. Loading rebuilds the parent/children
- * edges through `World::SetParent`. Saves written before v3 had no way to express an
- * edge, so migration marks every one of their transforms as a root.
+ * edges through `World::SetParent`.
+ *
+ * ## Compatibility window (OD-03)
+ *
+ * Readers accept exactly the current version (N = kCurrentSaveVersion) and the previous
+ * one (N-1 = kOldestSupportedSaveVersion) and migrate N-1 in memory; writers emit N only.
+ * Anything older or newer fails closed with a diagnostic naming the file's version and
+ * the supported window. Game modules version their own custom-state blocks with
+ * ModulePersistedSchema (public SDK header Spark/PersistedSchema.h), which applies the same N/N-1 rule.
  *
  * ## Component registration
  *
@@ -663,12 +670,12 @@ namespace Spark
         /**
          * @brief Migrate an in-memory save snapshot to kCurrentSaveVersion.
          *
-         * The supported compatibility window is exactly
-         * kOldestSupportedSaveVersion..kCurrentSaveVersion. The v1-to-v2 step adds
-         * the previously unpersisted screenshot field with its defined empty value; the
-         * v2-to-v3 step marks every serialized Transform as a hierarchy root, which is
-         * the only edge a pre-v3 save could represent. Calling this function again after
-         * success is a no-op. Unsupported versions return false without changing @p data.
+         * The supported compatibility window is exactly N-1..N
+         * (kOldestSupportedSaveVersion..kCurrentSaveVersion, owner decision OD-03). The
+         * v3-to-v4 step changes only the on-disk CRC-32 envelope, so the semantic payload
+         * carries over unchanged. Calling this function again after success is a no-op.
+         * Unsupported versions (older than N-1 or newer than N) return false without
+         * changing @p data.
          *
          * @param data Parsed or manually constructed save data to migrate in place.
          * @return true when data is current after the call; false when its source

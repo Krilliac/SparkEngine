@@ -1,12 +1,11 @@
-// TestCrashHandlerGatingReal.cpp - Real crash-path helpers: the stack hash the
-// uploader actually calls, the redaction applied before transport, the ungated
-// crash-report entry point, and the shipping-build watchdog gate.
+// TestCrashHandlerGatingReal.cpp - Real crash-path helpers: the redaction applied
+// to crash artifacts, the ungated crash-report entry point, and the
+// shipping-build watchdog gate.
 
 #include "TestFramework.h"
 #include "Core/Platform.h"
 #include "Utils/CrashHandler.h"
 #include "Utils/CrashHandlerSupport.h"
-#include "Utils/CrashReportUploader.h"
 #include "Utils/FreezeDetector.h"
 
 #include <algorithm>
@@ -17,48 +16,10 @@
 #include <string>
 #include <vector>
 
-// =============================================================================
-// utils-05 — the hash must recognise the format the engine itself writes
-// =============================================================================
-
-namespace
-{
-    /// Byte-for-byte the shape CrashHandler::SymStackTrace() produces.
-    std::string MakeEngineStackTrace(const std::string& topSymbol)
-    {
-        return std::string("*** STACK TRACE ***\n") + "  " + kStackFrameMarker + topSymbol + " +0x42\n" + "  " +
-               kStackFrameMarker + "Spark::GraphicsEngine::Present +0x1a\n" + "  " + kStackFrameMarker +
-               "Spark::Engine::Run +0xff\n";
-    }
-} // namespace
-
-TEST(CrashHash_EngineStackTraceFormatProducesAHash)
-{
-    const std::string hash = ComputeStackHash(MakeEngineStackTrace("Spark::Renderer::Draw"));
-    EXPECT_FALSE(hash.empty());
-    EXPECT_EQ(hash.size(), static_cast<size_t>(8));
-}
-
-TEST(CrashHash_EngineStackTraceHashIsStableAndDiscriminating)
-{
-    const std::string first = ComputeStackHash(MakeEngineStackTrace("Spark::Renderer::Draw"));
-    const std::string second = ComputeStackHash(MakeEngineStackTrace("Spark::Renderer::Draw"));
-    const std::string other = ComputeStackHash(MakeEngineStackTrace("Spark::Physics::Step"));
-    EXPECT_EQ(first, second);
-    EXPECT_FALSE(other.empty());
-    EXPECT_NE(first, other);
-}
-
-TEST(CrashHash_ThreadStackSectionDoesNotFeedTheHash)
-{
-    // ThreadStacks() deliberately writes unmarked lines: only the faulting
-    // thread's stack may decide which issue a crash is deduplicated onto.
-    const std::string threadStacksOnly = "*** THREAD STACKS ***\n"
-                                         "\nThread 0x1234\n"
-                                         " Spark::Worker::Wait +0x10\n"
-                                         " Spark::JobSystem::Run +0x20\n";
-    EXPECT_TRUE(ComputeStackHash(threadStacksOnly).empty());
-}
+#if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+#include <csignal>
+#include <unistd.h>
+#endif
 
 // =============================================================================
 // utils-08 — no profile path or account name may leave the machine
@@ -182,10 +143,61 @@ TEST(CrashRedaction_AnEmptyContextIsReportedAsHavingNoRules)
 // utils-02 — the ungated report entry point exists alongside the gated one
 // =============================================================================
 
-#if defined(SPARK_PLATFORM_WINDOWS) && defined(SPARK_MINIZ_AVAILABLE)
+// The production producer (CrashHandler.cpp) is compiled only when miniz is
+// found; otherwise CMake links CrashHandlerStub.cpp on every platform, which
+// writes no artifacts. Windows, Linux and macOS run the same entry points.
+#if defined(SPARK_MINIZ_AVAILABLE) &&                                                                                  \
+    (defined(SPARK_PLATFORM_WINDOWS) || defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS))
+#define SPARK_TEST_CRASH_PRODUCER 1
+#endif
+
+#ifdef SPARK_TEST_CRASH_PRODUCER
 
 namespace
 {
+    unsigned long CurrentProcessIdForCrashArtifacts()
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        return static_cast<unsigned long>(GetCurrentProcessId());
+#else
+        return static_cast<unsigned long>(getpid());
+#endif
+    }
+
+#if !defined(SPARK_PLATFORM_WINDOWS)
+    /// InstallCrashHandler() replaces the suite's crash-signal handlers (which
+    /// name the crashing test) with its own one-shot handlers. Put the suite's
+    /// handlers back when the test ends so later tests keep their diagnostics.
+    class ScopedCrashSignalDispositions
+    {
+      public:
+        ScopedCrashSignalDispositions()
+        {
+            for (size_t index = 0; index < kSignalCount; ++index)
+                m_saved[index] = sigaction(kSignals[index], nullptr, &m_previous[index]) == 0;
+        }
+
+        ~ScopedCrashSignalDispositions()
+        {
+            for (size_t index = 0; index < kSignalCount; ++index)
+            {
+                if (m_saved[index])
+                    sigaction(kSignals[index], &m_previous[index], nullptr);
+            }
+        }
+
+        ScopedCrashSignalDispositions(const ScopedCrashSignalDispositions&) = delete;
+        ScopedCrashSignalDispositions& operator=(const ScopedCrashSignalDispositions&) = delete;
+
+      private:
+        // The exact set InstallCrashHandler() hooks on POSIX.
+        static constexpr int kSignals[] = {SIGSEGV, SIGFPE, SIGABRT, SIGBUS, SIGILL, SIGTRAP};
+        static constexpr size_t kSignalCount = sizeof(kSignals) / sizeof(kSignals[0]);
+        struct sigaction m_previous[kSignalCount]{};
+        bool m_saved[kSignalCount]{};
+    };
+#endif
+
     /// Artifact roots InstallCrashHandler() creates: temp/spark_crash_<pid>_<random>.
     std::vector<std::filesystem::path> FindCrashArtifactDirectories()
     {
@@ -196,7 +208,7 @@ namespace
         if (error)
             return directories;
 
-        const std::string prefix = "spark_crash_" + std::to_string(GetCurrentProcessId()) + "_";
+        const std::string prefix = "spark_crash_" + std::to_string(CurrentProcessIdForCrashArtifacts()) + "_";
         for (fs::directory_iterator it(temp, error), end; !error && it != end; it.increment(error))
         {
             if (it->is_directory(error) && it->path().filename().string().rfind(prefix, 0) == 0)
@@ -249,24 +261,28 @@ TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
     // rather than an arbitrary older directory for the same process ID.
     const auto artifactDirectoriesBeforeInstall = FindCrashArtifactDirectories();
 
+#ifdef SPARK_PLATFORM_WINDOWS
     // The suite installs its own unhandled-exception filter to report crashing
     // tests; InstallCrashHandler() replaces it, so put it back afterwards.
     LPTOP_LEVEL_EXCEPTION_FILTER harnessFilter = SetUnhandledExceptionFilter(nullptr);
     SetUnhandledExceptionFilter(harnessFilter);
+#else
+    const ScopedCrashSignalDispositions harnessSignals;
+#endif
 
     CrashConfig config;
     config.dumpPrefix = L"SparkTestCrash";
     config.captureScreenshot = false; // no swap chain in the test process
     config.captureSystemInfo = false; // no DXGI enumeration
     config.captureAllThreads = false; // no suspending the test runner's threads
-    config.zipBeforeUpload = false;
-    config.enableCrashReporting = false; // never upload from a test
     config.requireConsent = false;
     config.headlessMode = true; // no dialogs
     config.promptUserDescription = false;
     config.triggerCrashOnAssert = false; // the production default this test is about
     InstallCrashHandler(config);
+#ifdef SPARK_PLATFORM_WINDOWS
     SetUnhandledExceptionFilter(harnessFilter);
+#endif
 
     const std::filesystem::path artifacts = FindNewCrashArtifactDirectory(artifactDirectoriesBeforeInstall);
     ASSERT_FALSE(artifacts.empty());
@@ -297,7 +313,7 @@ TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
     }
 }
 
-#endif // SPARK_PLATFORM_WINDOWS && SPARK_MINIZ_AVAILABLE
+#endif // SPARK_TEST_CRASH_PRODUCER
 
 // =============================================================================
 // utils-13 — the watchdog must not run where heartbeats are compiled out

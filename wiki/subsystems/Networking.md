@@ -24,11 +24,11 @@ The networking subsystem is composed of several layered modules that work togeth
 │   (message routing, entity replication, connection management)     │
 ├────────────────────────────────────────────────────────────────────┤
 │  ClientPrediction  │  LagCompensator  │  NetworkSecurity           │
-│  (input buffering, │  (history buffer, │  (toy XOR/token helpers,  │
-│   reconciliation)  │   hitbox rewind)  │   rate limiting)          │
+│  (input buffering, │  (history buffer, │  (single-use connection   │
+│   reconciliation)  │   hitbox rewind)  │   tokens)                 │
 ├────────────────────┴─────────────────┬┴───────────────────────────┤
 │                     NetworkStack                                   │
-│      (transport + optional prototype transform helper)             │
+│         (transport selection + connection-token registry)          │
 ├────────────────────────────────────────────────────────────────────┤
 │                     ITransport (abstract)                          │
 │        ┌───────────────────┬───────────────────────┐              │
@@ -47,9 +47,9 @@ The networking subsystem is composed of several layered modules that work togeth
 | `UDPTransport.h` | Concrete UDP socket transport (default) |
 | `SteamTransport.h` | Stub transport for future Steam Networking Sockets |
 | `ClientPrediction.h` | Client-side prediction and server reconciliation |
-| `NetworkSecurity.h` | Isolated repeating-key XOR and token-lifecycle prototypes; not security |
-| `NetworkEncryption.h` | Legacy XOR/FNV packet-format prototype plus rate limiter |
-| `NetworkIntegration.h` | `NetworkStack` -- transport plus optional prototype transform helper |
+| `NetworkSecurity.h` | Single-use, expiring CSPRNG connection-token registry; not encryption or peer authentication |
+| `NetworkEncryption.h` | In-tree RFC 8439 ChaCha20-Poly1305 `SecureChannel` (no production caller, not independently reviewed) plus rate limiter |
+| `NetworkIntegration.h` | `NetworkStack` -- transport selection plus connection-token registry |
 | `DedicatedServer.h` | Headless server: tick loop, local admin commands, map rotation, LAN broadcast |
 | `AreaServer.h` | Per-area server process for scalable multiplayer worlds |
 | `WorldServer.h` | Central coordinator for area-based multiplayer architecture |
@@ -445,9 +445,9 @@ The default transport uses platform BSD/Winsock UDP sockets:
 
 A placeholder for future Steam Networking Sockets integration. Currently all methods return failure. When the Steamworks SDK is linked, this will use `ISteamNetworkingSockets` for relay-based, NAT-traversing packet I/O.
 
-## NetworkStack -- Transport + Prototype Transform
+## NetworkStack -- Transport + Connection Tokens
 
-The `NetworkStack` class combines transport selection with an optional legacy XOR transform. It is not the active `NetworkManager` wire path and is not a security layer:
+The `NetworkStack` class combines transport selection with a connection-token registry. It is not the active `NetworkManager` wire path and applies no packet encryption:
 
 ```cpp
 struct NetworkStackConfig
@@ -457,7 +457,6 @@ struct NetworkStackConfig
     TransportType transport = TransportType::UDP;
     std::string serverAddress = "127.0.0.1";
     uint16_t serverPort = 27015;
-    bool enableEncryption = false; // Legacy name: toy XOR obfuscation only
 };
 ```
 
@@ -465,64 +464,58 @@ struct NetworkStackConfig
 NetworkStack stack;
 NetworkStackConfig config;
 config.transport = NetworkStackConfig::TransportType::UDP;
-config.enableEncryption = false;
 stack.Initialize(config);
 
-// Legacy Encrypt/Decrypt API names apply/reverse XOR only.
-auto obfuscated = stack.Encrypt(rawPayload);
-auto restored = stack.Decrypt(obfuscated);
+NetworkSecurity::Token token{};
+if (stack.GenerateConnectionToken(token)) // false on CSPRNG failure or before Initialize()
+{
+    bool accepted = stack.ValidateToken(token); // single use; false before Initialize()
+}
 
-// Access underlying layers
 ITransport* transport = stack.GetTransport();
-NetworkSecurity* security = stack.GetSecurity();
 ```
 
-## Security-Shaped Prototypes
+## Connection Tokens and Transport Cryptography
 
-### NetworkSecurity
+### NetworkSecurity (connection-token registry)
 
-Provides experimental XOR-based obfuscation and token utilities for callers that explicitly integrate them. These helpers do not authenticate or encrypt the active `NetworkManager` UDP path:
+Issues single-use connection tokens and matches them. Tokens come from `NetworkEncryption`'s `GenerateConnectionToken()` (OS CSPRNG) and are compared with its constant-time `ValidateToken()`. Both fail closed: a CSPRNG failure issues and records nothing, and unknown, reused, or expired tokens are rejected. A token only proves that a peer echoed a value this process issued; it does not authenticate or encrypt the UDP connection.
 
 ```cpp
-static constexpr size_t SECURITY_KEY_SIZE = 32;          // XOR state bytes
-static constexpr size_t CONNECTION_TOKEN_SIZE = 16;     // prototype token bytes
 static constexpr float CONNECTION_TOKEN_LIFETIME = 30.0f; // 30 second expiry
+using Token = ConnectionToken;                            // TOKEN_SIZE (16) bytes
 ```
 
 | Method | Description |
 |--------|-------------|
-| `PacketEncrypt(data, size, key)` | Apply repeating-key XOR in-place (legacy name) |
-| `PacketDecrypt(data, size, key)` | Reverse repeating-key XOR (legacy name) |
-| `Encrypt(plaintext, key)` | Return an XOR-obfuscated copy |
-| `Decrypt(ciphertext, key)` | Reverse the XOR transform |
-| `GenerateConnectionToken()` | Generate and retain prototype token bytes |
-| `ValidateConnectionToken(token)` | Match and consume bytes in the local pending set |
-| `GenerateKey(outKey)` | Generate non-cryptographic prototype state |
-| `SetEncryptionEnabled(bool)` | Toggle the legacy prototype helper |
+| `GenerateConnectionToken(outToken)` | Issue and record a CSPRNG token; returns false (token zeroed) on CSPRNG failure |
+| `ValidateConnectionToken(token)` | Constant-time match against pending tokens; consumes the token on success |
 
-> **Warning:** XOR/FNV is not encryption, authentication, or attacker-resistant integrity. A remotely reachable production design requires separately integrated and independently reviewed authenticated encryption. NET-100 remains open and blocking.
+The repeating-key XOR "encryption" prototype (`PacketEncrypt`/`Encrypt`/`GetEncryptionKey`, `NetworkStack::Encrypt`/`Decrypt`, and the `enableEncryption` flags in `NetworkStackConfig` and `[Network]` engine settings) was deleted under NET-100. `Tests/TestNetworkSecurity.cpp` static-asserts that the API stays gone, and `Tests/Tools/test_network_security_csprng.py` (label `network-security`) fails if XOR transform code returns to these headers.
+
+> **Warning:** The active `NetworkManager` UDP path is unauthenticated and unencrypted. NET-100 remains open and blocking: `SecureChannel` has no key-agreement handshake or production caller, and OD-06 replaces the in-tree primitive with libsodium.
 
 ### NetworkEncryption (Advanced)
 
-Preserves a legacy packet-format prototype and an independent rate limiter. The “key,” “nonce,” “HMAC,” and replay-protection names do not make the custom XOR/FNV construction cryptographic:
+Holds the in-tree RFC 8439 ChaCha20-Poly1305 construction, the `SecureChannel` packet channel built on it, the fail-closed token helpers, and an independent rate limiter. `SecureChannel` has no production caller yet: there is no key-agreement handshake and `NetworkManager` does not use it.
 
 ```cpp
-constexpr size_t SESSION_KEY_SIZE = 32;        // XOR state bytes
-constexpr size_t NONCE_SIZE = 8;               // serialized sequence bytes
-constexpr size_t HMAC_SIZE = 4;                // legacy name: forgeable keyed FNV tag
-constexpr size_t TOKEN_SIZE = 16;               // prototype token bytes
-constexpr size_t ENCRYPTION_OVERHEAD = 12;     // legacy packet-format overhead
+constexpr size_t SESSION_KEY_SIZE = 32;                     // shared secret / ChaCha20 key
+constexpr size_t AEAD_NONCE_SIZE = 12;                      // RFC 8439 96-bit nonce
+constexpr size_t AEAD_TAG_SIZE = 16;                        // full Poly1305 tag
+constexpr size_t TOKEN_SIZE = 16;                           // CSPRNG connection token
+constexpr uint8_t SECURE_TRANSPORT_VERSION = 1;             // only accepted wire version
+constexpr size_t SECURE_HEADER_SIZE = 1 + 1 + 8;            // [version][key epoch][sequence u64 LE]
 ```
 
-**Prototype layout:** `[sequence (8B)] [XOR-obfuscated payload] [keyed-FNV tag (4B)]`
+| Function / type | Description |
+|-----------------|-------------|
+| `GenerateSessionKey(outKey)` / `GenerateConnectionToken(outToken)` | OS CSPRNG; return false (output zeroed) on failure |
+| `ValidateToken(expected, received)` | Constant-time token comparison |
+| `ChaCha20Poly1305Seal` / `ChaCha20Poly1305Open` | Raw RFC 8439 AEAD; the caller owns nonce uniqueness |
+| `SecureChannel::Seal` / `Open` | Per-direction HKDF keys, sender-owned sequence numbers, authenticated replay window, epoch ratchet; `Open` returns an `OpenResult` drop reason |
 
-| Function | Description |
-|----------|-------------|
-| `GenerateSessionKey()` | Create pseudo-random prototype state |
-| `GenerateConnectionToken()` | Create pseudo-random prototype bytes |
-| `EncryptPacket(key, sequence, payload)` | Apply the legacy XOR/FNV transform |
-| `DecryptPacket(key, packet, outPayload, outSeq)` | Check the forgeable tag and reverse XOR |
-| `ValidateToken(expected, received)` | Constant-time byte comparison only |
+Tests: `Tests/TestNET100TransportReal.cpp` (`Transport_*`). The implementation is in-house and not independently reviewed; OD-06 replaces it with libsodium.
 
 ### RateLimiter
 
@@ -589,9 +582,8 @@ struct ServerConfig
     std::vector<std::string> mapRotation;
     bool randomizeMapOrder = false;
 
-    // Administration
-    std::string rconPassword;                  // Reserved; currently ignored
-    uint16_t rconPort = 0;                     // Reserved; currently ignored
+    // Administration: trusted in-process only. Remote RCON is permanently
+    // unavailable in stable-v1 (OD-05), so there is no password or port field.
     bool enableLogging = true;
     std::string logFilePath = "server.log";
 
@@ -660,9 +652,10 @@ struct ServerCallbacks
 
 ### Local Administration Commands (legacy RCON API names)
 
-There is currently no remote RCON listener. `ExecuteRcon` is for trusted
+There is no remote RCON listener, and remote administration is permanently
+unavailable in stable-v1 (owner decision OD-05). `ExecuteRcon` is for trusted
 in-process host/control code only; network chat never dispatches admin commands,
-and the compatibility fields `rconPassword`/`rconPort` are inactive.
+and `ServerConfig` has no RCON password or port field.
 
 ```cpp
 // Register custom local administration commands
@@ -847,7 +840,7 @@ This ensures clients see fair hit registration despite network latency.
 | `NetworkManager` | Queue mutex | `m_queueMutex` protects `m_incomingQueue` and `m_outgoingQueue`; `m_handlerMutex` protects handler registration |
 | `DedicatedServer` | Internal mutexes | Local admin registry (`m_rconMutex`), bans (`m_banMutex`), logging (`m_logMutex`). Tick loop runs on `m_tickThread`. |
 | `UDPTransport` | Not thread-safe | Socket operations should be called from the network thread only |
-| `NetworkSecurity` | Not thread-safe | Token map is not mutex-protected; call from single thread |
+| `NetworkSecurity` | Not thread-safe | Pending-token list is not mutex-protected; call from single thread |
 | `ClientPrediction` | Not thread-safe | Call from main game thread only |
 | `RateLimiter` | Not thread-safe | Access from network thread only |
 
@@ -884,7 +877,6 @@ This ensures clients see fair hit registration despite network latency.
 net_status           # Show NetworkManager connection state and role
 net_clients          # List connected clients with stats (server only)
 net_stats            # Show bandwidth, ping, jitter, packet loss
-net_stack_status     # Show transport and prototype-XOR status
 prediction_status    # Show prediction pending count and correction magnitude
 server_status        # Show DedicatedServer uptime, players, map, match state
 ```

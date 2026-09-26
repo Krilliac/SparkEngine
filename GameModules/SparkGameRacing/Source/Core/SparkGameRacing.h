@@ -33,7 +33,7 @@ namespace Racing
  * @brief Game module that demonstrates racing game mechanics
  *
  * Wires up a complete racing game framework demonstrating:
- * - Physics-based vehicle driving with multiple vehicle types
+ * - Jolt vehicles on the engine's shared PhysicsSystem, with multiple vehicle types
  * - Track layouts with checkpoints, surface zones, and hazards
  * - Race lifecycle management with timing and positions
  * - AI drivers with difficulty scaling and rubber-banding
@@ -60,7 +60,7 @@ class SparkGameRacingModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
-    void SetupDefaultRaceRoster();
+    bool SetupDefaultRaceRoster();
     void StepRace(float deltaTime);
     void UpdatePresentationState();
 

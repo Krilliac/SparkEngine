@@ -30,6 +30,8 @@ library/extension modules must be declared as add-ons and can coexist with it.
 GameModules/
   MyGame/
     CMakeLists.txt
+    README.md           # Required: what runs, release classification, known limits
+    module.json         # Required: per-module facts checked by site-data validation
     Source/
       Core/
         Main.cpp        # DLL entry point + IModule implementation
@@ -37,6 +39,19 @@ GameModules/
       Game/
         ...             # Your game logic
 ```
+
+`module.json` names the module's CMake target, source directory, asset roots
+(or `"state": "none"` with a reason), the registered test sources and the
+`TEST` name prefixes that cover it (each with the exact number of tests it
+selects), its README, and any parity dimensions it declares N/A. Release-profile policy stays in `tools/module-evidence/manifest.json`.
+`python3 tools/site-data/validate.py --modules` and the `ModuleManifest_Contract`
+CTest fail when a discovered module has no manifest or any referenced path,
+test prefix, test count, README, or N/A declaration does not hold.
+`Tests/CMakeLists.txt` also generates one `ModuleManifest_<Module>_<Prefix>`
+CTest (label `module-kit`) per declared prefix; it runs exactly that many
+tests or fails. A prefix with `"requires": ["angelscript"]` is not registered
+when the build disables AngelScript, because its tests are compiled out. The field rules are in
+[Creating a Game Module](../wiki/getting-started/Creating-a-Game-Module.md#gamemodulesnamemodulejson-in-tree-modules).
 
 ### 2. Implement `Spark::IModule`
 
@@ -145,6 +160,17 @@ See `SparkGame/CMakeLists.txt` for an in-tree example with platform libraries an
 optional dependencies (Jolt, Vulkan, OpenGL). It does not establish standalone
 installed-SDK support.
 
+Engine-private includes in prototype modules are ratcheted, not endorsed. For
+every module outside all release profiles, `module-content-inventory.json`
+publishes `privateEngineHeaders` (each `SparkEngine/Source` header the module
+includes), `privateEngineHeaderCount`, and `copiedInfrastructureFiles` (its
+copied `*EngineSystems.cpp` setup). `python3 tools/site-data/module_content.py
+--check` and the `PrototypeModuleKit_PrivateDependencyRatchet` CTest fail when a
+module gains an engine-private header its committed entry does not list, or when
+a removed include is not dropped from the list. Regenerate the inventory with
+`python3 tools/site-data/module_content.py` only when the new dependency is
+reviewed and intended.
+
 ## Module Lifecycle
 
 ```
@@ -164,6 +190,33 @@ Engine shutdown
   9. OnUnload() in reverse load order
  10. DestroyModule() and unload each loaded library
 ```
+
+### Experimental module lifecycle evidence (RDY-015)
+
+Each experimental module (every `tools/module-evidence/manifest.json` entry
+tracked under RDY-015) has an `ExperimentalModuleLifecycle_<Module>` CTest on
+Linux. The test runs `cmake/RunSparkExperimentalModuleLifecycle.cmake`, which
+launches the real `SparkEngine` host on the SDL path with NullRHI and
+`-require-game`. The run passes only if the host exits 0, prints one
+`SPARK_MODULE_READY count=1` line, and then prints one post-teardown
+`SPARK_MODULE_LIFECYCLE module=<Module> ...` record in which every phase
+(create, load, update, fixed, render, unload, destroy) is at least 1 and
+`faults=0`. The runner sets 120000 frames because fixed steps follow a 60 Hz
+wall clock, and a shorter NullRHI run can finish before one fixed step elapses.
+
+```bash
+ctest --test-dir build/linux-gcc-release -L experimental-modules --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R ExperimentalModuleLifecycleParserContract
+```
+
+These tests are prototype evidence and never certify a module. They carry the
+`experimental-modules;prototype` labels and never `stable-v1`
+or `module-profile`. The required full-ctest Linux lanes exclude them with
+`--label-exclude '^experimental-modules$'`. Only the advisory
+`experimental-module-lifecycle` job in `build.yml` runs them. That job is
+`continue-on-error`, is not a `required-ci-gate` dependency, and uploads its JUnit
+even when a module fails. A failing module stays visible there without changing
+stable-v1 support. `test-workflow-failure-propagation.py` enforces this separation.
 
 ## Module Dependencies
 

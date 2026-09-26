@@ -522,7 +522,8 @@ class PhysicsSystem
      * @brief Create a vehicle with engine, transmission, and suspension.
      * @param body  The rigid body to attach the vehicle constraint to.
      * @param desc  Vehicle configuration (wheels, engine, transmission).
-     * @return      Unique pointer to the new VehiclePhysics.
+     * @return      The new VehiclePhysics, or nullptr when the body or descriptor is unusable
+     *              (for example a tracked layout without wheels on both sides).
      */
     std::unique_ptr<VehiclePhysics> CreateVehicle(std::shared_ptr<PhysicsBody> body, const VehicleDesc& desc);
 

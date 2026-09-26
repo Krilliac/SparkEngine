@@ -393,8 +393,8 @@ namespace Spark
 
         /// @brief Decode a serialized Transform's parent as a saved-entity index.
         ///
-        /// An absent property decodes as -1 (root), which is how every pre-v3 save and
-        /// every hand-built snapshot reads.
+        /// An absent property decodes as -1 (root), which is how a Transform record
+        /// without a parent edge (including a hand-built snapshot) reads.
         ///
         /// @return false when the property is present but is not a decimal index >= -1.
         bool ParseTransformParentIndex(const SerializedComponent& transform, long long& outIndex)
@@ -443,7 +443,7 @@ namespace Spark
                 return false;
             }
 
-            if (sourceVersion >= 2 && !std::getline(stream, parsedMetadata.screenshotPath))
+            if (!std::getline(stream, parsedMetadata.screenshotPath))
                 return false;
 
             stream >> parsedMetadata.timestamp;
@@ -471,8 +471,7 @@ namespace Spark
             return true;
         }
 
-        bool BuildMetadataBlock(const SaveMetadata& metadata, uint32_t version, const char* operation,
-                                std::string& outBlock)
+        bool BuildMetadataBlock(const SaveMetadata& metadata, const char* operation, std::string& outBlock)
         {
             auto rejectNewline = [&](const std::string& value, const char* field)
             {
@@ -485,7 +484,7 @@ namespace Spark
 
             if (rejectNewline(metadata.saveName, "saveName") || rejectNewline(metadata.sceneName, "sceneName") ||
                 rejectNewline(metadata.playerClass, "playerClass") ||
-                (version >= 2 && rejectNewline(metadata.screenshotPath, "screenshotPath")))
+                rejectNewline(metadata.screenshotPath, "screenshotPath"))
             {
                 return false;
             }
@@ -501,8 +500,7 @@ namespace Spark
             stream << metadata.saveName << "\n";
             stream << metadata.sceneName << "\n";
             stream << metadata.playerClass << "\n";
-            if (version >= 2)
-                stream << metadata.screenshotPath << "\n";
+            stream << metadata.screenshotPath << "\n";
             stream << metadata.timestamp << "\n";
             stream << metadata.playTime << "\n";
             stream << metadata.playerHealth << "\n";
@@ -1658,26 +1656,6 @@ namespace Spark
         {
             switch (migrated.metadata.version)
             {
-            case 1:
-                // v1 did not carry screenshotPath on disk. Its exact v2 value is
-                // therefore empty, even if a caller manually populated a v1 struct.
-                migrated.metadata.screenshotPath.clear();
-                migrated.metadata.version = 2;
-                break;
-            case 2:
-                // v2 had no way to express a hierarchy edge, so every Transform it
-                // carried was a root. Materialize that exact value rather than relying
-                // on the absent-property default.
-                for (SerializedEntity& entity : migrated.entities)
-                {
-                    for (SerializedComponent& component : entity.components)
-                    {
-                        if (component.typeName == "Transform")
-                            component.properties[kTransformParentProperty] = kTransformParentNone;
-                    }
-                }
-                migrated.metadata.version = 3;
-                break;
             case 3:
                 // v4 changes only the disk integrity envelope. The in-memory
                 // semantic payload is identical to v3.
@@ -1727,7 +1705,7 @@ namespace Spark
         try
         {
             std::string metadataBlock;
-            if (!BuildMetadataBlock(data.metadata, data.metadata.version, "DeserializeWorld", metadataBlock) ||
+            if (!BuildMetadataBlock(data.metadata, "DeserializeWorld", metadataBlock) ||
                 !ValidateSaveRepresentation(data, metadataBlock.size(), "DeserializeWorld") ||
                 !ValidateSerializedWorldStructure(data, "DeserializeWorld"))
             {
@@ -1990,7 +1968,7 @@ namespace Spark
             }
 
             std::string metaStr;
-            if (!BuildMetadataBlock(data.metadata, kCurrentSaveVersion, "WriteToFile", metaStr) ||
+            if (!BuildMetadataBlock(data.metadata, "WriteToFile", metaStr) ||
                 !ValidateSaveRepresentation(data, metaStr.size(), "WriteToFile") ||
                 !ValidateSerializedWorldStructure(data, "WriteToFile"))
             {
@@ -2409,7 +2387,7 @@ namespace Spark
                 parsedData.entities.push_back(entity);
             }
 
-            // Version 1 always ends with a custom-state count, even when zero.
+            // Every supported version ends with a custom-state count, even when zero.
             uint32_t customStateCount = 0;
             if (!readUint32(customStateCount))
                 return false;

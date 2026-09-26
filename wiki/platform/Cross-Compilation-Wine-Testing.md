@@ -87,7 +87,7 @@ cmake --build build/linux-mingw-release --parallel $(nproc)
 |--------|------|-------------|
 | `SparkEngine.exe` | `bin/SparkEngine.exe` | Engine runtime with D3D11 graphics |
 | `SparkEditor.exe` | `bin/SparkEditor.exe` | Editor with D3D11 + ImGui |
-| `SparkTests.exe` | `bin/SparkTests.exe` | Full unit test suite (2,500+ tests) |
+| `SparkTests.exe` | `bin/SparkTests.exe` | Full unit test suite (the source count is the generated `tests.definitions` metric) |
 | `SparkConsole.exe` | `bin/SparkConsole.exe` | Standalone debug console |
 | `SparkShaderCompiler.exe` | `bin/SparkShaderCompiler.exe` | Offline shader compiler |
 | `libSparkGameFPS.dll` | `bin/libSparkGameFPS.dll` | FPS game module |
@@ -121,7 +121,7 @@ export LIBGL_ALWAYS_SOFTWARE=1
 wine64 build/linux-mingw-release/bin/SparkTests.exe
 ```
 
-Expected result: **~2,504/2,509 tests pass** (99.8%). The 5 expected failures are:
+Expected result: **every registered test passes except the 5 expected failures below**. The registered total depends on the build configuration; the source-level count is the generated `tests.definitions` metric, not a Wine pass count. The expected failures are:
 - `WARP_D3D11DeviceInit` -- needs real D3D11 runtime (DXVK or native Windows)
 - `WARP_D3D11BufferCreation` -- same
 - `WARP_D3D11FactoryCreate` -- same

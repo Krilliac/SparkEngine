@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "profiles": {
+    "stable-v1": {
+      "modules": ["SparkGameFPS"],
+      "engineSources": [
+        {
+          "path": "SparkEngine/Source/",
+          "reason": "Engine code every module runs on; e.g. Game/CubeObject.h and the other primitive objects load Assets/Models/<Primitive>.obj, which SparkGameFPS and SceneManager instantiate for level1.scene nodes"
+        }
+      ],
+      "seeds": [
+        {
+          "path": "README.md",
+          "reason": "Asset-tree README installed beside the package manifest"
+        },
+        {
+          "path": "Engine/Branding/",
+          "reason": "Engine startup branding; StartupSplash plays Engine/Branding/sparkengine_splash.wav before any project loads, and the package BOM requires the wordmark"
+        }
+      ],
+      "unshippedReferences": [
+        {
+          "path": "Textures/Decals/blood_splatter.dds",
+          "reason": "DecalSystem stores this name in DecalMaterial::albedoTexture, which no code reads; no .dds decal file exists or is opened"
+        },
+        {
+          "path": "Textures/Decals/bullet_hole.dds",
+          "reason": "DecalSystem stores this name in DecalMaterial::albedoTexture, which no code reads; no .dds decal file exists or is opened"
+        },
+        {
+          "path": "Textures/Decals/bullet_hole_normal.dds",
+          "reason": "DecalSystem stores this name in DecalMaterial::normalTexture, which no code reads; no .dds decal file exists or is opened"
+        },
+        {
+          "path": "Textures/Decals/scorch_mark.dds",
+          "reason": "DecalSystem stores this name in DecalMaterial::albedoTexture, which no code reads; no .dds decal file exists or is opened"
+        },
+        {
+          "path": "audio/door_open.wav",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        },
+        {
+          "path": "models/chest.mesh",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        },
+        {
+          "path": "models/crate.mesh",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        },
+        {
+          "path": "models/door.mesh",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        },
+        {
+          "path": "models/enemy_default.mesh",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        },
+        {
+          "path": "models/key.mesh",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        },
+        {
+          "path": "models/npc_default.mesh",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        },
+        {
+          "path": "models/pickup_ammo.mesh",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        },
+        {
+          "path": "models/pickup_health.mesh",
+          "reason": "EntityPresetManager built-in preset property value; only the SparkEditor HierarchyPanel reads presets (no runtime path instantiates them or opens this file), and no such file exists in the repository"
+        }
+      ]
+    }
+  }
+}

@@ -24,6 +24,9 @@
 #include "Engine/Replay/ReplaySystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
 
+#include <string>
+#include <unordered_map>
+
 namespace Platformer
 {
 
@@ -31,12 +34,13 @@ namespace Platformer
     // Initialize / Update / Shutdown
     // =========================================================================
 
-    bool PlatformerEngineSystems::Initialize(Spark::IEngineContext* context)
+    bool PlatformerEngineSystems::Initialize(Spark::IEngineContext* context, const PlatformerProgressSystems& progress)
     {
         if (!context)
             return false;
 
         m_context = context;
+        m_progressSystems = progress;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[Platformer] Wiring engine systems...");
@@ -62,7 +66,8 @@ namespace Platformer
         if (m_autosaveTimer >= AutosaveInterval)
         {
             m_autosaveTimer = 0.0f;
-            SaveProgress("__platformer_autosave");
+            if (!SaveProgress("__platformer_autosave"))
+                Spark::SimpleConsole::GetInstance().LogWarning("[Platformer] Autosave failed");
         }
     }
 
@@ -75,6 +80,7 @@ namespace Platformer
             StopReplayRecording();
 
         m_context = nullptr;
+        m_progressSystems = {};
     }
 
     // =========================================================================
@@ -89,11 +95,11 @@ namespace Platformer
 
         // World theme tracks
         const std::pair<std::string, std::string> tracks[] = {
-            {"world_1_theme", "Assets/Audio/Music/world_1_theme.ogg"},
-            {"world_2_theme", "Assets/Audio/Music/world_2_theme.ogg"},
-            {"boss_theme", "Assets/Audio/Music/boss_theme.ogg"},
-            {"victory_jingle", "Assets/Audio/Music/victory_jingle.ogg"},
-            {"game_over", "Assets/Audio/Music/game_over.ogg"},
+            {"world_1_theme", "Assets/Audio/Platformer/Music/world_1_theme.wav"},
+            {"world_2_theme", "Assets/Audio/Platformer/Music/world_2_theme.wav"},
+            {"boss_theme", "Assets/Audio/Platformer/Music/boss_theme.wav"},
+            {"victory_jingle", "Assets/Audio/Platformer/Music/victory_jingle.wav"},
+            {"game_over", "Assets/Audio/Platformer/Music/game_over.wav"},
         };
 
         for (const auto& [name, path] : tracks)
@@ -173,27 +179,83 @@ namespace Platformer
 
     bool PlatformerEngineSystems::SaveProgress(const std::string& slotName) const
     {
-        auto* save = m_context->GetSaveSystem();
-        if (!save)
+        auto& console = Spark::SimpleConsole::GetInstance();
+        if (!PlatformerProgress::IsValidSlotName(slotName))
+        {
+            console.LogError("[Platformer] Invalid save slot: " + slotName);
             return false;
+        }
+
+        auto* save = m_context ? m_context->GetSaveSystem() : nullptr;
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!save || !world || !m_progressSystems.IsComplete())
+        {
+            console.LogError("[Platformer] SaveSystem, World, or gameplay systems not available");
+            return false;
+        }
 
         Spark::SaveMetadata meta;
         meta.saveName = "Platformer - " + slotName;
         meta.sceneName = "platformer";
+        meta.playTime = static_cast<float>(m_context->GetElapsedTime());
 
-        // Custom state: coins, stars, unlocked levels, best times
-        World world;
-        return save->Save(slotName, world, meta);
+        const std::unordered_map<std::string, std::string> customState = {
+            {std::string(PlatformerProgress::StateKey),
+             PlatformerProgress::Serialize(PlatformerProgress::Capture(m_progressSystems))}};
+        if (!save->Save(slotName, *world, meta, customState))
+        {
+            console.LogError("[Platformer] Failed to write save slot: " + slotName);
+            return false;
+        }
+        return true;
     }
 
     bool PlatformerEngineSystems::LoadProgress(const std::string& slotName) const
     {
-        auto* save = m_context->GetSaveSystem();
-        if (!save || !save->SaveExists(slotName))
+        auto& console = Spark::SimpleConsole::GetInstance();
+        if (!PlatformerProgress::IsValidSlotName(slotName))
+        {
+            console.LogError("[Platformer] Invalid save slot: " + slotName);
             return false;
+        }
 
-        World world;
-        return save->Load(slotName, world);
+        auto* save = m_context ? m_context->GetSaveSystem() : nullptr;
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!save || !world || !m_progressSystems.IsComplete())
+        {
+            console.LogError("[Platformer] SaveSystem, World, or gameplay systems not available");
+            return false;
+        }
+        if (!save->SaveExists(slotName))
+        {
+            console.LogError("[Platformer] Save slot not found: " + slotName);
+            return false;
+        }
+
+        // Decode and validate progress before the SaveSystem commits the world, so a bad entry changes nothing.
+        PlatformerProgressSnapshot snapshot;
+        std::string error;
+        const auto decodeProgress = [&](const std::unordered_map<std::string, std::string>& state)
+        {
+            const auto encoded = state.find(std::string(PlatformerProgress::StateKey));
+            if (encoded == state.end())
+            {
+                error = "slot has no platformer progress";
+                return false;
+            }
+            return PlatformerProgress::Deserialize(encoded->second, snapshot, error) &&
+                   PlatformerProgress::Validate(snapshot, m_progressSystems, error);
+        };
+
+        std::unordered_map<std::string, std::string> customState;
+        if (!save->Load(slotName, *world, customState, decodeProgress) ||
+            !PlatformerProgress::Apply(snapshot, m_progressSystems, error))
+        {
+            console.LogError("[Platformer] Failed to load slot '" + slotName +
+                             "': " + (error.empty() ? "unreadable save" : error));
+            return false;
+        }
+        return true;
     }
 
     // =========================================================================

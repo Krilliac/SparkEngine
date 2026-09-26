@@ -127,7 +127,7 @@ static std::vector<uint8_t> MakePacket(MessageType type, ChannelType channel, ui
 static std::vector<uint8_t> MakeConnectPacket(const std::string& playerName)
 {
     NetBuffer nameBuf;
-    nameBuf.WriteString(playerName);
+    WriteConnectRequest(nameBuf, playerName);
     return MakePacket(MessageType::Connect, ChannelType::Reliable, 0, 0, 0.0f,
                       std::vector<uint8_t>(nameBuf.GetData().begin(), nameBuf.GetData().end()));
 }

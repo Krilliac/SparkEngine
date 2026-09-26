@@ -46,6 +46,11 @@ namespace
             info.version = "1.0.0";
             const char* gameKind = std::getenv("SPARK_MODULE_ABI_KIND_GAME");
             info.kind = gameKind && gameKind[0] != '\0' ? Spark::ModuleKind::Game : Spark::ModuleKind::Addon;
+            // Lets tests prove the post-factory ModuleInfo SDK check still
+            // rejects a module whose ModuleInfo contradicts its descriptor.
+            const char* contradictSdk = std::getenv("SPARK_MODULE_ABI_CONTRADICT_INFO_SDK");
+            if (contradictSdk && contradictSdk[0] != '\0')
+                info.sdkVersion = SPARK_SDK_VERSION + 1;
             return info;
         }
 

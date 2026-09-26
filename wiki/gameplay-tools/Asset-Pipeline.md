@@ -120,7 +120,7 @@ These entries describe observed source paths, not a stable-v1 support matrix.
 |--------|-------------|---------|---------------|
 | `.obj` | Static Wavefront OBJ geometry | tinyobjloader in the general mesh/scene and non-Windows paths; a limited parser in the Windows `MeshAsset` path | `MeshAsset::Load()` / `LoadOBJ()` |
 | `.fbx` | Native binary FBX parsing; the non-Windows mesh path consumes geometry only | `FBXImporter` (no external FBX SDK) | Native importer source; not wired into the Windows stable-v1 `MeshAsset` path |
-| `.gltf` / `.glb` | Validated static triangle geometry; skins, animations, morph targets, sparse accessors, and required extensions are rejected | cgltf | `LoadGLTFStaticMesh()` |
+| `.gltf` / `.glb` | Validated static triangle geometry, or (non-Windows `MeshAsset` only) one skin with four influences per vertex; morph targets, sparse accessors, and required extensions are rejected | cgltf | `LoadGLTFStaticMesh()` / `LoadGLTFSkinnedMesh()` |
 
 ### Textures
 
@@ -177,6 +177,140 @@ scan. Verification rejects traversal and Windows path aliases, reparses,
 non-regular files, incomplete declarations, resource-limit violations, and a
 file that changes while it is read. This is a repository-content gate, not yet
 proof that the same verified snapshot was consumed by package assembly.
+
+### Staged reference closure (ENG-220)
+
+Hashes prove the staged files are the reviewed bytes. They do not prove that
+what a scene or material names is actually there. The `references` command
+checks that separately:
+
+```bash
+python3 tools/asset-integrity/verify_asset_integrity.py references Assets/assets.integrity.json --root Assets
+python3 tools/asset-integrity/verify_asset_integrity.py references <pkg>/bin/Assets/assets.integrity.json \
+    --root <pkg>/bin/Assets
+```
+
+It parses every `.scene` and every `Materials/**.json` that the manifest
+lists, plus any other material a scene names
+(`tools/asset-integrity/asset_references.py`). Every reference must resolve
+inside the root, without `..` or an absolute path, to a regular, link-free
+file that the manifest lists with exact case. A failure names the
+referencing file, its line or JSON key, and the value.
+
+| Format | Reference keys | Base |
+|--------|----------------|------|
+| INI `.scene` (SceneManager) | Runtime: `model`, `material`. Validator policy: `mesh`, `[Scene] skybox` | `model` must start with `Assets/` because SceneManager hands it to the OBJ loader unchanged. `material` must start with exactly `Assets/Materials/` (or `Assets\Materials\`) and end in `.json`, because GameObject silently uses the default material for anything else (`material=ground_dirt` or `material=Assets/Textures/foo.json` fails). SceneManager stores `mesh` as an opaque node property and ignores `skybox` today; the validator still requires `mesh` to be an `Assets/`-rooted model and a non-`default` `skybox` to name a cubemap prefix whose six `_px/_nx/_py/_ny/_pz/_nz.png` faces are all staged |
+| JSON `.scene` (`entities`) | `MeshRenderer.mesh` (or the built-in `Primitive/<Name>`), `MeshRenderer.material`, `AudioSource.sound`, `environment.skyTexture` | `Assets`-relative, and a leading `Assets/` is accepted |
+| Material `.json` | `albedo`, `normal`, string `roughness` | `Assets`-relative unless prefixed with `Assets/` (as `GetOrLoadBasicMaterial` resolves them) |
+
+The check fails closed. If a value looks like an asset path (it has a
+separator or a known asset suffix) under any other key, that is an error
+until the key is added to `asset_references.py`. So is a legacy
+space-delimited scene. `check-all` runs the check on the repository
+`Assets/`. `Tests/PackageSmoke/ValidateInstalledFPSAssets.cmake` runs it on
+the installed package after hash and profile verification. The check proves
+that staged content is closed under its references. It does not prove that a
+runtime consumer loads every JSON-dialect path. Windows package evidence
+stays external.
+
+### stable-v1 package asset profile (OD-09)
+
+The stable-v1 package ships only the runtime asset closure of its in-profile
+game modules, not every root under `Assets/` (RDY-020). The focused FPS
+shipping selector (`SPARK_GAME_MODULES=SparkGameFPS`, the `windows-shipping`
+preset) installs runtime assets through `cmake/SparkRuntimeAssets.cmake`,
+which derives the stable-v1 manifest at configure time, skips every file
+outside it, and installs the derived manifest as
+`bin/Assets/assets.integrity.json`. Other selectors keep the full manifest
+(`default` profile).
+
+`tools/asset-integrity/package_closure.py` derives the closure; nothing in it
+is hand-listed per asset:
+
+1. The in-profile modules are the `GameModules/module-content-inventory.json`
+   modules whose `profileApplicability["stable-v1"]` is `required`. The
+   reviewed definition in `tools/asset-integrity/package-profiles.json` must
+   name the same modules, so a module joining the profile forces a review.
+2. Every asset-rooted string literal in those modules' sources, and in the
+   reviewed `engineSources` directory (`SparkEngine/Source/`), is a
+   reference. The engine scan is what adds `Models/Cube.obj` and the other
+   primitive defaults: `CubeObject.h` and its siblings name them, and FPS and
+   SceneManager (for `level1.scene` plane/wall/cube nodes) create those
+   objects. Comments and preprocessor lines (`#include "Audio/..."`) are
+   skipped.
+3. `package-profiles.json` adds reviewed seeds, each with a reason: the
+   asset README and `Engine/Branding/` (the startup splash).
+4. References are followed transitively. A `.scene` contributes its
+   `key=value` asset paths (a bare `model=crate.obj` resolves below
+   `Models/`). A material or data `.json` contributes its string values. OBJ
+   `mtllib` lines are not followed, because no engine or FPS OBJ loader opens
+   MTL files.
+
+A literal is a reference when its first path component names a top-level
+asset directory, ignoring case, after backslashes become `/` and a leading
+`./` or `Assets/` is dropped. So `models/crate.obj` and `Models\crate.obj`
+are both references. Each reference must then name a manifest entry with its
+exact case. Configure fails when a reference resolves to nothing or differs
+only in case (a typo a case-insensitive Windows filesystem would hide), or
+when the closure needs an entry whose license is `NOASSERTION`. Under OD-09
+that content cannot ship, and dropping it silently would ship a package that
+cannot load its own scene. The only exemptions are the reviewed
+`unshippedReferences` in `package-profiles.json`, each with a reason. These
+are the DecalSystem `.dds` names that no code opens, and the
+EntityPresetManager preset strings that only the editor reads. An exemption
+that no scanned source uses any more, or that names a declared asset, also
+fails.
+
+Configure re-runs when the profile definition, the module inventory, a
+followed scene or material, or the set of files in a scanned source directory
+changes. It does not re-run when you edit the contents of an existing source
+file, because that would turn every engine edit into a full configure. A
+stale closure is caught instead: `verify --profile stable-v1` re-derives it
+from the current sources and fails with `profile-incomplete`.
+
+The closure is currently 40 of 883 entries: `Scenes/level1.scene`, its five
+materials and their textures, the FPS models and music, the six engine
+primitive OBJs, and the branding. It covers the literal asset paths in the
+scanned code. It does not cover paths the runtime builds from non-literal
+parts. It is not yet proven to be everything the runtime opens: the Linux
+proof ran under NullRHI, which creates no meshes, so the D3D11 package smoke
+(MOD-310) still has to confirm it.
+The `NOASSERTION` TERRAFRONT content and the rest of the TERRAFRONT/MMO
+content stay in the repository and in the `default` package.
+
+```bash
+# Derive the stable-v1 closure, check it ships no NOASSERTION entry
+python3 tools/asset-integrity/verify_asset_integrity.py check-all --profile stable-v1 --strict-provenance
+# Derive the stable-v1 manifest and install exclusions (what CMake runs)
+python3 tools/asset-integrity/verify_asset_integrity.py package-profile Assets/assets.integrity.json \
+    --profile stable-v1 --output stable.json --exclusions excluded.txt --repo-root .
+# Check an installed stable-v1 tree
+python3 tools/asset-integrity/verify_asset_integrity.py verify <pkg>/bin/Assets/assets.integrity.json \
+    --root <pkg>/bin/Assets --profile stable-v1
+```
+
+With `--profile`, `check-all --strict-provenance` judges only the entries
+that profile ships. Without `--profile` it still fails while any repository
+entry is `NOASSERTION`.
+
+`verify --profile stable-v1` fails on any `NOASSERTION` entry
+(`profile-excluded`), on an entry the repository manifest records as
+`NOASSERTION` even if the package relabels it, on a file the repository
+manifest does not declare (`profile-unreviewed`), and on an entry that
+differs from the repository entry (`profile-mismatch`). It also fails on a
+file outside the derived closure (`profile-outside-closure`) or a closure
+file the package omits (`profile-incomplete`). When the source manifest is
+not inside a checkout that holds the profile definitions, the check derives
+the closure from the verifier's own checkout. If neither has the
+definitions, it fails with `profile-closure` rather than skipping the check.
+Any file not in the installed manifest fails as `undeclared`. The installed FPS package smoke and
+the release workflow's extracted-package check
+(`--package-profile ${{ matrix.profile }}`) run it. For stable-v1,
+`cmake/ValidateStagedPackageExecutables.cmake` requires
+`bin/Assets/Scenes/level1.scene` in place of the TERRAFRONT
+`MMOFPS/Data/continents.json`. `PackageAssets_StableV1ExcludesNoAssertion`
+(Tests/Tools/test_asset_package_profile.py) covers the closure, the
+derivation, the check, and the install rules.
 
 ```
 Assets/
@@ -672,13 +806,30 @@ auto mesh = pipeline.LoadMesh("Assets/Models/weapon.gltf");
 
 The canonical Blender-authored static fixture lives in `Tests/Fixtures/GLTFStaticMesh/BlenderBox/` with an editable compressed `.blend`, reproducible author/export script, GLB, and hash-bound provenance. `GLTFStaticMesh_LoadsBlenderAuthoredStaticBox` exercises the production CPU loader against its nonuniform applied-transform box: exported axis-converted bounds, flat normals, all six faces' geometric-corner/UV associations, triangle winding/area, and indices. This establishes the documented static attribute contract only; D3D11 rendering, scene-node transforms, skeletal data, animation, and packaged-content certification remain separate requirements.
 
+### glTF 2.0 Skins (cgltf, CPU importer)
+
+`LoadGLTFSkinnedMesh()` (`Graphics/GLTFSkinnedMeshLoader.h`) is the fail-closed CPU importer for one glTF skin. It reads `POSITION`, `NORMAL`, optional `TEXCOORD_0`, `JOINTS_0`, and `WEIGHTS_0` into vertices with exactly four influences, plus a `Spark::Animation::Skeleton` whose bones are ordered parent-first (a stable topological order, so joints already listed parent-first keep their indices). Vertex joint indices are remapped to that bone order. `offsetMatrix` is the skin's inverse bind matrix (identity when absent) and `localBindPose` is the joint node's local transform; the root bone also folds in every non-joint ancestor (for example the Blender armature object). Matrices are the glTF column-major array read as DirectXMath row-major, so the translation sits in `_41.._43`.
+
+It rejects, with a diagnostic naming the node, joint, primitive, or vertex:
+
+- `JOINTS_1`/`WEIGHTS_1` (more than four influences) and any attribute outside the five above; a missing `NORMAL`
+- `JOINTS_0` that is not a non-normalized unsigned byte/short `VEC4`, and `WEIGHTS_0` that is not float or normalized unsigned byte/short `VEC4`
+- joint indices outside the skin (including zero-weight slots), negative or non-finite weights, and zero-sum weights
+- weight sums outside `1 +/- kGLTFSkinWeightSumTolerance` (0.01, which covers four quantized UNSIGNED_BYTE weights); sums inside it are renormalized to exactly 1
+- more than `kMaxBonesPerMesh` (256, the GPU skinning palette) joints, duplicate joints or joint names, and anything other than exactly one skin
+- inverse bind matrices that are not a float `MAT4` accessor with one matrix per joint, or that are non-finite, non-affine, or singular
+- cyclic node graphs (detected before cgltf walks any parent chain), joints separated from their parent joint by a non-joint node, joints forming more than one tree, and mesh nodes that do not reference the skin
+- everything the static loader rejects (sparse accessors, morph targets, required extensions, oversized or unaligned buffers)
+
+The mesh loader ignores animations; `LoadGLTFAnimationClips()` (`Graphics/GLTFAnimationLoader.h`) imports them for `AnimationManager::LoadAnimations()` (see [Animation](../subsystems/Animation.md#asset-ingestion-boundary)). All glTF loaders share `GLTFValidation.h/.cpp` (root-confined reads, size limits, and buffer/view/accessor pre-validation), so the skinned path cannot relax the static loader's limits; the parsers are one entry in the SEC-120 parser inventory. `GLTF_Skinning_*` tests (ctest `GLTFSkinnedMeshImport`, exact count) build every GLB fixture in-test. The portable (non-Windows) `MeshAsset::Load()` checks whether a `.gltf`/`.glb` declares a skin (`GLTFFileHasSkin()`) and then uses this loader, copying joints and weights into `MeshAssetData::Vertex::boneIndices`/`boneWeights` (indices address the skeleton `AnimationManager::LoadSkeleton()` builds from the same file) and recording `gltf.boneCount` in the asset metadata; an invalid skin fails the load. The Windows D3D11 `MeshAsset` (`AssetTypesWindows.cpp`) still uses only the static loader and rejects skinned glTF. Nothing uploads the bone data to `GPUSkinning` or a skinned shader, and there is no Blender-authored skinned fixture.
+
 ### Observed Model Data Handoffs
 
 | Format path | Data handed to `MeshAssetData` | Current limit |
 |-------------|--------------------------------|---------------|
 | OBJ | Positions, normals, texture coordinates, and triangle indices | Static geometry path; parser details vary by platform/caller |
 | Native FBX | Geometry on the non-Windows `MeshAsset` path | No Windows `MeshAsset` branch and no `AnimationManager` handoff |
-| cgltf | Static triangle positions, normals, one UV set, and indices | Skins, animations, morph targets, and PBR material graphs are not ingested |
+| cgltf | Static triangle positions, normals, one UV set, and indices; on the non-Windows `MeshAsset` path also four bone indices and weights per vertex for a skinned file | The Windows `MeshAsset` rejects skinned files; no draw path consumes the bone data; animations go to `AnimationManager` instead; morph targets and PBR material graphs are not ingested |
 
 ## Error Handling
 
@@ -707,7 +858,7 @@ The canonical Blender-authored static fixture lives in `Tests/Fixtures/GLTFStati
 2. **Set appropriate priorities**: Use `Critical` for player/weapon assets, `Low` for distant scenery
 3. **Monitor cache hit ratio**: Below 0.5 suggests the cache is too small or assets churn too fast
 4. **Disable hot reloading** in shipping builds to avoid file timestamp overhead
-5. **Use `.gltf`/`.glb` only for the implemented static subset**; validate authoring output against the rejected-feature list
+5. **Use `.gltf`/`.glb` only for the implemented static and single-skin subsets**; validate authoring output against the rejected-feature lists
 6. **Batch directory scans** during loading rather than at runtime
 
 ## Thread Safety
@@ -762,7 +913,7 @@ asset_reload_all            # Force reload all loaded assets
 | Load takes too long | Too few streaming threads | Increase with `SetStreamingThreadCount()` |
 | Cache hit ratio is 0 | Assets loaded but not accessed through cache | Use `GetAsset()` for subsequent accesses |
 | FBX skeleton or clips are unavailable | No current importer-to-`AnimationManager` handoff | A separately verified conversion tool would be required to produce `.skel`/`.sanim`; this pipeline does not provide that conversion |
-| glTF skin, animation, morph, or material data is unavailable | The cgltf path intentionally loads static geometry only | Export a static triangle mesh subset; use separately wired systems for other data |
+| glTF skin data is missing on Windows, or morph/material data is unavailable | The Windows `MeshAsset` loads the static subset only; morph targets and material graphs are not imported | Use the non-Windows `MeshAsset` or `AnimationManager::LoadSkeleton()` for skins; export morph and material data through separately wired systems |
 
 ## Utility Functions
 

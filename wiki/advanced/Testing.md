@@ -118,6 +118,17 @@ All macros use `do { ... } while(0)` for safe use in if/else blocks. Failed asse
   unowned, or expired entries fail the workflow. Prefer `EXPECT_WARN_ONLY` for
   a single environment-sensitive assertion so unrelated assertions remain
   strict.
+- Per-assertion `EXPECT_WARN_ONLY` waivers are held to the same rule. The
+  validator inventories every call site in `Tests/**/*.cpp` (comments and
+  string literals are ignored) and attributes it to its enclosing `TEST` /
+  `TEST_F` body (fixture tests are keyed `Fixture.Name`). Each (file, test)
+  pair needs a schema-2 `assertionWaivers` entry with the exact number of
+  `sites`, a named `owner`, and a future `expires` date. Unregistered, stale,
+  expired, ownerless, miscounted, and out-of-test-body sites fail the workflow.
+  The only exempt sites are the `RunnerSemanticsReal_*` probes in
+  `Tests/TestRunnerSemanticsReal.cpp`, which exercise the macro itself.
+  Schema-1 metadata (whole-test waivers only) is still accepted and declares
+  no per-assertion waivers.
 
 ### Production-source census
 
@@ -136,6 +147,28 @@ assertions (`tautologicalAssertions` in the JSON) and the zero-assertion tests n
 surfaced as `[ EMPTY ]`. The CI ratchet (`.github/test-count-ratchet.json`) bounds
 `minimumProductionSourceTests` (4900) and `maximumEmpty` (25, a first ceiling that
 must be re-measured from the first Build run and ratcheted down).
+
+`--profile-selectors [CTEST_JSON]` (RDY-010) guards release-profile evidence.
+It takes every CTest labeled `stable-v1` or `module-profile` that runs
+SparkTests and resolves its `SPARK_TEST_NAME` / `SPARK_TEST_FILE` /
+`SPARK_TEST_EXCLUDE` filters to the `TEST`/`TEST_F` definitions they reach. It
+uses the same `strstr` semantics as `TestMain.cpp`. A file filter is matched
+against every spelling `__FILE__` can have, including absolute and backslashed
+paths. The check fails if a selector:
+
+- reaches a mirror file or a body that is only `EXPECT_TRUE(true)` /
+  `EXPECT_NO_CRASH`
+- runs the whole suite unfiltered
+- has no valid `SPARK_TEST_EXPECT_COUNT`, or a count larger than the
+  definitions it can see
+- cannot be resolved to a literal
+
+It always checks `Tests/CMakeLists.txt` statically, so Windows-only
+registrations are covered on every host. When given `ctest --show-only=json-v1`
+output, it checks that configured tree too. The Windows Release census step
+runs both, and CTest `TestSourceCensus_ProfileSelectors`
+(`Tests/Tools/test_source_census_profile.py`) runs both plus the mutations that
+must fail.
 
 ## Running Tests
 
@@ -170,6 +203,26 @@ the expected registration floor. This prevents an executable launch failure
 from being reported as a zero-failure test run. Repository badges count source
 test definitions separately because platform and feature gates affect the
 runtime set.
+
+**CTest registration policy (CI-110).** Every `add_test` must carry a positive
+`TIMEOUT` (at most 3600 s) and non-empty `LABELS` set in the same file: the
+project never includes `CTest.cmake`, so an unbounded test that hangs stalls the
+whole run instead of failing, and an unlabelled one is invisible to
+`ctest -L unit|integration|process`. Label product registrations with the
+product (`console`, `server`, `sparkbuild`, ...) plus `unit`, `integration`, or
+`process`; the validator enforces only a non-empty set, so that category is a
+review convention (fuzz and policy registrations keep `fuzz`/`security`). `python3 Tools/validate_ctest_policy.py` (no arguments) checks every
+git-tracked first-party `CMakeLists.txt` and `*.cmake` that calls `add_test`,
+outside `ThirdParty/`. Because loops, functions, and platform branches are only
+resolved by CMake, `build-linux-gcc` and `build-windows-vs2022` also run
+`ctest --show-only=json-v1` on the configured tree and pass it to
+`validate_ctest_policy.py --ctest-json`. That step fails the job on any
+violation or an empty inventory. To reproduce locally:
+
+```bash
+ctest --test-dir build/linux-gcc-release --show-only=json-v1 > ctest.json
+python3 Tools/validate_ctest_policy.py --ctest-json ctest.json
+```
 
 `cmake/RunSparkTests.cmake` **requires** `-DSPARK_TEST_TIMEOUT_SECONDS=<n>`; any
 script that invokes it directly must pass one (the 180 s default is gone so no
@@ -233,6 +286,16 @@ ctest --test-dir build -C Release -R "^SparkSaveCompatibilityTests$" --output-on
 # Without the -D the label selects zero tests and ctest exits 0 - a check that stopped checking.
 cmake -B build -DSPARK_ENABLE_INSTALLED_SDK_TESTS=ON
 ctest --test-dir build -L installed-sdk --no-tests=error
+
+# Linux installed-package consumer (ASSET-220; local, non-hosted evidence). Installs the
+# complete build into build/package-consumer-linux/<config>/prefix, builds and ctests
+# Tests/PackageSmoke against only that prefix, and fails if the consumer resolved any
+# header or library from the source or build tree. Needs a full build, libgl-dev and
+# `make`: the consumer always uses the Unix Makefiles generator (whatever the engine
+# tree uses) because the boundary proof reads its depfiles and link.txt. An empty
+# build type (single-config tree without CMAKE_BUILD_TYPE) runs the consumer as Release.
+cmake -B build -DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON
+ctest --test-dir build -L package-consumer-linux --no-tests=error --output-on-failure
 
 # Verbose output
 ctest --test-dir build -C Release -V --no-tests=error
@@ -302,6 +365,41 @@ wine64 SparkEngine.exe -test-frames 60                     # Wine
 ./SparkEditor --test-mode --test-frames 120                # Linux
 wine64 SparkEditor.exe --test-mode --test-frames 120       # Wine
 ```
+
+#### Scripted console timelines (`-exec`, `-exec-audit`, `-test-seconds`)
+
+The engine can replay a console timeline on Windows (windowed and headless) and
+on Linux (headless and SDL2 windowed). The shared implementation is
+`SparkEngine/Source/Core/ExecScript.{h,cpp}`:
+
+```bash
+./SparkEngine -headless -game libSparkGameMMOFPS.so -require-game \
+    -exec server.cfg -exec-audit server-audit.log -test-seconds 60
+```
+
+- Script lines are `<frame> <command>` or `t<seconds> <command>`. A line with
+  no prefix runs at frame 0, `#` starts a comment, and CRLF files are accepted.
+  Entries that share a due time run in file order.
+- `-test-seconds N` exits after N wall-clock seconds. The clock starts at the
+  first main-loop tick, so boot time is not counted.
+- By default every executed command is appended to `exec_audit.log` in the
+  working directory, which is the file the package smokes read. Use `-exec-audit <path>`
+  to give each process its own file when several are launched from the same
+  directory. A relative path is resolved against the launch directory.
+- Sensitive console commands, the ones registered with `RegisterSensitiveCommand`
+  (for example `tf_register` and `tf_login`), are written as
+  `<name> <arguments-redacted>` in both the `[exec]` console line and the audit
+  file. The redaction goes through `SimpleConsole::RedactSensitiveArguments`.
+  It fails closed: a command that is neither registered nor a CVar (for example
+  `tf_login` when its module did not load) is also written as
+  `<name> <arguments-redacted>` when it has arguments.
+- On Linux, a `-test-seconds` value that is not a positive finite number
+  (including `nan`, `inf`, `0` and negatives), or an `-exec` script that cannot
+  be read, fails the launch with a non-zero exit code. A Linux build without
+  SDL2 also rejects `-exec` and `-test-seconds` unless `-headless` is given,
+  because its no-window fallback runs a fixed ten ticks and never plays a timeline.
+
+Coverage: `Tests/TestExecScript.cpp` (`SPARK_TEST_FILE=TestExecScript.cpp`).
 
 ## Test Categories and Coverage
 
@@ -520,11 +618,11 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `build-linux-msan` | ubuntu-24.04 | Clang + MSan-instrumented libc++ 18.1.3 (built in-job, cached) | Debug | MSan + ignorelist, `-DENABLE_VULKAN=OFF`, `continue-on-error` |
 | `build-windows-vs2022` | windows-2022 | MSVC v143 | Debug, Release | Ninja Multi-Config + sccache, `-DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON` |
 | `build-windows-vs2026` | windows-2025-vs2026 | MSVC v145 | Debug, Release | Ninja Multi-Config + sccache, `continue-on-error` |
-| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error` |
+| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error`, experimental |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job (individual diagnostics advisory) |
-| `todo-count` | ubuntu-24.04 | -- | -- | warn-only above 20 |
+| `todo-count` | ubuntu-24.04 | -- | -- | fails above 20 (required) |
 
 **Enforcement truth (verified 2026-09-12):** legacy branch protection is not
 configured on `Working` (`branches/Working/protection` is 404), but repository
@@ -534,7 +632,19 @@ check with no bypass actors. The exact-source gate accepts a failed Build job on
 `build.yml` at that exact commit declares the job `continue-on-error`; the
 required set is cross-checked between `required-ci-gate.needs` and
 `EXPECTED_REQUIRED_JOBS_JSON`, and a required job marked `continue-on-error` is
-rejected outright. A Build Matrix Verifier run conclusion is never evidence (each
+rejected outright. A non-required job may also be `skipped` when its exact
+committed job-level `if:` is an allowlisted event-only guard that is false for
+the verified source event. Today that covers `build-linux-mingw-wine`
+(`workflow_dispatch` only) and `Coverage PR Comment` (`pull_request` only) on a
+push. Any other `if:` expression, a required job, or a guard that is true for
+the event still rejects the skip. Re-verified 2026-09-24 with
+`python3 .github/scripts/verify-working-ruleset.py --live`. That command asserts
+that ruleset `21968740` is active, has no bypass actors, and requires exactly
+`Required CI Gate` from integration 15368. CI runs its fixture tests in
+`validate-ci-tools`. Every `tools/validate-all.sh` check except the advisory
+`check-bloat.sh` and warn-only `check-wiki-quality.sh` now runs fail-closed in a
+required job. `test-workflow-failure-propagation.py` enforces that mapping.
+A Build Matrix Verifier run conclusion is never evidence (each
 source attempt fires the workflow twice; the `in_progress` run skips verification
 and still concludes success; never add `run-name` to that workflow, because GitHub
 then returns it as the run's API name, which the exact gate compares to the
@@ -549,6 +659,19 @@ control result has `validate-ci-tools` fail at the
 observing that required dependency; this red run is proof of failure propagation,
 not release evidence. The input defaults to false, and push/PR runs cannot enable
 the probe.
+
+`Required CI Gate` also publishes a machine-readable record of its decision.
+`verify-required-jobs.py --json-out required-ci-gate.json` writes a canonical
+`sparkengine.required-ci-gate.v1` JSON document with sorted keys. It holds the
+exact `sha`, `run_id`, `run_attempt`, `repository`, `event` and `ref`, the
+expected job list, each job's raw `result` and `status`, the deferred and failed
+entries, and the `verdict` (`pass`/`fail`). The record is written on pass and on
+fail, and the exit code is unchanged (0 pass, 1 failed job, 2 invalid evidence).
+Invalid needs evidence or a malformed run identity writes no record and removes
+any stale one. The gate uploads it under `if: always()` as
+`required-ci-gate-<sha>-<run_attempt>` with `if-no-files-found: error`, so a red
+gate still publishes the record. It is additive: no consumer reads it yet, and
+none should until a hosted run has published one.
 
 ### Code Coverage
 
@@ -594,16 +717,16 @@ Or use the preset:
 
 ```bash
 cmake --preset ci-linux-asan
-cmake --build build
-cd build && ctest --output-on-failure --no-tests=error
+cmake --build build/ci-linux-asan
+ctest --test-dir build/ci-linux-asan --output-on-failure --no-tests=error
 ```
 
 #### ThreadSanitizer
 
 ```bash
 cmake --preset ci-linux-tsan
-cmake --build build
-cd build && ctest --output-on-failure --no-tests=error
+cmake --build build/ci-linux-tsan
+ctest --test-dir build/ci-linux-tsan --output-on-failure --no-tests=error
 ```
 
 ### Matching CI Locally
@@ -657,7 +780,7 @@ Xvfb :99 -screen 0 1920x1080x24 -ac &
 # Set environment
 export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 MESA_GL_VERSION_OVERRIDE=3.3
 
-# Run automated test suite (21 tests)
+# Run the automated live-editor test suite
 python3 tools/test-editor-live.py build/bin/SparkEditor
 ```
 
@@ -696,7 +819,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*632 test-bearing `.cpp`/`.mm` files, 7567 source-level test definitions*
+*650 test-bearing `.cpp`/`.mm` files, 7680 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -730,11 +853,12 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationStress` | 12 |
 | `TestAnimationSystem` | 17 |
-| `TestAreaAssetLoader` | 14 |
+| `TestAreaAssetLoader` | 18 |
 | `TestAreaSimulationHook` | 6 |
 | `TestAssertSuppression` | 9 |
 | `TestAssertSuppressionReal` | 8 |
 | `TestAssetDependencyGraph` | 19 |
+| `TestAssetManifestReal` | 4 |
 | `TestAssetMigration` | 23 |
 | `TestAssetMigrationPhaseEE` | 10 |
 | `TestAssetPipelineCache` | 22 |
@@ -803,7 +927,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCooldown` | 14 |
 | `TestCooldownReal` | 9 |
 | `TestCoreAndBuildSystems` | 39 |
-| `TestCoroutineScheduler` | 10 |
+| `TestCoroutineScheduler` | 13 |
 | `TestCoverSystem` | 4 |
 | `TestCoverSystemReal` | 5 |
 | `TestCoverageAI` | 9 |
@@ -812,11 +936,12 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCpuDebuggerPhaseGG` | 8 |
 | `TestCpuNeuralInference` | 14 |
 | `TestCpuNeuralTraining` | 13 |
-| `TestCrashHandlerGatingReal` | 11 |
-| `TestCrashReportUploader` | 12 |
+| `TestCrashHandlerGatingReal` | 8 |
+| `TestCrashSymbolication` | 5 |
 | `TestCrossSystemIntegration` | 4 |
 | `TestD3D11DeviceContractsReal` | 14 |
 | `TestDATA120PersistenceReal` | 5 |
+| `TestDATA120SecretsAtRest` | 5 |
 | `TestDXRSupport` | 13 |
 | `TestDaemonCodexFixes` | 4 |
 | `TestDaemonConcurrent` | 6 |
@@ -830,13 +955,13 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDatablockRegistryPhaseHH` | 8 |
 | `TestDayNightCycle` | 10 |
 | `TestDeadlockDetector` | 8 |
-| `TestDebugHookManager` | 28 |
+| `TestDebugHookManager` | 29 |
 | `TestDebugTools` | 37 |
 | `TestDebugUtilities` | 28 |
 | `TestDecalSystem` | 7 |
 | `TestDedicatedServer` | 27 |
 | `TestDedicatedServerProcessController` | 5 |
-| `TestDedicatedServerRuntime` | 10 |
+| `TestDedicatedServerRuntime` | 12 |
 | `TestDeferredDeletion` | 6 |
 | `TestDeferredDeletionReal` | 6 |
 | `TestDeferredQueue` | 6 |
@@ -882,7 +1007,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorUndoHierarchyReal` | 6 |
 | `TestEditorWindowManager` | 14 |
 | `TestEngineBootPlatforms` | 41 |
-| `TestEngineContext` | 18 |
+| `TestEngineContext` | 9 |
 | `TestEngineDiagnostics` | 4 |
 | `TestEngineInterfaceProtocol` | 4 |
 | `TestEngineLifecycle` | 22 |
@@ -890,7 +1015,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEngineMonitor` | 10 |
 | `TestEngineSettingsEdgeCases` | 45 |
 | `TestEngineSettingsParser` | 28 |
-| `TestEngineSettingsReal` | 13 |
+| `TestEngineSettingsReal` | 14 |
 | `TestEngineWiringReal` | 9 |
 | `TestEntityArchetype` | 5 |
 | `TestEntityEventBus` | 11 |
@@ -903,6 +1028,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEventResponseSystem` | 15 |
 | `TestEventResponseSystemPhaseEE` | 8 |
 | `TestEventSystem` | 10 |
+| `TestExecScript` | 9 |
 | `TestExtendedSystems` | 38 |
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 17 |
@@ -930,6 +1056,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 9 |
 | `TestGLSLPipelineIntegration` | 19 |
+| `TestGLTFAnimationImport` | 19 |
+| `TestGLTFSkinnedMeshLoader` | 19 |
 | `TestGLTFStaticMeshLoader` | 10 |
 | `TestGPUClusterCulling` | 11 |
 | `TestGPUDrivenRenderer` | 14 |
@@ -959,12 +1087,13 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
-| `TestGatewayAreaControl` | 13 |
+| `TestGatewayAreaControl` | 17 |
 | `TestGatewaySecurity` | 14 |
 | `TestGizmoMath` | 3 |
-| `TestGoldenImageTest` | 17 |
+| `TestGoldenImageTest` | 28 |
 | `TestGraphicsBenchmarkStats` | 3 |
 | `TestGraphicsEngine` | 14 |
+| `TestGraphicsEngineLinuxPassTruthReal` | 2 |
 | `TestGraphicsInitFallback` | 7 |
 | `TestGraphicsIntegration` | 33 |
 | `TestGraphicsStress` | 15 |
@@ -977,6 +1106,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestHResultPlatform` | 24 |
 | `TestHash` | 18 |
 | `TestHashReal` | 9 |
+| `TestHeadlessTickStats` | 7 |
 | `TestHitchDetector` | 10 |
 | `TestHybridRT` | 20 |
 | `TestInGameConsole` | 12 |
@@ -998,6 +1128,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLauncherProcess` | 4 |
 | `TestLegacyGameObjectMaterial` | 2 |
 | `TestLevelStreamingSystemPhaseAA` | 11 |
+| `TestLifecycleCompositionRootFailure` | 8 |
 | `TestLightManager` | 13 |
 | `TestLightmapBaker` | 9 |
 | `TestLoadingScreen` | 11 |
@@ -1011,9 +1142,16 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLootAndCrafting` | 11 |
 | `TestMMOAssetImport` | 16 |
 | `TestMMOCredentialSecurity` | 3 |
-| `TestMOD310FPSSceneReloadRespawnReal` | 5 |
+| `TestMOD310FPSSceneReloadRespawnReal` | 6 |
+| `TestMOD330ARPGDungeonReal` | 6 |
+| `TestMOD340PlatformerCompletionReal` | 9 |
+| `TestMOD350RPGQuestSliceReal` | 2 |
+| `TestMOD360OpenWorldPersistenceReal` | 2 |
+| `TestMOD370RTSSaveReal` | 3 |
 | `TestMOD370SkirmishDeterminismReal` | 7 |
 | `TestMOD380RacingCompleteRaceReal` | 5 |
+| `TestMOD380VehiclePhysicsReal` | 5 |
+| `TestMOD390VisualScriptDiagnosticsReal` | 5 |
 | `TestMSanCanary` | 2 |
 | `TestMacOSPlatform` | 6 |
 | `TestMain` | 1 |
@@ -1036,13 +1174,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
 | `TestModuleABI` | 27 |
+| `TestModuleABIDiagnostics` | 6 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 7 |
 | `TestModuleHotReload` | 12 |
 | `TestModuleLifecycleReal` | 11 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
-| `TestMultiISADispatch` | 7 |
+| `TestMultiISADispatch` | 14 |
 | `TestMusicManager` | 9 |
 | `TestNET100TransportReal` | 17 |
 | `TestNavMesh` | 11 |
@@ -1061,9 +1200,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
 | `TestNetworkReplicationIntegration` | 13 |
-| `TestNetworkSecurity` | 12 |
-| `TestNetworkSecurityPhaseHH` | 8 |
-| `TestNetworkStack` | 2 |
+| `TestNetworkSecurity` | 6 |
+| `TestNetworkSecurityPhaseHH` | 2 |
+| `TestNetworkStack` | 4 |
 | `TestNetworkStress` | 21 |
 | `TestNeuralInference` | 17 |
 | `TestNeuralPostProcessing` | 9 |
@@ -1076,7 +1215,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestObjectPool` | 6 |
 | `TestObjectPoolReal` | 7 |
 | `TestOcclusionCulling` | 6 |
-| `TestOnlineServices` | 10 |
+| `TestOnlineServices` | 22 |
 | `TestOpaqueHandle` | 7 |
 | `TestOpenWorldModule` | 61 |
 | `TestPLT210AngelScriptVector3Real` | 2 |
@@ -1115,7 +1254,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestQuestSystem` | 11 |
 | `TestRHI210D3D11GoldenReal` | 4 |
 | `TestRHI230VulkanValidationReal` | 16 |
-| `TestRHI240OpenGLReal` | 11 |
+| `TestRHI240OpenGLReal` | 13 |
 | `TestRHIBridgeIntegration` | 19 |
 | `TestRHICapabilityParity` | 4 |
 | `TestRHIHandlePool` | 10 |
@@ -1130,7 +1269,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestReflectionReal` | 22 |
 | `TestRegionMapDataSource` | 7 |
 | `TestReliableChannel` | 22 |
-| `TestRemoteDebugSystem` | 20 |
+| `TestRemoteDebugSystem` | 22 |
 | `TestRenderCommandRing` | 8 |
 | `TestRenderECSIntegration` | 8 |
 | `TestRenderGraph` | 36 |
@@ -1144,11 +1283,12 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRuntimePrefab` | 19 |
 | `TestSAVE230NewerFormatSlotReal` | 2 |
 | `TestSEC100ChatAuditLogReal` | 3 |
+| `TestSEC100RemoteAdminUnavailableReal` | 2 |
 | `TestSHLighting` | 7 |
 | `TestSSAOTemporalFilter` | 8 |
 | `TestSafetyCoreUtils` | 17 |
 | `TestSaveSystem` | 7 |
-| `TestSaveSystemRoundTripReal` | 15 |
+| `TestSaveSystemRoundTripReal` | 16 |
 | `TestSceneConfigDatabase` | 3 |
 | `TestSceneConfigDatabaseReal` | 9 |
 | `TestSceneGraph2D` | 14 |
@@ -1157,7 +1297,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSceneRoundtrip` | 8 |
 | `TestSceneSaveConfinedReal` | 5 |
 | `TestSceneSerializer` | 13 |
-| `TestSceneSerializerReal` | 18 |
+| `TestSceneSerializerReal` | 22 |
 | `TestSceneSnapshotSerializer` | 20 |
 | `TestScheduledCallback` | 8 |
 | `TestScopeGuard` | 13 |
@@ -1200,15 +1340,17 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkEngineCameraOwnership` | 1 |
 | `TestSparkError` | 6 |
 | `TestSparkGameARPG` | 5 |
-| `TestSparkGameFPSLoopReal` | 32 |
+| `TestSparkGameFPSLoopReal` | 34 |
 | `TestSparkGameFPSMirrorCompanionsReal` | 14 |
 | `TestSparkGamePlatformer` | 5 |
 | `TestSparkGameRPG` | 5 |
 | `TestSparkGameRTS` | 5 |
 | `TestSparkGameRacing` | 5 |
+| `TestSparkGameShowcase` | 4 |
 | `TestSparkGatewayCoordinator` | 7 |
 | `TestSparkPak` | 19 |
-| `TestSparkServerApplication` | 25 |
+| `TestSparkServerApplication` | 27 |
+| `TestSparkServerHealth` | 6 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
 | `TestSplineMath` | 24 |
@@ -1228,6 +1370,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSubTickInput` | 5 |
 | `TestSubsystemConsoleCommands` | 14 |
 | `TestSystemManagerIntegration` | 11 |
+| `TestTF120SharedSaveRoot` | 8 |
 | `TestTFAbilityWire` | 6 |
 | `TestTFCaptureMath` | 7 |
 | `TestTFChatRules` | 11 |
@@ -1236,7 +1379,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTFDeathRecapWire` | 5 |
 | `TestTFFixedStep` | 1 |
 | `TestTFNetProtocolLayout` | 9 |
-| `TestTFOnboarding` | 38 |
+| `TestTFOnboarding` | 40 |
 | `TestTFOutfitStore` | 16 |
 | `TestTFRedeployRules` | 7 |
 | `TestTFRegionLattice` | 11 |
@@ -1288,7 +1431,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestVolumeManager` | 11 |
 | `TestVolumetricClouds` | 14 |
 | `TestVoxelConeTracing` | 24 |
-| `TestVulkanLavapipe` | 8 |
+| `TestVulkanLavapipe` | 5 |
 | `TestWARPRendering` | 4 |
 | `TestWaterRenderer` | 6 |
 | `TestWeaponMechanics` | 29 |
@@ -1327,7 +1470,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_persistence_SaveSystem` | 43 |
 | `Test_scripting_hardening` | 8 |
 | `Test_tests_ecsystemordering_real` | 5 |
-| `Test_tests_enginecontext_real` | 8 |
+| `Test_tests_enginecontext_real` | 1 |
 | `Test_tests_inversekinematics` | 10 |
 | `Test_tooling_CommandParser` | 9 |
 | `Test_ui-2d_tween` | 7 |

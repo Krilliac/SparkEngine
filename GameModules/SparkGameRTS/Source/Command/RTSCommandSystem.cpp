@@ -18,13 +18,15 @@
 namespace RTS
 {
 
-    bool RTSCommandSystem::Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem)
+    bool RTSCommandSystem::Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem,
+                                      const RTSBuildingSystem* buildingSystem)
     {
         if (!unitSystem)
             return false;
 
         m_context = context;
         m_unitSystem = unitSystem;
+        m_buildingSystem = buildingSystem;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS command system initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Command system initialized");
         return true;
@@ -40,6 +42,7 @@ namespace RTS
         m_selectedUnits.clear();
         m_commandQueues.clear();
         m_unitSystem = nullptr;
+        m_buildingSystem = nullptr;
         m_context = nullptr;
     }
 
@@ -103,9 +106,11 @@ namespace RTS
         if (!m_unitSystem || !m_unitSystem->GetUnit(unitId) || !IsCommandValid(command))
             return;
 
-        // Replace existing queue with single command
-        m_commandQueues[unitId].clear();
-        m_commandQueues[unitId].push_back(command);
+        // Replace existing queue with single command; its route is planned by the simulation, never supplied.
+        std::vector<UnitCommand>& queue = m_commandQueues[unitId];
+        queue.clear();
+        queue.push_back(command);
+        queue.back().path.clear();
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS command issued to unit %u (type=%d)", unitId,
                         static_cast<int>(command.type));
     }
@@ -115,8 +120,13 @@ namespace RTS
         if (!m_unitSystem || !m_unitSystem->GetUnit(unitId) || !IsCommandValid(command))
             return;
 
-        // Append to existing queue (shift-click behavior)
-        m_commandQueues[unitId].push_back(command);
+        // Append to existing queue (shift-click behavior); a full queue ignores further orders.
+        std::vector<UnitCommand>& queue = m_commandQueues[unitId];
+        if (queue.size() < MAX_QUEUED_COMMANDS)
+        {
+            queue.push_back(command);
+            queue.back().path.clear();
+        }
     }
 
     void RTSCommandSystem::ClearCommands(uint32_t unitId)
@@ -162,10 +172,31 @@ namespace RTS
         return result;
     }
 
-    void RTSCommandSystem::ResetRuntimeState()
+    const std::map<uint32_t, std::vector<UnitCommand>>& RTSCommandSystem::GetCommandQueues() const
     {
-        m_selectedUnits.clear();
-        m_commandQueues.clear();
+        return m_commandQueues;
+    }
+
+    bool RTSCommandSystem::RestoreRuntimeState(const std::map<uint32_t, std::vector<UnitCommand>>& queues,
+                                               const std::vector<uint32_t>& selection)
+    {
+        for (const auto& [unitId, queue] : queues)
+        {
+            if (unitId == 0 || queue.empty() || queue.size() > MAX_QUEUED_COMMANDS ||
+                !std::ranges::all_of(queue, IsCommandValid))
+                return false;
+        }
+        std::vector<uint32_t> sortedSelection = selection;
+        std::ranges::sort(sortedSelection);
+        if (std::ranges::find(sortedSelection, 0u) != sortedSelection.end() ||
+            std::ranges::adjacent_find(sortedSelection) != sortedSelection.end())
+        {
+            return false;
+        }
+
+        m_commandQueues = queues;
+        m_selectedUnits = selection;
+        return true;
     }
 
     // === Internal ===
@@ -176,6 +207,7 @@ namespace RTS
             return;
 
         PruneSelection();
+        m_obstaclesCurrent = false;
         const float safeDeltaTime = std::isfinite(deltaTime) && deltaTime > 0.0f ? deltaTime : 0.0f;
 
         for (auto it = m_commandQueues.begin(); it != m_commandQueues.end();)
@@ -195,7 +227,7 @@ namespace RTS
                 continue;
             }
 
-            const auto& cmd = queue.front();
+            auto& cmd = queue.front();
             switch (cmd.type)
             {
             case RTSCommandType::Move:
@@ -215,25 +247,12 @@ namespace RTS
                 if (attackMove && unit->state == RTSUnitState::Attacking && unit->targetId != 0)
                     break;
 
-                const float dx = cmd.targetX - unit->posX;
-                const float dy = cmd.targetY - unit->posY;
-                // sqrt is correctly rounded on every IEEE-754 platform; std::hypot is not, which breaks lockstep.
-                const float distance = std::sqrt(dx * dx + dy * dy);
-                const float speed = std::isfinite(unit->moveSpeed) ? std::max(unit->moveSpeed, 0.0f) : 0.0f;
-                const float step = speed * safeDeltaTime;
                 unit->state = attackMove ? RTSUnitState::Attacking : RTSUnitState::Moving;
                 unit->targetId = 0;
-                if (distance <= 0.001f || (step > 0.0f && step >= distance))
+                if (AdvanceAlongRoute(*unit, cmd, safeDeltaTime))
                 {
-                    unit->posX = cmd.targetX;
-                    unit->posY = cmd.targetY;
                     unit->state = RTSUnitState::Idle;
                     queue.erase(queue.begin());
-                }
-                else if (step > 0.0f)
-                {
-                    unit->posX += dx / distance * step;
-                    unit->posY += dy / distance * step;
                 }
                 break;
             }
@@ -274,10 +293,67 @@ namespace RTS
         }
     }
 
-    bool RTSCommandSystem::IsCommandValid(const UnitCommand& command) const
+    bool RTSCommandSystem::AdvanceAlongRoute(UnitData& unit, UnitCommand& command, float deltaTime)
+    {
+        if (!m_obstaclesCurrent)
+        {
+            if (m_buildingSystem)
+                m_pathfinder.RebuildObstacles(*m_buildingSystem);
+            else
+                m_pathfinder.ClearObstacles();
+            m_obstaclesCurrent = true;
+        }
+
+        // Plan when the order becomes current, and again if a structure now stands across the remaining route.
+        if (command.path.empty() || !m_pathfinder.IsRouteClear(unit.posX, unit.posY, command.path))
+        {
+            command.path = m_pathfinder.FindPath(unit.posX, unit.posY, command.targetX, command.targetY);
+            if (command.path.empty())
+                return true; // Walled in: nothing to walk towards
+        }
+
+        const float speed = std::isfinite(unit.moveSpeed) ? std::max(unit.moveSpeed, 0.0f) : 0.0f;
+        float remaining = speed * deltaTime;
+        while (!command.path.empty())
+        {
+            const RTSWaypoint waypoint = command.path.front();
+            const float dx = waypoint.x - unit.posX;
+            const float dy = waypoint.y - unit.posY;
+            // sqrt is correctly rounded on every IEEE-754 platform; std::hypot is not, which breaks lockstep.
+            const float distance = std::sqrt(dx * dx + dy * dy);
+            if (distance <= 0.001f || (remaining > 0.0f && remaining >= distance))
+            {
+                // Reach the waypoint and spend what is left of this tick's movement on the next leg.
+                unit.posX = waypoint.x;
+                unit.posY = waypoint.y;
+                remaining = remaining > distance ? remaining - distance : 0.0f;
+                command.path.erase(command.path.begin());
+                continue;
+            }
+            if (remaining > 0.0f)
+            {
+                unit.posX += dx / distance * remaining;
+                unit.posY += dy / distance * remaining;
+            }
+            break;
+        }
+        return command.path.empty();
+    }
+
+    bool RTSCommandSystem::IsCommandValid(const UnitCommand& command)
     {
         if (command.type >= RTSCommandType::Count)
             return false;
+
+        const bool routed = command.type == RTSCommandType::Move ||
+                            (command.type == RTSCommandType::Attack && command.targetEntity == 0);
+        if (!command.path.empty() &&
+            (!routed || command.path.size() > RTSGridPathfinder::MAX_WAYPOINTS ||
+             !std::ranges::all_of(command.path, [](const RTSWaypoint& waypoint)
+                                  { return std::isfinite(waypoint.x) && std::isfinite(waypoint.y); })))
+        {
+            return false;
+        }
 
         if (command.type == RTSCommandType::Move || command.type == RTSCommandType::Patrol ||
             command.type == RTSCommandType::Build ||

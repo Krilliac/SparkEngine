@@ -17,13 +17,14 @@
 namespace Spark
 {
 
-    /// Oldest save format that this build can migrate and load.
-    inline constexpr uint32_t kOldestSupportedSaveVersion = 1;
-
-    /// Save format emitted by every writer in this build.
+    /// Save format emitted by every writer in this build (N).
     /// v4 retains the v3 semantic payload and appends a standard CRC-32 trailer
     /// over every preceding byte for accidental-corruption detection.
     inline constexpr uint32_t kCurrentSaveVersion = 4;
+
+    /// Oldest save format this build migrates and loads: exactly N-1 (owner decision
+    /// OD-03). Older and newer files fail closed with a versioned diagnostic.
+    inline constexpr uint32_t kOldestSupportedSaveVersion = kCurrentSaveVersion - 1;
 
     /// Property key that carries a Transform's parent as a saved-entity index.
     inline constexpr const char* kTransformParentProperty = "parent";

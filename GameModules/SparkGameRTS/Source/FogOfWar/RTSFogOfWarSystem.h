@@ -70,6 +70,16 @@ namespace RTS
         const FogGrid* GetGrid(RTSFaction faction) const;
         std::string GetFogStatusString() const;
 
+        /**
+         * @brief Replace every faction's grid (explored history included) from a persistence snapshot.
+         * @param grids  One grid per faction, indexed by RTSFaction, all sharing dimensions in
+         *               [1, MAX_MAP_DIMENSION] with width * height cells of valid RTSVisibility values.
+         * @return false (leaving state untouched) if any grid is malformed.
+         */
+        bool RestoreState(const std::vector<FogGrid>& grids);
+
+        static constexpr int MAX_MAP_DIMENSION = 1024;
+
       private:
         int WorldToGrid(float worldPos) const;
 

@@ -12,7 +12,7 @@
  * two round trips and the allocation-bomb test returned a populated texture
  * before the fix, so its EXPECT fails against the unbounded loader. The
  * allocation-bomb inputs are also committed as fuzz regressions in
- * Tests/Fuzz/corpus/texture-stex, where libFuzzer's 256 MB malloc cap turns
+ * FuzzerTests/corpora/texture-stex, where libFuzzer's 256 MB malloc cap turns
  * the pre-fix allocation into a deterministic failure.
  */
 

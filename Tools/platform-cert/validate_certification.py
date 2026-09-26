@@ -18,7 +18,10 @@ What is *measured* rather than believed:
     ones, and no undeclared file may sit in the bundle (see bundle_verify)
   - the dependency closure is matched against the committed dependency
     authority derived from ThirdParty/dependencies.lock, so a fabricated but
-    well-formed list fails (see dependency_authority)
+    well-formed list fails (see dependency_authority), and it is re-checked
+    against the attested PE import graph of the staged package, so a closure
+    that omits a measured import or names one nothing imports fails
+    (see pe_imports)
   - document structure comes from the committed JSON Schemas, enforced by a
     validator that refuses any keyword it does not implement, so a schema
     rule can never be silently skipped (see schema_validator)
@@ -1098,6 +1101,15 @@ def _cross_validate_row(
                     row_id, evidence.get("dependencyClosure"), authority
                 )
             )
+            if artifact_root is not None and measured_digest is not None:
+                errors.extend(
+                    bundle_verify.check_measured_closure(
+                        evidence,
+                        artifact_root=artifact_root,
+                        row_id=row_id,
+                        authority=authority,
+                    )
+                )
     return errors
 
 

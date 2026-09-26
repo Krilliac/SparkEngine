@@ -26,18 +26,15 @@ namespace RTS
     // Lifecycle
     // =========================================================================
 
-    bool RTSEngineSystems::Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem,
-                                      RTSBuildingSystem* buildingSystem, RTSResourceSystem* resourceSystem,
-                                      RTSCommandSystem* commandSystem)
+    bool RTSEngineSystems::Initialize(Spark::IEngineContext* context, const RTSSkirmishSystems& systems,
+                                      RTSSkirmishSimulation* simulation)
     {
         if (!context)
             return false;
 
         m_context = context;
-        m_unitSystem = unitSystem;
-        m_buildingSystem = buildingSystem;
-        m_resourceSystem = resourceSystem;
-        m_commandSystem = commandSystem;
+        m_systems = systems;
+        m_simulation = simulation;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[RTS] Initializing engine system integrations...");
@@ -83,10 +80,8 @@ namespace RTS
         m_eventHandles.clear();
 
         m_context = nullptr;
-        m_unitSystem = nullptr;
-        m_buildingSystem = nullptr;
-        m_resourceSystem = nullptr;
-        m_commandSystem = nullptr;
+        m_systems = {};
+        m_simulation = nullptr;
         console.LogInfo("[RTS] Engine system integrations shut down");
     }
 
@@ -230,39 +225,39 @@ namespace RTS
         // Register faction themes
         Spark::Audio::MusicTrack faction1Theme;
         faction1Theme.name = "faction_1_theme";
-        faction1Theme.filepath = "Audio/Music/RTS/faction_1_theme.ogg";
+        faction1Theme.filepath = "Assets/Audio/RTS/Music/faction_1_theme.wav";
         faction1Theme.loop = true;
         music->RegisterTrack(faction1Theme);
 
         Spark::Audio::MusicTrack faction2Theme;
         faction2Theme.name = "faction_2_theme";
-        faction2Theme.filepath = "Audio/Music/RTS/faction_2_theme.ogg";
+        faction2Theme.filepath = "Assets/Audio/RTS/Music/faction_2_theme.wav";
         faction2Theme.loop = true;
         music->RegisterTrack(faction2Theme);
 
         Spark::Audio::MusicTrack faction3Theme;
         faction3Theme.name = "faction_3_theme";
-        faction3Theme.filepath = "Audio/Music/RTS/faction_3_theme.ogg";
+        faction3Theme.filepath = "Assets/Audio/RTS/Music/faction_3_theme.wav";
         faction3Theme.loop = true;
         music->RegisterTrack(faction3Theme);
 
         // Combat and outcome tracks
         Spark::Audio::MusicTrack battleTrack;
         battleTrack.name = "battle_music";
-        battleTrack.filepath = "Audio/Music/RTS/battle_music.ogg";
+        battleTrack.filepath = "Assets/Audio/RTS/Music/battle_music.wav";
         battleTrack.loop = true;
         battleTrack.bpm = 140.0f;
         music->RegisterTrack(battleTrack);
 
         Spark::Audio::MusicTrack victoryTrack;
         victoryTrack.name = "victory";
-        victoryTrack.filepath = "Audio/Music/RTS/victory.ogg";
+        victoryTrack.filepath = "Assets/Audio/RTS/Music/victory.wav";
         victoryTrack.loop = false;
         music->RegisterTrack(victoryTrack);
 
         Spark::Audio::MusicTrack defeatTrack;
         defeatTrack.name = "defeat";
-        defeatTrack.filepath = "Audio/Music/RTS/defeat.ogg";
+        defeatTrack.filepath = "Assets/Audio/RTS/Music/defeat.wav";
         defeatTrack.loop = false;
         music->RegisterTrack(defeatTrack);
 
@@ -413,7 +408,7 @@ namespace RTS
         }
 
         auto* world = m_context->GetWorld();
-        if (!world || !m_unitSystem || !m_buildingSystem || !m_resourceSystem)
+        if (!world || !HasMatchState())
         {
             Spark::SimpleConsole::GetInstance().LogError("[RTS] World or gameplay state is not available");
             return false;
@@ -424,12 +419,11 @@ namespace RTS
         meta.sceneName = "RTSMatch";
         meta.playTime = static_cast<float>(m_context->GetElapsedTime());
 
-        const RTSPersistenceSnapshot snapshot =
-            RTSPersistence::Capture(*m_unitSystem, *m_buildingSystem, *m_resourceSystem);
-        const std::string encoded = RTSPersistence::Serialize(snapshot);
+        std::string error;
+        const std::string encoded = RTSPersistence::Serialize(RTSPersistence::Capture(m_systems, *m_simulation), error);
         if (encoded.empty())
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to serialize match state");
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to serialize match state: " + error);
             return false;
         }
 
@@ -461,7 +455,7 @@ namespace RTS
         }
 
         auto* world = m_context->GetWorld();
-        if (!world || !m_unitSystem || !m_buildingSystem || !m_resourceSystem)
+        if (!world || !HasMatchState())
         {
             Spark::SimpleConsole::GetInstance().LogError("[RTS] World or gameplay state is not available");
             return false;
@@ -473,33 +467,38 @@ namespace RTS
             return false;
         }
 
-        std::unordered_map<std::string, std::string> customState;
-        if (!saveSystem->Load(slotName, *world, customState))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to read save slot: " + slotName);
-            return false;
-        }
-
-        const auto encoded = customState.find(std::string(RTSPersistence::StateKey));
-        if (encoded == customState.end())
-        {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Save slot has no RTS match state: " + slotName);
-            return false;
-        }
-
+        // Decode the RTS state before the SaveSystem commits the ECS world, so a retired, damaged, or truncated
+        // slot leaves both the world and the running match untouched.
         RTSPersistenceSnapshot snapshot;
         std::string error;
-        if (!RTSPersistence::Deserialize(encoded->second, snapshot, error) ||
-            !RTSPersistence::Apply(snapshot, *m_unitSystem, *m_buildingSystem, *m_resourceSystem, m_commandSystem,
-                                   error))
+        const auto decodeMatchState = [&](const std::unordered_map<std::string, std::string>& state)
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Invalid match state in slot '" + slotName +
-                                                         "': " + error);
+            const auto encoded = state.find(std::string(RTSPersistence::StateKey));
+            if (encoded != state.end())
+                return RTSPersistence::Deserialize(encoded->second, snapshot, error);
+            error = state.contains(std::string(RTSPersistence::LegacyStateKeyV1))
+                        ? "slot uses the retired v1 format, which cannot resume a match"
+                        : "slot has no RTS match state";
+            return false;
+        };
+
+        std::unordered_map<std::string, std::string> customState;
+        if (!saveSystem->Load(slotName, *world, customState, decodeMatchState) ||
+            !RTSPersistence::Apply(snapshot, m_systems, *m_simulation, error))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to load slot '" + slotName +
+                                                         "': " + (error.empty() ? "unreadable save" : error));
             return false;
         }
 
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match loaded from slot: " + slotName);
         return true;
+    }
+
+    bool RTSEngineSystems::HasMatchState() const
+    {
+        const auto& [units, buildings, resources, commands, fog, match] = m_systems;
+        return units && buildings && resources && commands && fog && match && m_simulation;
     }
 
     bool RTSEngineSystems::IsValidSlotName(const std::string& slotName)

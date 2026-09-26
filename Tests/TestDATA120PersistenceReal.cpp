@@ -7,15 +7,22 @@
  * Every test drives the production TFDatabase / TFPlayerMetaStore against a
  * real file. Write failures are injected by occupying the "<db>.tmp" staging
  * path with a directory, the same technique TestTFOnboarding.cpp uses.
+ * The Persistence_Durable_* cases pin the SavePaths::WriteDurableReplace
+ * commit primitive every TERRAFRONT store writes through.
  */
 #include "TestFramework.h"
 #include "Persistence/TFDatabase.h"
 #include "Persistence/TFPlayerMeta.h"
+#include "Persistence/TFSavePaths.h"
 
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 using namespace Terrafront;
 
@@ -294,3 +301,142 @@ TEST(Persistence_Migration_NewerSchemaFailsClosedWithoutRewrite)
     }
     fs::remove(path);
 }
+
+TEST(Persistence_Durable_ReplaceCommitsExactBytesAndClearsStaleStaging)
+{
+    const fs::path path = FreshDbPath("test_data120_durable.json");
+    const fs::path staging = StagingBlocker(path);
+
+    std::error_code ec;
+    ASSERT_TRUE(SavePaths::WriteDurableReplace(path, "first revision", ec));
+    EXPECT_FALSE(static_cast<bool>(ec));
+    EXPECT_TRUE(ReadFile(path) == "first revision");
+    EXPECT_FALSE(fs::exists(staging));
+
+    // A crashed writer's leftover staging file is discarded, never merged into the commit.
+    WriteFile(staging, "partial bytes from a crashed writer that are longer than the new revision");
+    ASSERT_TRUE(SavePaths::WriteDurableReplace(path, "second", ec));
+    EXPECT_TRUE(ReadFile(path) == "second");
+    EXPECT_FALSE(fs::exists(staging));
+
+    // Empty payloads and embedded NULs are committed byte-exactly.
+    const std::string binary("a\0b\0c", 5);
+    ASSERT_TRUE(SavePaths::WriteDurableReplace(path, binary, ec));
+    EXPECT_TRUE(ReadFile(path) == binary);
+    ASSERT_TRUE(SavePaths::WriteDurableReplace(path, "", ec));
+    EXPECT_EQ(fs::file_size(path), uintmax_t{0});
+
+    EXPECT_FALSE(SavePaths::WriteDurableReplace(fs::path{}, "x", ec));
+    EXPECT_TRUE(ec == std::make_error_code(std::errc::invalid_argument));
+    fs::remove(path);
+}
+
+TEST(Persistence_Durable_FailedStagingLeavesCommittedFileUntouched)
+{
+    const fs::path path = FreshDbPath("test_data120_durable_fail.json");
+    const fs::path staging = StagingBlocker(path);
+    std::error_code ec;
+    ASSERT_TRUE(SavePaths::WriteDurableReplace(path, "committed", ec));
+
+    ASSERT_TRUE(fs::create_directory(staging));
+    EXPECT_FALSE(SavePaths::WriteDurableReplace(path, "must not land", ec));
+    EXPECT_TRUE(static_cast<bool>(ec));
+    EXPECT_TRUE(ReadFile(path) == "committed");
+    EXPECT_TRUE(fs::is_directory(staging));
+    fs::remove_all(staging);
+
+    // A missing parent is reported, not created behind the caller's back.
+    const fs::path orphan = fs::path("Saves") / "test_data120_no_such_dir" / "store.json";
+    fs::remove_all(orphan.parent_path());
+    EXPECT_FALSE(SavePaths::WriteDurableReplace(orphan, "x", ec));
+    EXPECT_FALSE(fs::exists(orphan.parent_path()));
+    fs::remove(path);
+}
+
+TEST(Persistence_Durable_StoreCommitUnlinksStaleStagingSymlink)
+{
+    // TFDatabase::SaveToDisk commits through the durable primitive. On POSIX a stale symlink left at
+    // the staging path is unlinked, not followed into (and truncating) the file it names, and the
+    // committed file is owner-only because the store holds password hashes. This pins the stale-entry
+    // unlink; the O_EXCL|O_NOFOLLOW create flags only matter if an entry is planted between that
+    // unlink and open(), which a test cannot schedule without a hook. Windows has no owner-only
+    // mode here: the committed file inherits the parent directory's ACL, so only commit and reopen
+    // are asserted there.
+    const fs::path path = FreshDbPath("test_data120_durable_link.db");
+#ifndef _WIN32
+    const fs::path staging = StagingBlocker(path);
+    const fs::path victim = fs::path("Saves") / "test_data120_durable_victim.txt";
+    WriteFile(victim, "victim contents");
+    fs::create_symlink(fs::absolute(victim), staging);
+#endif
+
+    {
+        TFDatabase db;
+        ASSERT_TRUE(db.Open(path));
+        ASSERT_TRUE(SeedCharacter(db, "durable_user", "Durable", 5) != 0);
+    }
+    EXPECT_TRUE(ReadFile(path).find("durable_user") != std::string::npos);
+
+#ifndef _WIN32
+    EXPECT_TRUE(ReadFile(victim) == "victim contents");
+    EXPECT_FALSE(fs::exists(fs::symlink_status(staging)));
+    const fs::perms mode = fs::status(path).permissions();
+    EXPECT_TRUE((mode & (fs::perms::group_all | fs::perms::others_all)) == fs::perms::none);
+    fs::remove(victim);
+#endif
+
+    TFDatabase reopened;
+    ASSERT_TRUE(reopened.Open(path));
+    TFAccountRecord account;
+    EXPECT_TRUE(reopened.FindAccountByUsername("durable_user", account));
+    fs::remove(path);
+}
+
+#ifndef _WIN32
+TEST(Persistence_Durable_DirectorySyncFailureAfterRenameStillReportsCommit)
+{
+    // Once the rename lands, the commit is reported as committed even if the parent directory cannot
+    // be synced; otherwise TFDatabase would roll its in-memory state back while the disk holds the new
+    // revision. A write+search-only directory (0300) lets rename() succeed while open(dir, O_RDONLY)
+    // fails with EACCES. Root bypasses permission checks, so the failure cannot be forced there.
+    if (::geteuid() == 0)
+        SKIP_TEST("directory permission checks do not apply to root");
+
+    const fs::path dir = fs::path("Saves") / "test_data120_durable_nosync";
+    fs::remove_all(dir);
+    ASSERT_TRUE(fs::create_directories(dir));
+    const fs::path path = dir / "store.db";
+
+    std::error_code ec;
+    ASSERT_TRUE(SavePaths::WriteDurableReplace(path, "first", ec));
+    EXPECT_FALSE(static_cast<bool>(ec));
+
+    // TFDatabase keeps its in-memory state in step with the disk through the same commit.
+    bool dbCommitted = false;
+    bool committed = false;
+    std::error_code syncWarning;
+    {
+        TFDatabase db;
+        const bool opened = db.Open(dir / "accounts.db");
+        fs::permissions(dir, fs::perms::owner_write | fs::perms::owner_exec, fs::perm_options::replace);
+        committed = SavePaths::WriteDurableReplace(path, "second", ec);
+        syncWarning = ec;
+        dbCommitted = opened && SeedCharacter(db, "nosync_user", "NoSync", 7) != 0;
+        TFAccountRecord inMemory;
+        dbCommitted = dbCommitted && db.FindAccountByUsername("nosync_user", inMemory);
+    }
+    fs::permissions(dir, fs::perms::owner_all, fs::perm_options::replace);
+
+    EXPECT_TRUE(committed);
+    EXPECT_TRUE(syncWarning == std::make_error_code(std::errc::permission_denied));
+    EXPECT_TRUE(ReadFile(path) == "second");
+    EXPECT_FALSE(fs::exists(StagingBlocker(path)));
+    EXPECT_TRUE(dbCommitted);
+
+    TFDatabase reopened;
+    ASSERT_TRUE(reopened.Open(dir / "accounts.db"));
+    TFAccountRecord account;
+    EXPECT_TRUE(reopened.FindAccountByUsername("nosync_user", account));
+    fs::remove_all(dir);
+}
+#endif

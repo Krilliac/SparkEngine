@@ -9,12 +9,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
 
 from receipt_publication import publish_receipt_no_replace
+from record_release_approval import GitHubApi, canonical_bytes, collect as collect_release_approval
 from verify_release_bundle import verify_release_bundle
 
 
@@ -125,13 +127,35 @@ def tag_commit(api, tag):
     raise ValueError("tag nesting exceeds the bounded identity check")
 
 
+def default_approval_collector(**identity):
+    return collect_release_approval(GitHubApi(os.environ.get("GH_TOKEN", "")), **identity)
+
+
+def verify_release_approval(*, repository, source_commit, run_id, run_attempt, approval_run_attempt,
+                            approval_record_sha256, collector):
+    """Rebuild the publisher's approval record from GitHub and require the identical digest."""
+    require(isinstance(approval_record_sha256, str) and re.fullmatch(r"[0-9a-f]{64}", approval_record_sha256),
+            "the release job published no approval record digest")
+    require(type(approval_run_attempt) is int and 0 < approval_run_attempt <= run_attempt,
+            "approval run attempt must be a completed attempt of this run")
+    record = collector(repository=repository, run_id=run_id, run_attempt=approval_run_attempt,
+                       source_commit=source_commit)
+    require(hashlib.sha256(canonical_bytes(record)).hexdigest() == approval_record_sha256,
+            "independently rebuilt release approval differs from the publisher's approval record")
+    return {"sha256": approval_record_sha256, "record": record}
+
+
 def verify(*, repository, tag, source_commit, directory, signature_directory, fingerprint,
-           gate_output, receipt, run_id, run_attempt, api=None,
+           gate_output, receipt, run_id, run_attempt, approval_record_sha256, approval_run_attempt, api=None,
            bundle_verifier=verify_release_bundle, provenance_verifier=verify_manifest,
-           signature_control_asset=None):
+           signature_control_asset=None, approval_collector=default_approval_collector):
     require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository), "invalid repository identity")
     require(re.fullmatch(r"[0-9a-f]{40}", source_commit), "invalid source commit")
     require(type(run_id) is int and run_id > 0 and type(run_attempt) is int and run_attempt > 0, "invalid verifier run identity")
+    approval = verify_release_approval(
+        repository=repository, source_commit=source_commit, run_id=run_id, run_attempt=run_attempt,
+        approval_run_attempt=approval_run_attempt, approval_record_sha256=approval_record_sha256,
+        collector=approval_collector)
     names = expected_assets(tag)
     api = api or GitHub(repository)
     identity = release_identity(api.json(f"releases/tags/{tag}"), tag)
@@ -177,11 +201,11 @@ def verify(*, repository, tag, source_commit, directory, signature_directory, fi
     result = {
         "schemaVersion": 1, "state": "publication-verified", "repository": repository,
         "sourceCommit": source_commit, "release": identity, "assets": assets,
-        "trustedSigningKeyFingerprint": fingerprint,
+        "trustedSigningKeyFingerprint": fingerprint, "releaseApproval": approval,
         "verifier": {"workflow": ".github/workflows/release.yml", "job": "verify-stable-publication",
                      "runId": run_id, "runAttempt": run_attempt, "sourceCommit": source_commit},
         "checks": ["fresh-download", "asset-identity", "detached-signatures", "checksums", "sbom",
-                   "exact-ci", "github-release-attestation", "immutable-tag"],
+                   "exact-ci", "github-release-attestation", "immutable-tag", "protected-release-approval"],
         "limitations": ["Does not promote readiness or prove live-site consumption, owner sign-off, or Windows certification."],
     }
     publish_receipt_no_replace(receipt, (json.dumps(result, indent=2, sort_keys=True) + "\n").encode("utf-8"))
@@ -196,6 +220,8 @@ def main():
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--run-id", required=True, type=int)
     parser.add_argument("--run-attempt", required=True, type=int)
+    parser.add_argument("--approval-record-sha256", required=True)
+    parser.add_argument("--approval-run-attempt", required=True, type=int)
     parser.add_argument("--signature-control-asset", default=SIGNATURE_CONTROL_ASSET)
     args = parser.parse_args()
     try:

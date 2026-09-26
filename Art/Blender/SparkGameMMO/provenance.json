@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameMMO",
+  "author_script": {
+    "path": "tools/blender/author_mmo_kit.py",
+    "sha256": "2dddd8c3f2832fffd37b922d02cc732e63d55ee6eab90e35a64ffbb9b7d9c048"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameMMO/mmo_kit.blend",
+    "sha256": "438abb209b55d1d73321aaa92314f048e5601ff0762a66c2a7552355752269f5",
+    "scene_sha256": "95ff22e4992e6bc3698aad210fdd9a0f325e458467dc2d5690063009f9da1830"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "quest_board",
+      "obj_path": "Assets/Models/MMO/Kit/quest_board.obj",
+      "mtl_path": "Assets/Models/MMO/Kit/quest_board.mtl",
+      "bounds": {
+        "min": [
+          -1.0,
+          0.0,
+          -0.33
+        ],
+        "max": [
+          1.0,
+          2.2,
+          0.33
+        ]
+      },
+      "triangle_count": 1156,
+      "obj_sha256": "30efbd9f04a4069cfdf7a324c34edb9ab9a17b4edda13b6748c0b497700aea65",
+      "mtl_sha256": "9f37c8e4f2fc5c4043f933c753f7c751179f0b84af12a3b076c5c4a5abce554a",
+      "triangle_budget": 1400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/MMO/Kit/quest_board_lod1.obj",
+          "mtl_path": "Assets/Models/MMO/Kit/quest_board_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.0029,
+              0.008333,
+              -0.33305
+            ],
+            "max": [
+              1.0029,
+              2.199226,
+              0.33305
+            ]
+          },
+          "triangle_count": 410,
+          "obj_sha256": "aa1dfb011d4dcbda9fcbff82d9976ecbe61426a9b3edb17b101dd8651426f944",
+          "mtl_sha256": "9f37c8e4f2fc5c4043f933c753f7c751179f0b84af12a3b076c5c4a5abce554a",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/MMO/Kit/quest_board_collision.obj",
+          "mtl_path": "Assets/Models/MMO/Kit/quest_board_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.0,
+              0.0,
+              -0.33
+            ],
+            "max": [
+              1.0,
+              2.2,
+              0.33
+            ]
+          },
+          "triangle_count": 100,
+          "obj_sha256": "ba5c5bf20255403b866f896d847ce60124035d04f47fabc9567e052c596f80be",
+          "mtl_sha256": "b82a834654c32c5772def2dcf65399a3a8cb614c2d1c1f90ee9d6b56e9715e5a",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "vendor_stall",
+      "obj_path": "Assets/Models/MMO/Kit/vendor_stall.obj",
+      "mtl_path": "Assets/Models/MMO/Kit/vendor_stall.mtl",
+      "bounds": {
+        "min": [
+          -1.5,
+          0.0,
+          -0.98
+        ],
+        "max": [
+          1.5,
+          2.6,
+          1.037971
+        ]
+      },
+      "triangle_count": 2364,
+      "obj_sha256": "d4ce16b10084b59e46c0accd3a3accb5d013d7b0aade9b05865082d14172d2c2",
+      "mtl_sha256": "9f37c8e4f2fc5c4043f933c753f7c751179f0b84af12a3b076c5c4a5abce554a",
+      "triangle_budget": 2600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/MMO/Kit/vendor_stall_lod1.obj",
+          "mtl_path": "Assets/Models/MMO/Kit/vendor_stall_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.501985,
+              0.0,
+              -0.978842
+            ],
+            "max": [
+              1.501985,
+              2.600585,
+              1.035291
+            ]
+          },
+          "triangle_count": 846,
+          "obj_sha256": "cdbb73905f93a64b5f034e6ae19ca5663fc474e8c4ed1a13e192a6719070ae18",
+          "mtl_sha256": "9f37c8e4f2fc5c4043f933c753f7c751179f0b84af12a3b076c5c4a5abce554a",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/MMO/Kit/vendor_stall_collision.obj",
+          "mtl_path": "Assets/Models/MMO/Kit/vendor_stall_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.5,
+              0.0,
+              -0.98
+            ],
+            "max": [
+              1.5,
+              2.6,
+              1.037971
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "c4030a838238487ebe931f724277b467c2cff6d485980daa7288fe0f3464bca4",
+          "mtl_sha256": "b82a834654c32c5772def2dcf65399a3a8cb614c2d1c1f90ee9d6b56e9715e5a",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "portal_ring",
+      "obj_path": "Assets/Models/MMO/Kit/portal_ring.obj",
+      "mtl_path": "Assets/Models/MMO/Kit/portal_ring.mtl",
+      "bounds": {
+        "min": [
+          -1.6,
+          0.0,
+          -0.9
+        ],
+        "max": [
+          1.6,
+          3.63,
+          0.9
+        ]
+      },
+      "triangle_count": 1924,
+      "obj_sha256": "c7bf5593c5f6ec4bbeabcdff8915c9a7bef07bd064e8004e4e05f8c74bbf0fcb",
+      "mtl_sha256": "9608bb8afc81c2bdb4ea88591f2d1edbcf2c89e4a6539e97b55b61b475e9a31e",
+      "triangle_budget": 2400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/MMO/Kit/portal_ring_lod1.obj",
+          "mtl_path": "Assets/Models/MMO/Kit/portal_ring_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.6,
+              0.008333,
+              -0.891667
+            ],
+            "max": [
+              1.6,
+              3.616097,
+              0.891667
+            ]
+          },
+          "triangle_count": 690,
+          "obj_sha256": "0256b12291969ae0533fb5c6dad5b807e17485f8ffa25195592dd05afd47f60d",
+          "mtl_sha256": "9608bb8afc81c2bdb4ea88591f2d1edbcf2c89e4a6539e97b55b61b475e9a31e",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/MMO/Kit/portal_ring_collision.obj",
+          "mtl_path": "Assets/Models/MMO/Kit/portal_ring_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.6,
+              0.0,
+              -0.9
+            ],
+            "max": [
+              1.6,
+              3.63,
+              0.9
+            ]
+          },
+          "triangle_count": 132,
+          "obj_sha256": "f88624d31bec35ce0eecd0351544ff7ebdcbe298e45b9ec0021f9b8ed60c5993",
+          "mtl_sha256": "b82a834654c32c5772def2dcf65399a3a8cb614c2d1c1f90ee9d6b56e9715e5a",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

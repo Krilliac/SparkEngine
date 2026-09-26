@@ -48,7 +48,7 @@ SparkEngine authors shaders in HLSL. On Windows the `SparkShaderCompiler` tool a
 |----------|----------------------|----------------|--------------------|
 | HLSL     | DirectX 11 / D3D12   | `.hlsl`        | `.cso` bytecode    |
 | GLSL     | OpenGL               | `.glsl`        | `.glsl.spv`        |
-| SPIR-V   | Vulkan (cross-compiled from HLSL) | `.spv` | Binary SPIR-V |
+| SPIR-V   | Vulkan (built from `Shaders/GLSL` by `glslangValidator` at build time; see [RHI Abstraction Layer](../graphics/RHI-Abstraction-Layer.md#shipped-shader-spir-v-build-rhi-230)) | `.spv` | Binary SPIR-V |
 
 ## Directory Structure
 

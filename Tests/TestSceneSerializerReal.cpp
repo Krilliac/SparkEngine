@@ -770,8 +770,10 @@ TEST(SceneSerializerReal_WrongCustomAndLegacyRawPayloadsFailClosed)
         std::ofstream output(inputFile.Path(), std::ios::binary | std::ios::trunc);
         output << R"({"version":1,"objectCount":0,"componentCount":0,"objects":[],"components":[]})";
     }
-    EXPECT_FALSE(serializer.LoadScene(inputFile.Path().string(), live).success);
-    EXPECT_EQ(live.header.timestamp, UINT64_C(42));
+    // OD-03: an N-1 document without raw payloads migrates instead of failing.
+    SceneFile migratedEmpty;
+    EXPECT_TRUE(serializer.LoadScene(inputFile.Path().string(), migratedEmpty).success);
+    EXPECT_EQ(migratedEmpty.header.version, SCENE_FILE_VERSION);
 
     {
         std::ofstream output(inputFile.Path(), std::ios::binary | std::ios::trunc);
@@ -831,4 +833,171 @@ TEST(SceneSerializerReal_BinaryFormatFailsWithoutWriting)
     const auto load = serializer.LoadScene(file.Path().string(), liveScene);
     EXPECT_FALSE(load.success);
     EXPECT_EQ(liveScene.objects.size(), size_t{1});
+}
+
+namespace
+{
+    std::filesystem::path SceneCompatibilityFixture(const char* name)
+    {
+        return std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" / "SceneFile" /
+               name;
+    }
+
+    std::string ReadWholeFile(const std::filesystem::path& path)
+    {
+        std::ifstream input(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
+} // namespace
+
+TEST(SceneMigration_V1FixtureMigratesDeclaredStateWithoutRewritingSource)
+{
+    using namespace SparkEditor;
+    const auto fixturePath = SceneCompatibilityFixture("v1-hierarchy.sparkscene");
+    const std::string fixtureBefore = ReadWholeFile(fixturePath);
+    ASSERT_TRUE(fixtureBefore.find("\"version\": 1,") != std::string::npos);
+
+    SceneSerializer serializer;
+    SceneFile scene;
+    const SerializationResult loaded = serializer.LoadScene(fixturePath.string(), scene);
+    ASSERT_TRUE(loaded.success);
+    EXPECT_EQ(scene.header.version, SCENE_FILE_VERSION);
+    EXPECT_TRUE(std::any_of(loaded.warnings.begin(), loaded.warnings.end(), [](const std::string& warning)
+                            { return warning.find("migrated in memory from version 1 to 2") != std::string::npos; }));
+
+    EXPECT_EQ(std::string(scene.header.sceneName), std::string("Legacy v1 Courtyard"));
+    EXPECT_EQ(std::string(scene.header.description), std::string("SceneFile v1 N-1 compatibility fixture"));
+    EXPECT_EQ(scene.header.timestamp, UINT64_C(1700000000));
+    EXPECT_NEAR(scene.header.gravity.y, -7.5f, 0.0001f);
+    EXPECT_NEAR(scene.header.gravity.z, 0.25f, 0.0001f);
+    EXPECT_NEAR(scene.header.ambientColor.z, 0.75f, 0.0001f);
+    EXPECT_NEAR(scene.header.ambientIntensity, 1.5f, 0.0001f);
+
+    ASSERT_EQ(scene.objects.size(), size_t{2});
+    const SceneObject* root = scene.FindObject(10);
+    const SceneObject* child = scene.FindObject(11);
+    ASSERT_TRUE(root != nullptr);
+    ASSERT_TRUE(child != nullptr);
+    EXPECT_EQ(root->name, std::string("Courtyard Root"));
+    EXPECT_EQ(root->tag, std::string("Environment"));
+    EXPECT_EQ(root->layer, 3);
+    EXPECT_TRUE(root->active);
+    EXPECT_TRUE(root->staticObject);
+    EXPECT_NEAR(root->transform.position.z, 3.0f, 0.0001f);
+    EXPECT_NEAR(root->transform.rotation.y, 0.5f, 0.0001f);
+    EXPECT_NEAR(root->transform.rotation.w, 0.75f, 0.0001f);
+    EXPECT_NEAR(root->transform.scale.x, 2.0f, 0.0001f);
+    ASSERT_EQ(root->transform.childIDs.size(), size_t{1});
+    EXPECT_EQ(root->transform.childIDs[0], ObjectID{11});
+    EXPECT_EQ(child->name, std::string("Fountain"));
+    EXPECT_FALSE(child->active);
+    EXPECT_EQ(child->transform.parentID, ObjectID{10});
+    EXPECT_NEAR(child->transform.position.x, -4.5f, 0.0001f);
+    EXPECT_NEAR(child->transform.position.y, 0.125f, 0.0001f);
+    ASSERT_EQ(child->componentTypes.size(), size_t{1});
+    EXPECT_TRUE(child->componentTypes[0] == ComponentType::TRANSFORM);
+
+    ASSERT_EQ(scene.components.size(), size_t{2});
+    EXPECT_TRUE(scene.components[0].type == ComponentType::TRANSFORM);
+    EXPECT_TRUE(scene.components[0].enabled);
+    EXPECT_TRUE(scene.components[1].type == ComponentType::TRANSFORM);
+    EXPECT_FALSE(scene.components[1].enabled);
+
+    EXPECT_TRUE(scene.environment.skyType == EnvironmentSettings::GRADIENT);
+    EXPECT_TRUE(scene.environment.fogEnabled);
+    EXPECT_NEAR(scene.environment.fogEnd, 80.0f, 0.0001f);
+    EXPECT_NEAR(scene.environment.bloomIntensity, 0.75f, 0.0001f);
+    EXPECT_NEAR(scene.environment.exposure, 1.25f, 0.0001f);
+    EXPECT_NEAR(scene.defaultCamera.fieldOfView, 90.0f, 0.0001f);
+    EXPECT_NEAR(scene.defaultCamera.farPlane, 2500.0f, 0.0001f);
+    EXPECT_TRUE(scene.defaultCamera.isMainCamera);
+
+    ASSERT_EQ(scene.assetReferences.size(), size_t{1});
+    EXPECT_EQ(scene.assetReferences[0].assetPath, std::string("Assets/Meshes/fountain.obj"));
+    EXPECT_EQ(scene.assetReferences[0].fileSize, UINT64_C(4096));
+    EXPECT_EQ(scene.assetReferences[0].checksum, std::string("a1b2c3d4"));
+    ASSERT_EQ(scene.assetReferences[0].dependencies.size(), size_t{1});
+
+    // Reading migrates in memory only; the checked-in N-1 document is never rewritten.
+    EXPECT_EQ(ReadWholeFile(fixturePath), fixtureBefore);
+
+    // The migrated scene is written as version N and reads back with the same state.
+    TemporarySceneFile resaved(".sparkscene");
+    ASSERT_TRUE(serializer.SaveScene(scene, resaved.Path().string(), SerializationFormat::JSON).success);
+    const std::string resavedText = ReadWholeFile(resaved.Path());
+    EXPECT_TRUE(resavedText.find("\"version\": 2") != std::string::npos ||
+                resavedText.find("\"version\":2") != std::string::npos);
+    SceneFile reloaded;
+    const SerializationResult reloadResult = serializer.LoadScene(resaved.Path().string(), reloaded);
+    ASSERT_TRUE(reloadResult.success);
+    EXPECT_TRUE(reloadResult.warnings.empty());
+    ASSERT_EQ(reloaded.objects.size(), size_t{2});
+    ASSERT_TRUE(reloaded.FindObject(11) != nullptr);
+    EXPECT_EQ(reloaded.FindObject(11)->transform.parentID, ObjectID{10});
+    EXPECT_EQ(reloaded.header.timestamp, UINT64_C(1700000000));
+}
+
+TEST(SceneMigration_V1RawObjectImagePayloadFailsClosedWithVersionedError)
+{
+    using namespace SparkEditor;
+    const auto fixturePath = SceneCompatibilityFixture("v1-raw-light-payload.sparkscene");
+    const std::string fixtureBefore = ReadWholeFile(fixturePath);
+
+    SceneSerializer serializer;
+    SceneFile live;
+    live.header.timestamp = 314;
+    const SerializationResult result = serializer.LoadScene(fixturePath.string(), live);
+    EXPECT_FALSE(result.success);
+    EXPECT_TRUE(result.errorMessage.find("version 1 component Light") != std::string::npos);
+    EXPECT_TRUE(result.errorMessage.find("cannot be migrated to version 2") != std::string::npos);
+    EXPECT_EQ(live.header.timestamp, UINT64_C(314));
+    EXPECT_TRUE(live.objects.empty());
+    EXPECT_EQ(ReadWholeFile(fixturePath), fixtureBefore);
+}
+
+TEST(SceneMigration_OlderAndNewerVersionsFailClosedWithVersionedError)
+{
+    using namespace SparkEditor;
+    SceneSerializer serializer;
+    TemporarySceneFile file(".sparkscene");
+    SceneFile live;
+    live.header.timestamp = 2718;
+
+    const auto rejectsVersion = [&](uint32_t version, const char* guidance)
+    {
+        {
+            std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+            output << "{\"version\":" << version
+                   << ",\"objectCount\":0,\"componentCount\":0,\"objects\":[],\"components\":[]}";
+        }
+        const SerializationResult result = serializer.LoadScene(file.Path().string(), live);
+        EXPECT_FALSE(result.success);
+        EXPECT_TRUE(result.errorMessage.find("Scene file version " + std::to_string(version) + " is unsupported") !=
+                    std::string::npos);
+        EXPECT_TRUE(result.errorMessage.find("reads scene versions 1-2 and writes version 2") != std::string::npos);
+        EXPECT_TRUE(result.errorMessage.find(guidance) != std::string::npos);
+        EXPECT_EQ(live.header.timestamp, UINT64_C(2718));
+    };
+
+    rejectsVersion(SCENE_FILE_OLDEST_READABLE_VERSION - 1, "older build");
+    rejectsVersion(SCENE_FILE_VERSION + 1, "newer SparkEngine build");
+    rejectsVersion(99, "newer SparkEngine build");
+}
+
+TEST(SceneMigration_WriterEmitsOnlyCurrentVersion)
+{
+    using namespace SparkEditor;
+    SceneSerializer serializer;
+    TemporarySceneFile file(".sparkscene");
+
+    SceneFile previous;
+    previous.header.version = SCENE_FILE_OLDEST_READABLE_VERSION;
+    EXPECT_FALSE(serializer.SaveScene(previous, file.Path().string(), SerializationFormat::JSON).success);
+    EXPECT_FALSE(std::filesystem::exists(file.Path()));
+
+    SceneFile current;
+    ASSERT_TRUE(serializer.SaveScene(current, file.Path().string(), SerializationFormat::JSON).success);
+    SceneFile reloaded;
+    ASSERT_TRUE(serializer.LoadScene(file.Path().string(), reloaded).success);
+    EXPECT_EQ(reloaded.header.version, SCENE_FILE_VERSION);
 }

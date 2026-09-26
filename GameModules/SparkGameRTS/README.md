@@ -29,6 +29,32 @@ toward the point but stops to fight whatever enters range. The Swarm AI keeps it
 sends its idle army at the oldest surviving Human structure once four units are ready. A faction with no units and
 no structures is eliminated; the match reports **Victory** or **Defeat** from the local (non-AI) player's side.
 
+## 3D kit
+
+With a world available, `RTSDemoPresentation::SyncKitProps` stages the skirmish in 3D with the Blender RTS kit in
+`Assets/Models/RTS/Kit/`. It runs after every simulation advance, at 2.5 m per grid cell, and places:
+- command center and barracks meshes: Azure for the Human player and the `_crimson` variants for the opponent;
+- a rally flag on each barracks' unit spawn cell;
+- a crystal cluster on each resource node that still holds resources;
+- a marker ring under each selected unit.
+
+Props are removed when their building, node or selection goes away. The kit's source, budgets and limits are in
+`Art/Blender/SparkGameRTS/README.md`. The six music cues `RTSEngineSystems` registers live in
+`Assets/Audio/RTS/Music/`. `asset-references.json` records every asset path the source names.
+
+## Movement and pathfinding
+
+`Move` and attack-move orders are routed by `Source/Navigation/RTSGridPathfinder` on the 96 × 96 map grid, where
+every building's 4 × 4 footprint (`[pos − 2, pos + 2)` on both axes) is a blocked cell block. An order with a clear
+straight line walks it directly; otherwise A* searches the grid with integer costs (10 orthogonal, 14 diagonal, no
+corner cutting, octile heuristic) and an open list ordered by `(f, h, cell index)`, so the same map always yields the
+same route. The cell path is shortened to the waypoints a straight segment cannot skip. A target under a footprint
+moves to the nearest free cell, and an unreachable one to the reachable cell closest to it.
+
+The route is planned when the order becomes current, stored in the order (`UnitCommand::path`), hashed by
+`ComputeStateHash()`, and saved with the match, so a resumed skirmish continues on the same route. Each tick the
+remaining route is re-checked and replanned if a structure now stands across it.
+
 ## Live controls
 
 | Input | Action |
@@ -52,3 +78,24 @@ simulation tick.
 - `rts_move <x> <y> [queue]`, `rts_hold`, and `rts_stop` issue orders.
 - `rts_train_marine` queues a marine at the Human barracks.
 - `rts_demo_reset` restores the default skirmish.
+- `rts_save [slot]` / `rts_load [slot]` save or resume the skirmish (default slot `rts_quicksave`; an autosave is
+  written to `rts_autosave` every two minutes).
+
+## Save and resume
+
+Saves go through the engine `SaveSystem` under the custom-state key `SparkGameRTS.match.v2`, encoded by
+`Source/Core/RTSPersistence`. A snapshot holds the complete skirmish, so a loaded match continues bit-identically:
+
+- units, buildings (with production queues), player economies, and resource nodes with their worker order;
+- the never-reused unit/building/node id counters and the harvest timer;
+- every command queue and the current selection;
+- match state, players, eliminations, winner, and match time;
+- each faction's fog grid, including explored history that cannot be rebuilt from unit positions;
+- the simulation tick, which also fixes the AI decision phase. Loading resumes at that tick with the sub-tick
+  wall-clock remainder discarded.
+
+Floats are stored as IEEE-754 bit patterns. Loading is all-or-nothing: version 1 slots (records only, from earlier
+builds, including old `rts_autosave` files), truncated or trailing data, and out-of-range values are rejected
+without changing the running match. `Tests/TestMOD370RTSSaveReal.cpp` saves a scripted skirmish at several ticks,
+loads each save into rebuilt systems (directly and through `rts_save`/`rts_load`'s `SaveMatch`/`LoadMatch` on the
+real `SaveSystem`), and requires the uninterrupted run's state hash for the next 2000 ticks and at victory.

@@ -1,6 +1,6 @@
 # Telemetry output and offline validation
 
-This document describes the current local telemetry implementation in `SparkEngine/Source/Utils/Telemetry.h` and the stricter offline validator in `tools/ops/validate_telemetry_spool.py`. It does not claim a durable runtime spool or remote delivery.
+This document describes the current telemetry runtime in `SparkEngine/Source/Utils/Telemetry.h` (with its durable spool in `SparkEngine/Source/Utils/TelemetrySpool*.cpp`) and the stricter offline validator in `tools/ops/validate_telemetry_spool.py`. The runtime bounds below are enforced by C++ source constants and pinned by local `TelemetrySpool` tests. This document does not claim remote delivery: the only shipped backend is `LocalFileTelemetryBackend`, so "endpoint outage" means a backend that reports `RetryableFailure`, exercised through test backends, not a hosted endpoint. `TelemetryConfig::httpEndpoint` is unused.
 
 ## Runtime output
 
@@ -17,13 +17,36 @@ This document describes the current local telemetry implementation in `SparkEngi
 
 `name`, `sessionId`, property keys, and property values are strings. `timestamp` is an unsigned 64-bit epoch-millisecond value. The in-memory event also has an unsigned 64-bit `sequence`, used to sort a flush; the current local serializer does not write it. The offline validator permits `sequence` only as an optional uint64 compatibility field and rejects all other unknown event fields.
 
-Runtime defaults are 10,000 queued events, 50 events per batch, and a 30-second flush interval. A full queue silently drops new events. Backend failure is not durably spooled, retried, or fully accounted today.
+## Runtime bounds, spool, and retry
 
-## Consent semantics and known race
+All values are `TelemetryConfig` defaults unless noted; a caller may lower them.
 
-Consent is reversible through `SetConsent(false)`, which clears the queue under the queue mutex. Future `RecordEvent` calls normally fail the `CanRecord()` gate.
+| Bound | Default | Enforced where | Pinned by |
+|-------|---------|----------------|-----------|
+| In-memory queue events (`maxQueueSize`) | 10,000 | `EnqueueEventThreadSafe` drops and counts `droppedEvents` | `Telemetry_SpoolRecovery_CapDropAccounting` |
+| In-memory queue bytes (`maxQueueBytes`) | 4 MiB (conservative per-event estimate) | same | `Telemetry_SpoolRecovery_CapDropAccounting` |
+| Durable spool events (`maxSpoolEvents`) | 10,000; `Configure` rejects 0 or more than 100,000 (`kAbsoluteMaxEvents`) | `TelemetrySpool::Constrain` keeps the oldest events | `Telemetry_SpoolRecovery_CapDropAccounting` |
+| Durable spool bytes (`maxSpoolBytes`) | 4 MiB including the 16-byte header | same | `Telemetry_SpoolRecovery_CapDropAccounting` |
+| Spool strings / properties | 1 MiB per string, 256 properties per event | `TelemetrySpoolFormat.cpp` reader and writer | source constants; malformed/oversized artifacts: `Telemetry_SpoolRecovery_HostileArtifactRejection` |
+| Batch size (`batchSize`) | 50 events | `FlushEvents` | `Telemetry_SpoolRecovery_RejectedIsTerminal` (batch of 2) |
+| Normal flush cadence (`flushIntervalSeconds`) | 30 s | `Update(dt)` | source default; retry-versus-flush precedence: `Telemetry_SpoolRecovery_UpdateRetriesAtBoundary` |
+| Retry cadence (`retryIntervalSeconds`) | 5 s after a retryable failure or pending spool work | `Update(dt)` | `Telemetry_SpoolRecovery_UpdateRetriesAtBoundary` |
 
-This is not yet a complete concurrent no-event-after-revocation guarantee. A producer can pass `CanRecord()` immediately before another thread revokes consent, then enqueue after the queue was cleared because enqueue does not recheck consent while holding the queue lock. Flush/lifecycle coordination also needs a reviewed contract. This producer race is a blocking OPS-100 runtime issue; the offline validator cannot prove consent from a file and deliberately makes no consent claim.
+The spool is enabled only when `spoolDirectory` is set. It owns exactly two fixed names in that directory, `spark-telemetry.spool` and the atomic staging file `spark-telemetry.spool.tmp`, and never removes the directory or any other entry. A flush first commits the bounded pending set to the spool, then sends batches to the backend:
+
+- `Delivered` and `Rejected` are terminal. The durable cursor advances only after a terminal result. A rejected batch is counted in `rejectedEvents` and is never retried.
+- `RetryableFailure` (or a backend exception) keeps the remaining events queued and spooled and schedules a retry after `retryIntervalSeconds`. After a restart, `Initialize` restores the committed spool before new events are delivered.
+- Delivery is at-least-once. If a cursor update fails after a terminal result, replay can repeat a delivered event, so the per-event `sequence` is the deduplication key.
+- Capacity loss is published in `droppedEvents` only after the bounded durable snapshot has committed. Events that did not fit remain accounted, not silently lost. `TelemetryDeliveryStats` also reports queued, carryover, spooled, delivered, rejected, retryable-failed, spool I/O failure, and rejected spool-operation counts.
+- A spool directory or artifact that is a symlink, hard link, or reparse point, or an artifact that is malformed or oversized, is rejected without being read, followed, or deleted (`Telemetry_SpoolRecovery_SymlinkRejection`, `Telemetry_SpoolRecovery_HostileArtifactRejection`).
+
+Without a spool directory, a retryable failure keeps events in memory only, and `Shutdown` counts them as dropped.
+
+## Consent semantics
+
+Consent is reversible through `SetConsent(false)`. Revocation stops recording, clears the in-memory queue and shutdown carryover (counted in `droppedEvents`), and purges only the fixed spool artifacts. The purge is retried on the retry cadence if it cannot complete immediately. `Telemetry_SpoolRecovery_ConsentRevocation` proves that no backend call follows revocation, both spool files are removed, and a caller-owned file in the same directory survives.
+
+Revocation increments a recording generation. `RecordEvent` captures the generation before it builds an event, and the enqueue path rechecks consent and that generation while holding the queue lock. A producer that passed the first consent check just before another thread revoked consent therefore cannot enqueue afterwards. `Initialize` records the game thread; `SetConsent`, `Shutdown`, `FlushEvents`, and `Update` assert they run on it.
 
 ## Offline spool policy
 
@@ -38,11 +61,11 @@ The validator pins the supplied non-reparse root; accepts only immediate `teleme
 
 JSON is strict UTF-8 with duplicate keys, non-finite numbers, excessive depth, excessive collections, and oversized strings rejected. Events require `name`, `timestamp`, `sessionId`, and `properties`; timestamps and optional sequences must be true uint64 integers (not booleans or floats); properties must be a bounded string-to-string object. Filename time and filesystem modification time are checked independently for retention and future skew. The shared secret policy covers GitHub, AWS, OpenAI, Anthropic, bearer/URL/PEM, and structured credential fields without printing secret previews.
 
-The validator's 50 MiB aggregate, 1 MiB file, 1,000-entry, seven-day retention, event/property, archive, and wall-time limits are **Python-only offline policy**. The present C++ telemetry runtime does not enforce those spool/retention/file limits, and passing this tool is not evidence of outage recovery, durable retry, drop accounting, or consent correctness.
+The validator's 50 MiB aggregate, 1 MiB file, 1,000-entry, seven-day retention, event/property, archive, and wall-time limits are **Python-only offline policy** for exported `telemetry_*.json` files. The C++ runtime does not enforce those export-file retention limits. Passing this tool is not evidence of outage recovery, durable retry, drop accounting, or consent correctness; the C++ tests above are the evidence for those.
 
 ## OPS-100 blockers
 
-- Close the producer/revocation race and define lifecycle synchronization.
-- Implement bounded durable spool, retry, retention, and explicit drop/failure accounting in C++.
-- Add outage/recovery and consent integration tests plus required CI jobs.
-- Review the privacy/retention policy and operations runbook.
+- No network backend or controlled relay exists, so no hosted outage/recovery evidence exists. The bounds above are local, test-proven behavior only.
+- Exported `telemetry_*.json` files have no runtime retention or deletion policy.
+- `telemetry-integration` has no successful exact-SHA hosted record on the Working branch yet.
+- The privacy/retention policy and operations runbook still need review.

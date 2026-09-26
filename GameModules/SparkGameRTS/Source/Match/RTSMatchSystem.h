@@ -31,6 +31,16 @@ namespace RTS
         bool isEliminated = false;
     };
 
+    /// @brief Complete match lifecycle state, as persisted in a save
+    struct RTSMatchSnapshot
+    {
+        RTSMatchState state = RTSMatchState::Setup;
+        float matchTime = 0.0f;
+        RTSFaction winner = RTSFaction::Human;
+        bool hasWinner = false;
+        std::vector<PlayerSetup> players;
+    };
+
     /**
      * @brief Manages match lifecycle, players, and win conditions
      */
@@ -60,7 +70,19 @@ namespace RTS
         int GetPlayerCount() const;
         const PlayerSetup* GetPlayer(int index) const;
         RTSFaction GetWinner() const;
+        bool HasWinner() const;
         std::string GetMatchStatusString() const;
+
+        // === Persistence ===
+        RTSMatchSnapshot CaptureState() const;
+        /**
+         * @brief Replace the match lifecycle state from a persistence snapshot.
+         * @return false (leaving state untouched) on an out-of-range enum, a non-finite or negative match time,
+         *         a non-finite start position, or more than MAX_PLAYERS players.
+         */
+        bool RestoreState(const RTSMatchSnapshot& snapshot);
+
+        static constexpr int MAX_PLAYERS = 8;
 
         // === Win condition checks ===
         void MarkPlayerEliminated(int playerIndex);

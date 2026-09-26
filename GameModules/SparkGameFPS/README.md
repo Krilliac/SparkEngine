@@ -31,6 +31,21 @@ The module initializes without a D3D11 device: gameplay state is built in full a
 `Render()` are skipped. Module assets (the scene, arena and weapon models, music tracks) resolve against a single
 asset root discovered at runtime (`FPSAssets::Resolve`), not against paths relative to the working directory.
 
+The arena also places a Blender-authored training kit from `Assets/Models/FPS/Kit/` (spawn pads, cover barriers,
+weapon racks, ammo crates and target dummies; source and provenance in `Art/Blender/SparkGameFPS/`).
+`asset-references.json` records every asset path the module source names.
+
+Under the headless (NullRHI) host the engine context exposes no `GraphicsEngine` or `InputManager`, so the renderable
+`Game` is not built. The module still simulates the authored arena (`Core/HeadlessArena.cpp`): it loads
+`Scenes/level1.scene` through the data-only `SceneManager` path, binds `RespawnSystem` and a Deathmatch `GameMode` to
+the scene's default spawns, ticks both on every `OnUpdate`, and at unload prints one
+`SPARK_FPS_HEADLESS_ARENA objects=N spawns=S bound=B mode_spawns=M ticks=T match=1` record. `OnLoad` fails when the
+scene or its default spawns cannot be loaded. The Linux CTest `FPSSinglePlayerSlice_HeadlessArenaLinux`
+(`cmake/RunSparkFPSHeadlessArena.cmake`) runs `SparkEngine -headless -game libSparkGameFPS.so -test-frames 8` on
+NullRHI and fails closed unless the record matches an independent parse of the staged scene, the host lifecycle
+records pass, and the arena ticked once per reported update. It exercises no player, combat or HUD path and is
+source-tree evidence, not package certification.
+
 The editor's **Spark Arena** panel exposes the same survival and class actions and shows the live player, round, wave,
 enemy, weapon, progression, time-scale, and engine-service state.
 
@@ -44,8 +59,9 @@ enemy, weapon, progression, time-scale, and engine-service state.
   (progression XP/level, class, weapon, kills/deaths/score, playtime, health, armor), reached through the engine
   context's `SaveSystem` and `World`. They print the real result, or `Save system unavailable...` when the engine
   context exposes neither service. `save_list` reads the same `SaveSystem`.
-- `net_host`, `net_connect`, `net_disconnect`, `net_status`, and `net_stats` exercise engine networking when enabled
-  (experimental; outside `stable-v1`).
+- `net_host`, `net_connect`, `net_disconnect`, `net_status`, and `net_stats` run the FPS multiplayer session when
+  networking is enabled (experimental; outside `stable-v1`). `FPSMultiplayerSystem` is the module's only network path:
+  the game ticks it each frame and sends the local player's WASD/look/fire input at a fixed 60 Hz.
 - The dev cheat commands (`god`, `noclip`) are excluded only when `SPARK_BUILD_SHIPPING` is defined, which today
   means the MinSizeRel configuration / the `windows-shipping` preset alone. A package built from the MSVC
   `Release` configuration still registers them — state which artifact a release actually ships before claiming
@@ -53,7 +69,22 @@ enemy, weapon, progression, time-scale, and engine-service state.
 
 Build the `SparkGameFPS` target. CPU-only regression coverage is part of `SparkTests`; filter for `FPSInteg_`,
 `FPSRespawn_`, `FPSLocalProfile_`, `FPSProgression_`, `FPSAssets_`, `FPSStateRules_`, `FPSComponentsReal_`, and
-`WeaponMechanicsReal_` when running the test executable directly (`FPSMultiplayer_` covers the experimental LAN path).
+`WeaponMechanicsReal_` when running the test executable directly. For the experimental LAN path, `FPSMultiplayer_`
+covers the snapshot/input wire encoding and `FPSMultiplayerProduction_` drives the real `FPSMultiplayerSystem` in one
+process: server input application, hit validation (a lag-compensated line-of-fire ray; damage reports also require a
+living attacker aiming at the victim, and every hit deals at most the weapon's server-owned damage), death, the respawn
+timer, scoreboard ordering, and client reconciliation after a real handshake. The system registers its handlers with
+`NetworkManager` on every host/connect: admission and disconnect/timeout spawn and remove players, clients send
+`FPSMessageType::PlayerInput` (the server drops malformed and over-rate inputs; `ApplyClientInput`, the one path from
+any input, including the listen-server host's, to authoritative state, rejects non-finite fields and replayed or zero
+sequences, clamps the axes and pitch, wraps yaw into [-pi, pi], and spawns at most one projectile per server-owned 0.1 s fire interval however often fire is held), and the server broadcasts one `FPSMessageType::StateSnapshot` batch (states plus scores) at 20 Hz that clients
+accept only when well-formed and newer. `FPSMultiplayerProduction_NetworkPath*` exchange real datagrams with a raw
+loopback peer on each side. `FPSLAN_ThreeProcessLoopbackConvergence` (CTest `FPSLANTwoClientConvergence`) runs one
+server and two independent client processes (`SparkFPSLANLoopbackPeer`, each with its own `NetworkManager`) over
+loopback UDP through a scripted spawn-move-kill-respawn-score round. It requires every client's spawn and respawn to
+match the server's and all three views to agree on positions, life, health and scores, and it requires the server to
+drop both players when their clients quit. This is unconstrained loopback on one machine: it does not yet cover the
+production encrypted transport, packet loss or latency, or separate hosts (`MOD-315`).
 
 ## SDK module boundary
 

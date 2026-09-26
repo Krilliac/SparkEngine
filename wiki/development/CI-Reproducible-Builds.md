@@ -76,6 +76,8 @@ cd ..
 
 There is also a `ci-linux-asan` CMake preset that bundles these flags if you prefer `cmake --preset ci-linux-asan`.
 
+The `--output-file` name above is only a local convenience. CI does not write `asan-ubsan-lsan-results.txt`. It runs the suite through `.github/scripts/run-sanitizer-tests.sh`, which writes `junit.xml`, `metadata.json`, `console.txt`, `report.txt` and `process-footer.txt` into `$SANITIZER_EVIDENCE_DIR`, and uploads that directory as `test-results-linux-asan`. The `module-evidence` job (RDY-010) downloads it to `build/module-evidence/sanitizer-asan/` and runs `verify-sanitizer-evidence.py verify-published` on it. `tools/module-evidence/validate_manifest.py` then consumes it as SparkGameFPS's required `sanitizer-report` evidence: the metadata must name the exact commit, carry an origin directory that matches that commit and its recorded run id/attempt, be a clean run with zero failures, and match the `junit.xml` digest; the `junit.xml` must record at least the 6900-testcase SparkTests floor (`SANITIZER_MIN_JUNIT_TESTCASES`, pinned by a test to the step's `--minimum-tests`); and at least one `FPSRespawn_*` production-source test must have executed and passed. Only the preceding `verify-published` step binds the directory to the current workflow run id and attempt, so keep it ahead of the consumer.
+
 ## Linux GCC ThreadSanitizer — Debug (job `build-linux-tsan`)
 
 ```bash
@@ -165,12 +167,149 @@ version agrees with the other recorded tools. This is provenance validation,
 not hosted reproducibility evidence: BLD-100 still requires two clean Windows
 Shipping builds and an externally verified comparison.
 
+### Shipping private symbols (BLD-100)
+
+`STRIP_DEBUG_SYMBOLS=ON` (both Shipping presets) keeps private symbols out of
+the runtime package. It no longer stops them from being produced:
+
+- **MSVC**: every image links with `/DEBUG` (objects already compile with
+  `/Z7`), so it carries a CodeView RSDS record, the PDB GUID and age that
+  identify its PDB. Outside Debug, `/PDBALTPATH:%_PDB%` records only the PDB
+  file name. `/OPT:REF` and `/OPT:ICF` are restated for every non-Debug
+  configuration, because `/DEBUG` alone would switch them off.
+- **ELF (GCC/Clang)**: every image links with `-Wl,--build-id=sha1`. With
+  `STRIP_DEBUG_SYMBOLS=ON`, every target compiles with `-g` (the static
+  libraries hold most shipped code), and each shipped image target gets
+  `cmake/SparkSplitDebugLink.cmake` as its C/C++ `LINKER_LAUNCHER`. It runs the
+  link, then writes `<image>.debug` (`objcopy --only-keep-debug`) and strips the
+  image with a `.gnu_debuglink`. It runs inside the link step, so the module
+  `.sparkabi` hash and every `POST_BUILD` copy see the stripped image. Every
+  other image (SparkTests, test probes) links outside Debug with `-g0` and
+  `--strip-all` and gets no `.debug`; under LTO, link-time `-g0` keeps the
+  LTRANS stage from generating debug info (checked with GCC 13). MinGW keeps
+  `-s`, and Apple has no strip step.
+
+The PDBs and `.debug` files of the shipped image targets
+(`SPARK_SHIPPED_IMAGE_TARGETS` in the root `CMakeLists.txt`) install only into
+the `symbols` component. `CPACK_COMPONENTS_ALL` leaves that component out, so no
+package carries symbols:
+
+```bash
+cmake --install <build> --component runtime --prefix stage     # also tools, samples
+cmake --install <build> --component symbols --prefix symbols-stage
+python3 tools/shipping_symbol_manifest.py --images stage \
+    --symbols symbols-stage/symbols --output shipping-symbol-manifest.json
+```
+
+The manifest tool uses only the standard library. It maps each ELF image by
+build-id, `.gnu_debuglink` name and CRC-32 to one DWARF `.debug` file, and each
+PE image by RSDS GUID and age to one PDB: the GUID comes from the PDB info
+stream and the age from the DBI stream. It writes a closed
+`spark.shipping-symbol-manifest/1` JSON and writes nothing (exit 1) when any of
+these hold:
+
+- an image has no build ID, or still has DWARF or `.symtab`;
+- an image has no matching symbol file, or more than one;
+- a debuglink name or CRC does not match;
+- an RSDS record holds a path instead of a bare PDB name;
+- a symbol file sits in the runtime tree;
+- a symbol file maps to no image.
+
+`build-windows-shipping` runs it over the staged runtime/tools/samples
+components and uploads the PDBs and manifest as the separate
+`shipping-symbols-<sha>` artifact. Symbol-server hosting belongs to OPS-100.
+
+CTests: `ShippingManifest_SymbolManifestTool` runs
+`Tests/Tools/test_shipping_symbol_manifest.py`. It builds real gcc fixtures
+through the production launcher, and clang/lld-link PE+PDB fixtures
+cross-checked with `llvm-readobj` and `llvm-pdbutil`. It also checks that
+`SPARK_SHIPPED_IMAGE_TARGETS` names every image target installed by an
+`install(TARGETS)` rule in the root, `Spark*/`, `GameModules/` and `cmake/`
+CMake files, and that no `CPACK_COMPONENTS_ALL` list (root or
+`cmake/SparkCPackOptions.cmake`) names the symbols component.
+`ShippingManifest_PrivateSymbols` is registered only in a `STRIP_DEBUG_SYMBOLS`
+ELF tree with tests enabled; it installs the runtime/tools/samples and symbols
+components to separate roots under `<build>/shipping-symbol-stage` and maps
+every installed image, so it needs every installed target built. The local
+linux-shipping evidence is with `ENABLE_LTO=OFF`; a full LTO (preset default)
+build with `-g`, and its disk, memory and time on hosted runners, has not been
+measured. MSVC PDB output under `/Brepro` and the hosted job have not yet been
+observed.
+
+### Build-output reproducibility (BLD-100)
+
+`cmake/SparkReproducibleBuild.cmake` maps both roots out of optimized GCC/Clang
+outputs: `-ffile-prefix-map=<source>/=` and then `-ffile-prefix-map=<build>=.`
+(the later map wins, so it also covers a build tree inside the source tree).
+Without the build-root map every DWARF `comp_dir` (each target's binary
+directory) carried the build path, so builds made in different directories
+differed in `.debug_info` and, through the GNU build-id, in the stripped image.
+Under GCC LTO the LTRANS units compile at link time, so GCC also gets both maps
+as link options, and every compile gets `-frandom-seed=<OBJECT>`: without a
+seed GCC names the LTO IR sections of an object from the clock and pid, so even
+two builds in one directory produced different static libraries.
+
+Known limit: GCC's LTO IR (the members of static libraries such as
+`libSparkAssetPipelineCore.a`) still records the build directory; no prefix map
+rewrites it. Those members differ between trees in different directories,
+although the linked images and `.debug` files are equivalent.
+
+`tools/compare_build_outputs.py` compares builds with the standard library only:
+
+```bash
+python3 tools/compare_build_outputs.py manifest <root> --output a.json   # one tree
+python3 tools/compare_build_outputs.py compare a.json b.json --report r.json
+python3 tools/compare_build_outputs.py trees <root-a> <root-b>           # both at once
+```
+
+The `spark.build-output-manifest/1` manifest lists every ELF, PE and `ar` file
+under the root: relative path, size, SHA-256, the identity (GNU build-id; COFF
+timestamp, RSDS GUID/age/PDB name and whether the image carries the `/Brepro`
+REPRO debug entry) and a SHA-256 per section or archive
+member. It holds no absolute path, so equivalent trees give byte-identical
+manifests. PDBs are not compared: the RSDS record in the image identifies them.
+The comparison exits 1 on any missing, extra or differing output and names the
+first differing section that is a cause (headers, the build-id note and the
+debuglink CRC only follow other changes). A PE image linked without `/Brepro`
+whose COFF timestamp differs is reported at `<pe-headers> (COFF timestamp)`:
+there the timestamp is the link time and the debug directory that repeats it
+is derived. Under `/Brepro` the timestamp is a content hash, so the content
+section is named instead. An empty or malformed tree exits 2.
+
+CTests (label `reproducibility`):
+
+- `ReproducibleBuild_CompareTool` runs `Tests/Tools/test_compare_build_outputs.py`
+  on gcc ELF, crafted PE and `ar` fixtures.
+- `ReproducibleBuild_LinuxToolTargets` (ELF trees with objcopy; `RUN_SERIAL`,
+  about 80 s) runs `compare_build_outputs.py two-tree`. It copies the source
+  tree (no `.git`, no `build/`) to `<build>/reproducible-build-trees/a/src` and
+  `.../tree-b/nested/src`, configures each with the linux-shipping settings
+  (MinSizeRel, LTO, `STRIP_DEBUG_SYMBOLS=ON`; `SPARK_STRICT_DEPS` stays OFF
+  because the copies have no `.git` for the third-party audit) and this tree's
+  compiler, with no compiler launcher and no `CFLAGS`/`CXXFLAGS`/`LDFLAGS`,
+  builds `SparkCooker`, and compares `bin/`: the stripped image and its
+  `.debug`. Before the build-root map both differed (`.debug_info`, and the
+  image's build-id). It has passed locally only with GCC 13.3. The inner
+  build uses the defaults (`ENABLE_LTO=ON`, the compiler's default standard
+  library), not the Clang lane's `ENABLE_LTO=OFF`/libc++ flags, and no hosted
+  GCC 14 or Clang lane has run it yet; one manual Clang two-tree run outside
+  the CTest was equivalent.
+
+The `reproducibility-windows` job checks the repository out twice (`a` and
+`tree-b/nested/src`), builds and installs the `windows-shipping` preset in each
+with no compiler cache, and compares the two install trees. It is job-level
+`continue-on-error` and not a `required-ci-gate` dependency until a hosted run
+shows equivalent trees, and it has not run yet. MSVC objects embed CodeView
+(`/Z7`) with absolute paths that `/d1trimfile` does not rewrite, so the static
+libraries in the SDK install may differ between the trees; the job reports
+that rather than hiding it.
+
 ## macOS (job `build-macos`, `continue-on-error`)
 
 ```bash
 cmake --preset macos-release
-cmake --build build --parallel $(sysctl -n hw.logicalcpu)
-cd build && ./bin/SparkTests && cd ..
+cmake --build build/macos-release --parallel $(sysctl -n hw.logicalcpu)
+./build/macos-release/bin/SparkTests
 ```
 
 ## MinGW + Wine (job `build-linux-mingw-wine`, `continue-on-error`)
@@ -179,8 +318,8 @@ Cross-compiles the Windows D3D11 code on Linux and runs it under Wine:
 
 ```bash
 cmake --preset linux-mingw-release
-cmake --build build --parallel $(nproc)
-tools/wine-run.sh build/bin/SparkTests.exe
+cmake --build build/linux-mingw-release --parallel $(nproc)
+tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
 ```
 
 See the project's MinGW/Wine setup notes for the full toolchain install (`tools/setup-mingw-wine.sh`).
@@ -219,13 +358,14 @@ This is a red control run and cannot qualify a release commit.
   - **Fixed a broken shell construct** in the ASan/TSan/MSan run lines: the source wrote `ENV=... cd build && ./bin/SparkTests` which applies the env var to `cd`, not to the test binary. Rewritten as `cd build` then the env-prefixed `./bin/SparkTests` run, matching how CI actually invokes it.
   - Aligned the LSan suppressions path to `../Tests/lsan_suppressions.txt` (relative to `build/`); verified `Tests/lsan_suppressions.txt` and `Tests/msan_ignorelist.txt` exist.
   - Removed the source's prior CTest-plus-`SparkTests` combo from the GCC/Clang jobs — CI runs `./bin/SparkTests` directly there; clarified where CTest actually runs (Windows/macOS matrix).
-  - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.).
+  - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.). Corrected 2026-09-24: CI's ASan evidence is the `run-sanitizer-tests.sh` directory (`junit.xml` + `metadata.json`), not a results `.txt` file.
   - Added the new `ci-linux-asan` / `ci-linux-tsan` presets as alternatives.
   - Noted MSan builds only the `SparkTests` target in CI; added `|| true` to match CI (2026-09-06: the recipe now builds the MSan-instrumented libc++ first and runs with `halt_on_error=1`, so the `|| true` was dropped again).
   - Added sccache/`continue-on-error` notes for the Windows jobs and the v145 VS 2026 variant.
   - Windows VS 2022 / VS 2026 recipes switched to Ninja Multi-Config + sccache (2026-09-06); the Visual Studio-generator configure now applies only to `build-windows-shipping`'s preset.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
+  - 2026-09-25: added build-output reproducibility (BLD-100): the build-root prefix map, the GCC LTO seed, `tools/compare_build_outputs.py`, the `ReproducibleBuild_*` CTests and the advisory `reproducibility-windows` job, measured locally with GCC 13.3.
 
 ## Related Pages
 

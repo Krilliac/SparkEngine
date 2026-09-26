@@ -142,11 +142,24 @@ Wine GUI (`WIN32`) applications often return exit code 255 instead of 0 when std
 
 `build-linux-mingw-wine` in `.github/workflows/build.yml`:
 
+- Display name **`build-linux-mingw-wine (experimental)`**: the lane is experimental, not a supported release lane.
 - **`if: github.event_name == 'workflow_dispatch'`** — the job runs **only on manual dispatch**, not on every push/PR. (This changed from the original entry, which described it as running on PRs.)
-- `continue-on-error: true` (non-blocking).
+- Job-level `continue-on-error: true` (non-blocking). It is not a `required-ci-gate` dependency and is absent from `EXPECTED_REQUIRED_JOBS_JSON`.
+- These four properties are locked by `test_mingw_wine_lane_is_manual_advisory_and_labeled_experimental` and its mutation test in `.github/scripts/test-workflow-failure-propagation.py`. The exact-source verifier (`.github/scripts/verify-exact-required-gate.py`) accepts the lane's `skipped` conclusion on push runs only because its committed `if:` is an allowlisted event-only guard that is false for `push`.
 - Installs MinGW, Wine, Mesa Lavapipe; cross-compiles with the MinGW toolchain.
 - Configures with `-DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF -DENABLE_SDL2=OFF` (matching the preset).
 - Sets up the Wine prefix via `tools/wine-run.sh --setup-only`, then runs `SparkTests.exe` under Wine.
+
+### Sample of Wine failures (hosted run 34983218822, 2026-09-15)
+
+Manual dispatch on PR branch `claude/stable-v1-release` at `3f427dd` (job 104483285541). Configure and the MinGW build (~49 min) succeeded, and the Wine prefix/DXVK setup succeeded. **`Run Tests under Wine` failed**. `extract-errors.sh` counted 32 test failures, and the run ended at a crash. The table below is a partial sample of two of them, not the full list; the job uploads its complete per-test output (`wine-test-results.txt`) as the `mingw-wine-test-results` artifact, kept for the workflow's artifact retention period:
+
+| Test | Result under Wine | Cause observed in the log |
+|------|-------------------|---------------------------|
+| `CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot` | FAIL at `Tests/TestCrashHandlerGatingReal.cpp:283` (at `3f427dd`), 0 artifacts instead of 1 | `CrashHandler: failed to create private crash-artifact directory; filesystem artifacts disabled`; root cause under Wine not yet diagnosed |
+| `AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat` | CRASH (`ACCESS_VIOLATION`), aborting the run | Wine FAudio `FAudio_PlatformGetDeviceDetails` dereferences a missing device: the runner has no ALSA card (`cannot find card '0'`) |
+
+Only the FAudio crash is attributed to the runner environment (no ALSA sound card). The `CrashHandler` failure is undiagnosed and may be a product defect in the crash-artifact directory path under Windows-like hosts; do not treat it as a Wine quirk until it is reproduced and explained. The other 30 failures were not triaged here. None of them are excluded via `SPARK_TEST_EXCLUDE`, and investigating them needs a MinGW + Wine host.
 
 ## Notes
 
@@ -160,6 +173,7 @@ Wine GUI (`WIN32`) applications often return exit code 255 instead of 0 when std
 - **Verified against codebase 2026-06-08.**
 - **VERIFIED present:** `cmake/toolchains/mingw-w64-x86_64.cmake`, `tools/wine-run.sh`, `tools/test-windows-wine.py`, `tools/setup-mingw-wine.sh`. Presets `linux-mingw-release` / `linux-mingw-debug` exist in `CMakePresets.json` and disable Vulkan/OpenGL/SDL2 as documented.
 - **UPDATED — CI trigger:** `build-linux-mingw-wine` now runs **only on `workflow_dispatch`** (manual), not on every PR. The original entry implied it ran on PRs. Confirmed it still uses `continue-on-error: true` and `-DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF -DENABLE_SDL2=OFF`.
+- **UPDATED 2026-09-24 (CI-100):** the job is now named `build-linux-mingw-wine (experimental)` and declares job-level `continue-on-error: true`. Before this, the docs claimed `continue-on-error` but build.yml did not set it. The sampled Wine failures were read from the job 104483285541 log.
 - **UPDATED — build directory:** corrected build/run commands to use the preset's per-preset `build/linux-mingw-release` directory.
 - **FLAGGED — STALE counts:** the 2,509 unit-test figure is a 2026-03-29 snapshot; the suite now exceeds 6,000 tests. Test-results table marked historical.
 

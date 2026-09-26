@@ -56,12 +56,17 @@ namespace Racing
     /// Compute normalized steering toward the next authored track waypoint.
     float ComputeTrackSteer(const VehicleInstance& vehicle, const RacingTrackSystem& trackSystem);
 
-    /// Neutralize and stop a finished or DNF racer's vehicle while other racers continue.
+    /// Park a finished or DNF racer's vehicle (out of the physics world) while other racers continue.
     bool StopTerminalRacer(const RacingRaceManager& raceManager, RacingVehicleSystem& vehicleSystem,
                            uint32_t vehicleId);
 
-    /// Rebuild the player + AI roster on the current track's starting grid and begin the countdown.
-    void SetupRaceRoster(const RaceSimulation& sim, Spark::IEngineContext* context);
+    /// Fastest speed (km/h) from which the vehicle can still brake for every corner within its braking horizon
+    /// on the authored centerline (circumradius of centerline samples against a fixed usable lateral grip).
+    float ComputeCornerSpeedLimit(const VehicleInstance& vehicle, const RacingTrackSystem& trackSystem);
+
+    /// Rebuild the player + AI roster as Jolt vehicles on the current track's starting grid and begin the
+    /// countdown. Returns false when the vehicle system has no live physics world or a chassis cannot be built.
+    bool SetupRaceRoster(const RaceSimulation& sim, Spark::IEngineContext* context);
 
     /// Advance one variable-rate race frame: race clock, track progress/checkpoints, AI, and driving inputs.
     /// @param playerInput Player controls for this frame, or nullptr when no input device is available.
