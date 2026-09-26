@@ -5,8 +5,9 @@
  * Every test binds the module's systems to a real engine PhysicsSystem (RacingPhysicsTestWorld), builds the
  * module's own roster with SetupRaceRoster(), and advances it with StepRaceFrame() +
  * RacingVehicleSystem::FixedUpdate() -- the same calls SparkGameRacingModule::OnUpdate/OnFixedUpdate make, one
- * shared-world physics tick per 60 Hz frame -- so the cars, the track colliders they drive on, lap validation,
- * AI driving, standings, and results are exercised end to end.
+ * shared-world physics tick per 60 Hz frame -- so the cars, the track colliders they drive on, the barrier walls
+ * that keep them on the circuit, lap validation through the Jolt checkpoint sensor gates, AI driving, standings,
+ * and results are exercised end to end.
  */
 
 #include "TestFramework.h"
@@ -206,7 +207,7 @@ TEST(RacingCompleteRace_CuttingTheInfieldDoesNotCompleteALap)
         cut.throttle = 1.0f;
         cut.steer = SteerToward(*rig.vehicles.GetPlayerVehicle(), finish.x, finish.z);
         rig.Frame(cut);
-        reachedFinishLine = DistanceTo(*rig.vehicles.GetPlayerVehicle(), finish.x, finish.z) < finish.radius * 0.5f;
+        reachedFinishLine = DistanceTo(*rig.vehicles.GetPlayerVehicle(), finish.x, finish.z) < 8.0f;
     }
     ASSERT_TRUE(reachedFinishLine);
     EXPECT_EQ(rig.race.GetRacer(playerId)->currentLap, 0u);
@@ -324,6 +325,89 @@ TEST(RacingCompleteRace_FinishedRacersLeaveThePhysicsWorld)
         rig.Frame(rig.Autopilot());
     EXPECT_NEAR(rig.vehicles.GetPlayerVehicle()->positionX, parked.positionX, 1.0e-4f);
     EXPECT_NEAR(rig.vehicles.GetPlayerVehicle()->positionZ, parked.positionZ, 1.0e-4f);
+}
+
+TEST(RacingCompleteRace_BarrierStopsCarLeavingTrack)
+{
+    RaceRig rig(0);
+    ASSERT_TRUE(rig.ready);
+    EXPECT_GT(rig.track.GetBarrierCount(), static_cast<size_t>(0));
+    const float roadHalfWidth = rig.track.GetCurrentTrack().waypoints[0].width;
+    const float barrierLine = roadHalfWidth + RacingTrackSystem::kBarrierClearance;
+
+    // Full throttle with the wheel held straight: the circuit bends away under the car, so it runs wide off the
+    // outside of the bend. The outside barrier must catch it -- its center never gets further off the centerline
+    // than the barrier's inner face plus the chassis half-width and a little contact slop.
+    while (rig.race.GetState() != RaceState::Racing)
+        rig.Frame({});
+    PlayerDriveInput straight;
+    straight.throttle = 1.0f;
+    const uint32_t playerId = rig.vehicles.GetPlayerVehicle()->id;
+    float widest = 0.0f;
+    float speedRunningWide = -1.0f; // km/h as the car crosses the middle of the road half heading for the edge
+    for (int frame = 0; frame < 60 * 12; ++frame)
+    {
+        rig.Frame(straight);
+        const VehicleInstance& player = *rig.vehicles.GetVehicle(playerId);
+        const float lateral = rig.track.ProjectOntoTrack(player.positionX, player.positionZ).lateralDistance;
+        widest = std::max(widest, lateral);
+        if (speedRunningWide < 0.0f && lateral > roadHalfWidth * 0.5f)
+            speedRunningWide = player.speed;
+        EXPECT_LT(lateral, barrierLine + 1.5f);
+    }
+    EXPECT_GT(widest, roadHalfWidth); // it did leave the road and reach the barrier
+    EXPECT_GT(speedRunningWide, 40.0f);
+    std::printf("barrier: ran wide at %.1f km/h, widest %.2f m off the centerline (barrier face at %.2f m)\n",
+                speedRunningWide, widest, barrierLine);
+}
+
+TEST(RacingCompleteRace_CheckpointSensorOrderStillRejectsInfieldCut)
+{
+    RaceRig rig(0);
+    ASSERT_TRUE(rig.ready);
+    const TrackData& circuit = rig.track.GetCurrentTrack();
+    ASSERT_EQ(circuit.checkpoints.size(), static_cast<size_t>(4));
+    EXPECT_EQ(rig.track.GetCheckpointGateCount(), circuit.checkpoints.size());
+    const Checkpoint& finish = circuit.checkpoints[0];
+    const Checkpoint& first = circuit.checkpoints[1];
+    const uint32_t playerId = rig.vehicles.GetPlayerVehicle()->id;
+
+    // Checkpoint 1 sits on the top of the ellipse, where the racing line runs toward -X. The crossing registers
+    // when the chassis reaches the gate's sensor box (kGateDepth deep), not anywhere inside a wide trigger radius.
+    float t = 0.0f;
+    while (t < 60.0f && rig.race.GetRacer(playerId)->lastCheckpoint != first.index)
+    {
+        rig.Frame(rig.Autopilot());
+        t += kFrameDt;
+    }
+    ASSERT_EQ(rig.race.GetRacer(playerId)->lastCheckpoint, first.index);
+    const float approach = -(rig.vehicles.GetPlayerVehicle()->positionX - first.x); // + once past the gate plane
+    EXPECT_GT(approach, -(RacingTrackSystem::kGateDepth * 0.5f + 2.1f + 2.0f));
+    EXPECT_LT(approach, 3.0f);
+
+    // Cut straight across the infield and through the finish gate from the inside, skipping checkpoints 2 and 3.
+    bool throughFinishGate = false;
+    for (int frame = 0; frame < 60 * 60 && !throughFinishGate; ++frame)
+    {
+        PlayerDriveInput cut;
+        cut.throttle = 1.0f;
+        cut.steer = SteerToward(*rig.vehicles.GetPlayerVehicle(), finish.x, finish.z);
+        rig.Frame(cut);
+        throughFinishGate = DistanceTo(*rig.vehicles.GetPlayerVehicle(), finish.x, finish.z) < 3.0f;
+    }
+    ASSERT_TRUE(throughFinishGate);
+    for (int frame = 0; frame < 30; ++frame)
+        rig.Frame(rig.Autopilot());
+    EXPECT_EQ(rig.race.GetRacer(playerId)->currentLap, 0u);
+    EXPECT_EQ(rig.race.GetRacer(playerId)->lastCheckpoint, first.index);
+
+    // Driving on around the circuit passes gates 1 (again, ignored), 2, and 3 in order, and the next pass through
+    // the finish gate completes exactly one lap.
+    for (t = 0.0f; t < 120.0f && rig.race.GetRacer(playerId)->currentLap == 0u; t += kFrameDt)
+        rig.Frame(rig.Autopilot());
+    EXPECT_EQ(rig.race.GetRacer(playerId)->currentLap, 1u);
+    EXPECT_EQ(rig.race.GetRacer(playerId)->lapTimes.size(), static_cast<size_t>(1));
+    EXPECT_EQ(rig.race.GetRacer(playerId)->lastCheckpoint, finish.index);
 }
 
 #endif // SPARK_TEST_HAS_IMGUI && SPARK_TEST_HAS_PHYSICS

@@ -1631,7 +1631,7 @@
             "GameModules/SparkGameRacing/Source/Track/RacingTrackColliders.cpp",
             "Tests/TestMOD380RacingCompleteRaceReal.cpp"
           ],
-          "note": "Every racer is a Jolt chassis with a VehicleConstraint from the engine PhysicsSystem, driving on per-track static road colliders; the module is the process's single StepFixed owner, one tick per engine fixed step, and the kinematic path is gone. Local RacingCompleteRace_* runs pass; no exact-commit CI evidence yet."
+          "note": "Each racer is a Jolt chassis with a VehicleConstraint from the engine PhysicsSystem on static road colliders, with barrier walls outside the bends; laps count from Jolt sensor-gate contacts at each checkpoint. The module is the single StepFixed owner, one tick per fixed step; the kinematic path is gone. Local RacingCompleteRace_* runs pass; no exact-commit CI evidence yet."
         },
         {
           "criterionDigest": "sha256:6a35b45838fc",

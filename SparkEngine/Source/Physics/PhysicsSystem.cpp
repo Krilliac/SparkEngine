@@ -710,7 +710,13 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
         {
             PhysicsBody* first = (bodyA < bodyB) ? bodyA : bodyB;
             PhysicsBody* second = (bodyA < bodyB) ? bodyB : bodyA;
-            outTriggerPairs.push_back({first, second});
+
+            // A multi-tick StepFixed() drains both the add and the persist report of one overlap (and a compound
+            // shape reports one manifold per sub-shape): record each pair once so it enters and exits once.
+            const std::pair<PhysicsBody*, PhysicsBody*> pair{first, second};
+            if (std::find(outTriggerPairs.begin(), outTriggerPairs.end(), pair) != outTriggerPairs.end())
+                continue;
+            outTriggerPairs.push_back(pair);
 
             if (m_triggerCallback)
             {

@@ -77,13 +77,22 @@ namespace Racing
             sim.vehicles.SetVehiclePose(vehicle.id, pose);
         }
 
-        /// Surfaces, hazards, progress distance, ordered checkpoints, standings, and rubber-banding.
+        /// Ordered checkpoint gate crossings, surfaces, hazards, progress distance, standings, and rubber-banding.
         void SyncRaceProgress(const RaceSimulation& sim)
         {
             const TrackData& currentTrack = sim.track.GetCurrentTrack();
             const size_t waypointCount = currentTrack.waypoints.size();
             if (waypointCount == 0)
                 return;
+
+            // Checkpoint gate entries the Jolt sensors reported during the physics ticks since the last frame, in
+            // step order. Order validation rejects skipped or repeated gates, and finished or retired racers.
+            for (const CheckpointCrossing& crossing : sim.track.TakeCheckpointCrossings())
+            {
+                const VehicleInstance* vehicle = sim.vehicles.GetVehicle(crossing.vehicleId);
+                if (vehicle && vehicle->isActive)
+                    ProcessOrderedCheckpoint(sim.race, currentTrack, crossing.vehicleId, crossing.checkpointIndex);
+            }
 
             float playerDistance = 0.0f;
             float leadDistance = 0.0f;
@@ -137,10 +146,6 @@ namespace Racing
                     playerDistance = progressDistance;
                     hasPlayer = true;
                 }
-
-                const int checkpoint = sim.track.CheckCheckpoint(vehicle.positionX, vehicle.positionZ);
-                if (checkpoint >= 0)
-                    ProcessOrderedCheckpoint(sim.race, currentTrack, vehicle.id, static_cast<uint32_t>(checkpoint));
             }
 
             if (!hasPlayer)
@@ -326,6 +331,7 @@ namespace Racing
         sim.race.Initialize(context);
         sim.ai.Shutdown();
         sim.ai.Initialize(context);
+        sim.track.TakeCheckpointCrossings(); // gate entries from the previous race must not count in this one
         if (!sim.vehicles.Initialize(context))
             return false;
 

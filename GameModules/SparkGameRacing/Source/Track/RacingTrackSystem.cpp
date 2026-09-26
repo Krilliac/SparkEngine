@@ -89,20 +89,6 @@ namespace Racing
         return projection.t < 0.5f ? from.surface : to.surface;
     }
 
-    int RacingTrackSystem::CheckCheckpoint(float x, float z) const
-    {
-        for (size_t i = 0; i < m_currentTrack.checkpoints.size(); ++i)
-        {
-            const auto& cp = m_currentTrack.checkpoints[i];
-            float dx = x - cp.x;
-            float dz = z - cp.z;
-            float distSq = dx * dx + dz * dz;
-            if (distSq < cp.radius * cp.radius)
-                return static_cast<int>(i);
-        }
-        return -1;
-    }
-
     int RacingTrackSystem::CheckHazard(float x, float z) const
     {
         for (size_t i = 0; i < m_currentTrack.hazards.size(); ++i)
@@ -269,8 +255,8 @@ namespace Racing
         // Meters, pivot at the ground-contact centre, front facing +Z (source Art/Blender/SparkGameRacing/
         // racing_kit.blend). Each prop is posed against the centerline segment under it: yaw 0 faces the driving
         // direction, yawOffset turns it from there, and localX offsets run across the prop's own width. The props
-        // are set dressing only: checkpoints stay trigger circles and no collider is attached. The OBJ/MTL base
-        // colours render without a material.
+        // are set dressing only: the checkpoint sensor gates and the barrier walls are generated Jolt bodies
+        // (BuildTrackColliders), and no prop carries a collider. The OBJ/MTL base colours render without a material.
         constexpr float kFaceTraffic = 3.14159265f; // gates face oncoming cars
         constexpr float kAlongTraffic = kFaceTraffic / 2.0f;
         auto place = [&](const char* name, const char* meshPath, float x, float z, float localX, float yawOffset)
@@ -403,8 +389,8 @@ namespace Racing
             Checkpoint cp{};
             cp.index = static_cast<uint32_t>(i);
             cp.x = track.waypoints[wpIdx].x;
+            cp.y = track.waypoints[wpIdx].y;
             cp.z = track.waypoints[wpIdx].z;
-            cp.radius = 20.0f;
             cp.isFinishLine = (i == 0);
             track.checkpoints.push_back(cp);
         }
@@ -466,8 +452,8 @@ namespace Racing
             Checkpoint cp{};
             cp.index = i;
             cp.x = track.waypoints[wpIdx].x;
+            cp.y = track.waypoints[wpIdx].y;
             cp.z = track.waypoints[wpIdx].z;
-            cp.radius = 18.0f;
             cp.isFinishLine = (i == 2);
             track.checkpoints.push_back(cp);
         }
@@ -505,7 +491,6 @@ namespace Racing
         cpCenter.index = 0;
         cpCenter.x = 0.0f;
         cpCenter.z = 0.0f;
-        cpCenter.radius = 15.0f;
         cpCenter.isFinishLine = true;
         track.checkpoints.push_back(cpCenter);
 
@@ -513,14 +498,12 @@ namespace Racing
         cpLeft.index = 1;
         cpLeft.x = -halfLength;
         cpLeft.z = 0.0f;
-        cpLeft.radius = 15.0f;
         track.checkpoints.push_back(cpLeft);
 
         Checkpoint cpRight{};
         cpRight.index = 2;
         cpRight.x = halfLength;
         cpRight.z = 0.0f;
-        cpRight.radius = 15.0f;
         track.checkpoints.push_back(cpRight);
 
         // Barrier at the crossing point

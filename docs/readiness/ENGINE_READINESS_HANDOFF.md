@@ -4069,7 +4069,7 @@ Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
    - Player and AI finish valid laps in-process, but no packaged race run exists.
 2. **[implemented]** Physics uses the shared runtime and timestep
    - Evidence: `GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp`, `GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleChassis.cpp`, `GameModules/SparkGameRacing/Source/Track/RacingTrackColliders.cpp`, `Tests/TestMOD380RacingCompleteRaceReal.cpp`
-   - Every racer is a Jolt chassis with a VehicleConstraint from the engine PhysicsSystem, driving on per-track static road colliders; the module is the process's single StepFixed owner, one tick per engine fixed step, and the kinematic path is gone. Local RacingCompleteRace_* runs pass; no exact-commit CI evidence yet.
+   - Each racer is a Jolt chassis with a VehicleConstraint from the engine PhysicsSystem on static road colliders, with barrier walls outside the bends; laps count from Jolt sensor-gate contacts at each checkpoint. The module is the single StepFixed owner, one tick per fixed step; the kinematic path is gone. Local RacingCompleteRace_* runs pass; no exact-commit CI evidence yet.
 3. **[unmet]** Results/restart and declared ghost state persist
    - Evidence: `Tests/TestMOD380RacingCompleteRaceReal.cpp`
    - Restart after results is tested in memory only. No results or ghost persistence test exists.
