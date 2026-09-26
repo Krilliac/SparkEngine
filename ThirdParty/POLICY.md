@@ -154,6 +154,22 @@ Sentinel files are additionally rejected if they are hardlinked or if they
 resolve outside the repository root. The walk is bounded in depth and entry
 count and never descends through a rejected entry.
 
+Submodules are identified by their mode-160000 gitlink in the superproject
+index, which exists whether or not the submodule is initialized, so the
+verdict must not depend on `git submodule update`. Inside an initialized
+submodule whose gitlink matches the lock, one narrow allowance applies: a true
+symbolic link (never a junction or other reparse point) is accepted only if
+the *locked* upstream commit tracks it at that exact path as mode 120000, its
+on-disk target equals the tracked target, the target is relative, and it
+resolves to an existing path inside the submodule root. Untracked links, links
+added off the pin, retargeted, absolute, dangling, or escaping links, and every
+link in the superproject are still rejected. Accepted links are never
+descended into. The locked tree is read with `git --no-replace-objects`, so a
+`refs/replace/*` entry in the submodule's object store cannot substitute a
+forged tree for the pin. On Windows, the `\` separators Git for Windows writes
+into on-disk link targets are mapped back to git's `/` form before the target
+is compared with the tracked blob.
+
 Container declarations must be pairwise disjoint across
 `managed_vendored_dirs`, `project_owned_dirs`, and `submodule_gitlinks`; no
 container may be nested inside another; and case-variant aliases are rejected,

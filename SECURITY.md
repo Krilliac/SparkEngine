@@ -163,7 +163,10 @@ and enforced by `tools/check-supply-chain.py` in the required
   blob, and size checks; gitlink SHAs reconcile bidirectionally with
   `.gitmodules`.
 - **Link hygiene:** symbolic links, Windows reparse points, hardlinked
-  sentinels, and containment escapes are rejected.
+  sentinels, and containment escapes are rejected. The only exception is a
+  relative symlink that the locked commit of an initialized submodule itself
+  tracks and that resolves inside that submodule, so the verdict is the same
+  with or without submodules initialized.
 - **Structured action pinning:** workflow and composite-action YAML is parsed,
   not line-scanned. External actions must be lockfile-authorized full-SHA pins,
   Docker actions must be digest-pinned, and local actions must resolve to

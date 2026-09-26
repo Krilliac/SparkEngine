@@ -103,6 +103,7 @@ SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_\-./]+$")
 GIT_FILE_MODES = frozenset({"100644", "100755"})
 GIT_SYMLINK_MODE = "120000"
 GIT_GITLINK_MODE = "160000"
+SYMLINK_REJECTED = "symbolic link rejected"
 
 ACTION_REF_RE = re.compile(
     r"^(?P<repo>[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+)"
@@ -364,7 +365,7 @@ def link_reason(path: Path) -> str | None:
     except OSError as e:
         return f"cannot lstat path: {e}"
     if stat.S_ISLNK(st.st_mode):
-        return "symbolic link rejected"
+        return SYMLINK_REJECTED
     attributes = getattr(st, "st_file_attributes", 0)
     reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
     if reparse_flag and (attributes & reparse_flag):
@@ -373,12 +374,164 @@ def link_reason(path: Path) -> str | None:
     return None
 
 
-def check_link_hygiene(root: Path, result: CheckResult) -> None:
+def verified_submodule_gitlinks(
+    lockfile: dict[str, Any], tracked: list[TrackedEntry]
+) -> dict[str, str]:
+    """Submodules whose superproject gitlink matches the lockfile exactly.
+
+    A submodule's identity is its mode-160000 gitlink, which is present in the
+    superproject index whether or not the submodule is initialized.  Only a
+    gitlink that agrees with the lock earns the in-submodule link allowance in
+    check_link_hygiene; any disagreement is reported by check_tracked_inventory.
+    """
+    locked = lockfile["submodule_gitlinks"]
+    return {
+        entry.path: entry.blob
+        for entry in tracked
+        if entry.mode == GIT_GITLINK_MODE and locked.get(entry.path) == entry.blob
+    }
+
+
+def _git_object_id(kind: str, payload: bytes, hex_length: int) -> str:
+    """Object id git assigns to `payload`, in the repository's hash algorithm."""
+    algorithm = "sha1" if hex_length == 40 else "sha256"
+    header = f"{kind} {len(payload)}\0".encode("ascii")
+    return hashlib.new(algorithm, header + payload).hexdigest()
+
+
+def _submodule_locked_links(
+    root: Path, submodule_rel: str, locked_sha: str
+) -> tuple[dict[str, str], str | None]:
+    """Mode-120000 entries of the submodule's LOCKED commit, as {path: blob}.
+
+    The allowance is derived from the pinned commit, never from the
+    submodule's mutable index or checked-out HEAD, so a link added locally or
+    by moving the submodule off its pin is not accepted.  Returns the map and
+    an error string when the locked tree cannot be read.
+    """
+    sub_dir = root / submodule_rel
+    try:
+        toplevel = Path(git_cmd(["rev-parse", "--show-toplevel"], sub_dir)).resolve()
+    except RuntimeError as e:
+        return {}, f"cannot identify submodule repository: {e}"
+    if toplevel != sub_dir.resolve():
+        # git fell through to an enclosing repository: the submodule is not
+        # an initialized repository of its own, so nothing vouches for links.
+        return {}, "submodule directory is not its own git repository"
+    try:
+        # --no-replace-objects: a refs/replace/* entry in the submodule's own
+        # object store could otherwise substitute a forged tree for the pin.
+        raw = _git_raw(
+            ["--no-replace-objects", "-c", "core.quotePath=false", "ls-tree",
+             "-r", "-z", "--full-tree", locked_sha],
+            sub_dir,
+        )
+    except RuntimeError as e:
+        return {}, f"cannot read locked submodule tree {locked_sha}: {e}"
+
+    records = _split_nul(raw)
+    if len(records) > MAX_TRACKED_PATHS:
+        return {}, (
+            f"locked submodule tree has {len(records)} entries, exceeding "
+            f"MAX_TRACKED_PATHS ({MAX_TRACKED_PATHS})"
+        )
+    links: dict[str, str] = {}
+    for record in records:
+        meta, _, path = record.partition("\t")
+        parts = meta.split()
+        if not path or len(parts) != 3:
+            return {}, f"unparseable git ls-tree record: {record!r}"
+        if parts[0] == GIT_SYMLINK_MODE:
+            links[path] = parts[2]
+    return links, None
+
+
+def _git_link_target(on_disk_target: str, separator: str) -> str:
+    """The link target as git stores it in the mode-120000 blob.
+
+    Git always records '/' separators; Git for Windows (core.symlinks=true)
+    writes the on-disk link with '\\' instead, so readlink must be mapped back
+    before the blob comparison or every legitimate tracked link would fail.
+    """
+    if separator == "\\":
+        return on_disk_target.replace("\\", "/")
+    return on_disk_target
+
+
+def _submodule_link_violation(
+    link_path: Path,
+    rel_in_submodule: str,
+    submodule_root: Path,
+    locked_links: dict[str, str],
+    tree_error: str | None,
+) -> str | None:
+    """Why a symlink inside an initialized submodule is rejected, or None.
+
+    Accepted only when all hold: it is a true symbolic link (never a junction
+    or other reparse point), the locked submodule commit tracks it at this
+    exact path as mode 120000, its on-disk target is the tracked target, and
+    that target resolves to an existing path inside the submodule root.
+    """
+    if tree_error:
+        return f"symbolic link rejected — {tree_error}"
+    expected_blob = locked_links.get(rel_in_submodule)
+    if expected_blob is None:
+        return (
+            "symbolic link rejected — not tracked as a symlink in the locked "
+            "submodule commit"
+        )
+    try:
+        target = _git_link_target(os.readlink(link_path), os.sep)
+    except OSError as e:
+        return f"symbolic link rejected — cannot read link target: {e}"
+    actual_blob = _git_object_id(
+        "blob", os.fsencode(target), len(expected_blob)
+    )
+    if actual_blob != expected_blob:
+        return (
+            "symbolic link rejected — on-disk target differs from the locked "
+            "submodule commit"
+        )
+    # splitdrive catches Windows drive-relative targets such as "C:foo",
+    # which isabs reports as relative.
+    if (os.path.isabs(target) or os.path.splitdrive(target)[0]
+            or target.startswith(("/", "\\"))):
+        return "symbolic link rejected — absolute target"
+    lexical = os.path.normpath(os.path.join(os.path.dirname(link_path), target))
+    root_text = os.path.normpath(str(submodule_root))
+    try:
+        escapes = os.path.commonpath([root_text, lexical]) != root_text
+    except ValueError:
+        # Different drives (Windows) or a mix of absolute and relative paths.
+        escapes = True
+    if escapes:
+        return "symbolic link rejected — target escapes the submodule root"
+    try:
+        resolved = link_path.resolve(strict=True)
+        resolved.relative_to(submodule_root.resolve(strict=True))
+    except (OSError, RuntimeError):
+        return "symbolic link rejected — target does not resolve"
+    except ValueError:
+        return "symbolic link rejected — target escapes the submodule root"
+    return None
+
+
+def check_link_hygiene(
+    root: Path, result: CheckResult, submodules: dict[str, str]
+) -> None:
     """Reject any symlink or reparse point anywhere under ThirdParty/.
 
     A junction redirects a whole managed directory at content-read time while
     every tracked-path check still sees the in-repo name.  The walk is bounded
     in depth and entry count and never descends through a rejected entry.
+
+    `submodules` maps each verified submodule path to its locked commit.  Its
+    content is pinned by that gitlink, so an uninitialized submodule is simply
+    an empty directory here.  When it IS initialized, the only links accepted
+    are the ones the locked upstream commit itself tracks and that stay inside
+    the submodule; see _submodule_link_violation.  Initializing a submodule at
+    its pin therefore cannot change the verdict, while an untracked link, a
+    retargeted link, an escaping link, and any junction still fail.
     """
     base = root / AUTHORITATIVE_ROOT
     if not base.is_dir():
@@ -392,9 +545,13 @@ def check_link_hygiene(root: Path, result: CheckResult) -> None:
         return
 
     seen = 0
-    stack: list[tuple[Path, str, int]] = [(base, AUTHORITATIVE_ROOT, 0)]
+    link_trees: dict[str, tuple[dict[str, str], str | None]] = {}
+    # Each stack frame carries the submodule it is inside (or None).
+    stack: list[tuple[Path, str, int, str | None]] = [
+        (base, AUTHORITATIVE_ROOT, 0, None)
+    ]
     while stack:
-        current, current_rel, depth = stack.pop()
+        current, current_rel, depth, submodule = stack.pop()
         if depth >= MAX_WALK_DEPTH:
             result.error(
                 "bounds", current_rel,
@@ -416,6 +573,23 @@ def check_link_hygiene(root: Path, result: CheckResult) -> None:
                 )
             rel = f"{current_rel}/{entry.name}"
             reason = link_reason(Path(entry.path))
+            if reason and submodule is not None and reason == SYMLINK_REJECTED:
+                if submodule not in link_trees:
+                    link_trees[submodule] = _submodule_locked_links(
+                        root, submodule, submodules[submodule]
+                    )
+                locked_links, tree_error = link_trees[submodule]
+                reason = _submodule_link_violation(
+                    Path(entry.path),
+                    rel[len(submodule) + 1:],
+                    root / submodule,
+                    locked_links,
+                    tree_error,
+                )
+                if reason is None:
+                    # Accepted link: never descended, so its target is only
+                    # ever reached under its own in-submodule path.
+                    continue
             if reason:
                 result.error("link", rel, reason)
                 continue
@@ -427,7 +601,8 @@ def check_link_hygiene(root: Path, result: CheckResult) -> None:
                 result.error("inventory", rel, f"cannot stat entry: {e}")
                 continue
             if is_dir:
-                stack.append((Path(entry.path), rel, depth + 1))
+                inner = rel if submodule is None and rel in submodules else submodule
+                stack.append((Path(entry.path), rel, depth + 1, inner))
 
 
 # ── Path safety ───────────────────────────────────────────────────────
@@ -2202,8 +2377,8 @@ def run_all_checks(
     check_exception_expiry(lockfile, result)
     check_container_model(lockfile, result)
     check_allowed_root_files(lockfile, result)
-    check_link_hygiene(root, result)
     tracked = git_tracked_thirdparty(root)
+    check_link_hygiene(root, result, verified_submodule_gitlinks(lockfile, tracked))
     assigned = check_tracked_inventory(root, lockfile, tracked, result)
     check_tree_digests(lockfile, assigned, result)
     check_sentinel_files(root, root_resolved, lockfile, result)

@@ -504,6 +504,311 @@ class TestLinkHygiene(FakeRepoCase):
         self.assertIsNone(sc.link_reason(self.repo / "ThirdParty/Utils/demo/demo.h"))
 
 
+SUBMODULE_REL = "ThirdParty/Sub/dep"
+SUBMODULE_URL = "https://example.invalid/dep.git"
+SUBMODULE_NOTICE_REL = "ThirdParty/Local/dep-LICENSE.txt"
+FIXTURE_GIT_IDENTITY = (
+    "-c", "user.email=fixture@example.invalid",
+    "-c", "user.name=Supply Chain Fixture",
+    "-c", "commit.gpgsign=false",
+)
+
+
+def _symlinks_or_skip(probe_dir: Path) -> None:
+    """Symlink-dependent fixtures need real links; CI must provide them."""
+    probe = probe_dir / "symlink-probe"
+    try:
+        os.symlink("target", str(probe))
+    except (OSError, NotImplementedError) as exc:
+        if IN_CI:
+            raise AssertionError(f"symlink creation must work in CI: {exc}") from exc
+        raise unittest.SkipTest(f"symlink creation unavailable: {exc}")
+    probe.unlink()
+
+
+class _SubmoduleBaseline:
+    """The passing baseline plus an initialized submodule that tracks symlinks.
+
+    The upstream tracks a file link and a directory link whose targets stay
+    inside the submodule, which is exactly the shape of SDL2's
+    android-project-ant links that made the gate's verdict depend on whether
+    submodules were initialized.
+    """
+
+    path: Path | None = None
+    _holder: tempfile.TemporaryDirectory | None = None
+
+    @classmethod
+    def get(cls) -> Path:
+        if cls.path is None:
+            cls._holder = tempfile.TemporaryDirectory(prefix="spark-sc-submodule-")
+            cls.path = cls._build(Path(cls._holder.name))
+        return cls.path
+
+    @staticmethod
+    def _git(git: str, cwd: Path, *args: str) -> str:
+        done = subprocess.run(
+            [git, *FIXTURE_GIT_IDENTITY, "-c", "protocol.file.allow=always", *args],
+            cwd=str(cwd), capture_output=True, text=True, timeout=120,
+        )
+        if done.returncode != 0:
+            raise AssertionError(f"git {args}: {done.stderr}")
+        return done.stdout.strip()
+
+    @classmethod
+    def _build(cls, holder: Path) -> Path:
+        git = _require("git")
+        _symlinks_or_skip(holder)
+
+        upstream = holder / "upstream"
+        (upstream / "real" / "java").mkdir(parents=True)
+        (upstream / "dep.h").write_text("/* dep */\n", encoding="utf-8")
+        (upstream / "real" / "target.h").write_text("/* target */\n", encoding="utf-8")
+        (upstream / "real" / "java" / "Main.java").write_text("class Main {}\n", encoding="utf-8")
+        (upstream / "ant").mkdir()
+        os.symlink("../real/target.h", str(upstream / "ant" / "target.h"))
+        os.symlink("../real/java", str(upstream / "ant" / "src"))
+        cls._git(git, upstream, "init", "-q", "-b", "main")
+        cls._git(git, upstream, "add", "-A")
+        cls._git(git, upstream, "commit", "-q", "-m", "upstream")
+        head = cls._git(git, upstream, "rev-parse", "HEAD")
+
+        repo = holder / "repo"
+        shutil.copytree(_Baseline.get(), repo)
+        cls._git(git, repo, "submodule", "add", "-q", str(upstream), SUBMODULE_REL)
+        cls._git(
+            git, repo, "config", "-f", ".gitmodules",
+            f"submodule.{SUBMODULE_REL}.url", SUBMODULE_URL,
+        )
+        notice = repo / SUBMODULE_NOTICE_REL
+        notice.write_text(LICENSE_TEXT, encoding="utf-8", newline="\n")
+        manifest = MANIFEST_TEXT.replace(
+            '\n)\n',
+            f'\n    "dep|{SUBMODULE_URL}|{head}|MIT|{SUBMODULE_REL}|dep.h|SPARK_HAS_DEP|'
+            f'SparkEngine/Source/DemoStub.cpp|WARN|{SUBMODULE_NOTICE_REL}"\n)\n',
+        )
+        (repo / "ThirdParty/dependencies.lock").write_text(
+            manifest, encoding="utf-8", newline="\n"
+        )
+        cls._git(git, repo, "add", "-A")
+        cls._git(git, repo, "commit", "-q", "-m", "add submodule")
+        _SubmoduleBaseline.relock(git, repo)
+        return repo
+
+    @classmethod
+    def relock(cls, git: str, repo: Path, *, expect_clean: bool = True) -> None:
+        """Regenerate and commit the lock.
+
+        --update re-verifies what it wrote; a fixture pinning a hostile
+        upstream expects that re-verification to fail (exit 1) after writing.
+        """
+        done = subprocess.run(
+            [sys.executable, CHECKER_REL, "--update"],
+            cwd=str(repo), capture_output=True, text=True, timeout=300,
+        )
+        wrote = f"Wrote {sc.LOCKFILE_REL}" in done.stdout
+        expected_rc = 0 if expect_clean else 1
+        if done.returncode != expected_rc or not wrote:
+            raise AssertionError(f"--update exited {done.returncode}:\n{done.stdout}\n{done.stderr}")
+        cls._git(git, repo, "add", "-A")
+        cls._git(git, repo, "commit", "-q", "-m", "relock")
+
+
+class TestSubmoduleLinks(FakeRepoCase):
+    """An initialized submodule must not change the verdict, nor widen it.
+
+    Before the fix, every mode-120000 entry tracked by a pinned upstream was
+    rejected as soon as the submodule was checked out, while CI (which checks
+    out without submodules) passed the same commit.  The allowance that fixes
+    that is narrow: only links the LOCKED upstream commit tracks, with their
+    tracked targets, resolving inside the submodule.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.submodule_baseline = _SubmoduleBaseline.get()
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-sc-case-")
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = Path(self._tmp.name) / "repo"
+        # symlinks=True: copying must preserve the links under test.
+        shutil.copytree(self.submodule_baseline, self.repo, symlinks=True)
+        self.sub = self.repo / SUBMODULE_REL
+
+    def sub_git(self, *args: str) -> str:
+        return _SubmoduleBaseline._git(self.git, self.sub, *args)
+
+    def pin_submodule_head(self) -> None:
+        """Record the submodule's current HEAD as the reviewed, locked gitlink."""
+        head = self.sub_git("rev-parse", "HEAD")
+        manifest = self.repo / "ThirdParty/dependencies.lock"
+        text = manifest.read_text(encoding="utf-8")
+        old = text.split(f"|MIT|{SUBMODULE_REL}|")[0].rsplit("|", 1)[1]
+        manifest.write_text(text.replace(old, head), encoding="utf-8", newline="\n")
+        self.commit("pin submodule")
+        _SubmoduleBaseline.relock(self.git, self.repo, expect_clean=False)
+
+    def commit_in_submodule(self, message: str = "upstream change") -> None:
+        self.sub_git("add", "-A")
+        self.sub_git("commit", "-q", "-m", message)
+
+    def verdict(self) -> tuple[int, list]:
+        done = self.check("--json")
+        self.assertIn(done.returncode, (0, 1), f"{done.stdout}\n{done.stderr}")
+        return done.returncode, json.loads(done.stdout)["violations"]
+
+    def test_initialized_submodule_verdict_matches_uninitialized(self) -> None:
+        self.assertTrue((self.sub / "ant" / "src").is_symlink())
+        initialized = self.verdict()
+        self.git_run("submodule", "deinit", "-q", "-f", SUBMODULE_REL)
+        self.assertFalse((self.sub / "ant").exists())
+        uninitialized = self.verdict()
+        self.assertEqual(initialized, uninitialized)
+        self.assertEqual(initialized, (0, []))
+
+    def test_untracked_symlink_in_submodule_is_rejected(self) -> None:
+        os.symlink("../real/target.h", str(self.sub / "ant" / "extra.h"))
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/extra.h",
+            "not tracked as a symlink in the locked submodule commit",
+        )
+
+    def test_link_committed_off_the_locked_pin_is_rejected(self) -> None:
+        # Tracked by the submodule's own HEAD, but not by the reviewed gitlink.
+        os.symlink("../real/target.h", str(self.sub / "ant" / "later.h"))
+        self.commit_in_submodule()
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/later.h",
+            "not tracked as a symlink in the locked submodule commit",
+        )
+
+    def test_replace_ref_cannot_forge_the_locked_tree(self) -> None:
+        # A refs/replace/* entry in the submodule's own object store makes a
+        # plain `git ls-tree <pin>` list the forged commit's tree instead.
+        pin = self.sub_git("rev-parse", "HEAD")
+        os.symlink("../real/target.h", str(self.sub / "ant" / "forged.h"))
+        self.commit_in_submodule("forged link")
+        forged = self.sub_git("rev-parse", "HEAD")
+        self.sub_git("replace", pin, forged)
+        # Precondition: without --no-replace-objects git really lies.
+        self.assertIn("ant/forged.h", self.sub_git("ls-tree", "-r", "--name-only", pin))
+        done = self.assert_violation()
+        violations = json.loads(done.stdout)["violations"]
+        self.assertTrue(
+            any(
+                v["path"] == "ThirdParty/Sub/dep/ant/forged.h"
+                and "not tracked as a symlink in the locked submodule commit" in v["message"]
+                for v in violations
+            ),
+            violations,
+        )
+
+    def test_windows_link_target_separators_map_to_git_form(self) -> None:
+        # Git for Windows writes '\\' into on-disk link targets; git's blob
+        # always holds '/'.  POSIX targets are never rewritten.
+        self.assertEqual(sc._git_link_target("..\\real\\java", "\\"), "../real/java")
+        self.assertEqual(sc._git_link_target("../real/java", "\\"), "../real/java")
+        self.assertEqual(sc._git_link_target("a\\b", "/"), "a\\b")
+
+    def test_retargeted_tracked_link_is_rejected(self) -> None:
+        link = self.sub / "ant" / "target.h"
+        link.unlink()
+        os.symlink("../dep.h", str(link))
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/target.h",
+            "on-disk target differs from the locked submodule commit",
+        )
+
+    def test_locked_link_escaping_the_submodule_is_rejected(self) -> None:
+        outside = self.repo / "ThirdParty" / "Local" / "notes.h"
+        self.assertTrue(outside.is_file())
+        os.symlink("../../../Local/notes.h", str(self.sub / "ant" / "escape.h"))
+        self.commit_in_submodule("escaping link")
+        self.pin_submodule_head()
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/escape.h",
+            "target escapes the submodule root",
+        )
+
+    def test_locked_link_escaping_through_an_inner_link_is_rejected(self) -> None:
+        # Lexically inside, but the hop is itself a link that leaves the root.
+        os.symlink("../../../Local", str(self.sub / "real" / "hop"))
+        os.symlink("../real/hop/notes.h", str(self.sub / "ant" / "chained.h"))
+        self.commit_in_submodule("chained link")
+        self.pin_submodule_head()
+        self.assert_violation(
+            "ThirdParty/Sub/dep/real/hop", "target escapes the submodule root",
+        )
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/chained.h", "target escapes the submodule root",
+        )
+
+    def test_locked_absolute_link_is_rejected(self) -> None:
+        os.symlink(str(self.sub / "dep.h"), str(self.sub / "ant" / "absolute.h"))
+        self.commit_in_submodule("absolute link")
+        self.pin_submodule_head()
+        self.assert_violation("ThirdParty/Sub/dep/ant/absolute.h", "absolute target")
+
+    def test_locked_dangling_link_is_rejected(self) -> None:
+        os.symlink("../real/missing.h", str(self.sub / "ant" / "dangling.h"))
+        self.commit_in_submodule("dangling link")
+        self.pin_submodule_head()
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/dangling.h", "target does not resolve",
+        )
+
+    def test_superproject_link_is_still_rejected_beside_a_submodule(self) -> None:
+        os.symlink("Sub/dep/dep.h", str(self.repo / "ThirdParty" / "Local" / "alias.h"))
+        self.assert_violation("ThirdParty/Local/alias.h", "symbolic link rejected")
+
+    def test_reparse_point_in_submodule_is_never_accepted(self) -> None:
+        # A junction is not S_ISLNK; the allowance must never reach it even
+        # at a path the locked commit tracks as a symlink.
+        junction_reason = "reparse point (junction/link) rejected — tag 0xa0000003"
+        real_link_reason = sc.link_reason
+
+        def fake_link_reason(path: Path) -> str | None:
+            if path.name == "src" and path.parent.name == "ant":
+                return junction_reason
+            return real_link_reason(path)
+
+        lockfile = self.lock()
+        tracked = sc.git_tracked_thirdparty(self.repo)
+        submodules = sc.verified_submodule_gitlinks(lockfile, tracked)
+        self.assertIn(SUBMODULE_REL, submodules)
+        result = sc.CheckResult()
+        original = sc.link_reason
+        sc.link_reason = fake_link_reason
+        try:
+            sc.check_link_hygiene(self.repo, result, submodules)
+        finally:
+            sc.link_reason = original
+        messages = [(v.path, v.message) for v in result.violations]
+        self.assertEqual(messages, [("ThirdParty/Sub/dep/ant/src", junction_reason)])
+
+    @unittest.skipUnless(sys.platform == "win32", "junctions are a Windows concept")
+    def test_junction_inside_submodule_is_rejected(self) -> None:
+        target = self.sub / "real"
+        link = self.sub / "junction"
+        done = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if done.returncode != 0:
+            self.fail(f"could not create junction: {done.stdout}{done.stderr}")
+        self.assert_violation("ThirdParty/Sub/dep/junction", "reparse point")
+
+    def test_gitlink_that_disagrees_with_the_lock_gets_no_allowance(self) -> None:
+        data = self.lock()
+        data["submodule_gitlinks"][SUBMODULE_REL] = "e" * 40
+        self.set_lock(data)
+        tracked = sc.git_tracked_thirdparty(self.repo)
+        self.assertEqual(sc.verified_submodule_gitlinks(data, tracked), {})
+        self.assert_violation("gitlink drift", "symbolic link rejected")
+
+
 class TestContainment(unittest.TestCase):
     """assert_regular_file_no_escape must separate its failure modes."""
 
