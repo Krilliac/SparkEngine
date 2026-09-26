@@ -66,6 +66,11 @@ inline constexpr int kLinuxSceneLoadFailedExitCode = 4;
 /// @brief True when @p flag appears verbatim in argv[1..argc).
 bool HasLinuxCommandLineFlag(int argc, char* argv[], const char* flag);
 
+/// @brief Print the game module's post-teardown SPARK_MODULE_LIFECYCLE record to stdout.
+/// Call only after ShutdownLinuxAfterPreflight(); prints nothing when no single
+/// game-kind module was ever created.
+void EmitLinuxModuleLifecycleRecord();
+
 /// @brief Common shutdown sequence for all Linux startup paths.
 /// @return false when the engine lifecycle teardown was not clean (exit non-zero).
 bool ShutdownLinuxAfterPreflight();

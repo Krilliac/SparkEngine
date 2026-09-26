@@ -45,7 +45,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <thread>
 
 #ifndef SPARK_PLATFORM_WINDOWS
@@ -132,9 +131,7 @@ int RunHeadlessLinux(int argc, char* argv[])
         SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
     }
 
-    bool requireGameModule = false;
-    for (int i = 1; i < argc; ++i)
-        requireGameModule = requireGameModule || std::string_view(argv[i]) == "-require-game";
+    const bool requireGameModule = HasLinuxCommandLineFlag(argc, argv, "-require-game");
 
     int exitCode = 0;
     if (requireGameModule &&
@@ -267,6 +264,11 @@ int RunHeadlessLinux(int argc, char* argv[])
         exitCode = 3;
     if (!teardownClean && exitCode == 0)
         exitCode = 1;
+
+    // Headless teardown keeps module images mapped until process exit (see
+    // ShutdownEngineAfterPreflight), so this record reports destroy=0.
+    if (requireGameModule)
+        EmitLinuxModuleLifecycleRecord();
 
     // One machine-readable record after full teardown, consumed by
     // tools/perf-budget/collect_headless_result.py. Every tick ran on NullRHI

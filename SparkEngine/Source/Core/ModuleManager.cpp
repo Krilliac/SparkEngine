@@ -775,6 +775,36 @@ ModuleManager::LifecycleEvidence ModuleManager::GetLastTeardownLifecycleEvidence
     return s_lastTeardownLifecycleEvidence;
 }
 
+void ModuleManager::PublishLifecycleEvidence() const
+{
+    PublishTeardownLifecycleEvidence(m_lifecycleEvidence);
+}
+
+std::string ModuleManager::LibraryTargetName(std::string_view libraryPath)
+{
+    // Split on either separator so a Windows-style path is handled on POSIX too.
+    const size_t separator = libraryPath.find_last_of("/\\");
+    std::string_view filename = separator == std::string_view::npos ? libraryPath : libraryPath.substr(separator + 1);
+    const size_t extension = filename.rfind('.');
+    if (extension != std::string_view::npos && extension > 0)
+        filename = filename.substr(0, extension);
+#ifndef _WIN32
+    // CMAKE_SHARED_LIBRARY_PREFIX is "lib" on Linux and macOS; the Windows
+    // record names the bare target, so strip it to keep one identity.
+    if (filename.size() > 3 && filename.starts_with("lib"))
+        filename.remove_prefix(3);
+#endif
+    return std::string(filename);
+}
+
+std::string ModuleManager::FormatLifecycleRecord(const ModuleLifecycleRecord& record)
+{
+    return std::format("SPARK_MODULE_LIFECYCLE module={} create={} load={} update={} fixed={} render={} unload={} "
+                       "destroy={} faults={}",
+                       LibraryTargetName(record.libraryPath), record.createModule, record.onLoad, record.onUpdate,
+                       record.onFixedUpdate, record.onRender, record.onUnload, record.destroyModule, record.faults);
+}
+
 bool ModuleManager::LoadModule(const std::string& path)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -1033,7 +1063,14 @@ bool ModuleManager::LoadModule(const std::string& path)
         console.LogSuccess(std::format("Loaded module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
         if (!m_modules.back().isLegacyAdapter)
-            ++FindOrCreateLifecycleRecord(m_modules.back().name).createModule;
+        {
+            ModuleLifecycleRecord& record = FindOrCreateLifecycleRecord(m_modules.back().name);
+            ++record.createModule;
+            // A hot-reload replacement is created by a staged manager from a
+            // shadow copy; merging its evidence keeps this live-manager path.
+            record.libraryPath = path;
+            record.kind = info.kind;
+        }
 #ifndef _WIN32
         stagedImage.Disarm();
 #endif

@@ -371,8 +371,9 @@ bool ShutdownEngineAfterPreflight()
         {
             // Linux/headless teardown currently hits a late-shutdown crash path
             // when module-owned callbacks/channels are destroyed after dlclose().
-            // Keep modules mapped until process exit in this mode, and keep the
-            // manager reachable (never deleted) through residentModuleManagers.
+            // Keep modules mapped until process exit in this mode. The manager
+            // destructor never runs, so publish its lifecycle evidence here.
+            rt.moduleManager->PublishLifecycleEvidence();
             rt.residentModuleManagers.push_back(rt.moduleManager.release());
         }
         else

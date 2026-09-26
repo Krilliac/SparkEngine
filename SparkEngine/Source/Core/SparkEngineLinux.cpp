@@ -90,6 +90,18 @@ bool HasLinuxCommandLineFlag(int argc, char* argv[], const char* flag)
     return false;
 }
 
+void EmitLinuxModuleLifecycleRecord()
+{
+    // Read the snapshot the owning ModuleManager published at teardown, so the
+    // record covers the manager's whole lifetime including OnUnload/Destroy.
+    const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
+    const ModuleManager::ModuleLifecycleRecord* record = evidence.FindGameModule();
+    if (!record)
+        return;
+    std::fprintf(stdout, "%s\n", ModuleManager::FormatLifecycleRecord(*record).c_str());
+    std::fflush(stdout);
+}
+
 static int ParseTestFrameLimitArgs(int argc, char* argv[])
 {
     for (int i = 1; i < argc - 1; ++i)
@@ -264,6 +276,7 @@ int main(int argc, char* argv[])
                     "  -test-seconds <seconds>    Exit after a wall-clock duration\n"
                     "  -exec <file>               Run a scripted console timeline (frame or t<sec> entries)\n"
                     "  -exec-audit <path>         Write the -exec audit trail here (default exec_audit.log)\n"
+                    "  -require-game              Fail (exit 2) if no game module initializes\n"
                     "  -window-size <WxH>         Override the initial window size\n",
                     SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR, SPARK_ENGINE_VERSION_PATCH);
         return 0;

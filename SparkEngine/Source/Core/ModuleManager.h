@@ -86,6 +86,8 @@ class ModuleManager
     struct ModuleLifecycleRecord
     {
         std::string module;
+        std::string libraryPath;                          ///< Image path this manager last created it from
+        Spark::ModuleKind kind = Spark::ModuleKind::Game; ///< Load-policy class from ModuleInfo
         uint64_t createModule = 0;
         uint64_t onLoad = 0;
         uint64_t onUpdate = 0;
@@ -115,6 +117,21 @@ class ModuleManager
                     return &record;
             }
             return nullptr;
+        }
+
+        /** @brief The single Game-kind record, or nullptr when there is none or more than one. */
+        const ModuleLifecycleRecord* FindGameModule() const
+        {
+            const ModuleLifecycleRecord* game = nullptr;
+            for (const auto& record : modules)
+            {
+                if (record.kind != Spark::ModuleKind::Game)
+                    continue;
+                if (game)
+                    return nullptr;
+                game = &record;
+            }
+            return game;
         }
     };
 
@@ -291,6 +308,29 @@ class ModuleManager
      * teardown has completed.
      */
     static LifecycleEvidence GetLastTeardownLifecycleEvidence();
+
+    /**
+     * @brief Publish this manager's evidence as the last-teardown snapshot now.
+     *
+     * For hosts that deliberately keep module images mapped until process exit
+     * and therefore never run the destructor that normally publishes it.
+     */
+    void PublishLifecycleEvidence() const;
+
+    /**
+     * @brief Build-target name of a module image: its filename stem without the
+     *        POSIX shared-library "lib" prefix (libSparkGameRTS.so -> SparkGameRTS).
+     */
+    static std::string LibraryTargetName(std::string_view libraryPath);
+
+    /**
+     * @brief Format the host's machine-readable lifecycle record for @p record.
+     *
+     * Produces `SPARK_MODULE_LIFECYCLE module=<target> create= load= update= fixed=
+     * render= unload= destroy= faults=` (no newline), identifying the module by
+     * LibraryTargetName(record.libraryPath) rather than its display name.
+     */
+    static std::string FormatLifecycleRecord(const ModuleLifecycleRecord& record);
 
     /**
      * @brief Detailed reason from the most recent load operation.

@@ -536,9 +536,23 @@ int RunSDL2Windowed(int argc, char* argv[])
         g_shutdownRequested.store(true, std::memory_order_relaxed);
     }
 
+    // -require-game: a launch that names a game must not "succeed" in
+    // engine-only mode. Leave through the ordinary shutdown preflight so the
+    // failed module is still torn down and its lifecycle record is published.
+    const bool requireGame = HasLinuxCommandLineFlag(argc, argv, "-require-game");
+    const bool requiredGameMissing =
+        requireGame &&
+        (!GetEngineRuntime().moduleManager || GetEngineRuntime().moduleManager->GetInitializedModuleCount() == 0);
+    if (requiredGameMissing)
+    {
+        Spark::SimpleConsole::GetInstance().LogError(
+            "Required game module was not initialized; terminating with a failure status.");
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
+    }
+
     // -scene: a scene that cannot load must fail the launch, not run an empty
-    // engine. Leave through the ordinary shutdown preflight.
-    const bool sceneLoadFailed = lifecycleInitialized && !LoadLinuxLaunchScene(argc, argv);
+    // engine. Leave through the same shutdown preflight as -require-game.
+    const bool sceneLoadFailed = lifecycleInitialized && !requiredGameMissing && !LoadLinuxLaunchScene(argc, argv);
     if (sceneLoadFailed)
         g_shutdownRequested.store(true, std::memory_order_relaxed);
     RunSDL2MainLoop(/*pollSdlEvents=*/sdlInitOk);
@@ -546,8 +560,15 @@ int RunSDL2Windowed(int argc, char* argv[])
     const bool teardownClean = ShutdownLinuxAfterPreflight();
     releaseSdlResources();
 
+    // One machine-readable record, only after ordinary teardown has destroyed
+    // the ModuleManager (same contract as the Windows windowed host).
+    if (requireGame)
+        EmitLinuxModuleLifecycleRecord();
+
     if (!lifecycleInitialized)
         return EXIT_FAILURE;
+    if (requiredGameMissing)
+        return 2;
     if (sceneLoadFailed)
         return kLinuxSceneLoadFailedExitCode;
     return teardownClean ? 0 : EXIT_FAILURE;

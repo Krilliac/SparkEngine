@@ -519,3 +519,105 @@ TEST(ModuleLegacyAdapter_FailedLoadCleanupCreatesNoLifecycleRecord)
     EXPECT_EQ(evidence.FindModule("Spark Legacy Adapter Fixture"), nullptr);
     EXPECT_TRUE(evidence.modules.empty());
 }
+
+TEST(ModuleLifecycleRecord_CarriesLoadedLibraryPathAndKind)
+{
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
+    const ScopedModuleEnvironment gameKind("SPARK_MODULE_ABI_KIND_GAME", true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+
+    const auto evidence = manager.GetLifecycleEvidence();
+    const auto* record = evidence.FindModule("Spark Compatible ABI Fixture");
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->libraryPath, std::string(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    EXPECT_TRUE(record->kind == Spark::ModuleKind::Game);
+    EXPECT_EQ(evidence.FindGameModule(), record);
+}
+
+TEST(ModuleLifecycleRecord_AddonIsNotReportedAsTheGameModule)
+{
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
+    const ScopedModuleEnvironment gameKind("SPARK_MODULE_ABI_KIND_GAME", false);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+
+    const auto evidence = manager.GetLifecycleEvidence();
+    const auto* record = evidence.FindModule("Spark Compatible ABI Fixture");
+    ASSERT_NE(record, nullptr);
+    EXPECT_TRUE(record->kind == Spark::ModuleKind::Addon);
+    EXPECT_EQ(evidence.FindGameModule(), nullptr);
+}
+
+TEST(ModuleLifecycleRecord_LibraryTargetNameDropsPlatformAffixes)
+{
+    EXPECT_EQ(ModuleManager::LibraryTargetName("SparkGameFPS.dll"), std::string("SparkGameFPS"));
+    EXPECT_EQ(ModuleManager::LibraryTargetName("C:/Games/Spark/bin/SparkGameFPS.dll"), std::string("SparkGameFPS"));
+    EXPECT_EQ(ModuleManager::LibraryTargetName(""), std::string(""));
+#ifdef _WIN32
+    // Windows images carry no CMake shared-library prefix to strip.
+    EXPECT_EQ(ModuleManager::LibraryTargetName("libSparkGameRTS.dll"), std::string("libSparkGameRTS"));
+#else
+    EXPECT_EQ(ModuleManager::LibraryTargetName("build/bin/libSparkGameRTS.so"), std::string("SparkGameRTS"));
+    EXPECT_EQ(ModuleManager::LibraryTargetName("/opt/spark/libSparkGameRacing.dylib"), std::string("SparkGameRacing"));
+    // A bare "lib" stem is a name, not a prefix.
+    EXPECT_EQ(ModuleManager::LibraryTargetName("/opt/spark/lib.so"), std::string("lib"));
+#endif
+}
+
+TEST(ModuleLifecycleRecord_FormatsTheHostRecordByteCompatibly)
+{
+    ModuleManager::ModuleLifecycleRecord record;
+    record.module = "Spark Arena - Engine Showcase";
+    record.libraryPath = "package/bin/SparkGameFPS.dll";
+    record.createModule = 1;
+    record.onLoad = 1;
+    record.onUpdate = 5;
+    record.onFixedUpdate = 4;
+    record.onRender = 5;
+    record.onUnload = 1;
+    record.destroyModule = 1;
+    record.faults = 0;
+
+    // The exact line tools/module-evidence/collect_lifecycle.py and
+    // .github/scripts/qualify-windows-msi.py parse from the Windows host.
+    EXPECT_EQ(ModuleManager::FormatLifecycleRecord(record),
+              std::string("SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 update=5 fixed=4 render=5 "
+                          "unload=1 destroy=1 faults=0"));
+}
+
+TEST(ModuleLifecycleRecord_RetainedManagerCanPublishItsEvidence)
+{
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
+    const ScopedModuleEnvironment gameKind("SPARK_MODULE_ABI_KIND_GAME", true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    manager.InitializeAll(&context);
+    manager.UpdateAll(1.0F / 60.0F);
+    ASSERT_TRUE(manager.ShutdownAll());
+
+    // A host that keeps module images mapped until process exit never runs the
+    // manager destructor; it publishes the snapshot explicitly instead.
+    manager.PublishLifecycleEvidence();
+    const auto published = ModuleManager::GetLastTeardownLifecycleEvidence();
+    const auto* record = published.FindGameModule();
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->onLoad, 1u);
+    EXPECT_GE(record->onUpdate, 1u);
+    EXPECT_EQ(record->onUnload, 1u);
+    EXPECT_EQ(record->destroyModule, 0u);
+
+    manager.UnloadAll();
+}

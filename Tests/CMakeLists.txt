@@ -1868,6 +1868,39 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
         TIMEOUT 45)
 endif()
 
+# RDY-015: the Linux hosts honor -require-game (exit 2 when no game module
+# initialized) and print one post-teardown SPARK_MODULE_LIFECYCLE record named
+# after the loaded library. Host evidence only; it promotes no module profile.
+add_test(NAME ModuleLifecycleRecordHost COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(ModuleLifecycleRecordHost PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=ModuleLifecycleRecord_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "lifecycle;module;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 60)
+if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
+   TARGET SparkEngine AND TARGET SparkGame)
+    add_dependencies(SparkTests SparkEngine SparkGame SparkCompatibleModuleFixture)
+    if(SPARK_HEADLESS_SUPPORT)
+        set(_spark_lifecycle_record_headless ON)
+    else()
+        set(_spark_lifecycle_record_headless OFF)
+    endif()
+    add_test(
+        NAME LinuxHostModuleLifecycleRecord
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGame>"
+            "-DSPARK_FAILING_MODULE=$<TARGET_FILE:SparkCompatibleModuleFixture>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_CHECK_HEADLESS=${_spark_lifecycle_record_headless}"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkLinuxModuleLifecycleRecord.cmake
+    )
+    set_tests_properties(LinuxHostModuleLifecycleRecord PROPERTIES
+        LABELS "lifecycle;module;linux;sdl2;integration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 240)
+endif()
+
 # EDT-210: the Linux host runs `-scene <path>` engine-only. An editor-saved
 # reflected scene must load into the engine ECS world (one SPARK_SCENE_LOADED
 # record with the fixture's counts, no game module), and a missing or rejected
