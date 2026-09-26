@@ -2263,9 +2263,10 @@
           "criterionDigest": "sha256:bb0380c76dc5",
           "state": "unmet",
           "evidence": [
-            "Tests/TestENG200ScriptFaultsReal.cpp"
+            "Tests/TestENG200ScriptFaultsReal.cpp",
+            "Tests/TestENG200ScriptBindingsReal.cpp"
           ],
-          "note": "The real script moves an entity only through a direct CallUpdate. Nothing tests production collision/event dispatch or script-driven audio/animation."
+          "note": "A real script moves an entity via CallUpdate and, through applyForce(), a Dynamic Jolt body; getSpeed() reads the live body and fireEvent() publishes Spark::ScriptEvent with its source entity (ScriptBindings_*). Scripts still get no production collision/event dispatch and audio/animation is untested."
         },
         {
           "criterionDigest": "sha256:cd885ff23a2b",
@@ -2337,7 +2338,6 @@
         "visual-script-package"
       ],
       "plannedTestSelectors": [
-        "ScriptBindings_*",
         "VisualScriptRuntime_*"
       ]
     }

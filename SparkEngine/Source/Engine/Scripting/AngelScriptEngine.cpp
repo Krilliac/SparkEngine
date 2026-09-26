@@ -16,6 +16,9 @@
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/Validate.h"
+#include "../../Physics/PhysicsBody.h"
+#include "../Events/EventSystem.h"
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -312,17 +315,79 @@ void ASSetHealth(EntityID entity, float health)
         world->GetComponent<HealthComponent>(entity)->health = health;
 }
 
+namespace
+{
+    /// The entity's RigidBodyComponent in the bound World, or nullptr when the
+    /// World, entity or component is missing.
+    RigidBodyComponent* FindScriptRigidBody(EntityID entity)
+    {
+        auto* world = AngelScriptEngine::GetBoundWorld();
+        if (!world || entity == entt::null || !world->GetRegistry().valid(entity))
+            return nullptr;
+        return world->GetRegistry().try_get<RigidBodyComponent>(entity);
+    }
+
+    bool IsFiniteVector(const DirectX::XMFLOAT3& v)
+    {
+        return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    }
+} // namespace
+
 float ASGetSpeed(EntityID entity)
 {
-    (void)entity;
-    return 0.0f; // Speed comes from physics velocity — query RigidBody if available
+    const RigidBodyComponent* rb = FindScriptRigidBody(entity);
+    if (!rb)
+        return 0.0f;
+
+    // Prefer the live simulation velocity; before PhysicsUpdateSystem has
+    // created the body, fall back to the component's cached velocity.
+    const auto* body = rb->physicsBodyHandle.As<PhysicsBody>();
+    const DirectX::XMFLOAT3 velocity = body ? body->GetLinearVelocity() : rb->linearVelocity;
+    return std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z);
 }
 
 void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force)
 {
-    (void)entity;
-    (void)force;
-    // Force application dispatched to physics system
+    if (!IsFiniteVector(force))
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] applyForce ignored: force (%f, %f, %f) is not finite.", force.x, force.y, force.z);
+        return;
+    }
+
+    RigidBodyComponent* rb = FindScriptRigidBody(entity);
+    if (!rb)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] applyForce ignored: entity %u has no RigidBodyComponent in the bound World.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+
+    // Only Dynamic bodies respond to forces; Static never moves and Kinematic
+    // is driven by its Transform (see RigidBodyComponent).
+    if (rb->type != RigidBodyComponent::Type::Dynamic)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] applyForce ignored: entity %u is not a Dynamic rigid body.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+
+    auto* body = rb->physicsBodyHandle.As<PhysicsBody>();
+    if (!body)
+    {
+        // PhysicsUpdateSystem creates the Jolt body on its first tick after the
+        // component is added; a force issued before then has nothing to act on.
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] applyForce ignored: entity %u has no physics body yet.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+
+    // Accumulated by Jolt and integrated over the next simulation step; the
+    // body is woken if it was sleeping.
+    body->ApplyForce(force);
 }
 
 void ASPlaySound(EntityID entity, const std::string& soundName)
@@ -355,7 +420,29 @@ EntityID ASGetEntityByName(const std::string& name)
 
 void ASFireEvent(const std::string& eventName)
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Script] FireEvent: %s", eventName.c_str());
+    if (eventName.empty())
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] fireEvent ignored: event name is empty.");
+        return;
+    }
+
+    auto* ctx = EngineContext::Get();
+    Spark::EventBus* bus = ctx ? ctx->GetEventBus() : nullptr;
+    if (!bus)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] fireEvent('%s') dropped: no EventBus is registered on EngineContext.",
+                       eventName.c_str());
+        return;
+    }
+
+    // Published synchronously on the calling (game) thread, so subscribers see
+    // the event before the script's callback returns.
+    Spark::ScriptEvent event;
+    event.eventName = eventName;
+    event.sourceEntity = static_cast<uint32_t>(AngelScriptEngine::GetExecutingEntity());
+    bus->Publish(event);
 }
 
 static DebugTraceCallback g_debugTraceCallback = nullptr;
@@ -370,6 +457,32 @@ void ASDebugTrace(uint32_t nodeId, const std::string& nodeName, const std::strin
 void ASSetDebugTraceCallback(DebugTraceCallback callback)
 {
     g_debugTraceCallback = callback;
+}
+
+// ============================================================================
+// Executing-entity query (shared by both the real and stub builds)
+// ============================================================================
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+namespace
+{
+    /// asIScriptContext user-data slot holding a pointer to the executing
+    /// script's EntityID ('SPEN'); distinct from slot 0 so add-ons keep theirs.
+    constexpr asPWORD kExecutingEntityUserDataType = 0x5350454E;
+} // namespace
+#endif
+
+EntityID AngelScriptEngine::GetExecutingEntity()
+{
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+    asIScriptContext* active = asGetActiveContext();
+    if (!active)
+        return entt::null;
+    const auto* entity = static_cast<const EntityID*>(active->GetUserData(kExecutingEntityUserDataType));
+    return entity ? *entity : entt::null;
+#else
+    return entt::null;
+#endif
 }
 
 // ============================================================================
@@ -933,6 +1046,10 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
         ctx->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
     }
 
+    // The constructor may call natives such as fireEvent(); expose the entity
+    // being attached for its duration. DispatchCallback repoints the slot at
+    // the stored ScriptInstance before every later call.
+    ctx->SetUserData(&entity, kExecutingEntityUserDataType);
     ctx->Prepare(factory);
     int execResult = ctx->Execute();
 
@@ -975,6 +1092,7 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
     instance.context = ctx;
     instance.className = className;
     instance.moduleName = moduleName;
+    instance.entity = entity;
 
     CacheScriptMethods(instance);
 
@@ -1044,6 +1162,8 @@ void AngelScriptEngine::DispatchCallback(ScriptInstance& instance, asIScriptFunc
         return;
     }
     instance.context->SetObject(instance.object);
+    // unordered_map nodes are address-stable, so this pointer outlives Execute().
+    instance.context->SetUserData(&instance.entity, kExecutingEntityUserDataType);
     if (setArgs)
         setArgs(instance.context);
 

@@ -373,6 +373,7 @@ add_executable(SparkTests
     TestMusicManager.cpp
     TestAngelScriptEngine.cpp
     TestENG200ScriptFaultsReal.cpp
+    TestENG200ScriptBindingsReal.cpp
     TestScriptHotReload.cpp
     TestVRSystem.cpp
     TestSeamlessAreaManager.cpp
@@ -1298,6 +1299,15 @@ if(ENABLE_NETWORKING)
 endif()
 if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_PHYSICS)
+    # ENG-200: script physics/event bindings against the real AngelScript VM and
+    # Jolt world (TestENG200ScriptBindingsReal.cpp); the count pins all five.
+    if(SPARK_ANGELSCRIPT_AVAILABLE)
+        add_test(NAME ScriptBindingsReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(ScriptBindingsReal PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_;SPARK_TEST_EXPECT_COUNT=5"
+            LABELS "scripting;scripting-integration;physics;integration"
+            TIMEOUT 120)
+    endif()
 endif()
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_VULKAN)

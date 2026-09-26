@@ -44,8 +44,9 @@
  * - **Input:** print, getKeyDown, getKey
  * - **Entity lifecycle:** createEntity, destroyEntity, getEntityByName
  * - **Transform:** getTransform, getPosition/setPosition, getRotation/setRotation
- * - **Gameplay:** getHealth/setHealth, getSpeed, applyForce, playSound, playAnimation
- * - **Events/debug:** fireEvent, debugTrace
+ * - **Gameplay:** getHealth/setHealth, playSound, playAnimation
+ * - **Physics:** getSpeed (live body speed), applyForce (Dynamic Jolt body)
+ * - **Events/debug:** fireEvent (publishes Spark::ScriptEvent on the engine EventBus), debugTrace
  * - **Reflection-driven component access:** getComponentField, setComponentField, hasComponent
  *
  * @see Components.h (for EntityID and Transform), ECSWorld
@@ -252,6 +253,18 @@ class AngelScriptEngine
                                   const std::vector<std::string>& blockedFunctions = {});
 
     /**
+     * @brief Entity whose script is executing on the calling thread.
+     *
+     * Resolved from the active AngelScript context, so it is correct inside a
+     * native called from a script's constructor, Start(), Update() or
+     * OnCollision(), including nested dispatch into another entity's script.
+     * Used by fireEvent() to stamp ScriptEvent::sourceEntity.
+     *
+     * @return The executing script's entity, or entt::null when no script is running.
+     */
+    static EntityID GetExecutingEntity();
+
+    /**
      * @brief Get the global singleton instance
      * @return Pointer to the AngelScriptEngine instance, or nullptr if not created
      */
@@ -299,6 +312,7 @@ class AngelScriptEngine
         std::string className;                          ///< Name of the script class
         std::string moduleName;                         ///< Name of the module containing the class
         bool faulted = false;                           ///< Disabled by a runtime fault until re-attached
+        EntityID entity = entt::null;                   ///< Owning entity (context user data for GetExecutingEntity)
     };
 
     std::unordered_map<EntityID, ScriptInstance> m_entityScripts; ///< Active script instances by entity ID
@@ -590,10 +604,23 @@ float ASGetHealth(EntityID entity);
 /** @brief Set entity health value (callable as `setHealth()`) */
 void ASSetHealth(EntityID entity, float health);
 
-/** @brief Get entity movement speed (callable as `getSpeed()`) */
+/**
+ * @brief Get entity linear speed in m/s (callable as `getSpeed()`)
+ *
+ * Reads the live Jolt body velocity through the entity's RigidBodyComponent,
+ * falling back to the component's cached velocity before the body exists.
+ * Returns 0 when the entity has no RigidBodyComponent in the bound World.
+ */
 float ASGetSpeed(EntityID entity);
 
-/** @brief Apply a physics force to an entity (callable as `applyForce()`) */
+/**
+ * @brief Apply a world-space force (N) to an entity's physics body (callable as `applyForce()`)
+ *
+ * Accumulated on the entity's Dynamic Jolt body and integrated over the next
+ * physics step (the body is woken). Ignored with a one-time warning when the
+ * force is not finite, the entity has no RigidBodyComponent, is not Dynamic,
+ * or PhysicsUpdateSystem has not yet created its body.
+ */
 void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force);
 
 /** @brief Play a sound effect on an entity (callable as `playSound()`) */
@@ -605,7 +632,13 @@ void ASPlayAnimation(EntityID entity, const std::string& animName);
 /** @brief Find an entity by name (callable as `getEntityByName()`) */
 EntityID ASGetEntityByName(const std::string& name);
 
-/** @brief Fire a named event (callable as `fireEvent()`) */
+/**
+ * @brief Fire a named event (callable as `fireEvent()`)
+ *
+ * Publishes Spark::ScriptEvent{eventName, executing entity} synchronously on
+ * the EngineContext EventBus. Dropped with a one-time warning when the name is
+ * empty or no EventBus is registered.
+ */
 void ASFireEvent(const std::string& eventName);
 
 /** @brief Print a debug trace message (callable as `debugTrace()`) */
