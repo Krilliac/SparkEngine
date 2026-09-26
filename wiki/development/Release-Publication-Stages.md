@@ -46,9 +46,9 @@ delete its entry in the same change. A work item marked `done` never resolves a
 reference through that list.
 
 Work-item `commands` are resolved against `CMakePresets.json`, using the
-inheritance resolver in `Tools/buildmatrix/inventory.py`. `cmake --preset X`
-must name a configure preset, `cmake --build --preset X` a build preset, and
-`ctest --preset X` a test preset. Every `build/<dir>` tree passed to cmake or
+inheritance resolver in `Tools/buildmatrix/inventory.py`. `cmake --preset <name>`
+must name a configure preset, `cmake --build --preset <name>` a build preset, and
+`ctest --preset <name>` a test preset. Every `build/<dir>` tree passed to cmake or
 ctest must be a configure preset's binaryDir. A ctest run must target a preset
 that builds tests. A preset whose resolved `BUILD_TESTS` is false, such as
 `windows-shipping` or `linux-shipping`, is accepted only when the same item

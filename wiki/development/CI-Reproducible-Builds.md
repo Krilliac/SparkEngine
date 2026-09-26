@@ -308,8 +308,8 @@ that rather than hiding it.
 
 ```bash
 cmake --preset macos-release
-cmake --build build --parallel $(sysctl -n hw.logicalcpu)
-cd build && ./bin/SparkTests && cd ..
+cmake --build build/macos-release --parallel $(sysctl -n hw.logicalcpu)
+./build/macos-release/bin/SparkTests
 ```
 
 ## MinGW + Wine (job `build-linux-mingw-wine`, `continue-on-error`)
@@ -318,8 +318,8 @@ Cross-compiles the Windows D3D11 code on Linux and runs it under Wine:
 
 ```bash
 cmake --preset linux-mingw-release
-cmake --build build --parallel $(nproc)
-tools/wine-run.sh build/bin/SparkTests.exe
+cmake --build build/linux-mingw-release --parallel $(nproc)
+tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
 ```
 
 See the project's MinGW/Wine setup notes for the full toolchain install (`tools/setup-mingw-wine.sh`).

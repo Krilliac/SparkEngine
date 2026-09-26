@@ -725,7 +725,7 @@
       "wave": 1,
       "area": "build",
       "owner": "unassigned",
-      "rationale": "SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open. 2026-09-24 progress: root CMake now ends with spark_reject_undeclared_options() (cmake/SparkOptionGuard.cmake), which fails configure on any untyped -D ENABLE_*/SPARK_*/BUILD_* entry nothing declared; SPARK_REQUIRE_WINDOWS_INSTALLERS is declared on every platform (SparkBuild passes it everywhere) and the SPARK_MODULE_CXX_LANGUAGE_ABI override is declared by SparkGameModule.cmake. BuildOptions_UnknownOptionRejected (Tests/Tools/test_build_option_guard.py, 9 cases incl. a preset audit) is green and a local linux-gcc-release configure rejects -DENABLE_TYPO_OPTION=ON; explicitly typed -DNAME:TYPE entries remain outside the guard and no Windows lane has exercised it yet.",
+      "rationale": "SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open. 2026-09-24 progress: root CMake now ends with spark_reject_undeclared_options() (cmake/SparkOptionGuard.cmake), which fails configure on any untyped -D ENABLE_*/SPARK_*/BUILD_* entry nothing declared; SPARK_REQUIRE_WINDOWS_INSTALLERS is declared on every platform (SparkBuild passes it everywhere) and the SPARK_MODULE_CXX_LANGUAGE_ABI override is declared by SparkGameModule.cmake. BuildOptions_UnknownOptionRejected (Tests/Tools/test_build_option_guard.py, 9 cases incl. a preset audit) is green and a local linux-gcc-release configure rejects -DENABLE_TYPO_OPTION=ON; explicitly typed -DNAME:TYPE entries remain outside the guard and no Windows lane has exercised it yet. 2026-09-26 progress: tools/site-data/documented_commands.py (run by validate.py) checks documented build commands against CMakePresets.json; the 46 drifted quick-start commands it found (bare build/ trees after a preset configure, trees nothing configured, an ad-hoc configure into a preset tree, and Visual Studio configures without the presets' -A/-T pins) were aligned to the presets.",
       "dependencies": [
         "CI-100"
       ],
@@ -761,6 +761,8 @@
         "Tests/Tools/test_build_matrix_parity.py",
         "Tests/Tools/test_build_option_guard.py",
         "cmake/SparkOptionGuard.cmake",
+        "tools/site-data/documented_commands.py",
+        "Tests/Tools/test_documented_build_commands.py",
         "Tests/Tools/test_build_matrix_pending_authority.py",
         "Tests/Tools/test_build_matrix_external_verifier.py",
         "docs/site/readiness.json",
@@ -819,11 +821,13 @@
         },
         {
           "criterionDigest": "sha256:06bff177aa6c",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "tools/site-data/validate.py"
+            "tools/site-data/documented_commands.py",
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_documented_build_commands.py"
           ],
-          "note": "Only work-item commands are resolved against presets. README and wiki quick starts are not validated."
+          "note": "validate.py checks every cmake/ctest/cpack command in README, CLAUDE.md, wiki, docs and prompt code blocks against CMakePresets.json: preset names, build/<preset> trees (incl. cpack --config, cd), -B and configure-script trees, multi-config --config/-C and generator -A/-T pins. BuildOptions_DocumentedCommandsMatchPresets is green locally; no exact-commit CI run yet."
         },
         {
           "criterionDigest": "sha256:029af64cb513",
@@ -860,6 +864,8 @@
         "python3 Tools/buildmatrix/validate_pending_authority.py --inventory build-matrix-inventory.json --report build-matrix-parity-findings.json --output build-matrix-pending-authority.json",
         "python3 Tests/Tools/test_build_matrix_parity.py",
         "python3 Tests/Tools/test_build_option_guard.py",
+        "python3 Tests/Tools/test_documented_build_commands.py",
+        "python3 tools/site-data/documented_commands.py",
         "python3 -m unittest Tests.Tools.test_build_matrix_pending_authority Tests.Tools.test_build_matrix_external_verifier",
         "cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel --clean-first",

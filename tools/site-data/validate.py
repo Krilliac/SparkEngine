@@ -33,6 +33,7 @@ from common import (
 )
 from contract_selectors import (cmake_preset_index, preset_references, required_gate_jobs, resolve_ci_job,
                                 resolve_test_selector)
+from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
                             predecessor_candidate_readiness_errors)
@@ -3131,6 +3132,9 @@ class Validator:
         self.validate_docs_catalog()
         self.validate_future_acceptance_paths()
         self.validate_build_matrix_evidence()
+        # CI-120: README/wiki/CLAUDE.md quick starts resolve against CMakePresets.json.
+        for finding in check_documented_build_commands():
+            self.error(f"{finding.path}:{finding.line}", finding.message)
         self.validate_public_numeric_claims()
         self.validate_online_service_boundary()
         self.validate_legal(strict_public_wording=legal)

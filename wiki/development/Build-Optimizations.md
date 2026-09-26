@@ -15,7 +15,7 @@ Concrete time and effort savers for build, CI diagnosis, and git workflows. Thes
 Always pass `--parallel $(nproc)` to `cmake --build` to exploit all available CPU cores:
 
 ```bash
-cmake --build build --config Release --parallel $(nproc)
+cmake --build build/linux-gcc-release --config Release --parallel $(nproc)
 ```
 
 Without this flag, CMake builds single-threaded by default on some configurations, which is dramatically slower on multi-core hosts.

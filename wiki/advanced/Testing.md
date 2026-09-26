@@ -717,16 +717,16 @@ Or use the preset:
 
 ```bash
 cmake --preset ci-linux-asan
-cmake --build build
-cd build && ctest --output-on-failure --no-tests=error
+cmake --build build/ci-linux-asan
+ctest --test-dir build/ci-linux-asan --output-on-failure --no-tests=error
 ```
 
 #### ThreadSanitizer
 
 ```bash
 cmake --preset ci-linux-tsan
-cmake --build build
-cd build && ctest --output-on-failure --no-tests=error
+cmake --build build/ci-linux-tsan
+ctest --test-dir build/ci-linux-tsan --output-on-failure --no-tests=error
 ```
 
 ### Matching CI Locally

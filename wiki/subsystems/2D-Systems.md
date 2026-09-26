@@ -656,9 +656,9 @@ The test file uses minimal re-declarations of DirectXMath types (`TestHelper::Fl
 Run the tests with:
 
 ```bash
-cd build && ctest --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 # Or directly:
-SPARK_TEST_NAME=Sprite2D ./bin/SparkTests   # substring filter; the harness is not GoogleTest
+SPARK_TEST_NAME=Sprite2D build/linux-gcc-release/bin/SparkTests   # substring filter; the harness is not GoogleTest
 ```
 
 ---

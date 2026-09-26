@@ -152,7 +152,7 @@ chmod +x generate.sh
 ### Using CMake Directly
 
 ```bash
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143
 ```
 
 ### CMake Presets
@@ -182,7 +182,7 @@ For a release-configured development build with networking and DXR disabled:
 
 ```bash
 cmake --preset minimal
-cmake --build build --config Release
+cmake --build build/minimal
 ```
 
 This preset effectively disables networking and DXR. Its AI, animation, save,
@@ -545,8 +545,8 @@ cmake --build build --config Release --target install
 
 ```bash
 cmake --preset ci-linux-asan
-cmake --build build
-cd build && ctest --output-on-failure --no-tests=error
+cmake --build build/ci-linux-asan
+ctest --test-dir build/ci-linux-asan --output-on-failure --no-tests=error
 ```
 
 ## Project Structure Quick Reference

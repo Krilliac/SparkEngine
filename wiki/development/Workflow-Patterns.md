@@ -145,10 +145,10 @@ find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkSha
 cmake --preset linux-gcc-release 2>&1 | tail -20
 
 # 3. Build (catches compile errors)
-cmake --build build --config Release --parallel $(nproc) 2>&1 | tail -30
+cmake --build build/linux-gcc-release --parallel $(nproc) 2>&1 | tail -30
 
 # 4. Tests (catches regressions)
-cd build && ctest --output-on-failure --no-tests=error && cd ..
+ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 
 # 5. Docs (catches stale auto-generated content)
 docs/update-all-docs.sh

@@ -368,7 +368,7 @@ For large worlds, the streaming system loads/unloads areas automatically. Monito
 Always profile with Release builds. Debug builds are 5–10x slower:
 
 ```bash
-cmake --build build --config Release
+cmake --build build/windows-release --config Release   # Linux: cmake --build build/linux-gcc-release
 ```
 
 ### Disable Unused Features

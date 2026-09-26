@@ -12,8 +12,9 @@ SparkEngine uses CPack from the top-level `CMakeLists.txt`.
 Create packages after configure/build:
 
 ```bash
-cmake --build build --config Release
-cpack --config build/CPackConfig.cmake
+cmake --preset windows-release
+cmake --build build/windows-release --config Release
+cpack --config build/windows-release/CPackConfig.cmake -C Release
 ```
 
 ## Package Components

@@ -187,11 +187,9 @@ cmake --preset windows-release       # Windows MSVC
 cmake --preset linux-gcc-release     # Linux GCC
 cmake --preset macos-release         # macOS Apple Clang (experimental)
 
-# Build
-cmake --build build --config Release
-
-# Test
-cd build && ctest --output-on-failure
+# Build and test (each preset writes build/<preset>; the Visual Studio tree needs --config / -C)
+cmake --build build/windows-release --config Release && ctest --test-dir build/windows-release -C Release --output-on-failure
+cmake --build build/linux-gcc-release && ctest --test-dir build/linux-gcc-release --output-on-failure
 ```
 
 **Run a subset of `SparkTests`** while iterating. `Tests/TestMain.cpp` reads these environment variables:
@@ -276,10 +274,10 @@ git diff --name-only --diff-filter=ACMR origin/Working -- \
 cmake --preset linux-gcc-release 2>&1 | tail -20
 
 # 4. Build
-cmake --build build --config Release 2>&1 | tail -30
+cmake --build build/linux-gcc-release 2>&1 | tail -30
 
 # 5. Tests
-cd build && ctest --output-on-failure && cd ..
+ctest --test-dir build/linux-gcc-release --output-on-failure
 
 # 6. Docs (one command updates all wikis, stats, badges, context)
 docs/update-all-docs.sh

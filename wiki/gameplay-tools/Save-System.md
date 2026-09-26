@@ -325,7 +325,7 @@ compatibility uses `SceneMigration_` (`SparkSceneCompatibilityTests`, labels
 `compatibility;scene;unit`, fixtures under `Tests/Fixtures/Compatibility/SceneFile/`):
 
 ```bash
-ctest --test-dir build -C Release -L compatibility --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L compatibility --output-on-failure --no-tests=error
 ```
 
 The compatibility-labeled coverage includes:

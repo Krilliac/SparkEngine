@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **51 in progress**, **5 blocked**, **8 open**
-- Acceptance criteria: **259 total**, **39 implemented** (15%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **40 implemented** (15%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -259,7 +259,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
 | [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 0/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
-| [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | 1/8 · 0/8 | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
+| [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | 2/8 · 0/8 | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
 | [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | 0/4 · 0/4 | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 1/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **in-progress** | 2/4 · 0/4 | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
@@ -994,7 +994,7 @@ SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open. 2026-09-24 progress: root CMake now ends with spark_reject_undeclared_options() (cmake/SparkOptionGuard.cmake), which fails configure on any untyped -D ENABLE_*/SPARK_*/BUILD_* entry nothing declared; SPARK_REQUIRE_WINDOWS_INSTALLERS is declared on every platform (SparkBuild passes it everywhere) and the SPARK_MODULE_CXX_LANGUAGE_ABI override is declared by SparkGameModule.cmake. BuildOptions_UnknownOptionRejected (Tests/Tools/test_build_option_guard.py, 9 cases incl. a preset audit) is green and a local linux-gcc-release configure rejects -DENABLE_TYPO_OPTION=ON; explicitly typed -DNAME:TYPE entries remain outside the guard and no Windows lane has exercised it yet.
+SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open. 2026-09-24 progress: root CMake now ends with spark_reject_undeclared_options() (cmake/SparkOptionGuard.cmake), which fails configure on any untyped -D ENABLE_*/SPARK_*/BUILD_* entry nothing declared; SPARK_REQUIRE_WINDOWS_INSTALLERS is declared on every platform (SparkBuild passes it everywhere) and the SPARK_MODULE_CXX_LANGUAGE_ABI override is declared by SparkGameModule.cmake. BuildOptions_UnknownOptionRejected (Tests/Tools/test_build_option_guard.py, 9 cases incl. a preset audit) is green and a local linux-gcc-release configure rejects -DENABLE_TYPO_OPTION=ON; explicitly typed -DNAME:TYPE entries remain outside the guard and no Windows lane has exercised it yet. 2026-09-26 progress: tools/site-data/documented_commands.py (run by validate.py) checks documented build commands against CMakePresets.json; the 46 drifted quick-start commands it found (bare build/ trees after a preset configure, trees nothing configured, an ad-hoc configure into a preset tree, and Visual Studio configures without the presets' -A/-T pins) were aligned to the presets.
 
 **Dependency contract**
 
@@ -1030,6 +1030,8 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `Tests/Tools/test_build_matrix_parity.py`
 - `Tests/Tools/test_build_option_guard.py`
 - `cmake/SparkOptionGuard.cmake`
+- `tools/site-data/documented_commands.py`
+- `Tests/Tools/test_documented_build_commands.py`
 - `Tests/Tools/test_build_matrix_pending_authority.py`
 - `Tests/Tools/test_build_matrix_external_verifier.py`
 - `docs/site/readiness.json`
@@ -1051,7 +1053,7 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 
 **Acceptance criteria**
 
-Progress: 1 of 8 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 8 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every stable-v1 target appears with its declared kind in configured codemodel evidence for its canonical build profile
    - Needs configured Windows codemodel evidence from a real MSVC configure.
@@ -1062,9 +1064,9 @@ Progress: 1 of 8 implemented, 0 evidenced at an exact commit.
    - Typed -DNAME:TYPE entries bypass the guard and unused options are not detected. No Windows lane has run it.
 4. **[unmet]** Missing dependency is fatal
    - StrictDependencies_* is still planned. No test proves that a missing dependency is fatal.
-5. **[unmet]** Documented configure/build commands match the Windows presets
-   - Evidence: `tools/site-data/validate.py`
-   - Only work-item commands are resolved against presets. README and wiki quick starts are not validated.
+5. **[implemented]** Documented configure/build commands match the Windows presets
+   - Evidence: `tools/site-data/documented_commands.py`, `tools/site-data/validate.py`, `Tests/Tools/test_documented_build_commands.py`
+   - validate.py checks every cmake/ctest/cpack command in README, CLAUDE.md, wiki, docs and prompt code blocks against CMakePresets.json: preset names, build/<preset> trees (incl. cpack --config, cd), -B and configure-script trees, multi-config --config/-C and generator -A/-T pins. BuildOptions_DocumentedCommandsMatchPresets is green locally; no exact-commit CI run yet.
 6. **[unmet]** Experimental platform Shipping matrices remain owned by their platform work items
    - Evidence: `Tests/Tools/test_site_data_contract.py`
    - Only the planned macos-shipping preset is owner-scoped. linux-shipping has no enforced platform owner.
@@ -1086,6 +1088,8 @@ python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/build-matri
 python3 Tools/buildmatrix/validate_pending_authority.py --inventory build-matrix-inventory.json --report build-matrix-parity-findings.json --output build-matrix-pending-authority.json
 python3 Tests/Tools/test_build_matrix_parity.py
 python3 Tests/Tools/test_build_option_guard.py
+python3 Tests/Tools/test_documented_build_commands.py
+python3 tools/site-data/documented_commands.py
 python3 -m unittest Tests.Tools.test_build_matrix_pending_authority Tests.Tools.test_build_matrix_external_verifier
 cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON
 cmake --build build/windows-shipping --config MinSizeRel --clean-first

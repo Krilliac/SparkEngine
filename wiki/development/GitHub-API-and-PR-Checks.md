@@ -54,8 +54,8 @@ Note: this repo also has a `report-ci-errors` job that aggregates per-job error 
 Pull the matching configuration from `.github/workflows/build.yml`. The standard Linux jobs use manual flags, but for the common Debug/Release cases the presets match closely enough:
 
 ```bash
-cmake --preset linux-gcc-release && cmake --build build --parallel $(nproc)
-cmake --preset linux-gcc-debug   && cmake --build build --parallel $(nproc)
+cmake --preset linux-gcc-release && cmake --build build/linux-gcc-release --parallel $(nproc)
+cmake --preset linux-gcc-debug   && cmake --build build/linux-gcc-debug --parallel $(nproc)
 ```
 
 See [CI Reproducible Builds](CI-Reproducible-Builds.md) for the full job ↔ command table (including the sanitizer jobs, which use manual `cmake -B build` flag invocations, not presets).

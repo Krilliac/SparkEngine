@@ -237,7 +237,7 @@ target_include_directories(MyGame PRIVATE "Source")
 Configure and launch an in-tree module from the repository root. With a multi-config generator, keep the configuration segment in both paths:
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -T v143
 cmake --build build --config Release --target SparkEngine MyGame
 .\build\bin\Release\SparkEngine.exe -game .\build\bin\Release\MyGame.dll
 ```

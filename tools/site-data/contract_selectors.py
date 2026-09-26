@@ -295,6 +295,14 @@ class CMakePresetIndex:
                 name: inventory.resolve_dependent_preset(presets, "testPresets", name)["configurePreset"]
                 for name in self.names["test"]
             }
+            # The configuration a configure preset's own build preset selects;
+            # multi-config trees build Debug unless told otherwise.
+            self._build_configuration: dict[str, str] = {}
+            for name in sorted(self.names["build"]):
+                resolved_build = inventory.resolve_dependent_preset(presets, "buildPresets", name)
+                configuration = resolved_build.get("configuration")
+                if isinstance(configuration, str) and configuration:
+                    self._build_configuration.setdefault(resolved_build["configurePreset"], configuration)
         except inventory.InventoryError as error:
             raise SiteDataError(f"CMakePresets.json: {error}") from error
         self.binary_dirs: dict[str, str] = {}
@@ -317,6 +325,45 @@ class CMakePresetIndex:
         if reference.kind == "configure" and reference.name in self._configure:
             return reference.name
         return None
+
+    def binary_dir_of(self, configure_name: str) -> str | None:
+        """The ``build/<dir>`` tree a configure preset writes, when it resolves to one."""
+        return next((tree for tree, name in self.binary_dirs.items() if name == configure_name), None)
+
+    def is_multi_config(self, configure_name: str) -> bool:
+        """True when the preset pins a multi-config generator (Visual Studio, Ninja Multi-Config, Xcode)."""
+        generator = self._configure[configure_name].get("generator")
+        if not isinstance(generator, str):
+            return False
+        return generator.startswith("Visual Studio") or generator in {"Ninja Multi-Config", "Xcode"}
+
+    def generator_pins(self, generator: str) -> set[tuple[str | None, str | None]]:
+        """(architecture, toolset) pairs the visible presets pin for ``generator``."""
+
+        def pinned(value: Any) -> str | None:
+            if isinstance(value, dict):
+                value = value.get("value")
+            return value if isinstance(value, str) and value else None
+
+        return {
+            (pinned(resolved.get("architecture")), pinned(resolved.get("toolset")))
+            for resolved in self._configure.values()
+            if resolved.get("generator") == generator
+        }
+
+    def expected_configuration(self, configure_name: str) -> str | None:
+        """The configuration a build of this preset's tree must name.
+
+        The configure preset's own build preset wins; otherwise the configure
+        preset's CMAKE_BUILD_TYPE. None when neither states one.
+        """
+        configuration = self._build_configuration.get(configure_name)
+        if configuration:
+            return configuration
+        value = self._configure[configure_name]["cacheVariables"].get("CMAKE_BUILD_TYPE")
+        if isinstance(value, dict):
+            value = value.get("value")
+        return value if isinstance(value, str) and value else None
 
     def builds_tests(self, configure_name: str) -> bool:
         value = self._configure[configure_name]["cacheVariables"].get("BUILD_TESTS")

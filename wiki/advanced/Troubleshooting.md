@@ -74,9 +74,9 @@ git submodule update --init --recursive --force
 SparkEngine uses `/MD` (dynamic CRT). If third-party libraries were built with `/MT`, you get linker errors. Clean rebuild:
 
 ```batch
-rmdir /s /q build
-cmake -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
+rmdir /s /q build\windows-release
+cmake --preset windows-release
+cmake --build build\windows-release --config Release
 ```
 
 ### CMake Version Too Old

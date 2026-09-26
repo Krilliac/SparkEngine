@@ -55,9 +55,9 @@ clang-tidy -p build SparkEngine/Source/**/*.cpp
 ### 3. Build and test
 
 ```bash
-cmake --preset linux-gcc-release     # or windows-release
-cmake --build build --config Release
-cd build && ctest --output-on-failure --no-tests=error
+cmake --preset linux-gcc-release     # or windows-release (then build/windows-release, --config/-C Release)
+cmake --build build/linux-gcc-release
+ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 ```
 
 All checks must pass before submitting a PR.

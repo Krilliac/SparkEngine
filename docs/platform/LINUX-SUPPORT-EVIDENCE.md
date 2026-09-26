@@ -324,12 +324,15 @@ UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
 LSAN_OPTIONS=suppressions=$PWD/Tests/lsan_suppressions.txt:print_suppressions=0 \
   ctest --test-dir build/ci-linux-asan -L nullrhi-headless --output-on-failure --no-tests=error
 
-# TSan (same pattern, -fsanitize=thread; the CI job's TSAN_OPTIONS)
+# TSan (preset plus the CI job's shared-linker flag and TSAN_OPTIONS)
+cmake --preset ci-linux-tsan -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+  "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=thread"
+cmake --build build/ci-linux-tsan --target SparkEngine SparkGameFPS SparkGame SparkTests -j4
 TSAN_OPTIONS=halt_on_error=0:second_deadlock_stack=1:suppressions=$PWD/Tests/tsan_suppressions.txt \
   ctest --test-dir build/ci-linux-tsan -L nullrhi-headless --output-on-failure --no-tests=error
 
 # Ten-minute FPS soak (opt-in registration, Release)
-cmake -B build/linux-gcc-release -DSPARK_ENABLE_SOAK_TESTS=ON
+cmake --preset linux-gcc-release -DSPARK_ENABLE_SOAK_TESTS=ON
 ctest --test-dir build/linux-gcc-release -L '^soak$' --output-on-failure --no-tests=error
 ```
 

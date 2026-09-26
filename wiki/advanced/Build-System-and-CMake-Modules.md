@@ -34,7 +34,7 @@ detection run again. The supported Windows preset selects Visual Studio 17
 ./generate.sh release -g Ninja
 
 # Direct CMake
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143
 
 # Using presets (recommended)
 cmake --fresh --preset windows-release
@@ -200,6 +200,37 @@ cmake --preset windows-release
 cmake --build --preset windows-release
 ```
 
+### Documented commands are checked against the presets
+
+Every preset writes `build/<preset>`, and the Visual Studio presets are
+multi-config, so a tree built or tested without `--config`/`-C` produces Debug.
+`tools/site-data/documented_commands.py` (run by `tools/site-data/validate.py`
+and the `BuildOptions_DocumentedCommandsMatchPresets` CTest) resolves every
+`cmake`/`ctest`/`cpack` command in the shell code blocks and inline code spans
+of `README.md`, `CLAUDE.md`, `wiki/`, `docs/` and `.github/prompts/` against
+`CMakePresets.json`. It fails when:
+
+- `--preset` names no visible preset of that family;
+- a build, install, test or package tree (`cmake --build`/`--install`,
+  `ctest`, `cpack --config <tree>/CPackConfig.cmake`, or the directory a `cd`
+  entered) is neither a preset `binaryDir` nor configured earlier in the
+  document with `-B` or a repository configure script (`generate.sh`,
+  `generate.bat`, `build.sh` and `build.ps1` all configure `build`);
+- a block that configured presets then uses any other tree, including another
+  preset's (the classic `cmake --preset <name>` then `cmake --build build`);
+- an ad-hoc `-B` configure writes into a preset's tree;
+- a multi-config preset tree omits its preset's configuration, or any stated
+  configuration differs from it. `cmake --install` and `cpack` default a
+  multi-config tree to Release, so they may omit it only for a Release preset;
+  `--build` and `ctest` default to Debug;
+- an ad-hoc configure with a generator the presets use omits the `-A`/`-T`
+  values those presets pin (`-A x64 -T v143` for VS 2022; `-T v143,host=x64`
+  states the same toolset). A generator no preset uses has no pin to compare.
+
+Placeholders (`<preset>`, `$VAR`, `~`) and absolute paths are skipped. Generated
+pages (`docs/api/`, `wiki/reference/`, the readiness handoff) and dated plans
+under `docs/superpowers/` are out of scope.
+
 ### Configured-target build-matrix evidence
 
 The build-matrix tooling uses CMake File API replies to prove which targets a concrete build profile actually configured. The capture command creates a unique stateful File API query, invokes the canonical configure itself, and records only the matching reply transaction before inventory generation:
@@ -356,12 +387,12 @@ build/
 
 **SparkBuild** is an in-tree C++17 terminal-UI wrapper around CMake. The source lives at `SparkBuild/` (vendored from the now-archived `Krilliac/SparkBuild`; see `SparkBuild/UPSTREAM.md` for the pinned commit). It is built as part of the normal engine build under the `ENABLE_SPARKBUILD` option (ON by default).
 
-**Output:** `build/bin/SparkBuild` (or `SparkBuild.exe` on Windows).
+**Output:** `build/<preset>/bin/SparkBuild` (or `build/<preset>/bin/<Config>/SparkBuild.exe` on Windows).
 
 ```bash
 cmake --preset linux-gcc-release
-cmake --build build --target SparkBuild
-./build/bin/SparkBuild
+cmake --build build/linux-gcc-release --target SparkBuild
+./build/linux-gcc-release/bin/SparkBuild
 ```
 
 Because SparkBuild only shells out to `cmake`, it has no dependency on any SparkEngine header or library — so in-tree hosting introduces no circular build dependency. To skip it:

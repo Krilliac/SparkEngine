@@ -756,7 +756,7 @@ The coroutine system is covered by `Tests/TestCoroutineScheduler.cpp` with 10 te
 Run tests with:
 
 ```bash
-cd build && ctest --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 ```
 
 ---

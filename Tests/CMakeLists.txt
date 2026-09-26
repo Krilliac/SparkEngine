@@ -3358,6 +3358,15 @@ if(Python3_Interpreter_FOUND)
         LABELS "build-contract;ci;governance;unit;python"
         TIMEOUT 120)
 
+    # CI-120: documented cmake/ctest/cpack commands (README, CLAUDE.md, wiki,
+    # docs) resolve against CMakePresets.json trees, configurations and pins.
+    add_test(
+        NAME BuildOptions_DocumentedCommandsMatchPresets
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_documented_build_commands.py)
+    set_tests_properties(BuildOptions_DocumentedCommandsMatchPresets PROPERTIES
+        LABELS "build-contract;ci;governance;docs;unit;python"
+        TIMEOUT 120)
+
     add_test(
         NAME SparkNetworkBoundaryStatic
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/check_network_boundary.py)

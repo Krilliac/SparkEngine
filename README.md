@@ -61,8 +61,9 @@ cmake --build --preset windows-release
 ./build.sh release
 ```
 
-Visual Studio and Ninja Multi-Config builds keep binaries isolated under
-`build/bin/<Config>` (for example, `build/bin/Release/SparkEditor.exe`).
+Each preset builds into `build/<preset>`; Visual Studio and Ninja Multi-Config builds keep
+binaries isolated under `bin/<Config>` there (for example,
+`build/windows-release/bin/Release/SparkEditor.exe`).
 
 Requirements: MSVC 19.36+ / GCC 13+ / Clang 17+, CMake 3.25+.  
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
@@ -70,7 +71,9 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
 **Create a game module:**
 
 ```bash
-cmake --install build --prefix ~/SparkEngine-install
+# Install the engine you built above (pick the line for your build path)
+cmake --install build/windows-release --config Release --prefix ~/SparkEngine-install  # Windows preset
+cmake --install build --prefix ~/SparkEngine-install                                   # ./generate.sh + ./build.sh
 cp -r Templates/EmptyProject MyGame && cd MyGame
 cmake -B build -DCMAKE_PREFIX_PATH=~/SparkEngine-install
 cmake --build build --config Release

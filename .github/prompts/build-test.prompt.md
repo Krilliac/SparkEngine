@@ -8,8 +8,8 @@ Context: `#prompt:copilot-instructions` for project overview. Console commands: 
 
 | Action | Windows | Linux |
 |--------|---------|-------|
-| Generate | `generate.bat` or `cmake -B build -G "Visual Studio 17 2022" -A x64` | `generate.sh` |
-| Build | `build.ps1` or `cmake --build build --config Release` | `build.sh` |
+| Generate | `generate.bat` or `cmake --preset windows-release` | `generate.sh` |
+| Build | `build.ps1` or `cmake --build build/windows-release --config Release` | `build.sh` |
 
 Presets: `cmake --preset <name>` (see `CMakePresets.json`).
 
@@ -77,11 +77,11 @@ Workflow triggers and required/advisory matrix rows are defined in `.github/work
 
 ```powershell
 # Registered CTest cases; an empty selection is an error.
-ctest --test-dir build -C Debug --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release --output-on-failure --no-tests=error
 
 # Filter cases inside the aggregate SparkTests executable by source file.
 $env:SPARK_TEST_FILE = "TestPhysics.cpp"
-.\build\bin\Debug\SparkTests.exe
+.\build\windows-release\bin\Release\SparkTests.exe
 Remove-Item Env:SPARK_TEST_FILE
 ```
 

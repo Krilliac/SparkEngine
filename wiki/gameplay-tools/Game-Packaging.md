@@ -253,7 +253,7 @@ If any step produces fatal errors, the pipeline returns early with `success = fa
 
 ```bash
 cmake --preset windows-release
-cmake --build build --config Release
+cmake --build build/windows-release --config Release
 ```
 
 ### Step 2: Package from C++
