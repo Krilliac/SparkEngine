@@ -22,10 +22,10 @@ Account passwords are stored only as `Spark::PasswordHash` hashes, never as plai
 
 - Accounts and sessions are in memory only. `MMOAccountSystem` keeps them in `std::unordered_map`s and nothing
   persists them, so every account is lost when the process exits.
-- Scene paths do not match the shipped scenes. `MMOWorldSetup` registers streaming areas as
-  `Assets/Scenes/<AreaName>.scene` (for example `Assets/Scenes/TownSquare.scene`) and `MMODungeonSystem` uses
-  `Assets/Scenes/shadow_crypt.scene`, but the scenes ship as `Assets/Scenes/MMO/town_square.scene`,
-  `Assets/Scenes/MMO/shadow_crypt.scene`, and so on, so area streaming cannot find them.
+- Two dungeons have no authored scene. Each world area carries an exact-case `sceneFile` under
+  `Assets/Scenes/MMO/` (for example `Assets/Scenes/MMO/town_square.scene`), and the Shadow Crypt dungeon uses
+  `Assets/Scenes/MMO/shadow_crypt.scene`. Forgotten Mine and Void Spire have no scene yet, so they stay registered
+  but are not enterable: `CreateInstance` refuses them and `mmo_dungeon_enter` reports why.
 - The `Data/Localization/mmo_*.json` string tables that `MMOEngineSystems` loads do not exist in the repository.
 
 ## Assets
@@ -33,11 +33,12 @@ Account passwords are stored only as `Spark::PasswordHash` hashes, never as plai
 Assets authored for this module live under `Assets/Models/MMO`, `Assets/Textures/MMO`, `Assets/Audio/MMO`,
 `Assets/Materials/MMO`, and `Assets/Scenes/MMO`. Every file is listed in `Assets/assets.integrity.json`, and
 `Assets/MMO/asset_manifest.json` records their license and generators. The module source does not reference the
-model, texture, audio, or material files by path, and its scene paths miss the shipped scenes (see above).
+model, texture, audio, or material files by path. `MMOWorld_AreaScenePathsExistExactCase` checks that every
+registered scene path exists with exact case and that each scene's `areaId` header matches its area.
 
 ## Tests
 
-- `Tests/TestGameModuleMMO.cpp` (`MMO_*`) compiles the module's real system sources into SparkTests.
+- `Tests/TestGameModuleMMO.cpp` (`MMO_*`, `MMOWorld_*`) compiles the module's real system sources into SparkTests.
 - `Tests/TestMMOCredentialSecurity.cpp` (`MMOCredentials_*`) covers password handling in the account system.
 - `Tests/harden/Test_gamemodules_mmochat_di.cpp` (`MMO_ChatSystem_ResolvesNetworkViaInjectedContext`) checks that
   chat uses the injected engine context's `NetworkManager`.

@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2551,
+      "line": 2552,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1396,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2589,
+      "line": 2590,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1405,10 +1405,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2209,
+      "line": 2210,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2154",
+          "id": "Tests/CMakeLists.txt:2155",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1491,7 +1491,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1425,
+      "line": 1426,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2633,10 +2633,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 3109,
+      "line": 3110,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3107",
+          "id": "Tests/CMakeLists.txt:3108",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2803,10 +2803,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1280,
+      "line": 1281,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1268",
+          "id": "Tests/CMakeLists.txt:1269",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -4444,7 +4444,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 3109,
+          "line": 3110,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4624,7 +4624,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1280,
+          "line": 1281,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

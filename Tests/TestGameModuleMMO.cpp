@@ -13,6 +13,7 @@
 #include "../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.h"
+#include "../GameModules/SparkGameMMO/Source/Dungeon/MMODungeonSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Inventory/MMOInventorySystem.h"
 #include "../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h"
@@ -23,8 +24,15 @@
 
 #include "../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h"
 
+#include <nlohmann_json.h>
+
 #include <cmath>
+#include <filesystem>
+#include <exception>
+#include <fstream>
+#include <iterator>
 #include <limits>
+#include <string>
 
 // Later game-module headers can include Windows.h after MMOChatSystem has
 // declared its SendMessage overloads. Keep the Win32 alias out of the calls
@@ -55,6 +63,58 @@ namespace
         uint32_t GetEngineVersion() const override { return 0; }
         uint32_t GetSDKVersion() const override { return 0; }
     };
+
+    /// True when every component of relativePath names a directory entry with exactly that spelling.
+    /// std::filesystem::exists() is case-insensitive on Windows/macOS, so walk the directory listings instead.
+    bool ExistsWithExactCase(const std::filesystem::path& root, const std::string& relativePath)
+    {
+        const std::filesystem::path relative(relativePath);
+        if (relativePath.empty() || relative.is_absolute() || relativePath.find('\\') != std::string::npos)
+            return false;
+
+        std::filesystem::path current = root;
+        for (const auto& component : relative)
+        {
+            const std::string name = component.string();
+            if (name.empty() || name == "." || name == "..")
+                return false;
+
+            std::error_code ec;
+            bool found = false;
+            for (const auto& entry : std::filesystem::directory_iterator(current, ec))
+            {
+                if (entry.path().filename().string() == name)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (ec || !found)
+                return false;
+            current /= component;
+        }
+        return std::filesystem::is_regular_file(current);
+    }
+
+    /// Reads the scene's JSON "areaId" header; returns -1 when the file is missing, malformed or lacks it.
+    long long ReadSceneAreaId(const std::filesystem::path& scenePath)
+    {
+        std::ifstream in(scenePath, std::ios::binary);
+        if (!in)
+            return -1;
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        try
+        {
+            const nlohmann::json scene = nlohmann::json::parse(text);
+            if (!scene.is_object() || !scene.contains("areaId") || !scene["areaId"].is_number_integer())
+                return -1;
+            return scene["areaId"].get<int>();
+        }
+        catch (const std::exception&)
+        {
+            return -1;
+        }
+    }
 } // namespace
 
 // ============================================================================
@@ -406,6 +466,82 @@ TEST(MMO_PlayerMovement_RejectsNonFiniteInput)
     EXPECT_TRUE(std::isfinite(player.posZ));
     EXPECT_NEAR(player.posX, 0.0f, 0.0001f);
     EXPECT_NEAR(player.posZ, 0.6f, 0.0001f);
+}
+
+TEST(MMOWorld_AreaScenePathsExistExactCase)
+{
+    const std::filesystem::path sourceRoot(SPARK_TEST_SOURCE_DIR);
+
+    MMOTestContext context;
+    MMOWorldSetup world;
+    ASSERT_TRUE(world.Initialize(&context));
+    ASSERT_EQ(world.GetAreaCount(), 4u);
+
+    // Every world area streams/serves its sceneFile verbatim, so each one must exist with exact case
+    // and declare the same areaId in its JSON header.
+    for (const auto& area : world.GetAreas())
+    {
+        EXPECT_TRUE(ExistsWithExactCase(sourceRoot, area.sceneFile));
+        EXPECT_EQ(ReadSceneAreaId(sourceRoot / area.sceneFile), static_cast<long long>(area.areaId));
+    }
+    EXPECT_EQ(world.GetArea(1)->sceneFile, std::string("Assets/Scenes/MMO/town_square.scene"));
+    EXPECT_EQ(world.GetArea(3)->sceneFile, std::string("Assets/Scenes/MMO/shadow_crypt.scene"));
+
+    // The legacy name-derived spelling must not resolve on a case-sensitive tree.
+    EXPECT_FALSE(ExistsWithExactCase(sourceRoot, "Assets/Scenes/TownSquare.scene"));
+    EXPECT_FALSE(ExistsWithExactCase(sourceRoot, "Assets/Scenes/MMO/Town_Square.scene"));
+
+    // Enterable dungeons point at an authored scene that belongs to a registered world area.
+    MMODungeonSystem dungeons;
+    ASSERT_TRUE(dungeons.Initialize(&context));
+    size_t enterable = 0;
+    for (uint32_t dungeonId = 1; dungeonId <= dungeons.GetDungeonCount(); ++dungeonId)
+    {
+        const auto* dungeon = dungeons.GetDungeon(dungeonId);
+        ASSERT_TRUE(dungeon != nullptr);
+        if (!dungeon->IsEnterable())
+            continue;
+        ++enterable;
+        EXPECT_TRUE(ExistsWithExactCase(sourceRoot, dungeon->scenePath));
+
+        const MMOAreaInfo* owningArea = nullptr;
+        for (const auto& area : world.GetAreas())
+        {
+            if (area.sceneFile == dungeon->scenePath)
+                owningArea = &area;
+        }
+        ASSERT_TRUE(owningArea != nullptr);
+        EXPECT_EQ(ReadSceneAreaId(sourceRoot / dungeon->scenePath), static_cast<long long>(owningArea->areaId));
+    }
+    EXPECT_EQ(enterable, 1u);
+    dungeons.Shutdown();
+    world.Shutdown();
+}
+
+TEST(MMOWorld_UnauthoredDungeonsFailClosed)
+{
+    MMOTestContext context;
+    MMODungeonSystem dungeons;
+    ASSERT_TRUE(dungeons.Initialize(&context));
+    ASSERT_EQ(dungeons.GetDungeonCount(), 3u);
+
+    // Shadow Crypt has an authored scene; Forgotten Mine and Void Spire do not and must not be enterable.
+    EXPECT_TRUE(dungeons.GetDungeon(1)->IsEnterable());
+    EXPECT_FALSE(dungeons.GetDungeon(2)->IsEnterable());
+    EXPECT_FALSE(dungeons.GetDungeon(3)->IsEnterable());
+    EXPECT_EQ(dungeons.CreateInstance(2, DungeonDifficulty::Normal, {7}), 0u);
+    EXPECT_EQ(dungeons.CreateInstance(3, DungeonDifficulty::Normal, {7}), 0u);
+    EXPECT_EQ(dungeons.GetInstanceCount(), 0u);
+
+    const std::string listing = dungeons.GetDungeonListString();
+    EXPECT_NE(listing.find("Forgotten Mine (Lv5, 3p, 1 bosses) [not enterable: no scene authored]"), std::string::npos);
+    EXPECT_NE(listing.find("Void Spire (Lv20, 5p, 3 bosses) [not enterable: no scene authored]"), std::string::npos);
+    EXPECT_EQ(listing.find("Shadow Crypt (Lv10, 5p, 2 bosses) [not enterable"), std::string::npos);
+
+    const uint32_t instanceId = dungeons.CreateInstance(1, DungeonDifficulty::Normal, {7});
+    EXPECT_NE(instanceId, 0u);
+    EXPECT_EQ(dungeons.GetInstanceCount(), 1u);
+    dungeons.Shutdown();
 }
 
 TEST(MMO_WorldAreaResolution_PrefersCurrentOverlappingArea)
