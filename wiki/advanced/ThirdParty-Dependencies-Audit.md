@@ -44,10 +44,19 @@ inventory, hash, license, action-pin, or manifest checks.
 name|source|version_or_commit|license|local_path|required_files_csv|feature_macro|fallback_or_stub_path|severity
 ```
 
-Severity:
+Severity (default configure, `SPARK_STRICT_DEPS=OFF`):
 
-- `ERROR` → warning by default, fatal when `-DSPARK_STRICT_DEPS=ON`.
-- `WARN` → warning-only.
+- `ERROR` → warning that suggests `-DSPARK_STRICT_DEPS=ON`.
+- `WARN` → warning.
+
+**Strict-dependency closure.** With `-DSPARK_STRICT_DEPS=ON` (the `windows-release`, `windows-shipping` and
+`linux-shipping` presets, and the release workflow) every entry in this manifest is required, whatever its severity.
+A missing path or required file, or a submodule URL or gitlink revision that does not match, is collected, and the
+audit ends configure with one `FATAL_ERROR` that lists every issue. The manifest is the only strict list: root
+`CMakeLists.txt` no longer carries its own Jolt/ImGui/EnTT checks, so adding an entry here extends the strict closure.
+`StrictDependencies_LockClosureMissingIsFatal` (`Tests/Tools/test_strict_dependencies.py`) configures a fixture
+project against the real manifest and audit module. It removes each locked dependency in turn, requires a strict
+failure that names the dependency, and requires that a non-strict configure only warns.
 
 ---
 
@@ -114,6 +123,8 @@ Each entry pins its source/version, SPDX-compatible license, local path, require
   - Submodule vs. vendored split re-verified as unchanged.
   - Added the fail-closed reviewed-exception schema and required legal-compliance
     CI coverage.
+- 2026-09-26 (CI-120): `SPARK_STRICT_DEPS=ON` now makes the whole manifest the strict closure (both severities, one
+  aggregated `FATAL_ERROR`). The hard-coded Jolt/ImGui/EnTT strict checks were removed from root `CMakeLists.txt`.
 - Findings now resolved/changed since the original audit: submodule pointer updates no longer require Dependabot to edit a second SHA copy, and the CI guard now verifies the bot/event/diff shape before allowing that narrow path.
 
 ## Related Pages

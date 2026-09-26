@@ -177,7 +177,7 @@ option(BUILD_TESTS "Build test suite" ON)
 option(BUILD_GAME_MODULES "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)" ON)
 set(SPARK_GAME_MODULES "" CACHE STRING
     "Semicolon-separated in-tree game modules to build (empty builds every discovered module)")
-option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)" OFF)
+option(SPARK_STRICT_DEPS "FATAL_ERROR when any dependency declared by ThirdParty/dependencies.lock is missing" OFF)
 option(SPARK_SUPPRESS_THIRDPARTY_WARNINGS "Suppress compiler warnings from third-party libraries (Jolt, etc.)" ON)
 option(SPARK_DOUBLE_PRECISION_PHYSICS "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds" OFF)
 
@@ -3557,24 +3557,9 @@ if(_SPARK_MISSING_COUNT GREATER 0)
         "  system package manager — see the per-dependency messages above.\n"
         "\n"
         "  For full details, see README.md 'Dependencies' section.\n"
-        "  To make missing deps a hard error: cmake -DSPARK_STRICT_DEPS=ON ..."
+        "  To make every dependency in ThirdParty/dependencies.lock a hard error:\n"
+        "    cmake -DSPARK_STRICT_DEPS=ON ...  (enforced by the third-party audit above)"
     )
-
-    # Strict mode: fail the build if critical deps are missing
-    if(SPARK_STRICT_DEPS)
-        if(NOT JOLT_FOUND)
-            message(FATAL_ERROR "SPARK_STRICT_DEPS: Jolt Physics is required but not found. "
-                "Run: git submodule update --init ThirdParty/Physics/JoltPhysics")
-        endif()
-        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.cpp")
-            message(FATAL_ERROR "SPARK_STRICT_DEPS: Dear ImGui is required but not found. "
-                "Run: git submodule update --init ThirdParty/UI/imgui")
-        endif()
-        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include/entt/entt.hpp")
-            message(FATAL_ERROR "SPARK_STRICT_DEPS: EnTT is required but not found. "
-                "Run: git submodule update --init ThirdParty/ECS/entt")
-        endif()
-    endif()
 else()
     message(STATUS "All dependencies found. Full engine functionality available.")
 endif()

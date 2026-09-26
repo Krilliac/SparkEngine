@@ -156,7 +156,8 @@ Each manifest row declares:
 `cmake/SparkThirdPartyAudit.cmake` is invoked from root `CMakeLists.txt` early in configure and:
 - validates required files exist for each declared dependency,
 - prints source/version/license summary during configure,
-- warns on manifest mismatches (and can be made fatal with `-DSPARK_STRICT_DEPS=ON`).
+- warns on manifest mismatches; with `-DSPARK_STRICT_DEPS=ON` every locked entry is required and any missing
+  dependency or pin mismatch fails configure (see [ThirdParty Dependencies Audit](ThirdParty-Dependencies-Audit.md)).
 
 CI enforces manifest hygiene via `tools/check-thirdparty-manifest-sync.sh`: dependency path/URL/version wiring changes must include a matching `ThirdParty/dependencies.lock` update.
 

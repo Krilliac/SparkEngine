@@ -625,13 +625,13 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3607,
+      "line": 3592,
       "conditionFrames": [],
       "definitionScope": []
     },
     {
       "name": "SPARK_STRICT_DEPS",
-      "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
+      "description": "FATAL_ERROR when any dependency declared by ThirdParty/dependencies.lock is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
       "line": 180,
@@ -1032,7 +1032,7 @@
     },
     {
       "name": "SPARK_STRICT_DEPS",
-      "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
+      "description": "FATAL_ERROR when any dependency declared by ThirdParty/dependencies.lock is missing",
       "default": false,
       "status": "active",
       "declarationCount": 1,
@@ -1464,13 +1464,13 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3607,
+      "line": 3592,
       "conditionFrames": [],
       "definitionScope": []
     },
     {
       "name": "SPARK_STRICT_DEPS",
-      "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
+      "description": "FATAL_ERROR when any dependency declared by ThirdParty/dependencies.lock is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
       "line": 180,

@@ -3421,6 +3421,16 @@ if(Python3_Interpreter_FOUND)
         LABELS "build-contract;ci;governance;docs;unit;python"
         TIMEOUT 120)
 
+    # CI-120: SPARK_STRICT_DEPS=ON fails configure when any dependency declared by
+    # ThirdParty/dependencies.lock is missing (fixture configures of the real audit
+    # module against the real manifest, one removal per locked dependency).
+    add_test(
+        NAME StrictDependencies_LockClosureMissingIsFatal
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_strict_dependencies.py)
+    set_tests_properties(StrictDependencies_LockClosureMissingIsFatal PROPERTIES
+        LABELS "build-contract;ci;governance;supply-chain;unit;python"
+        TIMEOUT 180)
+
     add_test(
         NAME SparkNetworkBoundaryStatic
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/check_network_boundary.py)

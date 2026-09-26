@@ -9,13 +9,19 @@ if(POLICY CMP0007)
     cmake_policy(SET CMP0007 NEW)
 endif()
 
+# Strict-dependency closure: with SPARK_STRICT_DEPS=ON every entry in the
+# manifest is required, whatever its severity. The manifest is the only list of
+# dependencies a strict configure checks, so adding or removing an entry there
+# changes the strict closure without a second hand-maintained list in
+# CMakeLists.txt. Strict issues are collected and reported together by
+# spark_thirdparty_audit() as one FATAL_ERROR; without strict mode the manifest
+# severity decides only the wording of the configure-time warning.
 function(_spark_dep_report severity message_text)
-    if(severity STREQUAL "ERROR")
-        if(SPARK_STRICT_DEPS)
-            message(FATAL_ERROR "[ThirdParty Audit] ${message_text}")
-        else()
-            message(WARNING "[ThirdParty Audit] ${message_text} (set -DSPARK_STRICT_DEPS=ON to make this fatal)")
-        endif()
+    if(SPARK_STRICT_DEPS)
+        set_property(GLOBAL APPEND PROPERTY _SPARK_STRICT_DEP_ISSUES "${message_text}")
+        message(STATUS "[ThirdParty Audit] STRICT: ${message_text}")
+    elseif(severity STREQUAL "ERROR")
+        message(WARNING "[ThirdParty Audit] ${message_text} (set -DSPARK_STRICT_DEPS=ON to make this fatal)")
     else()
         message(WARNING "[ThirdParty Audit] ${message_text}")
     endif()
@@ -255,6 +261,7 @@ function(spark_thirdparty_audit manifest_file)
     message(STATUS "=== Spark Third-Party Dependency Audit ===")
 
     set(_audit_issues 0)
+    set_property(GLOBAL PROPERTY _SPARK_STRICT_DEP_ISSUES "")
 
     foreach(_entry IN LISTS SPARK_THIRDPARTY_AUDIT_ENTRIES)
         string(REPLACE "|" ";" _fields "${_entry}")
@@ -325,6 +332,22 @@ function(spark_thirdparty_audit manifest_file)
 
     message(STATUS "=== End Third-Party Audit (${_audit_issues} issue(s)) ===")
     message(STATUS "")
+
+    if(SPARK_STRICT_DEPS)
+        list(LENGTH SPARK_THIRDPARTY_AUDIT_ENTRIES _closure_size)
+        get_property(_strict_issues GLOBAL PROPERTY _SPARK_STRICT_DEP_ISSUES)
+        if(_strict_issues)
+            list(LENGTH _strict_issues _strict_issue_count)
+            list(JOIN _strict_issues "\n  - " _strict_issue_text)
+            message(FATAL_ERROR
+                "[ThirdParty Audit] SPARK_STRICT_DEPS: ${_strict_issue_count} issue(s) in the "
+                "${_closure_size}-entry dependency closure declared by ${manifest_file}:\n"
+                "  - ${_strict_issue_text}\n"
+                "Restore the pinned tree with 'git submodule update --init --recursive' or configure "
+                "with -DSPARK_STRICT_DEPS=OFF for a degraded development build.")
+        endif()
+        message(STATUS "[ThirdParty Audit] SPARK_STRICT_DEPS: all ${_closure_size} locked dependencies present")
+    endif()
 endfunction()
 
 if(SPARK_THIRDPARTY_AUDIT_VALIDATE_ONLY)
