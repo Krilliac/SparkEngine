@@ -35,7 +35,10 @@
 #include "Projectiles/ProjectilePool.h"
 #include "SceneManager/SceneManager.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Input/InputManager.h"
+#include "MultiplayerSystem.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <string_view>
 
@@ -992,76 +995,94 @@ bool Game::PlayerExitVehicle()
 
 bool Game::StartServer(uint16_t port, int maxClients)
 {
-    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-    if (!m_networkInitialized)
-    {
-        if (!netMgr.Initialize())
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"NetworkManager::Initialize() failed", L"ERROR");
-            return false;
-        }
-        m_networkInitialized = true;
-    }
+    auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
+    if (multiplayer.IsActive())
+        multiplayer.Shutdown();
 
-    if (!netMgr.StartServer(port, maxClients))
+    multiplayer.Initialize(true);
+    if (maxClients <= 0 || !multiplayer.StartServer(port, static_cast<uint32_t>(maxClients)))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to start server on port " + std::to_wstring(port), L"ERROR");
         return false;
     }
+    m_networkInitialized = true;
+    m_networkInputAccumulator = 0.0f;
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Server started on port " + std::to_wstring(port) + L" (max " +
                                  std::to_wstring(maxClients) + L" clients)",
                              L"SUCCESS");
-
-    // Register player entity for replication
-    Spark::Net::ReplicatedEntity playerEntity{};
-    playerEntity.entityType = "Player";
-    playerEntity.ownerID = netMgr.GetLocalClientID();
-    if (m_player)
-    {
-        auto pos = m_player->GetPosition();
-        playerEntity.position = {pos.x, pos.y, pos.z};
-    }
-    netMgr.RegisterReplicatedEntity(playerEntity);
-
     return true;
 }
 
 bool Game::ConnectToServer(const std::string& address, uint16_t port)
 {
-    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-    if (!m_networkInitialized)
-    {
-        if (!netMgr.Initialize())
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"NetworkManager::Initialize() failed", L"ERROR");
-            return false;
-        }
-        m_networkInitialized = true;
-    }
+    auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
+    if (multiplayer.IsActive())
+        multiplayer.Shutdown();
 
     std::wstring addr(address.begin(), address.end());
     LOG_TO_CONSOLE_IMMEDIATE(L"Connecting to " + addr + L":" + std::to_wstring(port) + L"...", L"INFO");
-    if (!netMgr.Connect(address, port, "Player"))
+    multiplayer.Initialize(false);
+    if (!multiplayer.Connect(address, port))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to connect to " + addr + L":" + std::to_wstring(port), L"ERROR");
         return false;
     }
+    m_networkInitialized = true;
+    m_networkInputAccumulator = 0.0f;
     return true;
 }
 
 void Game::DisconnectNetwork()
 {
-    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-    if (netMgr.GetRole() == Spark::Net::NetworkRole::Server)
+    auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
+    if (!multiplayer.IsActive())
+        return;
+
+    const bool wasServer = multiplayer.IsServer();
+    multiplayer.Shutdown();
+    LOG_TO_CONSOLE_IMMEDIATE(wasServer ? L"Server stopped" : L"Disconnected from server", L"INFO");
+}
+
+void Game::UpdateMultiplayer(float dt)
+{
+    auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
+    multiplayer.Update(dt);
+    if (!multiplayer.IsActive() || !m_player || !m_input)
     {
-        netMgr.StopServer();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Server stopped", L"INFO");
+        m_networkInputAccumulator = 0.0f;
+        return;
     }
-    else if (netMgr.GetRole() == Spark::Net::NetworkRole::Client)
+
+    // Each FPSMultiplayerSystem input is one 1/60 s step on both the client's prediction and
+    // the server, so inputs go out at that fixed rate whatever the render frame rate. The cap
+    // keeps a long hitch from sending a burst the server's input budget would drop anyway.
+    constexpr float kInputStep = 1.0f / 60.0f;
+    constexpr float kMaxBacklog = 0.1f;
+    m_networkInputAccumulator = (std::min)(m_networkInputAccumulator + dt, kMaxBacklog);
+    if (m_networkInputAccumulator < kInputStep)
+        return;
+
+    // The same bindings Player::HandleInput reads. Movement is suppressed in a vehicle or
+    // while dead, matching what the local player can do.
+    SparkFPS::PlayerInput input;
+    const XMFLOAT3 forward = m_player->GetForwardDirection();
+    input.yaw = std::atan2(forward.z, forward.x);
+    input.pitch = std::asin(std::clamp(forward.y, -1.0f, 1.0f));
+    if (!m_player->IsInVehicle() && m_player->IsAlive())
     {
-        netMgr.Disconnect();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Disconnected from server", L"INFO");
+        input.forward = (m_input->IsKeyDown('W') ? 1.0f : 0.0f) - (m_input->IsKeyDown('S') ? 1.0f : 0.0f);
+        input.strafe = (m_input->IsKeyDown('D') ? 1.0f : 0.0f) - (m_input->IsKeyDown('A') ? 1.0f : 0.0f);
+        input.jump = m_input->IsKeyDown(VK_SPACE);
+        input.fire = m_input->IsMouseButtonDown(0);
+        input.reload = m_input->IsKeyDown('R');
+        input.crouch = m_input->IsKeyDown(VK_LCONTROL);
+    }
+
+    while (m_networkInputAccumulator >= kInputStep && multiplayer.IsActive())
+    {
+        m_networkInputAccumulator -= kInputStep;
+        multiplayer.SendInput(input);
     }
 }
 
@@ -1077,7 +1098,8 @@ std::string Game::GetNetworkStatus() const
 {
     if (!m_networkInitialized)
         return "Networking not initialized";
-    return Spark::Net::NetworkManager::GetInstance().Console_GetStatus();
+    return SparkFPS::FPSMultiplayerSystem::GetInstance().Console_GetStatus() + "\n" +
+           Spark::Net::NetworkManager::GetInstance().Console_GetStatus();
 }
 
 Spark::Net::NetworkStats Game::GetNetworkStats() const

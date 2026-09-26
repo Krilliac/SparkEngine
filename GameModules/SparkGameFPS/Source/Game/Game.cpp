@@ -30,6 +30,7 @@
 #include "Game/WallObject.h"
 #include "ModelObject.h"
 #include "FPSAssetPaths.h"
+#include "MultiplayerSystem.h"
 #include "Player.h"
 #include "Projectiles/ProjectilePool.h"
 #include "SceneManager/SceneManager.h"
@@ -404,6 +405,7 @@ void Game::Shutdown()
 #ifdef ENABLE_NETWORKING
     if (m_networkInitialized)
     {
+        SparkFPS::FPSMultiplayerSystem::GetInstance().Shutdown();
         Spark::Net::NetworkManager::GetInstance().Shutdown();
         m_networkInitialized = false;
     }
@@ -660,19 +662,7 @@ void Game::Update(float dt)
     // Update networking - process incoming messages, send outgoing state
     SPARK_GUARDED_UPDATE("Game:Networking", "Game", {
         if (m_networkInitialized)
-        {
-            auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-            netMgr.Update(dt);
-
-            // Send the client input heartbeat for prediction/reconciliation.
-            if (m_player && netMgr.GetRole() != Spark::Net::NetworkRole::None)
-            {
-                Spark::Net::ClientInputState inputState{};
-                inputState.deltaTime = dt;
-                inputState.timestamp = netMgr.GetServerTime();
-                netMgr.SendClientInput(inputState);
-            }
-        }
+            UpdateMultiplayer(dt);
     });
 #endif
 

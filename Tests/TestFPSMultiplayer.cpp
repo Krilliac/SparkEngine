@@ -6,9 +6,10 @@
  * FPSMultiplayerProduction_* drives the real SparkFPS::FPSMultiplayerSystem (compiled into
  * SparkTests from GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp) against the
  * real NetworkManager singleton: a loopback server on an ephemeral port for the server-side
- * tests, and a client that completes the handshake with a loopback peer for reconciliation. Message
- * handlers are private and not yet registered with NetworkManager, so the tests invoke them
- * through FPSMultiplayerSystemTestAccess exactly as the future dispatch will.
+ * tests, and a client that completes the handshake with a loopback peer for reconciliation. Game
+ * rules are driven through FPSMultiplayerSystemTestAccess; FPSMultiplayerProduction_NetworkPath*
+ * instead exchange real datagrams with a raw loopback peer, so every message crosses
+ * NetworkManager's socket, packet validator and handler dispatch.
  */
 
 #include "TestFramework.h"
@@ -17,8 +18,10 @@
 
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -59,6 +62,12 @@ namespace SparkFPS
         }
 
         static size_t ActiveProjectiles(const FPSMultiplayerSystem& system) { return system.m_projectiles.size(); }
+
+        static uint32_t LastAppliedSequence(const FPSMultiplayerSystem& system, uint32_t clientId)
+        {
+            const auto it = system.m_lastInputByPlayer.find(clientId);
+            return it != system.m_lastInputByPlayer.end() ? it->second.sequenceNumber : 0;
+        }
 
         static PlayerInput LastSentInput(const FPSMultiplayerSystem& system)
         {
@@ -217,14 +226,37 @@ namespace
         return nullptr;
     }
 
-    /// Loopback UDP peer standing in for an FPS server: it answers the client's Connect with
-    /// a ConnectAccepted in the documented wire format (docs/specs/networking-wire-format.md)
-    /// and sends nothing else. It holds its own Winsock reference on Windows so the
-    /// NetworkManager::Shutdown() in FPSSessionGuard never pulls Winsock from under it.
-    class HandshakePeer
+    /// Pump @p system one frame at a time until @p done holds. Returns false after 2 s.
+    template <typename Condition> bool PumpUntil(FPSMultiplayerSystem& system, Condition done)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            system.Update(kFrame);
+            if (done())
+                return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        return false;
+    }
+
+    /// One datagram as a loopback peer received it.
+    struct WireMessage
+    {
+        Spark::Net::MessageType type = Spark::Net::MessageType::UserDefined;
+        uint32_t sequence = 0;
+        std::vector<uint8_t> payload;
+    };
+
+    /// Loopback UDP peer that speaks the documented wire format
+    /// (docs/specs/networking-wire-format.md): it stands in for an FPS server facing a real
+    /// client, or for a remote client facing a real server. It holds its own Winsock reference
+    /// on Windows so the NetworkManager::Shutdown() in FPSSessionGuard never pulls Winsock
+    /// from under it.
+    class LoopbackPeer
     {
       public:
-        HandshakePeer()
+        LoopbackPeer()
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             WSADATA winsockData{};
@@ -249,7 +281,7 @@ namespace
 #endif
         }
 
-        ~HandshakePeer()
+        ~LoopbackPeer()
         {
             if (m_socket != INVALID_SOCKET)
                 closesocket(m_socket);
@@ -259,8 +291,8 @@ namespace
 #endif
         }
 
-        HandshakePeer(const HandshakePeer&) = delete;
-        HandshakePeer& operator=(const HandshakePeer&) = delete;
+        LoopbackPeer(const LoopbackPeer&) = delete;
+        LoopbackPeer& operator=(const LoopbackPeer&) = delete;
 
         bool IsReady() const { return m_ready; }
 
@@ -277,58 +309,44 @@ namespace
             return ntohs(local.sin_port);
         }
 
-        /// Pump @p client until its Connect arrives, accept it as @p assignedId, then pump
-        /// until the client has adopted that id. Returns false on timeout.
-        bool AcceptClient(FPSMultiplayerSystem& client, uint32_t assignedId)
+        /// Address of the client accepted by AcceptClient, or the server set by SetRemotePort.
+        void SetRemotePort(uint16_t port)
         {
-            sockaddr_in clientAddress{};
-            if (!PumpUntil(client, [&] { return ReceiveConnect(clientAddress); }))
-                return false;
+            m_remote = {};
+            m_remote.sin_family = AF_INET;
+            m_remote.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            m_remote.sin_port = htons(port);
+        }
 
-            Spark::Net::NetBuffer payload;
-            payload.WriteUint32(assignedId);
-            payload.WriteFloat(0.0f); // server time
-            payload.WriteUint16(Spark::Net::NETWORK_PROTOCOL_VERSION);
-            const auto& body = payload.GetData();
-
+        bool Send(Spark::Net::MessageType type, Spark::Net::ChannelType channel, uint32_t sequence,
+                  const std::vector<uint8_t>& body) const
+        {
             Spark::Net::NetBuffer wire;
             wire.WriteUint32(kWirePacketMagic);
-            wire.WriteUint16(static_cast<uint16_t>(Spark::Net::MessageType::ConnectAccepted));
-            wire.WriteUint8(static_cast<uint8_t>(Spark::Net::ChannelType::Reliable));
-            wire.WriteUint32(Spark::Net::INVALID_CLIENT); // sender: the server
-            wire.WriteUint32(1);                          // sequence
-            wire.WriteFloat(0.0f);                        // timestamp
+            wire.WriteUint16(static_cast<uint16_t>(type));
+            wire.WriteUint8(static_cast<uint8_t>(channel));
+            wire.WriteUint32(Spark::Net::INVALID_CLIENT); // receivers never trust the wire sender
+            wire.WriteUint32(sequence);
+            wire.WriteFloat(0.0f); // timestamp
             wire.WriteUint32(static_cast<uint32_t>(body.size()));
-            wire.WriteBytes(body.data(), body.size());
+            if (!body.empty())
+                wire.WriteBytes(body.data(), body.size());
             const auto& datagram = wire.GetData();
             const int sent =
                 sendto(m_socket, reinterpret_cast<const char*>(datagram.data()), static_cast<int>(datagram.size()), 0,
-                       reinterpret_cast<const sockaddr*>(&clientAddress), sizeof(clientAddress));
-            if (sent != static_cast<int>(datagram.size()))
-                return false;
-
-            return PumpUntil(client, [&] { return client.GetLocalClientId() == assignedId; });
+                       reinterpret_cast<const sockaddr*>(&m_remote), sizeof(m_remote));
+            return sent == static_cast<int>(datagram.size());
         }
 
-      private:
-        static constexpr uint32_t kWirePacketMagic = 0x5350524B; // "SPRK"
-
-        template <typename Condition> static bool PumpUntil(FPSMultiplayerSystem& client, Condition done)
+        bool Send(SparkFPS::FPSMessageType type, const std::vector<uint8_t>& body) const
         {
-            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-            while (std::chrono::steady_clock::now() < deadline)
-            {
-                client.Update(kFrame);
-                if (done())
-                    return true;
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-            }
-            return false;
+            return Send(static_cast<Spark::Net::MessageType>(type), Spark::Net::ChannelType::Unreliable, 0, body);
         }
 
-        bool ReceiveConnect(sockaddr_in& outSender) const
+        /// Read one pending datagram; false when none is waiting or it is not a Spark packet.
+        bool Receive(WireMessage& out, sockaddr_in* outSender = nullptr) const
         {
-            std::array<uint8_t, 2048> buffer{};
+            std::array<uint8_t, 65536> buffer{};
             sockaddr_in from{};
 #ifdef SPARK_PLATFORM_WINDOWS
             int fromLength = sizeof(from);
@@ -344,19 +362,120 @@ namespace
             Spark::Net::NetBuffer wire;
             wire.WriteBytes(buffer.data(), static_cast<size_t>(received));
             const uint32_t magic = wire.ReadUint32();
-            const auto type = static_cast<Spark::Net::MessageType>(wire.ReadUint16());
-            if (wire.HasError() || magic != kWirePacketMagic || type != Spark::Net::MessageType::Connect)
+            out.type = static_cast<Spark::Net::MessageType>(wire.ReadUint16());
+            wire.ReadUint8();  // channel
+            wire.ReadUint32(); // sender
+            out.sequence = wire.ReadUint32();
+            wire.ReadFloat(); // timestamp
+            const uint32_t length = wire.ReadUint32();
+            if (wire.HasError() || magic != kWirePacketMagic || length != wire.RemainingBytes())
                 return false;
-            outSender = from;
+            out.payload.resize(length);
+            if (length > 0)
+                wire.ReadBytes(out.payload.data(), length);
+            if (outSender)
+                *outSender = from;
+            if (wire.HasError())
+                return false;
+            if (out.type == static_cast<Spark::Net::MessageType>(SparkFPS::FPSMessageType::PlayerInput))
+                ++m_inputsReceived;
             return true;
         }
 
+        /// FPS PlayerInput datagrams Receive has read so far.
+        size_t InputsReceived() const { return m_inputsReceived; }
+
+        /// Pump @p client until its Connect arrives, accept it as @p assignedId, then pump
+        /// until the client has adopted that id. Returns false on timeout.
+        bool AcceptClient(FPSMultiplayerSystem& client, uint32_t assignedId)
+        {
+            WireMessage connect;
+            sockaddr_in clientAddress{};
+            const bool gotConnect = PumpUntil(
+                client,
+                [&] { return Receive(connect, &clientAddress) && connect.type == Spark::Net::MessageType::Connect; });
+            if (!gotConnect)
+                return false;
+            m_remote = clientAddress;
+
+            Spark::Net::NetBuffer payload;
+            payload.WriteUint32(assignedId);
+            payload.WriteFloat(0.0f); // server time
+            payload.WriteUint16(Spark::Net::NETWORK_PROTOCOL_VERSION);
+            if (!Send(Spark::Net::MessageType::ConnectAccepted, Spark::Net::ChannelType::Reliable, 1,
+                      payload.GetData()))
+                return false;
+
+            return PumpUntil(client, [&] { return client.GetLocalClientId() == assignedId; });
+        }
+
+      private:
+        static constexpr uint32_t kWirePacketMagic = 0x5350524B; // "SPRK"
+
         SOCKET m_socket = INVALID_SOCKET;
+        sockaddr_in m_remote{};
+        mutable size_t m_inputsReceived = 0;
         bool m_ready = false;
 #ifdef SPARK_PLATFORM_WINDOWS
         bool m_winsockStarted = false;
 #endif
     };
+
+    /// A StateSnapshot payload in the documented layout (FPSMessageType::StateSnapshot).
+    std::vector<uint8_t> BuildSnapshotBatch(uint32_t batch,
+                                            const std::vector<std::pair<NetworkPlayerState, PlayerScore>>& players,
+                                            uint16_t declaredCount)
+    {
+        std::vector<uint8_t> bytes;
+        Detail::WriteU32(bytes, batch);
+        bytes.push_back(static_cast<uint8_t>(declaredCount));
+        bytes.push_back(static_cast<uint8_t>(declaredCount >> 8));
+        for (const auto& [state, score] : players)
+        {
+            NetworkPlayerState stamped = state;
+            stamped.sequenceNumber = batch;
+            const auto record = stamped.Serialize();
+            bytes.insert(bytes.end(), record.begin(), record.end());
+            Detail::WriteU32(bytes, score.kills);
+            Detail::WriteU32(bytes, score.deaths);
+            Detail::WriteU32(bytes, score.assists);
+            Detail::WriteU32(bytes, static_cast<uint32_t>(score.score));
+        }
+        return bytes;
+    }
+
+    std::vector<uint8_t> BuildSnapshotBatch(uint32_t batch,
+                                            const std::vector<std::pair<NetworkPlayerState, PlayerScore>>& players)
+    {
+        return BuildSnapshotBatch(batch, players, static_cast<uint16_t>(players.size()));
+    }
+
+    /// One player's record from a StateSnapshot payload, or nullopt when absent or malformed.
+    std::optional<NetworkPlayerState> FindInSnapshot(const std::vector<uint8_t>& payload, uint32_t clientId,
+                                                     uint32_t* outKills = nullptr)
+    {
+        constexpr size_t kHeader = 6;
+        constexpr size_t kRecord = NetworkPlayerState::SerializedSize + 16;
+        if (payload.size() < kHeader)
+            return std::nullopt;
+        const size_t count = static_cast<size_t>(payload[4]) | (static_cast<size_t>(payload[5]) << 8);
+        if (payload.size() != kHeader + count * kRecord)
+            return std::nullopt;
+        for (size_t index = 0; index < count; ++index)
+        {
+            const uint8_t* record = payload.data() + kHeader + index * kRecord;
+            const auto state = NetworkPlayerState::Deserialize(record, NetworkPlayerState::SerializedSize);
+            if (state.clientId != clientId)
+                continue;
+            if (outKills)
+            {
+                size_t offset = NetworkPlayerState::SerializedSize;
+                *outKills = Detail::ReadU32(record, offset);
+            }
+            return state;
+        }
+        return std::nullopt;
+    }
 } // namespace
 
 TEST(FPSMultiplayerProduction_ServerAppliesInputAndAcknowledgesSequence)
@@ -711,7 +830,7 @@ TEST(FPSMultiplayerProduction_ClientReconcilesToServerAuthority)
 
     // Phase 2: a real client connects to a loopback peer that speaks the handshake and
     // assigns a client id, then receives those snapshots.
-    HandshakePeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
+    LoopbackPeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
     FPSSessionGuard guard;
     ASSERT_TRUE(fakeServer.IsReady());
 
@@ -781,4 +900,261 @@ TEST(FPSMultiplayerProduction_ClientReconcilesToServerAuthority)
     EXPECT_NEAR(local->posZ, corrected.posZ, 1e-4f);
     EXPECT_NEAR(local->health, 40.0f, 1e-6f);
     EXPECT_EQ(client.GetDebugMetrics().correctionCount, correctionsAfterSpawn + 1);
+}
+
+TEST(FPSMultiplayerProduction_NetworkPathServerAdmitsInputAndBroadcastsSnapshots)
+{
+    LoopbackPeer remote; // declared before the guard: its Winsock reference outlives Shutdown()
+    FPSSessionGuard guard;
+    ASSERT_TRUE(remote.IsReady());
+
+    auto& server = FPSMultiplayerSystem::GetInstance();
+    ASSERT_TRUE(StartServer(server));
+    Access::SetSpawnPoints(server, {{0.0f, 1.0f, 0.0f, 0.0f}});
+    remote.SetRemotePort(Spark::Net::NetworkManager::GetInstance().GetBoundPort());
+
+    // Admission through NetworkManager's handshake spawns the player and its score row.
+    Spark::Net::NetBuffer connect;
+    Spark::Net::WriteConnectRequest(connect, "RawPeer");
+    ASSERT_TRUE(remote.Send(Spark::Net::MessageType::Connect, Spark::Net::ChannelType::Reliable, 1, connect.GetData()));
+    ASSERT_TRUE(PumpUntil(server, [&] { return server.GetAllPlayerStates().size() == 2; }));
+    uint32_t remoteId = Spark::Net::INVALID_CLIENT;
+    for (const auto& [id, state] : server.GetAllPlayerStates())
+    {
+        if (id != kHostId)
+            remoteId = id;
+    }
+    ASSERT_TRUE(remoteId != Spark::Net::INVALID_CLIENT);
+    ASSERT_TRUE(FindScore(server.GetScoreboard(), remoteId) != nullptr);
+    const NetworkPlayerState* state = server.GetPlayerState(remoteId);
+    ASSERT_TRUE(state != nullptr);
+
+    // A PlayerInput message moves the sender's player, identified by endpoint, not by payload.
+    PlayerInput forward;
+    forward.forward = 1.0f;
+    forward.sequenceNumber = 1;
+    ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, forward.Serialize()));
+    ASSERT_TRUE(PumpUntil(server, [&] { return state->posX > 0.0f; }));
+    EXPECT_NEAR(state->posX, 8.0f * kFrame, 1e-5f);
+
+    // The 20 Hz snapshot reaches the peer over UDP and acknowledges input 1.
+    bool acknowledged = false;
+    ASSERT_TRUE(PumpUntil(server,
+                          [&]
+                          {
+                              WireMessage message;
+                              while (remote.Receive(message))
+                              {
+                                  if (message.type !=
+                                      static_cast<Spark::Net::MessageType>(FPSMessageType::StateSnapshot))
+                                      continue;
+                                  const auto own = FindInSnapshot(message.payload, remoteId);
+                                  const auto host = FindInSnapshot(message.payload, kHostId);
+                                  acknowledged = own && host && own->acknowledgedInputSequence == 1 &&
+                                                 std::abs(own->posX - 8.0f * kFrame) < 1e-5f;
+                                  if (acknowledged)
+                                      return true;
+                              }
+                              return false;
+                          }));
+    EXPECT_TRUE(acknowledged);
+
+    // Hostile inputs change nothing: a replayed sequence, a non-finite axis, a truncated
+    // payload, and a sequence of 0.
+    const float settledX = state->posX;
+    PlayerInput replay = forward;
+    PlayerInput nonFinite = forward;
+    nonFinite.forward = std::numeric_limits<float>::quiet_NaN();
+    nonFinite.sequenceNumber = 2;
+    PlayerInput zeroSequence = forward;
+    zeroSequence.sequenceNumber = 0;
+    std::vector<uint8_t> truncated = forward.Serialize();
+    truncated.pop_back();
+    ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, replay.Serialize()));
+    ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, nonFinite.Serialize()));
+    ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, zeroSequence.Serialize()));
+    ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, truncated));
+    for (int frame = 0; frame < 10; ++frame)
+        server.Update(kFrame);
+    EXPECT_NEAR(state->posX, settledX, 1e-6f);
+
+    // An out-of-range axis is clamped to one full-speed step.
+    PlayerInput boosted;
+    boosted.forward = 1000.0f;
+    boosted.sequenceNumber = 3;
+    ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, boosted.Serialize()));
+    ASSERT_TRUE(PumpUntil(server, [&] { return state->posX > settledX; }));
+    EXPECT_NEAR(state->posX, settledX + 8.0f * kFrame, 1e-5f);
+
+    // A flood of inputs cannot outrun the server clock: the 0.25 s budget admits at most
+    // 15 steps of the 100 sent in one burst.
+    for (int frame = 0; frame < 30; ++frame)
+        server.Update(kFrame); // refill the budget to its cap
+    const float beforeFlood = state->posX;
+    for (uint32_t sequence = 10; sequence < 110; ++sequence)
+    {
+        PlayerInput flood = forward;
+        flood.sequenceNumber = sequence;
+        ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, flood.Serialize()));
+    }
+    for (int frame = 0; frame < 5; ++frame)
+        server.Update(kFrame);
+    const float floodSteps = (state->posX - beforeFlood) / (8.0f * kFrame);
+    EXPECT_GE(floodSteps, 1.0f - 1e-3f);
+    EXPECT_LE(floodSteps, 15.0f + 1e-3f);
+
+    // Held fire at 60 Hz for one second spawns at most the server's 600 RPM: one projectile
+    // every 6 applied inputs, 10 in all, however many fire inputs arrive.
+    for (int frame = 0; frame < 30; ++frame)
+        server.Update(kFrame);
+    ASSERT_EQ(Access::ActiveProjectiles(server), static_cast<size_t>(0));
+    constexpr uint32_t kFirstFireSequence = 200;
+    constexpr uint32_t kFireInputs = 60;
+    for (uint32_t index = 0; index < kFireInputs; ++index)
+    {
+        PlayerInput held;
+        held.fire = true;
+        held.yaw = 0.0f; // +X, away from the host at the origin
+        held.sequenceNumber = kFirstFireSequence + index;
+        ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, held.Serialize()));
+        server.Update(kFrame);
+    }
+    ASSERT_TRUE(PumpUntil(
+        server, [&] { return Access::LastAppliedSequence(server, remoteId) == kFirstFireSequence + kFireInputs - 1; }));
+    EXPECT_EQ(Access::ActiveProjectiles(server), static_cast<size_t>(10));
+
+    // Disconnect through NetworkManager removes the player and its score row.
+    ASSERT_TRUE(remote.Send(Spark::Net::MessageType::Disconnect, Spark::Net::ChannelType::Reliable, 2, {}));
+    ASSERT_TRUE(PumpUntil(server, [&] { return server.GetPlayerState(remoteId) == nullptr; }));
+    EXPECT_TRUE(FindScore(server.GetScoreboard(), remoteId) == nullptr);
+    EXPECT_TRUE(server.GetPlayerState(kHostId) != nullptr);
+}
+
+TEST(FPSMultiplayerProduction_NetworkPathClientAppliesSnapshotBatches)
+{
+    LoopbackPeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
+    FPSSessionGuard guard;
+    ASSERT_TRUE(fakeServer.IsReady());
+
+    auto& client = FPSMultiplayerSystem::GetInstance();
+    Spark::Net::NetworkManager::GetInstance().Shutdown();
+    client.Initialize(false);
+    ASSERT_TRUE(client.Connect("127.0.0.1", fakeServer.Port()));
+
+    // No input leaves the client before the handshake assigns its id: nothing is recorded,
+    // and no PlayerInput datagram reaches the server by the time the handshake completes.
+    PlayerInput early;
+    early.forward = 1.0f;
+    client.SendInput(early);
+    EXPECT_EQ(Access::LastSentInput(client).sequenceNumber, static_cast<uint32_t>(0));
+
+    constexpr uint32_t kLocalId = 7;
+    constexpr uint32_t kRemoteId = 9;
+    ASSERT_TRUE(fakeServer.AcceptClient(client, kLocalId));
+    {
+        WireMessage pending;
+        while (fakeServer.Receive(pending))
+        {
+        }
+    }
+    EXPECT_EQ(fakeServer.InputsReceived(), static_cast<size_t>(0));
+
+    // Local input travels as an FPS PlayerInput message carrying the prediction sequence.
+    PlayerInput step;
+    step.forward = 1.0f;
+    client.SendInput(step);
+    bool inputSeen = false;
+    ASSERT_TRUE(PumpUntil(
+        client,
+        [&]
+        {
+            WireMessage message;
+            while (fakeServer.Receive(message))
+            {
+                if (message.type == static_cast<Spark::Net::MessageType>(FPSMessageType::PlayerInput) &&
+                    message.payload.size() == PlayerInput::SerializedSize)
+                {
+                    const auto sent = PlayerInput::Deserialize(message.payload.data(), message.payload.size());
+                    inputSeen = sent.sequenceNumber == 1 && sent.forward == 1.0f;
+                }
+            }
+            return inputSeen;
+        }));
+
+    NetworkPlayerState local;
+    local.clientId = kLocalId;
+    local.posX = 3.0f;
+    local.posY = 1.0f;
+    local.posZ = -2.0f;
+    local.acknowledgedInputSequence = 1;
+    NetworkPlayerState remote;
+    remote.clientId = kRemoteId;
+    remote.posX = 10.0f;
+    remote.posY = 1.0f;
+    PlayerScore remoteScore;
+    remoteScore.kills = 2;
+    remoteScore.score = 200;
+    PlayerScore localScore;
+    localScore.deaths = 1;
+
+    // An accepted batch places both players and replaces the scoreboard.
+    ASSERT_TRUE(fakeServer.Send(FPSMessageType::StateSnapshot,
+                                BuildSnapshotBatch(1, {{local, localScore}, {remote, remoteScore}})));
+    ASSERT_TRUE(PumpUntil(client, [&] { return client.GetPlayerState(kRemoteId) != nullptr; }));
+    ASSERT_TRUE(PumpUntil(client, [&] { return std::abs(client.GetPlayerState(kLocalId)->posX - 3.0f) < 1e-4f; }));
+    EXPECT_NEAR(client.GetPlayerState(kLocalId)->posZ, -2.0f, 1e-4f);
+    EXPECT_NEAR(client.GetPlayerState(kRemoteId)->posX, 10.0f, 1e-4f);
+    ASSERT_TRUE(FindScore(client.GetScoreboard(), kRemoteId) != nullptr);
+    EXPECT_EQ(FindScore(client.GetScoreboard(), kRemoteId)->kills, static_cast<uint32_t>(2));
+    EXPECT_EQ(FindScore(client.GetScoreboard(), kRemoteId)->score, 200);
+    EXPECT_EQ(FindScore(client.GetScoreboard(), kLocalId)->deaths, static_cast<uint32_t>(1));
+
+    // Malformed, non-finite and stale batches are dropped whole.
+    const uint32_t packetsBeforeHostile = Spark::Net::NetworkManager::GetInstance().GetStats().packetsReceived;
+    PlayerScore forged = remoteScore;
+    forged.kills = 50;
+    NetworkPlayerState poisoned = remote;
+    poisoned.posX = std::numeric_limits<float>::infinity();
+    ASSERT_TRUE(fakeServer.Send(FPSMessageType::StateSnapshot,
+                                BuildSnapshotBatch(2, {{local, localScore}, {remote, forged}}, 3)));
+    ASSERT_TRUE(fakeServer.Send(FPSMessageType::StateSnapshot,
+                                BuildSnapshotBatch(3, {{local, localScore}, {poisoned, forged}})));
+    ASSERT_TRUE(fakeServer.Send(FPSMessageType::StateSnapshot, {0x01, 0x02}));
+    std::vector<uint8_t> oversized = BuildSnapshotBatch(4, {}, static_cast<uint16_t>(kMaxPlayers + 1));
+    oversized.resize(oversized.size() + (kMaxPlayers + 1) * (NetworkPlayerState::SerializedSize + 16));
+    ASSERT_TRUE(fakeServer.Send(FPSMessageType::StateSnapshot, oversized));
+    // All four reach the handler before these checks: NetworkManager counts each dispatched datagram.
+    ASSERT_TRUE(PumpUntil(
+        client, [&]
+        { return Spark::Net::NetworkManager::GetInstance().GetStats().packetsReceived >= packetsBeforeHostile + 4; }));
+    EXPECT_EQ(FindScore(client.GetScoreboard(), kRemoteId)->kills, static_cast<uint32_t>(2));
+    EXPECT_NEAR(client.GetPlayerState(kRemoteId)->posX, 10.0f, 1e-3f);
+
+    // A newer batch accepts; replaying an older batch number afterwards does nothing.
+    PlayerScore updated = remoteScore;
+    updated.kills = 3;
+    ASSERT_TRUE(fakeServer.Send(FPSMessageType::StateSnapshot,
+                                BuildSnapshotBatch(5, {{local, localScore}, {remote, updated}})));
+    ASSERT_TRUE(PumpUntil(client, [&] { return FindScore(client.GetScoreboard(), kRemoteId)->kills == 3; }));
+    EXPECT_TRUE(std::isfinite(client.GetPlayerState(kRemoteId)->posX));
+    EXPECT_NEAR(client.GetPlayerState(kRemoteId)->posX, 10.0f, 1e-3f);
+    ASSERT_TRUE(
+        fakeServer.Send(FPSMessageType::StateSnapshot, BuildSnapshotBatch(4, {{local, localScore}, {remote, forged}})));
+    for (int frame = 0; frame < 10; ++frame)
+        client.Update(kFrame);
+    EXPECT_EQ(FindScore(client.GetScoreboard(), kRemoteId)->kills, static_cast<uint32_t>(3));
+
+    // A remote player missing from an accepted batch has left the session.
+    ASSERT_TRUE(fakeServer.Send(FPSMessageType::StateSnapshot, BuildSnapshotBatch(6, {{local, localScore}})));
+    ASSERT_TRUE(PumpUntil(client, [&] { return client.GetPlayerState(kRemoteId) == nullptr; }));
+    EXPECT_TRUE(FindScore(client.GetScoreboard(), kRemoteId) == nullptr);
+    for (int frame = 0; frame < 5; ++frame)
+        client.Update(kFrame);
+    EXPECT_TRUE(client.GetPlayerState(kRemoteId) == nullptr);
+    EXPECT_TRUE(client.GetPlayerState(kLocalId) != nullptr);
+
+    // The server closing the session ends it on the client.
+    ASSERT_TRUE(fakeServer.Send(Spark::Net::MessageType::Disconnect, Spark::Net::ChannelType::Reliable, 2, {}));
+    ASSERT_TRUE(PumpUntil(client, [&] { return !client.IsActive(); }));
+    EXPECT_TRUE(Spark::Net::NetworkManager::GetInstance().GetRole() == Spark::Net::NetworkRole::None);
 }

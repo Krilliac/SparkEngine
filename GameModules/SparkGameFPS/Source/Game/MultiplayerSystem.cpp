@@ -37,6 +37,32 @@ namespace SparkFPS
 
         constexpr size_t kMaxSnapshotHistory = 4;
 
+        // Every input is one fixed simulation step on the client's prediction and on the server.
+        constexpr float kInputStep = 1.0f / 60.0f;
+
+        // Server-side input rate budget: a player earns simulated time as the server clock
+        // advances and spends one step per applied input, so flooding inputs cannot move a
+        // player faster than real time. The cap absorbs network jitter bursts.
+        constexpr float kMaxInputBudget = 0.25f;
+        constexpr float kInputBudgetEpsilon = 1e-4f;
+
+        // Server-owned fire interval: 600 rounds per minute, the default WeaponStats rate. Held
+        // fire in 60 Hz inputs spawns one projectile every 6 steps, whatever the client sends.
+        // With ProjectileData's fixed 3 s lifetime this also bounds each owner to 30 live projectiles.
+        constexpr float kServerFireInterval = 0.1f;
+
+        // StateSnapshot wire layout (see FPSMessageType::StateSnapshot).
+        constexpr size_t kSnapshotHeaderSize = sizeof(uint32_t) + sizeof(uint16_t);
+        constexpr size_t kSnapshotScoreSize = 4 * sizeof(uint32_t);
+        constexpr size_t kSnapshotRecordSize = NetworkPlayerState::SerializedSize + kSnapshotScoreSize;
+
+        bool IsFiniteState(const NetworkPlayerState& state)
+        {
+            return std::isfinite(state.posX) && std::isfinite(state.posY) && std::isfinite(state.posZ) &&
+                   std::isfinite(state.velX) && std::isfinite(state.velY) && std::isfinite(state.velZ) &&
+                   std::isfinite(state.yaw) && std::isfinite(state.pitch) && std::isfinite(state.health);
+        }
+
         void HitboxBounds(const NetworkPlayerState& state, DirectX::XMFLOAT3& outMin, DirectX::XMFLOAT3& outMax)
         {
             outMin = {state.posX - kHitboxHalfWidth, state.posY, state.posZ - kHitboxHalfWidth};
@@ -134,6 +160,7 @@ namespace SparkFPS
         m_projectiles.clear();
         m_remoteSnapshots.clear();
         m_lastInputByPlayer.clear();
+        m_fireCooldown.clear();
         m_stateSequence = 0;
         m_nextProjectileId = 1;
         m_correctionCount = 0;
@@ -142,6 +169,8 @@ namespace SparkFPS
         m_pendingLocalAuthority = {};
         m_hasPendingLocalAuthority = false;
         m_lastLocalAuthoritySequence = 0;
+        m_lastSnapshotBatch = 0;
+        m_inputBudget.clear();
         // A new session starts a new input sequence; a stale ACK from an earlier session
         // must not make the first snapshots of this one look old. The default-constructed
         // predictor's simulator captures the temporary, so it is replaced right below.
@@ -179,6 +208,10 @@ namespace SparkFPS
 
         auto& network = Spark::Net::NetworkManager::GetInstance();
         network.Update(deltaTime);
+
+        // A handler may have ended the session (the server closed it).
+        if (!m_isActive)
+            return;
 
         if (!m_isServer)
         {
@@ -218,13 +251,15 @@ namespace SparkFPS
 
     bool FPSMultiplayerSystem::StartServer(uint16_t port, uint32_t maxPlayers)
     {
-        if (maxPlayers == 0 || maxPlayers > 256)
+        // The host is a player too, so the session never exceeds kMaxPlayers.
+        if (maxPlayers == 0 || maxPlayers >= kMaxPlayers)
             return false;
 
         auto& network = Spark::Net::NetworkManager::GetInstance();
         if (!network.Initialize() || !network.StartServer(port, static_cast<int>(maxPlayers)))
             return false;
 
+        RegisterNetworkHandlers();
         m_isActive = true;
         m_isServer = true;
         m_localClientId = network.GetLocalClientID();
@@ -238,7 +273,11 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::StopServer()
     {
-        Spark::Net::NetworkManager::GetInstance().StopServer();
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+        // NetworkManager::Shutdown clears message handlers but not the timeout handler, and
+        // the NetworkManager outlives this module's image: release the callback into it here.
+        network.SetTimeoutHandler(nullptr);
+        network.StopServer();
         m_isActive = false;
         m_playerStates.clear();
         m_scores.clear();
@@ -257,9 +296,11 @@ namespace SparkFPS
         if (!network.Initialize() || !network.Connect(address, port, "FPSPlayer"))
             return false;
 
+        RegisterNetworkHandlers();
         m_isActive = true;
         m_isServer = false;
         m_localClientId = Spark::Net::INVALID_CLIENT;
+        m_lastSnapshotBatch = 0;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.Log("[FPSMultiplayer] Connecting to " + address + ":" + std::to_string(port));
@@ -268,7 +309,11 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::Disconnect()
     {
-        Spark::Net::NetworkManager::GetInstance().Disconnect();
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+        // See StopServer: the timeout handler must not outlive the session. NetworkManager
+        // invokes a copy of it, so clearing it from inside that callback is safe.
+        network.SetTimeoutHandler(nullptr);
+        network.Disconnect();
         m_isActive = false;
         m_playerStates.clear();
         m_localClientId = Spark::Net::INVALID_CLIENT;
@@ -276,7 +321,21 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::SendInput(const PlayerInput& input)
     {
-        if (!m_isActive || m_isServer)
+        if (!m_isActive)
+            return;
+
+        if (m_isServer)
+        {
+            // Listen server: the host's own input is authoritative and applied directly.
+            const auto lastIt = m_lastInputByPlayer.find(m_localClientId);
+            PlayerInput hostInput = input;
+            hostInput.sequenceNumber = lastIt != m_lastInputByPlayer.end() ? lastIt->second.sequenceNumber + 1 : 1;
+            ApplyClientInput(m_localClientId, hostInput, kInputStep);
+            return;
+        }
+
+        // Until the handshake assigns an id there is no player to predict or to send for.
+        if (m_localClientId == Spark::Net::INVALID_CLIENT)
             return;
 
         Spark::PredictedInput predicted{};
@@ -298,19 +357,15 @@ namespace SparkFPS
         m_clientPrediction.ApplyPrediction(m_localPredictedState, predicted, 1.0f / 60.0f);
         CopyPredictedMotionToLocal();
 
-        Spark::Net::ClientInputState networkInput{};
-        networkInput.inputSequence = assignedSequence;
-        networkInput.moveForward = input.forward;
-        networkInput.moveRight = input.strafe;
-        networkInput.lookYaw = input.yaw;
-        networkInput.lookPitch = input.pitch;
-        networkInput.jump = input.jump;
-        networkInput.fire = input.fire;
-        networkInput.reload = input.reload;
-        networkInput.crouch = input.crouch;
-        networkInput.deltaTime = 1.0f / 60.0f;
-        networkInput.timestamp = predicted.timestamp;
-        Spark::Net::NetworkManager::GetInstance().SendClientInput(networkInput);
+        // FPS input travels as its own message, not MessageType::ClientInput: NetworkManager
+        // renumbers ClientInput sequences, and the server must acknowledge the sequence
+        // client prediction assigned.
+        Spark::Net::NetworkMessage message;
+        message.type = static_cast<Spark::Net::MessageType>(FPSMessageType::PlayerInput);
+        message.channel = Spark::Net::ChannelType::Unreliable;
+        message.senderID = m_localClientId;
+        message.payload = sent.Serialize();
+        Spark::Net::NetworkManager::GetInstance().SendMessage(message);
 
         if (input.fire)
         {
@@ -381,6 +436,9 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::ServerUpdate(float dt)
     {
+        for (auto& [id, budget] : m_inputBudget)
+            budget = (std::min)(budget + dt, kMaxInputBudget);
+
         // Process respawn timers
         for (auto it = m_respawnTimers.begin(); it != m_respawnTimers.end();)
         {
@@ -449,6 +507,37 @@ namespace SparkFPS
                 history.pop_front();
             }
         }
+
+        if (m_playerStates.size() > kMaxPlayers)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "FPSMultiplayerSystem: %zu players exceed the %u-player batch",
+                            m_playerStates.size(), kMaxPlayers);
+            return;
+        }
+
+        std::vector<uint8_t> payload;
+        payload.reserve(kSnapshotHeaderSize + m_playerStates.size() * kSnapshotRecordSize);
+        Detail::WriteU32(payload, m_stateSequence);
+        const auto count = static_cast<uint16_t>(m_playerStates.size());
+        payload.push_back(static_cast<uint8_t>(count));
+        payload.push_back(static_cast<uint8_t>(count >> 8));
+        for (const auto& [id, state] : m_playerStates)
+        {
+            const std::vector<uint8_t> record = state.Serialize();
+            payload.insert(payload.end(), record.begin(), record.end());
+            const auto scoreIt = m_scores.find(id);
+            const bool scored = scoreIt != m_scores.end();
+            Detail::WriteU32(payload, scored ? scoreIt->second.kills : 0);
+            Detail::WriteU32(payload, scored ? scoreIt->second.deaths : 0);
+            Detail::WriteU32(payload, scored ? scoreIt->second.assists : 0);
+            Detail::WriteU32(payload, scored ? static_cast<uint32_t>(scoreIt->second.score) : 0);
+        }
+
+        Spark::Net::NetworkMessage message;
+        message.type = static_cast<Spark::Net::MessageType>(FPSMessageType::StateSnapshot);
+        message.channel = Spark::Net::ChannelType::Unreliable;
+        message.payload = std::move(payload);
+        Spark::Net::NetworkManager::GetInstance().SendToAll(message);
     }
 
     void FPSMultiplayerSystem::ApplyClientInput(uint32_t clientId, const PlayerInput& input, float dt)
@@ -473,8 +562,13 @@ namespace SparkFPS
         state.actionFlags |= input.crouch ? ActionCrouch : ActionNone;
         m_lastInputByPlayer[clientId] = input;
 
-        if (input.fire)
+        // The cooldown runs on applied input steps, which the input budget ties to the server
+        // clock, so neither held fire nor an input flood outpaces the weapon's rate.
+        float& fireCooldown = m_fireCooldown[clientId];
+        fireCooldown = (std::max)(0.0f, fireCooldown - dt);
+        if (input.fire && fireCooldown <= kInputBudgetEpsilon)
         {
+            fireCooldown = kServerFireInterval;
             ProjectileData projectile;
             projectile.projectileId = m_nextProjectileId++;
             projectile.ownerId = clientId;
@@ -665,6 +759,8 @@ namespace SparkFPS
 
         m_playerStates[clientId] = state;
         m_remoteSnapshots[clientId].push_back(state);
+        if (m_isServer)
+            m_inputBudget[clientId] = kMaxInputBudget;
 
         PlayerScore score;
         score.clientId = clientId;
@@ -680,6 +776,10 @@ namespace SparkFPS
         m_playerStates.erase(clientId);
         m_scores.erase(clientId);
         m_respawnTimers.erase(clientId);
+        m_remoteSnapshots.erase(clientId);
+        m_lastInputByPlayer.erase(clientId);
+        m_inputBudget.erase(clientId);
+        m_fireCooldown.erase(clientId);
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.Log("[FPSMultiplayer] Player " + std::to_string(clientId) + " left");
@@ -770,6 +870,182 @@ namespace SparkFPS
         history.push_back(snapshot);
         while (history.size() > kMaxSnapshotHistory)
             history.pop_front();
+    }
+
+    // ============================================================================
+    // NetworkManager Message Flow
+    // ============================================================================
+
+    void FPSMultiplayerSystem::RegisterNetworkHandlers()
+    {
+        using Spark::Net::MessageType;
+        using Spark::Net::NetworkMessage;
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+
+        // NetworkManager surfaces each admitted client once as a Connect event whose
+        // senderID is the id it assigned.
+        network.RegisterHandler(MessageType::Connect,
+                                [this](const NetworkMessage& message)
+                                {
+                                    if (m_isServer && m_isActive && message.senderID != Spark::Net::INVALID_CLIENT &&
+                                        !m_playerStates.contains(message.senderID))
+                                    {
+                                        OnPlayerJoined(message.senderID);
+                                    }
+                                });
+        network.RegisterHandler(MessageType::Disconnect,
+                                [this](const NetworkMessage& message) { HandlePeerDisconnected(message.senderID); });
+        network.SetTimeoutHandler([this](Spark::Net::ClientID clientId) { HandlePeerDisconnected(clientId); });
+        network.RegisterHandler(static_cast<MessageType>(FPSMessageType::PlayerInput),
+                                [this](const NetworkMessage& message) { HandleInputMessage(message); });
+        network.RegisterHandler(static_cast<MessageType>(FPSMessageType::StateSnapshot),
+                                [this](const NetworkMessage& message) { HandleSnapshotMessage(message); });
+    }
+
+    void FPSMultiplayerSystem::HandlePeerDisconnected(uint32_t clientId)
+    {
+        if (!m_isActive)
+            return;
+
+        if (m_isServer)
+        {
+            // The host's own player is never removed by a peer event.
+            if (clientId != m_localClientId && m_playerStates.contains(clientId))
+                OnPlayerLeft(clientId);
+            return;
+        }
+
+        // A client hears Disconnect only from its server endpoint: the session is over.
+        Spark::SimpleConsole::GetInstance().Log("[FPSMultiplayer] Server closed the session");
+        Disconnect();
+    }
+
+    void FPSMultiplayerSystem::HandleInputMessage(const Spark::Net::NetworkMessage& message)
+    {
+        if (!m_isServer || !m_isActive)
+            return;
+
+        // senderID is stamped by NetworkManager from the admitted endpoint, never read off the wire.
+        const uint32_t clientId = message.senderID;
+        if (clientId == m_localClientId || !m_playerStates.contains(clientId))
+            return;
+        if (message.payload.size() != PlayerInput::SerializedSize)
+            return;
+
+        PlayerInput input = PlayerInput::Deserialize(message.payload.data(), message.payload.size());
+        if (!std::isfinite(input.forward) || !std::isfinite(input.strafe) || !std::isfinite(input.yaw) ||
+            !std::isfinite(input.pitch))
+        {
+            return;
+        }
+
+        // Unreliable delivery can duplicate and reorder: only a newer sequence is applied.
+        const auto lastIt = m_lastInputByPlayer.find(clientId);
+        if (input.sequenceNumber == 0 ||
+            (lastIt != m_lastInputByPlayer.end() && input.sequenceNumber <= lastIt->second.sequenceNumber))
+        {
+            return;
+        }
+
+        const auto budgetIt = m_inputBudget.find(clientId);
+        if (budgetIt == m_inputBudget.end() || budgetIt->second + kInputBudgetEpsilon < kInputStep)
+            return;
+        budgetIt->second = (std::max)(0.0f, budgetIt->second - kInputStep);
+
+        input.forward = std::clamp(input.forward, -1.0f, 1.0f);
+        input.strafe = std::clamp(input.strafe, -1.0f, 1.0f);
+        input.pitch = std::clamp(input.pitch, -0.5f * kPi, 0.5f * kPi);
+        OnPlayerInputReceived(clientId, input);
+    }
+
+    void FPSMultiplayerSystem::HandleSnapshotMessage(const Spark::Net::NetworkMessage& message)
+    {
+        if (m_isServer || !m_isActive || m_localClientId == Spark::Net::INVALID_CLIENT)
+            return;
+
+        const std::vector<uint8_t>& payload = message.payload;
+        if (payload.size() < kSnapshotHeaderSize)
+            return;
+
+        size_t offset = 0;
+        const uint32_t batch = Detail::ReadU32(payload.data(), offset);
+        const uint32_t count =
+            static_cast<uint32_t>(payload[offset]) | (static_cast<uint32_t>(payload[offset + 1]) << 8);
+        if (count > kMaxPlayers || payload.size() != kSnapshotHeaderSize + count * kSnapshotRecordSize)
+            return;
+        if (batch <= m_lastSnapshotBatch)
+            return;
+
+        auto recordAt = [&payload](uint32_t index)
+        { return payload.data() + kSnapshotHeaderSize + static_cast<size_t>(index) * kSnapshotRecordSize; };
+
+        // Validate the whole batch before applying any of it.
+        for (uint32_t index = 0; index < count; ++index)
+        {
+            const NetworkPlayerState state =
+                NetworkPlayerState::Deserialize(recordAt(index), NetworkPlayerState::SerializedSize);
+            if (!IsFiniteState(state) || state.sequenceNumber != batch)
+                return;
+        }
+        m_lastSnapshotBatch = batch;
+
+        for (uint32_t index = 0; index < count; ++index)
+        {
+            const uint8_t* record = recordAt(index);
+            const NetworkPlayerState state =
+                NetworkPlayerState::Deserialize(record, NetworkPlayerState::SerializedSize);
+            OnStateSnapshotReceived(state);
+
+            size_t scoreOffset = NetworkPlayerState::SerializedSize;
+            auto [scoreIt, inserted] = m_scores.try_emplace(state.clientId);
+            PlayerScore& score = scoreIt->second;
+            if (inserted)
+                score.playerName = "Player_" + std::to_string(state.clientId);
+            score.clientId = state.clientId;
+            score.kills = Detail::ReadU32(record, scoreOffset);
+            score.deaths = Detail::ReadU32(record, scoreOffset);
+            score.assists = Detail::ReadU32(record, scoreOffset);
+            score.score = static_cast<int32_t>(Detail::ReadU32(record, scoreOffset));
+        }
+
+        // The batch lists every player in the session; a remote player missing from it left.
+        auto inBatch = [&](uint32_t clientId)
+        {
+            for (uint32_t index = 0; index < count; ++index)
+            {
+                size_t idOffset = 0;
+                if (Detail::ReadU32(recordAt(index), idOffset) == clientId)
+                    return true;
+            }
+            return false;
+        };
+        for (auto it = m_playerStates.begin(); it != m_playerStates.end();)
+        {
+            if (it->first != m_localClientId && !inBatch(it->first))
+            {
+                const uint32_t departed = it->first;
+                ++it;
+                OnPlayerLeft(departed);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        for (auto it = m_remoteSnapshots.begin(); it != m_remoteSnapshots.end();)
+        {
+            if (it->first != m_localClientId && !inBatch(it->first))
+                it = m_remoteSnapshots.erase(it);
+            else
+                ++it;
+        }
+        for (auto it = m_scores.begin(); it != m_scores.end();)
+        {
+            if (it->first != m_localClientId && !inBatch(it->first))
+                it = m_scores.erase(it);
+            else
+                ++it;
+        }
     }
 
     // ============================================================================
