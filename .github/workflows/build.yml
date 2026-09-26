@@ -925,6 +925,133 @@ jobs:
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
+  # SEC-100: runtime security selectors in the Linux Shipping configuration
+  # (MinSizeRel, SPARK_SHIPPING=1), so a selector that shipping compiles out
+  # fails here instead of passing only in a development tree. Each label runs
+  # as its own CTest invocation with --no-tests=error, so an empty label
+  # cannot hide behind a non-empty one.
+  security-runtime:
+    name: "Security Runtime"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping security tests
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log
+
+    # SparkTests pulls in SparkServer, SparkGateway and SparkCrashReporter via
+    # add_dependencies; the crash-reporter unit executables selected by the
+    # crash-security label are standalone targets and are named explicitly.
+    - name: Build security runtime targets
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --parallel $(nproc) --target \
+          SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \
+          SparkCrashReporterFakeGh 2>&1 | tee security-build.log
+
+    - name: Run RemoteAdmin selectors
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R RemoteAdmin 2>&1 | tee security-remote-admin-selectors.log
+
+    - name: Run security runtime labels
+      run: |
+        set -o pipefail
+        for label in remote-admin gateway crash-security; do
+          ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+            -L "^${label}\$" 2>&1 | tee "security-${label}.log"
+        done
+
+    - name: Extract security runtime error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "security-runtime" \
+          error-summary.json \
+          security-configure.log security-build.log security-remote-admin-selectors.log \
+          security-remote-admin.log security-gateway.log security-crash-security.log
+
+    - name: Upload security runtime error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-security-runtime
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+  # SEC-100: real multi-process network integration in the Linux Shipping
+  # configuration. SparkServer, SparkGateway and the SparkGame module run as
+  # separate processes over the area-control channel, and the orchestration
+  # smoke supervises SparkServer through SparkDaemon/SparkOrchestrator. Only
+  # the process targets are built; each smoke runs under its own exact
+  # selector with --no-tests=error.
+  network-integration:
+    name: "Network Integration"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping network integration
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee network-configure.log
+
+    - name: Build network integration processes
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --parallel $(nproc) --target \
+          SparkAutomation SparkServer SparkGateway SparkGame SparkGatewayTopologyProbe \
+          SparkDaemon SparkOrchestrator SparkCollabServer 2>&1 | tee network-build.log
+
+    - name: Run server/gateway process smoke
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R '^SparkServerGatewayProcessSmoke$' 2>&1 | tee network-server-gateway.log
+
+    - name: Run orchestration process smoke
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R '^SparkOrchestrationProcessSmoke$' 2>&1 | tee network-orchestration.log
+
+    - name: Extract network integration error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "network-integration" \
+          error-summary.json \
+          network-configure.log network-build.log network-server-gateway.log network-orchestration.log
+
+    - name: Upload network integration error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-network-integration
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
   # ===========================================================================
   # Linux Build — Clang with MemorySanitizer
   # MSan requires ALL code, including the C++ runtime, to be instrumented.
@@ -3549,6 +3676,8 @@ jobs:
       - todo-count
       - build-installer
       - aggregate-test-stats
+      - security-runtime
+      - network-integration
     runs-on: ubuntu-24.04
     permissions:
       contents: read

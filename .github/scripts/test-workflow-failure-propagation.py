@@ -1130,6 +1130,120 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 if error_upload.count(fragment) != 1:
                     errors.append(f"telemetry integration error upload is missing/duplicating {fragment}")
 
+    # SEC-100: the security-runtime and network-integration lanes run in the
+    # Linux Shipping configuration, and every selector or label runs under
+    # --no-tests=error so an empty selection cannot pass.
+    security_lanes = (
+        (
+            "security-runtime",
+            (
+                (
+                    "Configure Linux Shipping security tests",
+                    ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
+                ),
+                (
+                    "Build security runtime targets",
+                    (
+                        "set -o pipefail",
+                        "cmake --build --preset linux-shipping",
+                        "SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests",
+                        "SparkCrashReporterFakeGh",
+                    ),
+                ),
+                (
+                    "Run RemoteAdmin selectors",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-R RemoteAdmin",
+                    ),
+                ),
+                (
+                    "Run security runtime labels",
+                    (
+                        "set -o pipefail",
+                        "for label in remote-admin gateway crash-security; do",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        '-L "^${label}\\$"',
+                    ),
+                ),
+            ),
+        ),
+        (
+            "network-integration",
+            (
+                (
+                    "Configure Linux Shipping network integration",
+                    ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
+                ),
+                (
+                    "Build network integration processes",
+                    (
+                        "set -o pipefail",
+                        "cmake --build --preset linux-shipping",
+                        "SparkAutomation SparkServer SparkGateway SparkGame SparkGatewayTopologyProbe",
+                        "SparkDaemon SparkOrchestrator SparkCollabServer",
+                    ),
+                ),
+                (
+                    "Run server/gateway process smoke",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-R '^SparkServerGatewayProcessSmoke$'",
+                    ),
+                ),
+                (
+                    "Run orchestration process smoke",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-R '^SparkOrchestrationProcessSmoke$'",
+                    ),
+                ),
+            ),
+        ),
+    )
+    for lane, lane_steps in security_lanes:
+        try:
+            section = yaml_section(workflow, lane, indent=2)
+        except AssertionError as exc:
+            errors.append(str(exc))
+            continue
+        if not exact_field(section, "runs-on", "ubuntu-24.04"):
+            errors.append(f"{lane} must run on ubuntu-24.04")
+        if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", section):
+            errors.append(f"{lane} has a bypassing job-level directive")
+        for step_name, fragments in lane_steps:
+            try:
+                step = named_step(section, step_name)
+            except AssertionError as exc:
+                errors.append(str(exc))
+                continue
+            if re.search(r"(?m)^\s+['\"]?(?:if|continue-on-error)['\"]?:", step):
+                errors.append(f"{step_name} has a conditional/error bypass")
+            if re.search(r"\|\|\s*true\b", step):
+                errors.append(f"{step_name} suppresses failure")
+            for fragment in fragments:
+                if step.count(fragment) != 1:
+                    errors.append(f"{step_name} is missing/duplicating {fragment}")
+        try:
+            error_upload = named_step(section, f"Upload {lane.replace('-', ' ')} error summary")
+        except AssertionError as exc:
+            errors.append(str(exc))
+        else:
+            for fragment in ("if: failure()", f"name: ci-errors-{lane}"):
+                if error_upload.count(fragment) != 1:
+                    errors.append(f"{lane} error upload is missing/duplicating {fragment}")
+
     try:
         aggregate = yaml_section(workflow, "aggregate-test-stats", indent=2)
     except AssertionError as exc:
@@ -1186,6 +1300,9 @@ def required_workflow_errors(workflow: str) -> list[str]:
     if report:
         if len(re.findall(r"(?m)^      - telemetry-integration$", report)) != 1:
             errors.append("report-ci-errors must need telemetry-integration exactly once")
+        for lane in ("security-runtime", "network-integration"):
+            if len(re.findall(rf"(?m)^      - {lane}$", report)) != 1:
+                errors.append(f"report-ci-errors must need {lane} exactly once")
 
     try:
         gate = yaml_section(workflow, "required-ci-gate", indent=2)
@@ -2217,6 +2334,42 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         mutations["telemetry gate dependency removed"] = self.build.replace(
             "      - build-linux-tsan\n      - telemetry-integration\n      - build-windows-vs2022",
             "      - build-linux-tsan\n      - build-windows-vs2022",
+            1,
+        )
+        mutations["security runtime empty selection allowed"] = self.build.replace(
+            "ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \\\n          -R RemoteAdmin",
+            "ctest --test-dir build/linux-shipping --output-on-failure \\\n          -R RemoteAdmin",
+            1,
+        )
+        mutations["security runtime label dropped"] = self.build.replace(
+            "for label in remote-admin gateway crash-security; do",
+            "for label in remote-admin gateway; do",
+            1,
+        )
+        mutations["security runtime crash-security executables unbuilt"] = self.build.replace(
+            "SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \\\n"
+            "          SparkCrashReporterFakeGh 2>&1 | tee security-build.log",
+            "SparkTests 2>&1 | tee security-build.log",
+            1,
+        )
+        mutations["security runtime off shipping"] = self.build.replace(
+            "cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log",
+            "cmake --preset linux-gcc-release -DBUILD_TESTS=ON 2>&1 | tee security-configure.log",
+            1,
+        )
+        mutations["network integration smoke selector drift"] = self.build.replace(
+            "-R '^SparkServerGatewayProcessSmoke$'",
+            "-R 'ProcessSmoke'",
+            1,
+        )
+        mutations["network integration made advisory"] = self.build.replace(
+            "  network-integration:\n    name: \"Network Integration\"\n",
+            "  network-integration:\n    name: \"Network Integration\"\n    continue-on-error: true\n",
+            1,
+        )
+        mutations["network integration report dependency removed"] = self.build.replace(
+            "      - security-runtime\n      - network-integration\n    runs-on:",
+            "      - security-runtime\n    runs-on:",
             1,
         )
         mutations["required gate verifier removed"] = self.build.replace(
