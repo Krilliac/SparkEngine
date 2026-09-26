@@ -387,6 +387,27 @@
       ]
     },
     {
+      "id": "platformer-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGamePlatformer/provenance.json",
+        "Art/Blender/SparkGamePlatformer/platformer_kit.blend",
+        "tools/blender/author_platformer_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGamePlatformer/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/Platformer/Kit/"
+      ]
+    },
+    {
       "id": "module-music-composer",
       "license": "CC0-1.0",
       "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound",
@@ -395,6 +416,11 @@
         "Tests/Tools/test_module_music.py"
       ],
       "files": {
+        "Audio/Platformer/Music/boss_theme.wav": "a9900471e8d68262e22ca2dd2a1844bd60dc116565aa28e6906bcd8585031492",
+        "Audio/Platformer/Music/game_over.wav": "db0a9ba1c5fbf027914e657b27f60bb3374ac45228891d6b93d3823b9f8566a3",
+        "Audio/Platformer/Music/victory_jingle.wav": "18c841f60feb4c65dc816691b5fa0d2a2a91fddd3ef51fe7b1794959bf2d7127",
+        "Audio/Platformer/Music/world_1_theme.wav": "606b0b90442b58af9a4a910887d2b383d0e545fdfdf0f505ad04509a3260bf04",
+        "Audio/Platformer/Music/world_2_theme.wav": "b467102729977188688ca7ec60cbead55c55d97e46fe3fe0eda98fb690908f76",
         "Audio/RPG/Music/rpg_boss.wav": "a9fa0b9478fe9378b585360c43fcbe9551faf47db69dca2843ad3250fec5fb0d",
         "Audio/RPG/Music/rpg_dungeon.wav": "4394267ac3ef463ab3d0236f40866dfebd4b5d3aad06466d812ace0539863f04",
         "Audio/RPG/Music/rpg_forest.wav": "b904a8b4bd8499ed928835e37b99d27df560815d6d194413ac39c8116f0e64d9",

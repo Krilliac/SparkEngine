@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 1164,
+  "fileCount": 1199,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1151,6 +1151,41 @@
       "size": 176444,
       "license": "CC0-1.0",
       "provenance": "Repository-original procedural OpenWorld region ground tiles and music loops emitted by generate_openworld_assets() in tools/generate_default_assets.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound (MOD-360) [openworld-procedural-generator]"
+    },
+    {
+      "path": "Audio/Platformer/Music/boss_theme.wav",
+      "sha256": "a9900471e8d68262e22ca2dd2a1844bd60dc116565aa28e6906bcd8585031492",
+      "size": 529244,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Platformer/Music/game_over.wav",
+      "sha256": "db0a9ba1c5fbf027914e657b27f60bb3374ac45228891d6b93d3823b9f8566a3",
+      "size": 149984,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Platformer/Music/victory_jingle.wav",
+      "sha256": "18c841f60feb4c65dc816691b5fa0d2a2a91fddd3ef51fe7b1794959bf2d7127",
+      "size": 141164,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Platformer/Music/world_1_theme.wav",
+      "sha256": "606b0b90442b58af9a4a910887d2b383d0e545fdfdf0f505ad04509a3260bf04",
+      "size": 705644,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/Platformer/Music/world_2_theme.wav",
+      "sha256": "b467102729977188688ca7ec60cbead55c55d97e46fe3fe0eda98fb690908f76",
+      "size": 705644,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
     },
     {
       "path": "Audio/RPG/Music/rpg_boss.wav",
@@ -4644,6 +4679,216 @@
       "size": 8180,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original starter/module-kit model from Tools/model_pipeline/generate_starter_models.py; hash-bound by Assets/Models/Generated/starter_assets_manifest.json: starter model core_primitives/Plane [starter-model-pipeline]"
+    },
+    {
+      "path": "Models/Platformer/Kit/coin.mtl",
+      "sha256": "66bfa4e944cb6d58cbfc97abc7179f81afa2671306fcbae769d59f0885ae8806",
+      "size": 631,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored coin [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/coin.obj",
+      "sha256": "f7a5f18d42e68f727eccf37f77b57bbec1d0d65516830bf4907dcb0f1af1fd5b",
+      "size": 23163,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored coin [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/coin_collision.mtl",
+      "sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+      "size": 243,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/coin_collision.obj",
+      "sha256": "fa9f8c949e6970c61660cfef8072eeed5d2297fd403c01b4e7b42edbba96f876",
+      "size": 9088,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/coin_lod1.mtl",
+      "sha256": "66bfa4e944cb6d58cbfc97abc7179f81afa2671306fcbae769d59f0885ae8806",
+      "size": 631,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/coin_lod1.obj",
+      "sha256": "bbe33d84cefc507edeeea92fdbec91e69503ab8cf6ed86a0ea8e0cb76626219f",
+      "size": 11429,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/floating_platform.mtl",
+      "sha256": "7273c425061f0d35e6b5b750d3661eec8783d77b048c1e7d7578a2b407eb0731",
+      "size": 815,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored floating_platform [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/floating_platform.obj",
+      "sha256": "e0e160888fc1c669f9b12803a17b2aa32602cacf85b16ff9b218de33befeaa07",
+      "size": 52537,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored floating_platform [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/floating_platform_collision.mtl",
+      "sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+      "size": 243,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/floating_platform_collision.obj",
+      "sha256": "de300810d2089d7b259f4449971ae60148ca51d7dc4ae096e4fd5aecc6744c11",
+      "size": 1253,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/floating_platform_lod1.mtl",
+      "sha256": "7273c425061f0d35e6b5b750d3661eec8783d77b048c1e7d7578a2b407eb0731",
+      "size": 815,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/floating_platform_lod1.obj",
+      "sha256": "457d17e7f4583d75060b8a58f76aa19dac0a8efb45e0460c7a07a6ee88e17101",
+      "size": 23273,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/goal_flag.mtl",
+      "sha256": "09e69d920758455142da5d3497ac760143e9ad51fa559a80247ef6eb6dd8eabe",
+      "size": 1009,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored goal_flag [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/goal_flag.obj",
+      "sha256": "dce87c34bf4efdc09a81203fa8e331621c7a5b0a8c632dfc6ef36fc686238192",
+      "size": 28465,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored goal_flag [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/goal_flag_collision.mtl",
+      "sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+      "size": 243,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/goal_flag_collision.obj",
+      "sha256": "643d722e3e5b26215c44040fe42f12b1f19566b02f2f40daad190c164baa0db8",
+      "size": 1237,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/goal_flag_lod1.mtl",
+      "sha256": "09e69d920758455142da5d3497ac760143e9ad51fa559a80247ef6eb6dd8eabe",
+      "size": 1009,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/goal_flag_lod1.obj",
+      "sha256": "34dddf19b00347216a9965a4745b1fa4672f1c43bbf523949b7efb19d0e8381a",
+      "size": 12897,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spike_hazard.mtl",
+      "sha256": "71ee574eed59f160532d8da085c371b30393407d053459634e784df05c7b0053",
+      "size": 820,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored spike_hazard [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spike_hazard.obj",
+      "sha256": "e5a018a249dfb819373c26d745c9a67a84a4feb9e16da02f59ddf35fa0bd882c",
+      "size": 37235,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored spike_hazard [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spike_hazard_collision.mtl",
+      "sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+      "size": 243,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spike_hazard_collision.obj",
+      "sha256": "90150a72e4ece3340dc200c103d85a89ffd1be9de35328815827223a626b0fc3",
+      "size": 1243,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spike_hazard_lod1.mtl",
+      "sha256": "71ee574eed59f160532d8da085c371b30393407d053459634e784df05c7b0053",
+      "size": 820,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spike_hazard_lod1.obj",
+      "sha256": "72199dbb048eba7376fe01b6846e9b11512aa2e97182b9c3d190cef8f00d24bf",
+      "size": 17681,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spring_pad.mtl",
+      "sha256": "3c9a529a40db5ffc5b5572ac2fe28d050adfdba02f9827e102467f016387ca5e",
+      "size": 1008,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored spring_pad [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spring_pad.obj",
+      "sha256": "8a025fd8ae3a9fb09f23a0bbc5260db203adaee57e1cd4bcff0a29e182ae514b",
+      "size": 58480,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json: Blender-authored spring_pad [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spring_pad_collision.mtl",
+      "sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+      "size": 243,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spring_pad_collision.obj",
+      "sha256": "8f3d4910f3b8ed7971de51661a4becddd27feeb1e3a5c8d25ecc30d5414c7578",
+      "size": 13297,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spring_pad_lod1.mtl",
+      "sha256": "3c9a529a40db5ffc5b5572ac2fe28d050adfdba02f9827e102467f016387ca5e",
+      "size": 1008,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
+    },
+    {
+      "path": "Models/Platformer/Kit/spring_pad_lod1.obj",
+      "sha256": "b41b01536b0ed676d394f412ebc8ee98b110b326d04d95f3e84f4d7f94018d63",
+      "size": 27049,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGamePlatformer/platformer_kit.blend via tools/blender/author_platformer_kit.py; hash-bound by Art/Blender/SparkGamePlatformer/provenance.json [platformer-blender-kit]"
     },
     {
       "path": "Models/Pyramid.mtl",

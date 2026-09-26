@@ -136,9 +136,12 @@ namespace Platformer
       private:
         void BuildDemoCollectibles();
         void SpawnCollectibleLine(float startX, float y, float z, int count, float spacing, CollectibleType type);
+        void PlaceCoinMeshes();
+        void RemoveCoinMeshes();
 
         Spark::IEngineContext* m_context{nullptr};
         std::vector<CollectibleInstance> m_collectibles;
+        std::vector<uint32_t> m_coinEntities; ///< coin kit mesh per m_collectibles index (0 = none)
         uint32_t m_nextId{1};
 
         // Global counters

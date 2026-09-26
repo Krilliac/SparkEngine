@@ -158,6 +158,9 @@ namespace Platformer
         /// @brief Get the number of defined levels
         size_t GetLevelCount() const { return m_levels.size(); }
 
+        /// @brief Engine context passed to Initialize (null in the level-flow tests)
+        Spark::IEngineContext* GetContext() const { return m_context; }
+
         /// @brief Stars required before level @p index unlocks (0 for an out-of-range index)
         uint32_t GetRequiredStarsToUnlock(uint32_t index) const;
 

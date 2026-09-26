@@ -4,8 +4,17 @@
   "cmakeTarget": "SparkGamePlatformer",
   "sourceDirectory": "GameModules/SparkGamePlatformer/Source",
   "assets": {
-    "state": "none",
-    "reason": "No asset root exists for this module: the Assets/Audio/Music tracks and Data/Localization/platformer_*.json files its sources reference are not in the repository."
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/Platformer",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/Platformer",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
   },
   "tests": {
     "files": [

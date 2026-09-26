@@ -95,11 +95,11 @@ namespace Platformer
 
         // World theme tracks
         const std::pair<std::string, std::string> tracks[] = {
-            {"world_1_theme", "Assets/Audio/Music/world_1_theme.ogg"},
-            {"world_2_theme", "Assets/Audio/Music/world_2_theme.ogg"},
-            {"boss_theme", "Assets/Audio/Music/boss_theme.ogg"},
-            {"victory_jingle", "Assets/Audio/Music/victory_jingle.ogg"},
-            {"game_over", "Assets/Audio/Music/game_over.ogg"},
+            {"world_1_theme", "Assets/Audio/Platformer/Music/world_1_theme.wav"},
+            {"world_2_theme", "Assets/Audio/Platformer/Music/world_2_theme.wav"},
+            {"boss_theme", "Assets/Audio/Platformer/Music/boss_theme.wav"},
+            {"victory_jingle", "Assets/Audio/Platformer/Music/victory_jingle.wav"},
+            {"game_over", "Assets/Audio/Platformer/Music/game_over.wav"},
         };
 
         for (const auto& [name, path] : tracks)

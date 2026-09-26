@@ -17,6 +17,19 @@ ability unlocks, checkpoint activation, hazard damage and knockback, and the goa
 others). `plat_save` and `plat_load` save and restore progress through the engine bridge, and
 `plat_replay_start`, `plat_replay_stop`, and `plat_ghost` record a run and toggle ghost playback.
 
+## Level 0 toybox kit and music
+
+When the engine exposes a world, the module dresses each level with the Blender-authored kit in
+`Assets/Models/Platformer/Kit`. `PlatformerLevelFlow` places a `floating_platform` stretched to every platform
+collider (a scaled `spring_pad` for bouncy ones) and a `goal_flag` on the goal platform, moves the meshes with their
+colliders each fixed step, and hides disappearing platforms while they are not solid. `PlatformerHazardSystem`
+tiles every spike pit with `spike_hazard`, and `PlatformerCollectibleSystem` places a spinning, bobbing `coin` on
+each coin and hides it once collected. The meshes are set dressing only: collision stays with the module's own
+colliders, and rotating platforms keep an unrotated mesh. `PlatformerEngineSystems` registers the five generated
+WAV music cues in `Assets/Audio/Platformer/Music`. Source, provenance, and preview are in
+`Art/Blender/SparkGamePlatformer/`, and `asset-references.json` records every asset path the module source names.
+Placement has not yet been observed in a running engine; the tests run without a world and skip it.
+
 ## Progress persistence
 
 `PlatformerEngineSystems::SaveProgress` writes the ECS world through `SaveSystem` together with one custom-state
@@ -37,8 +50,7 @@ maps to the same items only within builds that place the same items; changing pl
 - Localization resources are missing. `PlatformerEngineSystems::SetupLocalization()` loads
   `Data/Localization/platformer_en.json`, `_fr`, `_de`, and `_ja`, and then logs that four languages loaded, but
   none of those files exists anywhere in the repository.
-- The `Assets/Audio/Music/*.ogg` tracks it registers do not exist either. The module ships no asset root and has
-  no networking.
+- The module has no networking.
 
 ## Tests
 

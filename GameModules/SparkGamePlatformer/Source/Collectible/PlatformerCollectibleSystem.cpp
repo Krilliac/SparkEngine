@@ -4,6 +4,7 @@
  */
 
 #include "PlatformerCollectibleSystem.h"
+#include "Engine/ECS/Components.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -16,6 +17,10 @@
 
 namespace Platformer
 {
+    namespace
+    {
+        constexpr float CoinMeshHalfHeight = 0.25f;
+    } // namespace
 
     bool PlatformerCollectibleSystem::Initialize(Spark::IEngineContext* context)
     {
@@ -24,6 +29,7 @@ namespace Platformer
         m_context = context;
 
         BuildDemoCollectibles();
+        PlaceCoinMeshes();
 
         m_initialized = true;
 
@@ -279,13 +285,76 @@ namespace Platformer
         m_animationTimer += deltaTime;
     }
 
+    void PlatformerCollectibleSystem::PlaceCoinMeshes()
+    {
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!world)
+            return; // No engine world (the level-flow tests): collectibles work without meshes.
+
+        // coin (tools/blender/author_platformer_kit.py) is a 0.5 m disc, pivot at its bottom edge, face towards +Z.
+        // Collectible positions are item centres, so the mesh is lowered by half its height.
+        m_coinEntities.assign(m_collectibles.size(), 0);
+        for (size_t index = 0; index < m_collectibles.size(); ++index)
+        {
+            const CollectibleInstance& item = m_collectibles[index];
+            if (item.type != CollectibleType::Coin)
+                continue;
+
+            EntityID entity = world->CreateEntity("Platformer_Coin");
+            world->AddComponent<Transform>(
+                entity,
+                Transform{{item.posX, item.posY - CoinMeshHalfHeight, item.posZ}, {0.0f, 180.0f, 0.0f}, {1, 1, 1}});
+            world->AddComponent<MeshRenderer>(entity).meshPath = "Assets/Models/Platformer/Kit/coin.obj";
+            m_coinEntities[index] = static_cast<uint32_t>(entity);
+        }
+    }
+
+    void PlatformerCollectibleSystem::RemoveCoinMeshes()
+    {
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (world)
+        {
+            for (uint32_t entityId : m_coinEntities)
+            {
+                const auto entity = static_cast<EntityID>(entityId);
+                if (entityId != 0 && world->GetRegistry().valid(entity))
+                    world->DestroyEntity(entity);
+            }
+        }
+        m_coinEntities.clear();
+    }
+
     void PlatformerCollectibleSystem::Render()
     {
         if (!m_initialized)
             return;
 
-        // In a full implementation, this would render each uncollected item:
-        // - Coins: gold disk with spin animation
+        // Coins are drawn by the engine's RenderSystem from the kit meshes PlaceCoinMeshes adds to the world; here
+        // they spin, bob and disappear once collected.
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (world && !m_coinEntities.empty())
+        {
+            const float bob = std::sin(m_animationTimer * m_bobFrequency) * m_bobAmplitude;
+            const float spin = std::fmod(180.0f + m_animationTimer * m_spinSpeed, 360.0f);
+            const size_t count = std::min(m_coinEntities.size(), m_collectibles.size());
+            for (size_t index = 0; index < count; ++index)
+            {
+                const auto entity = static_cast<EntityID>(m_coinEntities[index]);
+                if (m_coinEntities[index] == 0 || !world->GetRegistry().valid(entity))
+                    continue;
+                auto* transform = world->GetComponent<Transform>(entity);
+                auto* renderer = world->GetComponent<MeshRenderer>(entity);
+                if (!transform || !renderer)
+                    continue;
+                const CollectibleInstance& item = m_collectibles[index];
+                transform->position.y = item.posY - CoinMeshHalfHeight + bob;
+                transform->rotation.y = spin;
+                renderer->visible = !item.collected;
+                renderer->worldMatrixDirty = true;
+            }
+        }
+
+        // In a full implementation, this would also render each uncollected item:
         // - Gems: colored crystal with glow
         // - Stars: golden star with pulse
         // - Keys: key model with bob animation
@@ -296,6 +365,7 @@ namespace Platformer
 
     void PlatformerCollectibleSystem::Shutdown()
     {
+        RemoveCoinMeshes();
         m_collectibles.clear();
         m_initialized = false;
     }

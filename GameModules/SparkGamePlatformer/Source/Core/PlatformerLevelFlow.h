@@ -4,11 +4,16 @@
  *
  * SparkGamePlatformerModule forwards OnUpdate/OnFixedUpdate here, so the scripted level-completion tests
  * run exactly the collection, ability-unlock, checkpoint, hazard, wind, and goal logic the game runs.
+ * When the engine has a world, the flow also dresses the loaded level with the Blender platformer kit
+ * (Assets/Models/Platformer/Kit): one mesh per platform collider, kept in step with it, plus the goal flag.
  */
 
 #pragma once
 
 #include <cstdint>
+#include <vector>
+
+class World;
 
 namespace Platformer
 {
@@ -40,8 +45,17 @@ namespace Platformer
                             PlatformerCollectibleSystem& collectibles, PlatformerHazardSystem& hazards,
                             PlatformerCheckpointSystem& checkpoints);
 
+        /// @brief Removes the level kit entities this flow placed.
+        ~PlatformerLevelFlow();
+
+        PlatformerLevelFlow(const PlatformerLevelFlow&) = delete;
+        PlatformerLevelFlow& operator=(const PlatformerLevelFlow&) = delete;
+
         /**
          * @brief Load a level and reset its checkpoints and collectibles, then place the player at its spawn.
+         *
+         * With an engine world available (the level system's engine context), the previous level's kit meshes are replaced by the new
+         * level's: a floating_platform per platform (a spring_pad for Bouncy ones) and a goal_flag.
          * @param index 0-based level index
          * @return false when the level does not exist or is still locked
          */
@@ -55,16 +69,23 @@ namespace Platformer
 
         /**
          * @brief Advance one fixed physics step: platforms first so the player rides and collides with this
-         *        step's positions, then the player, then wind zones.
+         *        step's positions (their kit meshes follow), then the player, then wind zones.
          * @param fixedDeltaTime Fixed step in seconds; non-finite or non-positive values are ignored
          */
         void StepFixed(float fixedDeltaTime);
 
       private:
+        void PlaceLevelKit();
+        void SyncLevelKit();
+        void RemoveLevelKit();
+
         PlatformerLevelSystem& m_level;
         PlatformerPlayerController& m_player;
         PlatformerCollectibleSystem& m_collectibles;
         PlatformerHazardSystem& m_hazards;
         PlatformerCheckpointSystem& m_checkpoints;
+
+        ::World* m_kitWorld{nullptr};        ///< World the kit entities live in (non-owning)
+        std::vector<uint32_t> m_kitEntities; ///< One per platform collider (same index), then the goal flag
     };
 } // namespace Platformer
