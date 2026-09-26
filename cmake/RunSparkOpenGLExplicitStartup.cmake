@@ -1,10 +1,16 @@
 cmake_minimum_required(VERSION 3.25)
 
-# RHI-240: an explicit SPARK_RHI_BACKEND=opengl request must either bring the
-# production SparkEngine host up on the OpenGL backend or fail startup. Two
-# runs of the real executable prove both halves:
+# RHI-240 / PLT-210: an explicit SPARK_RHI_BACKEND=opengl request must either
+# bring the production SparkEngine host up on the OpenGL backend or fail
+# startup, and a windowed run that cannot create its window must never degrade
+# to NullRHI. Runs of the real executable:
 #   1. SPARK_RHI_BACKEND=opengl                        -> exit 0 on OpenGL, never NullRHI
 #   2. SPARK_RHI_BACKEND=opengl + SPARK_DISABLE_OPENGL=1 -> non-zero exit, explicit refusal
+#   3. (SPARK_GAME_MODULE set) the FPS game for 30 frames with -require-game
+#      -> exit 0, exactly one OpenGL initialization, never NullRHI
+#   4. SDL_VIDEODRIVER=dummy (no OpenGL-capable video driver, so
+#      SDL_CreateWindow fails on every host) -> non-zero exit with the SDL
+#      reason and the windowed-startup refusal, never a NullRHI main loop
 # The windowed SDL2 path needs an X server. An existing DISPLAY is used as-is;
 # otherwise the runs are wrapped in xvfb-run. Neither being available is a
 # failure, so the lane can never pass by skipping.
@@ -34,14 +40,21 @@ file(MAKE_DIRECTORY "${SPARK_WORKING_DIRECTORY}")
 
 # Runs SparkEngine for a few frames with the given extra environment and
 # returns the exit code plus combined stdout/stderr (the logger writes to stderr).
+# Extra environment entries come first in ARGN; ENGINE_ARGS <args...> replaces
+# the default "-test-frames 5" engine arguments.
 function(spark_run_engine out_result out_log)
+    cmake_parse_arguments(PARSE_ARGV 2 _run "" "" "ENGINE_ARGS")
+    set(_engine_args -test-frames 5)
+    if(_run_ENGINE_ARGS)
+        set(_engine_args ${_run_ENGINE_ARGS})
+    endif()
     execute_process(
         COMMAND ${_display_wrapper} "${CMAKE_COMMAND}" -E env
             "SPARK_RHI_BACKEND=opengl"
             "SDL_AUDIODRIVER=dummy"
-            ${ARGN}
+            ${_run_UNPARSED_ARGUMENTS}
             "${SPARK_ENGINE_EXECUTABLE}"
-            -test-frames 5
+            ${_engine_args}
             -window-size 320x240
             -no-subprocess
         WORKING_DIRECTORY "${SPARK_WORKING_DIRECTORY}"
@@ -93,5 +106,48 @@ if(_disabled_refusal EQUAL -1)
         "${_disabled_log}")
 endif()
 
+# --- 3. A real game module on the OpenGL window ------------------------------
+if(DEFINED SPARK_GAME_MODULE AND NOT "${SPARK_GAME_MODULE}" STREQUAL "")
+    if(NOT EXISTS "${SPARK_GAME_MODULE}")
+        message(FATAL_ERROR "Game module is missing: ${SPARK_GAME_MODULE}")
+    endif()
+    spark_run_engine(_game_result _game_log
+        ENGINE_ARGS -game "${SPARK_GAME_MODULE}" -require-game -test-frames 30)
+    if(NOT "${_game_result}" STREQUAL "0")
+        message(FATAL_ERROR "OpenGL windowed game run exited '${_game_result}', expected 0.\n${_game_log}")
+    endif()
+    string(REGEX MATCHALL "Initialized on Linux via RHI \\(OpenGL\\)" _game_inits "${_game_log}")
+    list(LENGTH _game_inits _game_init_count)
+    if(NOT _game_init_count EQUAL 1)
+        message(FATAL_ERROR
+            "OpenGL windowed game run logged 'Initialized on Linux via RHI (OpenGL)' ${_game_init_count} "
+            "times, expected exactly 1.\n${_game_log}")
+    endif()
+    string(REGEX MATCH "via RHI \\(NullRHI|falling back to NullRHIDevice|headless mode \\(NullRHIDevice\\)"
+        _game_nullrhi "${_game_log}")
+    if(_game_nullrhi)
+        message(FATAL_ERROR "OpenGL windowed game run degraded to NullRHI ('${_game_nullrhi}').\n${_game_log}")
+    endif()
+endif()
+
+# --- 4. A windowed run whose window cannot be created must fail --------------
+spark_run_engine(_nowindow_result _nowindow_log "SDL_VIDEODRIVER=dummy")
+if(NOT "${_nowindow_result}" MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR
+        "Windowed run on the SDL dummy video driver (no window possible) returned '${_nowindow_result}'; "
+        "expected a controlled non-zero exit instead of a NullRHI run.\n${_nowindow_log}")
+endif()
+foreach(_expected "SDL_CreateWindow failed:" "Windowed startup could not create its render window or context")
+    string(FIND "${_nowindow_log}" "${_expected}" _nowindow_found)
+    if(_nowindow_found EQUAL -1)
+        message(FATAL_ERROR "Window-failure run is missing '${_expected}'.\n${_nowindow_log}")
+    endif()
+endforeach()
+string(FIND "${_nowindow_log}" "Initialized on Linux via RHI" _nowindow_initialized)
+if(NOT _nowindow_initialized EQUAL -1)
+    message(FATAL_ERROR "Window-failure run still initialized an RHI device.\n${_nowindow_log}")
+endif()
+
 message(STATUS "Explicit OpenGL request initialized OpenGL (${_gl_renderer}); "
-               "unavailable explicit OpenGL request failed with exit ${_disabled_result}")
+               "unavailable explicit OpenGL request failed with exit ${_disabled_result}; "
+               "window-creation failure refused startup with exit ${_nowindow_result}")

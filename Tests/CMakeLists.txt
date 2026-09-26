@@ -1489,17 +1489,26 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     # RHI-240: the production SDL2 host must honor SPARK_RHI_BACKEND=opengl
     # (initialize OpenGL, never NullRHI) and must exit non-zero when that
-    # explicit request cannot be met. Uses DISPLAY or wraps itself in xvfb-run;
-    # having neither fails the lane rather than skipping it.
+    # explicit request cannot be met. PLT-210: it also runs SparkGameFPS on the
+    # OpenGL window for 30 frames, and a windowed run whose window cannot be
+    # created must exit non-zero rather than continue on NullRHI. Uses DISPLAY
+    # or wraps itself in xvfb-run; having neither fails the lane rather than
+    # skipping it.
     if(SPARK_PACKAGE_HAS_SDL2 AND TARGET SparkEngine)
         find_program(SPARK_XVFB_RUN_EXECUTABLE xvfb-run)
         add_dependencies(SparkTests SparkEngine)
+        set(_spark_opengl_startup_game_arg)
+        if(TARGET SparkGameFPS)
+            add_dependencies(SparkTests SparkGameFPS)
+            set(_spark_opengl_startup_game_arg "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>")
+        endif()
         add_test(
             NAME SparkEngineExplicitOpenGLStartup
             COMMAND ${CMAKE_COMMAND}
                 "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
                 "-DSPARK_WORKING_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/opengl-explicit-startup"
                 "-DSPARK_XVFB_RUN=${SPARK_XVFB_RUN_EXECUTABLE}"
+                ${_spark_opengl_startup_game_arg}
                 -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkOpenGLExplicitStartup.cmake
         )
         set_tests_properties(SparkEngineExplicitOpenGLStartup PROPERTIES

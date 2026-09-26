@@ -30,14 +30,16 @@ TEST_DEFINITION_PATTERN = re.compile(r"\bTEST\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*
 
 
 def _cmake_copy_declarations(text: str) -> tuple[set[str], bool]:
-    """Return asset roots in actual add_custom_command(copy_directory ...) bodies."""
+    """Return asset roots copied by add_custom_command(copy_directory ...) or
+    spark_stage_game_module_content(COPY_DIRECTORIES ...) calls."""
     # CMake bracket comments may use any number of '=' delimiters.
     bracket = re.compile(r"#\[(=*)\[.*?\]\1\]", re.DOTALL)
     text = bracket.sub(lambda match: "\n" * match.group(0).count("\n"), text)
     text = "\n".join(line.split("#", 1)[0] for line in text.splitlines())
     declarations: set[str] = set()
     unbalanced = False
-    for match in re.finditer(r"\badd_custom_command\s*\(", text, re.IGNORECASE):
+    calls = r"\b(?:add_custom_command|spark_stage_game_module_content)\s*\("
+    for match in re.finditer(calls, text, re.IGNORECASE):
         start, depth, quote = match.end(), 1, False
         index = start
         while index < len(text) and depth:
@@ -54,7 +56,7 @@ def _cmake_copy_declarations(text: str) -> tuple[set[str], bool]:
             unbalanced = True
             continue
         body = text[start:index - 1]
-        if re.search(r"\bcopy_directory\b", body, re.IGNORECASE):
+        if re.search(r"\bcopy_director(?:y|ies)\b", body, re.IGNORECASE):
             for root in FPS_ROOT_DEPENDENCIES:
                 if re.search(re.escape(root), body, re.IGNORECASE):
                     declarations.add(root)

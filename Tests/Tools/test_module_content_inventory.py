@@ -171,6 +171,18 @@ class ModuleContentInventoryTests(unittest.TestCase):
         messages = self.messages()
         self.assertTrue(any("build declaration is missing: Assets/Models" in message for message in messages), messages)
 
+    def test_stage_helper_copy_directories_count_as_fps_declarations(self) -> None:
+        cmake = self.root / "GameModules" / "SparkGameFPS" / "CMakeLists.txt"
+        cmake.write_text(
+            'spark_stage_game_module_content(SparkGameFPS COPY_DIRECTORIES "${ROOT}/Assets/Models" Assets/Models)\n'
+            "spark_stage_game_module_content(SparkGameFPS DIRECTORIES Assets/Scenes)\n",
+            encoding="utf-8",
+        )
+        self.write(module_content.generate(self.root))
+        messages = self.messages()
+        self.assertFalse(any("build declaration is missing: Assets/Models" in message for message in messages), messages)
+        self.assertTrue(any("build declaration is missing: Assets/Scenes" in message for message in messages), messages)
+
     def test_unterminated_add_custom_command_fails_after_regeneration(self) -> None:
         cmake = self.root / "GameModules" / "SparkGameFPS" / "CMakeLists.txt"
         cmake.write_text("add_custom_command(\n copy_directory Assets/Models\n", encoding="utf-8")

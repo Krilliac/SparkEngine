@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2519,
+      "line": 2528,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1396,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2557,
+      "line": 2566,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1405,10 +1405,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2177,
+      "line": 2186,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2122",
+          "id": "Tests/CMakeLists.txt:2131",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -2633,10 +2633,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 3068,
+      "line": 3077,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3066",
+          "id": "Tests/CMakeLists.txt:3075",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4426,7 +4426,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 3068,
+          "line": 3077,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

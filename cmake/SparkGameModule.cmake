@@ -243,6 +243,83 @@ function(spark_add_game_module TARGET_NAME)
         "spark_add_game_module: ${TARGET_NAME} configured with ${_spark_module_link_target}")
 endfunction()
 
+#[=============================================================================[
+  spark_stage_game_module_content - stage a module's runtime content where the
+  engine executable reads it.
+
+    spark_stage_game_module_content(<target>
+        [DIRECTORIES <runtime-relative dir>...]
+        [COPY_DIRECTORIES <source dir> <runtime-relative dir> [...]]
+        [COPY_FILES <runtime-relative dir> <file>...])
+
+  Modules resolve content (Assets/..., Shaders/...) relative to the engine's
+  working directory, which is the directory of the SparkEngine executable. In an
+  in-tree build that is $<TARGET_FILE_DIR:SparkEngine>; on Windows it equals the
+  module DLL directory, but on ELF/Mach-O hosts the module is a LIBRARY and lands
+  in lib/ while the engine runs from bin/ (PLT-210). A standalone module build
+  has no SparkEngine target, so content is staged next to the module, which the
+  standalone projects place in their own bin/.
+
+  All steps run as POST_BUILD commands of <target>. $<TARGET_FILE_DIR:SparkEngine>
+  does not add a target dependency (CMP0112), so this cannot form a cycle with
+  the engine's own post-build copy of the module binary.
+#]=============================================================================]
+function(spark_stage_game_module_content TARGET_NAME)
+    if(NOT TARGET ${TARGET_NAME})
+        message(FATAL_ERROR "spark_stage_game_module_content: target '${TARGET_NAME}' does not exist")
+    endif()
+    cmake_parse_arguments(PARSE_ARGV 1 SPARK_STAGE "" "" "DIRECTORIES;COPY_DIRECTORIES;COPY_FILES")
+    if(SPARK_STAGE_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR
+            "spark_stage_game_module_content: unknown arguments: ${SPARK_STAGE_UNPARSED_ARGUMENTS}")
+    endif()
+
+    if(TARGET SparkEngine)
+        set(_runtime_dir "$<TARGET_FILE_DIR:SparkEngine>")
+    else()
+        set(_runtime_dir "$<TARGET_FILE_DIR:${TARGET_NAME}>")
+    endif()
+
+    set(_commands "")
+    foreach(_relative_dir IN LISTS SPARK_STAGE_DIRECTORIES)
+        list(APPEND _commands COMMAND "${CMAKE_COMMAND}" -E make_directory "${_runtime_dir}/${_relative_dir}")
+    endforeach()
+
+    list(LENGTH SPARK_STAGE_COPY_DIRECTORIES _copy_directory_length)
+    math(EXPR _copy_directory_odd "${_copy_directory_length} % 2")
+    if(_copy_directory_odd)
+        message(FATAL_ERROR
+            "spark_stage_game_module_content: COPY_DIRECTORIES needs <source dir> <runtime-relative dir> pairs")
+    endif()
+    while(SPARK_STAGE_COPY_DIRECTORIES)
+        list(POP_FRONT SPARK_STAGE_COPY_DIRECTORIES _source_dir _relative_dir)
+        if(NOT IS_DIRECTORY "${_source_dir}")
+            message(FATAL_ERROR "spark_stage_game_module_content: source directory '${_source_dir}' does not exist")
+        endif()
+        list(APPEND _commands
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_runtime_dir}/${_relative_dir}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory "${_source_dir}" "${_runtime_dir}/${_relative_dir}")
+    endwhile()
+
+    if(SPARK_STAGE_COPY_FILES)
+        list(POP_FRONT SPARK_STAGE_COPY_FILES _relative_dir)
+        list(APPEND _commands COMMAND "${CMAKE_COMMAND}" -E make_directory "${_runtime_dir}/${_relative_dir}")
+        if(SPARK_STAGE_COPY_FILES)
+            list(APPEND _commands
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${SPARK_STAGE_COPY_FILES}
+                    "${_runtime_dir}/${_relative_dir}/")
+        endif()
+    endif()
+
+    if(NOT _commands)
+        message(FATAL_ERROR "spark_stage_game_module_content: nothing to stage for '${TARGET_NAME}'")
+    endif()
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        ${_commands}
+        COMMENT "Staging ${TARGET_NAME} runtime content"
+        VERBATIM)
+endfunction()
+
 # An explicit, untyped -DSPARK_MODULE_CXX_LANGUAGE_ABI=<value> override (the
 # cross-compiling path in _spark_detect_cxx_language_abi) is read with
 # if(DEFINED) and would otherwise stay UNINITIALIZED in the cache. Declaring it
