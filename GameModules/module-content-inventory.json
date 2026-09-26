@@ -298,7 +298,7 @@
       "directory": "GameModules/SparkGameRacing",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameRacing/Source",
-      "sourceFileCount": 21,
+      "sourceFileCount": 23,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,
@@ -320,12 +320,15 @@
         "Engine/SaveSystem/SaveSystem.h",
         "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
+        "Physics/PhysicsBody.h",
+        "Physics/PhysicsSystem.h",
+        "Physics/VehiclePhysics.h",
         "Utils/EventBus.h",
         "Utils/InvalidStateDetector.h",
         "Utils/LogMacros.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 14,
+      "privateEngineHeaderCount": 17,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp"
       ]

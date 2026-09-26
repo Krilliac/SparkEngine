@@ -19,6 +19,11 @@
 namespace Racing
 {
 
+    RacingTrackSystem::~RacingTrackSystem()
+    {
+        RemoveTrackColliders();
+    }
+
     bool RacingTrackSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
@@ -45,6 +50,7 @@ namespace Racing
 
     void RacingTrackSystem::Shutdown()
     {
+        RemoveTrackColliders();
         RemoveTrackKit();
         m_tracks.clear();
         m_currentTrack = {};
@@ -56,6 +62,7 @@ namespace Racing
         if (index < m_tracks.size())
         {
             m_currentTrack = m_tracks[index];
+            BuildTrackColliders();
             PlaceTrackKit();
             auto& console = Spark::SimpleConsole::GetInstance();
             SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing track loaded: %s", m_currentTrack.name.c_str());
@@ -228,6 +235,24 @@ namespace Racing
         const TrackWaypoint& end = GetWaypoint(segment + 1);
         outX = end.x;
         outZ = end.z;
+    }
+
+    float RacingTrackSystem::GetCenterlineHeight(const TrackProjection& projection) const
+    {
+        if (m_currentTrack.waypoints.empty())
+            return 0.0f;
+        const TrackWaypoint& from = GetWaypoint(projection.segment);
+        const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
+        return from.y + (to.y - from.y) * std::clamp(projection.t, 0.0f, 1.0f);
+    }
+
+    float RacingTrackSystem::GetCenterlineHeading(const TrackProjection& projection) const
+    {
+        if (m_currentTrack.waypoints.size() < 2)
+            return 0.0f;
+        const TrackWaypoint& from = GetWaypoint(projection.segment);
+        const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
+        return std::atan2(to.x - from.x, to.z - from.z);
     }
 
     // =========================================================================

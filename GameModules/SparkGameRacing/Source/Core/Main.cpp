@@ -74,11 +74,11 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
-    // Initialize vehicle system
+    // Initialize vehicle system (binds the engine's shared Jolt world; the module steps it in OnFixedUpdate)
     m_vehicleSystem = std::make_unique<Racing::RacingVehicleSystem>();
     if (!m_vehicleSystem->Initialize(context))
     {
-        console.LogError("[Racing] Failed to initialize vehicle system");
+        console.LogError("[Racing] Failed to initialize vehicle system (no live Jolt physics world)");
         return false;
     }
 
@@ -124,7 +124,11 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
-    SetupDefaultRaceRoster();
+    if (!SetupDefaultRaceRoster())
+    {
+        console.LogError("[Racing] Failed to build the starting grid");
+        return false;
+    }
 
     // Register Racing-specific state validation rules
     auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
@@ -233,6 +237,7 @@ void SparkGameRacingModule::OnFixedUpdate(float fixedDeltaTime)
     if (!m_initialized || m_paused)
         return;
 
+    // Sole physics stepping owner in the Racing process: one shared-world tick per engine fixed step.
     m_vehicleSystem->FixedUpdate(fixedDeltaTime);
 }
 

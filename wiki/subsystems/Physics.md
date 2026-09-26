@@ -108,7 +108,7 @@ enum class PhysicsBodyType {
 
 ```cpp
 enum class CollisionShapeType {
-    Box,          // Axis-aligned box (half-extents in dimensions)
+    Box,          // Axis-aligned box (FULL extents in dimensions; see note below)
     Sphere,       // Sphere (uses radius field)
     Capsule,      // Capsule -- character controllers (uses radius + height)
     Cylinder,     // Cylinder (uses radius + height)
@@ -120,12 +120,18 @@ enum class CollisionShapeType {
 };
 ```
 
+> **Box dimensions are full extents.** `PhysicsSystem::CreateBoxShape` (`PhysicsShapeFactory.cpp`) halves
+> `dimensions` before building the Jolt `BoxShape`, so `{2, 1, 4}` is a 2 x 1 x 4 m box, even though the
+> `CollisionShapeDesc::dimensions` comment in `PhysicsTypes.h` still says half-extents. Found while building the
+> SparkGameRacing chassis and run-off slab (MOD-380): a desc filled with half-extents yields a body half the
+> intended size.
+
 ### CollisionShapeDesc
 
 ```cpp
 struct CollisionShapeDesc {
     CollisionShapeType type = CollisionShapeType::Box;
-    XMFLOAT3 dimensions    = {1.0f, 1.0f, 1.0f};  // Half-extents for Box
+    XMFLOAT3 dimensions    = {1.0f, 1.0f, 1.0f};  // Full extents for Box (halved for Jolt)
     float radius           = 0.5f;                   // Radius for Sphere/Capsule/Cylinder/Cone
     float height           = 1.0f;                   // Height for Capsule/Cylinder/Cone
     std::string meshPath;                             // File path for Mesh shapes
@@ -268,7 +274,7 @@ enum class ConstraintType {
 - Steering is by track speed. `steerAngle / trackedFullSteerAngle` (default 0.5 rad) moves the inner track's ratio from 1 through a stop to -1. Jolt rejects an exact 0, so a stopped inner track is commanded as ±0.05.
 - Steering with no throttle or brake below 1 m/s pivots the hull in place (counter-rotating tracks). The handbrake acts as the brake.
 
-`Tests/TestMOD380VehiclePhysicsReal.cpp` (`VehiclePhysics_JoltVehicle*`) drives a real car on a static ground slab with `StepFixed()`: throttle accelerates it forward, braking decelerates it at more than twice the coasting rate, reverse works, steering yaws it in the input's sign, a sleeping car wakes on input, and two identical input scripts give bitwise-identical poses. `VehiclePhysics_JoltTrackedVehicle*` and `VehiclePhysics_TrackedVehicleRejects*` drive a ten-wheel tracked hull: it goes straight on equal tracks, brakes to a stop, yaws toward the steer side while driving, pivots in place, and rejects one-sided or centred-wheel layouts. SparkGameRacing does not use this wrapper yet; its vehicles still run the module's own kinematic model (MOD-380).
+`Tests/TestMOD380VehiclePhysicsReal.cpp` (`VehiclePhysics_JoltVehicle*`) drives a real car on a static ground slab with `StepFixed()`: throttle accelerates it forward, braking decelerates it at more than twice the coasting rate, reverse works, steering yaws it in the input's sign, a sleeping car wakes on input, and two identical input scripts give bitwise-identical poses. `VehiclePhysics_JoltTrackedVehicle*` and `VehiclePhysics_TrackedVehicleRejects*` drive a ten-wheel tracked hull: it goes straight on equal tracks, brakes to a stop, yaws toward the steer side while driving, pivots in place, and rejects one-sided or centred-wheel layouts. SparkGameRacing drives its whole grid through this wrapper (MOD-380): `RacingVehicleSystem` builds one chassis per racer, steps the shared world once per engine fixed step with `StepFixed(1)`, and `RacingTrackSystem` supplies static road-mesh and run-off colliders; `RacingCompleteRace_*` runs full races on them.
 
 ---
 

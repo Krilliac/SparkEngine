@@ -14,9 +14,13 @@
 #include "Spark/IEngineContext.h"
 #include "Enums/RacingEnums.h"
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
+class PhysicsBody;
+class PhysicsSystem;
 
 namespace Racing
 {
@@ -107,12 +111,22 @@ namespace Racing
      * Provides the track spline for AI path-following, validates checkpoint
      * passage for lap counting, and reports the surface type under any
      * world-space position.
+     *
+     * When the engine context has a live Jolt world, every loaded track also
+     * gets static colliders in the shared PhysicsSystem: a road mesh per surface
+     * type (friction = RacingVehicleSystem::GetSurfaceGrip) over a run-off
+     * ground slab, so the Jolt vehicles drive on the authored centerline,
+     * width, and elevation. Game thread only; the colliders are rebuilt on
+     * every LoadDemoTrack() and removed in Shutdown().
      */
     class RacingTrackSystem
     {
       public:
         RacingTrackSystem() = default;
-        ~RacingTrackSystem() = default;
+        ~RacingTrackSystem(); ///< Removes any track colliders still in the physics world (which must outlive this)
+
+        RacingTrackSystem(const RacingTrackSystem&) = delete;
+        RacingTrackSystem& operator=(const RacingTrackSystem&) = delete;
 
         bool Initialize(Spark::IEngineContext* context);
         void Update(float deltaTime);
@@ -141,12 +155,21 @@ namespace Racing
         /// Project a position onto the centerline; a heading breaks ties where the track crosses itself.
         TrackProjection ProjectOntoTrack(float x, float z, std::optional<float> heading = std::nullopt) const;
 
+        /// Centerline height (road surface level) at a projection.
+        float GetCenterlineHeight(const TrackProjection& projection) const;
+
+        /// Driving heading (yaw, 0 = +Z) of the centerline segment under a projection.
+        float GetCenterlineHeading(const TrackProjection& projection) const;
+
         /// Point `distance` meters further along the centerline (clamped at a point-to-point finish).
         void GetPointAhead(const TrackProjection& from, float distance, float& outX, float& outZ) const;
 
         const TrackData& GetCurrentTrack() const { return m_currentTrack; }
         size_t GetTrackCount() const { return m_tracks.size(); }
         size_t GetCheckpointCount() const { return m_currentTrack.checkpoints.size(); }
+
+        /// Static Jolt bodies (road surfaces + run-off ground) built for the current track.
+        size_t GetColliderCount() const { return m_colliders.size(); }
 
         std::string GetTrackListString() const;
 
@@ -161,10 +184,16 @@ namespace Racing
         void PlaceTrackKit();
         void RemoveTrackKit();
 
+        /// Build the current track's road and run-off colliders in the shared Jolt world (no-op without one)
+        void BuildTrackColliders();
+        void RemoveTrackColliders();
+
         Spark::IEngineContext* m_context{nullptr};
         std::vector<TrackData> m_tracks;
         TrackData m_currentTrack;
         std::vector<uint32_t> m_kitEntities; ///< Trackside kit props (MeshRenderer entities) owned by this system
+        std::vector<std::shared_ptr<PhysicsBody>> m_colliders; ///< Static track bodies owned by this system
+        PhysicsSystem* m_colliderPhysics{nullptr};             ///< World the colliders were built in; non-owning
         bool m_initialized{false};
     };
 

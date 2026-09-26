@@ -11,7 +11,13 @@ SparkGameRacing is a systems-first circuit-racing example. Loading the module cr
 - `C`: cycle camera mode
 - `R`: rebuild the roster and restart the race
 
-Vehicle input is integrated using the caller's frame time, so acceleration, braking, nitro, and drift do not depend on a fixed 60 Hz input-call rate. The template uses the engine's existing debug HUD and procedural track data.
+## Vehicle physics
+
+Every racer is a Jolt vehicle in the engine's shared `PhysicsSystem`: `RacingVehicleSystem` builds a dynamic chassis body (lowered centre of mass) with a four-wheel `VehicleConstraint` through `PhysicsSystem::CreateVehicle`. The per-type `VehicleStats` set the chassis mass, the engine torque (launch acceleration), the gearing (top gear reaches the redline at 1.3x the governed top speed, leaving nitro/drift boost headroom), the wheel brake torque, and the front steering lock. Player and AI input is latched per frame (nitro drain and drift charge use the frame time, so they do not depend on the input-call rate) and handed to the Jolt controller on every fixed tick; drifting applies a partial rear handbrake, boost adds forward thrust, and the steering lock falls off with speed.
+
+The module is the Racing process's single physics stepping owner: `SparkGameRacingModule::OnFixedUpdate` calls `RacingVehicleSystem::FixedUpdate`, which advances the shared world by exactly one `PhysicsSystem::StepFixed()` tick of the engine fixed timestep and reads the stepped poses back into `VehicleInstance`. There is no kinematic fallback: without a live Jolt world the vehicle system (and the module load) fails.
+
+`RacingTrackSystem` gives every loaded track static colliders in the same world: a road mesh per surface type along the authored centerline, width, and elevation (friction = `RacingVehicleSystem::GetSurfaceGrip`, which Jolt combines with the tyre friction) over a grass run-off slab. Grass and sand add rolling resistance so a car that runs wide slows down. The AI and the test autopilot brake for corners with `ComputeCornerSpeedLimit` (a braking-point planner over the centerline curvature). A chassis that rolls over, stays pinned under full throttle for three seconds, or falls off the elevated Mountain Pass road is put back on the centerline. Finished and DNF racers are parked: their chassis leaves the physics world so they never block the cars still racing.
 
 ## Circuit kit and music
 
@@ -19,12 +25,12 @@ Whenever a track loads with a world, `RacingTrackSystem` dresses it with the Ble
 
 Checkpoint traversal must follow the authored order, and laps complete only at the checkpoint marked as the finish line. This supports both circuit and point-to-point layouts; standings are refreshed after each frame's track-distance synchronization before the HUD and minimap snapshot is published.
 
-The whole race loop (roster/grid setup, race clock, surface and hazard sync, ordered checkpoints, AI, and driving input) lives in `Core/RacingRaceFlow` as `SetupRaceRoster()` and `StepRaceFrame()`; the module only binds engine input to them. AI and a scripted player follow the authored centerline with speed-scaled look-ahead (`RacingTrackSystem::ProjectOntoTrack` / `GetPointAhead`), and AI throttle/brake react to that real corner rather than a synthetic line. Surfaces are resolved against the centerline segments, and grass/sand bleed speed so a car that runs wide can recover. `Tests/TestMOD380RacingCompleteRaceReal.cpp` (`RacingCompleteRace_*`) runs full races on all three demo tracks through those functions and checks that every racer finishes valid laps, placings follow finish order, cutting the infield does not count a lap, and a restart after results produces a fresh, completable race.
+The whole race loop (roster/grid setup, race clock, surface and hazard sync, ordered checkpoints, AI, and driving input) lives in `Core/RacingRaceFlow` as `SetupRaceRoster()` and `StepRaceFrame()`; the module only binds engine input to them. AI and a scripted player follow the authored centerline with speed-scaled look-ahead (`RacingTrackSystem::ProjectOntoTrack` / `GetPointAhead`), and AI throttle/brake react to that real corner rather than a synthetic line. Surfaces are resolved against the centerline segments. `Tests/TestMOD380RacingCompleteRaceReal.cpp` (`RacingCompleteRace_*`) binds the systems to a real engine `PhysicsSystem` and runs full races on all three demo tracks through those functions, one shared physics tick per 60 Hz frame. It checks that every racer finishes valid laps, placings follow finish order, cutting the infield does not count a lap, a restart after results produces a fresh, completable race, every racer is a Jolt chassis advanced one tick per fixed step, the Mountain Pass road colliders carry the cars up to its 20 m summit, and finishers leave the physics world.
 
-Finished and DNF racers remain visible in the presentation state but receive neutral controls and stop moving while the remaining field continues racing.
+Finished and DNF racers remain visible in the presentation state at their last pose.
 
 ## Example boundary
 
 The slice demonstrates vehicle state, track surfaces and hazards, checkpoint/lap progression, AI steering, cameras, HUD data, replay/audio integrations, and console tooling. Production projects are expected to replace the procedural/debug presentation with authored vehicles, tracks, materials, and UI.
 
-Known limits: vehicles still use the module's own fixed-step kinematic model rather than Jolt bodies from the shared `PhysicsSystem`, checkpoints are trigger circles rather than authored collider gates, barrier/jump-ramp hazards are data-only, and ghost/replay persistence is not declared.
+Known limits: checkpoints are trigger circles rather than authored collider gates, barrier/jump-ramp hazards are data-only (no collider), vehicle damage is not yet fed by collisions, and ghost/replay persistence is not declared (OD-15).

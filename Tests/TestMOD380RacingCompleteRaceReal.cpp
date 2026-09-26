@@ -1,17 +1,19 @@
 /**
  * @file TestMOD380RacingCompleteRaceReal.cpp
- * @brief MOD-380: complete-race tests that drive the real SparkGameRacing flow.
+ * @brief MOD-380: complete-race tests that drive the real SparkGameRacing flow on Jolt vehicles.
  *
- * Every test builds the module's own roster with SetupRaceRoster() and advances
- * it with StepRaceFrame() + RacingVehicleSystem::FixedUpdate() -- the same calls
- * SparkGameRacingModule::OnUpdate/OnFixedUpdate make -- so lap validation,
- * AI driving, standings, and results are exercised end to end rather than by
- * calling race-manager bookkeeping directly.
+ * Every test binds the module's systems to a real engine PhysicsSystem (RacingPhysicsTestWorld), builds the
+ * module's own roster with SetupRaceRoster(), and advances it with StepRaceFrame() +
+ * RacingVehicleSystem::FixedUpdate() -- the same calls SparkGameRacingModule::OnUpdate/OnFixedUpdate make, one
+ * shared-world physics tick per 60 Hz frame -- so the cars, the track colliders they drive on, lap validation,
+ * AI driving, standings, and results are exercised end to end.
  */
 
 #include "TestFramework.h"
 
-#ifdef SPARK_TEST_HAS_IMGUI
+#if defined(SPARK_TEST_HAS_IMGUI) && defined(SPARK_TEST_HAS_PHYSICS)
+
+#include "RacingPhysicsTestWorld.h"
 
 #include "../GameModules/SparkGameRacing/Source/AI/RacingAIDriver.h"
 #include "../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.h"
@@ -33,16 +35,20 @@ namespace
 
     struct RaceRig
     {
+        RacingPhysicsTestWorld world; // declared first: outlives every system below
         RacingVehicleSystem vehicles;
         RacingTrackSystem track;
         RacingRaceManager race;
         RacingAIDriver ai;
+        bool ready = false;
 
         explicit RaceRig(uint32_t trackIndex)
         {
-            track.Initialize(nullptr);
+            if (!world.ready)
+                return;
+            track.Initialize(world.Context());
             track.LoadDemoTrack(trackIndex);
-            SetupRaceRoster(Sim(), nullptr);
+            ready = SetupRaceRoster(Sim(), world.Context());
         }
 
         ~RaceRig()
@@ -55,19 +61,26 @@ namespace
 
         RaceSimulation Sim() { return {vehicles, track, race, ai}; }
 
-        /// One module frame: OnUpdate's race step followed by OnFixedUpdate's vehicle integration.
+        /// One module frame: OnUpdate's race step followed by OnFixedUpdate's single shared physics tick.
         void Frame(const PlayerDriveInput& input)
         {
             StepRaceFrame(Sim(), &input, kFrameDt);
             vehicles.FixedUpdate(kFrameDt);
         }
 
-        /// Player autopilot that follows the authored racing line at full throttle.
+        /// Player autopilot that follows the authored racing line, braking for corners like the AI does.
         PlayerDriveInput Autopilot()
         {
+            const VehicleInstance& player = *vehicles.GetPlayerVehicle();
             PlayerDriveInput input;
             input.throttle = 1.0f;
-            input.steer = ComputeTrackSteer(*vehicles.GetPlayerVehicle(), track);
+            input.steer = ComputeTrackSteer(player, track);
+            const float limit = ComputeCornerSpeedLimit(player, track);
+            if (player.speed > limit)
+            {
+                input.throttle = 0.0f;
+                input.brake = std::clamp((player.speed - limit) / 20.0f, 0.2f, 1.0f);
+            }
             return input;
         }
 
@@ -129,11 +142,12 @@ namespace
 TEST(RacingCompleteRace_CircuitPlayerAndAIFinishValidLaps)
 {
     RaceRig rig(0);
+    ASSERT_TRUE(rig.ready);
     EXPECT_EQ(rig.race.GetRacerCount(), static_cast<size_t>(6));
     EXPECT_EQ(rig.ai.GetDriverCount(), static_cast<size_t>(5));
     EXPECT_TRUE(rig.race.GetState() == RaceState::Countdown);
 
-    rig.RunToResults(290.0f);
+    rig.RunToResults(400.0f);
     if (rig.race.GetState() != RaceState::Finished)
         rig.DumpStandings();
     ExpectValidResults(rig);
@@ -148,7 +162,8 @@ TEST(RacingCompleteRace_CircuitPlayerAndAIFinishValidLaps)
 TEST(RacingCompleteRace_PointToPointPlayerAndAIReachAuthoredFinish)
 {
     RaceRig rig(1);
-    rig.RunToResults(290.0f);
+    ASSERT_TRUE(rig.ready);
+    rig.RunToResults(400.0f);
     if (rig.race.GetState() != RaceState::Finished)
         rig.DumpStandings();
     ExpectValidResults(rig);
@@ -157,7 +172,8 @@ TEST(RacingCompleteRace_PointToPointPlayerAndAIReachAuthoredFinish)
 TEST(RacingCompleteRace_Figure8PlayerAndAIFinishValidLaps)
 {
     RaceRig rig(2);
-    rig.RunToResults(290.0f);
+    ASSERT_TRUE(rig.ready);
+    rig.RunToResults(400.0f);
     if (rig.race.GetState() != RaceState::Finished)
         rig.DumpStandings();
     ExpectValidResults(rig);
@@ -166,6 +182,7 @@ TEST(RacingCompleteRace_Figure8PlayerAndAIFinishValidLaps)
 TEST(RacingCompleteRace_CuttingTheInfieldDoesNotCompleteALap)
 {
     RaceRig rig(0);
+    ASSERT_TRUE(rig.ready);
     const TrackData& circuit = rig.track.GetCurrentTrack();
     ASSERT_EQ(circuit.checkpoints.size(), static_cast<size_t>(4));
     const Checkpoint& finish = circuit.checkpoints[0];
@@ -183,7 +200,7 @@ TEST(RacingCompleteRace_CuttingTheInfieldDoesNotCompleteALap)
     ASSERT_EQ(rig.race.GetRacer(playerId)->lastCheckpoint, first.index);
 
     bool reachedFinishLine = false;
-    for (int frame = 0; frame < 60 * 30 && !reachedFinishLine; ++frame)
+    for (int frame = 0; frame < 60 * 60 && !reachedFinishLine; ++frame)
     {
         PlayerDriveInput cut;
         cut.throttle = 1.0f;
@@ -200,10 +217,11 @@ TEST(RacingCompleteRace_CuttingTheInfieldDoesNotCompleteALap)
 TEST(RacingCompleteRace_RestartAfterResultsStartsAFreshRace)
 {
     RaceRig rig(0);
-    rig.RunToResults(290.0f);
+    ASSERT_TRUE(rig.ready);
+    rig.RunToResults(400.0f);
     ASSERT_TRUE(rig.race.GetState() == RaceState::Finished);
 
-    SetupRaceRoster(rig.Sim(), nullptr);
+    ASSERT_TRUE(SetupRaceRoster(rig.Sim(), rig.world.Context()));
     EXPECT_TRUE(rig.race.GetState() == RaceState::Countdown);
     EXPECT_EQ(rig.race.GetRacerCount(), static_cast<size_t>(6));
     EXPECT_EQ(rig.vehicles.GetVehicleCount(), static_cast<size_t>(6));
@@ -219,8 +237,93 @@ TEST(RacingCompleteRace_RestartAfterResultsStartsAFreshRace)
     EXPECT_STR_CONTAINS(rig.race.GetResultsString(), "not finished");
 
     // The restarted race is itself completable.
-    rig.RunToResults(290.0f);
+    rig.RunToResults(400.0f);
     ExpectValidResults(rig);
 }
 
-#endif // SPARK_TEST_HAS_IMGUI
+TEST(RacingCompleteRace_VehiclesAreJoltBodiesSteppedOnTheSharedTimestep)
+{
+    // No kinematic fallback: without the engine's live Jolt world the vehicle system refuses to start.
+    RacingVehicleSystem noPhysics;
+    EXPECT_FALSE(noPhysics.Initialize(nullptr));
+    EXPECT_EQ(noPhysics.CreateVehicle("Orphan", VehicleType::Kart, false, {}), 0u);
+
+    RaceRig rig(0);
+    ASSERT_TRUE(rig.ready);
+    EXPECT_GE(rig.track.GetColliderCount(), static_cast<size_t>(2)); // road surface(s) + run-off slab
+    for (const VehicleInstance& vehicle : rig.vehicles.GetVehicles())
+        EXPECT_TRUE(rig.vehicles.HasChassis(vehicle.id));
+
+    // The countdown settles every car onto the road collider under the grid, one physics tick per frame.
+    const uint64_t ticksBefore = rig.vehicles.GetStepCount();
+    for (int frame = 0; frame < 120; ++frame)
+        rig.Frame({});
+    EXPECT_EQ(rig.vehicles.GetStepCount() - ticksBefore, static_cast<uint64_t>(120));
+    EXPECT_NEAR(rig.world.physics->GetTimeStep(), kFrameDt, 1.0e-6f);
+    for (const VehicleInstance& vehicle : rig.vehicles.GetVehicles())
+    {
+        EXPECT_NEAR(vehicle.positionY, 0.0f, 0.25f);
+        EXPECT_LT(vehicle.speed, 1.0f);
+    }
+
+    // Racing: the player's throttle reaches the Jolt controller and the chassis drives down the straight.
+    while (rig.race.GetState() != RaceState::Racing)
+        rig.Frame({});
+    const VehicleInstance start = *rig.vehicles.GetPlayerVehicle();
+    PlayerDriveInput floorIt;
+    floorIt.throttle = 1.0f;
+    for (int frame = 0; frame < 240; ++frame)
+        rig.Frame(floorIt);
+    const VehicleInstance& player = *rig.vehicles.GetPlayerVehicle();
+    EXPECT_GT(player.speed, 50.0f);
+    EXPECT_GT(player.rpm, 1000.0f);
+    EXPECT_GT(DistanceTo(player, start.positionX, start.positionZ), 25.0f);
+    EXPECT_NEAR(player.positionY, 0.0f, 0.25f);
+}
+
+TEST(RacingCompleteRace_MountainPassRoadCarriesTheCarsUphill)
+{
+    RaceRig rig(1);
+    ASSERT_TRUE(rig.ready);
+
+    // The Mountain Pass climbs to 20 m. A car only gains that height by driving on the elevated road colliders;
+    // the run-off slab under the layout stays at 0 m. The tolerance covers the short hops over the crests.
+    float highestPlayerY = 0.0f;
+    for (float t = 0.0f; t < 400.0f && rig.race.GetState() != RaceState::Finished; t += kFrameDt)
+    {
+        rig.Frame(rig.Autopilot());
+        const VehicleInstance& player = *rig.vehicles.GetPlayerVehicle();
+        highestPlayerY = std::max(highestPlayerY, player.positionY);
+        if (rig.vehicles.HasChassis(player.id))
+        {
+            const TrackProjection projection =
+                rig.track.ProjectOntoTrack(player.positionX, player.positionZ, player.heading);
+            EXPECT_NEAR(player.positionY, rig.track.GetCenterlineHeight(projection), 3.0f);
+        }
+    }
+    EXPECT_GT(highestPlayerY, 15.0f);
+    ExpectValidResults(rig);
+}
+
+TEST(RacingCompleteRace_FinishedRacersLeaveThePhysicsWorld)
+{
+    RaceRig rig(0);
+    ASSERT_TRUE(rig.ready);
+    rig.RunToResults(400.0f);
+    ASSERT_TRUE(rig.race.GetState() == RaceState::Finished);
+
+    // StepRaceFrame parks every finisher: its chassis is gone and it holds its final pose.
+    rig.Frame(rig.Autopilot());
+    for (const VehicleInstance& vehicle : rig.vehicles.GetVehicles())
+    {
+        EXPECT_FALSE(rig.vehicles.HasChassis(vehicle.id));
+        EXPECT_NEAR(vehicle.speed, 0.0f, 0.001f);
+    }
+    const VehicleInstance parked = *rig.vehicles.GetPlayerVehicle();
+    for (int frame = 0; frame < 60; ++frame)
+        rig.Frame(rig.Autopilot());
+    EXPECT_NEAR(rig.vehicles.GetPlayerVehicle()->positionX, parked.positionX, 1.0e-4f);
+    EXPECT_NEAR(rig.vehicles.GetPlayerVehicle()->positionZ, parked.positionZ, 1.0e-4f);
+}
+
+#endif // SPARK_TEST_HAS_IMGUI && SPARK_TEST_HAS_PHYSICS

@@ -67,8 +67,7 @@ namespace Racing
                 return Fail(error, "invalid racing snapshot header");
             }
 
-            RacingVehicleSystem vehicleValidator;
-            if (!vehicleValidator.RestoreState(snapshot.vehicles))
+            if (!RacingVehicleSystem::ValidateSnapshot(snapshot.vehicles))
                 return Fail(error, "invalid vehicle snapshot");
             RacingRaceManager raceValidator;
             if (!raceValidator.RestoreState(snapshot.race))

@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **51 in progress**, **5 blocked**, **8 open**
-- Acceptance criteria: **259 total**, **38 implemented** (15%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **39 implemented** (15%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -314,7 +314,7 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **in-progress** | 0/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-360`](#mod-360--finish-openworld-as-a-streamed-survivalexploration-slice) Finish OpenWorld as a streamed survival/exploration slice | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-370`](#mod-370--finish-rts-as-a-deterministic-playable-skirmish) Finish RTS as a deterministic playable skirmish | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-380`, `MOD-390` |
-| [`MOD-380`](#mod-380--finish-racing-as-a-physics-backed-complete-race) Finish Racing as a physics-backed complete race | P1 | **in-progress** | 0/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-390` |
+| [`MOD-380`](#mod-380--finish-racing-as-a-physics-backed-complete-race) Finish Racing as a physics-backed complete race | P1 | **in-progress** | 1/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-390` |
 | [`MOD-390`](#mod-390--finish-visualscript-as-a-real-packaged-gameplay-loop) Finish VisualScript as a real packaged gameplay loop | P1 | **blocked** | 1/4 · 0/4 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380` |
 | [`RDY-015`](#rdy-015--build-real-source-lifecycle-evidence-for-experimental-modules) Build real-source lifecycle evidence for experimental modules | P1 | **in-progress** | 2/3 · 0/3 | `RDY-000`, `CI-100` | `MOD-295` |
 | [`MOD-295`](#mod-295--build-reusable-completion-helpers-for-prototype-modules) Build reusable completion helpers for prototype modules | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290`, `RDY-015`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
@@ -4058,14 +4058,14 @@ No real player input path exists; vehicles use custom fixed-step kinematic math,
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Automated packaged race has player and AI finish valid laps
    - Evidence: `Tests/TestMOD380RacingCompleteRaceReal.cpp`
    - Player and AI finish valid laps in-process, but no packaged race run exists.
-2. **[unmet]** Physics uses the shared runtime and timestep
-   - Evidence: `GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp`
-   - The module still uses its own kinematic vehicle physics, not the shared Jolt runtime and timestep.
+2. **[implemented]** Physics uses the shared runtime and timestep
+   - Evidence: `GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp`, `GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleChassis.cpp`, `GameModules/SparkGameRacing/Source/Track/RacingTrackColliders.cpp`, `Tests/TestMOD380RacingCompleteRaceReal.cpp`
+   - Every racer is a Jolt chassis with a VehicleConstraint from the engine PhysicsSystem, driving on per-track static road colliders; the module is the process's single StepFixed owner, one tick per engine fixed step, and the kinematic path is gone. Local RacingCompleteRace_* runs pass; no exact-commit CI evidence yet.
 3. **[unmet]** Results/restart and declared ghost state persist
    - Evidence: `Tests/TestMOD380RacingCompleteRaceReal.cpp`
    - Restart after results is tested in memory only. No results or ghost persistence test exists.

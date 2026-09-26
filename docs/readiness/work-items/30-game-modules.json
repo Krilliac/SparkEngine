@@ -1620,11 +1620,14 @@
         },
         {
           "criterionDigest": "sha256:e800cc13bee9",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp"
+            "GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp",
+            "GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleChassis.cpp",
+            "GameModules/SparkGameRacing/Source/Track/RacingTrackColliders.cpp",
+            "Tests/TestMOD380RacingCompleteRaceReal.cpp"
           ],
-          "note": "The module still uses its own kinematic vehicle physics, not the shared Jolt runtime and timestep."
+          "note": "Every racer is a Jolt chassis with a VehicleConstraint from the engine PhysicsSystem, driving on per-track static road colliders; the module is the process's single StepFixed owner, one tick per engine fixed step, and the kinematic path is gone. Local RacingCompleteRace_* runs pass; no exact-commit CI evidence yet."
         },
         {
           "criterionDigest": "sha256:6a35b45838fc",

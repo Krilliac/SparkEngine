@@ -19,7 +19,7 @@ SparkEngine contains **11 in-tree game-module directories** with differing proto
 | [SparkGameOpenWorld](#sparkgameopenworld)   | ~4.9K  | Large-world exploration | Seamless streaming, origin rebasing, weather |
 | [SparkGamePlatformer](#sparkgameplatformer) | ~4.1K  | 3D platformer | Player controller, destruction, audio, save |
 | [SparkGameRTS](#sparkgamerts)               | ~5.0K  | Real-time strategy | Unit roster, selection and move/stop/hold commands, buildings, economy, fog; no acting AI opponent and no damage resolution yet |
-| [SparkGameRacing](#sparkgameracing)         | ~3.8K  | Vehicle racing | Kinematic showcase vehicles (no Jolt), WASD input, waypoint AI, camera, audio, cinematic |
+| [SparkGameRacing](#sparkgameracing)         | ~3.8K  | Vehicle racing | Jolt vehicles on the shared PhysicsSystem, WASD input, waypoint AI, camera, audio, cinematic |
 | [SparkGameVisualScript](#sparkgamevisualscript) | ~370 | Script-only module | Visual scripting graphs, zero C++ game logic |
 
 The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled (ON by default); this target inventory is not a claim that every module is playable or release-ready.
@@ -98,7 +98,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 
 ## SparkGameRacing
 
-**Purpose:** systems-first circuit racing with one player car and five waypoint-following AI opponents. Vehicles are **kinematic showcase vehicles** (hand-rolled speed/heading integration, radius-check checkpoints) -- Jolt vehicle physics is not used; the camera system's output is internal and is not pushed to the renderer; the ImGui HUD/minimap is compiled out (`ENABLE_EDITOR` is never defined). WASD/nitro/drift input is real.
+**Purpose:** systems-first circuit racing with one player car and five waypoint-following AI opponents. Vehicles are **Jolt vehicles** (`PhysicsSystem::CreateVehicle` chassis driving on per-track road colliders; the module is the process's single `StepFixed()` owner, one tick per engine fixed step), checkpoints are radius checks; the camera system's output is internal and is not pushed to the renderer; the ImGui HUD/minimap is compiled out (`ENABLE_EDITOR` is never defined). WASD/nitro/drift input is real.
 
 - **Source:** `GameModules/SparkGameRacing/Source/`
 - **Wires:** [Physics](../subsystems/Physics.md) (vehicle subsystem), [Camera System](../subsystems/Camera-System.md) (chase/cockpit), [Audio](../subsystems/Audio.md), [Cinematic Sequencer](../gameplay-tools/Cinematic-Sequencer.md).
