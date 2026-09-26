@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **51 in progress**, **5 blocked**, **8 open**
-- Acceptance criteria: **259 total**, **40 implemented** (15%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **41 implemented** (16%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -318,7 +318,7 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | [`MOD-390`](#mod-390--finish-visualscript-as-a-real-packaged-gameplay-loop) Finish VisualScript as a real packaged gameplay loop | P1 | **blocked** | 1/4 · 0/4 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380` |
 | [`RDY-015`](#rdy-015--build-real-source-lifecycle-evidence-for-experimental-modules) Build real-source lifecycle evidence for experimental modules | P1 | **in-progress** | 2/3 · 0/3 | `RDY-000`, `CI-100` | `MOD-295` |
 | [`MOD-295`](#mod-295--build-reusable-completion-helpers-for-prototype-modules) Build reusable completion helpers for prototype modules | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290`, `RDY-015`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
-| [`MOD-315`](#mod-315--finish-optional-fps-lan-and-multiplayer-gameplay) Finish optional FPS LAN and multiplayer gameplay | P1 | **in-progress** | 1/4 · 0/4 | `MOD-310`, `NET-100` | `TF-110` |
+| [`MOD-315`](#mod-315--finish-optional-fps-lan-and-multiplayer-gameplay) Finish optional FPS LAN and multiplayer gameplay | P1 | **in-progress** | 2/4 · 0/4 | `MOD-310`, `NET-100` | `TF-110` |
 
 ### Wave 5 — Portable and modern backends
 
@@ -4375,10 +4375,11 @@ SparkGameFPS multiplayer currently ignores address and port and fabricates conne
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Two clients converge on authoritative spawn-move-kill-respawn-score
-   - There is no two-client authoritative convergence test.
+1. **[implemented]** Two clients converge on authoritative spawn-move-kill-respawn-score
+   - Evidence: `Tests/TestFPSLANLoopback.cpp`, `Tests/Fixtures/FPSLANLoopbackPeer.cpp`, `Tests/Fixtures/FPSLANLoopbackScenario.h`, `Tests/CMakeLists.txt`
+   - FPSLAN_ThreeProcessLoopbackConvergence runs one server and two independent client processes over loopback UDP through a scripted spawn-move-kill-respawn-score round; spawns, respawn, positions, health and scores converge with the server, and quitting clients leave the server. Local pass only; constrained LAN and the encrypted transport are not covered.
 2. **[unmet]** No fake connection state remains
    - Evidence: `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp`
    - Connect marks the session active before a handshake is confirmed, and nothing proves real connection state.

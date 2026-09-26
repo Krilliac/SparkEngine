@@ -768,9 +768,14 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:48fee83e2cbd",
-          "state": "unmet",
-          "evidence": [],
-          "note": "There is no two-client authoritative convergence test."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestFPSLANLoopback.cpp",
+            "Tests/Fixtures/FPSLANLoopbackPeer.cpp",
+            "Tests/Fixtures/FPSLANLoopbackScenario.h",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "FPSLAN_ThreeProcessLoopbackConvergence runs one server and two independent client processes over loopback UDP through a scripted spawn-move-kill-respawn-score round; spawns, respawn, positions, health and scores converge with the server, and quitting clients leave the server. Local pass only; constrained LAN and the encrypted transport are not covered."
         },
         {
           "criterionDigest": "sha256:5bc1ee8cc5b7",
@@ -839,9 +844,7 @@
       "plannedCiJobs": [
         "module-FPS-multiplayer"
       ],
-      "plannedTestSelectors": [
-        "FPSLAN_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-320",

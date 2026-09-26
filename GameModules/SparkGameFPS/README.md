@@ -78,7 +78,12 @@ timer, scoreboard ordering, and client reconciliation after a real handshake. Th
 `FPSMessageType::PlayerInput` (the server drops malformed, non-finite, replayed and over-rate inputs, clamps the
 axes, and spawns at most one projectile per server-owned 0.1 s fire interval however often fire is held), and the server broadcasts one `FPSMessageType::StateSnapshot` batch (states plus scores) at 20 Hz that clients
 accept only when well-formed and newer. `FPSMultiplayerProduction_NetworkPath*` exchange real datagrams with a raw
-loopback peer on each side. No two-independent-client LAN convergence result exists yet (`MOD-315`).
+loopback peer on each side. `FPSLAN_ThreeProcessLoopbackConvergence` (CTest `FPSLANTwoClientConvergence`) runs one
+server and two independent client processes (`SparkFPSLANLoopbackPeer`, each with its own `NetworkManager`) over
+loopback UDP through a scripted spawn-move-kill-respawn-score round. It requires every client's spawn and respawn to
+match the server's and all three views to agree on positions, life, health and scores, and it requires the server to
+drop both players when their clients quit. This is unconstrained loopback on one machine: it does not yet cover the
+production encrypted transport, packet loss or latency, or separate hosts (`MOD-315`).
 
 ## SDK module boundary
 

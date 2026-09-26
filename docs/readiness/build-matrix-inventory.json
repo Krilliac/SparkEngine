@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2528,
+      "line": 2550,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1396,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2566,
+      "line": 2588,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1405,10 +1405,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2186,
+      "line": 2208,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2131",
+          "id": "Tests/CMakeLists.txt:2153",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1491,7 +1491,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1402,
+      "line": 1424,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2633,10 +2633,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 3077,
+      "line": 3099,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3075",
+          "id": "Tests/CMakeLists.txt:3097",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2795,6 +2795,24 @@
       "file": "CMakeLists.txt",
       "line": 1445,
       "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFPSLANLoopbackPeer",
+      "kind": "executable",
+      "file": "Tests/CMakeLists.txt",
+      "line": 1279,
+      "conditionFrames": [
+        {
+          "id": "Tests/CMakeLists.txt:1267",
+          "branch": 0,
+          "branches": [
+            "ENABLE_NETWORKING"
+          ]
+        }
+      ],
       "definitionScope": [],
       "origin": "declaration",
       "resolved": true
@@ -4426,7 +4444,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 3077,
+          "line": 3099,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4590,6 +4608,24 @@
           "file": "CMakeLists.txt",
           "line": 1445,
           "kind": "static_library",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFPSLANLoopbackPeer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 1279,
+          "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
           "resolved": true

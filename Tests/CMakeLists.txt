@@ -1271,6 +1271,28 @@ if(ENABLE_NETWORKING)
         TestNetworkSecurity.cpp
         TestNetworkSecurityPhaseHH.cpp
         harden/Test_net-world_migration.cpp)
+
+    # MOD-315: three-process FPSLAN loopback harness. Each peer process runs the production
+    # FPSMultiplayerSystem against its own NetworkManager; TestFPSLANLoopback.cpp launches one
+    # server and two clients and requires both clients to converge on the server's
+    # spawn-move-kill-respawn-score round.
+    add_executable(SparkFPSLANLoopbackPeer
+        Fixtures/FPSLANLoopbackPeer.cpp
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp")
+    target_compile_features(SparkFPSLANLoopbackPeer PRIVATE cxx_std_23)
+    target_include_directories(SparkFPSLANLoopbackPeer PRIVATE
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source")
+    target_link_libraries(SparkFPSLANLoopbackPeer PRIVATE SparkEngineLib)
+    add_dependencies(SparkTests SparkFPSLANLoopbackPeer)
+    target_sources(SparkTests PRIVATE TestFPSLANLoopback.cpp)
+    target_compile_definitions(SparkTests PRIVATE
+        SPARK_TEST_FPSLAN_PEER_PATH="$<TARGET_FILE:SparkFPSLANLoopbackPeer>")
+    add_test(NAME FPSLANTwoClientConvergence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(FPSLANTwoClientConvergence PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=FPSLAN_;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "fps;multiplayer;network;integration;process"
+        TIMEOUT 180)
 endif()
 if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_PHYSICS)
