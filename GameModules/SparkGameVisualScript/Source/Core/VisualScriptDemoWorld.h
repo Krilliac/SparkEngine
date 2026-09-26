@@ -62,11 +62,14 @@ namespace Spark::VisualScriptDemo
          */
         bool Spawn();
 
-        /// Detach and destroy every entity this builder created (reverse creation order).
+        /// Detach and destroy every entity this builder created (reverse creation order), kit props included.
         void DestroyEntities();
 
-        /// Entities currently owned by the builder, in creation order.
+        /// Script entities currently owned by the builder, in creation order.
         const std::vector<EntityID>& GetEntities() const { return m_entities; }
+
+        /// Script-less Blender kit props (Assets/Models/VisualScript/Kit) placed by the last successful Spawn().
+        const std::vector<EntityID>& GetKitProps() const { return m_kitProps; }
 
         /// Script directory chosen by the last successful LoadScripts().
         const std::filesystem::path& GetScriptRoot() const { return m_scriptRoot; }
@@ -76,6 +79,7 @@ namespace Spark::VisualScriptDemo
 
       private:
         bool AttachScript(EntityID entity, const std::string& className);
+        void PlaceKitProps();
         void Fail(const std::string& message);
 
         World& m_world;
@@ -83,6 +87,7 @@ namespace Spark::VisualScriptDemo
         std::filesystem::path m_scriptRoot;
         std::unordered_map<std::string, std::string> m_scriptSources;
         std::vector<EntityID> m_entities;
+        std::vector<EntityID> m_kitProps;
         std::string m_lastError;
     };
 } // namespace Spark::VisualScriptDemo

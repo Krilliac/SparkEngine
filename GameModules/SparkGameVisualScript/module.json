@@ -9,6 +9,10 @@
       {
         "directory": "GameModules/SparkGameVisualScript/Assets",
         "manifest": "GameModules/SparkGameVisualScript/Assets/manifest.json"
+      },
+      {
+        "directory": "Assets/Models/VisualScript",
+        "manifest": "Assets/assets.integrity.json"
       }
     ]
   },

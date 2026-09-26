@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 1199,
+  "fileCount": 1223,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -5855,6 +5855,174 @@
       "size": 53704,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original starter/module-kit model from Tools/model_pipeline/generate_starter_models.py; hash-bound by Assets/Models/Generated/starter_assets_manifest.json: starter model core_primitives/Sphere [starter-model-pipeline]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/lever.mtl",
+      "sha256": "cfe4ae697f594a0d35f47e1b8caa5fed4cee7bd693d3fe64ddd0adb940d1fcd1",
+      "size": 1012,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json: Blender-authored lever [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/lever.obj",
+      "sha256": "beedb0eb92525fcec83e3f624c8bd0507d34453e8f9bac91adfcc40f1cc02a76",
+      "size": 44468,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json: Blender-authored lever [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/lever_collision.mtl",
+      "sha256": "c18eacf40c08fceaf2785ec5decc4be6592bb7ee5a99505af18d21c20e7208f7",
+      "size": 245,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/lever_collision.obj",
+      "sha256": "51575aec4e0c560dee9682792f46a579be5c65bbcd1d692b082029f07ecced77",
+      "size": 7324,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/lever_lod1.mtl",
+      "sha256": "cfe4ae697f594a0d35f47e1b8caa5fed4cee7bd693d3fe64ddd0adb940d1fcd1",
+      "size": 1012,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/lever_lod1.obj",
+      "sha256": "6a0905f6da0afef9d27113beaf38c5b167214cc93fa9082704d9cea68d94ee8b",
+      "size": 20444,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/pressure_plate.mtl",
+      "sha256": "0ac9cd1e9c1ec5e7166ad6f8a9ba322cc7d426ba14b5b0c47e961bd170f3eed3",
+      "size": 822,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json: Blender-authored pressure_plate [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/pressure_plate.obj",
+      "sha256": "394b1ff98a7153b3981510cb1071add496b1514fc385d02fca92f31d6f5d57dd",
+      "size": 24096,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json: Blender-authored pressure_plate [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/pressure_plate_collision.mtl",
+      "sha256": "c18eacf40c08fceaf2785ec5decc4be6592bb7ee5a99505af18d21c20e7208f7",
+      "size": 245,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/pressure_plate_collision.obj",
+      "sha256": "54ea472807680bfa600ecffe81d01b2b6ab4736c3df08dd131c042b3e90cb7de",
+      "size": 1249,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/pressure_plate_lod1.mtl",
+      "sha256": "0ac9cd1e9c1ec5e7166ad6f8a9ba322cc7d426ba14b5b0c47e961bd170f3eed3",
+      "size": 822,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/pressure_plate_lod1.obj",
+      "sha256": "62c6752df3366ce76c6ea89284865c36d552f6d27861ee3511055715933f4319",
+      "size": 11140,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/signal_lamp.mtl",
+      "sha256": "cfe4ae697f594a0d35f47e1b8caa5fed4cee7bd693d3fe64ddd0adb940d1fcd1",
+      "size": 1012,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json: Blender-authored signal_lamp [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/signal_lamp.obj",
+      "sha256": "3bc17ba90c27efc5869a1dca1a02b89e5d7303d8d91298f610d3e3e4310827c6",
+      "size": 39120,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json: Blender-authored signal_lamp [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/signal_lamp_collision.mtl",
+      "sha256": "c18eacf40c08fceaf2785ec5decc4be6592bb7ee5a99505af18d21c20e7208f7",
+      "size": 245,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/signal_lamp_collision.obj",
+      "sha256": "732ec2fa7f01933a721012fb2572501b9d55adadc6bca3b913f0d1435b8a7091",
+      "size": 5723,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/signal_lamp_lod1.mtl",
+      "sha256": "cfe4ae697f594a0d35f47e1b8caa5fed4cee7bd693d3fe64ddd0adb940d1fcd1",
+      "size": 1012,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/signal_lamp_lod1.obj",
+      "sha256": "a80d5762e25ad230f36893fab51585982bd544f4efa2efe12c04891c722c036f",
+      "size": 18709,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/sliding_door.mtl",
+      "sha256": "22d4ca3352986620018cba3967f1b440684be68be0202321d0d6ada5218fd068",
+      "size": 1018,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json: Blender-authored sliding_door [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/sliding_door.obj",
+      "sha256": "b78f2823e56885ceeaabe7febcb2e8438ab78869711575880e5949580497905e",
+      "size": 55915,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json: Blender-authored sliding_door [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/sliding_door_collision.mtl",
+      "sha256": "c18eacf40c08fceaf2785ec5decc4be6592bb7ee5a99505af18d21c20e7208f7",
+      "size": 245,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/sliding_door_collision.obj",
+      "sha256": "974bba2038520d4864cb5c816b2182c5e03320e10e6908a8827698adf05b0768",
+      "size": 1245,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/sliding_door_lod1.mtl",
+      "sha256": "22d4ca3352986620018cba3967f1b440684be68be0202321d0d6ada5218fd068",
+      "size": 1018,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
+    },
+    {
+      "path": "Models/VisualScript/Kit/sliding_door_lod1.obj",
+      "sha256": "2b3d9bf9c1651f78025d458c9ca4dae458a7631a371ffe8dbbb217d7777b62f3",
+      "size": 26401,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json [visualscript-blender-kit]"
     },
     {
       "path": "Models/Wall.mtl",

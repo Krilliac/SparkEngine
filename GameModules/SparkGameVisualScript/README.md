@@ -35,6 +35,16 @@ announces the win with a score of 500. Enemy contact costs 10 HP per strike, and
 and respawns after 10 seconds. The test reads outcomes only from state the scripts write: positions, health, and
 their `print` output.
 
+## Blueprint-lab kit
+
+After a successful spawn, `DemoWorld::PlaceKitProps` dresses the demo with the Blender-authored kit in
+`Assets/Models/VisualScript/Kit`: a `pressure_plate` under the player spawn with a `lever` beside it, and a
+`sliding_door` behind the coin row flanked by two `signal_lamp`s. The five `VSKit_*` entities carry only a transform
+and a mesh, no script, so the eleven-script-entity contract is unchanged; `GetKitProps()` lists them, and
+`DestroyEntities()` removes them on restart, rollback and unload. They are set dressing: the lever, plate and door do
+not drive gameplay, and nobody has reviewed them in a running engine yet. Source, provenance, and preview are in
+`Art/Blender/SparkGameVisualScript/`, and `asset-references.json` records every asset path the module source names.
+
 ## AngelScript build contract
 
 AngelScript is enabled by default when the complete vendored SDK is present. The root build compiles the core runtime

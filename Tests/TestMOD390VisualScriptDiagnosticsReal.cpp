@@ -145,12 +145,27 @@ TEST(VisualScriptDiagnostics_ShippedScriptsBuildElevenEntityWorld)
         EXPECT_FALSE(fx.engine.IsScriptFaulted(entity));
     }
 
+    // The Blender kit props are script-less dressing: each names a shipped kit mesh that exists on disk.
+    EXPECT_EQ(fx.demo->GetKitProps().size(), static_cast<size_t>(5));
+    for (EntityID prop : fx.demo->GetKitProps())
+    {
+        const auto* mesh = fx.world.GetComponent<MeshRenderer>(prop);
+        ASSERT_TRUE(mesh != nullptr);
+        EXPECT_STR_CONTAINS(mesh->meshPath, "Assets/Models/VisualScript/Kit/");
+        EXPECT_TRUE(fs::is_regular_file(fs::path(SPARK_TEST_SOURCE_DIR) / mesh->meshPath));
+        EXPECT_TRUE(fx.world.GetComponent<Script>(prop) == nullptr);
+    }
+
     // vs_restart path: Spawn() again replaces the demo instead of duplicating it.
     ASSERT_TRUE(fx.demo->Spawn());
     EXPECT_EQ(fx.CountDemoEntities(), Spark::VisualScriptDemo::ExpectedEntityCount);
+    EXPECT_EQ(fx.demo->GetKitProps().size(), static_cast<size_t>(5));
 
+    const EntityID firstProp = fx.demo->GetKitProps().front();
     fx.demo->DestroyEntities();
     EXPECT_EQ(fx.CountDemoEntities(), 0u);
+    EXPECT_TRUE(fx.demo->GetKitProps().empty());
+    EXPECT_FALSE(fx.world.GetRegistry().valid(firstProp));
 }
 
 TEST(VisualScriptDiagnostics_CompileErrorRejectsLoadWithFileLine)

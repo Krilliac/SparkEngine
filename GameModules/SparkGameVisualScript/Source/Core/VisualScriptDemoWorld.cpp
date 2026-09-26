@@ -226,9 +226,42 @@ namespace Spark::VisualScriptDemo
             return rollBack();
         }
 
+        PlaceKitProps();
         console.LogInfo("[VisualScript] All game entities spawned — 11 entities, 5 script types, 0 lines of C++ "
                         "game code");
         return true;
+    }
+
+    void DemoWorld::PlaceKitProps()
+    {
+        // Blueprint-lab dressing from tools/blender/author_visualscript_kit.py. The props carry no script, so they
+        // are named VSKit_* (outside the VS_ script-entity contract) and tracked apart from m_entities. Kit props
+        // face +Z; a 180-degree yaw turns the lever, door and lamps toward the spawn, since the player walks +Z.
+        struct KitPlacement
+        {
+            const char* name;
+            const char* meshPath;
+            DirectX::XMFLOAT3 position;
+            float yawDegrees;
+        };
+        static constexpr KitPlacement placements[] = {
+            {"VSKit_SpawnPlate", "Assets/Models/VisualScript/Kit/pressure_plate.obj", {0.0f, 0.0f, 0.0f}, 0.0f},
+            {"VSKit_SpawnLever", "Assets/Models/VisualScript/Kit/lever.obj", {2.0f, 0.0f, 2.5f}, 180.0f},
+            {"VSKit_ExitDoor", "Assets/Models/VisualScript/Kit/sliding_door.obj", {0.0f, 0.0f, 17.0f}, 180.0f},
+            {"VSKit_ExitLamp_0", "Assets/Models/VisualScript/Kit/signal_lamp.obj", {-1.9f, 0.0f, 17.0f}, 180.0f},
+            {"VSKit_ExitLamp_1", "Assets/Models/VisualScript/Kit/signal_lamp.obj", {1.9f, 0.0f, 17.0f}, 180.0f},
+        };
+
+        for (const auto& placement : placements)
+        {
+            auto prop = m_world.CreateEntity(placement.name);
+            m_kitProps.push_back(prop);
+            m_world.AddComponent<Transform>(
+                prop, Transform{placement.position, {0.0f, placement.yawDegrees, 0.0f}, {1.0f, 1.0f, 1.0f}});
+            m_world.AddComponent<MeshRenderer>(prop).meshPath = placement.meshPath;
+        }
+        SimpleConsole::GetInstance().LogInfo("[VisualScript] Placed " + std::to_string(m_kitProps.size()) +
+                                             " blueprint-lab kit props");
     }
 
     bool DemoWorld::AttachScript(EntityID entity, const std::string& className)
@@ -292,5 +325,12 @@ namespace Spark::VisualScriptDemo
                 m_world.DestroyEntity(*it);
         }
         m_entities.clear();
+
+        for (auto it = m_kitProps.rbegin(); it != m_kitProps.rend(); ++it)
+        {
+            if (m_world.GetRegistry().valid(*it))
+                m_world.DestroyEntity(*it);
+        }
+        m_kitProps.clear();
     }
 } // namespace Spark::VisualScriptDemo

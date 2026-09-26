@@ -1,0 +1,55 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameVisualScript",
+  "description": "Every asset path SparkGameVisualScript source names (the script entities' meshes and the Blender blueprint-lab kit under Models/VisualScript/Kit placed by DemoWorld::PlaceKitProps in VisualScriptDemoWorld.cpp), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. The generated AngelScript sources are the module's own package (Assets/manifest.json), not shared Assets/ files. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Models/Cube.obj",
+      "sha256": "11c03feaa3fe66b43f00d5e83c929075f93c28cc2333cfcf1130c47ddb10c2fb",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/Pyramid.obj",
+      "sha256": "3ebfaea9e8c52c3d3116437cf5426f4fb237dc2e7eddedebd470a46611bd9c3c",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/Sphere.obj",
+      "sha256": "66737ef1050fdde36bf5d500b6bd97f5a0aa623adbc1f125641a3a73fab0c7c8",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/VisualScript/Kit/lever.obj",
+      "sha256": "beedb0eb92525fcec83e3f624c8bd0507d34453e8f9bac91adfcc40f1cc02a76",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "visualscript-blender-kit"
+    },
+    {
+      "path": "Assets/Models/VisualScript/Kit/pressure_plate.obj",
+      "sha256": "394b1ff98a7153b3981510cb1071add496b1514fc385d02fca92f31d6f5d57dd",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "visualscript-blender-kit"
+    },
+    {
+      "path": "Assets/Models/VisualScript/Kit/signal_lamp.obj",
+      "sha256": "3bc17ba90c27efc5869a1dca1a02b89e5d7303d8d91298f610d3e3e4310827c6",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "visualscript-blender-kit"
+    },
+    {
+      "path": "Assets/Models/VisualScript/Kit/sliding_door.obj",
+      "sha256": "b78f2823e56885ceeaabe7febcb2e8438ab78869711575880e5949580497905e",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "visualscript-blender-kit"
+    },
+    {
+      "path": "Assets/Models/character.obj",
+      "sha256": "74f1446c12fea14821e29b6b5d972cb577dd9757bef24cc7c5c89b1fa364bc18",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
+    }
+  ]
+}

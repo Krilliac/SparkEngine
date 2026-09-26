@@ -408,6 +408,27 @@
       ]
     },
     {
+      "id": "visualscript-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameVisualScript/visualscript_kit.blend via tools/blender/author_visualscript_kit.py; hash-bound by Art/Blender/SparkGameVisualScript/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameVisualScript/provenance.json",
+        "Art/Blender/SparkGameVisualScript/visualscript_kit.blend",
+        "tools/blender/author_visualscript_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameVisualScript/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/VisualScript/Kit/"
+      ]
+    },
+    {
       "id": "module-music-composer",
       "license": "CC0-1.0",
       "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound",
