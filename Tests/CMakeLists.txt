@@ -1071,6 +1071,7 @@ target_sources(SparkTests PRIVATE
     TestSEC100RemoteAdminUnavailableReal.cpp
     TestSaveSystemRoundTripReal.cpp
     TestSAVE230NewerFormatSlotReal.cpp
+    TestSaveInterruptionReal.cpp
     TestMOD360OpenWorldPersistenceReal.cpp
     TestSecurityParsersReal.cpp
     TestTextureStexBoundsReal.cpp
@@ -1559,6 +1560,19 @@ set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     LABELS "compatibility;save;unit"
     RUN_SERIAL TRUE
     TIMEOUT 30)
+
+# SAVE-230: AtomicWrite_ SIGKILLs an exec'd SparkTests writer child at seeded, randomized
+# offsets while it saves successive generations through the real SaveSystem, then requires
+# the slot to load the last completed (or in-flight) generation with a valid CRC, an intact
+# .bak and no promoted .tmp; two deterministic AtomicWrite_ tests pin the staged .bak refresh.
+# POSIX only; Windows needs a TerminateProcess variant.
+if(NOT WIN32)
+    add_test(NAME SparkSaveInterruptionTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SparkSaveInterruptionTests PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AtomicWrite_;SPARK_TEST_EXPECT_COUNT=3"
+        LABELS "compatibility;save;process"
+        TIMEOUT 300)
+endif()
 
 # SAVE-230 / OD-03: SceneFile reads v2 (N) and v1 (N-1) from committed fixtures,
 # writes v2 only, and rejects older/newer versions with a versioned error.

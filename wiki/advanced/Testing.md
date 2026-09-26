@@ -1287,6 +1287,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSHLighting` | 7 |
 | `TestSSAOTemporalFilter` | 8 |
 | `TestSafetyCoreUtils` | 17 |
+| `TestSaveInterruptionReal` | 3 |
 | `TestSaveSystem` | 7 |
 | `TestSaveSystemRoundTripReal` | 16 |
 | `TestSceneConfigDatabase` | 3 |

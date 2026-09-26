@@ -4,6 +4,7 @@
  */
 
 #include "SaveSystem.h"
+#include "SaveFileDurability.h"
 #include "../../Core/Reflection.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/EventBus.h"
@@ -23,14 +24,6 @@
 #include <stdexcept>
 #include <system_error>
 #include <unordered_set>
-
-#if defined(_WIN32)
-#define NOMINMAX
-#include <Windows.h>
-#else
-#include <fcntl.h>
-#include <unistd.h>
-#endif
 
 namespace fs = std::filesystem;
 
@@ -66,85 +59,6 @@ namespace Spark
 
     namespace
     {
-        bool FlushFileDurably(const std::filesystem::path& path, std::error_code& error)
-        {
-#if defined(_WIN32)
-            const HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                              FILE_ATTRIBUTE_NORMAL, nullptr);
-            if (file == INVALID_HANDLE_VALUE)
-            {
-                error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
-                return false;
-            }
-
-            const bool flushed = ::FlushFileBuffers(file) != FALSE;
-            const DWORD flushError = flushed ? ERROR_SUCCESS : ::GetLastError();
-            ::CloseHandle(file);
-            if (!flushed)
-            {
-                error = std::error_code(static_cast<int>(flushError), std::system_category());
-                return false;
-            }
-            return true;
-#else
-            const int file = ::open(path.c_str(), O_RDONLY);
-            if (file < 0)
-            {
-                error = std::error_code(errno, std::generic_category());
-                return false;
-            }
-
-            const bool flushed = ::fsync(file) == 0;
-            const int flushError = flushed ? 0 : errno;
-            ::close(file);
-            if (!flushed)
-            {
-                error = std::error_code(flushError, std::generic_category());
-                return false;
-            }
-            return true;
-#endif
-        }
-
-        bool ReplaceFileAtomically(const std::filesystem::path& temporary, const std::filesystem::path& destination,
-                                   std::error_code& error)
-        {
-#if defined(_WIN32)
-            if (::MoveFileExW(temporary.c_str(), destination.c_str(),
-                              MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            {
-                return true;
-            }
-            error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
-            return false;
-#else
-            std::filesystem::rename(temporary, destination, error);
-            if (error)
-                return false;
-
-            const std::filesystem::path directory = destination.has_parent_path() ? destination.parent_path() : ".";
-#if defined(O_DIRECTORY)
-            const int directoryFile = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY);
-#else
-            const int directoryFile = ::open(directory.c_str(), O_RDONLY);
-#endif
-            if (directoryFile < 0)
-            {
-                error = std::error_code(errno, std::generic_category());
-                return false;
-            }
-            const bool flushed = ::fsync(directoryFile) == 0;
-            const int flushError = flushed ? 0 : errno;
-            ::close(directoryFile);
-            if (!flushed)
-            {
-                error = std::error_code(flushError, std::generic_category());
-                return false;
-            }
-            return true;
-#endif
-        }
-
         /// Suffix of the retained last-good copy written next to each slot file.
         constexpr const char* kSaveBackupSuffix = ".bak";
 
@@ -1431,6 +1345,14 @@ namespace Spark
             // otherwise recover a slot the player just deleted.
             std::error_code backupError;
             fs::remove(path + kSaveBackupSuffix, backupError);
+
+            // A writer killed mid-save can leave full-size staging copies of the slot
+            // (`<slot>.spark_save.tmp`, `<slot>.spark_save.bak.tmp`). Nothing reads them,
+            // but only the next save to this slot would replace them, so a deleted slot
+            // would otherwise keep them forever. Best effort, like the retained copy.
+            std::error_code stagingError;
+            fs::remove(path + ".tmp", stagingError);
+            fs::remove(path + kSaveBackupSuffix + ".tmp", stagingError);
             if (m_fileCache)
             {
                 // DeleteSave bypasses LocalFileCache for the filesystem operation;
@@ -2104,7 +2026,7 @@ namespace Spark
             }
 
             std::error_code ec;
-            if (!FlushFileDurably(tmpPath, ec))
+            if (!SaveFileDurability::FlushFileDurably(tmpPath, ec))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: durable flush failed for %s: %s",
                                tmpPath.c_str(), ec.message().c_str());
@@ -2138,16 +2060,15 @@ namespace Spark
                 SaveData previousRevision;
                 if (ReadFromFile(filepath, previousRevision))
                 {
+                    // Staged and renamed, never copied in place: an in-place copy truncates
+                    // the retained file first, so a process killed mid-copy destroyed the
+                    // last-good copy (found by the AtomicWrite_ SIGKILL rehearsal).
                     std::error_code rotateError;
-                    const bool retained =
-                        std::filesystem::copy_file(filepath, filepath + kSaveBackupSuffix,
-                                                   std::filesystem::copy_options::overwrite_existing, rotateError);
-                    if (!retained || rotateError)
+                    if (!SaveFileDurability::CopyFileAtomically(filepath, filepath + kSaveBackupSuffix, rotateError))
                     {
                         SPARK_LOG_WARN(Spark::LogCategory::Save,
                                        "WriteToFile: could not retain the last-good copy of '%s': %s; aborting replace",
-                                       filepath.c_str(),
-                                       rotateError ? rotateError.message().c_str() : "copy not performed");
+                                       filepath.c_str(), rotateError.message().c_str());
                         std::error_code removeError;
                         std::filesystem::remove(tmpPath, removeError);
                         return false;
@@ -2181,7 +2102,7 @@ namespace Spark
             // Replace the destination atomically. std::filesystem::rename does not
             // replace an existing file on Windows, which broke every second save to
             // the same slot (including QuickSave).
-            if (!ReplaceFileAtomically(tmpPath, filepath, ec))
+            if (!SaveFileDurability::ReplaceFileAtomically(tmpPath, filepath, ec))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: atomic replace failed %s -> %s: %s",
                                tmpPath.c_str(), filepath.c_str(), ec.message().c_str());

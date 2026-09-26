@@ -193,8 +193,30 @@ atomically replaces the destination. An unreadable primary never overwrites an
 existing last-good copy. A failed write removes the temporary file and leaves
 the previous slot in place. The local file cache is invalidated only after the
 replacement succeeds. `SetSaveDirectory()` records the directory and the next
-`Save()` creates it on demand. `DeleteSave()` removes both the slot file and its
-`.bak`.
+`Save()` creates it on demand. `DeleteSave()` removes the slot file, its `.bak`,
+and the `<slot>.spark_save.tmp` / `<slot>.spark_save.bak.tmp` staging files a
+killed writer can leave behind.
+
+The retained copy is published the same way as the slot: it is staged in
+`<slot>.spark_save.bak.tmp`, flushed, and renamed over `.bak`
+(`SaveFileDurability::CopyFileAtomically` in
+`SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp`). An in-place copy
+truncates `.bak` first, so a process killed mid-copy used to leave a torn
+last-good copy. `AtomicWrite_*` in `Tests/TestSaveInterruptionReal.cpp` (ctest
+`SparkSaveInterruptionTests`, POSIX only) rehearses this: an exec'd writer saves
+successive generations and is SIGKILLed at seeded, randomized offsets; after
+every kill the slot must load the last completed or in-flight generation with a
+valid CRC, `.bak` must be a complete save of the preceding revision, and a stray
+`.tmp` must never be promoted or listed. Reproduce a failure with
+`SPARK_ATOMICWRITE_SEED=<logged seed>`; raise coverage with
+`SPARK_ATOMICWRITE_ITERATIONS=<n>` (1000 kills per seed is the soak used when the
+torn-`.bak` bug was found). Because a kill lands in the in-place-copy window only
+about 4 times in 1000, two deterministic tests in the same file also guard the fix:
+a retention refresh must give `.bak` a new inode (renamed, not rewritten), and a
+save whose staging copy cannot be created must fail with `.bak` and the slot
+byte-identical. Each run uses a per-process scratch directory, so the parallel
+`SparkEngineTests` and `SparkSaveInterruptionTests` runs cannot collide. Windows
+needs a separate `TerminateProcess` rehearsal.
 
 `Load()` verifies v4 CRC-32 before parsing and falls back to
 `<slot>.spark_save.bak` with a logged warning when the primary is unreadable or

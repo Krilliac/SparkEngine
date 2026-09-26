@@ -452,7 +452,10 @@ namespace Spark
      * and writes the binary result to `<saveDirectory>/<slotName>.spark_save`.
      * The save directory is created if it does not exist. If a file already exists
      * for this slot and validates successfully, it is retained as
-     * `<slotName>.spark_save.bak` and then replaced atomically. An unreadable primary
+     * `<slotName>.spark_save.bak` and then replaced atomically. Both the retained copy and
+     * the slot are staged in a `.tmp` file and renamed into place, so a process killed at
+     * any point leaves each file at its previous or its new complete contents (rehearsed
+     * by the AtomicWrite_ SIGKILL tests). An unreadable primary
      * never overwrites an existing last-good copy. A primary written by a newer build
      * (SPRK header declaring a format newer than kCurrentSaveVersion) is never
      * overwritten: the save fails with an actionable error and both files stay intact.
@@ -569,7 +572,8 @@ namespace Spark
      *
      * Removes `<saveDirectory>/<slotName>.spark_save` and its retained last-good copy
      * from the file system, so a deleted slot cannot be recovered by a later Load().
-     * A no-op if the file does not exist (returns `true`). Returns `false` only if the
+     * The `.tmp` staging copies an interrupted save can leave behind are removed too
+     * (best effort). A no-op if the file does not exist (returns `true`). Returns `false` only if the
      * file exists but could not be deleted (e.g. permission denied).
      *
      * @param slotName  Slot to delete.
