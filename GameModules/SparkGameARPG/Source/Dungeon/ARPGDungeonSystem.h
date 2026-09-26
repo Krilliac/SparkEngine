@@ -8,7 +8,9 @@
  * chances, and boss encounters. Difficulty scales across four tiers
  * (Normal, Nightmare, Hell, Inferno) with HP/damage/XP multipliers. With a
  * world available it also dresses the crypt entry room with the Blender-authored
- * dungeon kit (Assets/Models/ARPG/Kit).
+ * dungeon kit (Assets/Models/ARPG/Kit) and the ModuleKits ARPG landmarks
+ * (Assets/Models/ModuleKits/ARPG) as Transform + MeshRenderer entities it owns.
+ * Game thread only.
  */
 
 #pragma once
@@ -76,6 +78,19 @@ namespace ARPG
 
         /// Floors between boss encounters; the first boss floor is also the demo run's final floor.
         static constexpr int BOSS_FLOOR_INTERVAL = 5;
+        /// Every crypt kit entity is named with this prefix.
+        static constexpr const char* CRYPT_PROP_PREFIX = "Crypt_";
+
+        /// Crypt kit prop entities (full EnTT identifiers) currently placed in the World.
+        const std::vector<uint32_t>& GetCryptKitEntities() const { return m_kitEntities; }
+
+        /**
+         * @brief Re-place the crypt kit after SaveSystem replaced the World's entities.
+         *
+         * The load assigns fresh entity identifiers, so the cached ones are dropped without being destroyed,
+         * every restored entity named CRYPT_PROP_PREFIX* is removed and the current kit is placed again.
+         */
+        void RebuildCryptKitAfterWorldLoad();
 
       private:
         void RegisterTierConfigs();

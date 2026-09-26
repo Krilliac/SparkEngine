@@ -29,6 +29,7 @@ namespace ARPG
     class ARPGMonsterSystem;
     class ARPGEngineSystems;
     class ARPGDemoEncounter;
+    class ARPGActorPresentation;
 } // namespace ARPG
 
 /**
@@ -79,6 +80,7 @@ class SparkGameARPGModule : public Spark::IModule
     // Engine system integrations (EventBus, Destruction, AI, Animation, Abilities, etc.)
     std::unique_ptr<ARPG::ARPGEngineSystems> m_engineSystems;
     std::unique_ptr<ARPG::ARPGDemoEncounter> m_demoEncounter;
+    std::unique_ptr<ARPG::ARPGActorPresentation> m_actorPresentation; ///< Hero/monster actors in the World
     bool m_attackHeld{false};
     bool m_skillHeld{false};
     bool m_restartHeld{false};

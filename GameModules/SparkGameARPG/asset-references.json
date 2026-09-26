@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
   "module": "SparkGameARPG",
-  "description": "Every asset path SparkGameARPG source names (the Blender Action RPG Dungeon kit under Models/ARPG/Kit, placed in the crypt entry room by ARPGDungeonSystem::PlaceCryptKit), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "description": "Every asset path SparkGameARPG source names (the Blender Action RPG Dungeon kit under Models/ARPG/Kit and the ModuleKits ARPG landmarks under Models/ModuleKits/ARPG, placed in the crypt entry room by ARPGDungeonSystem::PlaceCryptKit, and the humanoid mesh ARPGActorPresentation gives the hero and monsters), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
   "references": [
     {
       "path": "Assets/Models/ARPG/Kit/destructible_urn.obj",
@@ -26,6 +26,30 @@
       "sha256": "e5a5dbb97b5883339bb3f95cd359dda48b6a62a0cc5f0552a6a317a3a47f101f",
       "kind": "Blender kit prop (OBJ + MTL)",
       "provenanceRule": "arpg-blender-kit"
+    },
+    {
+      "path": "Assets/Models/ModuleKits/ARPG/arcane_loot_chest.obj",
+      "sha256": "3a0b23f225210967dfae1747aad981c36a467ac7b71fa5f37f0141fb579cd921",
+      "kind": "module kit landmark prop (OBJ + MTL)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/ModuleKits/ARPG/necrotic_combat_pillar.obj",
+      "sha256": "a7ba610410421823246f5ca30cf3125989d93d6f07c332d2293c77347b07e7ed",
+      "kind": "module kit landmark prop (OBJ + MTL)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/ModuleKits/ARPG/summoner_ritual_brazier.obj",
+      "sha256": "6c88e6bdd758c3794bf42e0ac181d2b90c12677a3dcff0cb96ac1adec128f7fa",
+      "kind": "module kit landmark prop (OBJ + MTL)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/character.obj",
+      "sha256": "74f1446c12fea14821e29b6b5d972cb577dd9757bef24cc7c5c89b1fa364bc18",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "repository-authored"
     }
   ]
 }

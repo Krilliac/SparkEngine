@@ -107,6 +107,8 @@ namespace ARPG
         // === Queries ===
         size_t GetTemplateCount() const { return m_templates.size(); }
         size_t GetActiveMonsterCount() const { return m_activeMonsters.size(); }
+        /// Every live encounter monster in spawn order (the ECS actor presentation mirrors this list).
+        const std::vector<MonsterData>& GetActiveMonsters() const { return m_activeMonsters; }
         std::string GetMonsterListString() const;
 
       private:

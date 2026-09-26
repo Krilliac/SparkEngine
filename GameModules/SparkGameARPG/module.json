@@ -7,7 +7,15 @@
     "state": "declared",
     "roots": [
       {
+        "directory": "Assets/Models",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
         "directory": "Assets/Models/ARPG",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Models/ModuleKits/ARPG",
         "manifest": "Assets/assets.integrity.json"
       }
     ]

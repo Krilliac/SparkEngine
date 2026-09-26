@@ -15,6 +15,7 @@
 #include "Skill/ARPGSkillSystem.h"
 #include "Monster/ARPGMonsterSystem.h"
 #include "Demo/ARPGDemoEncounter.h"
+#include "Demo/ARPGActorPresentation.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Input/InputManager.h"
 #include "Utils/SparkConsole.h"
@@ -133,6 +134,14 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Give the hero and live monsters bodies in the World (no-op without one, e.g. headless tooling contexts)
+    m_actorPresentation = std::make_unique<ARPG::ARPGActorPresentation>();
+    if (!m_actorPresentation->Initialize(context, m_demoEncounter.get(), m_monsterSystem.get()))
+    {
+        console.LogError("[ARPG] Failed to initialize the hero/monster actor presentation");
+        return false;
+    }
+
     RegisterConsoleCommands();
 
     // Register ARPG-specific state validation rules
@@ -203,6 +212,12 @@ void SparkGameARPGModule::OnUnload()
     console.LogInfo("[ARPG] Unloading Spark ARPG module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module shutting down");
 
+    if (m_actorPresentation)
+    {
+        m_actorPresentation->Shutdown();
+        m_actorPresentation.reset();
+    }
+
     if (m_demoEncounter)
     {
         m_demoEncounter->Shutdown();
@@ -267,6 +282,8 @@ void SparkGameARPGModule::OnUpdate(float deltaTime)
     m_monsterSystem->Update(deltaTime);
     m_engineSystems->Update(deltaTime);
     UpdateDemoInput();
+    // Last, so the World reflects this frame's attacks, kills, spawns and any console-driven restart or load.
+    m_actorPresentation->SyncActors();
 }
 
 void SparkGameARPGModule::OnFixedUpdate(float fixedDeltaTime)
@@ -434,7 +451,12 @@ void SparkGameARPGModule::RegisterConsoleCommands()
                                 if (saveSystem->Load(slot, *world, customState, validateDemoState))
                                 {
                                     const auto state = customState.find("SparkGameARPG.demo.v1");
-                                    if (!m_demoEncounter->RestoreState(state->second))
+                                    const bool restored = m_demoEncounter->RestoreState(state->second);
+                                    // The load replaced every World entity: re-place the kit and the actors
+                                    // from the gameplay state (even a failed restore falls back to a fresh run).
+                                    m_dungeonSystem->RebuildCryptKitAfterWorldLoad();
+                                    m_actorPresentation->RebuildAfterWorldLoad();
+                                    if (!restored)
                                         return "ARPG demo restore failed after validated world load: " + slot;
                                     return "ARPG state loaded from slot: " + slot;
                                 }

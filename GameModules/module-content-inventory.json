@@ -39,7 +39,7 @@
       "directory": "GameModules/SparkGameARPG",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameARPG/Source",
-      "sourceFileCount": 20,
+      "sourceFileCount": 22,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,
