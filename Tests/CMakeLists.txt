@@ -324,6 +324,7 @@ add_executable(SparkTests
     TestRHI230VulkanValidationReal.cpp
     TestMSanCanary.cpp
     TestWARPRendering.cpp
+    TestRHI230VulkanGoldenReal.cpp
     # Hardware acceleration tests
     TestGPUParticleSystem.cpp
     TestGPUSkinning.cpp
@@ -1813,6 +1814,23 @@ if(WIN32)
     set_tests_properties(D3D11_Golden PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=D3D11_Golden_;SPARK_TEST_EXPECT_COUNT=2"
         LABELS "d3d11-golden;d3d11;stable-v1"
+# RHI-230: shipped-shader goldens on the vulkan-lavapipe row. Renders the
+# FullscreenQuad post-process programs from the SPIR-V the build compiles
+# (SparkSpirvShaders) through VulkanDevice under the validation layer, and
+# compares each frame with the committed baseline under the reviewed thresholds
+# and SHA-256 in Tests/GoldenImages/manifest.json. Software-row shader evidence
+# only, not engine-pass goldens or hardware certification; the device must be
+# Lavapipe. The exact count fails the lane if a scene test stops being compiled.
+if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET SparkSpirvShaders)
+    add_test(NAME VulkanGoldenTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(VulkanGoldenTests PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI230VulkanGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=4;SPARK_REQUIRE_VULKAN_VALIDATION=1;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "vulkan;vulkan-lavapipe;vulkan-golden;rendering"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
         RUN_SERIAL TRUE
         TIMEOUT 60)
     add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)

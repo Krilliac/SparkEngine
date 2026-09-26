@@ -25,22 +25,20 @@
 
 #include "Graphics/RHI/RHIBridge.h"
 #include "Graphics/RHI/Vulkan/VulkanDevice.h"
+#include "VulkanTestSupport.h"
 
-#include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <memory>
 #include <set>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace
 {
     using namespace Spark::RHI;
-    using Spark::RHI::Vulkan::VulkanDevice;
+    using namespace SparkVkTest;
 
     // glslangValidator -V + spirv-opt --strip-debug of tri.vert (see comment above)
     const uint32_t kFullscreenTriangleVS[] = {
@@ -101,110 +99,6 @@ namespace
         0x00010038,
     };
 
-
-    struct ValidationCounter
-    {
-        uint32_t errors = 0;
-        std::string firstError;
-    };
-
-    VKAPI_ATTR VkBool32 VKAPI_CALL CountValidationMessage(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-                                                          VkDebugUtilsMessageTypeFlagsEXT,
-                                                          const VkDebugUtilsMessengerCallbackDataEXT* data,
-                                                          void* userData)
-    {
-        auto* counter = static_cast<ValidationCounter*>(userData);
-        if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-        {
-            if (counter->errors == 0 && data && data->pMessage)
-                counter->firstError = data->pMessage;
-            ++counter->errors;
-        }
-        return VK_FALSE;
-    }
-
-    bool ValidationLayerInstalled()
-    {
-        uint32_t count = 0;
-        vkEnumerateInstanceLayerProperties(&count, nullptr);
-        std::vector<VkLayerProperties> layers(count);
-        vkEnumerateInstanceLayerProperties(&count, layers.data());
-        for (const auto& layer : layers)
-        {
-            if (std::strcmp(layer.layerName, "VK_LAYER_KHRONOS_validation") == 0)
-                return true;
-        }
-        return false;
-    }
-
-    /// A lane that sets SPARK_REQUIRE_VULKAN_VALIDATION=1 (the vulkan-lavapipe CI row) must not pass by
-    /// skipping every test, so a missing driver or layer becomes a failure there.
-    [[noreturn]] void SkipOrFail(const char* reason)
-    {
-        if (std::getenv("SPARK_REQUIRE_VULKAN_VALIDATION") != nullptr)
-            throw std::runtime_error(std::string("required Vulkan validation unavailable: ") + reason);
-        SKIP_TEST(reason);
-    }
-
-    /// Real VulkanDevice with the validation layer on and an error counter attached.
-    struct ValidatedDevice
-    {
-        VulkanDevice device;
-        ValidationCounter counter;
-        VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
-
-        ValidatedDevice()
-        {
-            if (!ValidationLayerInstalled())
-                SkipOrFail("VK_LAYER_KHRONOS_validation is not installed");
-
-            RHIDeviceDesc desc;
-            desc.enableDebugLayer = true;
-            desc.applicationName = "RHI230Validation";
-            if (!device.Initialize(desc))
-                SkipOrFail("no Vulkan ICD available (install mesa-vulkan-drivers for Lavapipe)");
-
-            VkDebugUtilsMessengerCreateInfoEXT info = {};
-            info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            info.messageType =
-                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-            info.pfnUserCallback = CountValidationMessage;
-            info.pUserData = &counter;
-            auto create = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-                vkGetInstanceProcAddr(device.GetVkInstance(), "vkCreateDebugUtilsMessengerEXT"));
-            if (create)
-                create(device.GetVkInstance(), &info, nullptr, &messenger);
-        }
-
-        ~ValidatedDevice()
-        {
-            device.WaitForIdle();
-            DestroyMessenger();
-            device.Shutdown();
-        }
-
-        void DestroyMessenger()
-        {
-            if (messenger == VK_NULL_HANDLE)
-                return;
-            auto destroy = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-                vkGetInstanceProcAddr(device.GetVkInstance(), "vkDestroyDebugUtilsMessengerEXT"));
-            if (destroy)
-                destroy(device.GetVkInstance(), messenger, nullptr);
-            messenger = VK_NULL_HANDLE;
-        }
-
-        bool HasMessenger() const { return messenger != VK_NULL_HANDLE; }
-
-        void ExpectClean()
-        {
-            EXPECT_TRUE(HasMessenger());
-            if (counter.errors != 0)
-                std::cerr << "  first validation error: " << counter.firstError << "\n";
-            EXPECT_EQ(counter.errors, 0u);
-        }
-    };
 
     std::unique_ptr<IRHITexture> MakeColorTarget(IRHIDevice& device, uint32_t size = 16)
     {

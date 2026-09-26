@@ -453,11 +453,11 @@ The `RenderGraphBuilder` integrates with the RHI through `RHIAdapter`, so all GP
 
 Vulkan is not at parity with D3D11. An earlier `VulkanDevice::GetD3D11ParityMilestones()` snapshot hard-coded its pass-route, golden-scene and CI milestones to `true`, and `VulkanDevice::RenderCanonicalGoldenScene()` synthesized a CPU image that its test compared with itself. Both were removed under RHI-230, along with the `VulkanParity_*` tests that exercised them; `VulkanParity_*` is now a planned selector in the RHI-230 work item, not existing evidence. The `build-linux-gcc` Release gate instead requires `VulkanShaderToolchain_RejectsMalformedSpirv` and `VulkanGolden_FullscreenTriangleReadback` in the JUnit report, which proves the Vulkan backend is compiled into that binary.
 
-What has real test coverage today (Lavapipe, see the lane below): frame fencing and submission, image transitions, descriptor binding, constant-buffer binding, headless swapchain present/resize, and GPU readback of hand-written SPIR-V draws.
+What has real test coverage today (Lavapipe, see the lane below): frame fencing and submission, image transitions, descriptor binding, constant-buffer binding, headless swapchain present/resize, GPU readback of hand-written SPIR-V draws, and golden comparisons of three shipped post-process programs built from `Shaders/GLSL`.
 
 ### Explicitly unsupported / not-yet-parity-complete features
 
-1. GPU-backed golden images of the engine renderer: no committed baselines, thresholds or hardware row exist.
+1. GPU-backed golden images of the engine renderer: no engine-pass baselines and no hardware row exist. The only Vulkan baselines are the software-row shader goldens below.
 2. Production pass execution: SPIR-V is now built for every shipped shader stage (below), but the Linux engine passes still record unbound draws, so the shadow/deferred/post passes do not render on Vulkan.
 3. Shader toolchain beyond the Linux Vulkan row: glslang is a hard configure-time dependency only for non-Windows builds with the Vulkan backend. DXC HLSL-to-SPIR-V and runtime GLSL compilation remain unintegrated.
 
@@ -477,6 +477,14 @@ Only the default variant of each stage is built. Define-selected variants (`BLUR
 ### Validation-layer lane (RHI-230)
 
 The `VulkanValidation` CTest entry (labels `vulkan`, `vulkan-lavapipe`) runs the 18 `VulkanValidation_*`, `VulkanGolden_*` and `VulkanShaderToolchain_*` tests in `Tests/TestRHI230VulkanValidationReal.cpp` on a real `VulkanDevice` with `VK_LAYER_KHRONOS_validation` and an error-counting messenger. It is registered only on Linux builds with Vulkan available and sets `SPARK_REQUIRE_VULKAN_VALIDATION=1`, so a missing ICD, missing validation layer, or missing `VK_EXT_headless_surface` fails the lane instead of skipping (skips would otherwise satisfy `SPARK_TEST_EXPECT_COUNT=18`). The `build-linux-gcc` and `build-linux-clang` jobs install `mesa-vulkan-drivers` (Lavapipe) and `vulkan-validationlayers` for it, and every Linux job that installs `libvulkan-dev` also installs `glslang-tools`. Locally: `ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error`. Lavapipe proves API-usage correctness only, not hardware certification.
+
+### Shipped-shader goldens on Lavapipe (RHI-230)
+
+The `VulkanGoldenTests` CTest entry (labels `vulkan`, `vulkan-lavapipe`, `vulkan-golden`) runs the four `VulkanGolden_RHI230_*` tests in `Tests/TestRHI230VulkanGoldenReal.cpp`. Each renders a fixed input through `FullscreenQuad.vert.spv` and a shipped fragment module from the build (`PostProcess` with the default ACES tonemap, `BloomExtract`, and the default vertical `GaussianBlur`). The device is a real `VulkanDevice` under the validation layer. The test reads the target back and compares it with the committed baseline in `Tests/GoldenImages/vulkan-lavapipe/` using the manifest's reviewed thresholds and baseline SHA-256. Each scene also checks probe pixels against a CPU evaluation of the shader formula and ends with zero validation errors. `VulkanGolden_RHI230_ManifestCoversRowScenes` requires the manifest's `vulkan-lavapipe` entries to match the test's scenes exactly.
+
+- The device must be Lavapipe (`isSoftwareDevice` and an `llvmpipe` device name). Otherwise the test skips, or fails under `SPARK_REQUIRE_VULKAN_VALIDATION=1`, which the lane sets. A hardware GPU never reports under this row.
+- Thresholds are `perPixelThreshold` 2 and `tolerancePercent` 0.5. Lavapipe reproduces the baselines exactly (maximum distance 0), and the threshold allows about one 8-bit step per channel for Mesa drift. With these values, changing one constant in each shader (the ACES `a` coefficient, a bloom luma weight, the blur centre weight) fails the golden comparison as well as the formula probes.
+- Only the default variant of each stage has SPIR-V, so the define-selected variants (Reinhard/Uncharted2, FXAA, horizontal blur) have no Vulkan golden. On a mismatch the actual frame is written to `SPARK_GOLDEN_OUTPUT_DIR` (the lane uses `<build>/Tests/Output`) as `vulkan-lavapipe_<scene>.png` for review.
 
 ---
 

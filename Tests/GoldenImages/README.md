@@ -15,10 +15,17 @@ Tests/Output/                             ← run-time captures and diffs (not c
 Backend rows are `d3d11-warp`, `d3d11-hw`, `opengl-llvmpipe` and
 `vulkan-lavapipe`. A scene has one baseline per row it is certified on.
 
-No baselines are committed yet: `manifest.json` has an empty `entries`
-list, so every comparison currently fails closed. Baselines land with
-the backend golden slices of RHI-210 (D3D11) and the OpenGL/Vulkan
-golden work, each rendered on its real row and reviewed.
+Committed baselines:
+
+- `vulkan-lavapipe/`: `PostProcess_ACES`, `BloomExtract` and
+  `GaussianBlur_Vertical`, the shipped SPIR-V post-process programs
+  rendered on Mesa 25.2.8 Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp`
+  (RHI-230, CTest `VulkanGoldenTests`). They are software-row shader
+  evidence, not engine-pass goldens or hardware certification.
+
+Every other row has no entries, so its comparisons fail closed. D3D11
+baselines land with the RHI-210 golden slices and OpenGL baselines with
+the RHI-240 golden work, each rendered on its real row and reviewed.
 
 ## Fail-closed rules
 
