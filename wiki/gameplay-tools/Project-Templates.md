@@ -71,8 +71,9 @@ version fails closed: the project does not open, and the error names the file, t
 version and the supported window. Every project save stages the document, flushes it
 and renames it into place, keeping the previous document as `<Project>.sparkproject.bak`.
 If the document is later damaged (for example, truncated), opening the project loads
-that backup and reports why the primary was rejected. See
-`Tests/Fixtures/Compatibility/EditorState/README.md`.
+that backup and reports why the primary was rejected. The next save does not copy the
+damaged document over the backup, so a save that fails at that point still leaves the
+good copy on disk. See `Tests/Fixtures/Compatibility/EditorState/README.md`.
 
 ### spark.modules.json
 
