@@ -70,8 +70,10 @@ namespace Terrafront
         static std::string GenerateSalt(RandomFillFn fill = nullptr);
         static std::string HashPassword(const std::string& password,
                                         const std::string& salt); // self-describing pbkdf2-sha256$iters$salt$dk string
-        static bool VerifyPassword(const std::string& password,
-                                   const std::string& storedHash); // constant-time; false on legacy/unknown format
+        /// Constant-time compare. False on a legacy/unknown format and, before any
+        /// derivation, on stored parameters outside policy (iterations not a plain
+        /// decimal in [100000, 600000], salt not 16 bytes, derived key not 32 bytes).
+        static bool VerifyPassword(const std::string& password, const std::string& storedHash);
 
       private:
         TFDatabase* m_db = nullptr;

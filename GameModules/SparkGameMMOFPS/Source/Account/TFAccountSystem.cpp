@@ -12,8 +12,10 @@
 #include "Utils/SecureMemory.h"
 #include "Utils/SecureRandom.h"
 
+#include <charconv>
 #include <chrono>
 #include <sstream>
+#include <system_error>
 #include <vector>
 
 namespace Terrafront
@@ -43,6 +45,11 @@ namespace Terrafront
         constexpr uint32_t kPbkdf2Iterations = 150000; // >= 100000 floor with headroom
         constexpr size_t kSaltBytes = 16;              // 128-bit salt
         constexpr size_t kDkBytes = 32;                // 256-bit derived key
+        // Accepted range for a STORED hash's iteration count: the hardening
+        // floor up to headroom for a future cost bump, never an unbounded
+        // (up to 2^32 rounds per login attempt) database-controlled value.
+        constexpr uint32_t kMinVerifyIterations = 100000;
+        constexpr uint32_t kMaxVerifyIterations = kPbkdf2Iterations * 4;
         constexpr const char* kScheme = "pbkdf2-sha256";
 
         // Splits on '$' with no regex dependency; e.g. "a$b$c" -> {"a","b","c"}.
@@ -103,26 +110,30 @@ namespace Terrafront
         if (parts.size() != 4 || parts[0] != kScheme)
             return false; // legacy (old std::hash) or unrecognized format -> caller treats as bad credentials
 
+        // The stored hash comes from the database file, not from our own
+        // HashPassword, so its embedded cost parameters are untrusted: every
+        // login attempt for the username (right password or not) pays them.
+        // Accept only a fully consumed decimal iteration count inside the
+        // approved range and exactly the salt/derived-key sizes HashPassword
+        // writes; anything else is a corrupt or tampered row -> bad credentials.
+        const std::string& iterText = parts[1];
         uint32_t iterations = 0;
-        try
-        {
-            unsigned long parsed = std::stoul(parts[1]);
-            iterations = static_cast<uint32_t>(parsed);
-        }
-        catch (...)
-        {
+        const char* const iterEnd = iterText.data() + iterText.size();
+        const auto [parsedEnd, parseErr] = std::from_chars(iterText.data(), iterEnd, iterations);
+        if (iterText.empty() || parseErr != std::errc{} || parsedEnd != iterEnd)
             return false;
-        }
-        if (iterations == 0)
+        if (iterations < kMinVerifyIterations || iterations > kMaxVerifyIterations)
             return false;
 
         const std::string& saltHex = parts[2];
         const std::string& dkHex = parts[3];
+        if (saltHex.size() != kSaltBytes * 2 || dkHex.size() != kDkBytes * 2)
+            return false;
 
         std::vector<uint8_t> saltBytes = Crypto::FromHex(saltHex);
         std::vector<uint8_t> expectedDk = Crypto::FromHex(dkHex);
         const auto clearExpected = Spark::MakeScopeExit([&] { Spark::SecureClear(expectedDk); });
-        if (expectedDk.empty())
+        if (saltBytes.size() != kSaltBytes || expectedDk.size() != kDkBytes)
             return false;
 
         std::vector<uint8_t> actualDk = Crypto::Pbkdf2HmacSha256(password, saltBytes, iterations, expectedDk.size());

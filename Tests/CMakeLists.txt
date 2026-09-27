@@ -1900,7 +1900,7 @@ set(_spark_tf110_selectors
     "TF110_ForgedState_=4"
     "TF110_LoadoutWire_=3"
     "TF110_Observe_=4"
-    "TFSec_=3")
+    "TFSec_=4")
 foreach(_spark_tf110_selector IN LISTS _spark_tf110_selectors)
     string(REPLACE "=" ";" _spark_tf110_parts "${_spark_tf110_selector}")
     list(GET _spark_tf110_parts 0 _spark_tf110_prefix)
