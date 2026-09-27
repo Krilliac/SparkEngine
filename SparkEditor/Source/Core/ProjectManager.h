@@ -208,7 +208,9 @@ namespace SparkEditor
         /// its retained .bak; a newer projectFileVersion fails closed without it.
         bool LoadProjectFile(const std::string& sparkprojectPath, std::string* error = nullptr);
         /// Writes through SaveFileDurability::WriteFileAtomically; @p retainBackup keeps the
-        /// previous document as `<file>.bak`.
+        /// previous document as `<file>.bak`. It is ignored while the document at the target path
+        /// is one LoadProjectFile rejected and recovered from its `.bak`, so the refresh never
+        /// replaces the only good copy with the damaged document.
         bool SaveProjectFile(bool retainBackup = true);
 
         /// @brief Template package root for this session, resolved once and cached.
@@ -236,6 +238,11 @@ namespace SparkEditor
         // Preserve the exact normalized file selected/created so SaveProject()
         // never silently renames a project after loading its metadata.
         std::string m_currentProjectFilePath;
+        /// Normalized path of a document LoadProjectFile rejected and loaded from its `.bak`.
+        /// Keyed by path, not by the open project, because it describes the file on disk and must
+        /// survive the project rollbacks in Open/Create. Cleared by a clean load or a successful
+        /// save of that path.
+        std::string m_recoveredProjectFilePath;
         std::vector<RecentProject> m_recentProjects;
         mutable std::mutex m_recentProjectsMutex; ///< Protects m_recentProjects from concurrent access
         std::string m_engineRoot;

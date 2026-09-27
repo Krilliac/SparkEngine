@@ -470,17 +470,21 @@ namespace SparkEditor
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving prefab '%s' with %zu components to: %s", m_name.c_str(),
                        m_components.size(), path.c_str());
+        // Refreshing the .bak from a primary TryLoad rejected would replace the only good copy
+        // with the damaged file before the rename that repairs the primary can fail.
+        const bool retainBackup = !(m_recoveredFromBackup && path == m_filePath);
         std::error_code writeError;
-        if (!Spark::SaveFileDurability::WriteFileAtomically(PathFromUtf8(path), file.str(), true, writeError))
+        if (!Spark::SaveFileDurability::WriteFileAtomically(PathFromUtf8(path), file.str(), retainBackup, writeError))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor,
-                            "Failed to save prefab '%s' to '%s': %s. The previous file and its .bak are unchanged",
-                            m_name.c_str(), path.c_str(), writeError.message().c_str());
+                            "Failed to save prefab '%s' to '%s': %s. The previous file is unchanged", m_name.c_str(),
+                            path.c_str(), writeError.message().c_str());
             return false;
         }
 
         m_filePath = path;
         m_isModified = false;
+        m_recoveredFromBackup = false;
         return true;
     }
 
@@ -522,6 +526,7 @@ namespace SparkEditor
         // A recovered prefab keeps the primary path, so the next save repairs the primary.
         loaded.m_filePath = path;
         loaded.m_isModified = false;
+        loaded.m_recoveredFromBackup = primaryResult != PrefabParseResult::Ok;
         out = std::move(loaded);
         return true;
     }

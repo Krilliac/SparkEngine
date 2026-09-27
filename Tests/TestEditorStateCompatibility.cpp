@@ -21,6 +21,13 @@
 #include <system_error>
 #include <vector>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
+
 namespace
 {
     namespace fs = std::filesystem;
@@ -59,6 +66,32 @@ namespace
         path += suffix;
         return path;
     }
+
+#if defined(_WIN32)
+    /// Holds @p path open without FILE_SHARE_DELETE, so MoveFileExW cannot replace it while
+    /// reads (and the .bak refresh's copy) still succeed.
+    class RenameBlocker
+    {
+      public:
+        explicit RenameBlocker(const fs::path& path)
+            : m_file(::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                   FILE_ATTRIBUTE_NORMAL, nullptr))
+        {
+        }
+        ~RenameBlocker()
+        {
+            if (m_file != INVALID_HANDLE_VALUE)
+                ::CloseHandle(m_file);
+        }
+        RenameBlocker(const RenameBlocker&) = delete;
+        RenameBlocker& operator=(const RenameBlocker&) = delete;
+
+        bool Held() const { return m_file != INVALID_HANDLE_VALUE; }
+
+      private:
+        HANDLE m_file;
+    };
+#endif
 
     class ProjectScratch
     {
@@ -221,4 +254,53 @@ TEST(EditorStateMigration_CorruptProjectLoadsRetainedBackup)
     EXPECT_FALSE(manager.HasOpenProject());
     EXPECT_STR_CONTAINS(error, "was rejected: the file is not a complete JSON object");
     EXPECT_STR_CONTAINS(error, "V1Project.sparkproject.bak' was not usable: the file is empty");
+}
+
+TEST(EditorStateMigration_SaveAfterBackupRecoveryKeepsGoodBackup)
+{
+    ProjectScratch scratch("recoversave");
+    const fs::path document = scratch.Stage("v1-project/V1Project.sparkproject", "V1Project");
+    const fs::path backup = WithSuffix(document, ".bak");
+
+    {
+        SparkEditor::Testing::IsolatedProjectManager writer;
+        writer.Initialize();
+        ASSERT_TRUE(writer.OpenProject(Utf8(document)));
+        ASSERT_TRUE(writer.SaveProject());
+        writer.RemoveRecentProject(Utf8(document));
+    }
+    const std::string goodBackup = ReadBytes(backup);
+    ASSERT_FALSE(goodBackup.empty());
+
+    const std::string saved = ReadBytes(document);
+    const std::string damaged = saved.substr(0, saved.size() / 2);
+    WriteBytes(document, damaged);
+
+    SparkEditor::Testing::IsolatedProjectManager manager;
+    manager.Initialize();
+    std::string error;
+    ASSERT_TRUE(manager.OpenProject(Utf8(document), &error));
+    EXPECT_STR_CONTAINS(error, "Loaded the previous-good backup");
+
+#if defined(_WIN32)
+    {
+        // The final rename fails after the point where the .bak would be refreshed.
+        RenameBlocker blocker(document);
+        ASSERT_TRUE(blocker.Held());
+        EXPECT_FALSE(manager.SaveProject());
+    }
+    EXPECT_TRUE(ReadBytes(document) == damaged);
+    EXPECT_TRUE(ReadBytes(backup) == goodBackup);
+#endif
+
+    // The repairing save leaves the .bak on the last good document, not the damaged one.
+    ASSERT_TRUE(manager.SaveProject());
+    EXPECT_TRUE(ReadBytes(backup) == goodBackup);
+    const std::string repaired = ReadBytes(document);
+    EXPECT_STR_CONTAINS(repaired, "\"projectFileVersion\": 1,");
+
+    // Once the document is good again, saves retain it as usual.
+    ASSERT_TRUE(manager.SaveProject());
+    EXPECT_TRUE(ReadBytes(backup) == repaired);
+    manager.RemoveRecentProject(Utf8(document));
 }

@@ -21,6 +21,13 @@
 #include <system_error>
 #include <variant>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
+
 namespace
 {
     namespace fs = std::filesystem;
@@ -109,6 +116,32 @@ namespace
     {
         return prefab.GetName() == "Sentinel" && prefab.GetComponents().size() == 1 && prefab.HasComponent("Marker");
     }
+
+#if defined(_WIN32)
+    /// Holds @p path open without FILE_SHARE_DELETE, so MoveFileExW cannot replace it while
+    /// reads (and the .bak refresh's copy) still succeed.
+    class RenameBlocker
+    {
+      public:
+        explicit RenameBlocker(const fs::path& path)
+            : m_file(::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                   FILE_ATTRIBUTE_NORMAL, nullptr))
+        {
+        }
+        ~RenameBlocker()
+        {
+            if (m_file != INVALID_HANDLE_VALUE)
+                ::CloseHandle(m_file);
+        }
+        RenameBlocker(const RenameBlocker&) = delete;
+        RenameBlocker& operator=(const RenameBlocker&) = delete;
+
+        bool Held() const { return m_file != INVALID_HANDLE_VALUE; }
+
+      private:
+        HANDLE m_file;
+    };
+#endif
 } // namespace
 
 TEST(PrefabPersistence_FutureVersionFailsClosedNamingVersionAndWindow)
@@ -251,4 +284,53 @@ TEST(PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons)
     EXPECT_EQ(empty.GetPrefabCount(), static_cast<size_t>(0));
     EXPECT_STR_CONTAINS(error, "was rejected: the file is truncated at component 2 of 2");
     EXPECT_STR_CONTAINS(error, "Crate.sparkprefab.bak' was not usable: line 1 is not a 'SPARKPREFAB <version>' header");
+}
+
+TEST(PrefabPersistence_SaveAfterBackupRecoveryKeepsGoodBackup)
+{
+    PrefabScratch scratch("recoversave");
+    const std::string path = scratch.Utf8("Crate.sparkprefab");
+    const fs::path primaryFile = scratch.Native("Crate.sparkprefab");
+    const fs::path backupFile = scratch.Native("Crate.sparkprefab.bak");
+
+    SparkEditor::PrefabAsset crate = MakeCrate(10.0f);
+    ASSERT_TRUE(crate.Save(path));
+    crate.GetComponents()[1].properties["mass"] = 20.0f;
+    ASSERT_TRUE(crate.Save(path)); // .bak holds the mass-10 revision
+    const std::string goodBackup = ReadBytes(backupFile);
+
+    const std::string primary = ReadBytes(primaryFile);
+    const std::string damaged = primary.substr(0, primary.find("component RigidBody"));
+    WriteBytes(primaryFile, damaged);
+
+    SparkEditor::PrefabAsset recovered;
+    std::string error;
+    ASSERT_TRUE(SparkEditor::PrefabAsset::TryLoad(path, recovered, error));
+    ASSERT_EQ(MassOf(recovered), 10.0f);
+    recovered.GetComponents()[1].properties["mass"] = 30.0f;
+
+#if defined(_WIN32)
+    {
+        // The final rename fails after the point where the .bak would be refreshed.
+        RenameBlocker blocker(primaryFile);
+        ASSERT_TRUE(blocker.Held());
+        EXPECT_FALSE(recovered.Save(path));
+    }
+    EXPECT_EQ(ReadBytes(primaryFile), damaged);
+    EXPECT_EQ(ReadBytes(backupFile), goodBackup);
+#endif
+
+    // The repairing save leaves the .bak on the last good revision, not the damaged primary.
+    ASSERT_TRUE(recovered.Save(path));
+    EXPECT_EQ(ReadBytes(backupFile), goodBackup);
+    SparkEditor::PrefabAsset reloaded;
+    ASSERT_TRUE(SparkEditor::PrefabAsset::TryLoad(path, reloaded, error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(MassOf(reloaded), 30.0f);
+
+    // Once the primary is good again, saves retain it as usual.
+    const std::string repaired = ReadBytes(primaryFile);
+    recovered.GetComponents()[1].properties["mass"] = 40.0f;
+    ASSERT_TRUE(recovered.Save(path));
+    EXPECT_EQ(ReadBytes(backupFile), repaired);
 }

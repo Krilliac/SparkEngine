@@ -138,7 +138,9 @@ namespace SparkEditor
          * @brief Save the prefab to a file
          *
          * The text is written through SaveFileDurability::WriteFileAtomically: the previous file
-         * is kept as `<path>.bak`, and a failed or interrupted save leaves both files unchanged.
+         * is kept as `<path>.bak`, and a failed or interrupted save leaves @p path unchanged.
+         * When this prefab was recovered from the `.bak` of @p path, the rejected primary is not
+         * copied over it: the `.bak` keeps the good copy until a save to @p path succeeds.
          *
          * @param path UTF-8 file path to save to (.sparkprefab)
          * @return true if save succeeded
@@ -188,6 +190,8 @@ namespace SparkEditor
         std::vector<SerializedComponent> m_components;
         uint64_t m_id = 0;
         bool m_isModified = false;
+        /// TryLoad rejected the file at m_filePath and loaded its `.bak`; cleared by a successful Save.
+        bool m_recoveredFromBackup = false;
 
         static uint64_t s_nextId;
     };

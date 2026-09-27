@@ -80,10 +80,16 @@ namespace Spark::SaveFileDurability
      * and @p destination exists, its current contents are copied to BackupPathFor(destination)
      * with CopyFileAtomically. The staging file is then renamed over @p destination.
      *
-     * On failure the staging file is removed, and @p destination and its retained copy keep
-     * their previous bytes. The retained copy is refreshed from whatever @p destination holds;
-     * this function does not parse documents, so a reader that rejects a damaged primary should
-     * recover from the retained copy before the next write refreshes it.
+     * On failure the staging file is removed and @p destination keeps its previous bytes. The
+     * retained copy keeps its previous bytes when the failure precedes the refresh; when the
+     * final rename fails after the refresh, it holds a copy of @p destination's previous bytes.
+     * An interruption between the refresh and the rename leaves the same state.
+     *
+     * The retained copy is refreshed from whatever @p destination holds, because this function
+     * does not parse documents. A caller that rejected @p destination as damaged and recovered
+     * from the retained copy must pass @p retainBackup = false until a write succeeds.
+     * Otherwise the refresh overwrites the only good copy with the damaged document, and a
+     * failed or interrupted rename then leaves no good copy on disk.
      *
      * @param destination  Document to replace; its parent directory must exist.
      * @param bytes        Complete new contents, written in binary mode.

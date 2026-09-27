@@ -1689,7 +1689,7 @@ set_tests_properties(SparkDocumentWriteTests PROPERTIES
 # leaves the previous prefab byte-identical.
 add_test(NAME SparkPrefabPersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkPrefabPersistenceTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=5"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "compatibility;prefab;unit"
     TIMEOUT 30)
 
@@ -1698,7 +1698,7 @@ set_tests_properties(SparkPrefabPersistenceTests PROPERTIES
 # recovers a damaged document from it (Tests/Fixtures/Compatibility/EditorState).
 add_test(NAME SparkEditorStateCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkEditorStateCompatibilityTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorStateMigration_;SPARK_TEST_EXPECT_COUNT=4"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorStateMigration_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "compatibility;editor;unit"
     TIMEOUT 60)
 

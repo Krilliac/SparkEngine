@@ -2138,6 +2138,11 @@ namespace SparkEditor
         const fs::path projectRootPath = PathFromUtf8(normalizedProjectFile).parent_path();
         std::string projectRoot = PathToUtf8(projectRootPath);
 
+        if (primaryStatus != ProjectDocumentStatus::Ok)
+            m_recoveredProjectFilePath = normalizedProjectFile;
+        else if (m_recoveredProjectFilePath == normalizedProjectFile)
+            m_recoveredProjectFilePath.clear();
+
         m_currentProject = ProjectInfo{};
         m_currentProjectFilePath = normalizedProjectFile;
         m_currentProject.name = name.empty() ? PathToUtf8(projectRootPath.filename()) : name;
@@ -2249,9 +2254,13 @@ namespace SparkEditor
             file << "}\n";
 
             // Staged, flushed and renamed over the previous document, which is kept as
-            // <file>.bak; a failed write leaves both byte-identical.
+            // <file>.bak; a failed write leaves the document unchanged. A document recovered
+            // from its .bak is not copied over it: a failed rename after that refresh would
+            // leave no good copy.
+            const bool recoveredDocument = !filePath.empty() && filePath == m_recoveredProjectFilePath;
             std::error_code writeError;
-            if (!Spark::SaveFileDurability::WriteFileAtomically(nativeFilePath, file.str(), retainBackup, writeError))
+            if (!Spark::SaveFileDurability::WriteFileAtomically(nativeFilePath, file.str(),
+                                                                retainBackup && !recoveredDocument, writeError))
             {
                 std::cerr << "Failed to write project file " << filePath << ": " << writeError.message()
                           << ". The previous project file is unchanged.\n";
@@ -2260,6 +2269,8 @@ namespace SparkEditor
                                 filePath.c_str(), writeError.message().c_str());
                 return false;
             }
+            if (recoveredDocument)
+                m_recoveredProjectFilePath.clear();
 
             if (m_fileCache)
             {
