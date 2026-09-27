@@ -63,13 +63,26 @@ namespace Terrafront
 
         static constexpr float kScale = 10000.0f;
 
-        static float WrapPi(float a)
+        /**
+         * @brief Wrap an angle into [-pi, pi] in constant time.
+         *
+         * Total over every float: non-finite input yields 0. Client view angles
+         * reach this straight off the wire, so it must never iterate by 2*pi --
+         * once |a| >= 2^27 a float subtraction of 2*pi rounds back to `a` and a
+         * loop-based wrap never terminates (a one-packet authoritative-tick hang).
+         * In-range input is returned unchanged; out-of-range input is reduced
+         * with std::remainder, whose result is exact and bounded by half the
+         * divisor. Game-thread; no allocation.
+         */
+        static float WrapPi(float a) noexcept
         {
-            while (a > 3.14159265f)
-                a -= 6.28318531f;
-            while (a < -3.14159265f)
-                a += 6.28318531f;
-            return a;
+            constexpr float kPi = 3.14159265f;
+            constexpr float kTwoPi = 6.28318531f;
+            if (!std::isfinite(a))
+                return 0.0f;
+            if (a >= -kPi && a <= kPi)
+                return a;
+            return std::remainder(a, kTwoPi);
         }
         static QuantAim From(float yawRad, float pitchRad)
         {
