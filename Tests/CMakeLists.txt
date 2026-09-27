@@ -1139,6 +1139,7 @@ target_sources(SparkTests PRIVATE
     TestSaveSystemRoundTripReal.cpp
     TestSAVE230NewerFormatSlotReal.cpp
     TestSaveInterruptionReal.cpp
+    TestDocumentInterruptionReal.cpp
     TestDocumentDurableWrite.cpp
     TestSEC2PersistenceHardening.cpp
     TestMOD360OpenWorldPersistenceReal.cpp
@@ -1833,6 +1834,24 @@ set_tests_properties(SparkDocumentWriteTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=DocumentWrite_;SPARK_TEST_EXPECT_COUNT=4"
     LABELS "compatibility;save;unit"
     TIMEOUT 30)
+
+# SAVE-230: DocumentInterruption_ kills an exec'd SparkTests writer (SIGKILL on POSIX,
+# TerminateProcess on Windows) at seeded, randomized offsets while it saves successive
+# generations of a scene (SaveWorld), a prefab (PrefabAsset::Save) and a project document
+# (ProjectManager), then requires the production loader to read exactly the last completed
+# or in-flight generation, an intact .bak and no promoted .tmp. The family spawns ~300
+# child processes, so it runs only in this lane, not in the SparkEngineTests budget.
+add_test(NAME SparkDocumentInterruptionTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkDocumentInterruptionTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=DocumentInterruption_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "compatibility;save;process"
+    RUN_SERIAL TRUE
+    TIMEOUT 600)
+get_test_property(SparkEngineTests ENVIRONMENT _spark_main_suite_environment)
+string(REGEX REPLACE "(^|;)SPARK_TEST_EXCLUDE=([^;]*)" "\\1SPARK_TEST_EXCLUDE=\\2,DocumentInterruption_"
+    _spark_main_suite_environment "${_spark_main_suite_environment}")
+set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_spark_main_suite_environment}")
+unset(_spark_main_suite_environment)
 
 # Security: JobSystem worker counts never underflow on a 0-thread host, operator-supplied
 # counts (-threads, SPARK_MAX_WORKER_THREADS) are parsed without atoi UB and capped, and a
