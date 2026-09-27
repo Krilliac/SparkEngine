@@ -4,7 +4,6 @@
 #include "Core/ModuleManager.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/InvalidStateDetector.h"
-#include "Utils/LocalFileCache.h"
 #include "Utils/SparkConsole.h"
 #include <Spark/ModuleABI.h>
 #include <Spark/Version.h>
@@ -18,6 +17,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -473,9 +473,7 @@ TEST(ModuleABI_UnicodeManifestPathResolvesAndLoadsWithWideWindowsLoader)
     }
 
     {
-        Spark::LocalFileCache fileCache;
         ModuleManager manager;
-        manager.SetFileCache(&fileCache);
         EXPECT_TRUE(manager.LoadModulesFromManifest(PathToUtf8(manifestPath)));
         EXPECT_EQ(manager.GetLoadedModuleInfo().size(), size_t{1});
         manager.UnloadAll();
@@ -1195,6 +1193,40 @@ TEST(ModuleABI_OversizedManifestRejectedBeforeParse)
     RemoveModuleCopy(modulePath);
     std::error_code ec;
     std::filesystem::remove(manifestPath, ec);
+}
+
+TEST(ModuleABI_NonRegularManifestRejectedBeforeRead)
+{
+    // A manifest that is not a regular file has no size to budget. Reading it
+    // anyway meant an unbounded read (a symlink to /dev/zero) or an open that
+    // blocks forever (a FIFO with no writer). It must be refused before open.
+    const std::filesystem::path scratch = std::filesystem::temp_directory_path() / "SparkNonRegularManifest";
+    std::error_code ec;
+    std::filesystem::remove_all(scratch, ec);
+    std::filesystem::create_directories(scratch / "spark.directory.modules.json", ec);
+    ASSERT_FALSE(ec);
+
+    std::vector<std::filesystem::path> manifests{scratch / "spark.directory.modules.json"};
+#ifndef _WIN32
+    const std::filesystem::path zeroLink = scratch / "spark.zero.modules.json";
+    std::filesystem::create_symlink("/dev/zero", zeroLink, ec);
+    ASSERT_FALSE(ec);
+    manifests.push_back(zeroLink);
+
+    const std::filesystem::path fifo = scratch / "spark.fifo.modules.json";
+    ASSERT_EQ(::mkfifo(fifo.c_str(), 0600), 0);
+    manifests.push_back(fifo);
+#endif
+
+    for (const std::filesystem::path& manifestPath : manifests)
+    {
+        ModuleManager manager;
+        EXPECT_FALSE(manager.LoadModulesFromManifest(PathToUtf8(manifestPath)));
+        EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "regular file");
+        EXPECT_EQ(manager.GetModuleCount(), size_t{0});
+    }
+
+    std::filesystem::remove_all(scratch, ec);
 }
 
 TEST(ModuleABI_ManifestWithUnusableEntryLoadsNothing)

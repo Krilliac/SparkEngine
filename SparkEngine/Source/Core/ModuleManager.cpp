@@ -17,7 +17,6 @@
 #endif
 #include "Utils/SparkConsole.h"
 #include "Utils/InvalidStateDetector.h"
-#include "Utils/LocalFileCache.h"
 #include "Utils/JsonUtils.h"
 #include "Utils/Validate.h"
 
@@ -1362,44 +1361,41 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
         return false;
     };
 
-    // A manifest lists a handful of module paths. Refuse anything past the
-    // budget before reading it, and bound the read itself below.
+    // A manifest is a small regular file. A FIFO, a device or a symlink to one
+    // (/dev/zero, /dev/urandom) has no usable size and could stream forever or
+    // block the open, so refuse anything that is not a regular file before
+    // opening it, and refuse a regular file past the budget before reading it.
+    std::error_code statusError;
+    const bool isRegularFile = std::filesystem::is_regular_file(manifestFile, statusError);
+    if (statusError || !isRegularFile)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' as a regular file",
+                        manifestPath.c_str());
+        return failManifest("Could not open module manifest as a regular file: " + manifestPath);
+    }
     std::error_code sizeError;
     const std::uintmax_t manifestBytes = std::filesystem::file_size(manifestFile, sizeError);
-    if (!sizeError && manifestBytes > kMaxManifestBytes)
+    if (sizeError)
+        return failManifest("Could not read module manifest size: " + manifestPath);
+    if (manifestBytes > kMaxManifestBytes)
         return failManifest(std::format("Module manifest exceeds {} bytes: {}", kMaxManifestBytes, manifestPath));
 
-    std::string content;
-
-#ifndef _WIN32
-    // LocalFileCache's string-only FileUtils backend is UTF-8-safe on POSIX,
-    // but cannot open arbitrary Unicode paths on Windows. Use the native path
-    // stream below there so the manifest stays wide end-to-end.
-    if (m_fileCache)
+    // Always read the manifest straight from disk, bounded to one byte past the
+    // budget: the file can still grow (or be swapped) after the checks above.
+    // LocalFileCache is deliberately not used here; its whole-file read has no
+    // limit and a cached copy would outlive an edited manifest.
+    std::ifstream file(manifestFile, std::ios::binary);
+    if (!file.is_open())
     {
-        auto result = m_fileCache->ReadText(manifestPath);
-        if (result.IsOk())
-        {
-            content = result.Value();
-        }
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' (errno=%d)",
+                        manifestPath.c_str(), errno);
+        m_lastLoadError = "Could not open module manifest: " + manifestPath;
+        console.LogWarning(m_lastLoadError);
+        return false;
     }
-#endif
-
-    if (content.empty())
-    {
-        std::ifstream file(manifestFile);
-        if (!file.is_open())
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' (errno=%d)",
-                            manifestPath.c_str(), errno);
-            m_lastLoadError = "Could not open module manifest: " + manifestPath;
-            console.LogWarning(m_lastLoadError);
-            return false;
-        }
-        content.resize(static_cast<std::size_t>(kMaxManifestBytes) + 1);
-        file.read(content.data(), static_cast<std::streamsize>(content.size()));
-        content.resize(static_cast<std::size_t>(std::max<std::streamsize>(file.gcount(), 0)));
-    }
+    std::string content(static_cast<std::size_t>(kMaxManifestBytes) + 1, '\0');
+    file.read(content.data(), static_cast<std::streamsize>(content.size()));
+    content.resize(static_cast<std::size_t>(std::max<std::streamsize>(file.gcount(), 0)));
     if (content.size() > kMaxManifestBytes)
         return failManifest(std::format("Module manifest exceeds {} bytes: {}", kMaxManifestBytes, manifestPath));
 
@@ -2043,7 +2039,6 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
         ModuleManager stagedManager;
         stagedManager.m_publishTeardownLifecycleEvidence = false;
-        stagedManager.m_fileCache = m_fileCache;
         if (!stagedManager.LoadModule(PathToUtf8(shadowPath)))
         {
             const std::string detail = stagedManager.GetLastLoadError();

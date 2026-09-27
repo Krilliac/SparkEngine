@@ -27,11 +27,6 @@
 #include <vector>
 #include <memory>
 
-namespace Spark
-{
-    class LocalFileCache;
-}
-
 // Forward declaration for legacy adapter
 class IGameModule;
 using CreateGameModuleFn = IGameModule* (*)();
@@ -160,8 +155,14 @@ class ModuleManager
 
     /**
      * @brief Load modules listed in a spark.modules.json manifest
+     *
+     * The manifest must be a regular file of at most 1 MiB. It is always read
+     * directly from disk with a bounded read (never through LocalFileCache,
+     * whose whole-file read is unbounded and would also serve a stale copy),
+     * and a FIFO, device or symlink to one is refused before it is opened.
+     *
      * @param manifestPath Path to the JSON manifest file
-     * @return true if at least one module was loaded
+     * @return true if every listed module was loaded
      */
     bool LoadModulesFromManifest(const std::string& manifestPath);
 
@@ -361,9 +362,6 @@ class ModuleManager
     /** @brief Get paths and names of all loaded modules for hot-reload watching */
     std::vector<std::pair<std::string, std::string>> GetModulePathsAndNames() const;
 
-    /** @brief Set the file cache for manifest loading (non-owning). */
-    void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
-
     /**
      * @brief Scan a directory for module DLLs without executing them
      *
@@ -413,7 +411,6 @@ class ModuleManager
     ModuleLifecycleRecord& FindOrCreateLifecycleRecord(std::string_view module);
 
     std::vector<LoadedModule> m_modules;
-    Spark::LocalFileCache* m_fileCache = nullptr;
     std::string m_lastLoadError;
     LifecycleEvidence m_lifecycleEvidence;
     bool m_publishTeardownLifecycleEvidence = true;

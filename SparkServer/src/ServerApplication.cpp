@@ -582,7 +582,6 @@ namespace Spark::Server
         context->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         context->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
         m_modules = std::make_unique<ModuleManager>();
-        m_modules->SetFileCache(runtime.fileCache.get());
         if (!LoadSelectedModules())
         {
             DestroyModuleRuntime(true);
