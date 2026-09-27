@@ -3079,6 +3079,16 @@ set_tests_properties(SupplyChain_SbomAndPackageReconciliation PROPERTIES
     LABELS "governance;security;unit;python"
     TIMEOUT 300)
 
+# SEC-110: release.yml reconciles every package with the lock after install and
+# before CPack, and the release job requires a passing report per published
+# package plus the reproducible lock-bound SBOM before collecting assets.
+add_test(
+    NAME SupplyChain_ReleaseReconciliationWiring
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_release_supply_chain_wiring.py)
+set_tests_properties(SupplyChain_ReleaseReconciliationWiring PROPERTIES
+    LABELS "supply-chain;release;security;python"
+    TIMEOUT 120)
+
 # SEC-110: repository secret scan (tools/check-secret-scan.py) against planted
 # tokens, PEM keys and credentials, symlinks, oversize files, and exceptions that
 # are expired, stale, wildcarded, directory-scoped, count-exceeded or invalid. The
