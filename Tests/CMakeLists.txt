@@ -543,6 +543,7 @@ add_executable(SparkTests
     # Critical-path integration tests
     TestRHIBridgeIntegration.cpp
     TestNetworkManagerIntegration.cpp
+    TestNetTransportSecurity.cpp
     TestSystemManagerIntegration.cpp
     TestAssetPipelineIntegration.cpp
     TestMaterialSystemIntegration.cpp
@@ -1923,6 +1924,18 @@ if(ENABLE_NETWORKING)
     set_tests_properties(NetImpairmentTransport PROPERTIES
         ENVIRONMENT "SPARK_TEST_FILE=TestNetworkManagerIntegration.cpp;SPARK_TEST_NAME_PREFIX=NetImpairment_;SPARK_TEST_EXPECT_COUNT=4"
         LABELS "network;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
+
+# SEC-net-transport: transport hardening regressions over real loopback UDP
+# (input retention, client state cleanup, session termination, full-sync
+# throttling, reliable sequence wrap, client placeholder cap).
+if(ENABLE_NETWORKING)
+    add_test(NAME NetTransportSecurity COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetTransportSecurity PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestNetTransportSecurity.cpp;SPARK_TEST_NAME_PREFIX=NetTransportSec_;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "network;security;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)
 endif()

@@ -514,14 +514,10 @@ namespace Spark::Net
         /// Deserialize an entity state update from a NetBuffer and apply it
         void DeserializeEntityState(NetBuffer& inBuffer);
 
-        // Client input (for server-side processing)
+        /// Client -> server input send. The transport does not retain received
+        /// ClientInput: a server consumes it through an application observer
+        /// (RegisterHandler), which owns validation, attribution and bounding.
         void SendClientInput(const ClientInputState& input);
-        std::vector<ClientInputState> GetPendingInputs() const
-        {
-            std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
-            std::lock_guard<std::mutex> inputLock(m_inputMutex);
-            return m_pendingInputs;
-        }
 
         // Lag compensation. [game thread] Borrowed mutable subsystem reference.
         LagCompensator& GetLagCompensator() { return m_lagCompensator; }
@@ -924,8 +920,7 @@ namespace Spark::Net
         float m_replicationTimer = 0.0f;
 
         // Client input
-        std::vector<ClientInputState> m_pendingInputs;
-        mutable std::mutex m_inputMutex; ///< Protects m_pendingInputs and m_inputHistory
+        mutable std::mutex m_inputMutex; ///< Protects m_inputHistory
         SequenceNumber m_inputSequence = 0;
 
         // Prediction

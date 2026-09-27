@@ -662,10 +662,10 @@ TEST(NetworkManager_ConcurrentSnapshotsSendAndStopAreSerialized)
             {
                 auto stats = nm.GetStats();
                 auto clients = nm.GetClients();
-                auto inputs = nm.GetPendingInputs();
+                auto serverTime = nm.GetServerTime();
                 (void)stats;
                 (void)clients;
-                (void)inputs;
+                (void)serverTime;
             }
         });
     std::thread sender(

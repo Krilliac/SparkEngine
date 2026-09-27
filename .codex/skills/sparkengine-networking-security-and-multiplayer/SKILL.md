@@ -152,8 +152,8 @@ field is intentionally empty — salt lives inside the self-describing hash stri
    for `SeamlessAreaManager`).
 4. **No live rate limiting.** The only flood control on real ingress is per-packet size/schema
    checks and unreliable-channel drop-under-flood; the `RateLimiter` class is unwired.
-5. **Closed race claim — keep snapshots by value.** `NetworkManager::GetPendingInputs()`,
-   `GetStats()`, and connected-client accessors now lock and return value snapshots. Do not
+5. **Closed race claim — keep snapshots by value.** `NetworkManager::GetStats()`,
+   `GetClients()`, and the other connected-client accessors now lock and return value snapshots. Do not
    regress them to references into containers whose mutex is released at return.
 6. **Caps to respect, not remove.** `ClientPrediction` trims pending inputs above
    `m_maxPendingInputs` (default 128) — oldest inputs are silently dropped under sustained

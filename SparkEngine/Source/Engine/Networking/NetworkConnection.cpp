@@ -228,38 +228,11 @@ namespace Spark::Net
                              buf.WriteBytes(msg.payload.data(), msg.payload.size());
                              DeltaSnapshotManager::GetInstance().AcknowledgeSequence(msg.senderID, buf.ReadUint32());
                          });
-        registerInternal(MessageType::ClientInput,
-                         [this](const NetworkMessage& msg)
-                         {
-                             NetworkRole role;
-                             {
-                                 std::lock_guard<std::mutex> lock(m_stateMutex);
-                                 role = m_role;
-                             }
-                             if (role == NetworkRole::Server)
-                             {
-                                 NetBuffer buf;
-                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                 ClientInputState input;
-                                 input.inputSequence = buf.ReadUint32();
-                                 input.moveForward = buf.ReadFloat();
-                                 input.moveRight = buf.ReadFloat();
-                                 input.lookYaw = buf.ReadFloat();
-                                 input.lookPitch = buf.ReadFloat();
-                                 uint8_t flags = buf.ReadUint8();
-                                 input.jump = (flags & 1) != 0;
-                                 input.fire = (flags & 2) != 0;
-                                 input.reload = (flags & 4) != 0;
-                                 input.sprint = (flags & 8) != 0;
-                                 input.crouch = (flags & 16) != 0;
-                                 input.deltaTime = buf.ReadFloat();
-                                 input.timestamp = m_serverTime;
-                                 {
-                                     std::lock_guard<std::mutex> lock(m_inputMutex);
-                                     m_pendingInputs.push_back(input);
-                                 }
-                             }
-                         });
+        // ClientInput deliberately has no protocol handler. The transport used to
+        // parse every datagram into an unbounded, unattributed, never-drained
+        // server queue (a remote memory-exhaustion sink with no consumer). Input
+        // is gameplay data: an application observer owns its validation, its
+        // per-client attribution (msg.senderID) and its bounds.
 
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Network", 0.0);
         return true;
@@ -315,7 +288,6 @@ namespace Spark::Net
         }
         {
             std::lock_guard<std::mutex> inputLock(m_inputMutex);
-            m_pendingInputs.clear();
             m_inputHistory.clear();
         }
         {
@@ -459,10 +431,6 @@ namespace Spark::Net
             ++m_replicationMutationEpoch;
         }
         m_lagCompensator.Clear();
-        {
-            std::lock_guard<std::mutex> lock(m_inputMutex);
-            m_pendingInputs.clear();
-        }
         m_peers.clear();
         m_allowLanAdvertisement = false;
 
@@ -647,7 +615,6 @@ namespace Spark::Net
         m_lagCompensator.Clear();
         {
             std::lock_guard<std::mutex> lock(m_inputMutex);
-            m_pendingInputs.clear();
             m_inputHistory.clear();
         }
         m_peers.clear();
