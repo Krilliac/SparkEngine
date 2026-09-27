@@ -61,6 +61,21 @@ namespace Spark::Net
     using ConnectionToken = std::array<uint8_t, TOKEN_SIZE>;
 
     // ============================================================================
+    // libsodium initialization
+    // ============================================================================
+
+    /**
+     * @brief Initialize libsodium exactly once per process
+     *
+     * Thread-safe and idempotent: the first call runs sodium_init() and every
+     * call returns that first result. Every Spark::Net function that uses
+     * libsodium calls it first, so callers never need to.
+     *
+     * @return false if sodium_init() failed; callers must fail closed
+     */
+    [[nodiscard]] bool EnsureSodium();
+
+    // ============================================================================
     // Key / token generation (fail closed)
     // ============================================================================
 

@@ -151,6 +151,9 @@ EXCEPTION_PLACEHOLDER_OWNERS = frozenset({"", "none", "n/a", "tbd", "todo", "unk
 ALLOWED_SPDX_LICENSES = frozenset({
     "Apache-2.0",
     "BSD-3-Clause",
+    # ISC is pre-approved by ThirdParty/POLICY.md; added for libsodium (NET-100,
+    # owner decision OD-06, vendoring authorized by the owner on 2026-09-27).
+    "ISC",
     "MIT",
     "MIT-0",
     "Unlicense",

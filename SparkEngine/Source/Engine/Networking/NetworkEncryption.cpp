@@ -12,8 +12,28 @@
 
 #include <string_view>
 
+#ifndef SPARK_HAS_LIBSODIUM
+#error "NetworkEncryption.cpp requires libsodium (cmake/SparkLibsodium.cmake links spark_sodium)"
+#endif
+#include <sodium.h>
+
 namespace Spark::Net
 {
+
+    bool EnsureSodium()
+    {
+        // A function-local static is initialized exactly once, even under
+        // concurrent first calls. sodium_init() returns 0 on first success, 1 when
+        // already initialized, and -1 on failure.
+        static const bool initialized = []
+        {
+            const bool ok = sodium_init() >= 0;
+            if (!ok)
+                SPARK_LOG_ERROR(Spark::LogCategory::Network, "sodium_init() failed: network crypto is unavailable");
+            return ok;
+        }();
+        return initialized;
+    }
 
     namespace
     {

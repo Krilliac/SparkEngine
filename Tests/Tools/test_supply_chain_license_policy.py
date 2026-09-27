@@ -107,7 +107,7 @@ class TestSpdxExpressionParser(unittest.TestCase):
         # reviewed diff to this assertion, not as a quiet constant edit.
         self.assertEqual(
             sorted(sc.ALLOWED_SPDX_LICENSES),
-            ["Apache-2.0", "BSD-3-Clause", "MIT", "MIT-0", "Unlicense", "Zlib"],
+            ["Apache-2.0", "BSD-3-Clause", "ISC", "MIT", "MIT-0", "Unlicense", "Zlib"],
         )
 
 

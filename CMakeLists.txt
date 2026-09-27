@@ -756,6 +756,12 @@ else()
 endif()
 
 # ============================================================================
+# libsodium — the transport's only cryptographic library (NET-100, owner decision
+# OD-06). Always built: NetworkEncryption.cpp compiles in every configuration.
+# ============================================================================
+include("${CMAKE_SOURCE_DIR}/cmake/SparkLibsodium.cmake")
+
+# ============================================================================
 # zstd — Zstandard compression library (faster decompression than miniz)
 # ============================================================================
 set(ZSTD_ROOT "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/zstd")
@@ -1543,6 +1549,11 @@ if(MINIZ_FOUND)
     target_compile_definitions(SparkEngine PRIVATE SPARK_MINIZ_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with MINIZ")
 endif()
+
+# libsodium stays a private implementation detail of the networking code; the
+# engine's public headers never include sodium.h.
+target_link_libraries(SparkEngineLib PRIVATE spark_sodium)
+target_compile_definitions(SparkEngineLib PRIVATE SPARK_HAS_LIBSODIUM=1)
 
 if(SPARK_ANGELSCRIPT_AVAILABLE)
     # The public feature definition keeps AngelScriptEngine's class layout and
@@ -2776,7 +2787,7 @@ function(_spark_install_tracked_source_directory source_directory destination co
 endfunction()
 
 set(_SPARK_INSTALL_TARGETS SparkEngineLib)
-foreach(_spark_dependency SparkAssetPipelineCore miniz tinyexr zstd tinyobjloader stb_image cgltf miniaudio nlohmann_json glad Jolt Recast Detour angelscript)
+foreach(_spark_dependency SparkAssetPipelineCore miniz spark_sodium tinyexr zstd tinyobjloader stb_image cgltf miniaudio nlohmann_json glad Jolt Recast Detour angelscript)
     if(TARGET ${_spark_dependency})
         list(APPEND _SPARK_INSTALL_TARGETS ${_spark_dependency})
     endif()

@@ -152,7 +152,7 @@ function(spark_thirdparty_validate_manifest_schema manifest_file)
                     "[ThirdParty Audit] ${_entry}: license notice lacks a copyright statement: ${_notice_rel}")
             endif()
             if(NOT _notice_content MATCHES
-                "Permission is (hereby )?granted|Redistribution and use|public domain|TERMS AND CONDITIONS FOR USE")
+                "Permission is (hereby )?granted|Permission to use, copy, modify|Redistribution and use|public domain|TERMS AND CONDITIONS FOR USE")
                 message(FATAL_ERROR
                     "[ThirdParty Audit] ${_entry}: license notice lacks operative license terms: ${_notice_rel}")
             endif()

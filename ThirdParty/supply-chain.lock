@@ -7,6 +7,7 @@
     "ThirdParty/ECS/entt": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",
     "ThirdParty/SDL2": "5882a4f13d3bf374d2345280c679173f4ff324da",
     "ThirdParty/Scripting/angelscript-mirror": "c81df254037524b18cd41a57805cfec76acd05bf",
+    "ThirdParty/Security/libsodium": "77e1ce5d6dee871c49ef211222ba18ef0c486bda",
     "ThirdParty/UI/imgui": "fd13a1e8923a0a7077b404fc36fd063b25a0c0b5",
     "ThirdParty/Utils/miniz": "77d0dce8627735138c51770d1799a1ef48f2117d"
   },
@@ -43,8 +44,8 @@
       "file_count": 1
     },
     "ThirdParty/Licenses": {
-      "digest": "a434291e70aca16dbc83ae9d81a1e4466df1a930026d83fcb766c044452fe6c0",
-      "file_count": 6
+      "digest": "df8aa675bb86e0ea7ffca47da90690f7125eb6cfdc25c42a0e8dcad14b0a7284",
+      "file_count": 7
     },
     "ThirdParty/OpenGL/GL": {
       "digest": "9e48a292728a4133072206dd7f0d5f96cd6e2acbd3e4e4f57d1e688d43a0e5fc",
@@ -132,6 +133,12 @@
       "sha256": "173506a2d6f7fb67990d257fb2507f188690eca39060c39469ae7bef43aae2a3",
       "git_blob": "d5ba3155f0f438ba765551a5e2419bf3eaa8be64",
       "size": 1083,
+      "type": "license"
+    },
+    "ThirdParty/Licenses/libsodium-LICENSE.txt": {
+      "sha256": "508a76d186356c0dd807a670ef510964f8724557024796a2c426c6c0e19ab683",
+      "git_blob": "95c22fbadfa457cd7898ebe96aaa05147589b655",
+      "size": 823,
       "type": "license"
     },
     "ThirdParty/Licenses/miniz-LICENSE.txt": {
@@ -436,6 +443,13 @@
         "spdx": "MIT AND Apache-2.0",
         "upstream_version": "0.1.36",
         "cpe_unavailable_reason": "The NVD CPE dictionary has no glad product (keyword search on 2026-09-27), so no CPE can be matched."
+      },
+      "libsodium": {
+        "declared": "ISC",
+        "spdx": "ISC",
+        "upstream_version": "1.0.22",
+        "upstream_tag_commit": "77e1ce5d6dee871c49ef211222ba18ef0c486bda",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no libsodium product (CPE match-string and keyword searches on 2026-09-27; CVE-2025-69277 carries no CPE configuration), so no CPE can be matched."
       },
       "miniaudio": {
         "declared": "Public Domain / MIT-0",

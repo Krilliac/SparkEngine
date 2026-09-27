@@ -5,7 +5,7 @@
   "licenseText": {
     "minimumBytes": 200,
     "copyrightPattern": "[Cc]opyright",
-    "operativeTermsPattern": "Permission is (hereby )?granted|Redistribution and use|public domain|TERMS AND CONDITIONS FOR USE"
+    "operativeTermsPattern": "Permission is (hereby )?granted|Permission to use, copy, modify|Redistribution and use|public domain|TERMS AND CONDITIONS FOR USE"
   },
   "thirdPartyRoots": [
     "^include/SparkEngine/ThirdParty/",
@@ -47,6 +47,7 @@
     {"pattern": "^lib/(lib)?glad\\.(a|lib)$", "component": "glad"},
     {"pattern": "^lib/(lib)?miniaudio\\.(a|lib)$", "component": "miniaudio"},
     {"pattern": "^lib/(lib)?miniz\\.(a|lib)$", "component": "miniz"},
+    {"pattern": "^lib/(lib)?spark_sodium\\.(a|lib)$", "component": "libsodium"},
     {"pattern": "^lib/(lib)?stb_image\\.(a|lib)$", "component": "stb_image"},
     {"pattern": "^lib/(lib)?tinyexr\\.(a|lib)$", "component": "tinyexr"},
     {"pattern": "^lib/(lib)?tinyobjloader\\.(a|lib)$", "component": "tinyobjloader"},

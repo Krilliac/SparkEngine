@@ -273,6 +273,7 @@ add_executable(SparkTests
     TestPacketValidator.cpp
     TestPacketValidatorReal.cpp
     TestNET100TransportReal.cpp
+    TestNET100Libsodium.cpp
     TestSessionCompatibilityReal.cpp
     TestLogger.cpp
     TestProfiler.cpp
@@ -976,6 +977,8 @@ target_link_libraries(SparkTests PRIVATE SparkEngineLib)
 if(TARGET miniz)
     target_link_libraries(SparkTests PRIVATE miniz)
 endif()
+# NET-100 tests call libsodium directly (RFC known-answer vectors, handshake peers).
+target_link_libraries(SparkTests PRIVATE spark_sodium)
 
 # SparkBuild command generation is part of the supported first-party build
 # surface. Keep these tests conditional so minimal engine configurations can
@@ -1996,7 +1999,8 @@ set(_spark_net100_transport_selectors
     "Transport_KeyRotation_=3"
     "Transport_FuzzPacket_=1"
     "Transport_Capture_=1"
-    "Transport_KeyGeneration_=1")
+    "Transport_KeyGeneration_=1"
+    "Transport_Libsodium_=1")
 foreach(_spark_net100_selector IN LISTS _spark_net100_transport_selectors)
     string(REPLACE "=" ";" _spark_net100_parts "${_spark_net100_selector}")
     list(GET _spark_net100_parts 0 _spark_net100_prefix)

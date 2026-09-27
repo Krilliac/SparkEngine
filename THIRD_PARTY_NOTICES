@@ -16,8 +16,8 @@ only; the attention items below are not reflected in that packaged file.
 ===============================================================================
 SUMMARY
 ===============================================================================
-Locked third-party components: 16
-Components with at least one notice file on disk: 16
+Locked third-party components: 17
+Components with at least one notice file on disk: 17
 Components with attention items: 7
 Tracked font files outside ThirdParty/ with license text: 7
 Font license attention items outside ThirdParty/: 0
@@ -28,16 +28,17 @@ Font license attention items outside ThirdParty/: 0
 [04] Jolt Physics - MIT - ThirdParty/Physics/JoltPhysics (vendored) [attention]
 [05] SDL2 - zlib - ThirdParty/SDL2 (submodule)
 [06] AngelScript - zlib - ThirdParty/Scripting/angelscript-mirror (submodule)
-[07] Dear ImGui - MIT - ThirdParty/UI/imgui (submodule)
-[08] cgltf - MIT - ThirdParty/Utils/cgltf (vendored)
-[09] nlohmann/json - MIT - ThirdParty/Utils/json (vendored) [attention]
-[10] miniz - MIT - ThirdParty/Utils/miniz (submodule)
-[11] stb_image - Public Domain / MIT - ThirdParty/Utils/stb (vendored) [attention]
-[12] tinyexr - BSD-3-Clause - ThirdParty/Utils/tinyexr (vendored)
-[13] tinyobjloader - MIT - ThirdParty/Utils/tinyobjloader (vendored)
-[14] zstd - BSD-3-Clause (library, upstream tools are dual-licensed) - ThirdParty/Utils/zstd (vendored) [attention]
-[15] VulkanMemoryAllocator - MIT - ThirdParty/VulkanMemoryAllocator (vendored) [attention]
-[16] glad - MIT and Apache-2.0 - ThirdParty/glad (vendored) [attention]
+[07] libsodium - ISC - ThirdParty/Security/libsodium (submodule)
+[08] Dear ImGui - MIT - ThirdParty/UI/imgui (submodule)
+[09] cgltf - MIT - ThirdParty/Utils/cgltf (vendored)
+[10] nlohmann/json - MIT - ThirdParty/Utils/json (vendored) [attention]
+[11] miniz - MIT - ThirdParty/Utils/miniz (submodule)
+[12] stb_image - Public Domain / MIT - ThirdParty/Utils/stb (vendored) [attention]
+[13] tinyexr - BSD-3-Clause - ThirdParty/Utils/tinyexr (vendored)
+[14] tinyobjloader - MIT - ThirdParty/Utils/tinyobjloader (vendored)
+[15] zstd - BSD-3-Clause (library, upstream tools are dual-licensed) - ThirdParty/Utils/zstd (vendored) [attention]
+[16] VulkanMemoryAllocator - MIT - ThirdParty/VulkanMemoryAllocator (vendored) [attention]
+[17] glad - MIT and Apache-2.0 - ThirdParty/glad (vendored) [attention]
 
 ===============================================================================
 ATTENTION REQUIRED
@@ -1056,7 +1057,37 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 
 ===============================================================================
-[07] Dear ImGui
+[07] libsodium
+===============================================================================
+Path:             ThirdParty/Security/libsodium (submodule)
+Source:           https://github.com/jedisct1/libsodium.git
+Version:          77e1ce5d6dee871c49ef211222ba18ef0c486bda
+Declared license: ISC
+
+-------------------------------------------------------------------------------
+License file: ThirdParty/Licenses/libsodium-LICENSE.txt (sha256 of normalized text 508a76d186356c0dd807a670ef510964f8724557024796a2c426c6c0e19ab683)
+-------------------------------------------------------------------------------
+/*
+ * ISC License
+ *
+ * Copyright (c) 2013-2026
+ * Frank Denis <j at pureftpd dot org>
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+===============================================================================
+[08] Dear ImGui
 ===============================================================================
 Path:             ThirdParty/UI/imgui (submodule)
 Source:           https://github.com/ocornut/imgui.git (docking branch)
@@ -1089,7 +1120,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ===============================================================================
-[08] cgltf
+[09] cgltf
 ===============================================================================
 Path:             ThirdParty/Utils/cgltf (vendored)
 Source:           https://github.com/jkuhlmann/cgltf
@@ -1120,7 +1151,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ===============================================================================
-[09] nlohmann/json
+[10] nlohmann/json
 ===============================================================================
 Path:             ThirdParty/Utils/json (vendored)
 Source:           https://github.com/nlohmann/json
@@ -1151,7 +1182,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ===============================================================================
-[10] miniz
+[11] miniz
 ===============================================================================
 Path:             ThirdParty/Utils/miniz (submodule)
 Source:           https://github.com/richgel999/miniz.git
@@ -1185,7 +1216,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ===============================================================================
-[11] stb_image
+[12] stb_image
 ===============================================================================
 Path:             ThirdParty/Utils/stb (vendored)
 Source:           https://github.com/nothings/stb
@@ -1234,7 +1265,7 @@ ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
-[12] tinyexr
+[13] tinyexr
 ===============================================================================
 Path:             ThirdParty/Utils/tinyexr (vendored)
 Source:           https://github.com/syoyo/tinyexr
@@ -1304,7 +1335,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 
 ===============================================================================
-[13] tinyobjloader
+[14] tinyobjloader
 ===============================================================================
 Path:             ThirdParty/Utils/tinyobjloader (vendored)
 Source:           https://github.com/tinyobjloader/tinyobjloader
@@ -1337,7 +1368,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ===============================================================================
-[14] zstd
+[15] zstd
 ===============================================================================
 Path:             ThirdParty/Utils/zstd (vendored)
 Source:           https://github.com/facebook/zstd
@@ -1377,7 +1408,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ===============================================================================
-[15] VulkanMemoryAllocator
+[16] VulkanMemoryAllocator
 ===============================================================================
 Path:             ThirdParty/VulkanMemoryAllocator (vendored)
 Source:           https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
@@ -1406,7 +1437,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ===============================================================================
-[16] glad
+[17] glad
 ===============================================================================
 Path:             ThirdParty/glad (vendored)
 Source:           https://github.com/Dav1dde/glad
