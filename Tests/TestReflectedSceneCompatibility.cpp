@@ -28,10 +28,29 @@ using namespace Spark;
 
 namespace
 {
+    /// The narrow SPARK_TEST_SOURCE_DIR literal would be decoded with the ANSI code
+    /// page on Windows; the wide one keeps a non-ASCII checkout path intact.
     std::filesystem::path ReflectedFixture(const char* name)
     {
-        return std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
-               "ReflectedScene" / name;
+#if defined(_WIN32) && defined(SPARK_TEST_SOURCE_DIR_WIDE)
+        const std::filesystem::path sourceDir(SPARK_TEST_SOURCE_DIR_WIDE);
+#else
+        const std::filesystem::path sourceDir(SPARK_TEST_SOURCE_DIR);
+#endif
+        return sourceDir / "Tests" / "Fixtures" / "Compatibility" / "ReflectedScene" / name;
+    }
+
+    /// LoadWorld/SaveWorld take UTF-8; path::string() is the ANSI code page on Windows.
+    std::string PathToUtf8(const std::filesystem::path& path)
+    {
+        const std::u8string utf8 = path.u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    std::filesystem::path WithSuffix(std::filesystem::path path, const char* suffix)
+    {
+        path += suffix;
+        return path;
     }
 
     std::string ReadFixtureText(const std::filesystem::path& path)
@@ -44,8 +63,8 @@ namespace
     /// a backup or staging file beside it.
     bool HasRecoverySiblings(const std::filesystem::path& path)
     {
-        return std::filesystem::exists(path.string() + ".bak") || std::filesystem::exists(path.string() + ".tmp") ||
-               std::filesystem::exists(path.string() + ".bak.tmp");
+        return std::filesystem::exists(WithSuffix(path, ".bak")) || std::filesystem::exists(WithSuffix(path, ".tmp")) ||
+               std::filesystem::exists(WithSuffix(path, ".bak.tmp"));
     }
 
     class TemporaryReflectedSceneCopy
@@ -62,9 +81,9 @@ namespace
         {
             std::error_code ignored;
             std::filesystem::remove(m_path, ignored);
-            std::filesystem::remove(m_path.string() + ".bak", ignored);
-            std::filesystem::remove(m_path.string() + ".tmp", ignored);
-            std::filesystem::remove(m_path.string() + ".bak.tmp", ignored);
+            std::filesystem::remove(WithSuffix(m_path, ".bak"), ignored);
+            std::filesystem::remove(WithSuffix(m_path, ".tmp"), ignored);
+            std::filesystem::remove(WithSuffix(m_path, ".bak.tmp"), ignored);
         }
 
         TemporaryReflectedSceneCopy(const TemporaryReflectedSceneCopy&) = delete;
@@ -153,7 +172,7 @@ TEST(SceneMigration_ReflectedV1FixtureLoadsDeclaredStateWithoutRewritingSource)
 
     World world;
     std::string error;
-    ASSERT_TRUE(LoadWorld(world, fixturePath.string(), &error));
+    ASSERT_TRUE(LoadWorld(world, PathToUtf8(fixturePath), &error));
     EXPECT_TRUE(error.empty());
     EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(4));
 
@@ -225,7 +244,7 @@ TEST(SceneMigration_ReflectedV1FixtureLoadsDeclaredStateWithoutRewritingSource)
     // Re-saving the loaded world reproduces every entity the fixture declares: the
     // current writer still emits exactly this version-1 document.
     TemporaryReflectedSceneCopy resaved;
-    ASSERT_TRUE(SaveWorld(world, resaved.Path().string()));
+    ASSERT_TRUE(SaveWorld(world, PathToUtf8(resaved.Path())));
     const nlohmann::json resavedDocument = nlohmann::json::parse(ReadFixtureText(resaved.Path()));
     const nlohmann::json fixtureDocument = nlohmann::json::parse(fixtureBefore);
     EXPECT_TRUE(resavedDocument["version"] == fixtureDocument["version"]);
@@ -244,7 +263,7 @@ TEST(SceneMigration_ReflectedLegacyEditorFixtureMigratesAndResavesAsCurrentVersi
 
     World world;
     std::string error;
-    ASSERT_TRUE(LoadWorld(world, fixturePath.string(), &error));
+    ASSERT_TRUE(LoadWorld(world, PathToUtf8(fixturePath), &error));
     EXPECT_TRUE(error.empty());
     EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(4));
 
@@ -294,14 +313,14 @@ TEST(SceneMigration_ReflectedLegacyEditorFixtureMigratesAndResavesAsCurrentVersi
     // The next explicit save writes the current dialect only, and reloading that save
     // restores the same hierarchy and component values.
     TemporaryReflectedSceneCopy resaved;
-    ASSERT_TRUE(SaveWorld(world, resaved.Path().string()));
+    ASSERT_TRUE(SaveWorld(world, PathToUtf8(resaved.Path())));
     const nlohmann::json resavedDocument = nlohmann::json::parse(ReadFixtureText(resaved.Path()));
     EXPECT_TRUE(resavedDocument.contains("version"));
     EXPECT_EQ(resavedDocument["version"].get<int>(), 1);
     EXPECT_FALSE(resavedDocument.contains("sceneVersion"));
 
     World reloaded;
-    ASSERT_TRUE(LoadWorld(reloaded, resaved.Path().string(), &error));
+    ASSERT_TRUE(LoadWorld(reloaded, PathToUtf8(resaved.Path()), &error));
     EXPECT_EQ(reloaded.GetEntityCount(), static_cast<size_t>(4));
     const EntityID reloadedCrate = FindNamed(reloaded, "Crate");
     const EntityID reloadedPlayer = FindNamed(reloaded, "Player");
@@ -314,7 +333,7 @@ TEST(SceneMigration_ReflectedLegacyEditorFixtureMigratesAndResavesAsCurrentVersi
     // Every migrated value survives the round trip: saving the reloaded world again
     // reproduces the first current-dialect document entity for entity.
     TemporaryReflectedSceneCopy resavedAgain;
-    ASSERT_TRUE(SaveWorld(reloaded, resavedAgain.Path().string()));
+    ASSERT_TRUE(SaveWorld(reloaded, PathToUtf8(resavedAgain.Path())));
     const nlohmann::json resavedAgainDocument = nlohmann::json::parse(ReadFixtureText(resavedAgain.Path()));
     EXPECT_TRUE(resavedAgainDocument["version"] == resavedDocument["version"]);
     EXPECT_TRUE(SameEntitiesById(resavedDocument, resavedAgainDocument));
@@ -330,8 +349,8 @@ TEST(SceneMigration_ReflectedFutureVersionFixtureFailsClosedWithVersionedError)
     World world;
     world.CreateEntity("Open Document");
     std::string error;
-    EXPECT_FALSE(LoadWorld(world, fixturePath.string(), &error));
-    EXPECT_STR_CONTAINS(error, fixturePath.string());
+    EXPECT_FALSE(LoadWorld(world, PathToUtf8(fixturePath), &error));
+    EXPECT_STR_CONTAINS(error, PathToUtf8(fixturePath));
     EXPECT_STR_CONTAINS(error, "'version' 2 is unsupported");
     EXPECT_STR_CONTAINS(error, "reads reflected scene version 1");
     EXPECT_STR_CONTAINS(error, "'sceneVersion': 1");

@@ -6,11 +6,15 @@
 
 #include <nlohmann_json.h>
 #include <algorithm>
+#include <cstdint>
 #include <format>
 #include <limits>
+#include <optional>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 using nlohmann::json;
 
@@ -21,6 +25,33 @@ namespace Spark
 
     namespace
     {
+        // Serialized ids and parents are the full entity value, version bits
+        // included, so they span the whole unsigned width of entt::entity. A
+        // recycled slot whose version reaches 2048 already has an id >= 2^31.
+        static_assert(std::is_same_v<std::underlying_type_t<entt::entity>, uint32_t>,
+                      "the reflected scene format stores entity ids as unsigned 32-bit integers");
+
+        json EntityIdToJson(entt::entity entity)
+        {
+            return json(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
+        }
+
+        // Accept an integer in 0..UINT32_MAX that does not name entt::null.
+        bool ReadSerializedEntityId(const json& value, uint32_t& id)
+        {
+            uint64_t raw = 0;
+            if (value.is_number_unsigned())
+                raw = value.get<uint64_t>();
+            else if (value.is_number_integer() && value.get<int64_t>() >= 0)
+                raw = static_cast<uint64_t>(value.get<int64_t>());
+            else
+                return false;
+            if (raw > std::numeric_limits<uint32_t>::max())
+                return false;
+            id = static_cast<uint32_t>(raw);
+            return static_cast<entt::entity>(id) != entt::null;
+        }
+
         // Emit one component's fields via reflection.
         json SerializeComponentFields(const std::string& typeName, const void* comp)
         {
@@ -106,16 +137,15 @@ namespace Spark
         for (auto&& [entity] : entityStorage->each())
         {
             json ent;
-            ent["id"] = static_cast<int32_t>(static_cast<uint32_t>(entity));
+            ent["id"] = EntityIdToJson(entity);
             if (const NameComponent* nc = world.GetComponent<NameComponent>(entity))
                 ent["name"] = nc->name;
             else
                 ent["name"] = "";
-            int parentId = -1;
+            ent["parent"] = -1;
             if (const Transform* t = world.GetComponent<Transform>(entity))
                 if (t->parent != entt::null)
-                    parentId = static_cast<int>(static_cast<uint32_t>(t->parent));
-            ent["parent"] = parentId;
+                    ent["parent"] = EntityIdToJson(t->parent);
 
             json comps = json::array();
             for (const std::string& type : names)
@@ -174,6 +204,7 @@ namespace Spark
             // idMap would then silently overwrite the first mapping and parent
             // links could target the wrong entity.
             std::vector<uint32_t> serializedIds(entities.size());
+            std::vector<std::optional<uint32_t>> serializedParents(entities.size());
             std::unordered_set<uint32_t> reservedIds;
             for (size_t index = 0; index < entities.size(); ++index)
             {
@@ -183,22 +214,23 @@ namespace Spark
                     return Reject(error, std::format("{} must be a JSON object, found {}", DescribeEntity(index, ent),
                                                      JsonTypeName(ent)));
                 }
-                if (ent.contains("parent") && !ent["parent"].is_number_integer())
+                if (ent.contains("parent"))
                 {
-                    return Reject(error, std::format("{} has parent {}; parent must be an integer entity id or -1",
-                                                     DescribeEntity(index, ent), ent["parent"].dump()));
+                    const json& parentValue = ent["parent"];
+                    uint32_t parentId = 0;
+                    if (ReadSerializedEntityId(parentValue, parentId))
+                        serializedParents[index] = parentId;
+                    else if (!parentValue.is_number_integer() || parentValue.get<int64_t>() != -1)
+                    {
+                        return Reject(error, std::format("{} has parent {}; parent must be an integer entity id or -1",
+                                                         DescribeEntity(index, ent), parentValue.dump()));
+                    }
                 }
                 if (!ent.contains("id"))
                     continue;
                 const json& idValue = ent["id"];
-                const bool integerId = idValue.is_number_integer() || idValue.is_number_unsigned();
-                const int64_t rawId = integerId && !(idValue.is_number_unsigned() &&
-                                                     idValue.get<uint64_t>() > std::numeric_limits<uint32_t>::max())
-                                          ? idValue.get<int64_t>()
-                                          : -1;
-                const uint32_t id = static_cast<uint32_t>(rawId);
-                if (rawId < 0 || static_cast<uint64_t>(rawId) > std::numeric_limits<uint32_t>::max() ||
-                    static_cast<entt::entity>(id) == entt::null)
+                uint32_t id = 0;
+                if (!ReadSerializedEntityId(idValue, id))
                 {
                     return Reject(error,
                                   std::format("{} has id {}; ids must be integers in 0..{}", DescribeEntity(index, ent),
@@ -338,9 +370,8 @@ namespace Spark
                             static_cast<Camera*>(comp)->isMainCamera = true;
                     }
                 }
-                const int parentId = ent.value("parent", -1);
-                if (parentId >= 0)
-                    pending.push_back({e, (uint32_t)parentId});
+                if (const std::optional<uint32_t>& parentId = serializedParents[entityIndex - 1])
+                    pending.push_back({e, *parentId});
             }
 
             // Second pass: resolve parents now that all ids exist.
