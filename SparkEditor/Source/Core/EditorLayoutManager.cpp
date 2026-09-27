@@ -347,18 +347,32 @@ namespace SparkEditor
                     ++pos;
             }
 
-            // Find a key `"name"` at any position >= pos; move pos to the
+            // Find a key `"name":` at any position >= pos; move pos to the
             // character after the closing quote + colon. Returns true if
-            // the key was found.
+            // the key was found. Only a match followed by ':' is a key: a
+            // string value equal to the key text ("name": "version") is
+            // followed by ',' or '}' and is skipped, so a layout or panel
+            // named after a header key cannot shadow that key.
             bool FindKey(const std::string& key)
             {
                 const std::string quoted = std::string("\"") + key + "\"";
-                const size_t found = s.find(quoted, pos);
-                if (found == std::string::npos)
-                    return false;
-                pos = found + quoted.size();
-                SkipWhitespaceAndPunct();
-                return true;
+                size_t found = s.find(quoted, pos);
+                while (found != std::string::npos)
+                {
+                    size_t after = found + quoted.size();
+                    while (after < s.size() && std::isspace(static_cast<unsigned char>(s[after])))
+                    {
+                        ++after;
+                    }
+                    if (after < s.size() && s[after] == ':')
+                    {
+                        pos = after;
+                        SkipWhitespaceAndPunct();
+                        return true;
+                    }
+                    found = s.find(quoted, found + 1);
+                }
+                return false;
             }
 
             std::string ReadString()
@@ -556,7 +570,7 @@ namespace SparkEditor
         }
         const size_t panelsKey = cursor.pos;
 
-        // Only a "version" before "panels" belongs to the layout header; a panel could be named "version".
+        // Only a "version" key before "panels" belongs to the layout header; later keys are inside panel objects.
         cursor.pos = 0;
         long long version = kLayoutFormatVersion; // no version key: the legacy dialect, identical to 1
         if (cursor.FindKey("version") && cursor.pos < panelsKey)

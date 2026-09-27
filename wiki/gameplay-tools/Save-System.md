@@ -447,9 +447,13 @@ reads a file without a version as the legacy dialect of version 1. A newer
 version, a damaged panel or a truncated file fails closed. The load changes no
 panel, and `GetLastError()` names the file and the supported version.
 `EditorUI` prints that reason to the console. Saves replace the layout file
-atomically, so a failed or interrupted save keeps the previous file. Fixtures
-are under `Tests/Fixtures/Compatibility/EditorState/Layouts/`, and the tests are
-`EditorStateMigration_*Layout*` (`SparkEditorStateCompatibilityTests`).
+atomically, so a failed or interrupted save keeps the previous file. The reader
+matches keys only where a `:` follows the quoted name, so a layout named
+`version` or described as `panels` (or a panel named after one of its keys)
+cannot shadow the header keys and still loads. Fixtures are under
+`Tests/Fixtures/Compatibility/EditorState/Layouts/`, and the tests are
+`EditorStateMigration_*Layout*` (`SparkEditorStateCompatibilityTests`) and
+`EditorLayoutMgr_ValuesNamedLikeKeysDoNotShadowKeys`.
 
 SAVE-230 remains broader than this save-format slice. Local production-linked
 tests now cover the v4 CRC envelope, the OD-03 N/N-1 window (v3 migrates; v1/v2

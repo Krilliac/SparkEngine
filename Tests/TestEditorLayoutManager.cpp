@@ -554,6 +554,56 @@ TEST(EditorLayoutMgr_FailedSaveKeepsPreviousLayoutFile)
     std::filesystem::remove_all(dir, ec);
 }
 
+TEST(EditorLayoutMgr_ValuesNamedLikeKeysDoNotShadowKeys)
+{
+    // A layout named "version" with the description "panels", and a panel named "sizeX", write those
+    // words as string values ahead of the real keys. The reader must match keys, not values.
+    const std::string dir = MakeLayoutDir("keynames");
+    {
+        SparkEditor::EditorLayoutManager writer;
+        writer.Initialize(dir);
+        writer.RegisterPanel(MakePanel("Hierarchy", 0, 0, 111, 600));
+        writer.RegisterPanel(MakePanel("sizeX", 800, 0, 321, 600));
+        ASSERT_TRUE(writer.SaveCurrentLayout("version", "panels"));
+    }
+
+    SparkEditor::EditorLayoutManager reader;
+    reader.Initialize(dir);
+    reader.RegisterPanel(MakePanel("Hierarchy", 0, 0, 300, 600));
+    reader.RegisterPanel(MakePanel("sizeX", 800, 0, 250, 600));
+    EXPECT_TRUE(reader.LoadLayout("version"));
+    EXPECT_TRUE(reader.GetLastError().empty());
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 111.0f, 1e-3f);
+    EXPECT_NEAR(reader.GetPanelConfig("sizeX")->sizeX, 321.0f, 1e-3f);
+
+    const auto layouts = reader.GetSavedLayouts();
+    ASSERT_EQ(layouts.size(), static_cast<size_t>(1));
+    EXPECT_EQ(layouts[0].description, std::string("panels"));
+
+    // The same file declaring a newer format still fails closed, without applying any panel.
+    const std::filesystem::path file = std::filesystem::path(dir) / "version.json";
+    std::string text;
+    {
+        std::ifstream input(file, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+    const std::string declared = "\"version\": 1,";
+    const size_t at = text.find(declared);
+    ASSERT_TRUE(at != std::string::npos);
+    text.replace(at, declared.size(), "\"version\": 2,");
+    {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output << text;
+    }
+    reader.SetPanelSize("Hierarchy", 5.0f, 5.0f);
+    EXPECT_FALSE(reader.LoadLayout("version"));
+    EXPECT_STR_CONTAINS(reader.GetLastError(), "is layout format version 2");
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 5.0f, 1e-3f);
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
 TEST(EditorLayoutMgr_ConsoleStatusContainsName)
 {
     SparkEditor::EditorLayoutManager mgr;
