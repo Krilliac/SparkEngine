@@ -8,6 +8,7 @@
  */
 
 #include "BuildPipeline.h"
+#include "Utils/JsonUtils.h"
 
 #include <algorithm>
 #include <atomic>
@@ -468,6 +469,51 @@ namespace SparkEditor
             }
             std::sort(scenes.begin(), scenes.end());
             return scenes.empty() ? fs::path{} : scenes.front();
+        }
+
+        /// The project's authored `defaultScene` as its packaged `Scenes/...` copy,
+        /// or empty when the project names none that the package contains.
+        fs::path FindPackagedDefaultScene(const fs::path& projectRoot, const fs::path& packageRoot)
+        {
+            // Exactly one .sparkproject is the authoritative project document.
+            fs::path projectFile;
+            std::error_code ec;
+            for (fs::directory_iterator it(projectRoot, ec), end; it != end && !ec; it.increment(ec))
+            {
+                std::error_code typeError;
+                if (!it->is_regular_file(typeError) || typeError || it->path().extension() != ".sparkproject")
+                    continue;
+                if (!projectFile.empty())
+                    return {};
+                projectFile = it->path();
+            }
+            if (ec || projectFile.empty())
+                return {};
+
+            std::ifstream file(projectFile, std::ios::binary);
+            if (!file)
+                return {};
+            const std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            Spark::Json::Value document;
+            if (!Spark::Json::ParseStrict(content, &document) || !document.IsObject() ||
+                !document.HasKey("defaultScene") || !document["defaultScene"].IsString())
+                return {};
+
+            const std::string& declared = document["defaultScene"].AsString();
+            const fs::path relative =
+                fs::path(std::u8string(reinterpret_cast<const char8_t*>(declared.data()), declared.size()))
+                    .lexically_normal();
+            if (relative.empty() || relative.has_root_path() || *relative.begin() != "Scenes" ||
+                relative.extension() != ".sparkscene")
+                return {};
+            for (const auto& component : relative)
+            {
+                if (component == "..")
+                    return {};
+            }
+
+            const fs::path packaged = packageRoot / relative;
+            return fs::is_regular_file(packaged, ec) && !ec ? packaged : fs::path{};
         }
 
         std::string ManifestModuleFilename(const fs::path& projectRoot)
@@ -1345,14 +1391,37 @@ namespace SparkEditor
 #endif
         }
 
-        const fs::path reflectedScene = FindFirstReflectedScene(destination / "Scenes");
+        // The startup scene is the project's authored defaultScene when it names
+        // one the package contains, else the first reflected scene.
+        fs::path reflectedScene = FindPackagedDefaultScene(sourceRoot, destination);
+        if (reflectedScene.empty())
+            reflectedScene = FindFirstReflectedScene(destination / "Scenes");
         bool hasScenePreview = false;
         if (!reflectedScene.empty())
         {
-            const fs::path startupScene = destination / "Startup.sparkscene";
-            fs::copy_file(reflectedScene, startupScene, fs::copy_options::overwrite_existing, ec);
+            // <package>/Startup.sparkscene is the game-module contract: template
+            // modules load it before their own fallback scene.
+            fs::copy_file(reflectedScene, destination / "Startup.sparkscene", fs::copy_options::overwrite_existing, ec);
             if (ec)
                 return fail("Failed to stage reflected startup scene: " + ec.message());
+
+            // The preview host needs the scene inside the packaged Scenes/
+            // directory beside Assets/: that is how the runtime derives a
+            // project root and resolves the scene's Assets/... references.
+            const fs::path previewScene = destination / "Scenes" / "Startup.sparkscene";
+            const bool alreadyStaged = fs::equivalent(reflectedScene, previewScene, ec) && !ec;
+            ec.clear();
+            if (!alreadyStaged)
+            {
+                // Never overwrite a different authored scene that uses the
+                // staging name: the game module may load it by path.
+                if (fs::exists(previewScene, ec) || ec)
+                    return fail("Project scene Scenes/Startup.sparkscene is not the startup scene; rename it or "
+                                "make it the project's defaultScene");
+                fs::copy_file(reflectedScene, previewScene, fs::copy_options::none, ec);
+                if (ec)
+                    return fail("Failed to stage reflected scene-preview scene: " + ec.message());
+            }
 
             const fs::path previewDirectory = destination / "ScenePreview";
             fs::create_directories(previewDirectory, ec);
@@ -1368,14 +1437,14 @@ namespace SparkEditor
             std::ostringstream sceneLauncher;
 #ifdef _WIN32
             sceneLauncher << "@echo off\r\nsetlocal\r\npushd \"%~dp0\"\r\n"
-                          << "\"ScenePreview\\" << previewExecutable << "\" -scene Startup.sparkscene\r\n"
+                          << "\"ScenePreview\\" << previewExecutable << "\" -scene Scenes/Startup.sparkscene\r\n"
                           << "set \"spark_exit=%ERRORLEVEL%\"\r\npopd\r\nexit /b %spark_exit%\r\n";
             if (!WriteTextFile(destination / "LaunchScene.cmd", sceneLauncher.str(), detail))
                 return fail(detail);
 #else
             sceneLauncher << "#!/bin/sh\nset -eu\nSCRIPT_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
                           << "cd \"$SCRIPT_DIR\"\nexec \"./ScenePreview/" << previewExecutable
-                          << "\" -scene Startup.sparkscene \"$@\"\n";
+                          << "\" -scene Scenes/Startup.sparkscene \"$@\"\n";
             const fs::path sceneLauncherPath = destination / "LaunchScene.sh";
             if (!WriteTextFile(sceneLauncherPath, sceneLauncher.str(), detail) ||
                 !MakeExecutable(sceneLauncherPath, detail))
@@ -1416,8 +1485,9 @@ namespace SparkEditor
         }
         if (hasScenePreview)
             readme << "The LaunchScene launcher runs an isolated host with no module manifest and safely passes the "
-                      "staged Startup.sparkscene to -scene. This is a reflected-scene preview, separate from module "
-                      "execution.\n";
+                      "staged Scenes/Startup.sparkscene (the project's defaultScene when it names one) to -scene, so "
+                      "the scene's Assets/... references resolve against this package. This is a reflected-scene "
+                      "preview, separate from module execution.\n";
         else
             readme << "No .sparkscene file was present, so no reflected-scene preview launcher was generated.\n";
         if (!WriteTextFile(destination / "PACKAGE_README.txt", readme.str(), detail))
