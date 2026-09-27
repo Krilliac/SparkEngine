@@ -96,6 +96,11 @@ namespace
             return failures;
 
         failures += Check(RunRealGit(repository, "init --quiet") == 0, "real git init failed");
+        // A global core.autocrlf/safecrlf can print line-ending warnings, which
+        // ProcessRunner merges into status output; keep the fixture neutral.
+        failures += Check(RunRealGit(repository, "config core.autocrlf false") == 0 &&
+                              RunRealGit(repository, "config core.safecrlf false") == 0,
+                          "real git config failed");
         failures += Check(WriteTextFile(repository / "tracked.txt", "tracked\n"), "could not write tracked file");
         failures += Check(RunRealGit(repository, "add tracked.txt") == 0, "real git add failed");
         failures += Check(RunRealGit(repository, "-c user.name=SparkInstallerTests -c user.email=tests@invalid "
