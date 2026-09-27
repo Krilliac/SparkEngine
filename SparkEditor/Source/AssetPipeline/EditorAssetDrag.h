@@ -10,10 +10,13 @@
 
 #pragma once
 
+// EditorAssetReference.h uses std::string without including <string>; it must
+// arrive first because this header is the first include of EditorAssetDrag.cpp.
+#include <string>
+
 #include "EditorAssetReference.h"
 
 #include <filesystem>
-#include <string>
 
 namespace SparkEditor
 {
