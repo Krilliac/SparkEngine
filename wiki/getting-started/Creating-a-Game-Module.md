@@ -330,7 +330,7 @@ Module manifest whose loader consumes each non-empty `path` entry:
 
 For the engine-directory fallback, place `spark.modules.json` next to the executable: `build/bin/<Config>/` for a multi-config root build and `build/bin/` for a single-config root build. An explicit `-manifest <path>` may name a regular manifest file elsewhere.
 
-### Per-module `module.json` (in-tree modules)
+### Per-module module.json (in-tree modules)
 
 Every directory under `GameModules/` must carry a `module.json` that records per-module facts. The runtime loader does not read it; `python3 tools/site-data/validate.py --modules` (through `tools/site-data/module_content.py`) and the `ModuleManifest_Contract` CTest do. Release-profile policy (`profileApplicability`, evidence bindings) lives only in `tools/module-evidence/manifest.json`, so any key outside the schema below is rejected.
 
