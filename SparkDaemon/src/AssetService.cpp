@@ -5,6 +5,8 @@
 
 #include "AssetService.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -12,6 +14,11 @@
 
 namespace Spark::Daemon
 {
+    namespace
+    {
+        /// Size of the `[u32 pathLen]` prefix at the start of every `.asset` file.
+        constexpr size_t kBlobHeaderBytes = 4;
+    } // namespace
 
     std::optional<size_t> AssetService::Initialize(const std::filesystem::path& cacheDir)
     {
@@ -39,6 +46,11 @@ namespace Spark::Daemon
             Key key;
             std::vector<uint8_t> blob;
             if (!ReadBlobFile(entry.path(), key, blob))
+                continue;
+            // Honour a budget configured before Initialize: entries past it stay
+            // on disk but are not pulled into memory, so startup cannot exceed
+            // the cap the operator asked for.
+            if (m_maxBytes != 0 && blob.size() > m_maxBytes - std::min(m_totalBytes, m_maxBytes))
                 continue;
 
             m_totalBytes += blob.size();
@@ -367,32 +379,39 @@ namespace Spark::Daemon
             return false;
         }
 
-        uint8_t lenBytes[4];
+        // Size-first validation. Every length in the header is checked against
+        // the real file size before anything is allocated, so a corrupt or
+        // planted header cannot request more memory than the file holds. No
+        // legitimate entry can exceed one wire frame: PutAsset carries the path
+        // and the blob inside a single kMaxPayloadSize payload.
+        std::error_code sizeEc;
+        const std::uintmax_t fileSize = std::filesystem::file_size(file, sizeEc);
+        if (sizeEc || fileSize < kBlobHeaderBytes || fileSize > kMaxPayloadSize)
+            return false;
+        const size_t total = static_cast<size_t>(fileSize);
+
+        uint8_t lenBytes[kBlobHeaderBytes];
         in.read(reinterpret_cast<char*>(lenBytes), sizeof(lenBytes));
         if (!in)
             return false;
-        uint32_t pathLen = static_cast<uint32_t>(lenBytes[0]) | (static_cast<uint32_t>(lenBytes[1]) << 8) |
-                           (static_cast<uint32_t>(lenBytes[2]) << 16) | (static_cast<uint32_t>(lenBytes[3]) << 24);
+        const uint32_t pathLen = static_cast<uint32_t>(lenBytes[0]) | (static_cast<uint32_t>(lenBytes[1]) << 8) |
+                                 (static_cast<uint32_t>(lenBytes[2]) << 16) |
+                                 (static_cast<uint32_t>(lenBytes[3]) << 24);
+        if (pathLen > total - kBlobHeaderBytes)
+            return false;
 
         outKey.path.resize(pathLen);
         if (pathLen > 0)
             in.read(outKey.path.data(), static_cast<std::streamsize>(pathLen));
-        if (!in && pathLen > 0)
+        if (!in)
             return false;
 
-        // Remaining bytes = blob.
-        in.seekg(0, std::ios::end);
-        auto total = static_cast<size_t>(in.tellg());
-        size_t header = 4 + pathLen;
-        if (total < header)
-            return false;
-        size_t blobSize = total - header;
-
-        in.seekg(static_cast<std::streamoff>(header), std::ios::beg);
+        // Remaining bytes = blob. The stream already sits right after the path.
+        const size_t blobSize = total - kBlobHeaderBytes - pathLen;
         outBlob.resize(blobSize);
         if (blobSize > 0)
             in.read(reinterpret_cast<char*>(outBlob.data()), static_cast<std::streamsize>(blobSize));
-        return !(!in && blobSize > 0);
+        return static_cast<bool>(in);
     }
 
     void AssetService::DeleteBlobFile(const Key& key)

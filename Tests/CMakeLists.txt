@@ -584,6 +584,8 @@ add_executable(SparkTests
     TestDaemonLRU.cpp
     # Codex PR #478 review fixes (thread reap, fatal error, strict filename parsing)
     TestDaemonCodexFixes.cpp
+    # Security hardening of the daemon cache services (cache-file validation, persistence)
+    TestSecDaemonCacheHardening.cpp
     # Stats formatter used by the daemon.stats console command (Phase 6)
     TestDaemonDiagnostics.cpp
     # Comprehensive subsystem coverage
@@ -1928,6 +1930,15 @@ foreach(_spark_data120_selector IN LISTS _spark_data120_recovery_selectors)
         RUN_SERIAL TRUE
         TIMEOUT 120)
 endforeach()
+
+# Security: SparkDaemon shader/asset cache hardening. The pinned count fails the
+# lane if the family silently stops being compiled in.
+add_test(NAME SecDaemonCacheHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SecDaemonCacheHardening PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SecDaemonCache_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "daemon;security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
 
 # OPS-110: SparkServer operator health (build identity, tick percentiles, RSS, drain ordering).
 if(TARGET SparkServerCore)

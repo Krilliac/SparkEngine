@@ -5,6 +5,8 @@
 
 #include "ShaderService.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -40,12 +42,21 @@ namespace Spark::Daemon
             if (!parsed)
                 continue;
 
+            // Size-first validation: no legitimate blob exceeds one wire frame,
+            // because PutCacheEntry carries it inside a single kMaxPayloadSize
+            // payload. A budget configured before Initialize is honoured too, so
+            // startup never pulls more into memory than the operator allowed.
+            std::error_code sizeEc;
+            const std::uintmax_t fileSize = entry.file_size(sizeEc);
+            if (sizeEc || fileSize > kMaxPayloadSize)
+                continue;
+            const auto size = static_cast<size_t>(fileSize);
+            if (m_maxBytes != 0 && size > m_maxBytes - std::min(m_totalBytes, m_maxBytes))
+                continue;
+
             std::ifstream in(entry.path(), std::ios::binary);
             if (!in)
                 continue;
-            in.seekg(0, std::ios::end);
-            auto size = static_cast<size_t>(in.tellg());
-            in.seekg(0, std::ios::beg);
 
             std::vector<uint8_t> blob(size);
             if (size > 0)
