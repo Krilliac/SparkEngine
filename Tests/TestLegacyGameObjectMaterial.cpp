@@ -156,8 +156,23 @@ TEST(LegacyGameObject_AuthoredMaterialChangesBasicDrawBinding)
 
 TEST(BasicMaterial_LoadsTextureOnFreshRenderThreadWithoutCallerCom)
 {
-    HRESULT apartmentBeforeDevice = E_FAIL;
-    HRESULT apartmentBeforeLoad = E_FAIL;
+    // "Without caller COM" means this thread never called CoInitializeEx. A
+    // fresh thread reports CO_E_NOTINITIALIZED only while no other thread in
+    // the process holds the MTA; once any thread does (other tests, OS or
+    // driver worker threads), Windows places every uninitialized thread in the
+    // *implicit* MTA. Both states mean the caller established no apartment;
+    // an explicit STA/MTA (qualifier NONE) would still fail this check.
+    const auto hasNoCallerApartment = []
+    {
+        APTTYPE apartmentType{};
+        APTTYPEQUALIFIER qualifier{};
+        const HRESULT result = CoGetApartmentType(&apartmentType, &qualifier);
+        return result == CO_E_NOTINITIALIZED ||
+               (result == S_OK && apartmentType == APTTYPE_MTA && qualifier == APTTYPEQUALIFIER_IMPLICIT_MTA);
+    };
+
+    bool noApartmentBeforeDevice = false;
+    bool noApartmentBeforeLoad = false;
     HRESULT deviceResult = E_FAIL;
     HRESULT graphicsResult = E_FAIL;
     bool loaded = false;
@@ -165,9 +180,7 @@ TEST(BasicMaterial_LoadsTextureOnFreshRenderThreadWithoutCallerCom)
     std::thread renderThread(
         [&]
         {
-            APTTYPE apartmentType{};
-            APTTYPEQUALIFIER qualifier{};
-            apartmentBeforeDevice = CoGetApartmentType(&apartmentType, &qualifier);
+            noApartmentBeforeDevice = hasNoCallerApartment();
 
             ComPtr<ID3D11Device> device;
             ComPtr<ID3D11DeviceContext> context;
@@ -182,16 +195,16 @@ TEST(BasicMaterial_LoadsTextureOnFreshRenderThreadWithoutCallerCom)
             if (FAILED(graphicsResult))
                 return;
 
-            apartmentBeforeLoad = CoGetApartmentType(&apartmentType, &qualifier);
+            noApartmentBeforeLoad = hasNoCallerApartment();
             const auto* material =
                 graphics.GetOrLoadBasicMaterial("Assets/Materials/Terrain_Dirt.json", SPARK_TEST_SOURCE_DIR);
             loaded = material != nullptr && material->srv != nullptr;
         });
     renderThread.join();
 
-    EXPECT_TRUE(apartmentBeforeDevice == CO_E_NOTINITIALIZED);
+    EXPECT_TRUE(noApartmentBeforeDevice);
     EXPECT_TRUE(SUCCEEDED(deviceResult));
     EXPECT_TRUE(SUCCEEDED(graphicsResult));
-    EXPECT_TRUE(apartmentBeforeLoad == CO_E_NOTINITIALIZED);
+    EXPECT_TRUE(noApartmentBeforeLoad);
     EXPECT_TRUE(loaded);
 }

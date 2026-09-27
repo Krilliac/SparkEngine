@@ -151,6 +151,11 @@ class ParseCtestTests(unittest.TestCase):
         self.assertEqual(stats, {"number_executed_units": 5, "peak_rss_mb": 31})
 
 
+# The stand-in fuzzer is a "#!" script whose executability the tests flip with
+# POSIX mode bits; Windows CreateProcess honours neither, and the libFuzzer
+# targets this runner drives only build on non-Apple UNIX with Clang
+# (FuzzerTests/CMakeLists.txt), so there is no Windows campaign to exercise.
+@unittest.skipUnless(os.name == "posix", "stand-in fuzzer needs POSIX exec semantics; fuzz targets are UNIX-only")
 @unittest.skipUnless(_have_cmake(), "cmake/ctest not available")
 class CampaignEndToEnd(unittest.TestCase):
     def setUp(self) -> None:

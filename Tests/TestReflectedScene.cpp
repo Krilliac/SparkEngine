@@ -332,8 +332,14 @@ TEST(ReflectedScene_SchemaRejectionExplainsTheOffendingElement)
     EXPECT_FALSE(DeserializeInto(world, "[]", SceneDeserializeMode::Permissive, &error));
     EXPECT_STR_CONTAINS(error, "root must be a JSON object, found array");
 
-    EXPECT_FALSE(DeserializeInto(world, "not a scene", SceneDeserializeMode::Permissive, &error));
+    EXPECT_FALSE(DeserializeInto(world, "null", SceneDeserializeMode::Permissive, &error));
     EXPECT_STR_CONTAINS(error, "root must be a JSON object, found null");
+
+    // Text that is not JSON at all is a parse failure, not a null root: the strict
+    // vendored parser throws instead of yielding a partial (null) value.
+    EXPECT_FALSE(DeserializeInto(world, "not a scene", SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "scene could not be read");
+    EXPECT_STR_CONTAINS(error, "invalid literal");
 
     EXPECT_FALSE(DeserializeInto(world, R"json({"version":1})json", SceneDeserializeMode::Permissive, &error));
     EXPECT_STR_CONTAINS(error, "no 'entities' array");

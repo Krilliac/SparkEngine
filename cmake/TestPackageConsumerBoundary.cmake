@@ -142,6 +142,17 @@ _expect("install prefix inside the build tree is allowed"
     ""
     "/usr/bin/c++ app.o -o app -Wl,-rpath,${_prefix}/lib ${_prefix}/lib/libSparkEngineLib.a\n")
 
+# Windows paths are case-insensitive, so a different spelling of the same
+# source directory must still be caught (a file that does not exist, so no
+# resolved real path can mask the spelled comparison).
+if(CMAKE_HOST_WIN32)
+    string(TOUPPER "${_src}" _src_upper)
+    _expect("differently cased path on a Windows host"
+        "CMakeFiles/app.dir/main.cpp.o.d"
+        "${_src_upper}/SPARKENGINE/SOURCE/CORE/ABSENT.H"
+        "CMakeFiles/app.dir/main.cpp.o: ${_src_upper}/SPARKENGINE/SOURCE/CORE/ABSENT.H\n")
+endif()
+
 # A checkout reached through a symlink must not hide a leak through the real path.
 file(CREATE_LINK "${_src}" "${SPARK_TEST_ROOT}/checkout-link" RESULT _link_result SYMBOLIC)
 if(_link_result STREQUAL "0")

@@ -295,10 +295,17 @@ class PeSymbolTests(ToolTestCase):
         self.assertEqual(image["symbolKey"], image["pdbGuid"].replace("-", "") + f"{image['pdbAge']:X}")
         if LLVM_READOBJ:
             directory = _check(LLVM_READOBJ, "--coff-debug-directory", dll)
-            guid = re.search(r"PDBGUID: \(([0-9A-F ]+)\)", directory)
-            assert guid is not None
-            raw = bytes.fromhex(guid.group(1).replace(" ", ""))
-            self.assertEqual(image["pdbGuid"], str(tool.uuid.UUID(bytes_le=raw)).upper())
+            # llvm-readobj prints the GUID either as its raw on-disk bytes,
+            # "(DC FF 60 11 ...)", or (newer LLVM) already formatted,
+            # "{1160FFDC-4BE4-...}".
+            guid = re.search(r"PDBGUID: (?:\(([0-9A-F ]+)\)|\{([0-9A-F-]{36})\})", directory)
+            assert guid is not None, directory
+            if guid.group(1) is not None:
+                raw = bytes.fromhex(guid.group(1).replace(" ", ""))
+                expected_guid = str(tool.uuid.UUID(bytes_le=raw)).upper()
+            else:
+                expected_guid = guid.group(2).upper()
+            self.assertEqual(image["pdbGuid"], expected_guid)
             self.assertIn(f"PDBAge: {image['pdbAge']}", directory)
             self.assertIn("PDBFileName: fixture.pdb", directory)
         if LLVM_PDBUTIL:

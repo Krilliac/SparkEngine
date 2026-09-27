@@ -307,8 +307,11 @@ class HarnessTests(unittest.TestCase):
         self.assertTrue(any("status 2" in f for f in outcome.failures), outcome.failures)
 
     def test_launch_line_is_shared_with_the_tick_collector(self) -> None:
-        self.assertEqual(engine_command(Path("/e"), Path("/m.so"), 7200),
-                         ["/e", "-headless", "-game", "/m.so", "-require-game", "-test-frames", "7200"])
+        # The launch line carries each path in the host's native spelling
+        # (str(Path)), so "/e" is "\e" on Windows; compare against that.
+        engine, module = Path("/e"), Path("/m.so")
+        self.assertEqual(engine_command(engine, module, 7200),
+                         [str(engine), "-headless", "-game", str(module), "-require-game", "-test-frames", "7200"])
         self.assertEqual(soak_tool.SoakConfig(duration_s=120.0).frames, 7200)
 
     def test_inputs_rejected_before_launch(self) -> None:

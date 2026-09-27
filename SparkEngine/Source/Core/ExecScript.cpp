@@ -192,8 +192,10 @@ namespace Spark
                                        SimpleConsole& console) const
     {
         // Automated smokes read this trail: the Windows GUI build has no
-        // stdout and the file logger does not carry console traffic.
-        std::ofstream audit(m_auditPath, std::ios::app);
+        // stdout and the file logger does not carry console traffic. Binary mode
+        // keeps the line format byte-identical (LF) on every platform; text mode
+        // on Windows would emit CRLF and break exact-match consumers.
+        std::ofstream audit(m_auditPath, std::ios::app | std::ios::binary);
         if (!audit)
             return;
         audit << "frame " << frameCount << " t=" << std::format("{:.1f}", elapsedSeconds) << "s | "

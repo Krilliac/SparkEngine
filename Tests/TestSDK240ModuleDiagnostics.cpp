@@ -103,19 +103,23 @@ TEST(SDK240_SidecarSDKMismatchNamesModuleAndHostVersions)
     EXPECT_FALSE(manager.LoadModule(SPARK_TEST_MISMATCHED_MODULE_PATH));
 
     // The fixture's sidecar advertises SPARK_SDK_VERSION + 1 (Tests/CMakeLists.txt).
-    const std::string moduleVersion = "module sdk_version=" + std::to_string(SPARK_SDK_VERSION + 1);
-    const std::string hostVersion = "host sdk_version=" + std::to_string(SPARK_SDK_VERSION);
+    // Diagnostic wording is the one SparkSDK/README.md documents:
+    // "field '<sidecar key>' host expects <host value>, module declares <module value>".
+    const std::string versions = "field 'sdk_version' host expects " + std::to_string(SPARK_SDK_VERSION) +
+                                 ", module declares " + std::to_string(SPARK_SDK_VERSION + 1);
     const std::string error = manager.GetLastLoadError();
     EXPECT_STR_CONTAINS(error, "rejected before OS load");
     EXPECT_STR_CONTAINS(error, "SDK ABI version mismatch");
-    EXPECT_STR_CONTAINS(error, moduleVersion);
-    EXPECT_STR_CONTAINS(error, hostVersion);
-    EXPECT_TRUE(logged.Contains(moduleVersion));
-    EXPECT_TRUE(logged.Contains(hostVersion));
+    EXPECT_STR_CONTAINS(error, versions);
+    EXPECT_TRUE(logged.Contains("SDK ABI version mismatch: " + versions));
     EXPECT_TRUE(manager.GetLoadedModuleInfo().empty());
 }
 
-TEST(SDK240_SidecarRuntimeABIMismatchNamesBothValuesAndSDKVersions)
+// CheckModuleCompatibility() tests sdk_version before runtime_abi_version and
+// every toolchain field, so any later-field rejection implies both sides share
+// one SDK version; the diagnostic names the failing field's two values and
+// must not blame the SDK version.
+TEST(SDK240_SidecarRuntimeABIMismatchNamesBothValuesAfterSDKMatch)
 {
     ScopedLoggerBaseline loggerBaseline;
     LoggedErrors logged;
@@ -127,14 +131,15 @@ TEST(SDK240_SidecarRuntimeABIMismatchNamesBothValuesAndSDKVersions)
     ModuleManager manager;
     EXPECT_FALSE(manager.LoadModule(modulePath.string()));
 
+    const std::string versions = "field 'runtime_abi_version' host expects " +
+                                 std::to_string(SPARK_MODULE_RUNTIME_ABI_VERSION) + ", module declares " +
+                                 moduleRuntime;
     const std::string error = manager.GetLastLoadError();
-    EXPECT_STR_CONTAINS(error, "module runtime ABI version mismatch");
-    EXPECT_STR_CONTAINS(error, "module runtime_abi_version=" + moduleRuntime);
-    EXPECT_STR_CONTAINS(error, "host runtime_abi_version=" + std::to_string(SPARK_MODULE_RUNTIME_ABI_VERSION));
-    // Whatever field failed, the SDK versions of both sides are named too.
-    EXPECT_STR_CONTAINS(error, "module sdk_version=" + std::to_string(SPARK_SDK_VERSION));
-    EXPECT_STR_CONTAINS(error, "host sdk_version=" + std::to_string(SPARK_SDK_VERSION));
-    EXPECT_TRUE(logged.Contains("module runtime_abi_version=" + moduleRuntime));
+    EXPECT_STR_CONTAINS(error, "rejected before OS load");
+    EXPECT_STR_CONTAINS(error, "module runtime ABI version mismatch: " + versions);
+    EXPECT_TRUE(error.find("SDK ABI version mismatch") == std::string::npos);
+    EXPECT_TRUE(error.find("'sdk_version'") == std::string::npos);
+    EXPECT_TRUE(logged.Contains("module runtime ABI version mismatch: " + versions));
     EXPECT_TRUE(manager.GetLoadedModuleInfo().empty());
 
     std::error_code ec;

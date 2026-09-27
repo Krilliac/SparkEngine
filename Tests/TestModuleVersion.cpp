@@ -80,6 +80,10 @@ namespace
         std::string line;
         while (std::getline(sidecar, line))
         {
+            // CMake's file(WRITE) emits CRLF on Windows; ModuleManager accepts
+            // CRLF sidecars, so read them the same way it does.
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
             const size_t separator = line.find('=');
             if (separator != std::string::npos)
                 values[line.substr(0, separator)] = line.substr(separator + 1);

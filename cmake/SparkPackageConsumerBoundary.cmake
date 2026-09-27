@@ -17,7 +17,9 @@
 # <allowed>/../../SparkEngine/Source/X.h is judged by where it really points.
 # Only absolute paths are considered: the Unix Makefiles generator (the only
 # one whose depfiles and link.txt survive the build) emits absolute paths for
-# every include directory and imported library.
+# every include directory and imported library. On a Windows host, where the
+# fixture tests also run, drive-letter paths ("D:/...") count as absolute too
+# and paths compare case-insensitively.
 #
 # spark_package_consumer_boundary_violations(
 #     OUT_VAR <var>                 receives "<scanned file>: <path>" entries
@@ -35,6 +37,11 @@ function(_spark_consumer_boundary_normalize _out _path)
 endfunction()
 
 function(_spark_consumer_boundary_is_under _out _path _root)
+    # Windows paths compare case-insensitively, as its filesystem does.
+    if(CMAKE_HOST_WIN32)
+        string(TOLOWER "${_path}" _path)
+        string(TOLOWER "${_root}" _root)
+    endif()
     if(_path STREQUAL _root)
         set(${_out} TRUE PARENT_SCOPE)
         return()
@@ -90,12 +97,19 @@ function(spark_package_consumer_boundary_violations)
         string(REPLACE "[" " " _content "${_content}")
         string(REPLACE "]" " " _content "${_content}")
         string(REPLACE "\\ " "%SPARK_SPACE%" _content "${_content}")
+        # On a Windows host absolute paths carry a drive ("D:/..."), whose
+        # colon must not split the path. Only there: on Linux ":/" separates
+        # entries of an rpath or search-path list.
+        if(CMAKE_HOST_WIN32)
+            string(REGEX REPLACE "([A-Za-z]):/" "\\1%SPARK_DRIVE%/" _content "${_content}")
+        endif()
         string(REGEX REPLACE "[ \t\r\n\"',=:\\\\]+" ";" _tokens "${_content}")
         list(REMOVE_DUPLICATES _tokens)
         foreach(_token IN LISTS _tokens)
             string(REPLACE "%SPARK_SPACE%" " " _token "${_token}")
+            string(REPLACE "%SPARK_DRIVE%" ":" _token "${_token}")
             string(REGEX REPLACE "^-(isystem|iquote|idirafter|I|L)" "" _token "${_token}")
-            if(NOT _token MATCHES "^/")
+            if(NOT _token MATCHES "^/" AND NOT (CMAKE_HOST_WIN32 AND _token MATCHES "^[A-Za-z]:/"))
                 continue()
             endif()
             # Judge the spelled path and, when it exists, where it really

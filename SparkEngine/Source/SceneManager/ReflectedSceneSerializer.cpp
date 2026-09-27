@@ -5,6 +5,7 @@
 #include "Utils/LogMacros.h"
 
 #include <nlohmann_json.h>
+#include <algorithm>
 #include <format>
 #include <limits>
 #include <unordered_map>
@@ -92,7 +93,11 @@ namespace Spark
         json entities = json::array();
 
         auto& factory = ComponentFactory::Get();
-        const std::vector<std::string> names = factory.GetRegisteredNames();
+        // GetRegisteredNames() follows unordered_map iteration order, which differs
+        // between standard libraries (MSVC vs libstdc++). Sort so the same world
+        // writes its components in the same order on every platform.
+        std::vector<std::string> names = factory.GetRegisteredNames();
+        std::sort(names.begin(), names.end());
         const entt::registry& reg = world.GetRegistry();
         // Non-const World handle for the factory (its ops take void* world, uint32 entity).
         World& mutWorld = const_cast<World&>(world);

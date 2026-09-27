@@ -30,13 +30,16 @@ function(_spark_run_case name module_abi_text build result_var output_var)
         file(WRITE "${root}/include/Spark/ModuleABI.h" "${module_abi_text}")
     endif()
     file(WRITE "${root}/project/probe.cpp" "extern \"C\" int SparkSidecarProbe() { return 0; }\n")
+    # One path file per configuration: a multi-config generator (Visual Studio,
+    # Ninja Multi-Config) evaluates file(GENERATE) once per configuration, and
+    # $<TARGET_FILE> differs between them, so a single shared OUTPUT is an error.
     file(WRITE "${root}/project/CMakeLists.txt"
         "cmake_minimum_required(VERSION 3.25)\n"
         "project(SparkSidecarDerivation LANGUAGES CXX)\n"
         "include(\"${_helper}\")\n"
         "add_library(SparkSidecarProbe SHARED probe.cpp)\n"
         "spark_configure_module_abi(SparkSidecarProbe)\n"
-        "file(GENERATE OUTPUT \"\${CMAKE_BINARY_DIR}/sidecar-path.txt\"\n"
+        "file(GENERATE OUTPUT \"\${CMAKE_BINARY_DIR}/sidecar-path-$<CONFIG>.txt\"\n"
         "    CONTENT \"$<TARGET_FILE:SparkSidecarProbe>.sparkabi\")\n")
 
     set(configure "${CMAKE_COMMAND}" -S "${root}/project" -B "${root}/build" -G "${CONSUMER_GENERATOR}"
@@ -84,7 +87,7 @@ _spark_run_case(derived "${_bumped}" TRUE _result _output)
 if(NOT "${_result}" STREQUAL "0")
     message(FATAL_ERROR "Consumer against the bumped fixture SDK failed (${_result}):\n${_output}")
 endif()
-file(READ "${FIXTURE}/derived/build/sidecar-path.txt" _sidecar_path)
+file(READ "${FIXTURE}/derived/build/sidecar-path-Release.txt" _sidecar_path)
 if(NOT EXISTS "${_sidecar_path}")
     message(FATAL_ERROR "Module build did not write its sidecar ${_sidecar_path}:\n${_output}")
 endif()

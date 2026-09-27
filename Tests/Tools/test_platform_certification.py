@@ -3124,7 +3124,11 @@ class TestCollectorHostMeasurement(unittest.TestCase):
         banner = "Microsoft (R) C/C++ Optimizing Compiler Version 19.42.34435 for x64"
         command = [sys.executable, "-c", f"print({banner!r})"]
 
-        with patch.dict(os.environ, {}, clear=True):
+        # Remove only the toolset identity: clearing the whole environment
+        # leaves Windows unable to start the banner process (no SYSTEMROOT),
+        # which would be refused for the wrong reason.
+        environment = {k: v for k, v in os.environ.items() if k.upper() != "VCTOOLSVERSION"}
+        with patch.dict(os.environ, environment, clear=True):
             with self.assertRaises(collector.CollectionError) as raised:
                 collector.measure_compiler(command, repo_root=REPO_ROOT)
 

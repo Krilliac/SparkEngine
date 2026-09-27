@@ -32,7 +32,9 @@
 # DESTDIR is honored the same way `cmake --install` honors it. The manifest
 # records paths without DESTDIR, so entries are validated against PREFIX and
 # then removed at $ENV{DESTDIR}<entry>, with a leading drive letter ("C:")
-# dropped first exactly as `cmake --install` drops it. A network (//host) path
+# dropped first exactly as `cmake --install` drops it. On Windows a DESTDIR
+# install already records its entries without the drive letter, so a driveless
+# entry is validated as lying on PREFIX's drive. A network (//host) path
 # combined with DESTDIR is refused, as `cmake --install` refuses it.
 cmake_minimum_required(VERSION 3.25)
 
@@ -124,6 +126,15 @@ foreach(_spark_entry IN LISTS _spark_manifest_entries)
     endwhile()
     if(NOT _spark_brackets STREQUAL "" OR _spark_entry MATCHES ";")
         message(FATAL_ERROR "SparkUninstall: manifest entry has unbalanced square brackets: ${_spark_entry}")
+    endif()
+    # Under DESTDIR, `cmake --install` records each path with the drive letter
+    # already dropped ("/Games/x" for C:/Games/x), because that is the path it
+    # appended to DESTDIR. Such an entry is restored onto PREFIX's drive before
+    # validation; the drive is dropped again when DESTDIR is applied.
+    if(NOT _spark_destdir STREQUAL "" AND _spark_root MATCHES "^([A-Za-z]:)/"
+       AND _spark_entry MATCHES "^/[^/]")
+        string(REGEX REPLACE "^([A-Za-z]:)/.*" "\\1" _spark_root_drive "${_spark_root}")
+        set(_spark_entry "${_spark_root_drive}${_spark_entry}")
     endif()
     cmake_path(IS_ABSOLUTE _spark_entry _spark_entry_is_absolute)
     if(NOT _spark_entry_is_absolute)

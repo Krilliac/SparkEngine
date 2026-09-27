@@ -539,9 +539,11 @@ set(_spark_staged_prefix "${_spark_destdir}${_spark_driveless_install}")
 if(NOT EXISTS "${_spark_staged_prefix}/share/cycle/root.txt" OR EXISTS "${_spark_cycle_install}")
     message(FATAL_ERROR "DESTDIR install did not stage beneath DESTDIR")
 endif()
+# `cmake --install` records the path it appended to DESTDIR, which on Windows
+# has already lost its drive letter; the helper must map such entries back.
 file(STRINGS "${_spark_cycle_manifest}" _spark_staged_manifest)
 foreach(_spark_staged_entry IN LISTS _spark_staged_manifest)
-    cmake_path(IS_PREFIX _spark_cycle_install "${_spark_staged_entry}" NORMALIZE _spark_entry_unstaged)
+    cmake_path(IS_PREFIX _spark_driveless_install "${_spark_staged_entry}" NORMALIZE _spark_entry_unstaged)
     if(NOT _spark_entry_unstaged)
         message(FATAL_ERROR "DESTDIR manifest entry is not relative to the unstaged prefix: ${_spark_staged_entry}")
     endif()

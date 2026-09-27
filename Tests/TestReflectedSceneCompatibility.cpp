@@ -16,11 +16,13 @@
 
 #include <nlohmann_json.h>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <vector>
 
 using namespace Spark;
 
@@ -84,9 +86,44 @@ namespace
         return entt::null;
     }
 
+    /// The entity with its components array ordered by component type. The loader
+    /// matches components by type, so their order within an entity is not part of
+    /// the format: v1-reflected-courtyard was written by a libstdc++ build whose
+    /// unordered_map iteration order differs from MSVC's.
+    nlohmann::json WithComponentsByType(const nlohmann::json& entity)
+    {
+        std::vector<nlohmann::json> components(entity["components"].begin(), entity["components"].end());
+        std::stable_sort(components.begin(), components.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
+            return a["type"].get<std::string>() < b["type"].get<std::string>();
+        });
+        nlohmann::json ordered = nlohmann::json::array();
+        for (const nlohmann::json& component : components)
+            ordered.push_back(component);
+        nlohmann::json canonical = entity;
+        canonical["components"] = ordered;
+        return canonical;
+    }
+
+    /// True when every entity's components array is in ascending type order, the
+    /// deterministic order SerializeWorld writes on every platform.
+    bool ComponentsWrittenInTypeOrder(const nlohmann::json& document)
+    {
+        for (const nlohmann::json& entity : document["entities"])
+        {
+            const nlohmann::json& components = entity["components"];
+            for (size_t index = 1; index < components.size(); ++index)
+            {
+                if (!(components[index - 1]["type"].get<std::string>() < components[index]["type"].get<std::string>()))
+                    return false;
+            }
+        }
+        return true;
+    }
+
     /// True when both reflected documents declare the same entities with identical
     /// JSON, matched by serialized id. Entity array order follows ECS storage order
-    /// and is not part of the format.
+    /// and component order within an entity is keyed by type; neither is part of
+    /// the format. Every entity field and every component's fields must match exactly.
     bool SameEntitiesById(const nlohmann::json& expected, const nlohmann::json& actual)
     {
         if (expected["entities"].size() != actual["entities"].size())
@@ -97,7 +134,7 @@ namespace
             for (const nlohmann::json& written : actual["entities"])
             {
                 if (written["id"] == declared["id"])
-                    matched = written == declared;
+                    matched = WithComponentsByType(written) == WithComponentsByType(declared);
             }
             if (!matched)
                 return false;
@@ -193,6 +230,9 @@ TEST(SceneMigration_ReflectedV1FixtureLoadsDeclaredStateWithoutRewritingSource)
     const nlohmann::json fixtureDocument = nlohmann::json::parse(fixtureBefore);
     EXPECT_TRUE(resavedDocument["version"] == fixtureDocument["version"]);
     EXPECT_TRUE(SameEntitiesById(fixtureDocument, resavedDocument));
+    // The writer's component order is deterministic across standard libraries, so
+    // the same world writes components in the same order on Windows and Linux.
+    EXPECT_TRUE(ComponentsWrittenInTypeOrder(resavedDocument));
 }
 
 TEST(SceneMigration_ReflectedLegacyEditorFixtureMigratesAndResavesAsCurrentVersion)

@@ -344,6 +344,23 @@ TEST(RacingCompleteRace_BarrierStopsCarLeavingTrack)
     EXPECT_GT(rig.track.GetBarrierCount(), static_cast<size_t>(0));
     const float roadHalfWidth = rig.track.GetCurrentTrack().waypoints[0].width;
     const float barrierLine = roadHalfWidth + RacingTrackSystem::kBarrierClearance;
+    const uint32_t playerId = rig.vehicles.GetPlayerVehicle()->id;
+
+    // The player's car runs alone. With the AI field on the grid, the car starting behind it follows the bend
+    // while the player holds straight, catches its rear quarter and spins it out -- a racing incident whose
+    // outcome turns on contact-solver and libm rounding, so it differs between compilers. This test is about
+    // the barrier, so the other chassis leave the physics world before the start.
+    std::vector<uint32_t> aiIds;
+    for (const VehicleInstance& vehicle : rig.vehicles.GetVehicles())
+    {
+        if (vehicle.id != playerId)
+            aiIds.push_back(vehicle.id);
+    }
+    for (const uint32_t id : aiIds)
+    {
+        rig.vehicles.NeutralizeVehicle(id);
+        EXPECT_FALSE(rig.vehicles.HasChassis(id));
+    }
 
     // Full throttle with the wheel held straight: the circuit bends away under the car, so it runs wide off the
     // outside of the bend. The outside barrier must catch it -- its center never gets further off the centerline
@@ -352,7 +369,6 @@ TEST(RacingCompleteRace_BarrierStopsCarLeavingTrack)
         rig.Frame({});
     PlayerDriveInput straight;
     straight.throttle = 1.0f;
-    const uint32_t playerId = rig.vehicles.GetPlayerVehicle()->id;
     float widest = 0.0f;
     float speedRunningWide = -1.0f; // km/h as the car crosses the middle of the road half heading for the edge
     for (int frame = 0; frame < 60 * 12; ++frame)
@@ -366,6 +382,9 @@ TEST(RacingCompleteRace_BarrierStopsCarLeavingTrack)
         EXPECT_LT(lateral, barrierLine + 1.5f);
     }
     EXPECT_GT(widest, roadHalfWidth); // it did leave the road and reach the barrier
+    // It crosses the half-way line about 56 m from the grid. 40 km/h there needs only ~1.1 m/s^2 on average, far
+    // below the SportsCar's 7 m/s^2 rated launch even with the 1-2 shift, so an unobstructed car clears it with
+    // wide margin (about 67 km/h) and only a car that was blocked or spun falls short.
     EXPECT_GT(speedRunningWide, 40.0f);
     std::printf("barrier: ran wide at %.1f km/h, widest %.2f m off the centerline (barrier face at %.2f m)\n",
                 speedRunningWide, widest, barrierLine);
