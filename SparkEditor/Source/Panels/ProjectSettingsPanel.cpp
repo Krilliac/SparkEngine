@@ -1330,6 +1330,8 @@ namespace SparkEditor
                     m_modified = true;
                 if (ImGui::Checkbox("Sandbox Mods", &mod.sandboxMods))
                     m_modified = true;
+                // Neither script setting is enforced yet; say so instead of implying a sandbox.
+                ImGui::TextDisabled("Script mods are always refused: no sandboxed mod-script loader exists yet");
                 if (ImGui::DragInt("Max Loaded Mods", &mod.maxLoadedMods, 1, 1, 128))
                     m_modified = true;
             }

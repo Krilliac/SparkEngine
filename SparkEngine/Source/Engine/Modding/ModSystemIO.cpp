@@ -34,6 +34,11 @@ namespace Spark
         bool ReadModManifestFile(const std::string& path, std::string& outContent)
         {
             std::error_code ec;
+            if (!std::filesystem::is_regular_file(path, ec) || ec)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: '%s' is not a regular file", path.c_str());
+                return false;
+            }
             const auto fileSize = std::filesystem::file_size(path, ec);
             if (ec)
             {
@@ -56,8 +61,13 @@ namespace Spark
                 return false;
             }
 
-            outContent.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            // The file may have grown between the stat and the read.
+            // The stat above is only a fast reject: the file can be swapped or keep growing
+            // between it and this read (or report a size that lies, as procfs files do).
+            // The read itself is therefore bounded to one byte past the limit, which is
+            // what actually caps memory; seeing that extra byte means the file is too big.
+            outContent.assign(MAX_MOD_JSON_BYTES + 1, '\0');
+            file.read(outContent.data(), static_cast<std::streamsize>(outContent.size()));
+            outContent.resize(static_cast<size_t>(file.gcount()));
             if (outContent.size() > MAX_MOD_JSON_BYTES)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: '%s' grew past the %zu byte limit while reading",

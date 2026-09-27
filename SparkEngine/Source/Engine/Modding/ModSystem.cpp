@@ -10,11 +10,69 @@
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <filesystem>
 #include <functional>
+#include <string>
+#include <system_error>
 
 namespace Spark
 {
+
+    namespace
+    {
+        enum class ModScriptScan
+        {
+            None,   ///< No script content found
+            Found,  ///< A Scripts/ directory or an .as file is present
+            Unknown ///< The tree could not be fully inspected (fail closed)
+        };
+
+        /// Upper bound on directory entries inspected per mod; a larger tree is refused.
+        constexpr size_t kMaxModEntriesInspected = 20'000;
+
+        std::string ToLowerAscii(std::string text)
+        {
+            for (char& c : text)
+            {
+                if (c >= 'A' && c <= 'Z')
+                    c = static_cast<char>(c - 'A' + 'a');
+            }
+            return text;
+        }
+
+        /// Looks for executable mod content: a Scripts/ directory (the documented layout)
+        /// or any AngelScript (.as) file anywhere in the mod tree. Directory symlinks are
+        /// not followed.
+        ModScriptScan FindModScriptContent(const std::string& modPath)
+        {
+            namespace fs = std::filesystem;
+            std::error_code ec;
+            fs::recursive_directory_iterator it(modPath, fs::directory_options::none, ec);
+            if (ec)
+                return ModScriptScan::Unknown;
+
+            const fs::recursive_directory_iterator end;
+            size_t inspected = 0;
+            while (it != end)
+            {
+                if (++inspected > kMaxModEntriesInspected)
+                    return ModScriptScan::Unknown;
+
+                const fs::path& entryPath = it->path();
+                std::error_code typeEc;
+                if (it->is_directory(typeEc) && ToLowerAscii(entryPath.filename().string()) == "scripts")
+                    return ModScriptScan::Found;
+                if (ToLowerAscii(entryPath.extension().string()) == ".as")
+                    return ModScriptScan::Found;
+
+                it.increment(ec);
+                if (ec)
+                    return ModScriptScan::Unknown;
+            }
+            return ModScriptScan::None;
+        }
+    } // namespace
 
     ModSystem::ModSystem() = default;
 
@@ -53,6 +111,18 @@ namespace Spark
             std::string modJsonPath = entry.path().string() + "/mod.json";
             if (!fs::exists(modJsonPath))
             {
+                continue;
+            }
+            // The manifest itself must be a plain file inside the mod directory. A symlinked
+            // mod.json could point outside the mods tree or at a file whose reported size
+            // lies (procfs), so it is refused like a symlinked mod directory.
+            std::error_code manifestEc;
+            const fs::file_status manifestStatus = fs::symlink_status(modJsonPath, manifestEc);
+            if (manifestEc || !fs::is_regular_file(manifestStatus))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "ModSystem: skipping mod '%s' whose mod.json is a symlink or not a regular file",
+                               entry.path().string().c_str());
                 continue;
             }
 
@@ -228,10 +298,33 @@ namespace Spark
             }
         }
 
+        // The engine has no sandboxed loader for mod scripts, and mod.allowScriptMods /
+        // mod.sandboxMods are not enforced by anything. A mod that ships executable
+        // content must therefore never be reported Active: that status would claim its
+        // scripts were vetted and running when nothing ran them.
+        switch (FindModScriptContent(it->second.path))
+        {
+        case ModScriptScan::None:
+            break;
+        case ModScriptScan::Found:
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "LoadMod '%s' refused — it ships script content (Scripts/ or *.as) and no sandboxed "
+                            "mod-script loader exists",
+                            modId.c_str());
+            m_modStates[modId] = ModState::Error;
+            return false;
+        case ModScriptScan::Unknown:
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "LoadMod '%s' refused — its directory '%s' could not be fully inspected for script content",
+                            modId.c_str(), it->second.path.c_str());
+            m_modStates[modId] = ModState::Error;
+            return false;
+        }
+
         m_modStates[modId] = ModState::Loading;
 
-        // Load mod assets, scripts, etc.
-        // This is a framework — actual loading depends on mod contents
+        // The engine loads no mod content itself. Active means the mod passed validation
+        // and was announced to the OnModLoaded subscribers, which own loading its assets.
         it->second.loaded = true;
         m_modStates[modId] = ModState::Active;
 

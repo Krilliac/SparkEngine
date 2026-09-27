@@ -113,8 +113,14 @@ namespace Spark
 
         /**
      * @brief Load a single mod.
+     * @details The engine loads no mod content itself: a mod becomes Active once it
+     *          passes validation and is announced to the OnModLoaded subscribers, which
+     *          own loading its assets. A mod that ships script content (a Scripts/
+     *          directory or any .as file) is refused with ModState::Error, because no
+     *          sandboxed mod-script loader exists and mod.allowScriptMods /
+     *          mod.sandboxMods are not enforced.
      * @param modId Mod identifier.
-     * @return true if loading succeeded.
+     * @return true if the mod is now Active.
      */
         bool LoadMod(const std::string& modId);
 

@@ -400,3 +400,59 @@ TEST(SEC3Gameplay_LocalizationRejectsOversizedFile)
     EXPECT_FALSE(table.LoadFromFile(path.string()));
     EXPECT_EQ(table.GetEntryCount(), size_t{0});
 }
+
+// ----------------------------------------------------------------------------
+// #11 / #15 ModSystem
+// ----------------------------------------------------------------------------
+
+TEST(SEC3Gameplay_ModWithScriptContentIsNotReportedActive)
+{
+    ScratchDir dir("mods_scripts");
+    const fs::path scripted = dir.path / "Scripted";
+    const fs::path looseScript = dir.path / "LooseScript";
+    const fs::path assetsOnly = dir.path / "AssetsOnly";
+    fs::create_directories(scripted / "Scripts");
+    fs::create_directories(looseScript / "Data");
+    fs::create_directories(assetsOnly / "Assets");
+    WriteText(scripted / "mod.json", R"({"id":"scripted","name":"Scripted","version":"1.0"})");
+    WriteText(scripted / "Scripts" / "main.as", "void main() {}\n");
+    WriteText(looseScript / "mod.json", R"({"id":"loose","name":"Loose","version":"1.0"})");
+    WriteText(looseScript / "Data" / "Hook.AS", "void hook() {}\n");
+    WriteText(assetsOnly / "mod.json", R"({"id":"assets","name":"Assets","version":"1.0"})");
+    WriteText(assetsOnly / "Assets" / "readme.txt", "texture pack\n");
+
+    Spark::ModSystem mods;
+    ASSERT_EQ(mods.ScanForMods(dir.path.string()), size_t{3});
+
+    EXPECT_FALSE(mods.LoadMod("scripted"));
+    EXPECT_FALSE(mods.IsModActive("scripted"));
+    EXPECT_TRUE(mods.GetModState("scripted") == Spark::ModState::Error);
+
+    EXPECT_FALSE(mods.LoadMod("loose"));
+    EXPECT_FALSE(mods.IsModActive("loose"));
+
+    std::vector<std::string> announced;
+    mods.OnModLoaded([&announced](const std::string& id) { announced.push_back(id); });
+    EXPECT_TRUE(mods.LoadMod("assets"));
+    EXPECT_TRUE(mods.IsModActive("assets"));
+    ASSERT_EQ(announced.size(), size_t{1});
+    EXPECT_EQ(announced[0], std::string("assets"));
+}
+
+TEST(SEC3Gameplay_ModScanRefusesSymlinkedManifest)
+{
+    ScratchDir dir("mods_symlink");
+    const fs::path modsRoot = dir.path / "Mods";
+    const fs::path outside = dir.path / "outside.json";
+    fs::create_directories(modsRoot / "Linked");
+    WriteText(outside, R"({"id":"linked","name":"Linked","version":"1.0"})");
+
+    std::error_code linkError;
+    fs::create_symlink(outside, modsRoot / "Linked" / "mod.json", linkError);
+    if (linkError)
+        SKIP_TEST("cannot create a file symlink here (Windows without Developer Mode): " + linkError.message());
+
+    Spark::ModSystem mods;
+    EXPECT_EQ(mods.ScanForMods(modsRoot.string()), size_t{0});
+    EXPECT_TRUE(mods.GetModInfo("linked") == nullptr);
+}

@@ -756,10 +756,10 @@ class EngineSettings
     {
         bool enableModding = false;         ///< [RS] Master mod loading toggle
         std::string modsDirectory = "Mods"; ///< [RS] Relative path to mods folder
-        bool allowScriptMods = false;       ///< [RS] Allow mods to load scripts (security)
+        bool allowScriptMods = false;       ///< [RS] Not enforced yet: ModSystem refuses every script mod
         bool allowAssetOverrides = true;    ///< [RS] Allow mods to override base assets
         int maxLoadedMods = 32;             ///< [RS] Maximum simultaneously loaded mods
-        bool sandboxMods = true;            ///< [RS] Run mod scripts in sandbox
+        bool sandboxMods = true;            ///< [RS] Not enforced yet: no mod script runs at all
     };
 
     // =====================================================================

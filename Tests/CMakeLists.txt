@@ -1870,7 +1870,7 @@ set_tests_properties(TelemetrySpool PROPERTIES
 # Active, and symlinked or oversized mod manifests refused with a bounded read.
 add_test(NAME SparkSEC3GameplayHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkSEC3GameplayHardening PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=7"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=9"
     LABELS "security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
