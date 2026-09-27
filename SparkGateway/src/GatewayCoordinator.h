@@ -211,7 +211,11 @@ namespace Spark::Gateway
 
         /** [startup thread] Register routable server endpoints with WorldServer. */
         [[nodiscard]] bool RegisterAreas(const std::vector<AreaEndpoint>& endpoints);
-        /** [transport thread] Authenticate and route a new session. */
+        /**
+         * [transport thread] Authenticate and route a new session. A ClientID may hold one
+         * active session at a time (DuplicateSession otherwise), and the session table itself is
+         * capped at WorldServerConfig::maxTotalClients (CapacityReached).
+         */
         [[nodiscard]] RouteResult Admit(const AdmissionRequest& request);
         /** [transport thread] Start or deduplicate a fenced handoff. */
         [[nodiscard]] std::optional<uint64_t> BeginHandoff(std::string_view sessionId, Net::AreaID targetArea);
@@ -258,6 +262,9 @@ namespace Spark::Gateway
         IAreaPlacementPolicy* m_placement = nullptr;
         std::vector<std::pair<Net::AreaID, AreaEndpoint>> m_endpoints;
         std::unordered_map<std::string, SessionRecord> m_sessions;
+        // One gateway session per client: WorldServer keys its player record by ClientID, so a
+        // second session for a bound client would alias that record and escape the world cap.
+        std::unordered_map<Net::ClientID, std::string> m_sessionByClient;
         bool m_accepting = true;
         mutable std::mutex m_mutex;
     };

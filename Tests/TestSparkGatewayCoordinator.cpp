@@ -148,6 +148,52 @@ TEST(SparkGateway_RejectsBeforeAuthentication)
     EXPECT_EQ(fixture.coordinator.GetSessionCount(), static_cast<size_t>(0));
 }
 
+TEST(SparkGateway_DuplicateClientIdCannotOpenSecondSession)
+{
+    // WorldServer keys players by ClientID. A second gateway session for a bound client
+    // would alias that record, leave the world count flat and escape the world cap.
+    GatewayFixture fixture;
+    ASSERT_TRUE(fixture.registered);
+    const RouteResult first = fixture.coordinator.Admit(BuildAdmission(7));
+    ASSERT_TRUE(first.accepted);
+
+    AdmissionRequest alias = BuildAdmission(7);
+    alias.sessionId = "session-7-alias";
+    const RouteResult rejected = fixture.coordinator.Admit(alias);
+    EXPECT_FALSE(rejected.accepted);
+    EXPECT_TRUE(rejected.failure == RouteFailure::DuplicateSession);
+    EXPECT_EQ(fixture.coordinator.GetSessionCount(), static_cast<size_t>(1));
+    EXPECT_FALSE(fixture.coordinator.GetSession("session-7-alias").has_value());
+
+    // Once the first session is retired the client may be admitted again.
+    EXPECT_TRUE(fixture.coordinator.Disconnect(first.session.sessionId));
+    EXPECT_TRUE(fixture.coordinator.Admit(alias).accepted);
+    EXPECT_EQ(fixture.coordinator.GetSessionCount(), static_cast<size_t>(1));
+}
+
+TEST(SparkGateway_SessionTableCappedIndependentlyOfWorldMirror)
+{
+    Net::WorldServer world;
+    TestAuthenticator authenticator;
+    ScriptedControlPlane control;
+    GatewayCoordinator coordinator(world, authenticator, control);
+    Net::WorldServerConfig config;
+    config.worldName = "GatewayCapTest";
+    config.tickRate = 100.0f;
+    config.maxTotalClients = 1;
+    ASSERT_TRUE(world.Start(config));
+    ASSERT_TRUE(coordinator.RegisterAreas(BuildAreas()));
+
+    ASSERT_TRUE(coordinator.Admit(BuildAdmission(7)).accepted);
+    // The WorldServer mirror loses the player while the gateway session is still live.
+    world.HandlePlayerDisconnect(7);
+    const RouteResult overCap = coordinator.Admit(BuildAdmission(8));
+    EXPECT_FALSE(overCap.accepted);
+    EXPECT_TRUE(overCap.failure == RouteFailure::CapacityReached);
+    EXPECT_EQ(coordinator.GetSessionCount(), static_cast<size_t>(1));
+    world.Stop();
+}
+
 TEST(SparkGateway_HandoffCompletesOnlyAfterCommitAcknowledgement)
 {
     GatewayFixture fixture;

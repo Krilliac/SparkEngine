@@ -109,7 +109,16 @@ namespace Spark::Gateway
             result.reason = "Session identifier is already active";
             return result;
         }
-        if (m_worldServer->GetTotalPlayerCount() >= static_cast<uint32_t>(m_worldServer->GetConfig().maxTotalClients))
+        if (m_sessionByClient.contains(request.clientId))
+        {
+            result.failure = RouteFailure::DuplicateSession;
+            result.reason = "Client identifier is already bound to an active session";
+            return result;
+        }
+        // The gateway's own session table is capped independently of the WorldServer mirror, so
+        // the world limit holds even if the mirror and the gateway ever disagree.
+        const size_t maxTotalClients = static_cast<size_t>(std::max(0, m_worldServer->GetConfig().maxTotalClients));
+        if (m_sessions.size() >= maxTotalClients || m_worldServer->GetTotalPlayerCount() >= maxTotalClients)
         {
             result.failure = RouteFailure::CapacityReached;
             result.reason = "World capacity reached";
@@ -152,6 +161,7 @@ namespace Spark::Gateway
         result.session = record.snapshot;
         result.host = endpoint->host;
         result.port = endpoint->area.port;
+        m_sessionByClient.emplace(request.clientId, request.sessionId);
         m_sessions.emplace(request.sessionId, std::move(record));
         return result;
     }
@@ -279,6 +289,7 @@ namespace Spark::Gateway
         if (found == m_sessions.end() || found->second.snapshot.state != SessionState::Active)
             return false;
         m_worldServer->HandlePlayerDisconnect(found->second.snapshot.clientId);
+        m_sessionByClient.erase(found->second.snapshot.clientId);
         m_sessions.erase(found);
         return true;
     }
