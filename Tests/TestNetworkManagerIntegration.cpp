@@ -509,9 +509,11 @@ TEST(NetworkManager_StartServer_Succeeds)
     auto& nm = NetworkManager::GetInstance();
     EXPECT_TRUE(nm.Initialize());
 
-    // Use a high port to avoid conflicts
-    bool serverOk = nm.StartServer(39100, 8);
-    EXPECT_TRUE(serverOk);
+    // Port 0: the OS picks a free port. A fixed port fails when Windows reserves its range
+    // (WSL/Hyper-V dynamic port exclusions), and a failed start must not pass silently.
+    bool serverOk = nm.StartServer(0, 8);
+    ASSERT_TRUE(serverOk);
+    EXPECT_NE(nm.GetBoundPort(), uint16_t{0});
     EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
 
     nm.StopServer();
@@ -522,7 +524,7 @@ TEST(NetworkManager_StopServer_ResetsRole)
 {
     auto& nm = NetworkManager::GetInstance();
     nm.Initialize();
-    nm.StartServer(39101, 4);
+    ASSERT_TRUE(nm.StartServer(0, 4));
     nm.StopServer();
     EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
     nm.Shutdown();
@@ -532,7 +534,7 @@ TEST(NetworkManager_ServerUpdate_ProcessesWithoutClients)
 {
     auto& nm = NetworkManager::GetInstance();
     nm.Initialize();
-    nm.StartServer(39102, 4);
+    ASSERT_TRUE(nm.StartServer(0, 4));
 
     // Run a few update ticks with no clients connected
     for (int i = 0; i < 5; ++i)
@@ -549,7 +551,7 @@ TEST(NetworkManager_ServerDisconnect_CleansUpGracefully)
 {
     auto& nm = NetworkManager::GetInstance();
     nm.Initialize();
-    nm.StartServer(39103, 4);
+    ASSERT_TRUE(nm.StartServer(0, 4));
     nm.Disconnect();
     EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Disconnected));
     nm.Shutdown();

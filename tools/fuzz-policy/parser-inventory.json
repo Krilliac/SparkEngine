@@ -794,10 +794,12 @@
       "description": "Installer state and tracked-file manifest reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkInstaller/src/InstallState.cpp"
+        "SparkInstaller/src/InstallState.cpp",
+        "SparkInstaller/src/Installer.cpp"
       ],
       "formats": [
-        ".json"
+        ".json",
+        ".pending"
       ],
       "status": "blocked",
       "blocker": {

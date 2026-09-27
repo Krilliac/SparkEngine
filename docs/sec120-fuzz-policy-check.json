@@ -1,6 +1,6 @@
 {
   "closure_blockers": [
-    "131 inventoried parsers have no fuzz target"
+    "132 inventoried parsers have no fuzz target"
   ],
   "corpus": {
     "bound_target_count": 6,
@@ -13,10 +13,10 @@
   "coverage_claim": false,
   "inputs": {
     "corpus_manifest": "05ff409e62f606cfa44dc4727153bc09a9160ee2bff4cb620b64200038858ef1",
-    "inventory": "dd5e2ae031a054dafbf5de2a82b040a8dc0871c3be0f81b647c45207cc0199d4"
+    "inventory": "2dfed3fcc18409f0a7b0e616892e5077ed58964a55c0dc9b7105060d8db94380"
   },
   "inventory": {
-    "blocked_count": 131,
+    "blocked_count": 132,
     "candidate_count": 294,
     "deferred_candidate_count": 0,
     "excluded_files": [],
@@ -45,7 +45,7 @@
     },
     "exempt_candidate_count": 120,
     "fuzzed_count": 6,
-    "parser_count": 137,
+    "parser_count": 138,
     "scan_roots": [
       "SparkEngine/Source",
       "SparkEditor/Source",
@@ -65,7 +65,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 2068,
+    "scanned_file_count": 2072,
     "unclassified_candidate_count": 0
   },
   "passed": false,
