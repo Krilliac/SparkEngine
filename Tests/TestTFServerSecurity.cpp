@@ -202,3 +202,16 @@ TEST(TFSec_CharacterIsResidentInOneSessionOnly)
     active.erase(1u); // disconnect cleanup
     EXPECT_FALSE(IsCharacterResidentElsewhere(active, 3u, uint64_t{100}));
 }
+
+// HandleFactionSelect's only guard was "no live pawn", which holds before the
+// first spawn and after every death, so an entered-world client could rebind
+// its session faction away from its character's (reading/posting another
+// faction's chat, spawning at its skyanchor). A character-bound session's
+// faction now comes only from the character record.
+TEST(TFSec_CharacterBoundFactionIsNotClientSelectable)
+{
+    EXPECT_FALSE(CanApplyFactionSelect(true, false)); // bound, pre-spawn or dead
+    EXPECT_FALSE(CanApplyFactionSelect(true, true));  // bound, alive
+    EXPECT_FALSE(CanApplyFactionSelect(false, true)); // legacy: no switch while alive
+    EXPECT_TRUE(CanApplyFactionSelect(false, false)); // legacy unbound session, no pawn
+}

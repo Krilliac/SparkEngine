@@ -10,6 +10,7 @@
 
 #include "Net/TFChatRules.h"
 #include "Net/TFNetProtocol.h"
+#include "Net/TFOnboardingSessionRules.h" // CanApplyFactionSelect
 #include "Net/TFRedeployProtocol.h"
 #include "Data/TFDataTables.h"
 #include "World/TFRegionSystem.h"
@@ -228,10 +229,25 @@ namespace Terrafront
         TF_FactionSelect sel;
         std::memcpy(&sel, data, sizeof(sel));
 
-        if (m_move.contains(sender))
+        // Every sender that passes the enter-world gate is bound to a character
+        // whose faction HandleEnterWorld already applied; the legacy packet
+        // must not rebind it (it used to, whenever no pawn was alive: before the
+        // first spawn and after every death -- cross-faction chat and spawns).
+        const bool characterBound = ActiveCharacterOf(sender) != 0;
+        if (!CanApplyFactionSelect(characterBound, m_move.contains(sender)))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] player %u tried to switch faction while alive — ignored",
-                           sender);
+            if (characterBound && static_cast<FactionId>(sel.faction) != GetPlayerFaction(sender))
+            {
+                ++m_badPackets;
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF] player %u FactionSelect rejected: faction is bound to the entered character",
+                               sender);
+            }
+            else if (!characterBound)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] player %u tried to switch faction while alive — ignored",
+                               sender);
+            }
             return;
         }
         SetPlayerFaction(sender, static_cast<FactionId>(sel.faction));
