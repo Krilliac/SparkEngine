@@ -11,9 +11,11 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <system_error>
 
 namespace Spark
@@ -31,46 +33,65 @@ namespace Spark
         /// Upper bound on directory entries inspected per mod; a larger tree is refused.
         constexpr size_t kMaxModEntriesInspected = 20'000;
 
-        std::string ToLowerAscii(std::string text)
+        /// Case-insensitive comparison of a path component in its native encoding against a
+        /// lower-case ASCII literal. Working on native() avoids path::string(), which on
+        /// Windows converts UTF-16 to the ANSI code page and throws for any character that
+        /// code page cannot represent (e.g. a Japanese file name on an en-US machine).
+        /// Non-ASCII characters simply never match.
+        bool NativeEqualsAsciiNoCase(const std::filesystem::path::string_type& native, std::string_view lowerAscii)
         {
-            for (char& c : text)
+            using CharT = std::filesystem::path::value_type;
+            if (native.size() != lowerAscii.size())
+                return false;
+            for (size_t i = 0; i < native.size(); ++i)
             {
-                if (c >= 'A' && c <= 'Z')
-                    c = static_cast<char>(c - 'A' + 'a');
+                CharT c = native[i];
+                if (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
+                    c = static_cast<CharT>(c - static_cast<CharT>('A') + static_cast<CharT>('a'));
+                if (c != static_cast<CharT>(static_cast<unsigned char>(lowerAscii[i])))
+                    return false;
             }
-            return text;
+            return true;
         }
 
         /// Looks for executable mod content: a Scripts/ directory (the documented layout)
         /// or any AngelScript (.as) file anywhere in the mod tree. Directory symlinks are
-        /// not followed.
+        /// not followed. Any failure while walking the untrusted tree reports Unknown, so
+        /// the caller refuses the mod instead of letting an exception escape LoadMod.
         ModScriptScan FindModScriptContent(const std::string& modPath)
         {
             namespace fs = std::filesystem;
-            std::error_code ec;
-            fs::recursive_directory_iterator it(modPath, fs::directory_options::none, ec);
-            if (ec)
-                return ModScriptScan::Unknown;
-
-            const fs::recursive_directory_iterator end;
-            size_t inspected = 0;
-            while (it != end)
+            try
             {
-                if (++inspected > kMaxModEntriesInspected)
-                    return ModScriptScan::Unknown;
-
-                const fs::path& entryPath = it->path();
-                std::error_code typeEc;
-                if (it->is_directory(typeEc) && ToLowerAscii(entryPath.filename().string()) == "scripts")
-                    return ModScriptScan::Found;
-                if (ToLowerAscii(entryPath.extension().string()) == ".as")
-                    return ModScriptScan::Found;
-
-                it.increment(ec);
+                std::error_code ec;
+                fs::recursive_directory_iterator it(modPath, fs::directory_options::none, ec);
                 if (ec)
                     return ModScriptScan::Unknown;
+
+                const fs::recursive_directory_iterator end;
+                size_t inspected = 0;
+                while (it != end)
+                {
+                    if (++inspected > kMaxModEntriesInspected)
+                        return ModScriptScan::Unknown;
+
+                    const fs::path& entryPath = it->path();
+                    std::error_code typeEc;
+                    if (it->is_directory(typeEc) && NativeEqualsAsciiNoCase(entryPath.filename().native(), "scripts"))
+                        return ModScriptScan::Found;
+                    if (NativeEqualsAsciiNoCase(entryPath.extension().native(), ".as"))
+                        return ModScriptScan::Found;
+
+                    it.increment(ec);
+                    if (ec)
+                        return ModScriptScan::Unknown;
+                }
+                return ModScriptScan::None;
             }
-            return ModScriptScan::None;
+            catch (const std::exception&)
+            {
+                return ModScriptScan::Unknown;
+            }
         }
     } // namespace
 

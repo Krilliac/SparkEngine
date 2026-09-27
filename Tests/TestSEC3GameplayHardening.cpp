@@ -420,9 +420,22 @@ TEST(SEC3Gameplay_ModWithScriptContentIsNotReportedActive)
     WriteText(looseScript / "Data" / "Hook.AS", "void hook() {}\n");
     WriteText(assetsOnly / "mod.json", R"({"id":"assets","name":"Assets","version":"1.0"})");
     WriteText(assetsOnly / "Assets" / "readme.txt", "texture pack\n");
+    // A file name outside the ANSI code page: path::string() threw std::system_error on
+    // Windows here, escaping LoadMod and terminating the process. It must be scanned
+    // without conversion and the mod must still load.
+    WriteText(assetsOnly / "Assets" / fs::path(u8"\u30C6\u30AF\u30B9\u30C1\u30E3.png"), "png\n");
+    // A non-ASCII script name must still be recognised by its .as extension.
+    const fs::path unicodeScript = dir.path / "UnicodeScript";
+    fs::create_directories(unicodeScript / "Data");
+    WriteText(unicodeScript / "mod.json", R"({"id":"unicode","name":"Unicode","version":"1.0"})");
+    WriteText(unicodeScript / "Data" / fs::path(u8"\u30B9\u30AF\u30EA\u30D7\u30C8.as"), "void hook() {}\n");
 
     Spark::ModSystem mods;
-    ASSERT_EQ(mods.ScanForMods(dir.path.string()), size_t{3});
+    ASSERT_EQ(mods.ScanForMods(dir.path.string()), size_t{4});
+
+    EXPECT_FALSE(mods.LoadMod("unicode"));
+    EXPECT_FALSE(mods.IsModActive("unicode"));
+    EXPECT_TRUE(mods.GetModState("unicode") == Spark::ModState::Error);
 
     EXPECT_FALSE(mods.LoadMod("scripted"));
     EXPECT_FALSE(mods.IsModActive("scripted"));
