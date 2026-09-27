@@ -47,6 +47,7 @@
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "dxgi.lib")
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+#include <cerrno>
 #include <dirent.h>
 #include <signal.h>
 #include <unistd.h>
@@ -1937,22 +1938,312 @@ void RefreshCrashModuleIdentities()
 }
 #endif
 
+// ----------------------------------------------------------------------------
+// Fatal-signal report
+//
+// A fatal signal often arrives while the crashing thread holds a malloc,
+// stdio, locale or loader lock. The handler therefore runs in two stages:
+//
+// 1. Async-signal-safe: arm a watchdog, then write the report's header, raw
+//    stack and symbolic-frame section to a new file with open()/write() only,
+//    using names and buffers prepared by InstallCrashHandler().
+// 2. Best effort: append system and thread information, write the core hint
+//    and publish the manifest. This stage allocates and may block on a lock
+//    the crashed thread holds. The watchdog bounds it: after
+//    kSignalReportBudgetSeconds the process is terminated by the original
+//    signal, so a crash never becomes a hang.
+// ----------------------------------------------------------------------------
+
+namespace
+{
+    /// Wall-clock budget for the whole signal report.
+    constexpr unsigned kSignalReportBudgetSeconds = 10;
+
+    /// Report file-name prefix (the configured dump-prefix basename), copied
+    /// at install time so the handler never builds a path on the heap.
+    char g_signalLogPrefix[128] = "GameEngineCrash";
+    /// "<prefix>_<16 hex>.log" for the report being written.
+    char g_signalLogName[sizeof(g_signalLogPrefix) + 32] = {};
+
+    /// The fatal signal being reported; read by the watchdog.
+    volatile sig_atomic_t g_fatalSignal = 0;
+
+    /// Test seam (CrashSymbolicationProbe --stall-report): block the
+    /// best-effort stage as a crash under a held malloc lock would.
+    volatile sig_atomic_t g_stallSignalReportForTesting = 0;
+
+    /// Alternate stack for the installing thread, so a stack-overflow SIGSEGV
+    /// still runs the handler.
+    alignas(16) unsigned char g_signalAlternateStack[256 * 1024];
+
+    static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
+                  "the signal handler reserves report IDs with a lock-free atomic");
+
+    size_t SignalSafeLength(const char* text)
+    {
+        size_t length = 0;
+        while (text[length] != '\0')
+            ++length;
+        return length;
+    }
+
+    void SignalSafeWrite(int fd, const char* data, size_t length)
+    {
+        while (fd >= 0 && length > 0)
+        {
+            const ssize_t count = write(fd, data, length);
+            if (count < 0 && errno == EINTR)
+                continue;
+            if (count <= 0)
+                return;
+            data += count;
+            length -= static_cast<size_t>(count);
+        }
+    }
+
+    void SignalSafeWrite(int fd, const char* text)
+    {
+        SignalSafeWrite(fd, text, SignalSafeLength(text));
+    }
+
+    /// Append @p value in @p base (10 or 16, lowercase) without allocating.
+    void SignalSafeWriteNumber(int fd, std::uint64_t value, unsigned base, size_t minDigits = 1)
+    {
+        constexpr char kDigits[] = "0123456789abcdef";
+        char buffer[24];
+        size_t position = sizeof(buffer);
+        do
+        {
+            buffer[--position] = kDigits[value % base];
+            value /= base;
+        } while (value != 0 && position > 0);
+        while (sizeof(buffer) - position < minDigits && position > 0)
+            buffer[--position] = '0';
+        SignalSafeWrite(fd, buffer + position, sizeof(buffer) - position);
+    }
+
+    /// Terminate with the original fatal signal (default action: core dump).
+    [[noreturn]] void TerminateWithFatalSignal(int sig)
+    {
+        struct sigaction defaultAction;
+        memset(&defaultAction, 0, sizeof(defaultAction));
+        defaultAction.sa_handler = SIG_DFL;
+        sigemptyset(&defaultAction.sa_mask);
+        sigaction(sig, &defaultAction, nullptr);
+
+        sigset_t unblock;
+        sigemptyset(&unblock);
+        sigaddset(&unblock, sig);
+        sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
+        raise(sig);
+        _exit(128 + sig); // only if the signal did not terminate the process
+    }
+
+    /// SIGALRM: the report overran its budget, most likely deadlocked on a
+    /// lock the crashed thread holds. Finish the crash without the rest.
+    void OnSignalReportTimeout(int)
+    {
+        WriteStderr("[SPARK ENGINE] Crash report timed out; terminating without the remaining sections.\n");
+        const int sig = g_fatalSignal != 0 ? static_cast<int>(g_fatalSignal) : SIGABRT;
+        TerminateWithFatalSignal(sig);
+    }
+
+    void ArmSignalReportWatchdog(int sig)
+    {
+        g_fatalSignal = sig;
+        struct sigaction timeoutAction;
+        memset(&timeoutAction, 0, sizeof(timeoutAction));
+        timeoutAction.sa_handler = OnSignalReportTimeout;
+        sigemptyset(&timeoutAction.sa_mask);
+        timeoutAction.sa_flags = SA_ONSTACK;
+        sigaction(SIGALRM, &timeoutAction, nullptr);
+
+        sigset_t unblock;
+        sigemptyset(&unblock);
+        sigaddset(&unblock, SIGALRM);
+        sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
+        alarm(kSignalReportBudgetSeconds);
+    }
+
+    /// Create "<prefix>_<id>.log" in the pinned artifact root with open()
+    /// only. Returns -1 when no private root exists or the name is taken.
+    int OpenSignalReportLog(std::uint64_t reportSequence)
+    {
+        if (g_artifactRootHandle < 0)
+            return -1;
+        size_t length = 0;
+        const auto append = [&](const char* text)
+        {
+            for (; *text != '\0' && length + 1 < sizeof(g_signalLogName); ++text)
+                g_signalLogName[length++] = *text;
+        };
+        append(g_signalLogPrefix);
+        append("_");
+        constexpr char kDigits[] = "0123456789abcdef";
+        for (int shift = 60; shift >= 0 && length + 1 < sizeof(g_signalLogName); shift -= 4)
+            g_signalLogName[length++] = kDigits[(reportSequence >> shift) & 0xF];
+        append(".log");
+        g_signalLogName[length] = '\0';
+
+        int flags = O_WRONLY | O_CREAT | O_EXCL;
+#ifdef O_NOFOLLOW
+        flags |= O_NOFOLLOW;
+#endif
+#ifdef O_CLOEXEC
+        flags |= O_CLOEXEC;
+#endif
+        return openat(g_artifactRootHandle, g_signalLogName, flags, S_IRUSR | S_IWUSR);
+    }
+
+    /// Stage 1: everything a post-mortem needs, written with async-signal-safe calls only.
+    void WriteSignalSafeReport(int fd, int sig, const char* sigName, const siginfo_t* info, void* context)
+    {
+        SignalSafeWrite(fd, "================================================================\n"
+                            "           SPARK ENGINE CRASH REPORT (POSIX)\n"
+                            "================================================================\n\n");
+        SignalSafeWrite(fd, "Timestamp  : ");
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(time(nullptr)), 10);
+        SignalSafeWrite(fd, " (seconds since the Unix epoch, UTC)\nProcess ID : ");
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(getpid()), 10);
+        SignalSafeWrite(fd, "\nThread ID  : ");
+#ifdef SPARK_PLATFORM_LINUX
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(syscall(SYS_gettid)), 10);
+#else
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(pthread_mach_thread_np(pthread_self())), 10);
+#endif
+        SignalSafeWrite(fd, "\n\n*** CRASH DETECTED ***\nSignal     : ");
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(sig), 10);
+        SignalSafeWrite(fd, " - ");
+        SignalSafeWrite(fd, sigName);
+        SignalSafeWrite(fd, "\n");
+        if (info)
+        {
+            SignalSafeWrite(fd, "Fault Addr : 0x");
+            SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(info->si_addr)), 16);
+            SignalSafeWrite(fd, "\nSignal Code: ");
+            if (info->si_code < 0)
+            {
+                SignalSafeWrite(fd, "-");
+                SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(-static_cast<std::int64_t>(info->si_code)), 10);
+            }
+            else
+            {
+                SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(info->si_code), 10);
+            }
+            SignalSafeWrite(fd, "\n");
+        }
+
+        // backtrace() was primed at install time, and backtrace_symbols_fd()
+        // formats straight to the descriptor without malloc.
+        SignalSafeWrite(fd, "\n*** STACK TRACE ***\n");
+        void* frames[64];
+        const int frameCount = backtrace(frames, 64);
+        for (int index = 0; index < frameCount; ++index)
+        {
+            SignalSafeWrite(fd, "  ");
+            SignalSafeWrite(fd, kStackFrameMarker);
+            backtrace_symbols_fd(&frames[index], 1, fd);
+        }
+#ifdef SPARK_PLATFORM_LINUX
+        SignalSafeWrite(fd, g_symbolicSectionBuffer,
+                        FormatSymbolicSection(context, g_symbolicSectionBuffer, sizeof(g_symbolicSectionBuffer)));
+#else
+        (void)context;
+#endif
+    }
+
+    /// Stage 2: optional sections and the manifest. Allocates; bounded by the watchdog.
+    void WriteBestEffortReport(int fd, int sig)
+    {
+        if (g_stallSignalReportForTesting)
+        {
+            for (;;)
+                pause();
+        }
+
+        const std::string logName = g_signalLogName;
+        const std::string reportId = logName.substr(logName.size() - 20, 16); // "<id>.log"
+        if (g_cfg.captureSystemInfo)
+        {
+            const std::string section = LinuxSystemInfo();
+            SignalSafeWrite(fd, section.data(), section.size());
+        }
+        if (g_cfg.captureAllThreads)
+        {
+            const std::string section = LinuxThreadStacks();
+            SignalSafeWrite(fd, section.data(), section.size());
+        }
+        const bool logReady = close(fd) == 0;
+
+        const std::string prefix = GetCrashArtifactPrefix().string();
+        const std::string logFile = (g_artifactRootPath / logName).string();
+        const std::string coreFile = prefix + "_" + reportId + ".core_hint";
+        static const char coreHint[] = "Core dump may be found at the system core dump location.\n"
+                                       "Check: /proc/sys/kernel/core_pattern\n"
+                                       "Or run: coredumpctl list\n";
+        const bool coreReady = WriteExclusiveFileUtf8(coreFile, std::string(coreHint, sizeof(coreHint) - 1));
+        PinnedFile coreProbe = coreReady ? OpenPinnedInputFile(coreFile) : PinnedFile{};
+        PinnedFile logProbe = logReady ? OpenPinnedInputFile(logFile) : PinnedFile{};
+
+        const std::string crashTitle = (sig == SIGSEGV)   ? "SIGSEGV"
+                                       : (sig == SIGABRT) ? "SIGABRT"
+                                       : (sig == SIGFPE)  ? "SIGFPE"
+                                                          : "Crash";
+
+        // Always publish the local manifest when the log is safely pinned. A
+        // non-headless process normally has a read-only reporter watching this
+        // directory; headless processes retain the same local artifacts without
+        // starting UI or transport work.
+        if (logProbe.stream)
+            WriteCrashManifest(reportId, coreProbe.stream ? coreFile : std::string{}, logFile, "", "", crashTitle);
+
+        WriteStderr("Log file: ");
+        WriteStderr(logFile.c_str());
+        WriteStderr("\n");
+    }
+
+    /// Prepare everything the signal handler reads, then give the installing
+    /// thread an alternate signal stack. Called from InstallCrashHandler().
+    void PrepareSignalReport()
+    {
+        const std::string prefix = GetCrashArtifactPrefix().filename().string();
+        const std::string safePrefix = prefix.empty() ? std::string("GameEngineCrash") : prefix;
+        const size_t length = std::min(safePrefix.size(), sizeof(g_signalLogPrefix) - 1);
+        memcpy(g_signalLogPrefix, safePrefix.data(), length);
+        g_signalLogPrefix[length] = '\0';
+
+        stack_t current;
+        memset(&current, 0, sizeof(current));
+        if (sigaltstack(nullptr, &current) == 0 && (current.ss_flags & SS_DISABLE) != 0)
+        {
+            stack_t alternate;
+            memset(&alternate, 0, sizeof(alternate));
+            alternate.ss_sp = g_signalAlternateStack;
+            alternate.ss_size = sizeof(g_signalAlternateStack);
+            sigaltstack(&alternate, nullptr);
+        }
+    }
+} // namespace
+
+namespace Spark::CrashHandlerDetail
+{
+    void SetSignalReportStallForTesting(bool stall) noexcept
+    {
+        g_stallSignalReportForTesting = stall ? 1 : 0;
+    }
+} // namespace Spark::CrashHandlerDetail
+
 static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
 {
     // Prevent re-entrant crashes (e.g. crash inside the handler itself).
     // sig_atomic_t is the only type guaranteed safe in signal handlers.
     if (g_inSignalHandler)
-    {
-        signal(sig, SIG_DFL);
-        raise(sig);
-        return;
-    }
+        TerminateWithFatalSignal(sig);
     g_inSignalHandler = 1;
 
-    // --- Async-signal-safe section ---
-    // Write a minimal crash notice to stderr using only write(), which is
-    // async-signal-safe.  This guarantees visible output even if the heap
-    // or iostream locks are corrupted.
+    // A deadlocked report must still end the process.
+    ArmSignalReportWatchdog(sig);
+
     const char* sigName = "UNKNOWN";
     switch (sig)
     {
@@ -1979,87 +2270,21 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
     WriteStderr(sigName);
     WriteStderr("\n");
 
-    // --- Best-effort section ---
-    // The operations below use the heap and are technically not
-    // async-signal-safe.  However, they are wrapped in a try/catch and
-    // the process is about to terminate anyway, so this is acceptable
-    // best-effort behaviour (matching industry-standard crash reporters).
-    // We intentionally do NOT acquire g_lock here because the crashing
-    // thread may already hold it, which would deadlock.
+    // One report per process; the sequence is shared with nonfatal reports.
+    const std::uint64_t reportSequence = g_reportSequence.fetch_add(1, std::memory_order_relaxed) + 1;
+    const int fd = OpenSignalReportLog(reportSequence);
+    if (fd < 0)
+    {
+        WriteStderr("[SPARK ENGINE] Private crash-artifact directory unavailable; report not written.\n");
+        TerminateWithFatalSignal(sig);
+    }
+    WriteSignalSafeReport(fd, sig, sigName, info, context);
+
+    // We intentionally do NOT acquire g_lock here because the crashing thread
+    // may already hold it, which would deadlock.
     try
     {
-        const std::string reportId = MakeCrashReportId();
-        const std::string timestamp = MakeTimeStampUtf8();
-        const std::string artifactSuffix = "_" + reportId;
-        std::string prefix = GetCrashArtifactPrefix().string();
-        if (prefix.empty())
-        {
-            WriteStderr("[SPARK ENGINE] Private crash-artifact directory unavailable; report not written.\n");
-            signal(sig, SIG_DFL);
-            raise(sig);
-            return;
-        }
-        std::string logFile = prefix + artifactSuffix + ".log";
-
-        std::ostringstream log;
-        log << "================================================================\n";
-        log << "           SPARK ENGINE CRASH REPORT (POSIX)\n";
-        log << "================================================================\n\n";
-        log << "Timestamp  : " << timestamp << "\n";
-        log << "Process ID : " << getpid() << "\n";
-#ifdef SPARK_PLATFORM_LINUX
-        log << "Thread ID  : " << static_cast<unsigned long>(syscall(SYS_gettid)) << "\n\n";
-#else
-        log << "Thread ID  : " << pthread_mach_thread_np(pthread_self()) << "\n\n";
-#endif
-
-        log << "*** CRASH DETECTED ***\n";
-        log << "Signal     : " << sig << " - " << sigName << "\n";
-        if (info)
-        {
-            log << "Fault Addr : 0x" << std::hex << reinterpret_cast<uintptr_t>(info->si_addr) << std::dec << "\n";
-            log << "Signal Code: " << info->si_code << "\n";
-        }
-        log << "\n";
-
-        log << CaptureStackTraceString();
-#ifdef SPARK_PLATFORM_LINUX
-        log.write(g_symbolicSectionBuffer, static_cast<std::streamsize>(FormatSymbolicSection(
-                                               context, g_symbolicSectionBuffer, sizeof(g_symbolicSectionBuffer))));
-#endif
-        if (g_cfg.captureSystemInfo)
-            log << LinuxSystemInfo();
-        if (g_cfg.captureAllThreads)
-            log << LinuxThreadStacks();
-
-        std::string logStr = log.str();
-        const bool logReady = WriteExclusiveFileUtf8(logFile, logStr);
-
-        // Write core dump path hint
-        std::string coreFile = prefix + artifactSuffix + ".core_hint";
-        static const char coreHint[] = "Core dump may be found at the system core dump location.\n"
-                                       "Check: /proc/sys/kernel/core_pattern\n"
-                                       "Or run: coredumpctl list\n";
-        const bool coreReady = WriteExclusiveFileUtf8(coreFile, std::string(coreHint, sizeof(coreHint) - 1));
-        PinnedFile coreProbe = coreReady ? OpenPinnedInputFile(coreFile) : PinnedFile{};
-        PinnedFile logProbe = logReady ? OpenPinnedInputFile(logFile) : PinnedFile{};
-
-        const std::string crashTitle = (sig == SIGSEGV)   ? "SIGSEGV"
-                                       : (sig == SIGABRT) ? "SIGABRT"
-                                       : (sig == SIGFPE)  ? "SIGFPE"
-                                                          : "Crash";
-
-        // Always publish the local manifest when the log is safely pinned. A
-        // non-headless process normally has a read-only reporter watching this
-        // directory; headless processes retain the same local artifacts without
-        // starting UI or transport work.
-        if (logProbe.stream)
-            WriteCrashManifest(reportId, coreProbe.stream ? coreFile : std::string{}, logFile, "", "", crashTitle);
-
-        // Print log to stderr
-        WriteStderr("Log file: ");
-        WriteStderr(logFile.c_str());
-        WriteStderr("\n");
+        WriteBestEffortReport(fd, sig);
     }
     catch (const std::exception& e)
     {
@@ -2072,9 +2297,9 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         WriteStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 
-    // Re-raise to get core dump
-    signal(sig, SIG_DFL);
-    raise(sig);
+    // Re-raise to get the default action (core dump).
+    alarm(0);
+    TerminateWithFatalSignal(sig);
 }
 
 void InstallCrashHandler(const CrashConfig& cfg)
@@ -2097,12 +2322,15 @@ void InstallCrashHandler(const CrashConfig& cfg)
     RefreshCrashModuleIdentities();
     void* primeFrame[1];
     (void)backtrace(primeFrame, 1);
+    PrepareSignalReport();
 
-    // Install signal handlers for common crash signals
+    // Install signal handlers for common crash signals. SA_ONSTACK runs the
+    // handler on the alternate stack PrepareSignalReport() gave this thread,
+    // so a stack overflow is reported too; other threads use their own stack.
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = HandleLinuxCrash;
-    sa.sa_flags = SA_SIGINFO | SA_RESETHAND; // SA_RESETHAND to avoid infinite loops
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND | SA_ONSTACK; // SA_RESETHAND to avoid infinite loops
     sigemptyset(&sa.sa_mask);
 
     sigaction(SIGSEGV, &sa, nullptr);

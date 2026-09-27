@@ -13,7 +13,12 @@ faults inside SparkSymbolicationCanaryCrashSite(). The canary then:
    frame 0 (the exact faulting pc) to name the crash-site function at the
    marked source line, and a later return-address frame to resolve to main;
 4. proves fail-closed behaviour: a store entry whose build-id differs from the
-   recorded one is refused (exit 2), and a symlinked store entry is refused.
+   recorded one is refused (exit 2), and a symlinked store entry is refused;
+5. proves the fatal-signal handler cannot hang or skip a report (SEC2 finding
+   12): with its best-effort stage blocked (``--stall-report``) the report
+   watchdog still ends the probe by SIGSEGV within the budget and the
+   async-signal-safe log already holds the symbolic frames; and a stack
+   overflow (``--stack-overflow``) is still reported from the alternate stack.
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +38,8 @@ SYMBOLICATE = ROOT / "tools" / "ops" / "symbolicate_crash.py"
 CRASH_SITE = "SparkSymbolicationCanaryCrashSite"
 FAULT_MARKER = "SPARK_SYMBOLICATION_CANARY_FAULT_LINE"
 PROBE_TIMEOUT_SECONDS = 60
+# CrashHandler.cpp kSignalReportBudgetSeconds is 10; allow scheduling slack.
+STALLED_REPORT_DEADLINE_SECONDS = 30
 
 
 class CanaryFailure(Exception):
@@ -45,10 +53,10 @@ def fault_line(source: Path) -> int:
     return matches[0]
 
 
-def run_probe(probe: Path, temp_root: Path) -> Path:
+def run_probe(probe: Path, temp_root: Path, *mode: str) -> Path:
     env = dict(os.environ, TMPDIR=str(temp_root))
     completed = subprocess.run(
-        [str(probe)],
+        [str(probe), *mode],
         env=env,
         cwd=temp_root,
         stdin=subprocess.DEVNULL,
@@ -64,6 +72,48 @@ def run_probe(probe: Path, temp_root: Path) -> Path:
     if len(logs) != 1:
         raise CanaryFailure(f"expected exactly one crash log under {temp_root}, found {logs}")
     return logs[0]
+
+
+def check_stalled_report(probe: Path, temp_root: Path) -> None:
+    """A report blocked after its signal-safe stage still ends the process."""
+    started = time.monotonic()
+    env = dict(os.environ, TMPDIR=str(temp_root))
+    try:
+        completed = subprocess.run(
+            [str(probe), "--stall-report"],
+            env=env,
+            cwd=temp_root,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=STALLED_REPORT_DEADLINE_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise CanaryFailure(
+            f"a stalled crash report hung the probe for {STALLED_REPORT_DEADLINE_SECONDS}s; "
+            "the report watchdog did not terminate it"
+        ) from exc
+    elapsed = time.monotonic() - started
+    stderr = completed.stderr.decode(errors="replace")
+    require(
+        completed.returncode == -signal.SIGSEGV,
+        f"stalled report ended with {completed.returncode} after {elapsed:.1f}s, expected SIGSEGV\n{stderr[-2000:]}",
+    )
+    require("Crash report timed out" in stderr, f"stalled report did not report its timeout:\n{stderr[-2000:]}")
+    logs = [path for path in temp_root.glob("spark_crash_*/SymbolicationCanary_*.log") if path.is_file()]
+    require(len(logs) == 1, f"stalled report left {logs}, expected exactly one log")
+    text = logs[0].read_text(errors="replace")
+    for marker in ("Signal     : 11 - SIGSEGV", "*** STACK TRACE ***", "*** SYMBOLIC FRAMES ***"):
+        require(marker in text, f"signal-safe stage did not write {marker!r} before the stall")
+    manifests = list(temp_root.glob("spark_crash_*/crash_manifest_*.json"))
+    require(not manifests, f"the stalled best-effort stage should not have published {manifests}")
+
+
+def check_stack_overflow_report(probe: Path, temp_root: Path) -> None:
+    """A stack-overflow SIGSEGV is handled on the alternate signal stack."""
+    log = run_probe(probe, temp_root, "--stack-overflow")
+    text = log.read_text(errors="replace")
+    require("Signal     : 11 - SIGSEGV" in text, "stack-overflow report does not name SIGSEGV")
+    require("*** SYMBOLIC FRAMES ***" in text, "stack-overflow report has no symbolic-frame section")
 
 
 def symbolicate(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -152,9 +202,17 @@ def main() -> int:
                 f"a symlinked store entry was not refused (exit {linked.returncode}): {linked.stderr.strip()}",
             )
 
+            stalled_root = scratch_root / "tmp-stalled"
+            stalled_root.mkdir()
+            check_stalled_report(args.probe, stalled_root)
+            overflow_root = scratch_root / "tmp-overflow"
+            overflow_root.mkdir()
+            check_stack_overflow_report(args.probe, overflow_root)
+
         print(
             f"symbolication canary passed: {CRASH_SITE} at {args.probe_source.name}:{expected_line} "
-            f"(build-id {build_id}); wrong build-id and symlinked entry refused"
+            f"(build-id {build_id}); wrong build-id and symlinked entry refused; "
+            "stalled report terminated by its watchdog; stack overflow reported"
         )
         return 0
     except (CanaryFailure, subprocess.TimeoutExpired, OSError, ValueError, KeyError) as exc:

@@ -137,3 +137,18 @@ void SetAssertCrashBehavior(bool shouldCrash);
  * platforms without a crash handler.
  */
 void RefreshCrashModuleIdentities();
+
+#if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+namespace Spark::CrashHandlerDetail
+{
+    /**
+     * @brief Test seam: make the fatal-signal handler's best-effort stage block.
+     *
+     * Stands in for a crash while the crashing thread holds a malloc or stdio
+     * lock, so a test can prove the report watchdog still terminates the
+     * process with the original signal. Only the POSIX production handler
+     * (CrashHandler.cpp) defines it; never call it outside a crash probe.
+     */
+    void SetSignalReportStallForTesting(bool stall) noexcept;
+} // namespace Spark::CrashHandlerDetail
+#endif
