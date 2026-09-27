@@ -636,6 +636,8 @@ add_executable(SparkTests
     TestTFDeathRecapWire.cpp
     # TF-110 forged TF_LoadoutChange decode (header-only)
     TestTFLoadoutWire.cpp
+    # TF-110 tf_observe text form + tf_aim_at angles (header-only)
+    TestTFObservation.cpp
     # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp
@@ -1825,11 +1827,14 @@ set_tests_properties(OnlineServicesDegraded PROPERTIES
     LABELS "online-services;unit"
     TIMEOUT 30)
 
-# TF-110: TERRAFRONT server trust boundary. Forged loadout/fire state is rejected
-# and audited (TFServerValidation + Net/TFLoadoutWire.h). Exact counts per family.
+# TF-110: TERRAFRONT server trust boundary and harness probes. Forged
+# loadout/fire state is rejected and audited (TFServerValidation +
+# Net/TFLoadoutWire.h); tf_observe output is sorted and quantized
+# (Game/TFObservation.h). Exact counts per family.
 set(_spark_tf110_selectors
     "TF110_ForgedState_=4"
-    "TF110_LoadoutWire_=3")
+    "TF110_LoadoutWire_=3"
+    "TF110_Observe_=4")
 foreach(_spark_tf110_selector IN LISTS _spark_tf110_selectors)
     string(REPLACE "=" ";" _spark_tf110_parts "${_spark_tf110_selector}")
     list(GET _spark_tf110_parts 0 _spark_tf110_prefix)

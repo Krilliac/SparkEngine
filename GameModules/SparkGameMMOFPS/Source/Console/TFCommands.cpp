@@ -47,9 +47,10 @@ namespace
 
     constexpr uint16_t kDefaultPort = 27020;
 
-    // Every command registered through TerrafrontModule's three TFCommands
-    // translation units. Kept in one teardown list so no callback retaining
-    // `this` survives module unload or a hot-reload.
+    // Every command registered through the TFCommands translation units
+    // (TFCommands, TFCommandsGameplay, TFCommandsNet, TFCommandsHarness). Kept
+    // in one teardown list so no callback retaining `this` or the context
+    // survives module unload or a hot-reload.
     constexpr const char* kModuleConsoleCommands[] = {
         "tf_status",
         "tf_host",
@@ -89,6 +90,10 @@ namespace
         "tf_quickplay",
         "tf_selftest_onboarding",
         "tf_cheat_stats",
+        "tf_observe",
+        "tf_walk",
+        "tf_aim_at",
+        "tf_give_raw",
     };
 
     // Client-side class selection shared by tf_class / tf_spawn / tf_give.
@@ -413,8 +418,9 @@ void TerrafrontModule::RegisterConsoleCommands()
 
     // Split parts, called in the original registration order: data/world +
     // debug/move + W2/W3 gameplay first, then chat + W5 onboarding.
-    RegisterConsoleCommandsGameplay(); // Console/TFCommandsGameplay.cpp
-    RegisterConsoleCommandsNet();      // Console/TFCommandsNet.cpp
+    RegisterConsoleCommandsGameplay();     // Console/TFCommandsGameplay.cpp
+    RegisterConsoleCommandsNet();          // Console/TFCommandsNet.cpp
+    RegisterConsoleCommandsHarness(m_ctx); // Console/TFCommandsHarness.cpp (TF-110)
 
     // ------------------------------------------------------------------- W13
     // Anti-cheat lane: per-player detection/clamp/reject counters (movement

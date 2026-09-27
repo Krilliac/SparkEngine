@@ -101,6 +101,22 @@ namespace Terrafront
         /// Debug panel toggle (hidden by default; wired from tf_* console commands).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }
 
+        // --- TF-110 scripted-client harness (Console/TFCommandsHarness.cpp) ----
+
+        /// Drive the local pawn from script for `seconds` of client clock.
+        /// `forward`/`right` are clamped to [-1, 1] and replace the keyboard
+        /// axes inside PumpInput, so the move still travels the normal
+        /// TF_ClientInput + prediction path (the server stays authoritative).
+        /// Works without an InputManager (headless clients).
+        void SetScriptedMove(float forward, float right, float seconds);
+
+        /// Point the local view (radians, camera convention). Also turns the
+        /// module camera when one exists so mouse-look reads the new angles back.
+        void SetViewAngles(float yaw, float pitch);
+
+        /// Monotonic client clock (seconds since Initialize).
+        double ClockSec() const { return m_clock; }
+
         // --- chat-social lane (additive): UI self-registration ------------------
         // TFChatWindow/TFSocialPanel call these from their Initialize so the
         // uiOpen input-suppression check in Update covers them (a chat line or
@@ -210,6 +226,11 @@ namespace Terrafront
         // View angles (camera convention, radians; see TFMovementModel.h basis).
         float m_viewYaw{0.0f};
         float m_viewPitch{0.0f};
+
+        // TF-110 scripted move (SetScriptedMove); active while m_clock < until.
+        float m_scriptedMoveX{0.0f};
+        float m_scriptedMoveY{0.0f};
+        double m_scriptedMoveUntil{-1.0};
 
         // Prediction (pure client only)
         Spark::ClientPrediction m_prediction;
