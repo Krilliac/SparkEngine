@@ -790,6 +790,129 @@ def deferred_platform_claim_surfaces(repo_root: Path, contract: dict[str, Any]) 
     return surfaces, missing
 
 
+# PLT-250 ("No public source or CI implies certification"): without platform
+# authority nothing in the repository may read as a console build target or a
+# certification claim. CI and CMake must not name a console runner, job, matrix
+# value, option or preset at all; docs and engine source may name a console
+# program next to a certification term only with a planned/unsupported
+# qualifier (the same one OD-12 wording uses).
+# Underscore separates words here, so ENABLE_PLAYSTATION and SPARK_TARGET_XBOX match.
+CONSOLE_PLATFORM_IDENTIFIER = re.compile(
+    r"(?<![A-Za-z0-9])(?:ps[45]|playstation|xbox|gdkx?|nintendo|switch-nx|prospero|orbis|scarlett)(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
+CONSOLE_CERTIFICATION_PLATFORM = re.compile(
+    r"\b(?:ps[45]|playstation|xbox|gdkx?|nintendo|switch-nx|prospero|orbis|scarlett"
+    r"|(?:game\s+)?consoles|game\s+console|console\s+(?:platforms?|hardware|targets?|SDKs?|certification))\b",
+    re.IGNORECASE,
+)
+CONSOLE_CERTIFICATION_TERM = re.compile(r"\b(?:certif(?:ied|ication)|TRCs?|TCRs?|lotcheck|XR-\d+)\b", re.IGNORECASE)
+CONSOLE_SOURCE_ROOTS = (
+    "SparkEngine/Source",
+    "SparkEditor/Source",
+    "SparkSDK",
+    "GameModules",
+    "SparkConsole/src",
+    "SparkShaderCompiler/src",
+)
+_CONSOLE_SOURCE_SUFFIXES = frozenset({".h", ".hpp", ".cpp", ".inl"})
+_CONSOLE_DOC_ROOTS = ("wiki", "docs")
+# Generated indexes mirror source that is scanned directly; the readiness ledger
+# names the certification gate it tracks.
+_CONSOLE_DOC_EXCLUDED_PREFIXES = ("wiki/reference/", "docs/api/", "docs/readiness/")
+
+
+def _is_console_identifier_surface(location: str) -> bool:
+    name = location.rsplit("/", 1)[-1]
+    return (
+        location.startswith(".github/workflows/")
+        or name in {"CMakeLists.txt", "CMakePresets.json"}
+        or name.endswith(".cmake")
+    )
+
+
+def console_certification_implication_errors(files: dict[str, str]) -> list[str]:
+    """Reject CI, build configuration, docs or source that implies console certification (PLT-250).
+
+    Workflows and CMake files (``.github/workflows/*``, ``CMakeLists.txt``,
+    ``CMakePresets.json``, ``*.cmake``) may not carry a console identifier on
+    any non-comment line: a runner label, job id, matrix value, option or
+    preset naming a console reads as a console build lane. Every other file is
+    checked per sentence (per row for a Markdown table row): a unit naming a
+    console program together with a certification term (certified,
+    certification, TRC, TCR, lotcheck, XR-nnn) must also carry the OD-12
+    planned/unsupported qualifier.
+    """
+
+    errors: list[str] = []
+    for location, text in sorted(files.items()):
+        if not isinstance(text, str):
+            errors.append(f"{location}: console-certification source must be text")
+            continue
+        identifier_surface = _is_console_identifier_surface(location)
+        if not identifier_surface and CONSOLE_CERTIFICATION_TERM.search(text) is None:
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            if identifier_surface:
+                if line.lstrip().startswith("#"):
+                    continue
+                console = CONSOLE_PLATFORM_IDENTIFIER.search(line)
+                if console is not None:
+                    errors.append(
+                        f"{location}:{number}: {console.group(0)!r} names a console build lane; console support "
+                        "is planned and uncertified (OD-12, PLT-250), so CI and CMake carry no console runner, "
+                        "job, matrix value, option or preset"
+                    )
+                continue
+            is_table_row = line.lstrip().startswith("|")
+            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+                console = CONSOLE_CERTIFICATION_PLATFORM.search(unit)
+                term = CONSOLE_CERTIFICATION_TERM.search(unit)
+                if console is None or term is None or _DEFERRED_PLATFORM_QUALIFIER.search(unit):
+                    continue
+                errors.append(
+                    f"{location}:{number}: {console.group(0)!r} with {term.group(0)!r} implies console "
+                    "certification; console support is planned and uncertified (OD-12, PLT-250), so the "
+                    "wording must say planned, unsupported or not certified"
+                )
+    return errors
+
+
+def console_certification_surfaces(repo_root: Path) -> dict[str, str]:
+    """Every file the PLT-250 certification-implication rule governs.
+
+    CI workflows, the root CMake files and ``cmake/*.cmake``, every global
+    public claim surface, hand-written wiki and docs Markdown, and engine,
+    editor, SDK, console, shader-compiler and game-module C++ source.
+    """
+
+    paths: set[Path] = set()
+    workflows = repo_root / ".github" / "workflows"
+    if workflows.is_dir():
+        paths.update(path for path in workflows.iterdir() if path.suffix in {".yml", ".yaml"})
+    paths.update(repo_root / name for name in ("CMakeLists.txt", "CMakePresets.json"))
+    cmake_dir = repo_root / "cmake"
+    if cmake_dir.is_dir():
+        paths.update(cmake_dir.rglob("*.cmake"))
+    paths.update(repo_root / relative for relative in REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES)
+    for root in _CONSOLE_DOC_ROOTS:
+        if (repo_root / root).is_dir():
+            paths.update((repo_root / root).rglob("*.md"))
+    for root in CONSOLE_SOURCE_ROOTS:
+        base = repo_root / root
+        if not base.is_dir():
+            continue
+        paths.update(base.rglob("CMakeLists.txt"))
+        paths.update(path for path in base.rglob("*") if path.suffix in _CONSOLE_SOURCE_SUFFIXES)
+    surfaces: dict[str, str] = {}
+    for path in sorted(paths):
+        relative = path.relative_to(repo_root).as_posix()
+        if relative.startswith(_CONSOLE_DOC_EXCLUDED_PREFIXES) or not path.is_file():
+            continue
+        surfaces[relative] = path.read_text(encoding="utf-8", errors="replace")
+    return surfaces
+
+
 # INST-130: the nightly also publishes SparkInstaller-Linux-x64 and
 # SparkInstaller-macOS-arm64 (release.yml build-installer). Those installers are
 # experimental and owned by their platform capability and PLT-* work, never by
@@ -3117,7 +3240,8 @@ class Validator:
 
     def validate_deferred_platforms(self) -> None:
         """OD-12 (PLT-230/PLT-240/PLT-250): deferred platforms stay unsupported and blocked, console carries
-        no platform authority, and no public surface claims support for them."""
+        no platform authority, no public surface claims support for them, and no CI, build configuration, doc
+        or source implies console certification (PLT-250)."""
         for message in deferred_platform_support_errors(self.contract):
             self.error("deferredPlatforms", message)
         surfaces, missing = deferred_platform_claim_surfaces(REPO_ROOT, self.contract)
@@ -3125,6 +3249,8 @@ class Validator:
             self.error(f"deferredPlatforms.{relative}", "governed wording surface must exist")
         for violation in deferred_platform_claim_errors(surfaces):
             self.error("deferredPlatforms", violation)
+        for violation in console_certification_implication_errors(console_certification_surfaces(REPO_ROOT)):
+            self.error("consoleCertification", violation)
 
     def validate_build_matrix_evidence(self) -> None:
         """The build-matrix configuration evidence is part of the contract, not beside it.

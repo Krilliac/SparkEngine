@@ -6,6 +6,8 @@ license classification (``legal_public_wording_errors``).
 OD-12 (PublicWording_DeferredPlatforms, PLT-230/240/250): mobile, OpenXR and
 console stay unsupported in the contract and in public wording
 (``deferred_platform_support_errors``, ``deferred_platform_claim_errors``).
+PLT-250 (PublicWording_ConsoleCertification): no CI, build configuration, doc or
+source implies console certification (``console_certification_implication_errors``).
 
 Each CTest selects its classes by name and checks the live tree directly. It never constructs the full contract Validator, so
 it needs neither git nor a POSIX host and runs on every CTest platform.
@@ -15,6 +17,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -164,6 +167,91 @@ class DeferredPlatformWordingTests(unittest.TestCase):
             self.assertIn(page, surfaces)
         self.assertTrue(site_data_validate.REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES <= surfaces.keys())
         errors = site_data_validate.deferred_platform_claim_errors(surfaces)
+        self.assertEqual([], errors, "\n".join(errors))
+
+
+class ConsoleCertificationImplicationTests(unittest.TestCase):
+    """PLT-250: no CI, build configuration, doc or source implies console certification."""
+
+    def errors(self, text: str, location: str) -> list[str]:
+        return site_data_validate.console_certification_implication_errors({location: text})
+
+    def test_console_ci_and_cmake_identifiers_are_rejected_with_their_location(self) -> None:
+        cases = (
+            (".github/workflows/build.yml", "jobs:\n  build:\n    runs-on: [self-hosted, ps5]"),
+            (".github/workflows/release.yml", "strategy:\n  matrix:\n    platform: [windows, xbox-series]"),
+            (".github/workflows/nightly.yaml", "jobs:\n  build-gdkx:\n    runs-on: windows-2022"),
+            ("CMakeLists.txt", 'intro\noption(ENABLE_PLAYSTATION "Build the console target" OFF)'),
+            ("cmake/Platforms.cmake", "intro\nset(SPARK_TARGET_NINTENDO ON)"),
+            ("CMakePresets.json", '{\n  "configurePresets": [{"name": "scarlett-release"}]'),
+        )
+        for location, text in cases:
+            with self.subTest(location=location):
+                errors = self.errors(text, location)
+                self.assertEqual(1, len(errors), errors)
+                self.assertRegex(errors[0], rf"^{re.escape(location)}:[23]: ")
+                self.assertIn("PLT-250", errors[0])
+
+    def test_ci_comments_and_unrelated_identifiers_are_not_console_lanes(self) -> None:
+        text = "# No PS5 or Xbox runner exists (PLT-250).\njobs:\n  build-windows:\n    runs-on: windows-2022\n"
+        self.assertEqual([], self.errors(text, ".github/workflows/build.yml"))
+        self.assertEqual([], self.errors("option(ENABLE_SWITCH_STATEMENT_CHECK OFF)", "CMakeLists.txt"))
+
+    def test_unqualified_certification_wording_is_rejected_in_docs_and_source(self) -> None:
+        cases = (
+            ("README.md", "The engine passes PlayStation certification."),
+            ("wiki/platform/Accessibility.md", "| **PlayStation Certification** | Subtitle support |"),
+            ("docs/guides/Consoles.md", "Builds are Xbox certified and meet XR-015."),
+            ("SparkEngine/Source/Core/Platform.h", "// Satisfies Nintendo lotcheck requirements"),
+            ("wiki/Build-Guide.md", "Games pass console certification on day one."),
+        )
+        for location, text in cases:
+            with self.subTest(location=location):
+                errors = self.errors("intro\n" + text, location)
+                self.assertEqual(1, len(errors), errors)
+                self.assertRegex(errors[0], rf"^{re.escape(location)}:2: ")
+                self.assertIn("implies console certification", errors[0])
+
+    def test_qualified_or_unrelated_wording_is_allowed(self) -> None:
+        for text in (
+            "PlayStation certification is not available (PLT-250).",
+            "Xbox certification is planned and needs platform agreements.",
+            "| **PlayStation accessibility guidance** (reference only; console support is planned, PLT-250) | x |",
+            "The Windows installer certification covers MSI signing.",
+            "SparkConsole.exe is blocked and uncertified.",
+            "Xbox controller layout for gamepad input.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual([], self.errors(text, "README.md"))
+
+    def test_rule_is_per_sentence_not_per_line(self) -> None:
+        errors = self.errors(
+            "PlayStation certification is planned. Xbox certification is complete.", "README.md"
+        )
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("'Xbox'", errors[0])
+
+    def test_non_text_surface_is_an_error(self) -> None:
+        self.assertEqual(
+            ["a.md: console-certification source must be text"],
+            site_data_validate.console_certification_implication_errors({"a.md": None}),
+        )
+
+    def test_live_tree_implies_no_console_certification(self) -> None:
+        surfaces = site_data_validate.console_certification_surfaces(REPO_ROOT)
+        for governed in (
+            ".github/workflows/build.yml",
+            ".github/workflows/release.yml",
+            "CMakeLists.txt",
+            "CMakePresets.json",
+            "README.md",
+            "wiki/platform/Accessibility.md",
+            "SparkEngine/Source/Engine/OnlineServices/OnlineServices.h",
+        ):
+            self.assertIn(governed, surfaces, "a governed surface that is not scanned is never a pass")
+        self.assertTrue(site_data_validate.REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES <= surfaces.keys())
+        self.assertFalse(any(path.startswith("wiki/reference/") for path in surfaces))
+        errors = site_data_validate.console_certification_implication_errors(surfaces)
         self.assertEqual([], errors, "\n".join(errors))
 
 

@@ -3687,6 +3687,16 @@ add_test(
 set_tests_properties(PublicWording_DeferredPlatforms PROPERTIES
     LABELS "governance;platform;unit;python"
     TIMEOUT 60)
+# PLT-250: no workflow, CMake file, public doc or engine source implies console
+# certification (console runners/options/presets, unqualified certification wording).
+add_test(
+    NAME PublicWording_ConsoleCertification
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_public_wording.py -v
+        ConsoleCertificationImplicationTests)
+set_tests_properties(PublicWording_ConsoleCertification PROPERTIES
+    LABELS "governance;platform;unit;python"
+    TIMEOUT 60)
 # PLT-220: SPARK_MACOS_MIN_VERSION, every workflow deployment target, the
 # documented macOS floor/runner, and the Mach-O minimum-version parser.
 add_test(
