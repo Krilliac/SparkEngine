@@ -115,7 +115,9 @@ namespace Spark::VisualScriptDemo
 
         std::unordered_map<std::string, std::string> sources;
         if (!ReadAndValidateScripts(*root, sources))
+        {
             return false;
+        }
 
         m_scriptRoot = *root;
         m_scriptSources = std::move(sources);
@@ -196,7 +198,9 @@ namespace Spark::VisualScriptDemo
         // a lost selfEntity placeholder rejects the reload and changes nothing.
         std::unordered_map<std::string, std::string> sources;
         if (!ReadAndValidateScripts(m_scriptRoot, sources))
+        {
             return false;
+        }
         m_scriptSources = std::move(sources); // a later Spawn() (vs_restart) binds the new sources too
 
         struct ClassTotals
@@ -214,14 +218,23 @@ namespace Spark::VisualScriptDemo
         {
             const auto* script = m_world.GetRegistry().valid(entity) ? m_world.GetComponent<Script>(entity) : nullptr;
             if (!script)
+            {
                 continue;
+            }
             // Copied: the reload re-attaches the instance and must not read through the component.
             const std::string className = script->className;
             const std::string moduleName = script->moduleName;
             const std::string diagnosticPath = (m_scriptRoot / (className + ".as")).generic_string();
 
-            // Validation guarantees exactly one placeholder, so binding cannot fail here.
+            // Validation guarantees exactly one placeholder; a failed bind means validation and
+            // SelfEntityDeclaration drifted apart, so report it instead of dereferencing an empty optional.
             const auto bound = BindSelfEntity(m_scriptSources.at(className), static_cast<uint32_t>(entity));
+            if (!bound)
+            {
+                failures += (failures.empty() ? "" : "; ") + className + " on entity " +
+                            std::to_string(static_cast<uint32_t>(entity)) + " lost its selfEntity placeholder";
+                continue;
+            }
             const bool reloaded = m_scriptEngine.HotReloadModuleFromSource(moduleName, *bound);
             const auto& report = m_scriptEngine.GetLastHotReloadReport();
             auto& classTotals = totals[className];
@@ -250,7 +263,9 @@ namespace Spark::VisualScriptDemo
                     << classTotals.dropped;
         }
         for (const auto& note : notes)
+        {
             summary << "\n  " << note;
+        }
         m_reloadSummary = summary.str();
 
         if (!failures.empty())

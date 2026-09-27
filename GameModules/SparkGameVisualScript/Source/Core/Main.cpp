@@ -256,11 +256,15 @@ void SparkGameVisualScriptModule::RegisterConsoleCommands()
         [this](const std::vector<std::string>&)
         {
             if (!m_initialized || !m_context || !m_demo)
+            {
                 return std::string{"Visual-script demo is not initialized"};
+            }
 
             // Validates all five scripts before touching the running demo; a rejected reload changes nothing.
             if (!m_demo->ReloadScripts())
+            {
                 return "Visual-script reload failed: " + m_demo->GetLastError();
+            }
             return m_demo->GetReloadSummary();
         },
         "Hot-reload the generated visual scripts into the running demo, keeping entity state", "VisualScript");
