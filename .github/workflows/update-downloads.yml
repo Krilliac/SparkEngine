@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 */6 * * *'  # Every 6 hours
   workflow_dispatch:
+    inputs:
+      bootstrap_counter_state_seed:
+        description: >-
+          One-time bootstrap only. Full 40-hex SHA of the current Working commit whose reviewed
+          .github/badges/downloads-data.json seeds a missing refs/tags/generated-release-counters.
+          Leave empty for normal runs; a missing tag otherwise fails the run.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -51,12 +60,18 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         STATE_REF: refs/tags/generated-release-counters
+        BOOTSTRAP_SEED: ${{ inputs.bootstrap_counter_state_seed }}
       run: |
         set -euo pipefail
+        BOOTSTRAP_SEED="${BOOTSTRAP_SEED:-}"
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
         REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
           ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
         if test -n "$REMOTE_OBJECT"; then
+          if test -n "$BOOTSTRAP_SEED"; then
+            echo "Counter state tag $STATE_REF already exists; refusing to bootstrap over it." >&2
+            exit 1
+          fi
           git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
             fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
           git checkout --detach "$STATE_REF"
@@ -65,9 +80,30 @@ jobs:
             exit 1
           fi
         else
-          git checkout --detach "$(git rev-parse HEAD)"
+          # The durable ledger lives only on the tag. Working's checked-in
+          # ledger is an older, already-initialized snapshot: reseeding from it
+          # silently drops archived asset records and any pending-publication
+          # recovery marker. A lost tag is restored by hand, or bootstrapped
+          # once from an explicitly named, reviewed Working commit.
+          if test -z "$BOOTSTRAP_SEED"; then
+            echo "Counter state tag $STATE_REF is missing; refusing to reseed from Working's stale ledger." >&2
+            echo "Restore the tag, or dispatch this workflow with bootstrap_counter_state_seed set to the" >&2
+            echo "reviewed Working commit whose .github/badges/downloads-data.json should seed it." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$BOOTSTRAP_SEED" | grep -Eqx '[0-9a-f]{40}'; then
+            echo "bootstrap_counter_state_seed must be a full lowercase 40-hex commit SHA." >&2
+            exit 1
+          fi
+          if test "$(git rev-parse HEAD)" != "$BOOTSTRAP_SEED"; then
+            echo "bootstrap_counter_state_seed does not name the checked-out Working head." >&2
+            exit 1
+          fi
+          git checkout --detach "$BOOTSTRAP_SEED"
+          echo "Bootstrapping $STATE_REF from reviewed seed $BOOTSTRAP_SEED."
         fi
         echo "remote_object=$REMOTE_OBJECT" >> "$GITHUB_OUTPUT"
+        echo "bootstrap_seed=$BOOTSTRAP_SEED" >> "$GITHUB_OUTPUT"
         echo "state_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Refresh download count badges
@@ -79,9 +115,16 @@ jobs:
         STATE_REF: refs/tags/generated-release-counters
         EXPECTED_REMOTE_OBJECT: ${{ steps.badge-state.outputs.remote_object }}
         EXPECTED_STATE_COMMIT: ${{ steps.badge-state.outputs.state_commit }}
+        BOOTSTRAP_SEED: ${{ steps.badge-state.outputs.bootstrap_seed }}
         TRUSTED_SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
       run: |
         set -euo pipefail
+        # Creating the tag (an empty lease below) is only legitimate on the
+        # explicit bootstrap path the state step validated.
+        if test -z "$EXPECTED_REMOTE_OBJECT" && test -z "$BOOTSTRAP_SEED"; then
+          echo "Counter state tag was not loaded and no bootstrap seed was approved." >&2
+          exit 1
+        fi
         echo "changed=false" >> "$GITHUB_OUTPUT"
         mkdir -p .github/badges
         NIGHTLY_BADGE=".github/badges/nightly-downloads.json"
@@ -370,8 +413,15 @@ jobs:
           .github/badges/installer-downloads.json \
           .github/badges/nightly-downloads.json \
           .github/badges/stable-downloads.json
-        git diff --cached --quiet && echo "No changes" && exit 0
-        git commit -s -m "chore: refresh download badges (nightly: $NIGHTLY_DL, stable: $STABLE_DL) [skip ci]"
+        if test -n "$BOOTSTRAP_SEED"; then
+          # Always create the tag on bootstrap and record the seed identity.
+          git commit -s --allow-empty \
+            -m "chore: bootstrap download-counter state (nightly: $NIGHTLY_DL, stable: $STABLE_DL) [skip ci]" \
+            -m "Counter-State-Bootstrap-Seed: $BOOTSTRAP_SEED"
+        else
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -s -m "chore: refresh download badges (nightly: $NIGHTLY_DL, stable: $STABLE_DL) [skip ci]"
+        fi
         FINAL_COMMIT="$(git rev-parse HEAD)"
         git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_REMOTE_OBJECT}" origin \

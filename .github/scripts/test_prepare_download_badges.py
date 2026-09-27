@@ -3273,6 +3273,180 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         )
 
 
+RELEASE_RECOVERY_WORKFLOW = (
+    Path(__file__).resolve().parents[1] / "workflows" / "release-recovery.yml"
+)
+COUNTER_STATE_REF = "refs/tags/generated-release-counters"
+
+
+def workflow_step_script(workflow: Path, step_name: str) -> str:
+    """Return the dedented `run: |` body of the uniquely named workflow step."""
+    text = workflow.read_text(encoding="utf-8")
+    marker = f"- name: {step_name}\n"
+    if text.count(marker) != 1:
+        raise AssertionError(f"step {step_name!r} is not unique in {workflow.name}")
+    start = text.index(marker)
+    line_start = text.rfind("\n", 0, start) + 1
+    indent = text[line_start:start]
+    end = text.find(f"\n{indent}- name:", start)
+    step = text[start:end if end != -1 else len(text)]
+    return textwrap.dedent(step.split("run: |\n", 1)[1])
+
+
+class CounterStateTagFailClosedTests(unittest.TestCase):
+    """A missing durable counter tag must never be reseeded from Working.
+
+    Working's checked-in ledger is an older, already-initialized snapshot, so a
+    silent fallback drops archived asset records and pending-publication
+    recovery markers. These run the real step scripts against a local origin.
+    """
+
+    def setUp(self):
+        self.git = shutil.which("git")
+        if self.git is None:
+            self.skipTest("git is required for counter-state tag fixtures")
+        self.bash = bash_executable()
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-counter-tag-")
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.origin = root / "origin.git"
+        self.work = root / "badge-repository"
+        self.outputs = root / "github-output"
+        self.runner_temp = root / "runner-temp"
+        self.runner_temp.mkdir()
+        self._git(root, "init", "-q", "--bare", str(self.origin))
+        self._git(root, "init", "-q", "-b", "Working", str(self.work))
+        for key, value in (
+            ("user.email", "fixture@example.invalid"),
+            ("user.name", "Counter Fixture"),
+            ("commit.gpgsign", "false"),
+            ("core.autocrlf", "false"),
+        ):
+            self._git(self.work, "config", key, value)
+        self._commit_ledger("stale Working ledger", total=3)
+        self._git(self.work, "remote", "add", "origin", self.origin.as_posix())
+        self._git(self.work, "push", "-q", "origin", "Working")
+        self.working_head = self._git(self.work, "rev-parse", "HEAD")
+
+    def _git(self, cwd: Path, *args: str) -> str:
+        done = subprocess.run(
+            [self.git, *args], cwd=str(cwd), capture_output=True, text=True, timeout=120
+        )
+        if done.returncode != 0:
+            raise AssertionError(f"git {args}: {done.stderr}")
+        return done.stdout.strip()
+
+    def _commit_ledger(self, message: str, *, total: int) -> None:
+        ledger = self.work / ".github" / "badges" / "downloads-data.json"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text(json.dumps({"schemaVersion": 2, "total": total}) + "\n", encoding="utf-8")
+        self._git(self.work, "add", "-A")
+        self._git(self.work, "commit", "-q", "-m", message)
+
+    def _publish_tag(self) -> str:
+        """Push a newer ledger to the tag only, leaving Working on the stale one."""
+        self._commit_ledger("durable tag ledger", total=42)
+        tagged = self._git(self.work, "rev-parse", "HEAD")
+        self._git(self.work, "push", "-q", "origin", f"{tagged}:{COUNTER_STATE_REF}")
+        self._git(self.work, "reset", "-q", "--hard", self.working_head)
+        return tagged
+
+    def _run(self, workflow: Path, step: str, **env: str):
+        self.outputs.write_text("", encoding="utf-8")
+        result = subprocess.run(
+            [self.bash, "-c", workflow_step_script(workflow, step)],
+            cwd=str(self.work), capture_output=True, text=True, timeout=120,
+            env={
+                **os.environ,
+                "GH_TOKEN": "fixture-token",
+                "STATE_REF": COUNTER_STATE_REF,
+                "GITHUB_OUTPUT": str(self.outputs),
+                "RUNNER_TEMP": str(self.runner_temp),
+                "BOOTSTRAP_SEED": "",
+                # Git Bash would otherwise rewrite `ref:path` arguments as paths.
+                "MSYS_NO_PATHCONV": "1",
+                **env,
+            },
+        )
+        outputs = dict(
+            line.split("=", 1)
+            for line in self.outputs.read_text(encoding="utf-8").splitlines()
+            if "=" in line
+        )
+        return result, outputs
+
+    def _load_update(self, **env: str):
+        return self._run(UPDATE_WORKFLOW, "Load durable download-counter state tag", **env)
+
+    def test_update_refuses_missing_tag_without_bootstrap_seed(self):
+        result, outputs = self._load_update()
+        self.assertNotEqual(result.returncode, 0, "missing tag must not reseed from Working")
+        self.assertIn("is missing", result.stderr)
+        self.assertNotIn("state_commit", outputs)
+
+    def test_update_bootstraps_missing_tag_only_from_named_working_head(self):
+        for seed, needle in (
+            ("b" * 40, "does not name the checked-out Working head"),
+            ("HEAD", "40-hex"),
+            (self.working_head.upper(), "40-hex"),
+        ):
+            with self.subTest(seed=seed):
+                result, outputs = self._load_update(BOOTSTRAP_SEED=seed)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(needle, result.stderr)
+                self.assertNotIn("state_commit", outputs)
+        result, outputs = self._load_update(BOOTSTRAP_SEED=self.working_head)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs["remote_object"], "")
+        self.assertEqual(outputs["bootstrap_seed"], self.working_head)
+        self.assertEqual(outputs["state_commit"], self.working_head)
+
+    def test_update_loads_existing_tag_and_refuses_bootstrap_over_it(self):
+        tagged = self._publish_tag()
+        result, outputs = self._load_update()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs["remote_object"], tagged)
+        self.assertEqual(outputs["state_commit"], tagged)
+        self.assertEqual(outputs["bootstrap_seed"], "")
+        result, _ = self._load_update(BOOTSTRAP_SEED=self.working_head)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("already exists", result.stderr)
+
+    def test_release_refuses_missing_tag_and_loads_existing_tag(self):
+        step = "Load durable download-counter state tag"
+        result, outputs = self._run(RELEASE_WORKFLOW, step)
+        self.assertNotEqual(result.returncode, 0, "release must not publish against Working's ledger")
+        self.assertIn("is missing", result.stderr)
+        self.assertNotIn("state_commit", outputs)
+        tagged = self._publish_tag()
+        result, outputs = self._run(RELEASE_WORKFLOW, step)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs["state_commit"], tagged)
+
+    def test_recovery_refuses_to_conclude_nothing_pending_from_missing_tag(self):
+        step = "Load durable staged publication state"
+        result, outputs = self._run(RELEASE_RECOVERY_WORKFLOW, step)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is missing", result.stderr)
+        self.assertNotIn("found", outputs)
+        self._publish_tag()
+        result, outputs = self._run(RELEASE_RECOVERY_WORKFLOW, step)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs["found"], "true")
+        staged = json.loads((self.runner_temp / "downloads-data.json").read_text(encoding="utf-8"))
+        self.assertEqual(staged["total"], 42)
+
+    def test_update_refresh_creates_tag_only_on_recorded_bootstrap(self):
+        script = workflow_step_script(UPDATE_WORKFLOW, "Refresh download count badges")
+        guard = script.index('if test -z "$EXPECTED_REMOTE_OBJECT" && test -z "$BOOTSTRAP_SEED"; then')
+        self.assertLess(guard, script.index("api_get()"))
+        self.assertIn('-m "Counter-State-Bootstrap-Seed: $BOOTSTRAP_SEED"', script)
+        self.assertIn("--allow-empty", script)
+        text = UPDATE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("BOOTSTRAP_SEED: ${{ steps.badge-state.outputs.bootstrap_seed }}", text)
+        self.assertIn("BOOTSTRAP_SEED: ${{ inputs.bootstrap_counter_state_seed }}", text)
+
+
 class V2FakeApi:
     def __init__(self, responses):
         self.responses = {key: list(values) for key, values in responses.items()}
