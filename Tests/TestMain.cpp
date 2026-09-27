@@ -38,6 +38,7 @@
 #include <fstream>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <random>
 #include <sstream>
 
@@ -704,12 +705,24 @@ int main(int argc, char** argv)
     int testLimit = static_cast<int>(tests.size());
     if (const char* limitEnv = std::getenv("SPARK_TEST_LIMIT"))
         testLimit = std::min(testLimit, std::atoi(limitEnv));
-    const char* fileFilter = std::getenv("SPARK_TEST_FILE");
-    const char* nameFilter = std::getenv("SPARK_TEST_NAME");
+    // Tests may change the environment mid-run (e.g. to launch child processes), and
+    // setenv/_putenv can free the strings getenv returned. Own copies of the selection
+    // variables so a test cannot silently widen or break the run's selection.
+    const auto environmentCopy = [](const char* name) -> std::optional<std::string>
+    {
+        const char* value = std::getenv(name);
+        return value != nullptr ? std::optional<std::string>(value) : std::nullopt;
+    };
+    const std::optional<std::string> fileFilterValue = environmentCopy("SPARK_TEST_FILE");
+    const std::optional<std::string> nameFilterValue = environmentCopy("SPARK_TEST_NAME");
+    const std::optional<std::string> namePrefixFilterValue = environmentCopy("SPARK_TEST_NAME_PREFIX");
+    const std::optional<std::string> expectedCountValue = environmentCopy("SPARK_TEST_EXPECT_COUNT");
+    const char* fileFilter = fileFilterValue ? fileFilterValue->c_str() : nullptr;
+    const char* nameFilter = nameFilterValue ? nameFilterValue->c_str() : nullptr;
     // SPARK_TEST_NAME matches anywhere in the name ("RPG_" also selects "ARPG_*");
     // selectors that must count one family exactly use the anchored prefix filter.
-    const char* namePrefixFilter = std::getenv("SPARK_TEST_NAME_PREFIX");
-    const char* expectedCountText = std::getenv("SPARK_TEST_EXPECT_COUNT");
+    const char* namePrefixFilter = namePrefixFilterValue ? namePrefixFilterValue->c_str() : nullptr;
+    const char* expectedCountText = expectedCountValue ? expectedCountValue->c_str() : nullptr;
     int expectedTestCount = 0;
     bool expectedCountValid = expectedCountText == nullptr;
     if (expectedCountText != nullptr)
