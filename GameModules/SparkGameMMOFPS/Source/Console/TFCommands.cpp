@@ -94,6 +94,11 @@ namespace
         "tf_walk",
         "tf_aim_at",
         "tf_give_raw",
+        "tf_vehicle_buy",
+        "tf_vehicle_seat",
+        "tf_place_faction",
+        "tf_flux_floor",
+        "tf_damage_vehicles",
     };
 
     // Client-side class selection shared by tf_class / tf_spawn / tf_give.
