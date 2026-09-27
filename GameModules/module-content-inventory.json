@@ -153,6 +153,7 @@
         "Utils/ConsoleProcessManager.h",
         "Utils/ContainerUtils.h",
         "Utils/EventBus.h",
+        "Utils/FileUtils.h",
         "Utils/InvalidStateDetector.h",
         "Utils/LogMacros.h",
         "Utils/MathUtils.h",
@@ -162,7 +163,7 @@
         "Utils/StateMachine.h",
         "Utils/Validate.h"
       ],
-      "privateEngineHeaderCount": 51,
+      "privateEngineHeaderCount": 52,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],
@@ -228,7 +229,7 @@
       "directory": "GameModules/SparkGameMMOFPS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameMMOFPS/Source",
-      "sourceFileCount": 316,
+      "sourceFileCount": 318,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,

@@ -17,7 +17,7 @@
   },
   "inventory": {
     "blocked_count": 132,
-    "candidate_count": 288,
+    "candidate_count": 287,
     "deferred_candidate_count": 0,
     "excluded_files": [],
     "excluded_subtrees": [
