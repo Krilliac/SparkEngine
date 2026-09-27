@@ -168,7 +168,8 @@ namespace SparkFPS
             return false;
 
         auto& network = Spark::Net::NetworkManager::GetInstance();
-        if (!network.Initialize() || !network.StartServer(port, static_cast<int>(maxPlayers)))
+        if (!network.Initialize() || !network.UseDefaultSecurityConfig(Spark::Net::NetworkRole::Server) ||
+            !network.StartServer(port, static_cast<int>(maxPlayers)))
             return false;
 
         RegisterNetworkHandlers();
@@ -204,7 +205,8 @@ namespace SparkFPS
             return false;
 
         auto& network = Spark::Net::NetworkManager::GetInstance();
-        if (!network.Initialize() || !network.Connect(address, port, "FPSPlayer"))
+        if (!network.Initialize() || !network.UseDefaultSecurityConfig(Spark::Net::NetworkRole::Client) ||
+            !network.Connect(address, port, "FPSPlayer"))
             return false;
 
         RegisterNetworkHandlers();

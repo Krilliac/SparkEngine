@@ -42,6 +42,7 @@
 #include <atomic>
 #include <array>
 #include "NetworkInterpolation.h"
+#include "NetworkTrustStore.h"
 #include "NetworkWireLimits.h"
 #include "PacketValidator.h"
 
@@ -487,6 +488,32 @@ namespace Spark::Net
         /// Shut down the networking subsystem and release all resources.
         void Shutdown() override;
 
+        /**
+         * @brief Replace the transport security configuration (NET-100)
+         *
+         * The configuration is not lifecycle state: it survives Shutdown(),
+         * StopServer() and Disconnect(). StartServer() refuses without an identity
+         * and Connect() refuses without a usable ServerTrust, so there is no
+         * unauthenticated mode to fall back to.
+         */
+        void SetSecurityConfig(NetworkSecurityConfig config);
+
+        /// Copy of the current security configuration (includes the server secret; handle with care).
+        [[nodiscard]] NetworkSecurityConfig GetSecurityConfig() const;
+
+        /**
+         * @brief Fill in only the missing security configuration from per-user defaults
+         *
+         * Server role: an unset identity is loaded or created at
+         * DefaultNetworkSecurityDirectory()/server_identity.key. Client role: an
+         * unusable trust becomes trust-on-first-use in .../known_hosts. Anything a
+         * caller configured explicitly (SetSecurityConfig) is kept.
+         *
+         * @param role Server or Client
+         * @return false (and logs) when no default can be established; the caller must not start
+         */
+        [[nodiscard]] bool UseDefaultSecurityConfig(NetworkRole role);
+
         /// Initialize as server
         bool StartServer(uint16_t port = DEFAULT_PORT, int maxClients = 32);
         bool StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy);
@@ -884,6 +911,7 @@ namespace Spark::Net
         std::unordered_map<ClientID, sockaddr_in> m_clientAddresses;
 #endif // ENABLE_NETWORKING
 
+        NetworkSecurityConfig m_securityConfig;   ///< Guarded by m_apiMutex; survives lifecycles (SetSecurityConfig).
         NetworkEndpointPolicy m_endpointPolicy{}; ///< Captured once and unchanged for the active socket lifecycle.
         bool m_allowLanAdvertisement = false;     ///< Authoritative server option for discovery publishers.
 

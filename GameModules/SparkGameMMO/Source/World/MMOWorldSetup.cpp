@@ -323,7 +323,7 @@ namespace MMO
                 return false;
         }
 
-        if (!nm->StartServer(port, 128))
+        if (!nm->UseDefaultSecurityConfig(Spark::Net::NetworkRole::Server) || !nm->StartServer(port, 128))
             return false;
 
         // Chat routing remains owned by MMOChatSystem. Clients author their own

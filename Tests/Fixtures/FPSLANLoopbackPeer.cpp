@@ -7,9 +7,11 @@
  * clients share nothing but loopback UDP datagrams:
  *
  *   SparkFPSLANLoopbackPeer --role server [--timeout <seconds>]
- *   SparkFPSLANLoopbackPeer --role shooter|target --port <port> --host-id <id> [--timeout <seconds>]
+ *   SparkFPSLANLoopbackPeer --role shooter|target --port <port> --host-id <id> --server-key <hex>
+ *                           [--timeout <seconds>]
  *
- * The server hosts on an ephemeral port and prints `FPSLAN ready port=<port> host=<id>`. Each
+ * The server hosts on an ephemeral port with an ephemeral NET-100 identity and prints
+ * `FPSLAN ready port=<port> host=<id> key=<hex>`; clients pin that key (--server-key). Each
  * client plays its side of the round in FPSLANLoopbackScenario.h, driving the system only through
  * its public API (Update, SendInput at 60 Hz, GetAllPlayerStates, GetScoreboard), and prints
  * `FPSLAN event=done` once its own view shows the finished round. Every protocol line starts with
@@ -32,6 +34,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -80,7 +83,32 @@ namespace
         uint32_t hostId = 0;
         bool hasHostId = false;
         double timeoutSeconds = 120.0;
+        Spark::Net::ServerPublicKey serverKey{}; ///< NET-100: clients pin the key the server printed
+        bool hasServerKey = false;
     };
+
+    std::string KeyToHex(const Spark::Net::ServerPublicKey& key)
+    {
+        std::string hex;
+        for (const uint8_t byte : key)
+            hex += std::format("{:02x}", byte);
+        return hex;
+    }
+
+    bool HexToKey(std::string_view hex, Spark::Net::ServerPublicKey& key)
+    {
+        if (hex.size() != key.size() * 2)
+            return false;
+        for (size_t i = 0; i < key.size(); ++i)
+        {
+            unsigned value = 0;
+            const auto [end, ec] = std::from_chars(hex.data() + 2 * i, hex.data() + 2 * i + 2, value, 16);
+            if (ec != std::errc() || end != hex.data() + 2 * i + 2)
+                return false;
+            key[i] = static_cast<uint8_t>(value);
+        }
+        return true;
+    }
 
     template <typename... Args> void Emit(std::format_string<Args...> format, Args&&... args)
     {
@@ -129,6 +157,12 @@ namespace
                     options.hostId = static_cast<uint32_t>(std::stoul(value));
                     options.hasHostId = true;
                 }
+                else if (flag == "--server-key")
+                {
+                    if (!HexToKey(value, options.serverKey))
+                        return std::nullopt;
+                    options.hasServerKey = true;
+                }
                 else if (flag == "--timeout")
                 {
                     options.timeoutSeconds = std::stod(value);
@@ -147,7 +181,7 @@ namespace
         }
 
         const bool isClient = options.role != Role::Server;
-        if (!hasRole || isClient != hasPort || isClient != options.hasHostId)
+        if (!hasRole || isClient != hasPort || isClient != options.hasHostId || isClient != options.hasServerKey)
             return std::nullopt;
         return options;
     }
@@ -508,13 +542,25 @@ namespace
         for (const Point& point : kSpawnPoints)
             system.AddSpawnPoint({point.x, point.y, point.z, 0.0f});
         system.Initialize(true);
+        // NET-100: an ephemeral in-memory identity (never the per-user key file); the
+        // coordinator hands its public key to the clients, which pin it.
+        auto identity = Spark::Net::GenerateServerIdentity();
+        if (!identity)
+        {
+            Emit("error reason=identity-failed");
+            return Leave(system, kExitNetworkFailure);
+        }
+        const Spark::Net::ServerPublicKey serverKey = identity->publicKey;
+        Spark::Net::NetworkSecurityConfig security;
+        security.identity = std::move(*identity);
+        Spark::Net::NetworkManager::GetInstance().SetSecurityConfig(std::move(security));
         if (!system.StartServer(0, 4))
         {
             Emit("error reason=start-server-failed");
             return Leave(system, kExitNetworkFailure);
         }
-        Emit("ready port={} host={}", Spark::Net::NetworkManager::GetInstance().GetBoundPort(),
-             system.GetLocalClientId());
+        Emit("ready port={} host={} key={}", Spark::Net::NetworkManager::GetInstance().GetBoundPort(),
+             system.GetLocalClientId(), KeyToHex(serverKey));
 
         ServerObserver observer;
         FrameClock clock;
@@ -543,6 +589,9 @@ namespace
     {
         auto& system = FPSMultiplayerSystem::GetInstance();
         system.Initialize(false);
+        Spark::Net::NetworkSecurityConfig security;
+        security.trust = Spark::Net::ServerTrust::Pin(options.serverKey);
+        Spark::Net::NetworkManager::GetInstance().SetSecurityConfig(std::move(security));
         if (!system.Connect("127.0.0.1", options.port))
         {
             Emit("error reason=connect-failed port={}", options.port);
@@ -593,7 +642,7 @@ int main(int argc, char** argv)
     {
         std::fputs("usage: SparkFPSLANLoopbackPeer --role server [--timeout <s>]\n"
                    "       SparkFPSLANLoopbackPeer --role shooter|target --port <port> --host-id <id> "
-                   "[--timeout <s>]\n",
+                   "--server-key <hex> [--timeout <s>]\n",
                    stderr);
         return kExitUsage;
     }

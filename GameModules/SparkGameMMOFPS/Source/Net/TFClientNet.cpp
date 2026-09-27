@@ -216,7 +216,7 @@ namespace Terrafront
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         if (!nm.IsInitialized() && !nm.Initialize())
             return false;
-        if (!nm.Connect(ip, port, "TerrafrontPlayer"))
+        if (!nm.UseDefaultSecurityConfig(Spark::Net::NetworkRole::Client) || !nm.Connect(ip, port, "TerrafrontPlayer"))
             return false;
         if (m_ctx)
             m_ctx->role = NetRole::Client;

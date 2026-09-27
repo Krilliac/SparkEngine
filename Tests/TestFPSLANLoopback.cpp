@@ -319,9 +319,11 @@ TEST(FPSLAN_ThreeProcessLoopbackConvergence)
     const std::string port = readyFields.at("port");
     const std::string hostText = readyFields.at("host");
     const auto hostId = static_cast<uint32_t>(std::stoul(hostText));
+    const std::string serverKey = readyFields.at("key"); // NET-100: clients pin the server's identity
 
-    shooter.process = LaunchPeer({"--role", "shooter", "--port", port, "--host-id", hostText});
-    target.process = LaunchPeer({"--role", "target", "--port", port, "--host-id", hostText});
+    shooter.process =
+        LaunchPeer({"--role", "shooter", "--port", port, "--host-id", hostText, "--server-key", serverKey});
+    target.process = LaunchPeer({"--role", "target", "--port", port, "--host-id", hostText, "--server-key", serverKey});
     ASSERT_TRUE(shooter.process.has_value());
     ASSERT_TRUE(target.process.has_value());
 

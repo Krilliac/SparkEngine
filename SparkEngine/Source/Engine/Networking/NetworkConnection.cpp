@@ -318,6 +318,63 @@ namespace Spark::Net
     }
 
     // --------------------------------------------------------------------------
+    // Security configuration (NET-100)
+    // --------------------------------------------------------------------------
+
+    void NetworkManager::SetSecurityConfig(NetworkSecurityConfig config)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        m_securityConfig = std::move(config);
+    }
+
+    NetworkSecurityConfig NetworkManager::GetSecurityConfig() const
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        return m_securityConfig;
+    }
+
+    bool NetworkManager::UseDefaultSecurityConfig(NetworkRole role)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        if (role == NetworkRole::Server && m_securityConfig.identity)
+        {
+            return true;
+        }
+        if (role == NetworkRole::Client && m_securityConfig.trust.IsUsable())
+        {
+            return true;
+        }
+        if (role == NetworkRole::None)
+        {
+            return false;
+        }
+
+        const std::filesystem::path directory = DefaultNetworkSecurityDirectory();
+        if (directory.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "No per-user data directory: cannot establish the default network security configuration");
+            return false;
+        }
+        if (role == NetworkRole::Client)
+        {
+            m_securityConfig.trust = ServerTrust::TrustOnFirstUseAt(directory / DEFAULT_KNOWN_HOSTS_FILE);
+            return true;
+        }
+
+        const std::filesystem::path identityPath = directory / DEFAULT_SERVER_IDENTITY_FILE;
+        auto identity = LoadOrCreateServerIdentity(identityPath);
+        if (!identity)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Server identity '%s' unusable: %s",
+                            identityPath.string().c_str(), TrustStoreErrorText(identity.error()));
+            return false;
+        }
+        m_securityConfig.identity = std::move(*identity);
+        return true;
+    }
+
+    // --------------------------------------------------------------------------
     // StartServer / StopServer
     // --------------------------------------------------------------------------
 
@@ -350,6 +407,15 @@ namespace Spark::Net
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network,
                             "Refusing server startup while another endpoint lifecycle is active");
+            return false;
+        }
+        if (!m_securityConfig.identity)
+        {
+            // NET-100: the handshake signs with this identity. Without it no client could
+            // authenticate this server, and there is deliberately no plaintext fallback.
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing server startup: no server identity configured (SetSecurityConfig or "
+                            "UseDefaultSecurityConfig)");
             return false;
         }
         if (!endpointPolicy.IsValid())
@@ -496,6 +562,13 @@ namespace Spark::Net
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network,
                             "Refusing client startup while another endpoint lifecycle is active");
+            return false;
+        }
+        if (!m_securityConfig.trust.IsUsable())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing client startup: server trust is not configured (pin a server key or enable "
+                            "trust-on-first-use)");
             return false;
         }
         if (!endpointPolicy.IsValid())

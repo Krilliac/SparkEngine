@@ -29,6 +29,7 @@
 #include "TestFramework.h"
 #include "TestWarnings.h"
 #include "Utils/Logger.h"
+#include "Fixtures/NetworkTestSecurity.h"
 
 #include <algorithm>
 #include <charconv>
@@ -674,6 +675,11 @@ int main(int argc, char** argv)
     // stack traces clutter output and can confuse CI error parsers.
     // Individual tests that verify stack trace capture enable it explicitly.
     logger.SetStackTraceLevel(Spark::LogLevel::Off);
+
+    // NET-100: NetworkManager has no unauthenticated mode. Every test runs with one
+    // in-memory server identity and a pin on its key, so no test reads or writes the
+    // per-user identity file or known_hosts (Tests/Fixtures/NetworkTestSecurity.h).
+    SparkTestFixtures::InstallTestNetworkSecurity();
 
     auto& tests = GetTestRegistry();
     int passed = 0;
