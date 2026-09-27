@@ -1704,10 +1704,11 @@ set_tests_properties(SparkDocumentWriteTests PROPERTIES
 
 # SAVE-230: editor prefabs fail closed on a newer SPARKPREFAB version, name the
 # component and line of damage, recover from the retained .bak, and a failed save
-# leaves the previous prefab byte-identical.
+# leaves the previous prefab byte-identical. PrefabManager saves to and reloads
+# from <project>/Prefabs and never writes into the working directory.
 add_test(NAME SparkPrefabPersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkPrefabPersistenceTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=6"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=8"
     LABELS "compatibility;prefab;unit"
     TIMEOUT 30)
 

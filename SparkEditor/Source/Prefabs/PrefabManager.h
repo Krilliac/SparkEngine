@@ -12,7 +12,9 @@
 
 #include "PrefabAsset.h"
 #include "../SceneSystem/SceneFile.h"
+#include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <unordered_map>
 #include <string>
 #include <vector>
@@ -81,12 +83,31 @@ namespace SparkEditor
         uint64_t InstantiatePrefab(const std::string& prefabName);
 
         /**
-         * @brief Save a prefab to disk
-         * @param name Prefab name
-         * @param directory Directory to save into
+         * @brief Save a prefab to `<directory>/<name>.sparkprefab`
+         * @param name Prefab name; must be a single safe file-name segment (no separators, ':', or "..")
+         * @param directory UTF-8 directory to save into. Empty means the project prefab directory,
+         *                  which is created on demand; with no project open the save fails rather
+         *                  than writing into the process working directory.
          * @return true on success
          */
         bool SavePrefab(const std::string& name, const std::string& directory = "");
+
+        /**
+         * @brief Set the open project's prefab directory (`<project>/Prefabs`); empty when no project is open
+         */
+        void SetProjectPrefabDirectory(std::filesystem::path directory);
+
+        /**
+         * @brief Load every `*.sparkprefab` directly in the project prefab directory, in file-name order
+         *
+         * Each file goes through LoadPrefab, so a damaged file falls back to its `.bak` and a
+         * rejected file leaves any already-loaded prefab of the same name in place.
+         *
+         * @param diagnostics Receives one actionable message per rejected file and per file loaded
+         *                    from its `.bak`
+         * @return Number of prefabs loaded
+         */
+        size_t LoadProjectPrefabs(std::vector<std::string>& diagnostics);
 
         /**
          * @brief Load a prefab from disk (see PrefabAsset::TryLoad for validation and recovery)
@@ -219,7 +240,8 @@ namespace SparkEditor
         std::unordered_map<std::string, PrefabAsset> m_prefabs;
         std::vector<PrefabInstance> m_instances;
         std::function<void()> m_onPrefabsChanged;
-        SceneFile* m_scene = nullptr; ///< Non-owning pointer to the active scene
+        SceneFile* m_scene = nullptr;                   ///< Non-owning pointer to the active scene
+        std::filesystem::path m_projectPrefabDirectory; ///< Empty while no project is open
 
         void NotifyPrefabsChanged();
 

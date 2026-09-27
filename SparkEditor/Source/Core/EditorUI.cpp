@@ -422,6 +422,20 @@ namespace SparkEditor
                     }
                 }
 
+                // Project prefabs live in <project>/Prefabs: SavePrefab writes there and the
+                // project's prefabs are loaded now, each through the version gate and .bak recovery.
+                if (m_prefabManager)
+                {
+                    m_prefabManager->SetProjectPrefabDirectory(PathFromUtf8(project.path) / "Prefabs");
+                    std::vector<std::string> prefabDiagnostics;
+                    const size_t loadedPrefabs = m_prefabManager->LoadProjectPrefabs(prefabDiagnostics);
+                    auto& console = Spark::SimpleConsole::GetInstance();
+                    for (const std::string& diagnostic : prefabDiagnostics)
+                        console.LogWarning(diagnostic);
+                    if (loadedPrefabs > 0)
+                        console.LogInfo("Loaded " + std::to_string(loadedPrefabs) + " project prefab(s)");
+                }
+
                 // Open the project's last scene through the live reflected
                 // World path. Pointing at the file without loading it left the
                 // previous hard-coded Soldier World active and Ctrl+S then
@@ -455,6 +469,8 @@ namespace SparkEditor
                         gameView->SetFPSHUDPreviewEnabled(false);
 
                 ResetWorldAfterProjectClose();
+                if (m_prefabManager)
+                    m_prefabManager->SetProjectPrefabDirectory({});
 
                 auto it = m_panels.find("AssetBrowser");
                 if (it != m_panels.end())

@@ -14,9 +14,33 @@
 #include <cinttypes>
 #include <filesystem>
 #include <iostream>
+#include <system_error>
+#include <utility>
 
 namespace SparkEditor
 {
+    namespace
+    {
+        std::filesystem::path PathFromUtf8(const std::string& path)
+        {
+            return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path.data()), path.size()));
+        }
+
+        std::string PathToUtf8(const std::filesystem::path& path)
+        {
+            const std::u8string utf8 = path.u8string();
+            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+        }
+
+        /// One file-name segment: the same rule EditorLayoutManager applies to layout names.
+        bool IsSafePrefabFileName(const std::string& name)
+        {
+            if (name.empty() || name == "." || name == "..")
+                return false;
+            return std::none_of(name.begin(), name.end(),
+                                [](unsigned char c) { return c < 0x20 || c == '/' || c == '\\' || c == ':'; });
+        }
+    } // namespace
 
     bool PrefabManager::Initialize()
     {
@@ -185,10 +209,80 @@ namespace SparkEditor
         {
             return false;
         }
+        if (!IsSafePrefabFileName(name))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Prefab '%s' was not saved: its name is not a valid file name (no '/', '\\', ':', "
+                            "control characters, '.' or '..'). Rename the prefab and save again",
+                            name.c_str());
+            return false;
+        }
 
-        std::string dir = directory.empty() ? "." : directory;
-        std::string path = dir + "/" + name + ".sparkprefab";
-        return it->second.Save(path);
+        const std::string fileName = name + ".sparkprefab";
+        if (!directory.empty())
+        {
+            return it->second.Save(directory + "/" + fileName);
+        }
+        if (m_projectPrefabDirectory.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Prefab '%s' was not saved: no project is open. Open a project; prefabs are saved to "
+                            "its Prefabs directory",
+                            name.c_str());
+            return false;
+        }
+        std::error_code directoryError;
+        std::filesystem::create_directories(m_projectPrefabDirectory, directoryError);
+        if (directoryError)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Prefab '%s' was not saved: could not create '%s': %s",
+                            name.c_str(), PathToUtf8(m_projectPrefabDirectory).c_str(),
+                            directoryError.message().c_str());
+            return false;
+        }
+        return it->second.Save(PathToUtf8(m_projectPrefabDirectory / PathFromUtf8(fileName)));
+    }
+
+    void PrefabManager::SetProjectPrefabDirectory(std::filesystem::path directory)
+    {
+        m_projectPrefabDirectory = std::move(directory);
+    }
+
+    size_t PrefabManager::LoadProjectPrefabs(std::vector<std::string>& diagnostics)
+    {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        std::error_code error;
+        if (m_projectPrefabDirectory.empty() || !std::filesystem::is_directory(m_projectPrefabDirectory, error))
+        {
+            return 0; // no project open, or a project without prefabs
+        }
+
+        std::vector<std::filesystem::path> files;
+        for (std::filesystem::directory_iterator entry(m_projectPrefabDirectory, error), end; !error && entry != end;
+             entry.increment(error))
+        {
+            std::error_code typeError;
+            // `.sparkprefab.bak` and `.sparkprefab.tmp` siblings have other extensions.
+            if (entry->is_regular_file(typeError) && entry->path().extension() == ".sparkprefab")
+                files.push_back(entry->path());
+        }
+        if (error)
+        {
+            diagnostics.push_back("Could not list every project prefab in '" + PathToUtf8(m_projectPrefabDirectory) +
+                                  "': " + error.message());
+        }
+        std::sort(files.begin(), files.end());
+
+        size_t loaded = 0;
+        for (const auto& file : files)
+        {
+            std::string loadError;
+            if (LoadPrefab(PathToUtf8(file), &loadError))
+                ++loaded;
+            if (!loadError.empty())
+                diagnostics.push_back(std::move(loadError));
+        }
+        return loaded;
     }
 
     PrefabAsset* PrefabManager::LoadPrefab(const std::string& filePath, std::string* error)

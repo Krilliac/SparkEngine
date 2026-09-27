@@ -5,7 +5,8 @@
  * PrefabAsset::TryLoad must fail closed on a newer format version, name the component and
  * line of a truncated or malformed file, never hand back a partially read prefab, and recover
  * from the retained `.bak` when the primary is damaged. PrefabAsset::Save must leave the
- * previous prefab byte-identical when the write fails.
+ * previous prefab byte-identical when the write fails. PrefabManager saves to and reloads from
+ * the open project's Prefabs directory, and never writes into the working directory.
  */
 
 #include "TestFramework.h"
@@ -20,6 +21,7 @@
 #include <string>
 #include <system_error>
 #include <variant>
+#include <vector>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -333,4 +335,114 @@ TEST(PrefabPersistence_SaveAfterBackupRecoveryKeepsGoodBackup)
     recovered.GetComponents()[1].properties["mass"] = 40.0f;
     ASSERT_TRUE(recovered.Save(path));
     EXPECT_EQ(ReadBytes(backupFile), repaired);
+}
+
+TEST(PrefabPersistence_SaveWithoutProjectFailsInsteadOfWritingToCwd)
+{
+    PrefabScratch scratch("noproject");
+    const fs::path previousCwd = fs::current_path();
+    fs::create_directories(scratch.Native("cwd"));
+    fs::current_path(scratch.Native("cwd"));
+    struct RestoreCwd
+    {
+        fs::path path;
+        ~RestoreCwd()
+        {
+            std::error_code ec;
+            fs::current_path(path, ec);
+        }
+    } restoreCwd{previousCwd};
+
+    SparkEditor::PrefabManager manager;
+    ASSERT_TRUE(manager.Initialize());
+    ASSERT_TRUE(manager.GetPrefab("Crate") != nullptr);
+
+    // No project is open: the editor's Save button used to drop ./Crate.sparkprefab here.
+    EXPECT_FALSE(manager.SavePrefab("Crate"));
+    EXPECT_TRUE(fs::is_empty(scratch.Native("cwd")));
+
+    // With a project open the default target is <project>/Prefabs, created on demand.
+    const fs::path prefabs = scratch.Native("Project") / "Prefabs";
+    manager.SetProjectPrefabDirectory(prefabs);
+    ASSERT_TRUE(manager.SavePrefab("Crate"));
+    EXPECT_TRUE(fs::is_regular_file(prefabs / "Crate.sparkprefab"));
+    EXPECT_TRUE(fs::is_empty(scratch.Native("cwd")));
+
+    // A name that is not a single file-name segment cannot escape the prefab directory.
+    ASSERT_TRUE(manager.CreateEmptyPrefab("../Escape") != nullptr);
+    EXPECT_FALSE(manager.SavePrefab("../Escape"));
+    EXPECT_FALSE(fs::exists(scratch.Native("Project") / "Escape.sparkprefab"));
+
+    // Closing the project clears the target again.
+    manager.SetProjectPrefabDirectory({});
+    EXPECT_FALSE(manager.SavePrefab("Crate"));
+    EXPECT_TRUE(fs::is_empty(scratch.Native("cwd")));
+}
+
+TEST(PrefabPersistence_ProjectPrefabsReloadAndRejectedFileKeepsLoadedPrefab)
+{
+    PrefabScratch scratch("projectload");
+    const fs::path prefabs = scratch.Native("Project") / "Prefabs";
+
+    // A prefab saved through the editor path reloads in a later session.
+    {
+        SparkEditor::PrefabManager author;
+        author.SetProjectPrefabDirectory(prefabs);
+        SparkEditor::PrefabAsset* watchtower = author.CreateEmptyPrefab("Watchtower");
+        ASSERT_TRUE(watchtower != nullptr);
+        watchtower->GetComponents()[0].properties["position"] = XMFLOAT3{4.0f, 0.0f, -2.5f};
+        ASSERT_TRUE(author.SavePrefab("Watchtower"));
+    }
+
+    // A damaged primary with a good .bak recovers from the .bak.
+    SparkEditor::PrefabAsset gatehouse = MakeCrate(1.0f);
+    gatehouse.SetName("Gatehouse");
+    const fs::path gatehouseFile = prefabs / "Gatehouse.sparkprefab";
+    const std::u8string gatehouseUtf8 = gatehouseFile.u8string();
+    const std::string gatehouseText(reinterpret_cast<const char*>(gatehouseUtf8.data()), gatehouseUtf8.size());
+    ASSERT_TRUE(gatehouse.Save(gatehouseText));
+    gatehouse.GetComponents()[1].properties["mass"] = 2.0f;
+    ASSERT_TRUE(gatehouse.Save(gatehouseText)); // .bak holds mass 1
+    const std::string primary = ReadBytes(gatehouseFile);
+    WriteBytes(gatehouseFile, primary.substr(0, primary.find("component \"RigidBody\"")));
+
+    // A newer-version file declaring an already-loaded prefab, plus files that are not prefabs.
+    WriteBytes(prefabs / "Crate.sparkprefab", "SPARKPREFAB 3\nname \"Crate\"\ncomponents 0\nend\n");
+    WriteBytes(prefabs / "notes.txt", "not a prefab");
+
+    SparkEditor::PrefabManager manager;
+    ASSERT_TRUE(manager.Initialize()); // the built-in "Crate" is already loaded
+    manager.SetProjectPrefabDirectory(prefabs);
+    std::vector<std::string> diagnostics;
+    EXPECT_EQ(manager.LoadProjectPrefabs(diagnostics), static_cast<size_t>(2));
+
+    const SparkEditor::PrefabAsset* reloaded = manager.GetPrefab("Watchtower");
+    ASSERT_TRUE(reloaded != nullptr);
+    const SparkEditor::SerializedComponent* transform = reloaded->GetComponent("Transform");
+    ASSERT_TRUE(transform != nullptr);
+    const auto position = transform->properties.find("position");
+    ASSERT_TRUE(position != transform->properties.end() && std::holds_alternative<XMFLOAT3>(position->second));
+    EXPECT_EQ(std::get<XMFLOAT3>(position->second).z, -2.5f);
+
+    const SparkEditor::PrefabAsset* recovered = manager.GetPrefab("Gatehouse");
+    ASSERT_TRUE(recovered != nullptr);
+    EXPECT_EQ(MassOf(*recovered), 1.0f);
+
+    // The rejected newer file did not replace the loaded "Crate" (built-in mass 25).
+    const SparkEditor::PrefabAsset* crate = manager.GetPrefab("Crate");
+    ASSERT_TRUE(crate != nullptr);
+    EXPECT_EQ(MassOf(*crate), 25.0f);
+
+    // One actionable line per rejected or recovered file, in file-name order.
+    ASSERT_EQ(diagnostics.size(), static_cast<size_t>(2));
+    EXPECT_STR_CONTAINS(diagnostics[0], "Crate.sparkprefab");
+    EXPECT_STR_CONTAINS(diagnostics[0], "format version 3");
+    EXPECT_STR_CONTAINS(diagnostics[1], "Gatehouse.sparkprefab' was rejected");
+    EXPECT_STR_CONTAINS(diagnostics[1], "Loaded the previous-good backup");
+
+    // Without an open project nothing is read.
+    SparkEditor::PrefabManager closed;
+    std::vector<std::string> none;
+    EXPECT_EQ(closed.LoadProjectPrefabs(none), static_cast<size_t>(0));
+    EXPECT_TRUE(none.empty());
 }
