@@ -9,9 +9,12 @@
 
 #include <cstdlib>
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
+#include <string>
 #include <thread>
 
 #if defined(__linux__)
@@ -523,6 +526,80 @@ namespace
 #endif
     }
 
+    /// A Restart the caller is told was rejected must not leave desiredRunning committed to the
+    /// journal: recovery after an abrupt daemon exit would turn it into a Backoff launch.
+    void TestRejectedRestartDoesNotPersistDesiredRunning(const std::filesystem::path& executable,
+                                                         const std::filesystem::path& scratch)
+    {
+        const auto allowed = scratch / "restart-allowed";
+        std::filesystem::create_directories(allowed);
+        const auto busyExecutable = allowed / executable.filename();
+        std::filesystem::copy_file(executable, busyExecutable, std::filesystem::copy_options::overwrite_existing);
+        auto vanishingName = executable.stem().string() + "-vanishing" + executable.extension().string();
+        const auto vanishingExecutable = allowed / vanishingName;
+        std::filesystem::copy_file(executable, vanishingExecutable, std::filesystem::copy_options::overwrite_existing);
+
+        Spark::Daemon::OrchestrationConfig config;
+        config.allowedExecutableRoots = {allowed};
+        config.journalPath = scratch / "restart-reject.state";
+        config.maximumRunningProcesses = 1;
+        config.maximumGracefulStopMilliseconds = 1000;
+
+        const auto persistedDesiredRunning = [&config](const std::string& id) -> std::optional<bool>
+        {
+            const auto state = Spark::Daemon::RecoverOrchestrationJournal(config.journalPath, 16, 16);
+            if (!state)
+                return std::nullopt;
+            for (const auto& process : state->processes)
+                if (process.definition.id == id)
+                    return process.desiredRunning;
+            return std::nullopt;
+        };
+
+        Spark::Daemon::OrchestrationService service(config);
+        uint64_t sequence = 0;
+        std::vector<uint8_t> payload;
+        const auto define = [&](const std::string& id, const std::filesystem::path& program)
+        {
+            Spark::Daemon::ProcessDefinition definition;
+            definition.id = id;
+            definition.executable = program.string();
+            definition.workingDirectory = allowed.string();
+            definition.arguments = {"--supervised-child"};
+            definition.gracefulStopMilliseconds = 200;
+            Spark::Daemon::EncodeProcessDefinition({"restart-client", ++sequence}, definition, payload);
+            return *service.HandleMessage(static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::DefineRequest),
+                                          payload);
+        };
+        const auto mutate = [&](Spark::Daemon::OrchestrationMessage message, const std::string& id)
+        {
+            Spark::Daemon::EncodeProcessMutation({"restart-client", ++sequence}, id, payload);
+            return *service.HandleMessage(static_cast<uint16_t>(message), payload);
+        };
+
+        Check(!IsError(define("busy", busyExecutable)), "restart fixture defines the busy process");
+        Check(!IsError(define("idle", busyExecutable)), "restart fixture defines the idle process");
+        Check(!IsError(define("vanishing", vanishingExecutable)), "restart fixture defines the vanishing process");
+        Check(!IsError(mutate(Spark::Daemon::OrchestrationMessage::StartRequest, "busy")),
+              "busy process fills the one-process cap");
+
+        // Rejected by the running-process cap.
+        Check(IsError(mutate(Spark::Daemon::OrchestrationMessage::RestartRequest, "idle")),
+              "restart of an idle process is rejected at the process cap");
+        Check(persistedDesiredRunning("idle") == std::optional<bool>(false),
+              "cap-rejected restart does not persist desiredRunning");
+
+        // Rejected by LaunchLocked: the executable disappeared after Define.
+        Check(!IsError(mutate(Spark::Daemon::OrchestrationMessage::StopRequest, "busy")), "busy process stops");
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::error_code removeError;
+        std::filesystem::remove(vanishingExecutable, removeError);
+        Check(IsError(mutate(Spark::Daemon::OrchestrationMessage::RestartRequest, "vanishing")),
+              "restart of a process whose executable vanished is rejected");
+        Check(persistedDesiredRunning("vanishing") == std::optional<bool>(false),
+              "launch-rejected restart does not persist desiredRunning");
+    }
+
     void TestWindowsOrPosixLaunchAndDurableReplay(const std::filesystem::path& executable,
                                                   const std::filesystem::path& scratch)
     {
@@ -598,6 +675,7 @@ int main(int argc, char** argv)
     TestPersistentOrchestratorIdentity(scratch);
     TestPreExecReleaseFailsClosedAfterAbruptDaemonDeath(executable, scratch);
     TestWindowsOrPosixLaunchAndDurableReplay(executable, scratch);
+    TestRejectedRestartDoesNotPersistDesiredRunning(executable, scratch);
     std::error_code cleanupError;
     std::filesystem::remove_all(scratch, cleanupError);
     if (g_failures != 0)

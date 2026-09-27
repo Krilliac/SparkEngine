@@ -312,19 +312,26 @@ namespace Spark::Daemon
         auto it = m_records.find(id);
         if (it == m_records.end())
             return RememberMutationLocked(key, MakeError("unknown process definition"));
-        it->second.desiredRunning = true;
         if (IsActive(it->second.status.state))
         {
+            it->second.desiredRunning = true;
             it->second.restartAfterStop = true;
             RequestStopLocked(it->second, false);
         }
         else
         {
+            // Mirror Start: a rejected restart must not leave desiredRunning set. It would be
+            // committed to the journal with the error, and recovery after an abrupt daemon exit
+            // would turn it into a Backoff launch of a request the caller was told failed.
             if (RunningCountLocked() >= m_config.maximumRunningProcesses)
                 return RememberMutationLocked(key, MakeError("running process limit reached"));
+            it->second.desiredRunning = true;
             std::string error;
             if (!LaunchLocked(it->second, error))
+            {
+                it->second.desiredRunning = false;
                 return RememberMutationLocked(key, MakeError(std::move(error)));
+            }
         }
         m_wake.notify_all();
         return RememberMutationLocked(key, MakeAck(OrchestrationMessage::RestartResponse));
