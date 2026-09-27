@@ -1141,7 +1141,18 @@ target_sources(SparkTests PRIVATE
     TestSceneManagerUnicodeReal.cpp
     TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
+    TestSEC2ConsoleIpcReal.cpp
 )
+
+# SEC2 console-IPC security regressions (TestSEC2ConsoleIpcReal.cpp): Win32
+# handle-inheritance tests. The pinned count fails the lane if they compile out.
+if(WIN32)
+    add_test(NAME SEC2ConsoleIpcReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SEC2ConsoleIpcReal PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Console_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "security;console;process;integration"
+        TIMEOUT 120)
+endif()
 
 # TestBuildInfraReal.cpp asserts the generated SDK version header still carries
 # the version CMake is building, so the number has to reach the test as data.
