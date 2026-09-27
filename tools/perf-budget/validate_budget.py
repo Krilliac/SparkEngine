@@ -56,7 +56,7 @@ VALID_UNITS = frozenset({
 })
 VALID_DIRECTIONS = frozenset({"lower_is_better", "higher_is_better"})
 VALID_CATEGORIES = frozenset({
-    "frame_time", "tick_time", "startup_time",
+    "frame_time", "tick_time", "startup_time", "shutdown_time",
     "memory", "package_size", "soak", "visual", "throughput",
 })
 VALID_METRIC_STATUSES = frozenset({

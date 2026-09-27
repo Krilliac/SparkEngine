@@ -19,17 +19,22 @@ Every iteration gets a fresh working directory and private user directories
   every authored spawn bound, and one arena tick per reported OnUpdate;
 * print ``SPARK_HEADLESS_NULLRHI_RESOURCES live=0`` where the host reports it
   (the Linux headless host; the Windows host does not emit the record);
+* print exactly one ``SPARK_HEADLESS_SHUTDOWN ms=N`` teardown-time record with
+  ``N`` within the ``nullrhi.headless.shutdown_time`` ceiling of
+  ``perf-budgets/v1/budget.json`` (``--budget-file``);
 * keep stdout/stderr free of AddressSanitizer, LeakSanitizer, ThreadSanitizer
   and UBSan reports, so the sanitizer presets fail the loop on the first one.
 
 Across iterations the arena record (objects, spawns, bound, mode_spawns) must
 be identical: the same binary and scene have to boot to the same state every
-time. Per-run wall time and the maximum are printed.
+time. Per-run wall time, shutdown time and their maxima are printed.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import os
 import re
 import shutil
@@ -52,6 +57,8 @@ ARENA_RECORD = re.compile(
 )
 RESOURCES_RECORD = re.compile(r"^SPARK_HEADLESS_NULLRHI_RESOURCES live=(0|[1-9][0-9]{0,9})$")
 LIFECYCLE_UPDATED = re.compile(r"^SPARK_HEADLESS_LIFECYCLE .* updated=(\d+) ")
+SHUTDOWN_RECORD = re.compile(r"^SPARK_HEADLESS_SHUTDOWN ms=(0|[1-9][0-9]{0,9})$")
+SHUTDOWN_METRIC_ID = "nullrhi.headless.shutdown_time"
 
 # UBSan prints "<file>:<line>:<col>: runtime error: ..."; the location prefix keeps
 # an engine log line that merely says "runtime error" from matching.
@@ -139,18 +146,58 @@ def require_resources_released(stdout: str, stderr: str, *, required: bool) -> N
         raise HarnessFailure(f"NullRHI still held {live} live resources after teardown")
 
 
+def load_shutdown_ceiling(budget_file: Path) -> float:
+    """The provisional teardown ceiling (ms) the budget file sets for the headless host."""
+    try:
+        budget = json.loads(budget_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise HarnessFailure(f"cannot read budget file {budget_file}: {error}") from error
+    metrics = budget.get("metrics") if isinstance(budget, dict) else None
+    matches = [metric for metric in metrics or []
+               if isinstance(metric, dict) and metric.get("id") == SHUTDOWN_METRIC_ID]
+    if len(matches) != 1:
+        raise HarnessFailure(f"{budget_file} defines {len(matches)} {SHUTDOWN_METRIC_ID!r} metrics, expected exactly 1")
+    metric = matches[0]
+    ceiling = metric.get("budget")
+    if metric.get("unit") != "ms" or metric.get("direction") != "lower_is_better":
+        raise HarnessFailure(f"{SHUTDOWN_METRIC_ID!r} must be a lower_is_better budget in ms")
+    if isinstance(ceiling, bool) or not isinstance(ceiling, (int, float)) or not math.isfinite(ceiling) or ceiling <= 0:
+        raise HarnessFailure(f"{SHUTDOWN_METRIC_ID!r} has no enforceable ceiling (budget={ceiling!r})")
+    return float(ceiling)
+
+
+def require_shutdown_within(stdout: str, stderr: str, ceiling_ms: float) -> int:
+    """Exactly one teardown-time record, no slower than the budget ceiling; returns its ms."""
+    lines = _lines(f"{stdout}\n{stderr}")
+    mentions = [line for line in lines if "SPARK_HEADLESS_SHUTDOWN" in line]
+    records = [match for match in (SHUTDOWN_RECORD.match(line) for line in lines) if match]
+    if len(records) != 1 or len(mentions) != 1:
+        raise HarnessFailure(f"found {len(records)} shutdown-time records in {len(mentions)} mentions, "
+                             "expected exactly 1")
+    shutdown_ms = int(records[0].group(1))
+    if shutdown_ms > ceiling_ms:
+        raise HarnessFailure(f"teardown took {shutdown_ms} ms, over the {ceiling_ms:g} ms "
+                             f"{SHUTDOWN_METRIC_ID} budget")
+    return shutdown_ms
+
+
 def require_deterministic(states: list[ArenaState]) -> None:
     if len(set(states)) > 1:
         raise HarnessFailure(f"arena state differed between boots: {sorted(set(states), key=repr)}")
 
 
-def validate_run(result: RunResult, *, resources_required: bool) -> ArenaState:
-    """Every Python-side check of one run (the strict lifecycle parser runs separately in CMake)."""
+def validate_run(result: RunResult, *, resources_required: bool,
+                 shutdown_ceiling_ms: float) -> tuple[ArenaState, int]:
+    """Every Python-side check of one run (the strict lifecycle parser runs separately in CMake).
+
+    Returns the boot-determined arena state and the reported teardown time in ms.
+    """
     if result.returncode != 0:
         raise HarnessFailure(f"host exit status was {result.returncode}, expected 0")
     require_no_sanitizer_reports(result.stdout, result.stderr)
     require_resources_released(result.stdout, result.stderr, required=resources_required)
-    return require_arena_record(result.stdout, result.stderr)
+    shutdown_ms = require_shutdown_within(result.stdout, result.stderr, shutdown_ceiling_ms)
+    return require_arena_record(result.stdout, result.stderr), shutdown_ms
 
 
 def run_bounded(command: list[str], *, cwd: Path, env: dict[str, str], stdout_path: Path, stderr_path: Path,
@@ -226,12 +273,14 @@ def run_loop(args: argparse.Namespace, root: Path) -> list[str]:
     engine = args.engine.resolve(strict=True)
     module = args.module.resolve(strict=True)
     parser_script = (args.source_root / "cmake" / "RunSparkHeadlessNullRHILifecycle.cmake").resolve(strict=True)
+    shutdown_ceiling_ms = load_shutdown_ceiling(budget_file(args))
     command = [str(engine), "-headless", "-game", str(module), "-require-game",
                "-test-frames", str(TEST_FRAMES), "-threads", "2", "-no-subprocess"]
 
     notes: list[str] = []
     states: list[ArenaState] = []
     elapsed: list[float] = []
+    shutdowns: list[int] = []
     for iteration in range(1, args.iterations + 1):
         label = f"iteration {iteration}/{args.iterations}"
         run_dir = root / f"run{iteration}"
@@ -241,14 +290,18 @@ def run_loop(args: argparse.Namespace, root: Path) -> list[str]:
                              bound=RUN_BOUND_SECONDS, label=label)
         try:
             require_strict_records(args.cmake, parser_script, result, run_dir, label)
-            states.append(validate_run(result, resources_required=not IS_WINDOWS))
+            state, shutdown_ms = validate_run(result, resources_required=not IS_WINDOWS,
+                                              shutdown_ceiling_ms=shutdown_ceiling_ms)
+            states.append(state)
             require_deterministic(states)
         except HarnessFailure as failure:
             raise HarnessFailure(f"{label}: {failure}") from failure
         elapsed.append(result.elapsed)
-        notes.append(f"{label}: exit=0 wall={result.elapsed:.2f}s arena={states[-1]}")
+        shutdowns.append(shutdown_ms)
+        notes.append(f"{label}: exit=0 wall={result.elapsed:.2f}s shutdown={shutdown_ms}ms arena={state}")
     notes.append(f"{args.iterations} boots passed; max wall={max(elapsed):.2f}s "
-                 f"mean={sum(elapsed) / len(elapsed):.2f}s bound={RUN_BOUND_SECONDS:.0f}s")
+                 f"mean={sum(elapsed) / len(elapsed):.2f}s bound={RUN_BOUND_SECONDS:.0f}s; "
+                 f"max shutdown={max(shutdowns)}ms budget={shutdown_ceiling_ms:g}ms")
     return notes
 
 
@@ -261,7 +314,13 @@ _ARENA = "SPARK_FPS_HEADLESS_ARENA objects=72 spawns=4 bound=4 mode_spawns=4 tic
 _RHI = "SPARK_HEADLESS_RHI backend=null initialized=1 frames=8 shutdown=1\n"
 _LIFECYCLE = "SPARK_HEADLESS_LIFECYCLE initialized=1 updated=8 fixed=7 rendered=0 unloaded=1 faults=0\n"
 _RESOURCES = "SPARK_HEADLESS_NULLRHI_RESOURCES live=0\n"
-_GOOD = f"{_READY}{_ARENA}{_RHI}{_LIFECYCLE}{_RESOURCES}"
+_SHUTDOWN = "SPARK_HEADLESS_SHUTDOWN ms=42\n"
+_GOOD = f"{_READY}{_ARENA}{_RHI}{_LIFECYCLE}{_RESOURCES}{_SHUTDOWN}"
+_CEILING_MS = 5000.0
+
+
+def budget_file(args: argparse.Namespace) -> Path:
+    return args.budget_file or args.source_root / "perf-budgets" / "v1" / "budget.json"
 
 
 def self_test(args: argparse.Namespace) -> int:
@@ -275,32 +334,35 @@ def self_test(args: argparse.Namespace) -> int:
     def run(stdout: str, stderr: str = "", returncode: int = 0) -> RunResult:
         return RunResult(returncode, stdout, stderr, 0.0)
 
-    good = validate_run(run(_GOOD), resources_required=True)
-    assert good == ArenaState(72, 4, 4, 4), good
-    validate_run(run(_GOOD.replace("\n", "\r\n")), resources_required=True)
-    validate_run(run(_GOOD.replace(_RESOURCES, "")), resources_required=False)
+    def check(stdout: str, stderr: str = "", returncode: int = 0, *, resources_required: bool = True,
+              ceiling: float = _CEILING_MS) -> tuple[ArenaState, int]:
+        return validate_run(run(stdout, stderr, returncode), resources_required=resources_required,
+                            shutdown_ceiling_ms=ceiling)
 
-    expect_failure("nonzero-exit", lambda: validate_run(run(_GOOD, returncode=3), resources_required=True))
-    expect_failure("missing-arena", lambda: validate_run(run(_GOOD.replace(_ARENA, "")), resources_required=True))
-    expect_failure("duplicate-arena", lambda: validate_run(run(_GOOD + _ARENA), resources_required=True))
-    expect_failure("logger-only-arena", lambda: validate_run(
-        run(_GOOD.replace(_ARENA, f"[info] {_ARENA}")), resources_required=True))
-    expect_failure("match-inactive", lambda: validate_run(
-        run(_GOOD.replace("match=1", "match=0")), resources_required=True))
-    expect_failure("unbound-spawns", lambda: validate_run(
-        run(_GOOD.replace("bound=4", "bound=3")), resources_required=True))
-    expect_failure("ticks-differ-from-updates", lambda: validate_run(
-        run(_GOOD.replace("ticks=8", "ticks=5")), resources_required=True))
-    expect_failure("missing-lifecycle", lambda: validate_run(
-        run(_GOOD.replace(_LIFECYCLE, "")), resources_required=True))
-    expect_failure("live-resources", lambda: validate_run(
-        run(_GOOD.replace("live=0", "live=3")), resources_required=True))
-    expect_failure("live-resources-unrequired", lambda: validate_run(
-        run(_GOOD.replace("live=0", "live=3")), resources_required=False))
-    expect_failure("missing-resources", lambda: validate_run(
-        run(_GOOD.replace(_RESOURCES, "")), resources_required=True))
-    expect_failure("malformed-resources", lambda: validate_run(
-        run(_GOOD.replace("live=0", "live=01")), resources_required=True))
+    good = check(_GOOD)
+    assert good == (ArenaState(72, 4, 4, 4), 42), good
+    check(_GOOD.replace("\n", "\r\n"))
+    check(_GOOD.replace(_RESOURCES, ""), resources_required=False)
+    assert check(_GOOD, ceiling=42.0)[1] == 42
+
+    expect_failure("nonzero-exit", lambda: check(_GOOD, returncode=3))
+    expect_failure("missing-arena", lambda: check(_GOOD.replace(_ARENA, "")))
+    expect_failure("duplicate-arena", lambda: check(_GOOD + _ARENA))
+    expect_failure("logger-only-arena", lambda: check(_GOOD.replace(_ARENA, f"[info] {_ARENA}")))
+    expect_failure("match-inactive", lambda: check(_GOOD.replace("match=1", "match=0")))
+    expect_failure("unbound-spawns", lambda: check(_GOOD.replace("bound=4", "bound=3")))
+    expect_failure("ticks-differ-from-updates", lambda: check(_GOOD.replace("ticks=8", "ticks=5")))
+    expect_failure("missing-lifecycle", lambda: check(_GOOD.replace(_LIFECYCLE, "")))
+    expect_failure("live-resources", lambda: check(_GOOD.replace("live=0", "live=3")))
+    expect_failure("live-resources-unrequired", lambda: check(_GOOD.replace("live=0", "live=3"),
+                                                              resources_required=False))
+    expect_failure("missing-resources", lambda: check(_GOOD.replace(_RESOURCES, "")))
+    expect_failure("malformed-resources", lambda: check(_GOOD.replace("live=0", "live=01")))
+    expect_failure("over-budget-shutdown", lambda: check(_GOOD, ceiling=41.0))
+    expect_failure("missing-shutdown", lambda: check(_GOOD.replace(_SHUTDOWN, "")))
+    expect_failure("duplicate-shutdown", lambda: check(_GOOD + _SHUTDOWN))
+    expect_failure("malformed-shutdown", lambda: check(_GOOD.replace("ms=42", "ms=042")))
+    expect_failure("logger-only-shutdown", lambda: check(_GOOD.replace(_SHUTDOWN, f"[info] {_SHUTDOWN}")))
     sanitizer_reports = (
         "==123==ERROR: AddressSanitizer: heap-use-after-free on address 0x1\n",
         "==123==ERROR: LeakSanitizer: detected memory leaks\n",
@@ -309,16 +371,31 @@ def self_test(args: argparse.Namespace) -> int:
         "SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior Core/World.cpp:42:7\n",
     )
     for report in sanitizer_reports:
-        expect_failure(f"sanitizer report {report.strip()!r}", lambda report=report: validate_run(
-            run(_GOOD, report), resources_required=True))
+        expect_failure(f"sanitizer report {report.strip()!r}", lambda report=report: check(_GOOD, report))
     # An engine log line that only mentions a runtime error is not a UBSan report.
-    validate_run(run(_GOOD, "[ERROR] [Script] runtime error: missing function\n"), resources_required=True)
+    check(_GOOD, "[ERROR] [Script] runtime error: missing function\n")
     expect_failure("nondeterministic-arena", lambda: require_deterministic(
         [ArenaState(72, 4, 4, 4), ArenaState(71, 4, 4, 4)]))
     require_deterministic([ArenaState(72, 4, 4, 4)] * 3)
 
     with tempfile.TemporaryDirectory(prefix="spark-boot-loop-selftest-") as scratch:
         work = Path(scratch)
+        # The committed budget carries the enforced ceiling; a budget that drops it,
+        # nulls it or changes its unit must stop the loop instead of passing it.
+        assert load_shutdown_ceiling(budget_file(args)) > 0
+        for name, metric in (
+            ("null-ceiling", {"id": SHUTDOWN_METRIC_ID, "unit": "ms", "direction": "lower_is_better",
+                              "budget": None}),
+            ("seconds-ceiling", {"id": SHUTDOWN_METRIC_ID, "unit": "s", "direction": "lower_is_better",
+                                 "budget": 5}),
+            ("missing-metric", {"id": "nullrhi.headless.tick_time.p50", "unit": "ms",
+                                "direction": "lower_is_better", "budget": 5000}),
+        ):
+            bad_budget = work / f"{name}.json"
+            bad_budget.write_text(json.dumps({"metrics": [metric]}), encoding="utf-8")
+            expect_failure(f"budget-{name}", lambda bad_budget=bad_budget: load_shutdown_ceiling(bad_budget))
+        expect_failure("budget-unreadable", lambda: load_shutdown_ceiling(work / "absent.json"))
+
         parser_script = (args.source_root / "cmake" / "RunSparkHeadlessNullRHILifecycle.cmake").resolve(strict=True)
         # The strict CMake parser is part of the contract: prove the hook accepts a
         # clean run and rejects a faulted one, not just that the file exists.
@@ -353,6 +430,9 @@ def main() -> int:
     parser.add_argument("--source-root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="repository root (for the strict lifecycle parser)")
     parser.add_argument("--cmake", default="cmake", help="cmake executable used to run the strict parser")
+    parser.add_argument("--budget-file", type=Path, default=None,
+                        help="perf budget holding the shutdown-time ceiling "
+                             "(default: <source-root>/perf-budgets/v1/budget.json)")
     parser.add_argument("--iterations", type=int, default=10, help="number of consecutive boots")
     parser.add_argument("--keep", action="store_true", help="keep the temp run directory on success")
     args = parser.parse_args()

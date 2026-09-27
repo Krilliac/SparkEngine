@@ -2413,8 +2413,9 @@ endif()
 
 # LIFE-200: ten consecutive production headless FPS boots on NullRHI, each with a
 # fresh cwd and private user dirs, a 60 s deadlock bound, the strict lifecycle
-# parser, the arena record, released NullRHI resources and no sanitizer report,
-# plus an identical arena state across boots. The host exits on -test-frames, so
+# parser, the arena record, released NullRHI resources, a teardown within the
+# nullrhi.headless.shutdown_time ceiling of perf-budgets/v1/budget.json and no
+# sanitizer report, plus an identical arena state across boots. The host exits on -test-frames, so
 # no signal channel is needed and the loop runs on the Windows and Linux hosts.
 # The lifecycle label puts it in the Linux ASan/TSan presets' ctest runs.
 if(Python3_Interpreter_FOUND)

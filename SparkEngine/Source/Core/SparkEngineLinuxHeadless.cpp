@@ -237,7 +237,9 @@ int RunHeadlessLinux(int argc, char* argv[])
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
     }
 
+    const auto teardownStart = std::chrono::steady_clock::now();
     const bool teardownClean = ShutdownLinuxAfterPreflight();
+    const auto teardownElapsed = std::chrono::steady_clock::now() - teardownStart;
     Spark::SimpleConsole::GetInstance().LogInfo("Headless server shut down cleanly.");
 
     // Same machine-readable records as RunHeadlessWindows, published only after
@@ -259,6 +261,12 @@ int RunHeadlessLinux(int argc, char* argv[])
     // tools/perf-budget/run_nullrhi_soak.py, requires live=0).
     if (const std::optional<uint32_t> liveResources = GetEngineRuntime().headlessRhiLiveResourcesAtShutdown)
         std::fprintf(stdout, "SPARK_HEADLESS_NULLRHI_RESOURCES live=%u\n", static_cast<unsigned>(*liveResources));
+    // Teardown wall time, rounded up so a finished teardown never reads 0 ms;
+    // Tests/PackageSmoke/run_headless_boot_loop.py enforces the
+    // nullrhi.headless.shutdown_time ceiling of perf-budgets/v1/budget.json.
+    std::fprintf(
+        stdout, "SPARK_HEADLESS_SHUTDOWN ms=%llu\n",
+        static_cast<unsigned long long>(std::chrono::ceil<std::chrono::milliseconds>(teardownElapsed).count()));
     std::fflush(stdout);
     if (!nullRhiShutdown && exitCode == 0)
         exitCode = 3;

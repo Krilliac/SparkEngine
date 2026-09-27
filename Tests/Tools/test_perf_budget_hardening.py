@@ -928,6 +928,7 @@ class TestMeasurementIntegrity(unittest.TestCase):
         ("frame_time", "ms", "p50"),
         ("tick_time", "ms", "p50"),
         ("startup_time", "ms", None),
+        ("shutdown_time", "ms", None),
         ("memory", "megabytes", None),
         ("package_size", "megabytes", None),
     )
@@ -952,6 +953,24 @@ class TestMeasurementIntegrity(unittest.TestCase):
                     _metric_of(category, unit, percentile), 1.5, 1000,
                 )
                 self.assertTrue(report.passed, report.errors)
+
+    def test_committed_shutdown_ceiling_is_enforceable(self) -> None:
+        # Tests/PackageSmoke/run_headless_boot_loop.py enforces this ceiling on
+        # every headless boot; certified numbers remain PERF-100 evidence, so
+        # the comparator keeps it out of the hosted budget verdict.
+        suite = REPO_ROOT / "perf-budgets" / "v1"
+        self.assertEqual(validate_suite(suite), [])
+        budget = json.loads((suite / "budget.json").read_text(encoding="utf-8"))
+        matches = [metric for metric in budget["metrics"]
+                   if metric["id"] == "nullrhi.headless.shutdown_time"]
+        self.assertEqual(len(matches), 1)
+        metric = matches[0]
+        self.assertEqual(metric["category"], "shutdown_time")
+        self.assertEqual((metric["unit"], metric["direction"], metric["backend"]),
+                         ("ms", "lower_is_better", "nullrhi"))
+        self.assertIsInstance(metric["budget"], (int, float))
+        self.assertGreater(metric["budget"], 0)
+        self.assertEqual(metric["status"], "suspended")
 
     def test_zero_soak_crash_count_is_a_legitimate_pass(self) -> None:
         metric = _metric_of("soak", "count", None, budget=0.0)

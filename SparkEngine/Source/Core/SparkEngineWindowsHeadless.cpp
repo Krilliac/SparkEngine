@@ -482,7 +482,9 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // inside the crash handler.
     //
     console.LogInfo("Headless server shutting down...");
+    const auto teardownStart = std::chrono::steady_clock::now();
     const bool teardownClean = ShutdownEngineAfterPreflight();
+    const auto teardownElapsed = std::chrono::steady_clock::now() - teardownStart;
 
     // Publish machine-readable records only after ordinary teardown has
     // destroyed the ModuleManager and NullRHI bridge. This proves the complete
@@ -498,6 +500,12 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         static_cast<unsigned long long>(evidence.initialized), static_cast<unsigned long long>(evidence.updated),
         static_cast<unsigned long long>(evidence.fixedUpdated), static_cast<unsigned long long>(evidence.rendered),
         static_cast<unsigned long long>(evidence.unloaded), static_cast<unsigned long long>(evidence.faults));
+    // Teardown wall time, rounded up so a finished teardown never reads 0 ms;
+    // Tests/PackageSmoke/run_headless_boot_loop.py enforces the
+    // nullrhi.headless.shutdown_time ceiling of perf-budgets/v1/budget.json.
+    std::fprintf(
+        stdout, "SPARK_HEADLESS_SHUTDOWN ms=%llu\n",
+        static_cast<unsigned long long>(std::chrono::ceil<std::chrono::milliseconds>(teardownElapsed).count()));
     std::fflush(stdout);
     // Work-time distribution for tools/perf-budget/collect_headless_result.py.
     // Every tick above ran on NullRHI: startup returns when it is unavailable.

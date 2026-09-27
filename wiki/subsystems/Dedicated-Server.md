@@ -562,6 +562,16 @@ that skips `AllocConsole` when its output is redirected, so it has no console an
 module has no `quicksave`/`quickload` console commands, so no run kills a real FPS save
 mid-write. This is source-tree evidence only, not packaged Windows certification.
 
+### Shutdown-time budget (`LIFE-200`)
+
+After teardown, the Windows and Linux headless hosts both print
+`SPARK_HEADLESS_SHUTDOWN ms=<N>`. `N` is the wall time of the engine teardown, rounded up to whole
+milliseconds. The strict parser accepts at most one such record, and it must come after
+`SPARK_HEADLESS_LIFECYCLE`. `HeadlessBootLoop_FPSNullRHI` (`Tests/PackageSmoke/run_headless_boot_loop.py`)
+requires the record on every boot. Each boot fails if `N` exceeds the `nullrhi.headless.shutdown_time`
+ceiling in `perf-budgets/v1/budget.json`, which is a provisional 5000 ms. The metric's status is `suspended`,
+so the PERF-100 comparator does not treat the ceiling as a certified-hardware budget.
+
 ## Build Configuration
 
 ### Game Module Build
