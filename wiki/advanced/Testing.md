@@ -304,6 +304,13 @@ ctest --test-dir build -L package-consumer-linux --no-tests=error --output-on-fa
 cmake -B build -DSPARK_ENABLE_SOAK_TESTS=ON
 ctest --test-dir build -L '^soak$' --no-tests=error --output-on-failure
 
+# TERRAFRONT dedicated server + two headless clients (TF-110; local evidence until a
+# dedicated CI job exists). Needs SparkEngine and SparkGameMMOFPS; timing-sensitive,
+# so it is kept out of the required full-ctest lanes. TerrafrontMultiClient_Harness
+# (parser/comparator unit tests) is always registered.
+cmake -B build -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON
+ctest --test-dir build -L terrafront-multiclient --no-tests=error --output-on-failure
+
 # Verbose output
 ctest --test-dir build -C Release -V --no-tests=error
 

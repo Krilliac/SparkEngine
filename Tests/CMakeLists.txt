@@ -3182,6 +3182,11 @@ set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
 # host; OnboardSpawnMove runs a real dedicated server plus two headless clients
 # (register, log in, enter, spawn, walk) and fails unless both clients agree
 # with the server at every checkpoint.
+# OnboardSpawnMove is timing-sensitive (three processes on one host) and has not
+# yet run on hosted Linux or 2-core runners, so it is opt-in and stays out of the
+# required full-ctest lanes until a dedicated job enables it:
+#   cmake -B build -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON
+#   ctest --test-dir build -L terrafront-multiclient --no-tests=error
 add_test(
     NAME TerrafrontMultiClient_Harness
     COMMAND ${Python3_EXECUTABLE} -B
@@ -3190,7 +3195,10 @@ set_tests_properties(TerrafrontMultiClient_Harness PROPERTIES
     FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
     LABELS "terrafront;unit;python"
     TIMEOUT 120)
-if(ENABLE_NETWORKING AND SPARK_HEADLESS_SUPPORT AND TARGET SparkEngine AND TARGET SparkGameMMOFPS)
+option(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS
+    "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)" OFF)
+if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEADLESS_SUPPORT AND
+   TARGET SparkEngine AND TARGET SparkGameMMOFPS)
     add_dependencies(SparkTests SparkEngine SparkGameMMOFPS)
     add_test(
         NAME TerrafrontMultiClient_OnboardSpawnMove
