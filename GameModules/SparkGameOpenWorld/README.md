@@ -13,7 +13,9 @@ MOD-360.
 dynamic-event, and engine-bridge systems on load. Discovering a point of interest unlocks it as a fast-travel
 destination. `OWWorldSetup` registers each region with the engine's seamless area streaming manager.
 `ow_save` and `ow_load` write and restore the gameplay state through the module's persistence codec
-(`Source/Persistence`). The `ow_*` console commands (`ow_status`, `ow_explore`, `ow_harvest`, `ow_craft`,
+(`Source/Persistence`). The snapshot is stored in the engine save slot's custom state, so the ECS world and the
+gameplay state commit in one atomic `SaveSystem` write; a legacy `OpenWorld/<slot>.ow_save` sidecar is read only
+for a slot with no embedded state and is removed by the next save. The `ow_*` console commands (`ow_status`, `ow_explore`, `ow_harvest`, `ow_craft`,
 `ow_tame`, `ow_fast_travel`, and others) drive the systems.
 
 ## Assets

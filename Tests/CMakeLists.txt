@@ -2095,6 +2095,16 @@ set_tests_properties(SEC2GameModules PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2GM_;SPARK_TEST_EXPECT_COUNT=${_spark_sec2gm_count}"
     LABELS "security;module;unit"
     TIMEOUT 120)
+if(TARGET imgui)
+    # OpenWorld save/load through the real SaveSystem, including the SEC2 split-brain
+    # regression (stale sidecar) and legacy-sidecar migration.
+    add_test(NAME OpenWorldPersistence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(OpenWorldPersistence PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OpenWorldPersistence_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "module;persistence;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
 
 # SDK-240 / OD-02: real N-1 and N+1 SDK module images are rejected with a
 # diagnostic naming both versions before any module code runs; the current-SDK

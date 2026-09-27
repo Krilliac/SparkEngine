@@ -1,14 +1,14 @@
 /**
  * @file TestMOD360OpenWorldPersistenceReal.cpp
- * @brief MOD-360: OpenWorld save/restart/load through the production SaveSystem and
- *        the module's `.ow_save` sidecar.
+ * @brief MOD-360: OpenWorld save/restart/load through the production SaveSystem, with the
+ *        gameplay snapshot embedded in the engine slot's custom state.
  *
  * The codec and per-subsystem restore are covered by the Gated_OWPersistence_* tests in
  * TestOpenWorldModule.cpp. These tests drive the console-facing OWEngineSystems::SaveGame
  * and LoadGame paths end to end: the engine slot is written by the real SaveSystem
  * singleton into an isolated temporary directory, every gameplay system is destroyed and
  * rebuilt as a restarted process would, and LoadGame must reproduce the captured state.
- * Damaged sidecars and a missing engine slot must be rejected without touching live state.
+ * Damaged embedded state and a missing engine slot must be rejected without touching live state.
  *
  * OpenWorldAssets_* registers the module's real music tracks and area streaming manifests
  * and requires every file they name to exist in the repository asset tree.
@@ -33,10 +33,10 @@
 
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace OpenWorld;
@@ -166,12 +166,6 @@ namespace
         bool m_initialized = false;
     };
 
-    std::string ReadMOD360File(const std::filesystem::path& path)
-    {
-        std::ifstream input(path, std::ios::binary);
-        return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
-    }
-
     bool WriteMOD360File(const std::filesystem::path& path, const std::string& bytes)
     {
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
@@ -203,9 +197,9 @@ TEST(OpenWorldPersistence_RestartRestoresPlayerWorldEventSettlementState)
 
         const std::string result = session->engine.SaveGame("restart");
         EXPECT_TRUE(StartsWith(result, "Saved OpenWorld game"));
-        // The sidecar pairs with the engine slot inside the SaveSystem directory.
+        // Gameplay state lives inside the engine slot; no separate sidecar is written.
         EXPECT_TRUE(saves.System().SaveExists("restart"));
-        EXPECT_TRUE(std::filesystem::exists(sidecarPath));
+        EXPECT_FALSE(std::filesystem::exists(sidecarPath));
         EXPECT_FALSE(std::filesystem::exists(std::filesystem::path(sidecarPath).concat(".tmp")));
         EXPECT_FALSE(std::filesystem::exists(std::filesystem::path(sidecarPath).concat(".bak")));
     }
@@ -230,9 +224,10 @@ TEST(OpenWorldPersistence_RestartRestoresPlayerWorldEventSettlementState)
     // The engine world came back through SaveSystem as well.
     EXPECT_EQ(restartedWorld.GetEntityCount(), 1u);
 
-    // Saving over an existing slot replaces it atomically and leaves no backup behind.
+    // Saving over an existing slot replaces it atomically and writes no sidecar.
     restarted->player.SetPosition(10.0f, 2.0f, 30.0f);
     EXPECT_TRUE(StartsWith(restarted->engine.SaveGame("restart"), "Saved OpenWorld game"));
+    EXPECT_FALSE(std::filesystem::exists(sidecarPath));
     EXPECT_FALSE(std::filesystem::exists(std::filesystem::path(sidecarPath).concat(".bak")));
     const std::string resaved = restarted->Snapshot();
     restarted->player.SetPosition(-1.0f, -1.0f, -1.0f);
@@ -241,11 +236,44 @@ TEST(OpenWorldPersistence_RestartRestoresPlayerWorldEventSettlementState)
     restarted->engine.Shutdown();
 }
 
-TEST(OpenWorldPersistence_CorruptSidecarLeavesStateUnchanged)
+namespace
+{
+    /// On-disk prefix of the OpenWorld snapshot chunks inside the engine slot's customState.
+    constexpr const char* kMOD360SnapshotKeyPrefix = "SparkGameOpenWorld.snapshot.";
+
+    /// Custom state stored in @p slot, read back through the public SaveSystem API.
+    std::unordered_map<std::string, std::string> ReadMOD360SlotState(Spark::SaveSystem& saveSystem, const char* slot)
+    {
+        World scratch;
+        std::unordered_map<std::string, std::string> state;
+        EXPECT_TRUE(saveSystem.Load(slot, scratch, state));
+        return state;
+    }
+
+    /// Rewrite @p slot as a valid engine save (correct SaveSystem CRC) carrying @p state.
+    bool WriteMOD360SlotState(Spark::SaveSystem& saveSystem, const char* slot,
+                              const std::unordered_map<std::string, std::string>& state)
+    {
+        World scratch;
+        return saveSystem.Save(slot, scratch, Spark::SaveMetadata{}, state);
+    }
+
+    /// Key of the snapshot chunk whose text contains @p needle, or empty.
+    std::string FindMOD360Chunk(const std::unordered_map<std::string, std::string>& state, const char* needle)
+    {
+        for (const auto& [key, value] : state)
+        {
+            if (key.rfind(kMOD360SnapshotKeyPrefix, 0) == 0 && value.find(needle) != std::string::npos)
+                return key;
+        }
+        return {};
+    }
+} // namespace
+
+TEST(OpenWorldPersistence_CorruptEmbeddedStateLeavesStateUnchanged)
 {
     ScopedMOD360SaveDirectory saves("corrupt");
     ASSERT_TRUE(saves.IsInitialized());
-    const std::filesystem::path sidecarPath = saves.Path() / "OpenWorld" / "corrupt.ow_save";
 
     {
         World world;
@@ -255,8 +283,11 @@ TEST(OpenWorldPersistence_CorruptSidecarLeavesStateUnchanged)
         PlayMOD360Session(*session);
         ASSERT_TRUE(StartsWith(session->engine.SaveGame("corrupt"), "Saved OpenWorld game"));
     }
-    const std::string intactSidecar = ReadMOD360File(sidecarPath);
-    ASSERT_FALSE(intactSidecar.empty());
+    const std::unordered_map<std::string, std::string> intactState = ReadMOD360SlotState(saves.System(), "corrupt");
+    const std::string playerChunk = FindMOD360Chunk(intactState, "PLAYER ");
+    const std::string headerChunk = FindMOD360Chunk(intactState, "SPARK_OPEN_WORLD_SAVE");
+    ASSERT_FALSE(playerChunk.empty());
+    ASSERT_FALSE(headerChunk.empty());
 
     World liveWorld;
     liveWorld.AddComponent<Transform>(liveWorld.CreateEntity("mod360-live-a"));
@@ -268,35 +299,46 @@ TEST(OpenWorldPersistence_CorruptSidecarLeavesStateUnchanged)
     live->gathering.AddResource(ResourceType::Crystal, 2);
     const std::string liveSnapshot = live->Snapshot();
 
-    // Tampered: one body byte flipped inside the player record breaks the checksum.
-    std::string tampered = intactSidecar;
-    const size_t playerRecord = tampered.find("PLAYER ");
-    ASSERT_TRUE(playerRecord != std::string::npos);
-    const size_t digit = tampered.find_first_of("0123456789", playerRecord);
+    // Tampered: one body byte flipped inside the player record breaks the module checksum, even though
+    // the engine file around it is intact.
+    auto tampered = intactState;
+    std::string& playerText = tampered[playerChunk];
+    const size_t digit = playerText.find_first_of("0123456789", playerText.find("PLAYER "));
     ASSERT_TRUE(digit != std::string::npos);
-    tampered[digit] = tampered[digit] == '1' ? '2' : '1';
-    ASSERT_TRUE(WriteMOD360File(sidecarPath, tampered));
+    playerText[digit] = playerText[digit] == '1' ? '2' : '1';
+    ASSERT_TRUE(WriteMOD360SlotState(saves.System(), "corrupt", tampered));
     std::string result = live->engine.LoadGame("corrupt");
     EXPECT_TRUE(result.find("checksum") != std::string::npos);
     EXPECT_EQ(live->Snapshot(), liveSnapshot);
     EXPECT_EQ(liveWorld.GetEntityCount(), 2u);
 
-    // Truncated: half the file is gone.
-    ASSERT_TRUE(WriteMOD360File(sidecarPath, intactSidecar.substr(0, intactSidecar.size() / 2)));
+    // Truncated: half the snapshot text is gone.
+    auto truncated = intactState;
+    truncated[headerChunk].resize(truncated[headerChunk].size() / 2);
+    ASSERT_TRUE(WriteMOD360SlotState(saves.System(), "corrupt", truncated));
     result = live->engine.LoadGame("corrupt");
     EXPECT_TRUE(StartsWith(result, "OpenWorld save is invalid"));
     EXPECT_EQ(live->Snapshot(), liveSnapshot);
     EXPECT_EQ(liveWorld.GetEntityCount(), 2u);
 
-    // Missing sidecar with a present engine slot.
-    std::filesystem::remove(sidecarPath);
+    // Incomplete: the chunk count names a chunk that is not there.
+    auto incomplete = intactState;
+    incomplete[std::string(kMOD360SnapshotKeyPrefix) + "chunks"] = "2";
+    incomplete.erase(std::string(kMOD360SnapshotKeyPrefix) + "1");
+    ASSERT_TRUE(WriteMOD360SlotState(saves.System(), "corrupt", incomplete));
+    result = live->engine.LoadGame("corrupt");
+    EXPECT_TRUE(StartsWith(result, "OpenWorld save is invalid"));
+    EXPECT_EQ(live->Snapshot(), liveSnapshot);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 2u);
+
+    // An engine slot with no OpenWorld state and no legacy sidecar.
+    ASSERT_TRUE(WriteMOD360SlotState(saves.System(), "corrupt", {}));
     result = live->engine.LoadGame("corrupt");
     EXPECT_TRUE(result.find("missing") != std::string::npos);
     EXPECT_EQ(live->Snapshot(), liveSnapshot);
     EXPECT_EQ(liveWorld.GetEntityCount(), 2u);
 
-    // Missing engine slot with an intact sidecar.
-    ASSERT_TRUE(WriteMOD360File(sidecarPath, intactSidecar));
+    // Missing engine slot.
     ASSERT_TRUE(saves.System().DeleteSave("corrupt"));
     ASSERT_FALSE(saves.System().SaveExists("corrupt"));
     result = live->engine.LoadGame("corrupt");
@@ -308,6 +350,68 @@ TEST(OpenWorldPersistence_CorruptSidecarLeavesStateUnchanged)
     EXPECT_TRUE(StartsWith(live->engine.LoadGame("../corrupt"), "Invalid save slot name"));
     EXPECT_EQ(live->Snapshot(), liveSnapshot);
     live->engine.Shutdown();
+}
+
+TEST(OpenWorldPersistence_StaleSidecarCannotOverrideEngineSlot)
+{
+    // SEC2: the sidecar used to be committed before the engine slot, so a crash in between left a new
+    // sidecar paired with an old engine save and LoadGame silently mixed the two. The snapshot now rides
+    // inside the engine slot; a leftover sidecar for the same slot must never be read over it.
+    ScopedMOD360SaveDirectory saves("stale");
+    ASSERT_TRUE(saves.IsInitialized());
+    const std::filesystem::path sidecarPath = saves.Path() / "OpenWorld" / "stale.ow_save";
+
+    World world;
+    OpenWorldPersistenceContext context(&saves.System(), &world);
+    auto session = std::make_unique<OpenWorldSession>();
+    ASSERT_TRUE(session->Start(context));
+    PlayMOD360Session(*session);
+    ASSERT_TRUE(StartsWith(session->engine.SaveGame("stale"), "Saved OpenWorld game"));
+    const std::string committed = session->Snapshot();
+
+    // A later generation of gameplay state exists only as a sidecar (the old crash window).
+    session->player.SetPosition(1.0f, 2.0f, 3.0f);
+    session->gathering.AddResource(ResourceType::Crystal, 40);
+    const std::string uncommitted = session->Snapshot();
+    ASSERT_TRUE(uncommitted != committed);
+    std::filesystem::create_directories(sidecarPath.parent_path());
+    ASSERT_TRUE(WriteMOD360File(sidecarPath, uncommitted));
+
+    EXPECT_TRUE(StartsWith(session->engine.LoadGame("stale"), "Loaded OpenWorld game"));
+    EXPECT_EQ(session->Snapshot(), committed);
+    session->engine.Shutdown();
+}
+
+TEST(OpenWorldPersistence_LegacySidecarSlotMigratesOnNextSave)
+{
+    ScopedMOD360SaveDirectory saves("legacy");
+    ASSERT_TRUE(saves.IsInitialized());
+    const std::filesystem::path sidecarPath = saves.Path() / "OpenWorld" / "legacy.ow_save";
+
+    World world;
+    OpenWorldPersistenceContext context(&saves.System(), &world);
+    auto session = std::make_unique<OpenWorldSession>();
+    ASSERT_TRUE(session->Start(context));
+    PlayMOD360Session(*session);
+    const std::string legacySnapshot = session->Snapshot();
+
+    // A slot written before the snapshot moved into the engine file: no custom state, plus a sidecar.
+    ASSERT_TRUE(saves.System().Save("legacy", world, Spark::SaveMetadata{}));
+    std::filesystem::create_directories(sidecarPath.parent_path());
+    ASSERT_TRUE(WriteMOD360File(sidecarPath, legacySnapshot));
+
+    session->player.SetPosition(-7.0f, 0.0f, 7.0f);
+    ASSERT_TRUE(session->Snapshot() != legacySnapshot);
+    EXPECT_TRUE(StartsWith(session->engine.LoadGame("legacy"), "Loaded OpenWorld game"));
+    EXPECT_EQ(session->Snapshot(), legacySnapshot);
+
+    // The next save embeds the state and retires the sidecar, which can then never pair with the slot again.
+    ASSERT_TRUE(StartsWith(session->engine.SaveGame("legacy"), "Saved OpenWorld game"));
+    EXPECT_FALSE(std::filesystem::exists(sidecarPath));
+    session->player.SetPosition(9.0f, 9.0f, 9.0f);
+    EXPECT_TRUE(StartsWith(session->engine.LoadGame("legacy"), "Loaded OpenWorld game"));
+    EXPECT_EQ(session->Snapshot(), legacySnapshot);
+    session->engine.Shutdown();
 }
 
 namespace
