@@ -3278,6 +3278,17 @@ set_tests_properties(PrototypeModuleKit_PrivateDependencyRatchet PROPERTIES
     LABELS "module;module-kit;prototype-module-kit;readiness;unit;python"
     TIMEOUT 120)
 
+# MOD-310: the same ratchet on the stable-v1 SparkGameFPS module, under a
+# reviewed one-way ceiling (51 engine-private headers, 1 copied file at intro).
+add_test(
+    NAME FPSPublicSDK_PrivateIncludeRatchet
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_private_dependencies.py
+        FPSPrivateIncludeRatchetTests)
+set_tests_properties(FPSPublicSDK_PrivateIncludeRatchet PROPERTIES
+    LABELS "module;stable-v1;fps;sdk;readiness;unit;python"
+    TIMEOUT 120)
+
 # MOD-290: per-module test registration is generated from each module's
 # module.json rather than hand-written. Every declared {prefix, count} selector
 # becomes ModuleManifest_<Module>_<Prefix>, which runs SparkTests filtered to

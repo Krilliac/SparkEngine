@@ -171,6 +171,14 @@ a removed include is not dropped from the list. Regenerate the inventory with
 `python3 tools/site-data/module_content.py` only when the new dependency is
 reviewed and intended.
 
+The stable-v1 `SparkGameFPS` module publishes the same fields (MOD-310; target
+zero). Its baseline is 51 engine-private headers and one copied file,
+`Source/Game/GameEngineSystems.cpp`. The `FPSPublicSDK_PrivateIncludeRatchet`
+CTest also holds it to a reviewed one-way ceiling in
+`Tests/Tools/test_module_private_dependencies.py`, which regeneration cannot
+raise. Lower the ceiling together with the inventory whenever an include or copied
+file is removed.
+
 ## Module Lifecycle
 
 ```

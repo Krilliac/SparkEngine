@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
-"""MOD-295: engine-private dependency ratchet for prototype game modules.
+"""MOD-295 / MOD-310: engine-private dependency ratchet for game modules.
 
 module_content.classify_module_includes is the one include resolver shared by
-every module-boundary ratchet (MOD-310 reuses it for SparkGameFPS). These tests
-check the resolver against the include search order the module CMakeLists
-declare, check that the committed inventory matches the live tree for every
-prototype module, and mutate temporary copies of a real module so that each
-kind of drift fails by name. The ratchet measures the "prototype modules no
-longer copy private infrastructure" criterion; it does not satisfy it.
+every module-boundary ratchet. These tests check the resolver against the
+include search order the module CMakeLists declare, check that the committed
+inventory matches the live tree for every prototype module and for the
+RATCHETED_RELEASE_MODULES (SparkGameFPS), and mutate temporary copies of real
+modules so that each kind of drift fails by name.
+
+The ratchet measures the "prototype modules no longer copy private
+infrastructure" (MOD-295) and "the module builds without SparkEngineLib or
+engine-source include paths" (MOD-310) criteria; it does not satisfy them.
+SparkGameFPS additionally has a reviewed one-way ceiling below, which
+regenerating the inventory cannot raise.
+
+FPSPrivateIncludeRatchetTests is also registered on its own as the CTest
+FPSPublicSDK_PrivateIncludeRatchet.
 """
 
 from __future__ import annotations
@@ -24,7 +32,14 @@ sys.path.insert(0, str(ROOT / "tools" / "site-data"))
 import module_content  # noqa: E402
 
 MUTATION_MODULE = "SparkGameARPG"
+FPS_MODULE = "SparkGameFPS"
 LOCATION = "inventory"
+
+# Reviewed one-way ceilings for SparkGameFPS (MOD-310 target: zero). Lower them
+# together with the committed inventory whenever headers or copied files are
+# removed; never raise them.
+FPS_PRIVATE_HEADER_CEILING = 51
+FPS_COPIED_INFRASTRUCTURE_CEILING = 1
 
 
 def _authoritative(root: Path) -> dict[str, dict]:
@@ -112,7 +127,7 @@ class ResolverTests(unittest.TestCase):
 
 
 class CommittedInventoryTests(unittest.TestCase):
-    """Every prototype module's committed entry matches the live tree; the stable profile carries none."""
+    """Every ratcheted module's committed entry matches the live tree; no other module carries the fields."""
 
     def test_prototype_modules_match_committed_inventory(self) -> None:
         authoritative, entries = _authoritative(ROOT), _committed_entries(ROOT)
@@ -124,18 +139,74 @@ class CommittedInventoryTests(unittest.TestCase):
                 findings = module_content._validate_private_dependencies(ROOT, ROOT / "GameModules" / name, entries[name], LOCATION)
                 self.assertEqual([], findings)
 
-    def test_stable_profile_modules_are_not_prototypes(self) -> None:
+    def test_only_ratcheted_modules_publish_fields(self) -> None:
         entries = _committed_entries(ROOT)
         for name, module in _authoritative(ROOT).items():
-            if module_content._is_prototype(module["profileApplicability"]):
-                continue
-            with self.subTest(module=name):
-                self.assertFalse(set(module_content.PRIVATE_DEPENDENCY_KEYS) & set(entries[name]))
+            ratcheted = module_content._is_ratcheted(name, module["profileApplicability"])
+            with self.subTest(module=name, ratcheted=ratcheted):
+                published = set(module_content.PRIVATE_DEPENDENCY_KEYS) & set(entries[name])
+                self.assertEqual(set(module_content.PRIVATE_DEPENDENCY_KEYS) if ratcheted else set(), published)
 
     def test_copied_infrastructure_is_measured(self) -> None:
         entry = _committed_entries(ROOT)[MUTATION_MODULE]
         self.assertEqual([f"GameModules/{MUTATION_MODULE}/Source/Core/ARPGEngineSystems.cpp"], entry["copiedInfrastructureFiles"])
         self.assertIn("Engine/Coroutine/CoroutineScheduler.h", entry["privateEngineHeaders"])
+
+
+class FPSPrivateIncludeRatchetTests(unittest.TestCase):
+    """MOD-310: the stable-v1 FPS module is ratcheted like a prototype, under a reviewed ceiling."""
+
+    def test_fps_is_a_ratcheted_release_module(self) -> None:
+        applicability = _authoritative(ROOT)[FPS_MODULE]["profileApplicability"]
+        self.assertEqual("required", applicability.get("stable-v1"))
+        self.assertFalse(module_content._is_prototype(applicability))
+        self.assertTrue(module_content._is_ratcheted(FPS_MODULE, applicability))
+
+    def test_fps_matches_committed_inventory(self) -> None:
+        entry = _committed_entries(ROOT)[FPS_MODULE]
+        findings = module_content._validate_private_dependencies(ROOT, ROOT / "GameModules" / FPS_MODULE, entry, LOCATION)
+        self.assertEqual([], findings)
+
+    def test_fps_ceiling(self) -> None:
+        entry = _committed_entries(ROOT)[FPS_MODULE]
+        self.assertLessEqual(entry["privateEngineHeaderCount"], FPS_PRIVATE_HEADER_CEILING)
+        self.assertEqual(
+            FPS_PRIVATE_HEADER_CEILING,
+            entry["privateEngineHeaderCount"],
+            "SparkGameFPS dropped engine-private headers; lower FPS_PRIVATE_HEADER_CEILING to lock it in",
+        )
+        self.assertLessEqual(len(entry["copiedInfrastructureFiles"]), FPS_COPIED_INFRASTRUCTURE_CEILING)
+        self.assertEqual(
+            FPS_COPIED_INFRASTRUCTURE_CEILING,
+            len(entry["copiedInfrastructureFiles"]),
+            "SparkGameFPS dropped copied infrastructure; lower FPS_COPIED_INFRASTRUCTURE_CEILING to lock it in",
+        )
+
+    def test_fps_gained_header_fails_by_name(self) -> None:
+        temp = tempfile.TemporaryDirectory(prefix="fps-private-ratchet-")
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        entry = _committed_entries(ROOT)[FPS_MODULE]
+        module = root / "GameModules" / FPS_MODULE
+        shutil.copytree(ROOT / "GameModules" / FPS_MODULE / "Source", module / "Source")
+        shutil.copytree(ROOT / module_content.SDK_INCLUDE_ROOT, root / module_content.SDK_INCLUDE_ROOT)
+        # Resolution needs only the files to exist: stub every listed engine
+        # header plus the mutation target.
+        for header in entry["privateEngineHeaders"] + ["Utils/Logger.h"]:
+            stub = root / module_content.ENGINE_PRIVATE_ROOT / header
+            stub.parent.mkdir(parents=True, exist_ok=True)
+            stub.write_text("#pragma once\n", encoding="utf-8")
+
+        def findings() -> list[str]:
+            return [message for _, message in module_content._validate_private_dependencies(root, module, entry, LOCATION)]
+
+        self.assertEqual([], findings())
+        main = module / "Source" / "Core" / "Main.cpp"
+        main.write_text('#include "Utils/Logger.h"\n' + main.read_text(encoding="utf-8"), encoding="utf-8")
+        self.assertEqual(
+            [f"{FPS_MODULE} gained engine-private header not listed in its committed inventory: Utils/Logger.h"],
+            findings(),
+        )
 
 
 class RatchetMutationTests(unittest.TestCase):

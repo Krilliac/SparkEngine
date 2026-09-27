@@ -156,6 +156,10 @@ ENGINE_PRIVATE_ROOT = Path("SparkEngine/Source")
 SDK_INCLUDE_ROOT = Path("SparkSDK/Include")
 COPIED_INFRASTRUCTURE_GLOB = "*EngineSystems.cpp"
 PRIVATE_DEPENDENCY_KEYS = ("privateEngineHeaders", "privateEngineHeaderCount", "copiedInfrastructureFiles")
+# MOD-310: release-profile modules whose engine-private dependencies are
+# ratcheted like a prototype's. SparkGameFPS must reach zero; the ratchet
+# measures the gap and forbids growth, it does not close it.
+RATCHETED_RELEASE_MODULES = frozenset({"SparkGameFPS"})
 
 
 def _within(path: Path, root: Path) -> str | None:
@@ -231,6 +235,11 @@ def _is_prototype(applicability: dict[str, str]) -> bool:
     return bool(applicability) and all(state == "outside" for state in applicability.values())
 
 
+def _is_ratcheted(name: str, applicability: dict[str, str]) -> bool:
+    """Prototype modules and RATCHETED_RELEASE_MODULES publish the private-dependency ratchet."""
+    return _is_prototype(applicability) or name in RATCHETED_RELEASE_MODULES
+
+
 def _private_dependency_payload(module_dir: Path, repo_root: Path) -> dict[str, Any]:
     headers = sorted(classify_module_includes(repo_root, module_dir)["engine"])
     source = module_dir / "Source"
@@ -241,7 +250,7 @@ def _private_dependency_payload(module_dir: Path, repo_root: Path) -> dict[str, 
 def _validate_private_dependencies(
     repo_root: Path, module_dir: Path, entry: dict[str, Any], location: str
 ) -> list[tuple[str, str]]:
-    """Ratchet a prototype module's engine-private headers against its committed inventory entry."""
+    """Ratchet a module's engine-private headers against its committed inventory entry."""
     name = module_dir.name
     findings: list[tuple[str, str]] = []
     classified = classify_module_includes(repo_root, module_dir)
@@ -250,7 +259,7 @@ def _validate_private_dependencies(
     measured = _private_dependency_payload(module_dir, repo_root)
     committed = entry.get("privateEngineHeaders")
     if not isinstance(committed, list) or not all(isinstance(value, str) for value in committed):
-        findings.append((location, f"privateEngineHeaders must be a list of strings for prototype module {name}"))
+        findings.append((location, f"privateEngineHeaders must be a list of strings for ratcheted module {name}"))
         committed = []
     elif committed != sorted(set(committed)):
         findings.append((location, f"privateEngineHeaders must be sorted and unique for {name}"))
@@ -296,9 +305,10 @@ def _module_payload(module_dir: Path, repo_root: Path, applicability: dict[str, 
         "profileApplicability": applicability,
         "sharedRootDependencies": [_root_dependency(repo_root, root, integrity, root in declarations if name == "SparkGameFPS" else False) for root in roots],
     }
-    # MOD-295 measures, and does not reduce, what prototype modules take from
-    # engine-private headers and copied *EngineSystems.cpp setup code.
-    if _is_prototype(applicability):
+    # MOD-295 / MOD-310 measure, and do not reduce, what prototype modules and
+    # SparkGameFPS take from engine-private headers and copied *EngineSystems.cpp
+    # setup code.
+    if _is_ratcheted(name, applicability):
         payload.update(_private_dependency_payload(module_dir, repo_root))
     return payload
 
@@ -394,10 +404,16 @@ def validate(repo_root: Path) -> list[tuple[str, str]]:
         for key, value in expected.items():
             if key not in PRIVATE_DEPENDENCY_KEYS and entry.get(key) != value:
                 findings.append((location, f"{key} drift for {name}: expected {value!r}"))
-        if _is_prototype(authoritative[name]["profileApplicability"]):
+        if _is_ratcheted(name, authoritative[name]["profileApplicability"]):
             findings.extend(_validate_private_dependencies(repo_root, actual[name], entry, location))
         elif any(key in entry for key in PRIVATE_DEPENDENCY_KEYS):
-            findings.append((location, f"private-dependency ratchet fields are published only for prototype modules: {name}"))
+            findings.append(
+                (
+                    location,
+                    "private-dependency ratchet fields are published only for prototype modules and "
+                    f"RATCHETED_RELEASE_MODULES: {name}",
+                )
+            )
         if expected["assetsDirectory"] and expected["assetFileCount"] and not expected["assetManifest"]:
             findings.append((location, f"payload asset directory has no manifest for {name}"))
         if name == "SparkGameFPS":
