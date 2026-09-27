@@ -202,12 +202,16 @@ else()
     endif()
 
     # Each SIMD implementation enables its own ISA through target pragmas and is
-    # selected at run time from CPUID, as in upstream build.zig.
+    # selected at run time from CPUID, as in upstream build.zig. Only the
+    # implementations within the stable-v1 x86-64 floor (OD-04: SSE4.2, no AVX)
+    # are compiled: CpuFloor_IsaBaseline rejects any above-floor instruction in a
+    # shipped image, even behind a CPUID check. That drops the AVX/AVX2/AVX-512 and
+    # AES-NI/PCLMUL (wmmintrin) variants; SparkEngine uses ChaCha20-Poly1305,
+    # X25519, Ed25519 and SHA-256, whose SSSE3/SSE4.1 or portable paths remain.
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i[3-6]86|x86)$")
         target_compile_definitions(spark_sodium PRIVATE
             HAVE_CPUID=1 HAVE_MMINTRIN_H=1 HAVE_EMMINTRIN_H=1 HAVE_PMMINTRIN_H=1
-            HAVE_TMMINTRIN_H=1 HAVE_SMMINTRIN_H=1 HAVE_AVXINTRIN_H=1
-            HAVE_AVX2INTRIN_H=1 HAVE_AVX512FINTRIN_H=1 HAVE_WMMINTRIN_H=1)
+            HAVE_TMMINTRIN_H=1 HAVE_SMMINTRIN_H=1)
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
         target_compile_definitions(spark_sodium PRIVATE HAVE_ARMCRYPTO=1)
     endif()
