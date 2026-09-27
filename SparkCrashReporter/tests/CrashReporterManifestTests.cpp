@@ -723,12 +723,25 @@ namespace
             fcntl(inheritableSentinel[0], F_SETFL, O_NONBLOCK);
         const ScopedEnvironment sentinel("SPARK_FAKE_GH_SENTINEL_FD", std::to_string(inheritableSentinel[1]));
 #endif
+        // Every automatic Issue is confirmed per crash. The user answers yes
+        // here; CrashReporter_Consent covers refusals and unanswered prompts.
+        size_t publicationQuestions = 0;
+        SparkCrashReporter::ReporterUi ui;
+        ui.ask = [&](const std::string&, const char*, bool publication)
+        {
+            if (publication)
+                ++publicationQuestions;
+            return true;
+        };
+        ui.notifyIssueOutcome = [](const std::string& message, bool) { std::cerr << message << '\n'; };
+
         Check(SparkCrashReporter::SetAutoIssuesEnabled(false), "automatic issues start disabled");
         Check(!SparkCrashReporter::AutoIssuesEnabled(), "no manifest can enable GitHub Issues");
 
         const auto disabled = MakeAutoIssueManifest(scratch, "disabled");
-        Check(SparkCrashReporter::RunCrashReporter(disabled) == 0, "forged manifest remains local without opt-in");
+        Check(SparkCrashReporter::RunCrashReporter(disabled, ui) == 0, "forged manifest remains local without opt-in");
         Check(!fs::exists(capture), "disabled reporter never launches fake gh");
+        Check(publicationQuestions == 0, "no publication question is asked without the user's opt-in");
 
         Check(SparkCrashReporter::SetAutoIssuesEnabled(true), "user explicitly enables automatic issues");
         Check(SparkCrashReporter::AutoIssuesEnabled(), "explicit opt-in persists");
@@ -737,7 +750,7 @@ namespace
                                                    { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }),
               "public correlation ID comes from bounded random hexadecimal output");
         const auto success = MakeAutoIssueManifest(scratch, "success");
-        Check(SparkCrashReporter::RunCrashReporter(success) == 0, "authenticated fake gh confirms issue URL");
+        Check(SparkCrashReporter::RunCrashReporter(success, ui) == 0, "authenticated fake gh confirms issue URL");
         std::ifstream captured(capture, std::ios::binary);
         const std::string sent((std::istreambuf_iterator<char>(captured)), std::istreambuf_iterator<char>());
         Check(sent.find("\ngithub.com/Krilliac/SparkEngine\n") != std::string::npos &&
@@ -751,6 +764,8 @@ namespace
                   sent.find("attacker/repo") == std::string::npos && sent.find(scratch.string()) == std::string::npos,
               "submitted arguments contain no untrusted crash content, credentials, or paths");
         Check(sent.find("--end-call--") != std::string::npos, "fake gh received exactly one issue command");
+        Check(publicationQuestions == 1,
+              "a requireConsent=false manifest still asks one publication question before posting");
         std::ostringstream statusOutput;
         std::streambuf* previousStatus = std::cout.rdbuf(statusOutput.rdbuf());
         const int statusResult = SparkCrashReporter::ShowAutoIssueStatus(success.artifactRoot);
@@ -768,7 +783,7 @@ namespace
               "GitHub CLI inherits no unrelated POSIX descriptors");
 #endif
         const auto firstCallEnd = sent.find("--end-call--");
-        Check(SparkCrashReporter::RunCrashReporter(success) == 3, "same incident is never posted twice");
+        Check(SparkCrashReporter::RunCrashReporter(success, ui) == 3, "same incident is never posted twice");
         std::ifstream repeatedCapture(capture, std::ios::binary);
         const std::string afterRepeat((std::istreambuf_iterator<char>(repeatedCapture)),
                                       std::istreambuf_iterator<char>());
@@ -779,7 +794,7 @@ namespace
         const auto failure = MakeAutoIssueManifest(scratch, "failure");
         std::ostringstream failureOutput;
         std::streambuf* previousFailureError = std::cerr.rdbuf(failureOutput.rdbuf());
-        const int failureResult = SparkCrashReporter::RunCrashReporter(failure);
+        const int failureResult = SparkCrashReporter::RunCrashReporter(failure, ui);
         std::cerr.rdbuf(previousFailureError);
         Check(failureResult == 3, "gh authentication or network failure is reported");
         Check(failureOutput.str().find("GitHub CLI could not create an issue") != std::string::npos,
@@ -788,8 +803,8 @@ namespace
 
         ScopedEnvironment timeoutMode("SPARK_FAKE_GH_MODE", "timeout");
         const auto timeout = MakeAutoIssueManifest(scratch, "timeout");
-        Check(SparkCrashReporter::RunCrashReporter(timeout) == 3, "gh timeout is unconfirmed, not success");
-        Check(SparkCrashReporter::RunCrashReporter(timeout) == 3, "uncertain timeout is not retried automatically");
+        Check(SparkCrashReporter::RunCrashReporter(timeout, ui) == 3, "gh timeout is unconfirmed, not success");
+        Check(SparkCrashReporter::RunCrashReporter(timeout, ui) == 3, "uncertain timeout is not retried automatically");
         std::ostringstream timeoutStatus;
         std::streambuf* oldTimeoutStatus = std::cout.rdbuf(timeoutStatus.rdbuf());
         const int timeoutStatusResult = SparkCrashReporter::ShowAutoIssueStatus(timeout.artifactRoot);
@@ -799,14 +814,14 @@ namespace
 
         ScopedEnvironment unconfirmedMode("SPARK_FAKE_GH_MODE", "unconfirmed");
         const auto unconfirmed = MakeAutoIssueManifest(scratch, "unconfirmed");
-        Check(SparkCrashReporter::RunCrashReporter(unconfirmed) == 3, "unexpected issue URL is rejected");
+        Check(SparkCrashReporter::RunCrashReporter(unconfirmed, ui) == 3, "unexpected issue URL is rejected");
 
         const auto missingGh = MakeAutoIssueManifest(scratch, "missing-gh");
         {
             ScopedEnvironment missingGhPath("PATH", "");
             std::ostringstream missingGhOutput;
             std::streambuf* previousError = std::cerr.rdbuf(missingGhOutput.rdbuf());
-            const int missingGhResult = SparkCrashReporter::RunCrashReporter(missingGh);
+            const int missingGhResult = SparkCrashReporter::RunCrashReporter(missingGh, ui);
             std::cerr.rdbuf(previousError);
             Check(missingGhResult == 3, "missing gh fails without contacting GitHub");
             Check(missingGhOutput.str().find("https://github.com/Krilliac/SparkEngine/issues/new") != std::string::npos,
@@ -819,7 +834,7 @@ namespace
         Check(!fs::exists(missingGhReceipt), "certain missing-gh preflight does not consume one-shot attempt");
         {
             ScopedEnvironment restoredGhMode("SPARK_FAKE_GH_MODE", "success");
-            Check(SparkCrashReporter::RunCrashReporter(missingGh) == 0,
+            Check(SparkCrashReporter::RunCrashReporter(missingGh, ui) == 0,
                   "installing gh later can submit the same previously unattempted crash");
         }
 

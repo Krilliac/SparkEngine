@@ -9,7 +9,9 @@
 #include "CrashReporterApp.h"
 #include "CrashAutoIssues.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -135,7 +137,9 @@ namespace
         return count;
     }
 
-    SparkCrashReporter::CrashManifest MakeConsentManifest(const fs::path& scratch, std::string_view label)
+    SparkCrashReporter::CrashManifest MakeConsentManifest(const fs::path& scratch, std::string_view label,
+                                                          bool requireConsent = true,
+                                                          std::string_view crashTitleJson = "SIGSEGV")
     {
         const fs::path root = scratch / ("consent-" + std::string(label));
         fs::create_directories(root);
@@ -150,10 +154,12 @@ namespace
         const fs::path manifestFile = root / "manifest.json";
         {
             std::ofstream output(manifestFile, std::ios::binary);
-            // requireConsent is true: the engine asked for a per-crash prompt.
-            output << "{\"logFile\":\"" << log.filename().string()
-                   << "\",\"crashTitle\":\"SIGSEGV\",\"requireConsent\":true,"
-                      "\"allowScreenshotRefusal\":false,\"promptUserDescription\":false}";
+            // requireConsent true means the engine asked for a per-crash
+            // prompt; false is what a crafted manifest or a project setting
+            // that only meant "no screenshot prompt" would send.
+            output << "{\"logFile\":\"" << log.filename().string() << "\",\"crashTitle\":\"" << crashTitleJson
+                   << "\",\"requireConsent\":" << (requireConsent ? "true" : "false")
+                   << ",\"allowScreenshotRefusal\":false,\"promptUserDescription\":false}";
         }
         SparkCrashReporter::CrashManifest loaded;
         Check(SparkCrashReporter::LoadManifest(manifestFile.string(), loaded), "load consent manifest fixture");
@@ -197,6 +203,158 @@ namespace
         Check(!answer("n\n", true), "CrashReporter_Consent: 'n' declines");
         Check(!answer("no\n", true), "CrashReporter_Consent: 'no' declines");
         Check(!answer("\ny\n", false), "CrashReporter_Consent: only the first line is the answer");
+
+        // The answer limit is 64 bytes, inclusive.
+        Check(answer("y" + std::string(63, ' ') + "\n", false), "CrashReporter_Consent: a 64-byte answer is read");
+        Check(!answer("y" + std::string(64, ' ') + "\n", false), "CrashReporter_Consent: a 65-byte answer declines");
+    }
+
+    /// Serves an endless run of 'y' with no newline and counts what the reader
+    /// pulls. An unbounded std::getline would drain all of it into memory.
+    class EndlessAnswerBuffer : public std::streambuf
+    {
+      public:
+        explicit EndlessAnswerBuffer(std::size_t limit) : m_limit(limit) { setg(m_chunk, m_chunk, m_chunk); }
+        std::size_t Served() const { return m_served; }
+
+      protected:
+        int_type underflow() override
+        {
+            if (m_served >= m_limit)
+                return traits_type::eof();
+            const std::size_t count = std::min(sizeof(m_chunk), m_limit - m_served);
+            std::fill(m_chunk, m_chunk + count, 'y');
+            m_served += count;
+            setg(m_chunk, m_chunk, m_chunk + count);
+            return traits_type::to_int_type(m_chunk[0]);
+        }
+
+      private:
+        char m_chunk[256] = {};
+        std::size_t m_limit = 0;
+        std::size_t m_served = 0;
+    };
+
+    void TestConsentAnswerIsBoundedBeforeBuffering()
+    {
+        // 64 MiB without a newline stands in for a pipe or /dev/zero on stdin.
+        constexpr std::size_t kStreamBytes = std::size_t{64} * 1024 * 1024;
+        EndlessAnswerBuffer endless(kStreamBytes);
+        std::istream input(&endless);
+        Check(!SparkCrashReporter::ReadConsentAnswer(input, true),
+              "CrashReporter_Consent: an overlong newline-free answer declines");
+        Check(endless.Served() <= 4096,
+              "CrashReporter_Consent: the answer reader stops pulling input once past the 64-byte limit");
+    }
+
+    void TestTerminalSafeRendering()
+    {
+        using SparkCrashReporter::TerminalSafe;
+        Check(TerminalSafe("SIGSEGV") == "SIGSEGV", "CrashReporter_TerminalSafe: plain ASCII is unchanged");
+        Check(TerminalSafe("snowman \xE2\x98\x83 rocket \xF0\x9F\x9A\x80") ==
+                  "snowman \xE2\x98\x83 rocket \xF0\x9F\x9A\x80",
+              "CrashReporter_TerminalSafe: well-formed printable UTF-8 is unchanged");
+        Check(TerminalSafe("\x1b]52;c;cHduZWQ=\x07") == "\\x1b]52;c;cHduZWQ=\\x07",
+              "CrashReporter_TerminalSafe: ESC and BEL of an OSC 52 clipboard write are escaped");
+        Check(TerminalSafe(std::string("a\nb\rc\td\x7f") + '\0' + "e") == "a\\x0ab\\x0dc\\x09d\\x7f\\x00e",
+              "CrashReporter_TerminalSafe: C0 controls, DEL and NUL are escaped");
+        Check(TerminalSafe("\xC2\x9B"
+                           "2J") == "\\u009b2J",
+              "CrashReporter_TerminalSafe: a UTF-8 encoded C1 CSI is escaped");
+        Check(TerminalSafe("\x9B"
+                           "2J") == "\\x9b2J",
+              "CrashReporter_TerminalSafe: a raw 8-bit CSI byte is escaped");
+        Check(TerminalSafe("\xC0\x9B") == "\\xc0\\x9b",
+              "CrashReporter_TerminalSafe: an overlong encoding is escaped byte by byte");
+        Check(TerminalSafe("\xE2\x98") == "\\xe2\\x98", "CrashReporter_TerminalSafe: a truncated sequence is escaped");
+    }
+
+    /// Runs the reporter with stderr captured.
+    std::string CaptureReporterStderr(const SparkCrashReporter::CrashManifest& manifest, int& result)
+    {
+        std::ostringstream captured;
+        std::streambuf* previous = std::cerr.rdbuf(captured.rdbuf());
+        {
+            ScopedStdin stdinScript("", false);
+            result = SparkCrashReporter::RunCrashReporter(manifest);
+        }
+        std::cerr.rdbuf(previous);
+        return captured.str();
+    }
+
+    void TestManifestControlsNeverReachTheTerminal(const fs::path& scratch)
+    {
+        // No prompt and no opt-in: this path runs unattended on every platform.
+        Check(!SparkCrashReporter::AutoIssuesEnabled(), "terminal-escape case runs without automatic issues");
+        const auto manifest = MakeConsentManifest(scratch, "terminal-escape", false,
+                                                  "\\u001b]52;c;cHduZWQ=\\u0007\\u001b[2J\\u009b1A spoof");
+        Check(manifest.crashTitle.find('\x1b') != std::string::npos,
+              "fixture: the parsed crash title really contains ESC");
+        int result = -1;
+        const std::string output = CaptureReporterStderr(manifest, result);
+        Check(result == 0, "CrashReporter_TerminalSafe: the reporter still reviews the manifest");
+        Check(output.find('\x1b') == std::string::npos && output.find('\x07') == std::string::npos &&
+                  output.find("\xC2\x9B") == std::string::npos,
+              "CrashReporter_TerminalSafe: no manifest control character reaches stderr");
+        Check(output.find("The engine has crashed: \\x1b]52;c;cHduZWQ=\\x07\\x1b[2J\\u009b1A spoof") !=
+                  std::string::npos,
+              "CrashReporter_TerminalSafe: the crash title is shown with visible escapes");
+    }
+
+    /// Runs on every platform through the dialog seam: requireConsent=false in
+    /// a manifest must never waive the per-crash publication question.
+    void TestManifestCannotWaivePublicationQuestion(const fs::path& scratch, const fs::path& fakeGh)
+    {
+        const fs::path fakeDirectory = scratch / "fake-gh-seam-bin";
+        fs::create_directories(fakeDirectory);
+#ifdef _WIN32
+        const fs::path fakeExecutable = fakeDirectory / "gh.exe";
+#else
+        const fs::path fakeExecutable = fakeDirectory / "gh";
+#endif
+        std::error_code copyError;
+        fs::copy_file(fakeGh, fakeExecutable, fs::copy_options::overwrite_existing, copyError);
+        Check(!copyError && fs::is_regular_file(fakeExecutable), "install fake gh for the dialog-seam matrix");
+        if (copyError || !fs::is_regular_file(fakeExecutable))
+            return; // Never fall back to the real GitHub CLI.
+#ifndef _WIN32
+        fs::permissions(fakeExecutable, fs::perms::owner_exec, fs::perm_options::add, copyError);
+#endif
+        const fs::path capture = scratch / "fake-gh-seam-arguments.txt";
+        ScopedEnvironment path("PATH", fakeDirectory.string());
+        ScopedEnvironment capturePath("SPARK_FAKE_GH_CAPTURE", capture.string());
+        ScopedEnvironment mode("SPARK_FAKE_GH_MODE", "success");
+        Check(SparkCrashReporter::SetAutoIssuesEnabled(true), "user opts in for the dialog-seam matrix");
+
+        for (const bool answer : {false, true})
+        {
+            const std::string label = answer ? "seam-yes" : "seam-no";
+            const auto manifest = MakeConsentManifest(scratch, label, false);
+            Check(!manifest.requireConsent, "fixture: manifest disables the local review prompt (" + label + ")");
+            size_t publicationQuestions = 0;
+            size_t outcomes = 0;
+            SparkCrashReporter::ReporterUi ui;
+            ui.ask = [&](const std::string&, const char*, bool publication)
+            {
+                if (publication)
+                    ++publicationQuestions;
+                return answer;
+            };
+            ui.notifyIssueOutcome = [&](const std::string&, bool) { ++outcomes; };
+
+            const size_t before = CountCalls(capture);
+            const int result = SparkCrashReporter::RunCrashReporter(manifest, ui);
+            Check(result == 0, "CrashReporter_Consent: dialog-seam run exits cleanly (" + label + ")");
+            Check(publicationQuestions == 1,
+                  "CrashReporter_Consent: requireConsent=false still asks the publication question (" + label + ")");
+            Check(CountCalls(capture) == before + (answer ? 1u : 0u),
+                  "CrashReporter_Consent: only an explicit yes transmits (" + label + ")");
+            Check(AttemptReceiptExists(manifest) == answer,
+                  "CrashReporter_Consent: only an explicit yes claims an issue attempt (" + label + ")");
+            Check(outcomes == (answer ? 1u : 0u),
+                  "CrashReporter_Consent: a posted Issue always shows its outcome (" + label + ")");
+        }
+        Check(SparkCrashReporter::SetAutoIssuesEnabled(false), "user revokes the dialog-seam opt-in");
     }
 
 #ifndef _WIN32
@@ -256,6 +414,39 @@ namespace
                   "CrashReporter_Consent: declined consent keeps the local crash log (" + label + ")");
         }
 
+        // A manifest (or engine setting) with requireConsent=false must not
+        // waive the per-crash confirmation of a public post.
+        for (const Case& item : declined)
+        {
+            const std::string label = "no-review-" + std::string(item.label);
+            const auto manifest = MakeConsentManifest(scratch, label, false);
+            Check(!manifest.requireConsent, "fixture: manifest disables the local review prompt (" + label + ")");
+            const size_t before = CountCalls(capture);
+            int result = -1;
+            {
+                ScopedStdin stdinScript(item.input, item.broken);
+                result = SparkCrashReporter::RunCrashReporter(manifest);
+            }
+            Check(result == 0, "CrashReporter_Consent: requireConsent=false still asks before posting (" + label + ")");
+            Check(CountCalls(capture) == before,
+                  "CrashReporter_Consent: requireConsent=false without an explicit yes transmits nothing (" + label +
+                      ")");
+            Check(!AttemptReceiptExists(manifest),
+                  "CrashReporter_Consent: requireConsent=false without an explicit yes claims no attempt (" + label +
+                      ")");
+        }
+        {
+            const auto manifest = MakeConsentManifest(scratch, "no-review-yes", false);
+            const size_t before = CountCalls(capture);
+            int result = -1;
+            {
+                ScopedStdin stdinScript("y\n");
+                result = SparkCrashReporter::RunCrashReporter(manifest);
+            }
+            Check(result == 0 && CountCalls(capture) == before + 1,
+                  "CrashReporter_Consent: requireConsent=false plus an explicit yes transmits exactly once");
+        }
+
         // Positive control: an explicit yes does reach the (fake) transport, so
         // the zero-call assertions above are able to observe a transmission.
         const Case accepted[] = {{"yes", "y\n", false}, {"yes-crlf", "YES\r\n", false}};
@@ -291,15 +482,20 @@ int main(int argc, char* argv[])
     ScopedEnvironment configRoot("XDG_CONFIG_HOME", (scratch.path / "private-config").string());
 #endif
     TestConsentAnswerParsing();
-#ifndef _WIN32
+    TestConsentAnswerIsBoundedBeforeBuffering();
+    TestTerminalSafeRendering();
+    TestManifestControlsNeverReachTheTerminal(scratch.path);
     if (argc == 2)
+    {
+        TestManifestCannotWaivePublicationQuestion(scratch.path, argv[1]);
+#ifndef _WIN32
         TestUnansweredPromptTransmitsNothing(scratch.path, argv[1]);
-    else
-        Check(false, "fake gh executable path must be supplied");
-#else
-    (void)argc;
-    (void)argv;
 #endif
+    }
+    else
+    {
+        Check(false, "fake gh executable path must be supplied");
+    }
 
     if (checks == 0)
     {

@@ -1174,16 +1174,122 @@ namespace SparkCrashReporter
         return message;
     }
 
+    std::string TerminalSafe(std::string_view text)
+    {
+        constexpr char kHex[] = "0123456789abcdef";
+        std::string safe;
+        safe.reserve(text.size());
+        const auto escapeByte = [&](unsigned char byte)
+        {
+            safe += "\\x";
+            safe.push_back(kHex[byte >> 4]);
+            safe.push_back(kHex[byte & 0x0F]);
+        };
+
+        size_t index = 0;
+        while (index < text.size())
+        {
+            const auto lead = static_cast<unsigned char>(text[index]);
+            if (lead < 0x20 || lead == 0x7F)
+            {
+                escapeByte(lead); // C0 controls (ESC, BEL, CR, LF, ...) and DEL
+                ++index;
+                continue;
+            }
+            if (lead < 0x80)
+            {
+                safe.push_back(static_cast<char>(lead));
+                ++index;
+                continue;
+            }
+
+            // Copy only well-formed UTF-8. A stray byte such as a raw 0x9B is
+            // an 8-bit CSI on some terminals, so malformed input is escaped.
+            size_t length = 0;
+            uint32_t codePoint = 0;
+            if (lead >= 0xC2 && lead <= 0xDF)
+            {
+                length = 2;
+                codePoint = lead & 0x1Fu;
+            }
+            else if (lead >= 0xE0 && lead <= 0xEF)
+            {
+                length = 3;
+                codePoint = lead & 0x0Fu;
+            }
+            else if (lead >= 0xF0 && lead <= 0xF4)
+            {
+                length = 4;
+                codePoint = lead & 0x07u;
+            }
+            bool wellFormed = length != 0 && text.size() - index >= length;
+            for (size_t offset = 1; wellFormed && offset < length; ++offset)
+            {
+                const auto continuation = static_cast<unsigned char>(text[index + offset]);
+                if ((continuation & 0xC0) != 0x80)
+                    wellFormed = false;
+                codePoint = (codePoint << 6) | (continuation & 0x3Fu);
+            }
+            if (wellFormed)
+            {
+                const bool overlong = (length == 3 && codePoint < 0x800) || (length == 4 && codePoint < 0x10000);
+                const bool surrogate = codePoint >= 0xD800 && codePoint <= 0xDFFF;
+                wellFormed = !overlong && !surrogate && codePoint <= 0x10FFFF;
+            }
+            if (!wellFormed)
+            {
+                escapeByte(lead);
+                ++index;
+                continue;
+            }
+            if (codePoint >= 0x80 && codePoint <= 0x9F)
+            {
+                // C1 controls (CSI, OSC, ...) encoded as UTF-8.
+                safe += "\\u00";
+                safe.push_back(kHex[codePoint >> 4]);
+                safe.push_back(kHex[codePoint & 0x0F]);
+            }
+            else
+            {
+                safe.append(text.substr(index, length));
+            }
+            index += length;
+        }
+        return safe;
+    }
+
     bool ReadConsentAnswer(std::istream& input, bool emptyMeansYes)
     {
         // A detached watchdog, service, or CI job has stdin closed, redirected
         // from /dev/null, or broken. That is nobody answering, never consent,
         // so a failed read declines regardless of the prompt's default.
         constexpr size_t kMaxAnswerBytes = 64;
-        std::string answer;
-        if (!input.good() || !std::getline(input, answer))
+        if (!input.good())
             return false;
-        if (answer.size() > kMaxAnswerBytes)
+
+        // Read at most kMaxAnswerBytes + 1 characters. An unbounded
+        // std::getline would buffer a newline-free stdin (a pipe, /dev/zero)
+        // until memory ran out before any length check could run.
+        std::string answer;
+        answer.reserve(kMaxAnswerBytes);
+        bool terminated = false;
+        char next = 0;
+        while (input.get(next))
+        {
+            if (next == '\n')
+            {
+                terminated = true;
+                break;
+            }
+            // Overlong input is not an answer. Nothing is drained: the rest
+            // of an endless stream would never end, and a declined prompt
+            // reads no further input.
+            if (answer.size() == kMaxAnswerBytes)
+                return false;
+            answer.push_back(next);
+        }
+        // Like std::getline, end of input with nothing read is no answer.
+        if (!terminated && answer.empty())
             return false;
 
         const auto isSpace = [](char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; };
@@ -1198,7 +1304,44 @@ namespace SparkCrashReporter
         return word == "y" || word == "yes";
     }
 
-    int RunCrashReporter(const CrashManifest& untrustedManifest)
+    ReporterUi PlatformReporterUi()
+    {
+        ReporterUi ui;
+        ui.ask = [](const std::string& message, const char* title, bool publication)
+        {
+#ifdef _WIN32
+            // Without an interactive desktop MessageBoxA returns 0, not IDYES.
+            const UINT style = MB_YESNO | MB_ICONERROR | (publication ? MB_DEFBUTTON2 : 0u);
+            return MessageBoxA(nullptr, message.c_str(), title, style) == IDYES;
+#else
+            (void)title;
+            // A yes that authorizes a public post must be typed, not defaulted.
+            std::cerr << message << (publication ? "\n[y/N]: " : "\n[Y/n]: ");
+            return ReadConsentAnswer(std::cin, !publication);
+#endif
+        };
+        ui.notifyIssueOutcome = [](const std::string& message, bool confirmed)
+        {
+            std::cerr << message << '\n';
+#ifdef _WIN32
+            // The engine launches this reporter detached on Windows, so stderr
+            // cannot be the only place a playtester sees delivery status.
+            MessageBoxA(nullptr, message.c_str(),
+                        confirmed ? "SparkEngine Issue created" : "SparkEngine Issue not confirmed",
+                        MB_OK | (confirmed ? MB_ICONINFORMATION : MB_ICONWARNING));
+#else
+            (void)confirmed;
+#endif
+        };
+        return ui;
+    }
+
+    int RunCrashReporter(const CrashManifest& manifest)
+    {
+        return RunCrashReporter(manifest, PlatformReporterUi());
+    }
+
+    int RunCrashReporter(const CrashManifest& untrustedManifest, const ReporterUi& ui)
     {
         CrashManifest manifest = untrustedManifest;
         SecureWipeTransportConfiguration(manifest);
@@ -1228,14 +1371,16 @@ namespace SparkCrashReporter
         std::cerr << "       SPARK ENGINE CRASH REPORTER\n";
         std::cerr << "================================================================\n";
         std::cerr << "\n";
-        std::cerr << "The engine has crashed: " << manifest.crashTitle << "\n";
-        std::cerr << "Timestamp: " << manifest.timestamp << "\n";
-        std::cerr << "Crash log: " << manifest.logFile << "\n";
+        // Manifest strings are untrusted and may decode JSON escapes into
+        // terminal control sequences, so every one is rendered inert.
+        std::cerr << "The engine has crashed: " << TerminalSafe(manifest.crashTitle) << "\n";
+        std::cerr << "Timestamp: " << TerminalSafe(manifest.timestamp) << "\n";
+        std::cerr << "Crash log: " << TerminalSafe(manifest.logFile) << "\n";
         std::cerr << "Crash log bytes read safely: " << crashLog.size() << "\n";
         if (!manifest.dumpFile.empty())
-            std::cerr << "Dump file: " << manifest.dumpFile << "\n";
+            std::cerr << "Dump file: " << TerminalSafe(manifest.dumpFile) << "\n";
         if (!manifest.screenshotFile.empty())
-            std::cerr << "Screenshot: " << manifest.screenshotFile << "\n";
+            std::cerr << "Screenshot: " << TerminalSafe(manifest.screenshotFile) << "\n";
         if (!manifest.zipFile.empty())
             std::cerr << "Prebuilt archive: ignored by this read-only reporter\n";
         std::cerr << "\n";
@@ -1246,42 +1391,30 @@ namespace SparkCrashReporter
         if (autoIssues)
             std::cerr << "Automatic GitHub Issues are enabled by this user's local setting. "
                          "Issue metadata will be public; no crash artifacts will be sent.\n";
-        // The engine launches this reporter as a detached process on Windows,
-        // so stderr cannot be the only place a playtester sees delivery status.
+        // Only automatic-Issue runs report an outcome, and every one of them
+        // asked the user first, so the outcome is always shown.
         const auto showIssueOutcome = [&](const std::string& message, bool confirmed)
         {
-            std::cerr << message << '\n';
-#ifdef _WIN32
-            if (manifest.requireConsent)
-                MessageBoxA(nullptr, message.c_str(),
-                            confirmed ? "SparkEngine Issue created" : "SparkEngine Issue not confirmed",
-                            MB_OK | (confirmed ? MB_ICONINFORMATION : MB_ICONWARNING));
-#else
-            (void)confirmed;
-#endif
+            if (ui.notifyIssueOutcome)
+                ui.notifyIssueOutcome(message, confirmed);
+            else
+                std::cerr << message << '\n';
         };
         constexpr std::string_view manualIssueUrl = "https://github.com/Krilliac/SparkEngine/issues/new";
 
-        // Consent
+        // Consent. manifest.requireConsent only controls the local review
+        // prompt; it comes from the manifest (or the engine's screenshot
+        // setting) and must never waive the per-crash confirmation of a
+        // public post. With automatic Issues enabled the prompt is mandatory
+        // and defaults to No, so an unattended run publishes nothing.
         bool shouldReview = true;
-        if (manifest.requireConsent)
+        if (manifest.requireConsent || autoIssues)
         {
-#ifdef _WIN32
             std::string consentMessage = BuildConsentMessage(manifest);
             if (autoIssues)
                 consentMessage += "\n\nIf you continue, a metadata-only GitHub Issue will be attempted publicly. "
                                   "No log, dump, screenshot, path, or description will be sent.";
-            int result = MessageBoxA(nullptr, consentMessage.c_str(), "Crash Report", MB_YESNO | MB_ICONERROR);
-            shouldReview = (result == IDYES);
-#else
-            std::cerr << BuildConsentMessage(manifest);
-            if (autoIssues)
-                std::cerr << "\n\nIf you continue, a metadata-only GitHub Issue will be attempted publicly. "
-                             "No log, dump, screenshot, path, or description will be sent.";
-            // A yes that authorizes a public post must be typed, not defaulted.
-            std::cerr << (autoIssues ? "\n[y/N]: " : "\n[Y/n]: ");
-            shouldReview = ReadConsentAnswer(std::cin, !autoIssues);
-#endif
+            shouldReview = ui.ask && ui.ask(consentMessage, "Crash Report", autoIssues); // no dialog declines
         }
 
         if (!shouldReview)
@@ -1294,16 +1427,9 @@ namespace SparkCrashReporter
         bool includeScreenshot = true;
         if (manifest.allowScreenshotRefusal && !manifest.screenshotFile.empty())
         {
-#ifdef _WIN32
-            int ssResult = MessageBoxA(nullptr,
-                                       "Include a screenshot of the last rendered frame "
-                                       "with the crash report?",
-                                       "Screenshot Consent", MB_YESNO | MB_ICONERROR);
-            includeScreenshot = (ssResult == IDYES);
-#else
-            std::cerr << "Include screenshot with report? [Y/n]: ";
-            includeScreenshot = ReadConsentAnswer(std::cin, true);
-#endif
+            includeScreenshot =
+                ui.ask && ui.ask("Include a screenshot of the last rendered frame with the crash report?",
+                                 "Screenshot Consent", false);
         }
 
         if (!includeScreenshot && !manifest.screenshotFile.empty())

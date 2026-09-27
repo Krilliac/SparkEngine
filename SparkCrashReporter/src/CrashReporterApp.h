@@ -23,6 +23,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <iosfwd>
 #include <string>
 #include <string_view>
@@ -84,13 +85,38 @@ namespace SparkCrashReporter
     /// Build the privacy disclosure shown before crash-report consent.
     std::string BuildConsentMessage(const CrashManifest& manifest);
 
+    /// Render an untrusted manifest string for a terminal. C0 controls, DEL,
+    /// C1 controls and malformed UTF-8 bytes are replaced with visible
+    /// \\xNN / \\u00NN escapes; well-formed printable UTF-8 is kept.
+    std::string TerminalSafe(std::string_view text);
+
     /// Read one console consent answer. @p emptyMeansYes is the prompt's
     /// documented default for a bare Enter.
     bool ReadConsentAnswer(std::istream& input, bool emptyMeansYes);
 
+    /// The reporter's user-facing dialogs. Called on the reporter's thread only.
+    struct ReporterUi
+    {
+        /// Asks one yes/no question and returns true only for yes.
+        /// @p publication marks a question whose yes authorizes a public post;
+        /// it must default to no.
+        std::function<bool(const std::string& message, const char* title, bool publication)> ask;
+        /// Shows the outcome of an automatic Issue attempt.
+        std::function<void(const std::string& message, bool confirmed)> notifyIssueOutcome;
+    };
+
+    /// The platform dialogs: MessageBoxes on Windows; elsewhere a stdin
+    /// [Y/n] / [y/N] question, and the outcome goes to stderr only. An
+    /// unanswered question declines.
+    ReporterUi PlatformReporterUi();
+
     /// Run the crash reporter UI and prepare the local report
     /// Returns 0 on success, non-zero on error
     int RunCrashReporter(const CrashManifest& manifest);
+
+    /// Same as RunCrashReporter(manifest) with the dialogs sent to @p ui.
+    /// This is the test seam for the platform dialogs.
+    int RunCrashReporter(const CrashManifest& manifest, const ReporterUi& ui);
 
     /// Show bounded, local automatic-Issue receipts from a crash directory.
     int ShowAutoIssueStatus(const std::string& crashDirectory);
