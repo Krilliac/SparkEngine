@@ -26,7 +26,7 @@
     "prefixes": [
       {
         "prefix": "VisualScriptDemo_",
-        "count": 10,
+        "count": 11,
         "requires": [
           "angelscript"
         ]

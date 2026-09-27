@@ -77,6 +77,21 @@ namespace Spark::VisualScriptDemo
     };
 
     inline constexpr uint32_t ExpectedEntityCount = 11;
+
+    /// Every sound name the shipped scripts pass to playSound(); OnLoad registers each with the AudioEngine.
+    inline constexpr std::array<std::string_view, 5> SoundCues = {"coin_pickup", "enemy_attack", "health_pickup",
+                                                                  "pickup_respawn", "victory_fanfare"};
+
+    /**
+     * Cue audio ships in the same content root as the scripts that request it:
+     * `<root>/Assets/Audio/VisualScript/<cue>.wav` beside `<root>/Assets/Scripts/Generated`.
+     * @param scriptRoot The directory DemoWorld::LoadScripts() selected (GetScriptRoot()).
+     */
+    inline std::filesystem::path SoundCuePath(const std::filesystem::path& scriptRoot, std::string_view cue)
+    {
+        return (scriptRoot / ".." / ".." / "Audio" / "VisualScript" / (std::string(cue) + ".wav")).lexically_normal();
+    }
+
     inline constexpr std::string_view SelfEntityDeclaration = "uint selfEntity = 0;";
 
     using IsRegularFile = std::function<bool(const std::filesystem::path&)>;

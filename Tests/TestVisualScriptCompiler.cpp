@@ -3,6 +3,7 @@
 
 #include "TestFramework.h"
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <cstdint>
 #include <filesystem>
@@ -11,6 +12,8 @@
 #include <queue>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -650,6 +653,57 @@ TEST(VisualScriptDemo_ShippedScriptsUseBootstrapAPIOnly)
         source << stream.rdbuf();
         for (const auto call : unsupportedCalls)
             EXPECT_TRUE(source.str().find(call) == std::string::npos);
+    }
+}
+
+TEST(VisualScriptDemo_EverySoundCueShipsItsAudio)
+{
+    // Every playSound("<cue>") in the shipped scripts must name a SoundCues entry that OnLoad registers from a
+    // shipped WAV, and every entry must still be requested, so a graph cue without audio fails here.
+    using namespace Spark::VisualScriptDemo;
+    const auto scriptRoot = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "GameModules" / "SparkGameVisualScript" /
+                            "Assets" / "Scripts" / "Generated";
+    const std::string_view call = "playSound(";
+
+    std::unordered_set<std::string> requested;
+    for (const auto& asset : ScriptManifest)
+    {
+        std::ifstream stream(scriptRoot / std::filesystem::path(asset.fileName), std::ios::binary);
+        EXPECT_TRUE(stream.is_open());
+        std::ostringstream source;
+        source << stream.rdbuf();
+        const std::string text = source.str();
+        for (size_t at = text.find(call); at != std::string::npos; at = text.find(call, at + call.size()))
+        {
+            // The cue must be a string literal inside this call (the statement's ';' comes after it).
+            const size_t open = text.find('"', at);
+            const size_t close = open == std::string::npos ? open : text.find('"', open + 1);
+            const bool literal = close != std::string::npos && close < text.find(';', at);
+            EXPECT_TRUE(literal);
+            if (literal)
+                requested.insert(text.substr(open + 1, close - open - 1));
+        }
+    }
+
+    EXPECT_EQ(requested.size(), SoundCues.size());
+    for (const auto& cue : requested)
+    {
+        const bool listed = std::find(SoundCues.begin(), SoundCues.end(), cue) != SoundCues.end();
+        if (!listed)
+            std::printf("  playSound cue '%s' is not in SoundCues
+", cue.c_str());
+        EXPECT_TRUE(listed);
+    }
+    for (const auto cue : SoundCues)
+    {
+        const auto wav = SoundCuePath(scriptRoot, cue);
+        EXPECT_EQ(wav.parent_path().filename().string(), std::string("VisualScript"));
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(wav, error))
+            std::printf("  sound cue '%s' has no audio at %s
+", std::string(cue).c_str(), wav.generic_string().c_str());
+        EXPECT_TRUE(std::filesystem::is_regular_file(wav, error));
+        EXPECT_TRUE(requested.count(std::string(cue)) == 1);
     }
 }
 

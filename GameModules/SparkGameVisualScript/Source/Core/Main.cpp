@@ -13,6 +13,7 @@
 #include "SparkGameVisualScript.h"
 #include "VisualScriptDemoRuntime.h"
 #include "VisualScriptDemoWorld.h"
+#include "Audio/AudioEngine.h"
 #include "Core/RuntimePackage.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
@@ -26,6 +27,7 @@
 #include <filesystem>
 #include <memory>
 #include <sstream>
+#include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -100,6 +102,7 @@ bool SparkGameVisualScriptModule::OnLoad(Spark::IEngineContext* context)
     }
     m_demo = std::move(demo);
 
+    LoadSoundCues();
     RegisterConsoleCommands();
 
     // Register VisualScript state validation rules
@@ -136,6 +139,7 @@ void SparkGameVisualScriptModule::OnUnload()
 
     UnregisterConsoleCommands();
     Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("VisualScript");
+    UnloadSoundCues();
     m_demo.reset();
     if (m_context && AngelScriptEngine::GetBoundWorld() == m_context->GetWorld())
         AngelScriptEngine::BindWorld(nullptr);
@@ -194,6 +198,42 @@ void SparkGameVisualScriptModule::OnResume()
 }
 
 void SparkGameVisualScriptModule::OnImGui() {}
+
+void SparkGameVisualScriptModule::LoadSoundCues()
+{
+    // The scripts' playSound() cues are started by AudioUpdateSystem, which plays only sounds the AudioEngine has
+    // loaded. Audio is optional (headless and server hosts run without it), so a missing engine or file costs only
+    // that cue: AudioUpdateSystem counts its requests as dropped.
+    auto* audio = m_context ? m_context->GetAudio() : nullptr;
+    if (!audio || !m_demo)
+        return;
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    for (const auto cue : Spark::VisualScriptDemo::SoundCues)
+    {
+        const std::string name(cue);
+        const auto path = Spark::VisualScriptDemo::SoundCuePath(m_demo->GetScriptRoot(), cue);
+        if (FAILED(audio->LoadSound(name, path.wstring())))
+        {
+            console.LogWarning("[VisualScript] Sound cue '" + name + "' is unavailable; could not load " +
+                               path.generic_string());
+            continue;
+        }
+        m_loadedSoundCues.push_back(name);
+    }
+    console.LogInfo("[VisualScript] Loaded " + std::to_string(m_loadedSoundCues.size()) + "/" +
+                    std::to_string(Spark::VisualScriptDemo::SoundCues.size()) + " script sound cues");
+}
+
+void SparkGameVisualScriptModule::UnloadSoundCues()
+{
+    if (auto* audio = m_context ? m_context->GetAudio() : nullptr)
+    {
+        for (const auto& name : m_loadedSoundCues)
+            audio->UnloadSound(name);
+    }
+    m_loadedSoundCues.clear();
+}
 
 void SparkGameVisualScriptModule::RegisterConsoleCommands()
 {

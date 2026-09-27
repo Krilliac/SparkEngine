@@ -487,12 +487,13 @@
       "cmakeDeclarationParseError": false,
       "assetsDirectory": "GameModules/SparkGameVisualScript/Assets",
       "assetManifest": "GameModules/SparkGameVisualScript/Assets/manifest.json",
-      "assetFileCount": 10,
+      "assetFileCount": 15,
       "profileApplicability": {
         "stable-v1": "outside"
       },
       "sharedRootDependencies": [],
       "privateEngineHeaders": [
+        "Audio/AudioEngine.h",
         "Core/RuntimePackage.h",
         "Engine/ECS/Components.h",
         "Engine/ECS/Components/CoreComponents.h",
@@ -502,7 +503,7 @@
         "Utils/LogMacros.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 8,
+      "privateEngineHeaderCount": 9,
       "copiedInfrastructureFiles": []
     }
   ],

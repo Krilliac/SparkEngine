@@ -167,7 +167,10 @@ endif()
 
 # Stage the generated visual scripts where the engine executable resolves
 # Assets/Scripts/Generated (Source/Core/Main.cpp); the module fails to load without them.
+# Their playSound() cue audio ships in the same content root (SoundCuePath in
+# Source/Core/VisualScriptDemoRuntime.h); a missing cue only silences that cue.
 spark_stage_game_module_content(SparkGameVisualScript
-    COPY_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/Assets/Scripts/Generated" Assets/Scripts/Generated)
+    COPY_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/Assets/Scripts/Generated" Assets/Scripts/Generated
+                     "${CMAKE_CURRENT_SOURCE_DIR}/Assets/Audio/VisualScript" Assets/Audio/VisualScript)
 
 message(STATUS "SparkGameVisualScript configured — zero C++ game logic, all visual scripts")

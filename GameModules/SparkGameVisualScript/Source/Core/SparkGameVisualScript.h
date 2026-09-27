@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 /**
  * @brief Game module with all logic defined in visual scripts
@@ -53,12 +54,15 @@ class SparkGameVisualScriptModule : public Spark::IModule
     void OnImGui() override;
 
   private:
+    void LoadSoundCues();
+    void UnloadSoundCues();
     void RegisterConsoleCommands();
     void UnregisterConsoleCommands();
     std::string GetStatusString() const;
 
     Spark::IEngineContext* m_context{nullptr};
     std::unique_ptr<Spark::VisualScriptDemo::DemoWorld> m_demo; ///< Script entities; null until a load succeeds
+    std::vector<std::string> m_loadedSoundCues;                 ///< Cues this load registered with the AudioEngine
     bool m_initialized{false};
     bool m_paused{false};
 };

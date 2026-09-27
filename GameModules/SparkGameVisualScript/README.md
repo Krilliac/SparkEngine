@@ -12,7 +12,7 @@ truth: `VisualScriptGraphs_CheckedInGraphsRegenerateShippedScripts` (`Tests/Test
 compiles each one with `VisualScriptCompiler` and fails unless the result matches the shipped `.as` byte for byte. To
 change gameplay, edit a graph and regenerate: run that test with `SPARK_VSCRIPT_OUTPUT_DIR=<dir>`, copy the `.as` it
 writes over `Assets/Scripts/Generated` (and the canonical `.vscript` over `Assets/Graphs`), then update the SHA-256
-values in `Assets/manifest.json`. Only the generated `.as` files are staged into builds.
+values in `Assets/manifest.json`. Only the generated `.as` files and the cue audio (below) are staged into builds.
 
 ## Play
 
@@ -56,6 +56,15 @@ The scripts request media by name; the engine systems act on the request, so the
   controller, so `DemoWorld::Spawn` gives every entity whose script requests a clip its controller: coins list
   `idle` and `collect_burst`, enemies `idle`, `walk` and `attack_swing`. Re-requesting the playing clip (EnemyPatrol
   asks for `walk` every patrol frame) does not restart it, and `AnimationUpdateSystem` advances it.
+
+Each cue's audio ships in `Assets/Audio/VisualScript/<cue>.wav`, placeholder stingers composed by
+`tools/audio/compose_visualscript_cues.py` (deterministic, CC0; rerun it and update the SHA-256 values in
+`Assets/manifest.json` to change them). The build stages that directory beside the scripts, and `OnLoad` registers
+every cue in `SoundCues` (`Source/Core/VisualScriptDemoRuntime.h`) with the engine's `AudioEngine` from the content root
+the scripts were loaded from, and unloads them in `OnUnload`. Audio is optional: without an `AudioEngine` (headless,
+server) or with a missing file the module still loads, logs a warning naming the file, and that cue is dropped.
+`VisualScriptDemo_EverySoundCueShipsItsAudio` fails when a script's `playSound` names a cue that is not in `SoundCues`
+or has no shipped WAV.
 
 `VisualScriptGameplay_ScriptCuesReachAudioQueueAndAnimationControllers` plays the coin route to the win and checks
 each collected coin's `coin_pickup` cue and `collect_burst` clip, the GameManager's `victory_fanfare` cue, and that a
