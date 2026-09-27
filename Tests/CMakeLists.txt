@@ -2052,10 +2052,11 @@ if(TARGET SparkGatewayCore)
 
     # NET-110: the GuardedGatewayAuthenticator GatewayCoordinator installs around every
     # authenticator (docs/specs/online-services.md 5.2): exceptions contained without the
-    # credential, 2 s call budget, consecutive-fault circuit. Exact count: a dropped test fails.
+    # credential, 2 s call budget, consecutive-fault circuit, counters and open circuit in the
+    # gateway health JSON. Exact count: a dropped test fails.
     add_test(NAME GatewayGuardedAuthenticator COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(GatewayGuardedAuthenticator PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SparkGateway_GuardedAuthenticator_;SPARK_TEST_EXPECT_COUNT=6"
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SparkGateway_GuardedAuthenticator_;SPARK_TEST_EXPECT_COUNT=7"
         LABELS "online-services;gateway;unit"
         TIMEOUT 30)
 endif()

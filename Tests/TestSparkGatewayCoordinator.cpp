@@ -293,11 +293,17 @@ TEST(SparkGateway_GuardedAuthenticator_CircuitOpensAfterConsecutiveFaults)
     GatewayFixture fixture;
     ASSERT_TRUE(fixture.registered);
     fixture.authenticator.throwWithCredential = true;
-    for (Net::ClientID client = 10; client < 15; ++client)
+    for (Net::ClientID client = 10; client < 14; ++client)
         EXPECT_FALSE(fixture.coordinator.Admit(BuildAdmission(client)).accepted);
+    // Faults below the threshold keep the gateway ready: the adapter is still being asked.
+    EXPECT_TRUE(fixture.coordinator.IsReady());
+    EXPECT_FALSE(fixture.coordinator.Admit(BuildAdmission(14)).accepted);
     GatewayAuthenticatorHealth health = fixture.coordinator.GetAuthenticationHealth();
     EXPECT_EQ(health.consecutiveFaults, 5u);
     EXPECT_TRUE(health.circuitOpen);
+    // Failing fast: health readiness drops, so /health does not report ready while every
+    // admission is rejected.
+    EXPECT_FALSE(fixture.coordinator.IsReady());
 
     // Open: even a recovered backend is not called until the 30 s cooldown has elapsed.
     fixture.authenticator.throwWithCredential = false;
@@ -378,6 +384,8 @@ TEST(SparkGateway_GuardedAuthenticator_ProbeAfterCooldownClosesCircuit)
     EXPECT_FALSE(guard.Authenticate(BuildAdmission()).accepted);
     EXPECT_FALSE(guard.Authenticate(BuildAdmission()).accepted);
     EXPECT_TRUE(guard.GetHealth().circuitOpen);
+    // The cooldown has elapsed, so the guard no longer fails fast and readiness lets the probe in.
+    EXPECT_FALSE(guard.IsFailingFast());
 
     // Cooldown elapsed: a failing probe reaches the adapter and reopens the circuit.
     EXPECT_FALSE(guard.Authenticate(BuildAdmission()).accepted);

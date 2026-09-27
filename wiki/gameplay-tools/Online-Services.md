@@ -130,7 +130,7 @@ ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure 
 
 The `OnlineServices_Degraded_*` tests (ctest `OnlineServicesDegraded`, label `online-services`) drive a fault-injecting adapter through the manager to cover these rules.
 
-On the server side, `GatewayCoordinator` wraps every `IGatewayAuthenticator` in `GuardedGatewayAuthenticator` (section 5.2 of the spec). An authenticator exception becomes the rejection `Authentication backend fault` without the exception text, an answer slower than 2 s is rejected, and 5 consecutive faults open a 30 s circuit. A rejected credential is a normal answer and never opens it. `GatewayCoordinator::GetAuthenticationHealth()` returns the counters, covered by `SparkGateway_GuardedAuthenticator_*` (ctest `GatewayGuardedAuthenticator`).
+On the server side, `GatewayCoordinator` wraps every `IGatewayAuthenticator` in `GuardedGatewayAuthenticator` (section 5.2 of the spec). An authenticator exception becomes the rejection `Authentication backend fault` without the exception text, an answer slower than 2 s is rejected, and 5 consecutive faults open a 30 s circuit. A rejected credential is a normal answer and never opens it. `GatewayCoordinator::GetAuthenticationHealth()` returns the counters, and `SparkGateway` publishes them as the `authentication` object of its health JSON. The health `ready` field is false while the open circuit fails admissions fast. Covered by `SparkGateway_GuardedAuthenticator_*` (ctest `GatewayGuardedAuthenticator`).
 
 ## Configuration
 

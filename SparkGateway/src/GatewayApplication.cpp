@@ -427,7 +427,10 @@ namespace Spark::Gateway
             health.players = stats.totalPlayers;
         }
         if (m_coordinator)
+        {
             health.sessions = m_coordinator->GetSessionCount();
+            health.authentication = m_coordinator->GetAuthenticationHealth();
+        }
         std::lock_guard lock(m_errorMutex);
         health.lastError = m_lastError;
         return health;
@@ -443,7 +446,15 @@ namespace Spark::Gateway
                << ",\"controlPlaneReady\":" << (health.controlPlaneReady ? "true" : "false")
                << ",\"ingressReady\":" << (health.ingressReady ? "true" : "false") << ",\"port\":" << health.port
                << ",\"activeAreas\":" << health.activeAreas << ",\"players\":" << health.players
-               << ",\"sessions\":" << health.sessions << ",\"error\":\"" << EscapeJson(health.lastError) << "\"}";
+               << ",\"sessions\":" << health.sessions;
+        const GatewayAuthenticatorHealth& auth = health.authentication;
+        stream << ",\"authentication\":{\"accepted\":" << auth.accepted << ",\"rejected\":" << auth.rejected
+               << ",\"faults\":" << auth.faults << ",\"budgetOverruns\":" << auth.budgetOverruns
+               << ",\"rejectedWhileOpen\":" << auth.rejectedWhileOpen
+               << ",\"consecutiveFaults\":" << auth.consecutiveFaults
+               << ",\"circuitOpen\":" << (auth.circuitOpen ? "true" : "false")
+               << ",\"maxCallMicroseconds\":" << auth.maxCallMicroseconds << "}";
+        stream << ",\"error\":\"" << EscapeJson(health.lastError) << "\"}";
         return stream.str();
     }
 

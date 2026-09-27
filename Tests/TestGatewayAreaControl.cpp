@@ -19,6 +19,7 @@
 #include <iterator>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -1123,4 +1124,87 @@ TEST(GatewayApplication_IngressStartupFailureUnwindsAWorkingCoordinator)
     areaService.Stop();
     std::filesystem::remove(areaState, error);
     std::filesystem::remove(squatterState, error);
+}
+
+namespace
+{
+    // An adapter whose backend is down: it reports ready, then throws on every call.
+    class ThrowingAuthenticator final : public IGatewayAuthenticator
+    {
+      public:
+        AuthenticationResult Authenticate(const AdmissionRequest&) override
+        {
+            throw std::runtime_error("identity backend unreachable");
+        }
+        bool IsReady() const override { return true; }
+    };
+} // namespace
+
+TEST(SparkGateway_GuardedAuthenticator_GatewayHealthReportsCircuit)
+{
+    // NET-110 observability: the guarded-authenticator counters and the open circuit reach the
+    // running gateway's health JSON (the --health-file / status line), and readiness drops while
+    // every admission is being failed fast.
+    const auto areaState = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-health-area") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(areaState, error);
+    const std::vector<uint8_t> key(32, 0x5a);
+    const uint16_t controlPort = UniquePort(51);
+    const std::string ingressEndpoint = UniqueName("spark-gateway-health-ingress");
+
+    LocalAreaControlService areaService("spark-area-control-" + std::to_string(controlPort), key, areaState);
+    EXPECT_TRUE(areaService.Start());
+
+    GatewayOptions options;
+    options.world.worldName = "GatewayApplicationAuthenticationHealth";
+    options.world.port = UniquePort(52);
+    options.world.interServerPort = UniquePort(53);
+    options.ingressEndpoint = ingressEndpoint;
+    AreaEndpoint area;
+    area.host = "127.0.0.1";
+    area.area.areaName = "Loopback";
+    area.area.port = UniquePort(54);
+    area.area.interServerPort = controlPort;
+    area.area.maxClients = 8;
+    options.areas = {area};
+
+    {
+        GatewayApplication application(std::move(options), std::make_unique<ThrowingAuthenticator>(),
+                                       std::make_unique<LocalAreaControlPlane>(key));
+        ASSERT_TRUE(application.Start());
+        EXPECT_TRUE(application.GetHealth().ready);
+        EXPECT_TRUE(application.GetHealthJson().find("\"circuitOpen\":false") != std::string::npos);
+
+        AdmissionRequest request;
+        request.sessionId = "health-session";
+        request.playerName = "HealthPlayer";
+        request.credential = "opaque-health-credential";
+        const LocalGatewayIngressClient client(ingressEndpoint);
+        // Five consecutive adapter faults open the circuit (spec section 5.2); the sixth
+        // admission is failed fast without reaching the adapter.
+        for (Spark::Net::ClientID clientId = 1; clientId <= 6; ++clientId)
+        {
+            request.clientId = clientId;
+            EXPECT_FALSE(client.Admit(request).accepted);
+        }
+
+        const GatewayHealth health = application.GetHealth();
+        EXPECT_TRUE(health.live);
+        EXPECT_FALSE(health.ready);
+        EXPECT_TRUE(health.authenticationReady);
+        EXPECT_EQ(health.authentication.faults, 5u);
+        EXPECT_EQ(health.authentication.rejectedWhileOpen, 1u);
+        EXPECT_TRUE(health.authentication.circuitOpen);
+
+        const std::string json = application.GetHealthJson();
+        EXPECT_TRUE(json.find("\"ready\":false") != std::string::npos);
+        EXPECT_TRUE(json.find("\"authentication\":{\"accepted\":0,\"rejected\":0,\"faults\":5,\"budgetOverruns\":0,"
+                              "\"rejectedWhileOpen\":1,\"consecutiveFaults\":5,\"circuitOpen\":true,"
+                              "\"maxCallMicroseconds\":") != std::string::npos);
+        EXPECT_TRUE(json.find(request.credential) == std::string::npos);
+        application.Stop();
+    }
+
+    areaService.Stop();
+    std::filesystem::remove(areaState, error);
 }

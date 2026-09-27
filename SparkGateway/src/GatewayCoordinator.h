@@ -183,6 +183,10 @@ namespace Spark::Gateway
         /** [any thread] Return a copy safe for health/admin reporting. */
         [[nodiscard]] std::optional<SessionSnapshot> GetSession(std::string_view sessionId) const;
         [[nodiscard]] size_t GetSessionCount() const;
+        /**
+         * [any thread] Health readiness: routable, and the authenticator circuit is not failing
+         * fast. False during the circuit cooldown, when every admission would be rejected.
+         */
         [[nodiscard]] bool IsReady() const;
         /** [any thread] Fault, budget and circuit counters of the guarded authenticator. */
         [[nodiscard]] GatewayAuthenticatorHealth GetAuthenticationHealth() const;
@@ -194,6 +198,11 @@ namespace Spark::Gateway
         };
 
         [[nodiscard]] const AreaEndpoint* FindEndpoint(Net::AreaID areaId) const;
+        /**
+         * World, adapters, areas and drain state allow routing. Admit() gates on this rather than
+         * IsReady() so a fail-fast admission reaches the guard and is counted as rejectedWhileOpen.
+         */
+        [[nodiscard]] bool IsRoutable() const;
 
         Net::WorldServer* m_worldServer = nullptr;
         // Owned front over the caller's (non-owned) authenticator; set once in the constructor.

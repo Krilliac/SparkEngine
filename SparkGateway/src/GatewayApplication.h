@@ -6,6 +6,7 @@
 #pragma once
 
 #include "GatewayCoordinator.h"
+#include "GuardedGatewayAuthenticator.h"
 
 #include <atomic>
 #include <chrono>
@@ -57,6 +58,8 @@ namespace Spark::Gateway
         uint32_t activeAreas = 0;
         uint32_t players = 0;
         size_t sessions = 0;
+        /** Guarded-authenticator fault, budget and circuit counters (zero before Start()). */
+        GatewayAuthenticatorHealth authentication;
         std::string lastError;
     };
 

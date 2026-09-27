@@ -61,7 +61,7 @@ namespace Spark::Gateway
     RouteResult GatewayCoordinator::Admit(const AdmissionRequest& request)
     {
         RouteResult result;
-        if (!IsReady())
+        if (!IsRoutable())
         {
             result.failure = RouteFailure::NotReady;
             result.reason = "Gateway admission or area control plane is not ready";
@@ -292,6 +292,11 @@ namespace Spark::Gateway
     }
 
     bool GatewayCoordinator::IsReady() const
+    {
+        return IsRoutable() && !m_authenticator->IsFailingFast();
+    }
+
+    bool GatewayCoordinator::IsRoutable() const
     {
         std::vector<Net::AreaID> areas;
         Net::WorldServer* world = nullptr;

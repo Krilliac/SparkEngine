@@ -76,6 +76,17 @@ namespace Spark::Gateway
             return m_health;
         }
 
+        /**
+         * True while the circuit is open and the cooldown has not elapsed, i.e. every admission is
+         * rejected without reaching the adapter. Once the cooldown elapses this is false again even
+         * though circuitOpen stays set until a probe answers, so readiness lets the probe through.
+         */
+        [[nodiscard]] bool IsFailingFast() const
+        {
+            std::lock_guard lock(m_mutex);
+            return m_health.circuitOpen && std::chrono::steady_clock::now() < m_retryAt;
+        }
+
         [[nodiscard]] AuthenticationResult Authenticate(const AdmissionRequest& request) override
         {
             {
