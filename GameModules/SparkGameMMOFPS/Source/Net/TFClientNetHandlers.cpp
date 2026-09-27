@@ -90,8 +90,11 @@ namespace Terrafront
 
     void TFClientNet::ReleaseClientHandlers()
     {
-        // NetworkManager has no per-type removal; replace our handlers with no-ops
-        // so no dangling `this` survives module shutdown (TFServerSim pattern).
+        // Remove (never replace) every observer RegisterClientHandlers installed, including the accept-and-
+        // ignore routes (they are image-resident too). An empty placeholder lambda is itself code in this
+        // module image: it outlived unload, and during hot reload it overwrote the replacement module's
+        // handler. Inside the module's teardown scope NetworkManager leaves a slot the replacement already
+        // owns untouched.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         for (TFMsg id : {TFMsg::WorldWelcome, TFMsg::SpawnReply, TFMsg::HitConfirm, TFMsg::DamageEvent,
@@ -99,8 +102,7 @@ namespace Terrafront
                          TFMsg::SquadMsg, TFMsg::LoginReply, TFMsg::RegisterReply, TFMsg::CharListReply,
                          TFMsg::CharCreateReply, TFMsg::CharDeleteReply, TFMsg::RedeployReply})
         {
-            nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
-                               [](const Spark::Net::NetworkMessage&) {});
+            nm.UnregisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)));
         }
         m_handlersRegistered = false;
     }

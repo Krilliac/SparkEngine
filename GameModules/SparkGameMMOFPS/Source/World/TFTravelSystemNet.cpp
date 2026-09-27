@@ -51,11 +51,13 @@ namespace Terrafront
 
     void TFTravelSystem::ServerReleaseNetHandlers()
     {
-        // No per-type removal in NetworkManager; overwrite with no-ops so no
-        // dangling `this` survives shutdown (module-wide pattern).
+        // Remove (never replace) these observers. An empty placeholder lambda is itself code in this module
+        // image: it outlived unload, and during hot reload it overwrote the replacement module's handler.
+        // Inside the module's teardown scope NetworkManager leaves a slot the replacement already owns
+        // untouched.
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         for (uint16_t id : {kTFTravelMsg_Request, kTFTravelMsg_InfoRequest})
-            nm.RegisterHandler(static_cast<Spark::Net::MessageType>(id), [](const Spark::Net::NetworkMessage&) {});
+            nm.UnregisterHandler(static_cast<Spark::Net::MessageType>(id));
         m_serverHandlers = false;
     }
 
@@ -85,9 +87,13 @@ namespace Terrafront
 
     void TFTravelSystem::ClientReleaseNetHandlers()
     {
+        // Remove (never replace) these observers. An empty placeholder lambda is itself code in this module
+        // image: it outlived unload, and during hot reload it overwrote the replacement module's handler.
+        // Inside the module's teardown scope NetworkManager leaves a slot the replacement already owns
+        // untouched.
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         for (uint16_t id : {kTFTravelMsg_Reply, kTFTravelMsg_Info, static_cast<uint16_t>(TFMsg::ContinentHopReply)})
-            nm.RegisterHandler(static_cast<Spark::Net::MessageType>(id), [](const Spark::Net::NetworkMessage&) {});
+            nm.UnregisterHandler(static_cast<Spark::Net::MessageType>(id));
         m_clientHandlers = false;
     }
 

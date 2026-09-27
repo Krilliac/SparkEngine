@@ -78,20 +78,21 @@ namespace Terrafront
 
     void TFServerSim::UnregisterNetHandlers()
     {
-        // NetworkManager has no per-type removal; replace our handlers with no-ops
-        // so no dangling `this` survives module shutdown.
+        // Remove (never replace) every observer RegisterNetHandlers installed (removal also drops the
+        // credential ids' sensitive classification). An empty placeholder lambda is itself code in this
+        // module image: it outlived unload, and during hot reload it overwrote the replacement module's
+        // handler. Inside the module's teardown scope NetworkManager leaves a slot the replacement already
+        // owns untouched.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        const auto silence = [&nm](TFMsg id) {
-            nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
-                               [](const Spark::Net::NetworkMessage&) {});
-        };
+        const auto unregister = [&nm](TFMsg id)
+        { nm.UnregisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id))); };
         for (const TFMsg id : kTFEnteredWorldGatedMsgs)
-            silence(id);
+            unregister(id);
         for (const TFMsg id : kTFOnboardingMsgs)
-            silence(id);
+            unregister(id);
         for (const TFMsg id : kTFCredentialMsgs)
-            silence(id);
+            unregister(id);
         m_handlersRegistered = false;
     }
 
