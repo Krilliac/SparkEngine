@@ -25,7 +25,7 @@
     "prefixes": [
       {
         "prefix": "RTS_",
-        "count": 44
+        "count": 39
       },
       {
         "prefix": "RTSSkirmish_",

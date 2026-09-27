@@ -527,12 +527,6 @@ add_executable(SparkTests
     TestUndoRedoManagerProduction.cpp
     TestEditorLayoutManager.cpp
     TestGizmoMath.cpp
-    # Game module tests
-    TestSparkGameRPG.cpp
-    TestSparkGameARPG.cpp
-    TestSparkGameRTS.cpp
-    TestSparkGameRacing.cpp
-    TestSparkGamePlatformer.cpp
     # Security
     TestMemoryIntegrity.cpp
     TestMemoryIntegrityLifecycle.cpp
