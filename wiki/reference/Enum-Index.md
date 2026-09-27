@@ -378,7 +378,7 @@
 | `IKType` | enum | SparkEngine | [IKSolver.h:L25](../../SparkEngine/Source/Engine/Animation/IKSolver.h#L25) | IK solver algorithm variants. |
 | `ImpactBehavior` | enum | SparkEngine | [FPSComponents.h:L106](../../SparkEngine/Source/Engine/ECS/Components/FPSComponents.h#L106) |  |
 | `ImpactBehavior` | enum | Tests | [TestFPSComponents.cpp:L102](../../Tests/TestFPSComponents.cpp#L102) |  |
-| `InitBehavior` | enum | Tests | [TestLifecycleCompositionRootFailure.cpp:L44](../../Tests/TestLifecycleCompositionRootFailure.cpp#L44) |  |
+| `InitBehavior` | enum | Tests | [TestLifecycleCompositionRootFailure.cpp:L46](../../Tests/TestLifecycleCompositionRootFailure.cpp#L46) |  |
 | `InputAction` | enum | SparkEngine | [InputEnums.h:L19](../../SparkEngine/Source/Enums/InputEnums.h#L19) | Input action types |
 | `InputCaptureHint` | enum | SparkEditor | [GameViewPanel.h:L71](../../SparkEditor/Source/Panels/GameViewPanel.h#L71) |  |
 | `InputCaptureMode` | enum | SparkEditor | [CoreEditorEnums.h:L92](../../SparkEditor/Source/Enums/CoreEditorEnums.h#L92) | Input capture modes |
@@ -425,8 +425,8 @@
 | `Level` | enum | SparkEditor | [BuildPipeline.h:L39](../../SparkEditor/Source/Panels/BuildPipeline.h#L39) | A single line of build output with severity. |
 | `LevelTheme` | enum | GameModules | [PlatformerEnums.h:L85](../../GameModules/SparkGamePlatformer/Source/Enums/PlatformerEnums.h#L85) | Visual themes for levels |
 | `LifecycleOrder` | enum | SparkEngine | [LifecycleStage.h:L19](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L19) |  |
-| `LifecyclePhase` | enum | SparkEngine | [LifecycleCompositionRoot.h:L25](../../SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h#L25) |  |
-| `LifecycleRootState` | enum | SparkEngine | [LifecycleCompositionRoot.h:L41](../../SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h#L41) |  |
+| `LifecyclePhase` | enum | SparkEngine | [LifecycleCompositionRoot.h:L26](../../SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h#L26) |  |
+| `LifecycleRootState` | enum | SparkEngine | [LifecycleCompositionRoot.h:L42](../../SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h#L42) |  |
 | `LifecycleThreadAffinity` | enum | SparkEngine | [LifecycleStage.h:L13](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L13) |  |
 | `LightType` | enum | SparkEditor | [SceneSystemEnums.h:L103](../../SparkEditor/Source/Enums/SceneSystemEnums.h#L103) | Light component types |
 | `LightType` | enum | SparkEngine | [LightingSystem.h:L36](../../SparkEngine/Source/Graphics/LightingSystem.h#L36) | Light types supported by the system |
@@ -441,7 +441,7 @@
 | `LoadingState` | enum | SparkEngine | [LoadingScreen.h:L68](../../SparkEngine/Source/Engine/Loading/LoadingScreen.h#L68) | Current state of the loading process. |
 | `LoadPriority` | enum | SparkEngine | [DirectStorageLoader.h:L33](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L33) | Load request priority |
 | `LoadPriority` | enum | Tests | [TestDirectStorageLoader.cpp:L18](../../Tests/TestDirectStorageLoader.cpp#L18) |  |
-| `LoadResult` | enum | GameModules | [TFDatabase.h:L292](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L292) |  |
+| `LoadResult` | enum | GameModules | [TFDatabase.h:L279](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L279) |  |
 | `LoadResult` | enum | GameModules | [TFOutfitStore.h:L144](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L144) |  |
 | `LoadStatus` | enum | SparkEngine | [DirectStorageLoader.h:L50](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L50) | Completion status for async loads |
 | `LoadStatus` | enum | Tests | [TestDirectStorageLoader.cpp:L33](../../Tests/TestDirectStorageLoader.cpp#L33) |  |
@@ -752,7 +752,7 @@
 | `ShapeType` | enum | SparkEngine | [IPhysicsBackend.h:L35](../../SparkEngine/Source/Physics/IPhysicsBackend.h#L35) |  |
 | `ShapeType` | enum | Tests | [TestPhysicsSystem.cpp:L24](../../Tests/TestPhysicsSystem.cpp#L24) |  |
 | `ShippedVertexLayout` | enum | Tests | [TestRHI230VulkanValidationReal.cpp:L434](../../Tests/TestRHI230VulkanValidationReal.cpp#L434) |  |
-| `ShutdownBehavior` | enum | Tests | [TestLifecycleCompositionRootFailure.cpp:L52](../../Tests/TestLifecycleCompositionRootFailure.cpp#L52) |  |
+| `ShutdownBehavior` | enum | Tests | [TestLifecycleCompositionRootFailure.cpp:L54](../../Tests/TestLifecycleCompositionRootFailure.cpp#L54) |  |
 | `SIMDLevel` | enum | SparkEngine | [FastNoise2SIMD.h:L47](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L47) |  |
 | `SimulationSubsystem` | enum | SparkEditor | [PlayModeToolbarPanel.h:L23](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L23) |  |
 | `SimulationSubsystem` | enum | SparkEngine | [PlayModeTypes.h:L39](../../SparkEngine/Source/Engine/Editor/PlayModeTypes.h#L39) |  |
@@ -838,11 +838,11 @@
 | `TFAlertPhase` | enum | GameModules | [TFAlertSystem.h:L92](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystem.h#L92) |  |
 | `TFAlertType` | enum | GameModules | [TFAlertSystem.h:L85](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystem.h#L85) |  |
 | `TFAuthErr` | enum | GameModules | [TFAccountSystem.h:L21](../../GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.h#L21) |  |
-| `TFBackupStatus` | enum | GameModules | [TFDatabase.h:L108](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L108) |  |
+| `TFBackupStatus` | enum | GameModules | [TFDatabase.h:L102](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L102) |  |
 | `TFButton` | enum | GameModules | [TFNetProtocolGameplay.h:L22](../../GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocolGameplay.h#L22) |  |
 | `TFCharErr` | enum | GameModules | [TFCharacterSystem.h:L23](../../GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.h#L23) |  |
 | `TFColossusResult` | enum | GameModules | [TFColossusSystem.h:L44](../../GameModules/SparkGameMMOFPS/Source/Game/TFColossusSystem.h#L44) |  |
-| `TFDatabaseStatus` | enum | GameModules | [TFDatabase.h:L92](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L92) |  |
+| `TFDatabaseStatus` | enum | GameModules | [TFDatabase.h:L86](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L86) |  |
 | `TFDeployResult` | enum | GameModules | [TFDeployableSystem.h:L87](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L87) |  |
 | `TFDirectiveKind` | enum | GameModules | [TFDirectiveData.h:L39](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveData.h#L39) |  |
 | `TFFlowState` | enum | GameModules | [TFLoginFlow.h:L56](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlow.h#L56) |  |
