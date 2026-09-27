@@ -60,9 +60,13 @@
             "SparkInstaller/src/InstallerPreflight.cpp",
             "SparkInstaller/src/Installer.cpp",
             "SparkInstaller/tests/GitContractTests.cpp",
-            "SparkInstaller/CMakeLists.txt"
+            "SparkInstaller/CMakeLists.txt",
+            "SparkInstaller/src/Installer.h",
+            "SparkInstaller/src/InstallerContext.h",
+            "SparkInstaller/src/InstallState.h",
+            "SparkInstaller/README.md"
           ],
-          "note": "Update-marker cleanliness plus preflight refusal before any mutation (exit 10). Windows junction fixture fixed in 23de6d006."
+          "note": "Update-marker cleanliness and preflight refusal before any mutation (exit 10); Windows junction fixture fixed in 23de6d006. Added: rollback rebuild and verify (exit 9 repair-required), the interrupted-update rollback target, a staged fresh-install clone with pending marker and Resume install mode, and the trailing-separator destination fix. No build or test result recorded for the additions."
         },
         {
           "criterionDigest": "sha256:b2d639655345",

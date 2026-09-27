@@ -193,20 +193,32 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:1d1411824831",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/test_check_supply_chain.py",
-            "tools/check-supply-chain.py"
+            "tools/check-supply-chain.py",
+            "ThirdParty/supply-chain.lock",
+            "ThirdParty/POLICY.md",
+            "tools/architecture-viz/code_city_template.html",
+            "SECURITY.md"
           ],
-          "note": "Action pins and the ThirdParty lock are enforced. There is still no policy for third-party code outside ThirdParty/, so unmanaged dependencies are not ruled out."
+          "note": "external_dependencies policy for code outside ThirdParty/. Owner review of the declared records is still pending."
         },
         {
           "criterionDigest": "sha256:1fa25e25f1e1",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            ".github/scripts/verify_vulnerability_findings.py"
+            ".github/scripts/verify_vulnerability_findings.py",
+            ".github/workflows/build.yml",
+            ".github/scripts/test_verify_vulnerability_findings.py",
+            ".github/scripts/fixtures/vulnerability/lock-sbom.spdx.json",
+            ".github/scripts/fixtures/vulnerability/grype-lock-sbom-high.json",
+            "tools/generate-sbom.py",
+            "Tests/Tools/test_generate_sbom.py",
+            "ThirdParty/supply-chain.lock",
+            ".github/scripts/test-workflow-failure-propagation.py"
           ],
-          "note": "The gate covers only the release SBOM. Dependency-level scanning is still a listed blocker, and whether syft catalogs statically linked ThirdParty code is unverified."
+          "note": "The PR-time dependency-policy job over the lock SBOM, plus the existing release gate. Hosted exact-SHA evidence is still needed."
         },
         {
           "criterionDigest": "sha256:b70931523204",
@@ -309,7 +321,6 @@
         "stable-v1": "shared"
       },
       "plannedCiJobs": [
-        "dependency-policy",
         "license-scan"
       ],
       "plannedTestSelectors": [
@@ -637,9 +648,20 @@
         },
         {
           "criterionDigest": "sha256:70dbbe77ed6e",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Only NullOnlinePlatform is deterministic. Local adapters for identity, match, fleet, moderation and entitlement are still open."
+          "state": "implemented",
+          "evidence": [
+            "SparkGateway/src/GatewayLocalAdapters.h",
+            "SparkGateway/src/GatewayLocalAdapters.cpp",
+            "SparkGateway/src/GatewayCoordinator.h",
+            "SparkGateway/src/GatewayCoordinator.cpp",
+            "SparkGateway/src/GatewayApplication.cpp",
+            "SparkGateway/src/main.cpp",
+            "Tests/TestOnlineServicesLocalStack.cpp",
+            "Tests/CMakeLists.txt",
+            "docs/specs/online-services.md",
+            "wiki/advanced/Online-Service-Boundary.md"
+          ],
+          "note": "Engine seams, pending owner check OD-08: NullOnlinePlatform (B1); LocalFixtureAuthenticator for identity, entitlement, moderation (B2/B4); LocalDeterministicPlacement via IAreaPlacementPolicy (B9); SparkDaemon + BeginDrain for fleet (B8); DedicatedServer in-process admin. CTest OnlineServicesLocalStack (6 tests, exact count) runs admission twice from fresh state; both equal a fixed transcript."
         },
         {
           "criterionDigest": "sha256:5f2ff3eec738",
@@ -1071,9 +1093,15 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:23354f02da27",
-          "state": "unmet",
-          "evidence": [],
-          "note": "The Server_Health tests cover health JSON and drain signalling only. Restarting and recovering a failing server is not tested."
+          "state": "implemented",
+          "evidence": [
+            "wiki/advanced/Server-Operations-Runbook.md",
+            "Tests/Tools/test_server_recovery_drill.py",
+            "tools/ops/server_recovery_drill.py",
+            "wiki/_Sidebar.md",
+            "wiki/advanced/Online-Service-Boundary.md"
+          ],
+          "note": "Each runbook step ends with the drill that rehearses it. RunbookParityTests (run by ServerRecoveryDrill_Harness) fail on a SparkServer, tools/ops or SparkOrchestrator flag, or a path, that has drifted."
         },
         {
           "criterionDigest": "sha256:3d3d8ebe5028",
@@ -1083,9 +1111,12 @@
         },
         {
           "criterionDigest": "sha256:6a1b58381966",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No backup/restore or alert/runbook drills are recorded."
+          "state": "implemented",
+          "evidence": [
+            "wiki/advanced/Server-Operations-Runbook.md",
+            "Tests/Tools/test_server_recovery_drill.py"
+          ],
+          "note": "The backup/restore section points to the TERRAFRONT TFDatabaseBackup path and the DATA-120 Persistence_BackupRestore drill. The runbook states that SLOs and alert thresholds are provisional."
         },
         {
           "criterionDigest": "sha256:6a4de067db5d",

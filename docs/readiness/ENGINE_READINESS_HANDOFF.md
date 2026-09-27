@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **53 in progress**, **5 blocked**, **6 open**
-- Acceptance criteria: **259 total**, **71 implemented** (27%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **81 implemented** (31%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -247,7 +247,7 @@ Establish the only source of readiness truth and make CI report reality.
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 1/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
-| [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 1/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
+| [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 1/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 0/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
 | [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 2/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
@@ -264,7 +264,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 2/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **in-progress** | 2/4 · 0/4 | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **in-progress** | 4/4 · 0/4 | — | `CI-100`, `OPS-100`, `RDY-000` |
-| [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **in-progress** | 2/4 · 0/4 | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
+| [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **in-progress** | 4/4 · 0/4 | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
 | [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **in-progress** | 0/3 · 0/3 | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
 | [`OPS-100`](#ops-100--secure-and-complete-crash-reporting-telemetry-delivery-and-symbol-operations) Secure and complete crash reporting, telemetry delivery, and symbol operations | P0 | **in-progress** | 2/5 · 0/5 | — | `SEC-100`, `CI-100`, `RDY-000` |
 
@@ -277,14 +277,14 @@ Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK,
 | [`PLT-200`](#plt-200--certify-the-primary-windows-support-row) Certify the primary Windows support row | P0 | **in-progress** | 1/3 · 0/3 | `BLD-100`, `REL-100`, `RDY-020`, `RHI-210`, `EDT-210`, `OPS-100` | `HEAD-220`, `SAVE-230`, `SDK-240` |
 | [`RHI-210`](#rhi-210--certify-d3d11-as-the-primary-renderer) Certify D3D11 as the primary renderer | P0 | **in-progress** | 0/4 · 0/4 | `CI-110`, `BLD-100`, `RDY-020` | `HEAD-220`, `EDT-210`, `ENG-200` |
 | [`HEAD-220`](#head-220--certify-packaged-windows-11-nullrhi-execution) Certify packaged Windows 11 NullRHI execution | P0 | **open** | 0/4 · 0/4 | `BLD-100`, `RDY-010`, `RDY-020` | `RHI-210`, `EDT-210`, `LIFE-200` |
-| [`LIFE-200`](#life-200--close-runtime-ownership-shutdown-reload-and-failure-semantics) Close runtime ownership, shutdown, reload, and failure semantics | P0 | **in-progress** | 1/4 · 0/4 | `RDY-010`, `BLD-100` | `HEAD-220`, `EDT-210`, `ENG-200` |
+| [`LIFE-200`](#life-200--close-runtime-ownership-shutdown-reload-and-failure-semantics) Close runtime ownership, shutdown, reload, and failure semantics | P0 | **in-progress** | 3/4 · 0/4 | `RDY-010`, `BLD-100` | `HEAD-220`, `EDT-210`, `ENG-200` |
 | [`EDT-210`](#edt-210--finish-the-editor-authoring-and-undo-safe-package-round-trip) Finish the editor authoring and undo-safe package round trip | P1 | **in-progress** | 2/4 · 0/4 | `RDY-010`, `RDY-020`, `LIFE-200` | `RHI-210`, `ENG-200`, `SAVE-230` |
 | [`ASSET-220`](#asset-220--consolidate-cooking-packaging-cli-and-installed-consumer-behavior) Consolidate cooking, packaging, CLI, and installed consumer behavior | P0 | **in-progress** | 0/4 · 0/4 | `RDY-020`, `BLD-100`, `LIFE-200` | `EDT-210`, `SAVE-230`, `SDK-240` |
 | [`INST-130`](#inst-130--make-installer-clean-install-repair-and-uninstall-behavior-verified-and-recoverable) Make installer clean-install, repair, and uninstall behavior verified and recoverable | P0 | **in-progress** | 3/5 · 0/5 | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
 | [`SAVE-230`](#save-230--version-saves-scenes-assets-editor-data-and-migrations) Version saves, scenes, assets, editor data, and migrations | P0 | **in-progress** | 4/4 · 0/4 | `RDY-000`, `RDY-010`, `LIFE-200` | `EDT-210`, `ASSET-220`, `SDK-240` |
 | [`SDK-240`](#sdk-240--stabilize-sdk-module-abi-package-exports-and-compatibility-diagnostics) Stabilize SDK, module ABI, package exports, and compatibility diagnostics | P0 | **in-progress** | 4/4 · 0/4 | `ASSET-220`, `LIFE-200`, `REL-100` | `SAVE-230`, `EDT-210` |
 | [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **in-progress** | 0/4 · 0/4 | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
-| [`ENG-200`](#eng-200--complete-the-angelscript-and-visual-script-runtime-lifecycle) Complete the AngelScript and visual-script runtime lifecycle | P0 | **in-progress** | 3/4 · 0/4 | `RDY-010`, `LIFE-200`, `SAVE-230` | `EDT-210`, `RHI-210` |
+| [`ENG-200`](#eng-200--complete-the-angelscript-and-visual-script-runtime-lifecycle) Complete the AngelScript and visual-script runtime lifecycle | P0 | **in-progress** | 4/4 · 0/4 | `RDY-010`, `LIFE-200`, `SAVE-230` | `EDT-210`, `RHI-210` |
 
 ### Wave 3 — Secure multiplayer reference
 
@@ -293,11 +293,11 @@ Close transport, true multi-client, persistence, migration, load, and operations
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
 | [`NET-100`](#net-100--replace-placeholder-transport-security-with-audited-authenticated-encryption) Replace placeholder transport security with audited authenticated encryption | P0 | **in-progress** | 0/4 · 0/4 | `SEC-100`, `SEC-110`, `SEC-120`, `CI-110` | `NET-110`, `DATA-120` |
-| [`NET-110`](#net-110--define-and-implement-the-production-online-service-boundary) Define and implement the production online-service boundary | P1 | **in-progress** | 3/4 · 0/4 | `NET-100`, `SEC-100` | `DATA-120`, `TF-110`, `OPS-110` |
+| [`NET-110`](#net-110--define-and-implement-the-production-online-service-boundary) Define and implement the production online-service boundary | P1 | **in-progress** | 4/4 · 0/4 | `NET-100`, `SEC-100` | `DATA-120`, `TF-110`, `OPS-110` |
 | [`DATA-120`](#data-120--make-multiplayer-persistence-transactional-migratable-backed-up-and-recoverable) Make multiplayer persistence transactional, migratable, backed up, and recoverable | P1 | **in-progress** | 0/4 · 0/4 | `SAVE-230`, `NET-100` | `NET-110`, `TF-110`, `OPS-110` |
-| [`TF-110`](#tf-110--prove-mmofps-with-a-true-independent-multi-client-release-gate) Prove MMOFPS with a true independent multi-client release gate | P0 | **in-progress** | 1/4 · 0/4 | `NET-100`, `RDY-020`, `HEAD-220`, `RDY-010` | `TF-120`, `OPS-110` |
+| [`TF-110`](#tf-110--prove-mmofps-with-a-true-independent-multi-client-release-gate) Prove MMOFPS with a true independent multi-client release gate | P0 | **in-progress** | 2/4 · 0/4 | `NET-100`, `RDY-020`, `HEAD-220`, `RDY-010` | `TF-120`, `OPS-110` |
 | [`TF-120`](#tf-120--close-mmofps-restart-multimap-migration-topology-and-performance) Close MMOFPS restart, multimap migration, topology, and performance | P1 | **in-progress** | 0/5 · 0/5 | `TF-110`, `DATA-120`, `OPS-110` | — |
-| [`OPS-110`](#ops-110--add-production-server-observability-load-soak-backup-and-incident-gates) Add production server observability, load, soak, backup, and incident gates | P1 | **in-progress** | 0/4 · 0/4 | `OPS-100`, `HEAD-220`, `NET-100`, `DATA-120` | `TF-110`, `TF-120`, `NET-110` |
+| [`OPS-110`](#ops-110--add-production-server-observability-load-soak-backup-and-incident-gates) Add production server observability, load, soak, backup, and incident gates | P1 | **in-progress** | 2/4 · 0/4 | `OPS-100`, `HEAD-220`, `NET-100`, `DATA-120` | `TF-110`, `TF-120`, `NET-110` |
 
 ### Wave 4 — Module completion factory
 
@@ -526,13 +526,13 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every module included by a declared profile builds and executes through its real lifecycle
    - Needs a hosted Windows D3D11 lifecycle run at the exact commit. None has been observed.
-2. **[unmet]** No copied model or tautological test can satisfy a release-profile gate
-   - Evidence: `Tests/Tools/test_module_evidence.py`
-   - The census guards only the sanitizer FPSRespawn_* selector. Replacing mirror tests across the gates remains open.
+2. **[implemented]** No copied model or tautological test can satisfy a release-profile gate
+   - Evidence: `Tests/Tools/test_module_evidence.py`, `Tools/test_source_census.py`, `Tests/Tools/test_source_census_profile.py`, `tools/site-data/module_content.py`, `Tests/Tools/test_module_manifest.py`
+   - CTest TestSourceCensus_ProfileSelectors rejects any profile selector that reaches a mirror or tautological TEST. module_content.py fails a manifest whose prefix selects a TEST outside tests.files, lists a census mirror, or selects an EXPECT_TRUE(true)/EXPECT_NO_CRASH-only body; test_module_manifest.py mutates each rule. 11 mirrors retired, ~159 remain outside the gates. Local evidence only.
 3. **[unmet]** Each in-profile module publishes deterministic JUnit and sanitizer evidence
    - Needs hosted JUnit and sanitizer artifacts at the exact commit, consumed by module-evidence. None has been observed.
 4. **[implemented]** Experimental module evidence remains independently owned and cannot block stable-v1
@@ -1535,14 +1535,14 @@ Workflow actions use mutable major tags, dependency inventories disagree, CodeQL
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** No unpinned action or unmanaged dependency remains
-   - Evidence: `Tests/test_check_supply_chain.py`, `tools/check-supply-chain.py`
-   - Action pins and the ThirdParty lock are enforced. There is still no policy for third-party code outside ThirdParty/, so unmanaged dependencies are not ruled out.
-2. **[unmet]** Critical/high findings block without an owned expiring exception
-   - Evidence: `.github/scripts/verify_vulnerability_findings.py`
-   - The gate covers only the release SBOM. Dependency-level scanning is still a listed blocker, and whether syft catalogs statically linked ThirdParty code is unverified.
+1. **[implemented]** No unpinned action or unmanaged dependency remains
+   - Evidence: `Tests/test_check_supply_chain.py`, `tools/check-supply-chain.py`, `ThirdParty/supply-chain.lock`, `ThirdParty/POLICY.md`, `tools/architecture-viz/code_city_template.html`, `SECURITY.md`
+   - external_dependencies policy for code outside ThirdParty/. Owner review of the declared records is still pending.
+2. **[implemented]** Critical/high findings block without an owned expiring exception
+   - Evidence: `.github/scripts/verify_vulnerability_findings.py`, `.github/workflows/build.yml`, `.github/scripts/test_verify_vulnerability_findings.py`, `.github/scripts/fixtures/vulnerability/lock-sbom.spdx.json`, `.github/scripts/fixtures/vulnerability/grype-lock-sbom-high.json`, `tools/generate-sbom.py`, `Tests/Tools/test_generate_sbom.py`, `ThirdParty/supply-chain.lock`, `.github/scripts/test-workflow-failure-propagation.py`
+   - The PR-time dependency-policy job over the lock SBOM, plus the existing release gate. Hosted exact-SHA evidence is still needed.
 3. **[implemented]** Final package inventory reconciles with source lock
    - Evidence: `Tests/Tools/test_generate_sbom.py`, `tools/generate-sbom.py`, `.github/workflows/release.yml`, `Tests/Tools/test_release_supply_chain_wiring.py`, `Tests/CMakeLists.txt`
    - Reconcile mode is tested but not wired into the release.yml package jobs. There is no final Windows or hosted package reconciliation evidence.
@@ -1993,8 +1993,8 @@ Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `cmake/RunSparkHeadlessNullRHILifecycle.cmake`
    - The parser rejects D3D11 device records, but repository-content isolation is not asserted. There is no clean-host run.
 3. **[unmet]** FPS lifecycle, save/reload, shutdown, and recovery are bounded and sanitizer-clean
-   - Evidence: `docs/platform/LINUX-SUPPORT-EVIDENCE.md`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/TestHEAD220NullRHILifetimeReal.cpp`
-   - Linux precursor only (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; the 600 s Soak_FPSHeadlessNullRHI passes its RSS slope ceiling. live=0 only guards bridge/device teardown (modules cannot reach that device); LSan misses heap held by the resident ModuleManager. No NullRHI save/reload test, Windows FPSHeadlessPackage_* selector or Windows sanitizer/soak.
+   - Evidence: `docs/platform/LINUX-SUPPORT-EVIDENCE.md`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/TestHEAD220NullRHILifetimeReal.cpp`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`, `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, `Tests/CMakeLists.txt`, `wiki/subsystems/Dedicated-Server.md`
+   - Linux precursor (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; 600 s Soak_FPSHeadlessNullRHI meets its RSS slope ceiling. live=0 guards only bridge/device teardown; LSan misses ModuleManager-held heap. HeadlessSaveReload_FPSNullRHI now covers save/reload across two fresh processes. Missing: Windows FPSHeadlessPackage_* and Windows sanitizer/soak.
 4. **[unmet]** Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110
    - Evidence: `Tests/Tools/test_site_data_contract.py`
    - The contract checks OPS-110 wording only. Nothing asserts that HEAD-220 excludes these concerns or that G12 owns them.
@@ -2007,7 +2007,7 @@ ctest --test-dir build/windows-release -C Release -L nullrhi-headless --output-o
 
 **Automated evidence**
 
-- Test selectors: `NullRHI_Windows_*`, `FPSHeadlessPackage_*`, `HeadlessShutdown_*`, `RHIBridgeReal_*`
+- Test selectors: `NullRHI_Windows_*`, `FPSHeadlessPackage_*`, `HeadlessShutdown_*`, `RHIBridgeReal_*`, `HeadlessSaveReload_*`
 - Required CI jobs: `headless-windows-package`, `headless-windows-soak`
 - Performance / reliability budgets:
   - Server tick/memory/startup budgets from PERF-100
@@ -2072,20 +2072,20 @@ A fully ready engine needs deterministic initialization/teardown and safe partia
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Repeated lifecycle loops are leak/sanitizer/deadlock clean
    - Evidence: `Tests/TestLIFE200LifecycleLoopReal.cpp`, `Tests/TestLIFE200ModuleReloadLoopReal.cpp`, `Tests/LifecycleLoopGuards.h`, `Tests/PackageSmoke/run_headless_boot_loop.py`, `Tests/CMakeLists.txt`
    - criterionDigest sha256:a9bbfa256f65. Repeated-loop coverage: TestLIFE200LifecycleLoopReal.cpp and TestLIFE200ModuleReloadLoopReal.cpp (ModuleReload_*, now in testSelectors) with the LifecycleLoopGuards.h leak and deadlock checks and run_headless_boot_loop.py. The ASan and TSan runs of these tests are hosted-CI evidence and have not been run locally.
-2. **[unmet]** Every injected phase failure unwinds without stale singleton/thread/resource
-   - Evidence: `Tests/TestLifecycleCompositionRootFailure.cpp`, `SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h`
-   - Root rollback is tested with limited injection. Per-phase injection and thread/resource leak checks are missing.
+2. **[implemented]** Every injected phase failure unwinds without stale singleton/thread/resource
+   - Evidence: `Tests/TestLifecycleCompositionRootFailure.cpp`, `SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h`, `Tests/TestLIFE200LifecycleLoopReal.cpp`, `Tests/CMakeLists.txt`
+   - LifecycleLoop_InjectedFailureAtEveryInitBoundaryUnwinds and LifecycleLoop_ThrowingUpdateStageDoesNotLeakAcrossCycles (CTest Lifecycle_LifecycleLoop, exact count 4) inject failures at every production init stage boundary and a throwing update stage, and check the root unwinds without leaks. Local only; no exact-commit CI run.
 3. **[unmet]** Hot reload rejects incompatible state safely
    - Evidence: `Tests/TestModuleABI.cpp`
    - ABI-incompatible replacements are rejected. There is no state-handoff/versioning contract, so incompatible-state rejection is untested.
-4. **[unmet]** Shutdown completes within budget
-   - Evidence: `perf-budgets/v1/budget.json`
-   - No shutdown budget metric exists and nothing enforces shutdown time.
+4. **[implemented]** Shutdown completes within budget
+   - Evidence: `perf-budgets/v1/budget.json`, `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp`, `Tests/PackageSmoke/run_headless_boot_loop.py`, `cmake/RunSparkHeadlessNullRHILifecycle.cmake`, `tools/perf-budget/validate_budget.py`, `tools/perf-budget/compare_results.py`, `Tests/Tools/test_perf_budget_hardening.py`
+   - HeadlessBootLoop_FPSNullRHI enforces the provisional 5000 ms nullrhi.headless.shutdown_time ceiling on every boot. The metric stays 'suspended' because 'active' requires a reviewed baseline. Certified-hardware numbers remain PERF-100 hosted evidence. No MSVC run of HeadlessBootLoop_FPSNullRHI is recorded yet.
 
 **Required commands**
 
@@ -2096,7 +2096,7 @@ ctest --test-dir build/ci-linux-tsan -L lifecycle --output-on-failure --no-tests
 
 **Automated evidence**
 
-- Test selectors: `EngineLifecycle_*`, `ModuleReload_*`, `PartialInit_*`, `ModuleLifecycle_*`, `EngineWiring_*`, `ModuleABI_ThrownOnLoadCleansPartialHostRegistryState`
+- Test selectors: `EngineLifecycle_*`, `ModuleReload_*`, `PartialInit_*`, `ModuleLifecycle_*`, `EngineWiring_*`, `ModuleABI_ThrownOnLoadCleansPartialHostRegistryState`, `LifecycleLoop_*`, `HeadlessBootLoop_*`
 - Required CI jobs: `lifecycle-asan`, `lifecycle-tsan`
 - Performance / reliability budgets:
   - Startup/shutdown/reload budgets from PERF-100
@@ -2160,11 +2160,11 @@ Hierarchy and inspector can mutate World outside the command stack; rotate/scale
 Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** All world mutations round-trip through undo/redo without divergence
-   - Evidence: `Tests/TestEditorRecovery.cpp`
-   - No audit or check proves every World mutation goes through the command stack.
+   - Evidence: `Tests/TestEditorRecovery.cpp`, `Tests/TestEditorAssetDropWorldReal.cpp`, `SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp`
+   - Progress: asset-drop mutations record exactly one CommandHistory entry, and undo/redo restore exact document state, including ordering after a flushed pending field edit; an unrecordable mutation is reverted (EditorAssetDrag_WorldDrop*). No audit or check proves every World mutation goes through the command stack.
 2. **[implemented]** Assets can be browsed, dragged, assigned, saved, cooked, and run
-   - Evidence: `SparkEditor/Source/Panels/InspectorPanel.cpp`, `SparkEditor/Source/AssetPipeline/EditorAssetDrag.h`, `SparkEditor/Source/AssetPipeline/EditorAssetDrag.cpp`, `SparkEditor/Source/Panels/AssetBrowserPanel.cpp`, `SparkEditor/Source/Panels/InspectorComponentRenderers_Core3D.cpp`, `Tests/TestEditorAssetDrag.cpp`, `SparkEngine/Source/Core/HostScenePreview.h`, `SparkEngine/Source/Core/HostScenePreview.cpp`, `SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp`, `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `cmake/RunSparkWindowsScenePreview.cmake`, `SparkEditor/Source/Panels/BuildPipeline.cpp`, `SparkEditor/Source/Panels/BuildPipeline.h`, `Tests/TestEditorSubsystems.cpp`, `Tests/CMakeLists.txt`
-   - Evidence needs the central MSVC build and the ctests EditorAssetDrag (5 tests) and WindowsScenePreview to pass at this SHA. None of this was built or run here.
+   - Evidence: `SparkEditor/Source/Panels/InspectorPanel.cpp`, `SparkEditor/Source/AssetPipeline/EditorAssetDrag.h`, `SparkEditor/Source/AssetPipeline/EditorAssetDrag.cpp`, `SparkEditor/Source/Panels/AssetBrowserPanel.cpp`, `SparkEditor/Source/Panels/InspectorComponentRenderers_Core3D.cpp`, `Tests/TestEditorAssetDrag.cpp`, `SparkEngine/Source/Core/HostScenePreview.h`, `SparkEngine/Source/Core/HostScenePreview.cpp`, `SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp`, `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `cmake/RunSparkWindowsScenePreview.cmake`, `SparkEditor/Source/Panels/BuildPipeline.cpp`, `SparkEditor/Source/Panels/BuildPipeline.h`, `Tests/TestEditorSubsystems.cpp`, `Tests/CMakeLists.txt`, `SparkEditor/Source/Panels/InspectorWorldAssetDrop.h`, `SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp`, `Tests/TestEditorAssetDropWorldReal.cpp`
+   - EditorAssetDrag (5 tests) covers browse, drag and assign. EditorAssetDrag_WorldDrop* (EXPECT_COUNT 10) drops a typed payload into the World-backed Inspector's MeshRenderer mesh/material paths as one undo step and round-trips it through SaveWorld/LoadWorld. Cook and run of the assigned asset are untested. No exact-commit MSVC or CI run.
 3. **[unmet]** A clean automated author-to-installed-runtime scenario passes
    - Evidence: `cmake/RunSparkLinuxScenePreview.cmake`
    - There is no automated author-to-installed-runtime scenario or cook/package test. The editor smoke also runs on Linux under xvfb-run/llvmpipe (execution only, not D3D11 certification). The Linux runtime now honors -scene (LinuxScenePreview), which such a scenario needs, but the editor-cook-install-run scenario itself does not exist.
@@ -2344,8 +2344,8 @@ The published installer configuration and public GUI claims diverge; prerequisit
 Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Tampered download, failed fetch/build, wrong archive, or interruption never replaces a working install
-   - Evidence: `SparkInstaller/tests/PortableGitCacheTests.cpp`, `SparkInstaller/tests/InstallerTransactionTests.cpp`, `SparkInstaller/src/GitBootstrap.cpp`, `SparkInstaller/src/GitRunner.cpp`, `SparkInstaller/src/InstallerPreflight.cpp`, `SparkInstaller/src/Installer.cpp`, `SparkInstaller/tests/GitContractTests.cpp`, `SparkInstaller/CMakeLists.txt`
-   - Update-marker cleanliness plus preflight refusal before any mutation (exit 10). Windows junction fixture fixed in 23de6d006.
+   - Evidence: `SparkInstaller/tests/PortableGitCacheTests.cpp`, `SparkInstaller/tests/InstallerTransactionTests.cpp`, `SparkInstaller/src/GitBootstrap.cpp`, `SparkInstaller/src/GitRunner.cpp`, `SparkInstaller/src/InstallerPreflight.cpp`, `SparkInstaller/src/Installer.cpp`, `SparkInstaller/tests/GitContractTests.cpp`, `SparkInstaller/CMakeLists.txt`, `SparkInstaller/src/Installer.h`, `SparkInstaller/src/InstallerContext.h`, `SparkInstaller/src/InstallState.h`, `SparkInstaller/README.md`
+   - Update-marker cleanliness and preflight refusal before any mutation (exit 10); Windows junction fixture fixed in 23de6d006. Added: rollback rebuild and verify (exit 9 repair-required), the interrupted-update rollback target, a staged fresh-install clone with pending marker and Resume install mode, and the trailing-separator destination fix. No build or test result recorded for the additions.
 2. **[unmet]** Fresh install, repair, user-data retention, and uninstall pass on Windows 11 x64
    - Needs Windows 11 x64 fresh-install, repair and uninstall runs. None are recorded.
 3. **[implemented]** Capabilities match documentation exactly
@@ -2437,17 +2437,17 @@ A release engine must preserve or explicitly migrate user projects and game stat
 Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** N-1 fixtures migrate and retain declared state
-   - Evidence: `SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp`, `Tests/TestReflectedSceneCompatibility.cpp`, `Tests/Fixtures/Compatibility/ReflectedScene/README.md`, `Tests/Fixtures/Compatibility/EditorState/README.md`, `Tests/Fixtures/Compatibility/EditorState/v1-project/V1Project.sparkproject`, `Tests/Fixtures/Compatibility/EditorState/v2-future-project/Future.sparkproject`, `Tests/TestEditorStateCompatibility.cpp`
-   - Editor-state part only; promotion needs an owner decision. .sparkproject was only ever written as version 1, so no N-1 exists. The v1 fixture loads its declared state without a rewrite (EditorStateMigration_V1ProjectFixtureLoadsDeclaredStateWithoutRewrite) and the v2 fixture fails closed, as the ledger accepted for the reflected dialect. Prefabs likewise: only SPARKPREFAB 1 exists.
+   - Evidence: `SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp`, `Tests/TestReflectedSceneCompatibility.cpp`, `Tests/Fixtures/Compatibility/ReflectedScene/README.md`, `Tests/Fixtures/Compatibility/EditorState/README.md`, `Tests/Fixtures/Compatibility/EditorState/v1-project/V1Project.sparkproject`, `Tests/Fixtures/Compatibility/EditorState/v2-future-project/Future.sparkproject`, `Tests/TestEditorStateCompatibility.cpp`, `SparkEditor/Source/Prefabs/PrefabTextFormat.cpp`, `SparkEditor/Source/Prefabs/PrefabAsset.cpp`, `Tests/TestPrefabCompatibility.cpp`, `Tests/Fixtures/Compatibility/Prefab/v1-guard-tower.sparkprefab`, `Tests/Fixtures/Compatibility/Prefab/README.md`, `Tests/CMakeLists.txt`
+   - Prefab: PrefabMigration_* (SparkPrefabCompatibilityTests) load the v1 fixture with its declared state without rewriting the source; v1 resaves as v2. Editor state: .sparkproject has only ever been version 1, so no N-1 exists; the v1 fixture loads without rewrite and v2 fails closed (EditorStateMigration_*). Promotion needs an owner decision.
 2. **[implemented]** Rollback restores previous usable data
-   - Evidence: `SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp`, `SparkEditor/Source/Prefabs/PrefabAsset.cpp`, `SparkEditor/Source/Prefabs/PrefabManager.cpp`, `SparkEditor/Source/Core/ProjectManager.cpp`, `Tests/TestPrefabPersistence.cpp`, `Tests/TestEditorStateCompatibility.cpp`
-   - A damaged prefab or project file falls back to its retained .bak and reports both reasons; a later save keeps the good .bak. Tests: PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons, EditorStateMigration_CorruptProjectLoadsRetainedBackup, and *_SaveAfterBackupRecoveryKeepsGoodBackup in both suites. Asset-migration rollback is not covered.
+   - Evidence: `SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp`, `SparkEditor/Source/Prefabs/PrefabAsset.cpp`, `SparkEditor/Source/Prefabs/PrefabManager.cpp`, `SparkEditor/Source/Core/ProjectManager.cpp`, `Tests/TestPrefabPersistence.cpp`, `Tests/TestEditorStateCompatibility.cpp`, `SparkEditor/Source/Core/EditorUI.cpp`, `SparkEditor/Source/Core/EditorLayoutManager.cpp`
+   - A damaged prefab or project file falls back to its retained .bak and reports both reasons, and a later save keeps the good .bak (PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons, EditorStateMigration_CorruptProjectLoadsRetainedBackup). A rejected prefab keeps the loaded one; a rejected layout leaves applied panels unchanged. Asset-migration rollback is not covered.
 3. **[implemented]** Interrupted/corrupt writes do not destroy the last good state
-   - Evidence: `SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp`, `SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp`, `Tests/TestSaveInterruptionReal.cpp`, `SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.h`, `SparkEditor/Source/Prefabs/PrefabAsset.cpp`, `SparkEditor/Source/Core/ProjectManager.cpp`, `Tests/TestDocumentDurableWrite.cpp`, `Tests/TestPrefabPersistence.cpp`, `Tests/TestEditorStateCompatibility.cpp`
-   - Prefab and .sparkproject saves stage, flush and rename, and refresh .bak by staged rename. A failed save leaves the prior file byte-identical; a save after .bak recovery does not copy the damaged primary over .bak. A blocked final rename is tested on Windows. Tests: DocumentWrite_* (4), PrefabPersistence_*, EditorStateMigration_*. Open: Windows TerminateProcess rehearsal, hosted exact-SHA run.
+   - Evidence: `SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp`, `SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp`, `Tests/TestSaveInterruptionReal.cpp`, `SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.h`, `SparkEditor/Source/Prefabs/PrefabAsset.cpp`, `SparkEditor/Source/Core/ProjectManager.cpp`, `Tests/TestDocumentDurableWrite.cpp`, `Tests/TestPrefabPersistence.cpp`, `Tests/TestEditorStateCompatibility.cpp`, `SparkEditor/Source/Core/EditorLayoutManager.cpp`, `Tests/TestEditorLayoutManager.cpp`, `SparkEditor/Source/Prefabs/PrefabManager.cpp`
+   - Prefab and .sparkproject saves stage, flush and rename; a failed save leaves the prior file byte-identical and .bak recovery keeps the good .bak (DocumentWrite_*, PrefabPersistence_*, EditorStateMigration_*). Layouts: EditorLayoutMgr_FailedSaveKeepsPreviousLayoutFile, EditorLayoutMgr_MalformedLayoutLeavesPanelsUntouchedAndReportsError. Open: Windows TerminateProcess rehearsal, hosted run.
 4. **[implemented]** Breaking changes emit actionable diagnostics
-   - Evidence: `SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp`, `Tests/TestReflectedScene.cpp`, `SparkEditor/Source/Prefabs/PrefabAsset.cpp`, `SparkEngine/Source/Engine/ECS/RuntimePrefab.h`, `SparkEditor/Source/Core/ProjectManager.cpp`, `Tests/TestPrefabPersistence.cpp`, `Tests/TestRuntimePrefab.cpp`, `Tests/TestEditorStateCompatibility.cpp`
-   - Newer SPARKPREFAB and projectFileVersion fail closed, naming the version, supported window and next step. Malformed prefabs name component, property and line; RuntimePrefab::Deserialize rejects bad magic or version. Tests: PrefabPersistence_{FutureVersion,TruncatedFile,UnknownPropertyType}*, RuntimePrefab_DeserializeRejectsWrongMagicAndFutureVersion, EditorStateMigration_FutureProjectVersion*.
+   - Evidence: `SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp`, `Tests/TestReflectedScene.cpp`, `SparkEditor/Source/Prefabs/PrefabAsset.cpp`, `SparkEngine/Source/Engine/ECS/RuntimePrefab.h`, `SparkEditor/Source/Core/ProjectManager.cpp`, `Tests/TestPrefabPersistence.cpp`, `Tests/TestRuntimePrefab.cpp`, `Tests/TestEditorStateCompatibility.cpp`, `SparkEditor/Source/Core/EditorLayoutManager.cpp`, `Tests/TestEditorLayoutManager.cpp`, `Tests/Fixtures/Compatibility/EditorState/Layouts/v2-future-layout.json`, `Tests/Fixtures/Compatibility/Prefab/v3-future.sparkprefab`, `Tests/TestPrefabCompatibility.cpp`
+   - Newer SPARKPREFAB (v3 fixture), projectFileVersion and layout v2 fail closed, naming the version and supported window. Malformed prefabs name component, property and line; RuntimePrefab::Deserialize rejects bad magic or version. Since 6cd1ed6d1 a layout value named like a header key cannot bypass the gate (EditorLayoutMgr_ValuesNamedLikeKeysDoNotShadowKeys).
 
 **Required commands**
 
@@ -2527,8 +2527,8 @@ Dynamic modules and installed consumers need a declared version/ABI contract, co
 Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** External consumer needs no source-tree include/lib
-   - Evidence: `cmake/RunInstalledPackageConsumer.cmake`, `cmake/TestPackageConsumerBoundary.cmake`, `Tests/CMakeLists.txt`, `Tests/PackageSmoke/FPSProgression/CMakeLists.txt`
-   - Opt-in local PackageConsumer_LinuxInstalledSDK installs, builds and tests PackageSmoke from the prefix and fails on engine source/build-tree headers or libs. Always-on CTest covers the detector.
+   - Evidence: `cmake/RunInstalledPackageConsumer.cmake`, `cmake/TestPackageConsumerBoundary.cmake`, `Tests/CMakeLists.txt`, `Tests/PackageSmoke/FPSProgression/CMakeLists.txt`, `Tests/PackageSmoke/RunInstalledSDKTemplate.cmake`, `cmake/SparkPackageConsumerBoundary.cmake`
+   - Linux: opt-in PackageConsumer_LinuxInstalledSDK. Windows: SDKConsumer_InstalledEmptyProjectTemplate installs only the sdk component, builds the shipped EmptyProject, and boundary-scans ninja -t deps/commands dumps, failing if they are unscanned or never mention the prefix. SDKConsumer_TemplateRunnerContract passes locally; the Windows GREEN run is not independently verified.
 2. **[implemented]** Any module whose ABI descriptor differs from the host, including an N-1 module, is rejected before OS load with a diagnostic naming the field and both versions (OD-02)
    - Evidence: `Tests/TestModuleABIDiagnostics.cpp`, `Tests/TestModuleVersion.cpp`, `SparkEngine/Source/Core/ModuleManager.cpp`
    - ModuleABI_ tests drive production LoadModule with sidecars for all ten fields plus struct_size and N-1 sdk_version, asserting exact 'rejected before OS load' messages that name the field and both values. ModuleVersion_ tests load real N-1 and N+1 SDK module images and assert the same named-field, both-versions rejection before any module code runs.
@@ -2536,8 +2536,8 @@ Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestModuleABI.cpp`, `Tests/Fixtures/ModuleABI/MismatchedModule.cpp`, `SparkEngine/Source/Core/ModuleManager.cpp`
    - ModuleABI_MismatchRejectedBeforeStaticConstructorInjectionOrFactory loads the real mismatched fixture and asserts that its sentinel (static ctor/DllMain/inject/factory) is never written.
 4. **[implemented]** SDK package contains headers, targets, license, notices, docs, and examples
-   - Evidence: `Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake`, `Tests/CMakeLists.txt`
-   - SparkSDKComponentCompleteness installs only the sdk component and fails if the SDK header, Config/Targets, README, LICENSE, THIRD_PARTY_NOTICES or the EmptyProject example is missing.
+   - Evidence: `Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake`, `Tests/CMakeLists.txt`, `Tests/PackageSmoke/RunInstalledSDKTemplate.cmake`, `SparkSDK/README.md`
+   - SparkSDKComponentCompleteness fails if an sdk-only install lacks the SDK header, Config/Targets, README, LICENSE, THIRD_PARTY_NOTICES or EmptyProject. It also builds EmptyProject from that install in the engine config: one module image whose .sparkabi matches the installed Version.h, is hashed, and equals SparkGameFPS's sidecar in every other field.
 
 **Required commands**
 
@@ -2712,7 +2712,7 @@ Script objects/methods are cached, but entity identity and production start/upda
 
 **Acceptance criteria**
 
-Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Actual script moves an entity, receives collision/event, and drives audio/animation
    - Evidence: `Tests/TestENG200ScriptFaultsReal.cpp`, `Tests/TestENG200ScriptBindingsReal.cpp`, `Tests/TestEngineWiringReal.cpp`, `Tests/TestENG200ScriptAudioAnimationReal.cpp`, `SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp`, `SparkEngine/Source/Engine/ECS/Systems/ECSystems.cpp`, `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h`
@@ -2723,8 +2723,9 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 3. **[implemented]** Hot reload follows documented state rules
    - Evidence: `Tests/TestENG200ScriptHotReloadReal.cpp`, `SparkEngine/Source/Engine/Scripting/AngelScriptEngineHotReload.cpp`, `SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h`, `wiki/subsystems/Scripting-with-AngelScript.md`
    - criterionDigest sha256:6b96a39373c4. Rules R1-R8 are documented on AngelScriptEngine::HotReloadModule and in the wiki. ScriptHotReload_ENG200_* (CTest ScriptHotReloadReal, 9 tests): same-name, same-type primitive, string and POD values carry over; handles and arrays are dropped and reported; retyped or removed fields are reported; a failed compile changes nothing; reload survives a cwd change.
-4. **[unmet]** Graph-to-packaged-runtime gameplay loop passes
-   - No test runs a visual-script graph through a packaged runtime gameplay loop, and there are no VisualScriptRuntime_ tests.
+4. **[implemented]** Graph-to-packaged-runtime gameplay loop passes
+   - Evidence: `Tests/TestENG200VisualScriptRuntimeReal.cpp`, `Tests/VisualScriptGameplayHarness.h`, `Tests/TestMOD390VisualScriptGameplayReal.cpp`, `Tests/CMakeLists.txt`, `GameModules/SparkGameVisualScript/README.md`, `wiki/subsystems/Visual-Scripting.md`
+   - CTest VisualScriptRuntimePackagedLoop plays graphs compiled into a package to the win and pins the VisualScriptRuntime_ prefix with SPARK_TEST_EXPECT_COUNT=3. Local runs only; no exact-commit CI run.
 
 **Required commands**
 
@@ -2894,13 +2895,14 @@ Engine networking and reference modules do not provide turnkey identity, matchma
 
 **Acceptance criteria**
 
-Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** A deployment diagram and API contract name every trust/ownership boundary
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `docs/specs/online-services.md`
    - online_service_spec_contract_errors enforces the mermaid block, that boundary ids match the table with owner and enforcement filled in, that interface paths and symbols exist, and that every adapter class appears in the register. OnlineServiceBoundaryTests: 22 tests pass locally.
-2. **[unmet]** Engine runs locally with deterministic adapters
-   - Only NullOnlinePlatform is deterministic. Local adapters for identity, match, fleet, moderation and entitlement are still open.
+2. **[implemented]** Engine runs locally with deterministic adapters
+   - Evidence: `SparkGateway/src/GatewayLocalAdapters.h`, `SparkGateway/src/GatewayLocalAdapters.cpp`, `SparkGateway/src/GatewayCoordinator.h`, `SparkGateway/src/GatewayCoordinator.cpp`, `SparkGateway/src/GatewayApplication.cpp`, `SparkGateway/src/main.cpp`, `Tests/TestOnlineServicesLocalStack.cpp`, `Tests/CMakeLists.txt`, `docs/specs/online-services.md`, `wiki/advanced/Online-Service-Boundary.md`
+   - Engine seams, pending owner check OD-08: NullOnlinePlatform (B1); LocalFixtureAuthenticator for identity, entitlement, moderation (B2/B4); LocalDeterministicPlacement via IAreaPlacementPolicy (B9); SparkDaemon + BeginDrain for fleet (B8); DedicatedServer in-process admin. CTest OnlineServicesLocalStack (6 tests, exact count) runs admission twice from fresh state; both equal a fixed transcript.
 3. **[implemented]** Production adapters fail safely and are observable
    - Evidence: `SparkEngine/Source/Engine/OnlineServices/OnlineServices.h`, `SparkEngine/Source/Core/EngineConsoleCommands.cpp`, `SparkGateway/src/GuardedGatewayAuthenticator.h`, `SparkGateway/src/GatewayCoordinator.cpp`, `SparkGateway/src/GatewayApplication.cpp`, `Tests/TestOnlineServices.cpp`, `Tests/TestSparkGatewayCoordinator.cpp`, `Tests/TestGatewayAreaControl.cpp`, `Tests/CMakeLists.txt`, `docs/specs/online-services.md`
    - Safe failure: GuardedOnlinePlatform (5 ms budget, per-capability circuit) and GuardedGatewayAuthenticator (exception containment, 2 s budget, fault circuit, redaction). Observable: gateway health 'authentication' ready=false when failing fast; online_status command. CTests: OnlineServicesDegraded (11), GatewayGuardedAuthenticator (7). OD-08: owner to confirm this meets 'production adapters'.
@@ -3072,10 +3074,11 @@ Current chaos/listen-host/screenshot paths do not prove two independent client p
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Both clients converge on authoritative outcomes for every listed scenario
-   - No committed dedicated-server plus two-client convergence harness or test exists at HEAD.
+1. **[implemented]** Both clients converge on authoritative outcomes for every listed scenario
+   - Evidence: `Tools/Terrafront/multiclient.py`, `Tests/Tools/test_terrafront_multiclient.py`, `Tests/CMakeLists.txt`, `wiki/advanced/Testing.md`
+   - TerrafrontMultiClient_Harness (python unit, always registered) and TerrafrontMultiClient_OnboardSpawnMove (live 3-process run, opt-in via -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON, label terrafront-multiclient). Only scenario: onboard_spawn_move. Local live runs on a prebuilt Release: 3 of 4 converged; one failed on a server-side disconnect. No exact-commit CI run.
 2. **[implemented]** Forged state is rejected and audited
    - Evidence: `GameModules/SparkGameMMOFPS/Source/Net/TFLoadoutWire.h`, `GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.h`, `GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.cpp`, `GameModules/SparkGameMMOFPS/Source/Net/TFServerSimOnboarding.cpp`, `GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp`, `GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServer.cpp`, `GameModules/SparkGameMMOFPS/Source/Console/TFCommands.cpp`, `Tests/TestTFServerValidation.cpp`, `Tests/TestTFLoadoutWire.cpp`
    - Unit-level evidence only. The live multi-process proof (a forged packet produces [TF-AUDIT] and the client loadout is unchanged) belongs to TF-110/harness-combat-forged-reconnect.
@@ -3242,14 +3245,16 @@ Profiling utilities and local chaos scripts do not substitute for externally con
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Operators can detect, diagnose, drain, restart, and recover a failing server
-   - The Server_Health tests cover health JSON and drain signalling only. Restarting and recovering a failing server is not tested.
+1. **[implemented]** Operators can detect, diagnose, drain, restart, and recover a failing server
+   - Evidence: `wiki/advanced/Server-Operations-Runbook.md`, `Tests/Tools/test_server_recovery_drill.py`, `tools/ops/server_recovery_drill.py`, `wiki/_Sidebar.md`, `wiki/advanced/Online-Service-Boundary.md`
+   - Each runbook step ends with the drill that rehearses it. RunbookParityTests (run by ServerRecoveryDrill_Harness) fail on a SparkServer, tools/ops or SparkOrchestrator flag, or a path, that has drifted.
 2. **[unmet]** Thirty-minute release smoke and longer scheduled soak show bounded memory/queues and pass p95/p99 budgets
    - Server_Soak runs a 60 s SparkServer soak with RSS-slope and tickP95/P99 guards, and one local 1800 s run passed as precursor only. The budgets are provisional harness guards, not SLOs, and no hosted release smoke or scheduled soak history exists.
-3. **[unmet]** Backup/restore and alert/runbook drills are recorded
-   - No backup/restore or alert/runbook drills are recorded.
+3. **[implemented]** Backup/restore and alert/runbook drills are recorded
+   - Evidence: `wiki/advanced/Server-Operations-Runbook.md`, `Tests/Tools/test_server_recovery_drill.py`
+   - The backup/restore section points to the TERRAFRONT TFDatabaseBackup path and the DATA-120 Persistence_BackupRestore drill. The runbook states that SLOs and alert thresholds are provisional.
 4. **[unmet]** Telemetry is externally consumable and exact-SHA labeled
    - No telemetry export exists that outside tools can consume with exact-SHA labels, and it would need hosted evidence.
 
@@ -3594,11 +3599,11 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestNetworkMMOIntegration.cpp`
    - No committed test has two real clients authenticate, create owned characters and move authoritatively.
 2. **[implemented]** Inventory/reputation/world state persists through cold restart
-   - Evidence: `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp`, `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h`, `Tests/TestMOD320MMOPersistenceReal.cpp`
-   - Tests: MMOPersistence_InventoryRoundTripsExactSlotsThroughColdRestart, _RemovedItemDoesNotReappearAfterRestart, _AsyncSaveIsDurableAfterShutdown, _DeleteCharacterRemovesInventoryAndReputationKeys, _CraftingAndLockoutValuesSurviveColdRestart. Needs the central build and CTest run.
+   - Evidence: `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp`, `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h`, `Tests/TestMOD320MMOPersistenceReal.cpp`, `GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.cpp`, `GameModules/SparkGameMMO/Source/Core/Main.cpp`, `GameModules/SparkGameMMO/README.md`
+   - A fresh MMOPersistenceSystem on the same file (in-process cold restart, AsyncDatabase KV fallback) restores inventory slots, reputation, crafting, lockouts, achievements and guild world state (guilds, members, next guild ID); removed records stay removed. Boss kills are not persisted: MMOWorldBossSystem keeps no kill history. No two-client or process-restart test and no hosted CI yet.
 3. **[implemented]** No demo hash/timestamp identity/no-op load remains
    - Evidence: `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp`, `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h`, `GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.cpp`, `GameModules/SparkGameMMO/Source/Core/Main.cpp`, `Tests/TestMOD320MMOPersistenceReal.cpp`, `GameModules/SparkGameMMO/module.json`
-   - Tests: MMOPersistence_CharacterIdsAreUniqueWithinOneSecond, _CharacterIdCounterSurvivesColdRestart, _LegacyTimestampIdsSeedCounter, _ListCharactersFiltersByAccountAndReturnsNames, _CharacterSystemAllocatesDurableIdsAndDeletesRecords. Needs the central MSVC build and CTest run. It also needs the Tools/clang-tidy-budget.json change listed under risks, or CI-110 fails.
+   - Character IDs come from a durable counter (f7b32256a; MMOPersistence_CharacterIdsAreUniqueWithinOneSecond, _CharacterIdCounterSurvivesColdRestart, _LegacyTimestampIdsSeedCounter). LoadWorld rebuilds guilds and Main.cpp calls it (_LoadWorldIsNotANoOp). Account passwords use Spark::PasswordHash. Remaining GetTimestamp uses are createdAt/lastLogin/session times, not identity.
 4. **[unmet]** Applicable parity scores reach 3
    - Needs owner scoring and hosted module-MMO CI evidence.
 
@@ -4130,7 +4135,7 @@ ctest --test-dir build/windows-release -C Release -R RacingCompleteRace --output
 **Priority:** P1 · **Status:** blocked · **Wave:** 4 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. The five shipped scripts are compiled from graphs checked in under Assets/Graphs (*.vscript, read and written by the engine's VisualScriptGraphIO), and VisualScriptGraphs_* (TestMOD390VisualScriptGraphsReal.cpp) fails unless each graph regenerates its shipped .as byte for byte. Open: applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, and collision dispatch has no caller. VisualScriptGameplay_* (TestMOD390VisualScriptGameplayReal.cpp) plays the shipped generated scripts headless to the five-pickup win, and covers enemy damage and the health pickup, with scripted keys read through the real InputManager (script getKey/getKeyDown returned false off Windows until the key-name mapping was made platform-independent).
+Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. The five shipped scripts are compiled from graphs checked in under Assets/Graphs (*.vscript, read and written by the engine's VisualScriptGraphIO), and VisualScriptGraphs_* (TestMOD390VisualScriptGraphsReal.cpp) fails unless each graph regenerates its shipped .as byte for byte. The applyForce/playSound/playAnimation/fireEvent bindings and collision dispatch are real; module hot reload is still open. VisualScriptGameplay_* (TestMOD390VisualScriptGameplayReal.cpp) plays the shipped generated scripts headless to the five-pickup win, and covers enemy damage and the health pickup, with scripted keys read through the real InputManager (script getKey/getKeyDown returned false off Windows until the key-name mapping was made platform-independent).
 
 **Dependency contract**
 
@@ -4167,7 +4172,8 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `SparkEngine/Source/Engine/Scripting/VisualScriptGraphIO.cpp`, `SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp`, `GameModules/SparkGameVisualScript/Assets/Graphs/PlayerController.vscript`, `GameModules/SparkGameVisualScript/Assets/Graphs/GameManager.vscript`, `Tests/TestMOD390VisualScriptGraphsReal.cpp`, `Tests/TestMOD390VisualScriptGameplayReal.cpp`
    - The shipped scripts are now compiled from the checked-in Assets/Graphs/*.vscript graphs: VisualScriptGraphs_CheckedInGraphsRegenerateShippedScripts requires each compiled graph to equal its shipped .as byte for byte, and VisualScriptGameplay_ScriptedPlayerCollectsAllPickupsAndWins plays those scripts headless to the five-pickup win. Local runs only; no exact-commit module-VisualScript CI run yet.
 3. **[unmet]** Subsystem bindings and hot reload pass
-   - Engine collision and trigger dispatch now reaches scripts (ENG-200), but the playSound and playAnimation bindings only log and there is no module hot-reload test.
+   - Evidence: `GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp`, `GameModules/SparkGameVisualScript/Source/Core/Main.cpp`, `GameModules/SparkGameVisualScript/Source/Core/SparkGameVisualScript.h`, `GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/coin_pickup.wav`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/enemy_attack.wav`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/health_pickup.wav`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/pickup_respawn.wav`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/victory_fanfare.wav`, `GameModules/SparkGameVisualScript/Assets/manifest.json`, `GameModules/SparkGameVisualScript/CMakeLists.txt`, `GameModules/SparkGameVisualScript/module.json`, `tools/audio/compose_visualscript_cues.py`, `Tests/TestMOD390VisualScriptGameplayReal.cpp`, `Tests/TestVisualScriptCompiler.cpp`, `wiki/subsystems/Visual-Scripting.md`
+   - Bindings are real: the demo spawns coins and enemies with AnimationControllers, and playSound cues reach ScriptAudioCues backed by five shipped, hash-recorded WAVs that OnLoad registers with the AudioEngine (VisualScriptGameplay_ScriptCuesReachAudioQueueAndAnimationControllers, VisualScriptDemo_EverySoundCueShipsItsAudio). Unmet until a module hot-reload test lands (MOD-390/vs-hot-reload).
 4. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-VisualScript CI.
 

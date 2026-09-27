@@ -1501,9 +1501,13 @@
           "evidence": [
             "docs/platform/LINUX-SUPPORT-EVIDENCE.md",
             "Tests/Tools/test_run_nullrhi_soak.py",
-            "Tests/TestHEAD220NullRHILifetimeReal.cpp"
+            "Tests/TestHEAD220NullRHILifetimeReal.cpp",
+            "cmake/RunSparkHeadlessFPSSaveReload.cmake",
+            "Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake",
+            "Tests/CMakeLists.txt",
+            "wiki/subsystems/Dedicated-Server.md"
           ],
-          "note": "Linux precursor only (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; the 600 s Soak_FPSHeadlessNullRHI passes its RSS slope ceiling. live=0 only guards bridge/device teardown (modules cannot reach that device); LSan misses heap held by the resident ModuleManager. No NullRHI save/reload test, Windows FPSHeadlessPackage_* selector or Windows sanitizer/soak."
+          "note": "Linux precursor (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; 600 s Soak_FPSHeadlessNullRHI meets its RSS slope ceiling. live=0 guards only bridge/device teardown; LSan misses ModuleManager-held heap. HeadlessSaveReload_FPSNullRHI now covers save/reload across two fresh processes. Missing: Windows FPSHeadlessPackage_* and Windows sanitizer/soak."
         },
         {
           "criterionDigest": "sha256:e6a39adf789f",
@@ -1521,7 +1525,8 @@
         "NullRHI_Windows_*",
         "FPSHeadlessPackage_*",
         "HeadlessShutdown_*",
-        "RHIBridgeReal_*"
+        "RHIBridgeReal_*",
+        "HeadlessSaveReload_*"
       ],
       "requiredCiJobs": [
         "headless-windows-package",
@@ -1622,12 +1627,14 @@
         },
         {
           "criterionDigest": "sha256:0e019adbc00a",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestLifecycleCompositionRootFailure.cpp",
-            "SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h"
+            "SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h",
+            "Tests/TestLIFE200LifecycleLoopReal.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Root rollback is tested with limited injection. Per-phase injection and thread/resource leak checks are missing."
+          "note": "LifecycleLoop_InjectedFailureAtEveryInitBoundaryUnwinds and LifecycleLoop_ThrowingUpdateStageDoesNotLeakAcrossCycles (CTest Lifecycle_LifecycleLoop, exact count 4) inject failures at every production init stage boundary and a throwing update stage, and check the root unwinds without leaks. Local only; no exact-commit CI run."
         },
         {
           "criterionDigest": "sha256:4fdc9530334c",
@@ -1639,11 +1646,18 @@
         },
         {
           "criterionDigest": "sha256:a372c7c44e09",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "perf-budgets/v1/budget.json"
+            "perf-budgets/v1/budget.json",
+            "SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp",
+            "SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp",
+            "Tests/PackageSmoke/run_headless_boot_loop.py",
+            "cmake/RunSparkHeadlessNullRHILifecycle.cmake",
+            "tools/perf-budget/validate_budget.py",
+            "tools/perf-budget/compare_results.py",
+            "Tests/Tools/test_perf_budget_hardening.py"
           ],
-          "note": "No shutdown budget metric exists and nothing enforces shutdown time."
+          "note": "HeadlessBootLoop_FPSNullRHI enforces the provisional 5000 ms nullrhi.headless.shutdown_time ceiling on every boot. The metric stays 'suspended' because 'active' requires a reviewed baseline. Certified-hardware numbers remain PERF-100 hosted evidence. No MSVC run of HeadlessBootLoop_FPSNullRHI is recorded yet."
         }
       ],
       "commands": [
@@ -1656,7 +1670,9 @@
         "PartialInit_*",
         "ModuleLifecycle_*",
         "EngineWiring_*",
-        "ModuleABI_ThrownOnLoadCleansPartialHostRegistryState"
+        "ModuleABI_ThrownOnLoadCleansPartialHostRegistryState",
+        "LifecycleLoop_*",
+        "HeadlessBootLoop_*"
       ],
       "requiredCiJobs": [
         "lifecycle-asan",
@@ -1742,9 +1758,11 @@
           "criterionDigest": "sha256:75e8e61a5f5f",
           "state": "unmet",
           "evidence": [
-            "Tests/TestEditorRecovery.cpp"
+            "Tests/TestEditorRecovery.cpp",
+            "Tests/TestEditorAssetDropWorldReal.cpp",
+            "SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp"
           ],
-          "note": "No audit or check proves every World mutation goes through the command stack."
+          "note": "Progress: asset-drop mutations record exactly one CommandHistory entry, and undo/redo restore exact document state, including ordering after a flushed pending field edit; an unrecordable mutation is reverted (EditorAssetDrag_WorldDrop*). No audit or check proves every World mutation goes through the command stack."
         },
         {
           "criterionDigest": "sha256:69382bab2d53",
@@ -1764,9 +1782,12 @@
             "SparkEditor/Source/Panels/BuildPipeline.cpp",
             "SparkEditor/Source/Panels/BuildPipeline.h",
             "Tests/TestEditorSubsystems.cpp",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            "SparkEditor/Source/Panels/InspectorWorldAssetDrop.h",
+            "SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp",
+            "Tests/TestEditorAssetDropWorldReal.cpp"
           ],
-          "note": "Evidence needs the central MSVC build and the ctests EditorAssetDrag (5 tests) and WindowsScenePreview to pass at this SHA. None of this was built or run here."
+          "note": "EditorAssetDrag (5 tests) covers browse, drag and assign. EditorAssetDrag_WorldDrop* (EXPECT_COUNT 10) drops a typed payload into the World-backed Inspector's MeshRenderer mesh/material paths as one undo step and round-trips it through SaveWorld/LoadWorld. Cook and run of the assigned asset are untested. No exact-commit MSVC or CI run."
         },
         {
           "criterionDigest": "sha256:4c9b9b22f00d",
@@ -2033,9 +2054,15 @@
             "Tests/Fixtures/Compatibility/EditorState/README.md",
             "Tests/Fixtures/Compatibility/EditorState/v1-project/V1Project.sparkproject",
             "Tests/Fixtures/Compatibility/EditorState/v2-future-project/Future.sparkproject",
-            "Tests/TestEditorStateCompatibility.cpp"
+            "Tests/TestEditorStateCompatibility.cpp",
+            "SparkEditor/Source/Prefabs/PrefabTextFormat.cpp",
+            "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+            "Tests/TestPrefabCompatibility.cpp",
+            "Tests/Fixtures/Compatibility/Prefab/v1-guard-tower.sparkprefab",
+            "Tests/Fixtures/Compatibility/Prefab/README.md",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Editor-state part only; promotion needs an owner decision. .sparkproject was only ever written as version 1, so no N-1 exists. The v1 fixture loads its declared state without a rewrite (EditorStateMigration_V1ProjectFixtureLoadsDeclaredStateWithoutRewrite) and the v2 fixture fails closed, as the ledger accepted for the reflected dialect. Prefabs likewise: only SPARKPREFAB 1 exists."
+          "note": "Prefab: PrefabMigration_* (SparkPrefabCompatibilityTests) load the v1 fixture with its declared state without rewriting the source; v1 resaves as v2. Editor state: .sparkproject has only ever been version 1, so no N-1 exists; the v1 fixture loads without rewrite and v2 fails closed (EditorStateMigration_*). Promotion needs an owner decision."
         },
         {
           "criterionDigest": "sha256:8d9be8a2494e",
@@ -2046,9 +2073,11 @@
             "SparkEditor/Source/Prefabs/PrefabManager.cpp",
             "SparkEditor/Source/Core/ProjectManager.cpp",
             "Tests/TestPrefabPersistence.cpp",
-            "Tests/TestEditorStateCompatibility.cpp"
+            "Tests/TestEditorStateCompatibility.cpp",
+            "SparkEditor/Source/Core/EditorUI.cpp",
+            "SparkEditor/Source/Core/EditorLayoutManager.cpp"
           ],
-          "note": "A damaged prefab or project file falls back to its retained .bak and reports both reasons; a later save keeps the good .bak. Tests: PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons, EditorStateMigration_CorruptProjectLoadsRetainedBackup, and *_SaveAfterBackupRecoveryKeepsGoodBackup in both suites. Asset-migration rollback is not covered."
+          "note": "A damaged prefab or project file falls back to its retained .bak and reports both reasons, and a later save keeps the good .bak (PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons, EditorStateMigration_CorruptProjectLoadsRetainedBackup). A rejected prefab keeps the loaded one; a rejected layout leaves applied panels unchanged. Asset-migration rollback is not covered."
         },
         {
           "criterionDigest": "sha256:33b4700b3cfc",
@@ -2062,9 +2091,12 @@
             "SparkEditor/Source/Core/ProjectManager.cpp",
             "Tests/TestDocumentDurableWrite.cpp",
             "Tests/TestPrefabPersistence.cpp",
-            "Tests/TestEditorStateCompatibility.cpp"
+            "Tests/TestEditorStateCompatibility.cpp",
+            "SparkEditor/Source/Core/EditorLayoutManager.cpp",
+            "Tests/TestEditorLayoutManager.cpp",
+            "SparkEditor/Source/Prefabs/PrefabManager.cpp"
           ],
-          "note": "Prefab and .sparkproject saves stage, flush and rename, and refresh .bak by staged rename. A failed save leaves the prior file byte-identical; a save after .bak recovery does not copy the damaged primary over .bak. A blocked final rename is tested on Windows. Tests: DocumentWrite_* (4), PrefabPersistence_*, EditorStateMigration_*. Open: Windows TerminateProcess rehearsal, hosted exact-SHA run."
+          "note": "Prefab and .sparkproject saves stage, flush and rename; a failed save leaves the prior file byte-identical and .bak recovery keeps the good .bak (DocumentWrite_*, PrefabPersistence_*, EditorStateMigration_*). Layouts: EditorLayoutMgr_FailedSaveKeepsPreviousLayoutFile, EditorLayoutMgr_MalformedLayoutLeavesPanelsUntouchedAndReportsError. Open: Windows TerminateProcess rehearsal, hosted run."
         },
         {
           "criterionDigest": "sha256:333b592702f6",
@@ -2077,9 +2109,14 @@
             "SparkEditor/Source/Core/ProjectManager.cpp",
             "Tests/TestPrefabPersistence.cpp",
             "Tests/TestRuntimePrefab.cpp",
-            "Tests/TestEditorStateCompatibility.cpp"
+            "Tests/TestEditorStateCompatibility.cpp",
+            "SparkEditor/Source/Core/EditorLayoutManager.cpp",
+            "Tests/TestEditorLayoutManager.cpp",
+            "Tests/Fixtures/Compatibility/EditorState/Layouts/v2-future-layout.json",
+            "Tests/Fixtures/Compatibility/Prefab/v3-future.sparkprefab",
+            "Tests/TestPrefabCompatibility.cpp"
           ],
-          "note": "Newer SPARKPREFAB and projectFileVersion fail closed, naming the version, supported window and next step. Malformed prefabs name component, property and line; RuntimePrefab::Deserialize rejects bad magic or version. Tests: PrefabPersistence_{FutureVersion,TruncatedFile,UnknownPropertyType}*, RuntimePrefab_DeserializeRejectsWrongMagicAndFutureVersion, EditorStateMigration_FutureProjectVersion*."
+          "note": "Newer SPARKPREFAB (v3 fixture), projectFileVersion and layout v2 fail closed, naming the version and supported window. Malformed prefabs name component, property and line; RuntimePrefab::Deserialize rejects bad magic or version. Since 6cd1ed6d1 a layout value named like a header key cannot bypass the gate (EditorLayoutMgr_ValuesNamedLikeKeysDoNotShadowKeys)."
         }
       ],
       "commands": [
@@ -2183,9 +2220,11 @@
             "cmake/RunInstalledPackageConsumer.cmake",
             "cmake/TestPackageConsumerBoundary.cmake",
             "Tests/CMakeLists.txt",
-            "Tests/PackageSmoke/FPSProgression/CMakeLists.txt"
+            "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+            "Tests/PackageSmoke/RunInstalledSDKTemplate.cmake",
+            "cmake/SparkPackageConsumerBoundary.cmake"
           ],
-          "note": "Opt-in local PackageConsumer_LinuxInstalledSDK installs, builds and tests PackageSmoke from the prefix and fails on engine source/build-tree headers or libs. Always-on CTest covers the detector."
+          "note": "Linux: opt-in PackageConsumer_LinuxInstalledSDK. Windows: SDKConsumer_InstalledEmptyProjectTemplate installs only the sdk component, builds the shipped EmptyProject, and boundary-scans ninja -t deps/commands dumps, failing if they are unscanned or never mention the prefix. SDKConsumer_TemplateRunnerContract passes locally; the Windows GREEN run is not independently verified."
         },
         {
           "criterionDigest": "sha256:3e936e0f4337",
@@ -2212,9 +2251,11 @@
           "state": "implemented",
           "evidence": [
             "Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            "Tests/PackageSmoke/RunInstalledSDKTemplate.cmake",
+            "SparkSDK/README.md"
           ],
-          "note": "SparkSDKComponentCompleteness installs only the sdk component and fails if the SDK header, Config/Targets, README, LICENSE, THIRD_PARTY_NOTICES or the EmptyProject example is missing."
+          "note": "SparkSDKComponentCompleteness fails if an sdk-only install lacks the SDK header, Config/Targets, README, LICENSE, THIRD_PARTY_NOTICES or EmptyProject. It also builds EmptyProject from that install in the engine config: one module image whose .sparkabi matches the installed Version.h, is hashed, and equals SparkGameFPS's sidecar in every other field."
         }
       ],
       "commands": [
@@ -2268,9 +2309,7 @@
         "sdk-consumer-windows",
         "module-compatibility"
       ],
-      "plannedTestSelectors": [
-        "SDKConsumer_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "ENG-200",
@@ -2352,9 +2391,16 @@
         },
         {
           "criterionDigest": "sha256:cec871256cec",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No test runs a visual-script graph through a packaged runtime gameplay loop, and there are no VisualScriptRuntime_ tests."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestENG200VisualScriptRuntimeReal.cpp",
+            "Tests/VisualScriptGameplayHarness.h",
+            "Tests/TestMOD390VisualScriptGameplayReal.cpp",
+            "Tests/CMakeLists.txt",
+            "GameModules/SparkGameVisualScript/README.md",
+            "wiki/subsystems/Visual-Scripting.md"
+          ],
+          "note": "CTest VisualScriptRuntimePackagedLoop plays graphs compiled into a package to the win and pins the VisualScriptRuntime_ prefix with SPARK_TEST_EXPECT_COUNT=3. Local runs only; no exact-commit CI run."
         }
       ],
       "commands": [
@@ -2404,9 +2450,7 @@
         "scripting-integration",
         "visual-script-package"
       ],
-      "plannedTestSelectors": [
-        "VisualScriptRuntime_*"
-      ]
+      "plannedTestSelectors": []
     }
   ]
 }

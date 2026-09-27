@@ -200,11 +200,15 @@
         },
         {
           "criterionDigest": "sha256:9fe198aadd95",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_module_evidence.py"
+            "Tests/Tools/test_module_evidence.py",
+            "Tools/test_source_census.py",
+            "Tests/Tools/test_source_census_profile.py",
+            "tools/site-data/module_content.py",
+            "Tests/Tools/test_module_manifest.py"
           ],
-          "note": "The census guards only the sanitizer FPSRespawn_* selector. Replacing mirror tests across the gates remains open."
+          "note": "CTest TestSourceCensus_ProfileSelectors rejects any profile selector that reaches a mirror or tautological TEST. module_content.py fails a manifest whose prefix selects a TEST outside tests.files, lists a census mirror, or selects an EXPECT_TRUE(true)/EXPECT_NO_CRASH-only body; test_module_manifest.py mutates each rule. 11 mirrors retired, ~159 remain outside the gates. Local evidence only."
         },
         {
           "criterionDigest": "sha256:641c68cb4915",

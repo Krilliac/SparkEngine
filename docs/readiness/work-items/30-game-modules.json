@@ -921,9 +921,12 @@
           "evidence": [
             "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp",
             "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h",
-            "Tests/TestMOD320MMOPersistenceReal.cpp"
+            "Tests/TestMOD320MMOPersistenceReal.cpp",
+            "GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.cpp",
+            "GameModules/SparkGameMMO/Source/Core/Main.cpp",
+            "GameModules/SparkGameMMO/README.md"
           ],
-          "note": "Tests: MMOPersistence_InventoryRoundTripsExactSlotsThroughColdRestart, _RemovedItemDoesNotReappearAfterRestart, _AsyncSaveIsDurableAfterShutdown, _DeleteCharacterRemovesInventoryAndReputationKeys, _CraftingAndLockoutValuesSurviveColdRestart. Needs the central build and CTest run."
+          "note": "A fresh MMOPersistenceSystem on the same file (in-process cold restart, AsyncDatabase KV fallback) restores inventory slots, reputation, crafting, lockouts, achievements and guild world state (guilds, members, next guild ID); removed records stay removed. Boss kills are not persisted: MMOWorldBossSystem keeps no kill history. No two-client or process-restart test and no hosted CI yet."
         },
         {
           "criterionDigest": "sha256:e2c9ec3b616a",
@@ -936,7 +939,7 @@
             "Tests/TestMOD320MMOPersistenceReal.cpp",
             "GameModules/SparkGameMMO/module.json"
           ],
-          "note": "Tests: MMOPersistence_CharacterIdsAreUniqueWithinOneSecond, _CharacterIdCounterSurvivesColdRestart, _LegacyTimestampIdsSeedCounter, _ListCharactersFiltersByAccountAndReturnsNames, _CharacterSystemAllocatesDurableIdsAndDeletesRecords. Needs the central MSVC build and CTest run. It also needs the Tools/clang-tidy-budget.json change listed under risks, or CI-110 fails."
+          "note": "Character IDs come from a durable counter (f7b32256a; MMOPersistence_CharacterIdsAreUniqueWithinOneSecond, _CharacterIdCounterSurvivesColdRestart, _LegacyTimestampIdsSeedCounter). LoadWorld rebuilds guilds and Main.cpp calls it (_LoadWorldIsNotANoOp). Account passwords use Spark::PasswordHash. Remaining GetTimestamp uses are createdAt/lastLogin/session times, not identity."
         },
         {
           "criterionDigest": "sha256:96c5cc4ecb96",
@@ -1719,7 +1722,7 @@
       "wave": 4,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. The five shipped scripts are compiled from graphs checked in under Assets/Graphs (*.vscript, read and written by the engine's VisualScriptGraphIO), and VisualScriptGraphs_* (TestMOD390VisualScriptGraphsReal.cpp) fails unless each graph regenerates its shipped .as byte for byte. Open: applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, and collision dispatch has no caller. VisualScriptGameplay_* (TestMOD390VisualScriptGameplayReal.cpp) plays the shipped generated scripts headless to the five-pickup win, and covers enemy damage and the health pickup, with scripted keys read through the real InputManager (script getKey/getKeyDown returned false off Windows until the key-name mapping was made platform-independent).",
+      "rationale": "Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. The five shipped scripts are compiled from graphs checked in under Assets/Graphs (*.vscript, read and written by the engine's VisualScriptGraphIO), and VisualScriptGraphs_* (TestMOD390VisualScriptGraphsReal.cpp) fails unless each graph regenerates its shipped .as byte for byte. The applyForce/playSound/playAnimation/fireEvent bindings and collision dispatch are real; module hot reload is still open. VisualScriptGameplay_* (TestMOD390VisualScriptGameplayReal.cpp) plays the shipped generated scripts headless to the five-pickup win, and covers enemy damage and the health pickup, with scripted keys read through the real InputManager (script getKey/getKeyDown returned false off Windows until the key-name mapping was made platform-independent).",
       "dependencies": [
         "MOD-290",
         "ENG-200"
@@ -1784,8 +1787,25 @@
         {
           "criterionDigest": "sha256:4c73ad5bea74",
           "state": "unmet",
-          "evidence": [],
-          "note": "Engine collision and trigger dispatch now reaches scripts (ENG-200), but the playSound and playAnimation bindings only log and there is no module hot-reload test."
+          "evidence": [
+            "GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp",
+            "GameModules/SparkGameVisualScript/Source/Core/Main.cpp",
+            "GameModules/SparkGameVisualScript/Source/Core/SparkGameVisualScript.h",
+            "GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h",
+            "GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/coin_pickup.wav",
+            "GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/enemy_attack.wav",
+            "GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/health_pickup.wav",
+            "GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/pickup_respawn.wav",
+            "GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/victory_fanfare.wav",
+            "GameModules/SparkGameVisualScript/Assets/manifest.json",
+            "GameModules/SparkGameVisualScript/CMakeLists.txt",
+            "GameModules/SparkGameVisualScript/module.json",
+            "tools/audio/compose_visualscript_cues.py",
+            "Tests/TestMOD390VisualScriptGameplayReal.cpp",
+            "Tests/TestVisualScriptCompiler.cpp",
+            "wiki/subsystems/Visual-Scripting.md"
+          ],
+          "note": "Bindings are real: the demo spawns coins and enemies with AnimationControllers, and playSound cues reach ScriptAudioCues backed by five shipped, hash-recorded WAVs that OnLoad registers with the AudioEngine (VisualScriptGameplay_ScriptCuesReachAudioQueueAndAnimationControllers, VisualScriptDemo_EverySoundCueShipsItsAudio). Unmet until a module hot-reload test lands (MOD-390/vs-hot-reload)."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",
@@ -1886,9 +1906,14 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:86af5680b79c",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No committed dedicated-server plus two-client convergence harness or test exists at HEAD."
+          "state": "implemented",
+          "evidence": [
+            "Tools/Terrafront/multiclient.py",
+            "Tests/Tools/test_terrafront_multiclient.py",
+            "Tests/CMakeLists.txt",
+            "wiki/advanced/Testing.md"
+          ],
+          "note": "TerrafrontMultiClient_Harness (python unit, always registered) and TerrafrontMultiClient_OnboardSpawnMove (live 3-process run, opt-in via -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON, label terrafront-multiclient). Only scenario: onboard_spawn_move. Local live runs on a prebuilt Release: 3 of 4 converged; one failed on a server-side disconnect. No exact-commit CI run."
         },
         {
           "criterionDigest": "sha256:885e584f6fb7",
@@ -1961,9 +1986,7 @@
         "terrafront-multiclient",
         "terrafront-soak"
       ],
-      "plannedTestSelectors": [
-        "TerrafrontMultiClient_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "TF-120",
