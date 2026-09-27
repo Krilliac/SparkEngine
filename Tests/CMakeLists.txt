@@ -50,6 +50,8 @@ add_executable(SparkTests
     TestReflectedScene.cpp
     TestReflectedSceneEmissiveHierarchy.cpp
     TestReflectedSceneCompatibility.cpp
+    # SEC2: scene/JSON document trust-boundary hardening (depth, size, field, int, escape).
+    TestSerializationHardening.cpp
     TestNoiseGenerator.cpp
     TestTFFixedStep.cpp
     TestAIBehaviorTree.cpp
@@ -1818,6 +1820,16 @@ set_tests_properties(SparkSceneCompatibilityTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=SceneMigration_;SPARK_TEST_EXPECT_COUNT=7"
     LABELS "compatibility;scene;unit"
     TIMEOUT 30)
+
+# SEC2 scene-serialization lane: the nlohmann stub bounds nesting depth, reflected
+# scene loads cap file size and reject damaged current-version fields (recovering
+# the .bak), Json AsInt/TryAsInt never convert an out-of-range double, mod
+# loadOrder is validated, and ParseStrict rejects undefined escapes/control bytes.
+add_test(NAME SparkSerializationHardeningTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(SparkSerializationHardeningTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SerializationHardening_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "security;scene;unit"
+    TIMEOUT 60)
 
 add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(TelemetrySpool PROPERTIES

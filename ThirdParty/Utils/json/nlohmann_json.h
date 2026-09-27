@@ -91,6 +91,10 @@ namespace nlohmann
             }
         }
 
+        /// Deepest array/object nesting parse() accepts. Engine documents (scenes,
+        /// glTF, manifests) nest well under a dozen levels.
+        static constexpr size_t max_parse_depth = 256;
+
         // Named constructors
         static json array() { return json(value_t::array); }
         static json object() { return json(value_t::object); }
@@ -101,11 +105,15 @@ namespace nlohmann
          * objects and strings, missing separators, invalid literals or escapes,
          * and any non-whitespace after the root value. A torn or truncated file
          * must never load as a valid-looking (often empty) document.
+         *
+         * Nesting deeper than max_parse_depth arrays/objects throws as well. The
+         * parser is recursive, so an unbounded depth turns a few kilobytes of '['
+         * into a native stack overflow, which no C++ catch handler can recover.
          */
         static json parse(std::string_view input)
         {
             size_t pos = 0;
-            json result = parse_value(input, pos);
+            json result = parse_value(input, pos, 0);
             skip_ws(input, pos);
             if (pos != input.size())
                 parse_fail("trailing content after the JSON value", pos);
@@ -366,7 +374,7 @@ namespace nlohmann
 
         static bool is_digit(std::string_view s, size_t pos) { return pos < s.size() && s[pos] >= '0' && s[pos] <= '9'; }
 
-        static json parse_value(std::string_view s, size_t& pos)
+        static json parse_value(std::string_view s, size_t& pos, size_t depth)
         {
             skip_ws(s, pos);
             if (pos >= s.size())
@@ -375,10 +383,13 @@ namespace nlohmann
             char c = s[pos];
             if (c == '"')
                 return parse_string(s, pos);
-            if (c == '{')
-                return parse_object(s, pos);
-            if (c == '[')
-                return parse_array(s, pos);
+            if (c == '{' || c == '[')
+            {
+                // depth counts the containers already open around this value.
+                if (depth >= max_parse_depth)
+                    parse_fail("nesting too deep", pos);
+                return c == '{' ? parse_object(s, pos, depth + 1) : parse_array(s, pos, depth + 1);
+            }
             if (c == 't' || c == 'f')
                 return parse_bool(s, pos);
             if (c == 'n')
@@ -598,7 +609,7 @@ namespace nlohmann
             parse_fail("unterminated string", pos);
         }
 
-        static json parse_array(std::string_view s, size_t& pos)
+        static json parse_array(std::string_view s, size_t& pos, size_t depth)
         {
             ++pos; // consume '['
             skip_ws(s, pos);
@@ -614,7 +625,7 @@ namespace nlohmann
             // either way it throws rather than returning the elements so far.
             while (true)
             {
-                arr.m_array.push_back(parse_value(s, pos));
+                arr.m_array.push_back(parse_value(s, pos, depth));
                 skip_ws(s, pos);
                 if (pos >= s.size())
                     parse_fail("unterminated array", pos);
@@ -632,7 +643,7 @@ namespace nlohmann
             }
         }
 
-        static json parse_object(std::string_view s, size_t& pos)
+        static json parse_object(std::string_view s, size_t& pos, size_t depth)
         {
             ++pos; // consume '{'
             skip_ws(s, pos);
@@ -654,7 +665,7 @@ namespace nlohmann
                     parse_fail("expected ':'", pos);
                 ++pos;
 
-                obj.m_object[key.m_string] = parse_value(s, pos);
+                obj.m_object[key.m_string] = parse_value(s, pos, depth);
                 skip_ws(s, pos);
 
                 if (pos >= s.size())

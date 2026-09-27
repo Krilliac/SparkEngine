@@ -620,7 +620,7 @@ namespace SparkEditor
                    candidateText[rootText.size()] == '/';
         }
 
-        constexpr uint64_t kMaximumSceneDocumentBytes = 64ull * 1024ull * 1024ull;
+        constexpr uint64_t kMaximumSceneDocumentBytes = Spark::kMaxSceneDocumentBytes;
 
         bool ReadContainedFileFromHandle(const fs::path& projectRoot, const fs::path& candidate,
                                          std::string& resolvedPath, std::string& contents)

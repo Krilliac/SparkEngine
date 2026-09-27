@@ -174,9 +174,16 @@ namespace Spark
     {
         if (error)
             error->clear();
+        if (static_cast<uint64_t>(jsonText.size()) > kMaxSceneDocumentBytes)
+        {
+            return Reject(error, std::format("scene document is {} bytes; the limit is {} bytes", jsonText.size(),
+                                             kMaxSceneDocumentBytes));
+        }
         try
         {
             json root;
+            // Nesting depth is bounded inside json::parse (max_parse_depth), so a
+            // deeply nested document throws here instead of overflowing the stack.
             root = json::parse(jsonText);
             if (!root.is_object())
                 return Reject(error, std::format("scene root must be a JSON object, found {}", JsonTypeName(root)));
@@ -346,9 +353,17 @@ namespace Spark
                                 }
                                 continue;
                             }
+                            // The writer emits every round-trippable field of a
+                            // current document as a string. A present field of the
+                            // wrong type, or one that does not parse, is damage:
+                            // reject it (in every mode) so LoadWorld recovers the
+                            // .bak image instead of installing a default that the
+                            // next save would make permanent. Only legacy inline
+                            // values keep lenient conversion.
+                            const bool rejectBadField = strictRecovery || (!legacyScene && IsRoundTrippableField(f));
                             if (!legacyScene && !fieldValue->is_string())
                             {
-                                if (strictRecovery)
+                                if (rejectBadField)
                                 {
                                     return Reject(error, std::format("{} field '{}.{}' must be a string, found {}",
                                                                      DescribeEntity(entityIndex - 1, ent), type,
@@ -356,7 +371,7 @@ namespace Spark
                                 }
                                 continue;
                             }
-                            if (!SetFieldFromString(comp, f, JsonFieldValueToString(*fieldValue)) && strictRecovery)
+                            if (!SetFieldFromString(comp, f, JsonFieldValueToString(*fieldValue)) && rejectBadField)
                             {
                                 return Reject(error, std::format("{} field '{}.{}' value {} could not be applied",
                                                                  DescribeEntity(entityIndex - 1, ent), type,

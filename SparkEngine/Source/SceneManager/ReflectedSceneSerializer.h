@@ -12,10 +12,24 @@ class World;
 namespace Spark
 {
 
+    /// Largest scene document LoadWorld, SaveWorld's previous-image check and
+    /// DeserializeInto accept. The editor's contained project reader applies the
+    /// same bound, so every scene entry point rejects an oversized file before the
+    /// whole text (and then its JSON tree) is allocated.
+    inline constexpr uint64_t kMaxSceneDocumentBytes = 64ull * 1024ull * 1024ull;
+
     /**
-     * Permissive loading preserves legacy authored scenes. StrictRecovery is
-     * reserved for crash-recovery records: every current-schema entity,
-     * component, and reflected field must be understood and restored.
+     * Permissive loading preserves legacy authored scenes (`sceneVersion: 1`,
+     * whose inline values are converted leniently) and tolerates schema drift in
+     * current documents: unregistered component types are skipped and missing
+     * fields keep their defaults. A current-version field that IS present must
+     * still be a string the reflection layer can apply; a wrong JSON type or an
+     * unparsable value rejects the document, so LoadWorld falls back to the
+     * previous-good backup instead of installing (and later re-saving) defaults.
+     *
+     * StrictRecovery is reserved for crash-recovery records: every
+     * current-schema entity, component, and reflected field must be understood
+     * and restored.
      */
     enum class SceneDeserializeMode : uint8_t
     {
