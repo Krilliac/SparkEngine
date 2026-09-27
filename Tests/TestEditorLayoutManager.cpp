@@ -14,7 +14,10 @@
 #include "Core/EditorLayoutManager.h"
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -447,6 +450,108 @@ TEST(EditorLayoutMgr_LoadIgnoresUnregisteredPanels)
     EXPECT_EQ(reader.GetPanelConfig("Inspector"), nullptr);
 
     reader.Shutdown();
+}
+
+TEST(EditorLayoutMgr_MalformedLayoutLeavesPanelsUntouchedAndReportsError)
+{
+    const std::string dir = MakeLayoutDir("malformed");
+    {
+        SparkEditor::EditorLayoutManager writer;
+        writer.Initialize(dir);
+        writer.RegisterPanel(MakePanel("Hierarchy", 0, 0, 999, 999));
+        writer.RegisterPanel(MakePanel("Inspector", 800, 0, 999, 999));
+        ASSERT_TRUE(writer.SaveCurrentLayout("Cut"));
+    }
+    // Cut the file inside the second panel, as an interrupted external copy would.
+    const std::filesystem::path file = std::filesystem::path(dir) / "Cut.json";
+    std::string text;
+    {
+        std::ifstream input(file, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+    const size_t second = text.find("\"name\": \"Inspector\"");
+    ASSERT_TRUE(second != std::string::npos);
+    {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output << text.substr(0, second + 10);
+    }
+
+    SparkEditor::EditorLayoutManager reader;
+    reader.Initialize(dir);
+    reader.RegisterPanel(MakePanel("Hierarchy", 0, 0, 300, 600));
+    reader.RegisterPanel(MakePanel("Inspector", 800, 0, 250, 600));
+
+    // The first panel parsed fine, but nothing may be applied from a damaged file.
+    EXPECT_FALSE(reader.LoadLayout("Cut"));
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 300.0f, 1e-3f);
+    EXPECT_NEAR(reader.GetPanelConfig("Inspector")->sizeX, 250.0f, 1e-3f);
+    EXPECT_EQ(reader.GetCurrentLayoutName(), std::string("Default"));
+    EXPECT_STR_CONTAINS(reader.GetLastError(), "Cut.json");
+    EXPECT_STR_CONTAINS(reader.GetLastError(), "malformed or truncated panel 2; no panel was changed");
+
+    // A file cut right after its panels array is rejected too.
+    {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output << text.substr(0, text.rfind(']') + 1);
+    }
+    EXPECT_FALSE(reader.LoadLayout("Cut"));
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 300.0f, 1e-3f);
+    EXPECT_STR_CONTAINS(reader.GetLastError(), "is truncated or has content after its panels array");
+
+    // The intact file still loads and clears the error.
+    {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output << text;
+    }
+    EXPECT_TRUE(reader.LoadLayout("Cut"));
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 999.0f, 1e-3f);
+    EXPECT_TRUE(reader.GetLastError().empty());
+}
+
+TEST(EditorLayoutMgr_FailedSaveKeepsPreviousLayoutFile)
+{
+    const std::string dir = MakeLayoutDir("failedsave");
+    SparkEditor::EditorLayoutManager mgr;
+    mgr.Initialize(dir);
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 300, 600));
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Keep", "first"));
+
+    const std::filesystem::path file = std::filesystem::path(dir) / "Keep.json";
+    std::string before;
+    {
+        std::ifstream input(file, std::ios::binary);
+        before.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+
+    // Occupy the staging name with a non-empty directory so the staged write fails.
+    const std::filesystem::path staging = std::filesystem::path(dir) / "Keep.json.tmp";
+    std::filesystem::create_directories(staging);
+    {
+        std::ofstream occupant(staging / "occupant");
+        occupant << "x";
+    }
+
+    mgr.SetPanelSize("Hierarchy", 1.0f, 1.0f);
+    EXPECT_FALSE(mgr.SaveCurrentLayout("Keep", "second"));
+    EXPECT_STR_CONTAINS(mgr.GetLastError(), "Keep.json");
+    EXPECT_STR_CONTAINS(mgr.GetLastError(), "The previous file is unchanged");
+
+    std::string after;
+    {
+        std::ifstream input(file, std::ios::binary);
+        after.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+    EXPECT_TRUE(after == before);
+
+    // The staging leftover is not listed as a layout, and the kept file still loads.
+    const auto layouts = mgr.GetSavedLayouts();
+    ASSERT_EQ(layouts.size(), static_cast<size_t>(1));
+    EXPECT_EQ(layouts[0].name, std::string("Keep"));
+    EXPECT_TRUE(mgr.LoadLayout("Keep"));
+    EXPECT_NEAR(mgr.GetPanelConfig("Hierarchy")->sizeX, 300.0f, 1e-3f);
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
 }
 
 TEST(EditorLayoutMgr_ConsoleStatusContainsName)

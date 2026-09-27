@@ -433,6 +433,24 @@ Fixtures are under `Tests/Fixtures/Compatibility/Prefab/`, and the tests are
 `PrefabMigration_*` (CTest `SparkPrefabCompatibilityTests`, labels
 `compatibility;prefab;unit`) and `PrefabPersistence_*` (`SparkPrefabPersistenceTests`).
 
+The editor saves prefabs to the open project's `Prefabs/` directory. When a
+project opens, `EditorUI` loads every `*.sparkprefab` there through the same gate
+and prints each rejection or `.bak` recovery as a console warning. A rejected
+file never replaces a prefab that is already loaded. With no project open, a
+prefab save fails and logs the reason; it no longer writes into the process
+working directory.
+
+### Editor layouts
+
+`SparkEditor::EditorLayoutManager` reads and writes layout `"version"` 1, and
+reads a file without a version as the legacy dialect of version 1. A newer
+version, a damaged panel or a truncated file fails closed. The load changes no
+panel, and `GetLastError()` names the file and the supported version.
+`EditorUI` prints that reason to the console. Saves replace the layout file
+atomically, so a failed or interrupted save keeps the previous file. Fixtures
+are under `Tests/Fixtures/Compatibility/EditorState/Layouts/`, and the tests are
+`EditorStateMigration_*Layout*` (`SparkEditorStateCompatibilityTests`).
+
 SAVE-230 remains broader than this save-format slice. Local production-linked
 tests now cover the v4 CRC envelope, the OD-03 N/N-1 window (v3 migrates; v1/v2
 fixtures fail closed), SceneFile v1-to-v2 migration from real v1 fixtures, the
@@ -440,7 +458,8 @@ module persisted-schema mechanism used by SparkGameFPS, transactional corruption
 rejection, cache freshness, and primary-to-backup recovery. The staged MinSizeRel
 FPS smoke separately demonstrates same-version progression XP persistence across
 two fresh D3D11 WARP processes. Still open: the rest of `FPSLocalProfile`, forced
-process-interruption rehearsal, prefab/asset/editor-state migrations, schema
+process-interruption rehearsal, asset migrations, the window-manager layout file
+(`EditorWindowManager`, still written in place), schema
 declarations for the other game modules, clean-machine installation, and hosted
 exact-SHA evidence. CRC-32 is not an authenticity control. The ordinary
 build workflows run compatibility tests serially with the rest of the suite; no

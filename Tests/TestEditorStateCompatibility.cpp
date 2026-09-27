@@ -5,11 +5,13 @@
  * Drives the production ProjectManager against the committed fixtures in
  * Tests/Fixtures/Compatibility/EditorState (see the README there). Each fixture is copied
  * into a scratch project directory first, because opening a project adds missing build
- * scaffold files next to its document.
+ * scaffold files next to its document. EditorLayoutManager reads the committed layout
+ * fixtures in Layouts/ in place, because loading a layout never writes.
  */
 
 #include "TestFramework.h"
 #include "Fixtures/ScopedEditorProfile.h"
+#include "Core/EditorLayoutManager.h"
 #include "Core/ProjectManager.h"
 
 #include <atomic>
@@ -120,6 +122,14 @@ namespace
             const fs::path document = directory / (std::string(projectName) + ".sparkproject");
             fs::copy_file(EditorStateFixture(fixture), document, fs::copy_options::overwrite_existing);
             return document;
+        }
+
+        /// An empty scratch directory, for documents that are not projects.
+        fs::path Directory(const char* name) const
+        {
+            const fs::path directory = m_root / name;
+            fs::create_directories(directory);
+            return directory;
         }
 
       private:
@@ -303,4 +313,129 @@ TEST(EditorStateMigration_SaveAfterBackupRecoveryKeepsGoodBackup)
     ASSERT_TRUE(manager.SaveProject());
     EXPECT_TRUE(ReadBytes(backup) == repaired);
     manager.RemoveRecentProject(Utf8(document));
+}
+
+namespace
+{
+    SparkEditor::PanelConfig RegisteredPanel(const char* name)
+    {
+        SparkEditor::PanelConfig panel;
+        panel.name = name;
+        panel.displayName = name;
+        panel.sizeX = 111.0f;
+        panel.sizeY = 222.0f;
+        return panel;
+    }
+
+    /// EditorLayoutManager takes the directory as the editor passes it (path::string()).
+    bool InitializeOnLayoutFixtures(SparkEditor::EditorLayoutManager& layouts)
+    {
+        layouts.RegisterPanel(RegisteredPanel("Hierarchy"));
+        layouts.RegisterPanel(RegisteredPanel("Inspector"));
+        layouts.RegisterPanel(RegisteredPanel("Console"));
+        return layouts.Initialize(EditorStateFixture("Layouts").string());
+    }
+} // namespace
+
+TEST(EditorStateMigration_V1LayoutFixtureAppliesDeclaredPanels)
+{
+    SparkEditor::EditorLayoutManager layouts;
+    ASSERT_TRUE(InitializeOnLayoutFixtures(layouts));
+    ASSERT_TRUE(layouts.LoadLayout("v1-layout"));
+    EXPECT_TRUE(layouts.GetLastError().empty());
+    EXPECT_EQ(layouts.GetCurrentLayoutName(), std::string("v1-layout"));
+
+    const SparkEditor::PanelConfig* hierarchy = layouts.GetPanelConfig("Hierarchy");
+    ASSERT_TRUE(hierarchy != nullptr);
+    EXPECT_EQ(hierarchy->displayName, std::string("Scene Hierarchy"));
+    EXPECT_TRUE(hierarchy->dockPosition == SparkEditor::LayoutDockPosition::Left);
+    EXPECT_EQ(hierarchy->sizeX, 320.0f);
+    EXPECT_EQ(hierarchy->sizeY, 640.0f);
+    EXPECT_EQ(hierarchy->posY, 48.0f);
+    EXPECT_TRUE(hierarchy->isVisible);
+    EXPECT_EQ(hierarchy->dockRatio, 0.25f);
+    EXPECT_EQ(hierarchy->parentDock, std::string("MainDock"));
+
+    const SparkEditor::PanelConfig* inspector = layouts.GetPanelConfig("Inspector");
+    ASSERT_TRUE(inspector != nullptr);
+    EXPECT_TRUE(inspector->dockPosition == SparkEditor::LayoutDockPosition::Right);
+    EXPECT_EQ(inspector->sizeX, 360.5f);
+    EXPECT_EQ(inspector->posX, 1520.0f);
+    EXPECT_FALSE(inspector->isVisible);
+    EXPECT_EQ(inspector->dockRatio, 0.1875f);
+    EXPECT_EQ(inspector->tabOrder, 1);
+
+    const SparkEditor::PanelConfig* console = layouts.GetPanelConfig("Console");
+    ASSERT_TRUE(console != nullptr);
+    EXPECT_TRUE(console->dockPosition == SparkEditor::LayoutDockPosition::Bottom);
+    EXPECT_TRUE(console->isFloating);
+    EXPECT_FALSE(console->canClose);
+    EXPECT_FALSE(console->canDock);
+    EXPECT_EQ(console->tabOrder, 2);
+    EXPECT_TRUE(console->parentDock.empty());
+
+    // The legacy dialect, without a "version" key, is version 1 and loads the same way.
+    std::string legacy = ReadBytes(EditorStateFixture("Layouts/v1-layout.json"));
+    const size_t versionLine = legacy.find("\"version\"");
+    ASSERT_TRUE(versionLine != std::string::npos);
+    legacy.erase(versionLine, legacy.find('\n', versionLine) + 1 - versionLine);
+    ASSERT_TRUE(legacy.find("\"version\"") == std::string::npos);
+    ProjectScratch scratch("legacy-layout");
+    const fs::path legacyDirectory = scratch.Directory("Layouts");
+    WriteBytes(legacyDirectory / "legacy.json", legacy);
+
+    SparkEditor::EditorLayoutManager legacyLayouts;
+    ASSERT_TRUE(legacyLayouts.Initialize(legacyDirectory.string()));
+    legacyLayouts.RegisterPanel(RegisteredPanel("Inspector"));
+    ASSERT_TRUE(legacyLayouts.LoadLayout("legacy"));
+    EXPECT_EQ(legacyLayouts.GetPanelConfig("Inspector")->sizeX, 360.5f);
+}
+
+TEST(EditorStateMigration_FutureLayoutVersionFailsClosedWithVersionedError)
+{
+    SparkEditor::EditorLayoutManager layouts;
+    ASSERT_TRUE(InitializeOnLayoutFixtures(layouts));
+    ASSERT_TRUE(layouts.LoadLayout("v1-layout"));
+
+    EXPECT_FALSE(layouts.LoadLayout("v2-future-layout"));
+    const std::string& error = layouts.GetLastError();
+    EXPECT_STR_CONTAINS(error, "v2-future-layout.json");
+    EXPECT_STR_CONTAINS(error, "layout format version 2");
+    EXPECT_STR_CONTAINS(error, "reads layout version 1 only");
+    EXPECT_STR_CONTAINS(error, "newer SparkEditor");
+
+    // Nothing from the newer file was applied, and the current layout is still the v1 one.
+    const SparkEditor::PanelConfig* hierarchy = layouts.GetPanelConfig("Hierarchy");
+    ASSERT_TRUE(hierarchy != nullptr);
+    EXPECT_EQ(hierarchy->sizeX, 320.0f);
+    EXPECT_TRUE(hierarchy->isVisible);
+    EXPECT_EQ(hierarchy->parentDock, std::string("MainDock"));
+    EXPECT_EQ(layouts.GetCurrentLayoutName(), std::string("v1-layout"));
+}
+
+TEST(EditorStateMigration_LayoutFixtureIsNotRewrittenOnLoad)
+{
+    const fs::path v1 = EditorStateFixture("Layouts/v1-layout.json");
+    const fs::path future = EditorStateFixture("Layouts/v2-future-layout.json");
+    const std::string v1Bytes = ReadBytes(v1);
+    const std::string futureBytes = ReadBytes(future);
+    ASSERT_FALSE(v1Bytes.empty());
+    ASSERT_FALSE(futureBytes.empty());
+
+    SparkEditor::EditorLayoutManager layouts;
+    ASSERT_TRUE(InitializeOnLayoutFixtures(layouts));
+    EXPECT_TRUE(layouts.LoadLayout("v1-layout"));
+    EXPECT_FALSE(layouts.LoadLayout("v2-future-layout"));
+
+    // Loading, accepted or rejected, never writes: no rewrite and no staging sibling.
+    EXPECT_TRUE(ReadBytes(v1) == v1Bytes);
+    EXPECT_TRUE(ReadBytes(future) == futureBytes);
+    EXPECT_FALSE(fs::exists(WithSuffix(v1, ".tmp")));
+    EXPECT_FALSE(fs::exists(WithSuffix(future, ".tmp")));
+
+    const std::vector<SparkEditor::LayoutInfo> listed = layouts.GetSavedLayouts();
+    ASSERT_EQ(listed.size(), static_cast<size_t>(2));
+    EXPECT_EQ(listed[0].name, std::string("v1-layout"));
+    EXPECT_EQ(listed[0].description, std::string("Three-panel authoring layout"));
+    EXPECT_EQ(listed[1].name, std::string("v2-future-layout"));
 }

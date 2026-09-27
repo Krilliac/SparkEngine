@@ -36,6 +36,33 @@ closed. The reflected-scene dialect takes the same stance
 | `v1-project/V1Project.sparkproject` | Hand-written in the exact layout `ProjectManager::SaveProjectFile` emits. It carries a template identity, distinct default and last-opened scenes, non-zero timestamps, two modules and two scenes. It must open with every declared field intact and must not be rewritten by the open. |
 | `v2-future-project/Future.sparkproject` | Declares `projectFileVersion: 2` and adds a field no current build knows. It must fail closed with a versioned error and leave the previously open project in place. |
 
+## Editor layouts (`Layouts/`)
+
+`SparkEditor::EditorLayoutManager` (`SparkEditor/Source/Core/EditorLayoutManager.cpp`)
+keeps named panel layouts as `<EditorData>/Layouts/<name>.json`.
+
+- It reads and writes `"version": 1` (`EditorLayoutManager::kLayoutFormatVersion`).
+  A file without `"version"` is the legacy dialect, which is identical to version 1.
+- A larger version fails closed. `LoadLayout` returns false, `GetLastError()`
+  names the file, its version and the supported version ("reads layout version 1
+  only"), and no panel changes.
+- The whole file is parsed before any panel is applied. A malformed or truncated
+  panel, or a file cut after its panels array, fails the load without changing a
+  panel. The old reader applied every panel it had parsed and then reported
+  success.
+- Saves go through `SaveFileDurability::WriteFileAtomically` (`<name>.json.tmp`,
+  then rename), so a failed or interrupted save leaves the previous layout file
+  intact. No `.bak` is kept, because a layout can be recreated.
+
+| File | Purpose |
+|---|---|
+| `Layouts/v1-layout.json` | Hand-written in the exact layout `EditorLayoutManager::WriteLayoutFile` emits, with three panels that differ in every field. It must apply every declared value, and it must still load when the `"version"` line is removed (legacy dialect). |
+| `Layouts/v2-future-layout.json` | Declares `"version": 2`. It must fail closed with a versioned error and leave every panel and the current layout name unchanged. |
+
+The layout tests read these files in place, because loading a layout never
+writes. They check that neither file is rewritten and that no `.tmp` sibling
+appears.
+
 Tests (`EditorStateMigration_*` in `Tests/TestEditorStateCompatibility.cpp`,
 CTest `SparkEditorStateCompatibilityTests`) copy each fixture into a scratch
 project directory before opening it. Opening a project adds any missing build

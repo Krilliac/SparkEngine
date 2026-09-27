@@ -1725,9 +1725,11 @@ set_tests_properties(SparkPrefabCompatibilityTests PROPERTIES
 # SAVE-230: the .sparkproject document reads and writes projectFileVersion 1, fails
 # closed on a newer version, keeps the previous document as .bak on save and
 # recovers a damaged document from it (Tests/Fixtures/Compatibility/EditorState).
+# Editor layouts read version 1 (and the unversioned legacy dialect) in place and
+# fail closed on version 2 without applying any panel (EditorState/Layouts).
 add_test(NAME SparkEditorStateCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkEditorStateCompatibilityTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorStateMigration_;SPARK_TEST_EXPECT_COUNT=5"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorStateMigration_;SPARK_TEST_EXPECT_COUNT=8"
     LABELS "compatibility;editor;unit"
     TIMEOUT 60)
 

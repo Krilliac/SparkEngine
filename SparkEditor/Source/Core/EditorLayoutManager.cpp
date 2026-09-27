@@ -29,20 +29,34 @@
  *
  * The parser is deliberately simple: it walks keys linearly, assumes
  * whitespace is OK anywhere, accepts numbers / strings / booleans in the
- * obvious way, and ignores anything it does not understand. This is
+ * obvious way, and ignores keys it does not understand. This is
  * enough for the engine's own files and gives tests a real serialize
  * → deserialize round trip without pulling in a JSON library.
+ *
+ * Compatibility (SAVE-230): the reader accepts "version" 1 and treats a file
+ * without one as the legacy dialect of version 1. A newer version, a damaged
+ * panel or a truncated file fails closed with GetLastError() naming the file,
+ * and nothing is applied until the whole file has parsed. Saves replace the
+ * file atomically through SaveFileDurability::WriteFileAtomically.
  */
 
 #include "EditorLayoutManager.h"
+#include "Engine/SaveSystem/SaveFileDurability.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <limits>
+#include <locale>
 #include <sstream>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace SparkEditor
 {
@@ -215,17 +229,17 @@ namespace SparkEditor
     // ========================================================================
 
     bool EditorLayoutManager::WriteLayoutFile(const std::string& path, const std::string& name,
-                                              const std::string& description) const
+                                              const std::string& description, std::string& error) const
     {
-        std::ofstream f(path, std::ios::trunc);
-        if (!f.is_open())
-            return false;
+        std::ostringstream f;
+        f.imbue(std::locale::classic());
+        f << std::setprecision(std::numeric_limits<float>::max_digits10);
 
         f << "{\n";
         f << "  \"layout\": {\n";
         f << "    \"name\": \"" << EscapeJsonString(name) << "\",\n";
         f << "    \"description\": \"" << EscapeJsonString(description) << "\",\n";
-        f << "    \"version\": 1,\n";
+        f << "    \"version\": " << kLayoutFormatVersion << ",\n";
         f << "    \"panels\": [\n";
 
         bool first = true;
@@ -259,19 +273,33 @@ namespace SparkEditor
         }
         f << "\n    ]\n";
         f << "  }\n}\n";
-        return f.good();
+
+        // Staged write and rename: a failed or interrupted save leaves the previous file intact.
+        std::error_code writeError;
+        if (!Spark::SaveFileDurability::WriteFileAtomically(fs::path(path), f.str(), /*retainBackup*/ false,
+                                                            writeError))
+        {
+            error = "Layout '" + path + "' was not saved: " + writeError.message() + ". The previous file is unchanged";
+            return false;
+        }
+        return true;
     }
 
     bool EditorLayoutManager::SaveCurrentLayout(const std::string& name, const std::string& description)
     {
+        m_lastError.clear();
         if (!m_initialized || !IsSafeLayoutName(name))
+        {
+            m_lastError =
+                "Layout name '" + name + "' is not a valid file name, or the layout manager is not initialized";
             return false;
+        }
 
         std::error_code ec;
         fs::create_directories(m_layoutDirectory, ec);
 
         const std::string path = LayoutFilePath(name);
-        if (!WriteLayoutFile(path, name, description))
+        if (!WriteLayoutFile(path, name, description, m_lastError))
             return false;
 
         m_currentLayoutName = name;
@@ -501,61 +529,125 @@ namespace SparkEditor
         }
     } // namespace
 
-    bool EditorLayoutManager::ReadLayoutFile(const std::string& path, std::string& outDescription)
+    bool EditorLayoutManager::ReadLayoutFile(const std::string& path)
     {
-        std::ifstream f(path);
+        const std::string prefix = "Layout '" + path + "' ";
+        std::ifstream f(path, std::ios::binary);
         if (!f.is_open())
+        {
+            m_lastError = prefix + "could not be opened";
             return false;
+        }
 
         std::stringstream buffer;
         buffer << f.rdbuf();
         const std::string contents = buffer.str();
         if (contents.empty())
+        {
+            m_lastError = prefix + "is empty";
             return false;
+        }
 
         Cursor cursor(contents);
-
-        outDescription.clear();
-        if (cursor.FindKey("description"))
-            outDescription = cursor.ReadString();
-
-        cursor.pos = 0;
         if (!cursor.FindKey("panels"))
+        {
+            m_lastError = prefix + "has no \"panels\" array; it is damaged or not a layout file";
             return false;
+        }
+        const size_t panelsKey = cursor.pos;
 
+        // Only a "version" before "panels" belongs to the layout header; a panel could be named "version".
+        cursor.pos = 0;
+        long long version = kLayoutFormatVersion; // no version key: the legacy dialect, identical to 1
+        if (cursor.FindKey("version") && cursor.pos < panelsKey)
+        {
+            const double declared = cursor.ReadNumber();
+            if (!(declared >= 1.0 && declared <= 1.0e9) || declared != std::floor(declared))
+            {
+                m_lastError = prefix + "has an invalid \"version\" value; this build reads layout version " +
+                              std::to_string(kLayoutFormatVersion);
+                return false;
+            }
+            version = static_cast<long long>(declared);
+        }
+        if (version > kLayoutFormatVersion)
+        {
+            m_lastError = prefix + "is layout format version " + std::to_string(version) +
+                          "; this build reads layout version " + std::to_string(kLayoutFormatVersion) +
+                          " only. Open it with a newer SparkEditor";
+            return false;
+        }
+
+        // Parse every panel before applying any, so a damaged file changes nothing.
+        cursor.pos = panelsKey;
         cursor.SkipTo('[');
-        while (!cursor.Eof())
+        std::vector<PanelConfig> parsed;
+        bool closed = false;
+        while (true)
         {
             cursor.SkipWhitespaceAndPunct();
-            if (cursor.pos >= contents.size() || contents[cursor.pos] == ']')
+            if (cursor.Eof())
                 break;
-
+            if (contents[cursor.pos] == ']')
+            {
+                closed = true;
+                ++cursor.pos;
+                break;
+            }
             PanelConfig panel;
             if (!ParsePanel(cursor, panel))
+            {
+                m_lastError = prefix + "has a malformed or truncated panel " + std::to_string(parsed.size() + 1) +
+                              "; no panel was changed";
+                return false;
+            }
+            parsed.push_back(std::move(panel));
+        }
+        // The writer closes the panels array, then the "layout" object and the document.
+        size_t closingBraces = 0;
+        for (; closed && !cursor.Eof(); ++cursor.pos)
+        {
+            const char c = contents[cursor.pos];
+            if (c == '}')
+                ++closingBraces;
+            else if (!std::isspace(static_cast<unsigned char>(c)))
                 break;
+        }
+        if (!closed || closingBraces != 2 || !cursor.Eof())
+        {
+            m_lastError = prefix + "is truncated or has content after its panels array; no panel was changed";
+            return false;
+        }
 
-            // Only apply to panels that are already registered.
+        // Only apply to panels that are already registered.
+        for (PanelConfig& panel : parsed)
+        {
             auto it = m_panels.find(panel.name);
             if (it != m_panels.end())
-            {
-                it->second = panel;
-            }
+                it->second = std::move(panel);
         }
         return true;
     }
 
     bool EditorLayoutManager::LoadLayout(const std::string& name)
     {
+        m_lastError.clear();
         if (!m_initialized || !IsSafeLayoutName(name))
+        {
+            m_lastError =
+                "Layout name '" + name + "' is not a valid file name, or the layout manager is not initialized";
             return false;
+        }
 
         const std::string path = LayoutFilePath(name);
         std::error_code ec;
         if (!fs::exists(path, ec))
+        {
+            m_lastError = "Layout '" + path + "' does not exist";
             return false;
+        }
 
-        std::string description;
-        if (!ReadLayoutFile(path, description))
+        if (!ReadLayoutFile(path))
             return false;
 
         m_currentLayoutName = name;

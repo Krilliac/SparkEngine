@@ -1311,7 +1311,10 @@ namespace SparkEditor
                 }
             }
             if (!m_layoutManager->SaveCurrentLayout(layoutName, description))
+            {
+                Spark::SimpleConsole::GetInstance().LogError(m_layoutManager->GetLastError());
                 return false;
+            }
 
             const std::filesystem::path filePath =
                 std::filesystem::path(m_layoutManager->GetLayoutDirectory()) / (layoutName + ".ini");
@@ -1346,8 +1349,14 @@ namespace SparkEditor
         // Implementation for loading ImGui docking layout
         try
         {
-            if (!m_layoutManager || !m_layoutManager->LoadLayout(layoutName))
+            if (!m_layoutManager)
                 return false;
+            if (!m_layoutManager->LoadLayout(layoutName))
+            {
+                // A damaged or newer-version layout changes nothing; say why instead of failing silently.
+                Spark::SimpleConsole::GetInstance().LogError(m_layoutManager->GetLastError());
+                return false;
+            }
 
             const std::filesystem::path filePath =
                 std::filesystem::path(m_layoutManager->GetLayoutDirectory()) / (layoutName + ".ini");
