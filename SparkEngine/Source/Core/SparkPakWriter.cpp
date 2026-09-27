@@ -5,11 +5,14 @@
 
 #include "SparkPakWriter.h"
 
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <string>
+#include <system_error>
 #include <unordered_set>
 
 #ifdef SPARK_MINIZ_AVAILABLE
@@ -133,11 +136,28 @@ namespace Spark
             if (relative.empty() || relative.is_absolute() || *relative.begin() == "..")
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Core, "SparkPakWriter: rejected path outside packaging root '%s'",
-                               dirEntry.path().string().c_str());
+                               FileUtils::TryPathToUtf8(dirEntry.path()).value_or("?").c_str());
                 continue;
             }
 
-            auto relativePath = relative.generic_string();
+            // Archive entry names are UTF-8 on every host, so an archive built on one
+            // machine resolves the same names on another. generic_string() used the
+            // Windows ANSI code page instead, and threw std::system_error (ending the
+            // whole packaging pass) for a name that code page cannot spell.
+            std::string relativePath;
+            try
+            {
+                const std::u8string utf8 = relative.generic_u8string();
+                relativePath.assign(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+            }
+            catch (const std::system_error&)
+            {
+                // Only a Windows name that is not well-formed UTF-16 lands here.
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "SparkPakWriter: skipped a file whose name is not valid Unicode under '%s'",
+                               FileUtils::TryPathToUtf8(rootPath).value_or("?").c_str());
+                continue;
+            }
             auto virtualPath = virtualPrefix.empty() ? relativePath : virtualPrefix + relativePath;
 
             // Read file contents

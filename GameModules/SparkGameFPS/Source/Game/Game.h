@@ -546,7 +546,7 @@ class SPARK_GAME_API Game
 
     /**
      * @brief Get list of available scenes
-     * @return Vector of scene file paths
+     * @return Vector of scene file paths (UTF-8)
      */
     std::vector<std::string> GetAvailableScenes() const;
 

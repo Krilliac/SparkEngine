@@ -18,6 +18,7 @@
 #include "Game.h"
 #include "ClassSystem.h"
 #include "Utils/Assert.h"
+#include "Utils/FileUtils.h"
 #include "Utils/Validate.h"
 #include "Utils/SparkConsole.h"
 
@@ -597,21 +598,27 @@ std::vector<std::string> Game::GetAvailableScenes() const
     std::vector<std::string> scenes;
 
     // Scan common scene directories for .scene / .xml / .json files
+    // Both directories and results are UTF-8 (the SaveScene path above decodes the
+    // same way). The narrow path(std::string)/path::string() conversions use the
+    // Windows ANSI code page instead, and one scene name it cannot spell threw out of
+    // the loop and dropped the rest of that directory's listing.
     const std::string sceneDirs[] = {Spark::FPSAssets::ResolveUtf8("Scenes"), "Scenes"};
     for (const auto& dir : sceneDirs)
     {
         try
         {
-            if (!std::filesystem::exists(dir))
+            const std::filesystem::path directory = Spark::FileUtils::PathFromUtf8(dir);
+            if (!std::filesystem::exists(directory))
                 continue;
-            for (const auto& entry : std::filesystem::directory_iterator(dir))
+            for (const auto& entry : std::filesystem::directory_iterator(directory))
             {
                 if (!entry.is_regular_file())
                     continue;
-                auto ext = entry.path().extension().string();
+                const auto ext = entry.path().extension();
                 if (ext == ".scene" || ext == ".xml" || ext == ".json")
                 {
-                    scenes.push_back(entry.path().string());
+                    if (auto scenePath = Spark::FileUtils::TryPathToUtf8(entry.path()))
+                        scenes.push_back(std::move(*scenePath));
                 }
             }
         }

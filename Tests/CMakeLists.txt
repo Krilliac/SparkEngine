@@ -1178,6 +1178,7 @@ target_sources(SparkTests PRIVATE
     TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
     TestSEC2ConsoleIpcReal.cpp
+    TestSEC4NarrowPathsReal.cpp
 )
 
 # SEC2 console-IPC security regressions (TestSEC2ConsoleIpcReal.cpp). Seven tests
@@ -1207,6 +1208,15 @@ add_test(NAME SEC4ReflectionBinaryCodec COMMAND $<TARGET_FILE:SparkTests> --warn
 set_tests_properties(SEC4ReflectionBinaryCodec PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4Reflection_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "security;reflection;serialization"
+    TIMEOUT 120)
+
+# SEC4 narrow-path regressions (TestSEC4NarrowPathsReal.cpp): directory scans must
+# survive a file name the Windows ANSI code page cannot spell. Nine tests on every
+# platform; the pinned count fails the lane if one silently drops out.
+add_test(NAME SEC4NarrowPathsReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SEC4NarrowPathsReal PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4NarrowPath_;SPARK_TEST_EXPECT_COUNT=9"
+    LABELS "security;filesystem;unicode"
     TIMEOUT 120)
 
 # TestBuildInfraReal.cpp asserts the generated SDK version header still carries

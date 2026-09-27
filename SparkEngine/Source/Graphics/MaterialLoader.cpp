@@ -9,11 +9,13 @@
 #include "../Utils/SparkConsole.h"
 #include "../Utils/LogMacros.h"
 
+#include "../Utils/FileUtils.h"
 #include "../Utils/StringUtils.h"
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -83,7 +85,18 @@ namespace Spark::Graphics
 
             if (entry.path().extension() == ".sparkmat")
             {
-                if (LoadMaterial(entry.path().string()))
+                // LoadMaterial() reopens the file through a narrow path. path::string()
+                // throws on Windows for a name the ANSI code page cannot spell, which
+                // used to abort the scan (and the engine start that runs it).
+                const std::optional<std::string> narrow = Spark::FileUtils::TryPathToNarrow(entry.path());
+                if (!narrow)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "MaterialLoader: skipping '%s': its name has no spelling in the active code page",
+                                   Spark::FileUtils::TryPathToUtf8(entry.path()).value_or("?").c_str());
+                    continue;
+                }
+                if (LoadMaterial(*narrow))
                 {
                     anyLoaded = true;
                 }

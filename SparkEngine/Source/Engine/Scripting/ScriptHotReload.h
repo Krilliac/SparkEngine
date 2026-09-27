@@ -25,6 +25,7 @@
 #include <chrono>
 #include <filesystem>
 #include <functional>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -162,6 +163,9 @@ namespace Spark::Scripting
         std::vector<std::string> m_watchDirs;
         std::vector<std::string> m_extensions = {".as", ".angelscript"};
         std::unordered_map<std::string, FileState> m_fileStates;
+        /// Scripts skipped because no narrow spelling reopens them; remembered so the
+        /// per-poll rescan warns about each one once.
+        std::set<std::filesystem::path> m_unopenableScripts;
 
         RecompileCallback m_recompileCallback;
         ErrorCallback m_errorCallback;

@@ -17,6 +17,7 @@
 #include "../Utils/SparkConsole.h"
 #include "../Utils/ConsoleProcessManager.h"
 #include "Utils/LocalFileCache.h"
+#include "Utils/FileUtils.h"
 
 #include <fstream>
 #include <sstream>
@@ -1003,7 +1004,10 @@ std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& di
         auto ext = entry.path().extension();
         if (ext == L".scene" || ext == L".json")
         {
-            scenes.push_back(entry.path().filename().string());
+            // UTF-8, never the ANSI code page: path::string() throws on Windows for a
+            // scene name that code page cannot spell, which ended the whole listing.
+            if (auto name = Spark::FileUtils::TryPathToUtf8(entry.path().filename()))
+                scenes.push_back(std::move(*name));
         }
     }
     std::sort(scenes.begin(), scenes.end());

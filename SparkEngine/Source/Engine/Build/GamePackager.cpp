@@ -1,7 +1,10 @@
 #include "GamePackager.h"
 
+#include "Utils/FileUtils.h"
+
 #include <cstdio>
 #include <format>
+#include <string>
 
 namespace Spark::Build
 {
@@ -44,9 +47,16 @@ namespace Spark::Build
             return platform == PackagePlatform::WindowsX64 ? ".exe" : std::string_view{};
         }
 
+        /// UTF-8 text for messages and the manifest. path::string() goes through the
+        /// Windows ANSI code page and throws for a name it cannot spell.
+        std::string DisplayName(const fs::path& path)
+        {
+            return FileUtils::TryPathToUtf8(path).value_or("<unrepresentable name>");
+        }
+
         bool IsLegacyBinary(const fs::path& path, PackagePlatform platform, bool debugBuild)
         {
-            const auto extension = path.extension().string();
+            const std::string extension = DisplayName(path.extension());
             const auto moduleExtension = ModuleExtension(platform);
             const auto executableExtension = ExecutableExtension(platform);
             return extension == moduleExtension || extension == executableExtension ||
@@ -55,7 +65,7 @@ namespace Spark::Build
 
         bool IsCountedLegacyBinary(const fs::path& path, PackagePlatform platform)
         {
-            const auto extension = path.extension().string();
+            const std::string extension = DisplayName(path.extension());
             return extension == ModuleExtension(platform) || extension == ExecutableExtension(platform);
         }
 
@@ -95,8 +105,9 @@ namespace Spark::Build
 
         const auto configName = config.debugBuild ? "Debug" : "Release";
         const fs::path outputRoot =
-            fs::absolute(fs::path(config.outputDirectory) /
-                         std::format("{}_{}_{}", config.projectName, PlatformName(config.platform), configName));
+            fs::absolute(FileUtils::PathFromUtf8(config.outputDirectory) /
+                         FileUtils::PathFromUtf8(
+                             std::format("{}_{}_{}", config.projectName, PlatformName(config.platform), configName)));
         const fs::path binDestination = outputRoot / "Bin";
         const fs::path assetsDestination = outputRoot / "Assets";
         const fs::path configDestination = outputRoot / "Config";
@@ -133,11 +144,12 @@ namespace Spark::Build
             {
                 if (!entry.is_regular_file(ec))
                     continue;
-                const auto relative = fs::relative(entry.path(), assetsSource, ec).string();
+                const fs::path relativePath = fs::relative(entry.path(), assetsSource, ec);
+                const std::string relative = DisplayName(relativePath);
                 if (!config.includeEditor && relative.starts_with("Editor"))
                     continue;
 
-                const fs::path destination = assetsDestination / relative;
+                const fs::path destination = assetsDestination / relativePath;
                 fs::create_directories(destination.parent_path(), ec);
                 fs::copy_file(entry.path(), destination, fs::copy_options::overwrite_existing, ec);
                 if (ec)
@@ -162,7 +174,7 @@ namespace Spark::Build
             if (!entry.is_regular_file(ec) || !IsLegacyBinary(entry.path(), config.platform, config.debugBuild))
                 continue;
 
-            const auto filename = entry.path().filename().string();
+            const std::string filename = DisplayName(entry.path().filename());
             if (!config.includeEditor && filename.find("Editor") != std::string::npos)
                 continue;
 
@@ -202,14 +214,19 @@ namespace Spark::Build
                 if (ec)
                 {
                     result.warnings.push_back(
-                        std::format("Could not remove debug file '{}'", entry.path().filename().string()));
+                        std::format("Could not remove debug file '{}'", DisplayName(entry.path().filename())));
                     ec.clear();
                 }
             }
         }
 
         const fs::path manifestPath = outputRoot / "manifest.txt";
-        if (FILE* manifest = std::fopen(manifestPath.string().c_str(), "w"))
+#ifdef _WIN32
+        FILE* manifest = _wfopen(manifestPath.c_str(), L"w");
+#else
+        FILE* manifest = std::fopen(manifestPath.c_str(), "w");
+#endif
+        if (manifest)
         {
             const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             std::fprintf(manifest, "# SparkEngine Package Manifest\n");
@@ -225,7 +242,7 @@ namespace Spark::Build
                 if (entry.is_regular_file(ec))
                 {
                     const auto relative = fs::relative(entry.path(), outputRoot, ec);
-                    std::fprintf(manifest, "%s %llu\n", relative.string().c_str(),
+                    std::fprintf(manifest, "%s %llu\n", DisplayName(relative).c_str(),
                                  static_cast<unsigned long long>(entry.file_size(ec)));
                 }
             }
@@ -261,7 +278,7 @@ namespace Spark::Build
             if (entry.is_regular_file(ec))
                 totalBytes += entry.file_size(ec);
         }
-        result.outputPath = outputRoot.string();
+        result.outputPath = DisplayName(outputRoot);
         result.totalSizeMB = static_cast<float>(totalBytes) / (1024.0f * 1024.0f);
         result.success = result.errors.empty();
         return publish(result, result.success);

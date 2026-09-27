@@ -13,9 +13,11 @@
 #include "../../Utils/Assert.h"
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/DebugHookManager.h"
+#include "../../Utils/FileUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
+#include <optional>
 #include <sstream>
 
 namespace Spark::Scripting
@@ -217,9 +219,30 @@ namespace Spark::Scripting
                 if (!entry.is_regular_file())
                     return;
 
-                std::string path = entry.path().string();
-                if (!IsWatchedExtension(path))
+                // Tracked paths are reopened through narrow std::string file APIs and
+                // handed to the recompile callback, so a script needs a narrow spelling
+                // that names it. path::string() throws std::system_error (which is not a
+                // filesystem_error) for a name the Windows ANSI code page cannot spell;
+                // unguarded, one such file escaped PollChanges() every frame.
+                const std::optional<std::string> utf8 = Spark::FileUtils::TryPathToUtf8(entry.path());
+                if (!utf8 || !IsWatchedExtension(*utf8))
                     return;
+
+                std::optional<std::string> narrow = Spark::FileUtils::TryPathToNarrow(entry.path());
+                if (!narrow)
+                {
+                    // Warn once per file: PollChanges() rescans every watch directory.
+                    if (m_unopenableScripts.insert(entry.path()).second)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Scripting,
+                                       "ScriptHotReload: not watching '%s': its name has no spelling in the active "
+                                       "code page, so it cannot be opened for recompilation",
+                                       utf8->c_str());
+                    }
+                    return;
+                }
+
+                std::string path = std::move(*narrow);
 
                 if (!Spark::ContainerUtils::Contains(m_fileStates, path))
                 {

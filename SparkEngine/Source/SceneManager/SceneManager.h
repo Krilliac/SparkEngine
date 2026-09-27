@@ -447,7 +447,7 @@ class SceneManager
      * and returns their paths as narrow strings suitable for display in a file picker.
      *
      * @param directory  Directory to scan. Defaults to `L"Assets/Scenes"`.
-     * @return           Vector of file path strings, one per found scene file.
+     * @return           UTF-8 file names, one per found scene file, sorted.
      */
     std::vector<std::string> GetAvailableScenes(const std::wstring& directory = L"Assets/Scenes") const;
 

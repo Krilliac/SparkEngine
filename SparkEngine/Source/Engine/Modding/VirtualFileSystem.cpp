@@ -4,12 +4,14 @@
  */
 
 #include "VirtualFileSystem.h"
+#include "../../Utils/FileUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string_view>
 #include <system_error>
@@ -235,16 +237,24 @@ namespace Spark
                 continue;
             }
 
-            std::string filename = entry.path().filename().string();
-
-            if (!extension.empty())
+            if (!extension.empty() && entry.path().extension() != fs::path(extension))
             {
-                std::string ext = entry.path().extension().string();
-                if (ext != extension)
-                {
-                    continue;
-                }
+                continue;
             }
+
+            // A listed virtual path is fed back to ResolvePath(), which rebuilds the
+            // path from its narrow spelling. A name the Windows ANSI code page cannot
+            // spell has none (path::string() throws std::system_error, which used to
+            // abort the listing), and no virtual path could reopen it: leave it out.
+            const std::optional<std::string> narrowName = FileUtils::TryPathToNarrow(entry.path().filename());
+            if (!narrowName)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "VFS: not listing '%s': its name has no spelling in the active code page",
+                               FileUtils::TryPathToUtf8(entry.path().filename()).value_or("?").c_str());
+                continue;
+            }
+            const std::string& filename = *narrowName;
 
             // Return virtual path relative to the mount root
             std::string virtualPath = directory;

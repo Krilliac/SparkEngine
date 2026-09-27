@@ -9,6 +9,7 @@
 #include "../../Utils/Assert.h"
 #include "../../Utils/EventBus.h"
 #include "../../Utils/CRC32.h"
+#include "../../Utils/FileUtils.h"
 #include "../../Utils/Validate.h"
 #include "Utils/LocalFileCache.h"
 #include <array>
@@ -21,6 +22,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <system_error>
 #include <unordered_set>
@@ -1527,36 +1529,54 @@ namespace Spark
         std::vector<SaveMetadata> slots;
         try
         {
-            std::vector<fs::path> retainedCopies;
+            // A listed slot must be one Load()/DeleteSave()/GetSaveMetadata() accept, so
+            // the slot name is taken from the file stem only when it passes the same
+            // IsValidSlotName() gate, and the file is reopened through GetSavePath().
+            // Reading the stem through TryPathToUtf8() matters: path::string() throws on
+            // Windows for a name the ANSI code page cannot spell, and one such stray
+            // file used to abort the whole listing and hide every real slot.
+            const auto slotNameOf = [](const fs::path& stem) -> std::optional<std::string>
+            {
+                std::optional<std::string> name = FileUtils::TryPathToUtf8(stem);
+                if (!name || !IsValidSlotName(*name))
+                    return std::nullopt;
+                return name;
+            };
+
+            std::vector<std::string> retainedSlots;
             for (const auto& entry : fs::directory_iterator(m_saveDirectory))
             {
                 const fs::path& entryPath = entry.path();
                 if (entryPath.extension() == ".spark_save")
                 {
+                    const std::optional<std::string> slotName = slotNameOf(entryPath.stem());
+                    if (!slotName)
+                        continue;
+
                     // Metadata-only read: parse just the header + metadata block and stop
                     // before the (potentially large) entity data. Enumerating N save slots
                     // must not cost O(total bytes of all saves).
                     SaveMetadata meta;
-                    if (ReadMetadataOnly(entryPath.string(), meta))
+                    if (ReadMetadataOnly(GetSavePath(*slotName), meta))
                     {
                         // Carry the slot identifier so a listed entry can be passed
                         // straight back to Load()/DeleteSave()/GetSaveMetadata().
-                        meta.slotName = entryPath.stem().string();
+                        meta.slotName = *slotName;
                         slots.push_back(std::move(meta));
                     }
                 }
                 else if (entryPath.extension() == kSaveBackupSuffix && entryPath.stem().extension() == ".spark_save")
                 {
-                    retainedCopies.push_back(entryPath);
+                    if (std::optional<std::string> slotName = slotNameOf(entryPath.stem().stem()))
+                        retainedSlots.push_back(std::move(*slotName));
                 }
             }
 
             // A slot whose primary file is missing or unreadable is still loadable from
             // its retained last-good copy: Load() and SaveExists() both recover it. Not
             // listing it here is what makes a recoverable slot disappear from the save UI.
-            for (const fs::path& retained : retainedCopies)
+            for (std::string& slotName : retainedSlots)
             {
-                std::string slotName = retained.stem().stem().string();
                 const bool alreadyListed =
                     std::any_of(slots.begin(), slots.end(),
                                 [&slotName](const SaveMetadata& listed) { return listed.slotName == slotName; });
@@ -1565,13 +1585,12 @@ namespace Spark
 
                 // Load() refuses the retained copy of a slot whose primary was written by
                 // a newer build; listing that older copy would advertise a rollback.
-                fs::path primary = retained;
-                primary.replace_extension();
-                if (uint32_t newerVersion = 0; IsNewerFormatSaveFile(primary.string(), newerVersion))
+                const std::string primary = GetSavePath(slotName);
+                if (uint32_t newerVersion = 0; IsNewerFormatSaveFile(primary, newerVersion))
                     continue;
 
                 SaveMetadata meta;
-                if (ReadMetadataOnly(retained.string(), meta))
+                if (ReadMetadataOnly(primary + kSaveBackupSuffix, meta))
                 {
                     meta.slotName = std::move(slotName);
                     slots.push_back(std::move(meta));

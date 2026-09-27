@@ -141,6 +141,7 @@
 #include "Engine/RemoteDebug/RemoteDebugSystem.h"
 #include "Engine/Crafting/LootAndCraftingSystem.h"
 #include "Utils/FileWatcher/FileWatcher.h"
+#include "Utils/FileUtils.h"
 #include "Utils/TimerManager.h"
 #include "Utils/InGameConsole.h"
 #include "Engine/Modding/VirtualFileSystem.h"
@@ -168,6 +169,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -281,18 +283,31 @@ namespace Spark::Core::Lifecycle
         int32_t priorityOffset = 0;
         for (const auto& archivePath : archives)
         {
-            auto provider = std::make_unique<Spark::ArchiveResourceProvider>(archivePath.string());
+            // Names are shown and used as mount keys in UTF-8. The reader reopens the
+            // archive through a narrow path, and path::string() throws on Windows for a
+            // name the ANSI code page cannot spell, so such an archive is reported and
+            // skipped instead of aborting engine start-up.
+            const std::string displayName =
+                Spark::FileUtils::TryPathToUtf8(archivePath.filename()).value_or("<unrepresentable name>");
+            const std::optional<std::string> narrowPath = Spark::FileUtils::TryPathToNarrow(archivePath);
+            if (!narrowPath)
+            {
+                console.LogWarning("[SparkPak] Skipped (name has no spelling in the active code page): " + displayName);
+                continue;
+            }
+
+            auto provider = std::make_unique<Spark::ArchiveResourceProvider>(*narrowPath);
             if (provider->IsValid())
             {
-                auto name = archivePath.stem().string();
+                auto name = Spark::FileUtils::TryPathToUtf8(archivePath.stem()).value_or(displayName);
                 vfs.Mount(name, std::move(provider), Spark::ENGINE_PRIORITY + priorityOffset);
-                console.Log("[SparkPak] Mounted: " + archivePath.filename().string() + " (priority " +
+                console.Log("[SparkPak] Mounted: " + displayName + " (priority " +
                             std::to_string(Spark::ENGINE_PRIORITY + priorityOffset) + ")");
                 ++priorityOffset;
             }
             else
             {
-                console.LogWarning("[SparkPak] Failed to open: " + archivePath.filename().string());
+                console.LogWarning("[SparkPak] Failed to open: " + displayName);
             }
         }
     }

@@ -160,6 +160,51 @@ namespace Spark
             return path.string();
         }
 
+        /**
+         * @brief UTF-8 spelling of @p path, never routed through the ANSI code page.
+         *
+         * Use it for every path a directory scan hands to UTF-8 consumers: logs, UI
+         * text, report entries, archive/manifest names, and strings later reopened
+         * through PathFromUtf8(). Returns nullopt only for a Windows name that is not
+         * well-formed UTF-16 (an unpaired surrogate), which has no UTF-8 spelling.
+         */
+        inline std::optional<std::string> TryPathToUtf8(const fs::path& path)
+        {
+            try
+            {
+                const std::u8string utf8 = path.u8string();
+                return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+            }
+            catch (const std::system_error&)
+            {
+                return std::nullopt;
+            }
+        }
+
+        /**
+         * @brief Native narrow spelling of @p path, only when it reopens the same path.
+         *
+         * For scans whose results feed the narrow std::string file APIs (std::fstream,
+         * std::filesystem::path(std::string)), which decode in the active ANSI code page
+         * on Windows. path::string() throws std::system_error for a name that code page
+         * cannot spell, so a scan calling it unguarded dies on the first such entry.
+         * Returns nullopt in that case; the caller skips the entry, because no narrow
+         * spelling could open it. Always succeeds on POSIX, where narrow is native.
+         */
+        inline std::optional<std::string> TryPathToNarrow(const fs::path& path)
+        {
+            try
+            {
+                std::string narrow = path.string();
+                if (fs::path(narrow) == path)
+                    return narrow;
+            }
+            catch (const std::system_error&)
+            {
+            }
+            return std::nullopt;
+        }
+
 #endif // SPARK_HAS_FILESYSTEM
 
         namespace detail
