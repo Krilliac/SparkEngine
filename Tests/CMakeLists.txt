@@ -3085,6 +3085,16 @@ add_test(
 set_tests_properties(MacOSBaseline_MinimumVersionParity PROPERTIES
     LABELS "platform;unit;python"
     TIMEOUT 60)
+# CI-110 / PERF-100: the committed golden baselines (manifest schema, PNG
+# hashes and structure, no orphans, lane kScenes parity) on every host; the
+# GPU lanes SparkOpenGLGoldenTests / VulkanGoldenTests compare pixels on Linux.
+add_test(
+    NAME GoldenImage_ManifestIntegrity
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_golden_manifest.py -v)
+set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
+    LABELS "rendering;golden;unit;python"
+    TIMEOUT 60)
 
 # SEC-110: lock-derived SPDX 2.3 SBOM generation (commit and dependency-lock
 # binding, --check reproducibility) and package-inventory reconciliation
