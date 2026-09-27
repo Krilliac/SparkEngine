@@ -84,7 +84,7 @@ FUZZ_CMAKE = """add_executable(FuzzExampleParser ExampleFuzz.cpp ${CMAKE_SOURCE_
 target_compile_options(FuzzExampleParser PRIVATE -fsanitize=fuzzer,address)
 target_link_options(FuzzExampleParser PRIVATE -fsanitize=fuzzer,address)
 add_test(NAME FuzzExampleParserSmoke
-    COMMAND FuzzExampleParser -max_len=128 -timeout=1 -rss_limit_mb=64
+    COMMAND FuzzExampleParser -max_len=128 -timeout=1 -rss_limit_mb=64 -runs=3
             ${CMAKE_SOURCE_DIR}/FuzzerTests/corpora/example)
 set_tests_properties(FuzzExampleParserSmoke PROPERTIES LABELS "fuzz;security" TIMEOUT 5)
 """
@@ -231,6 +231,7 @@ class PolicyFixture:
                     "max_corpus_bytes": 4096,
                     "smoke_seconds": 5,
                 },
+                "regressions": [],
             }
         ]
         self.write_inventory()
@@ -239,6 +240,24 @@ class PolicyFixture:
     def refresh_digest(self) -> None:
         self.corpus["corpora"][0]["content_digest"] = corpus_digest(self.root, "FuzzerTests/corpora/example")
         self.write_corpus()
+
+    def add_regression(self, name: str = "regression-deep-nesting.json", payload: bytes = b'[[[[[[[[1]]]]]]]]',
+                       *, declare: bool = True, seed: bool = True, **record: str) -> None:
+        """Land one regression fixture the way import_regression.py does, then let a test break one fact."""
+        if seed:
+            (self.root / "FuzzerTests" / "corpora" / "example" / name).write_bytes(payload)
+            count = len(SEEDS) + len(self.corpus["corpora"][0]["regressions"]) + 1
+            self.rewrite_cmake(self.fuzz_cmake.read_text(encoding="utf-8").replace(f"-runs={count - 1}", f"-runs={count}"))
+        if declare:
+            entry = {
+                "file": name,
+                "finding": "Nested arrays past the depth cap recursed without bound.",
+                "found_by": "campaign",
+                "guard_test": "FuzzExampleParserSmoke",
+            }
+            entry.update(record)
+            self.corpus["corpora"][0]["regressions"].append(entry)
+        self.refresh_digest()
 
 
 class FixtureTestCase(unittest.TestCase):
@@ -1293,6 +1312,96 @@ class TestCorpusBinding(FixtureTestCase):
 # =========================================================================
 # Gate behaviour
 # =========================================================================
+class TestRegressionFixtures(FixtureTestCase):
+    """SEC-120: every found issue lands with a declared, guarded, replayed fixture."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.fixture.make_fuzzed()
+
+    def test_declared_regression_with_a_registered_guard_passes(self) -> None:
+        self.fixture.add_regression()
+        (corpus,) = self.fixture.load_corpora()
+        self.assertEqual(corpus.seed_count, len(SEEDS) + 1)
+        self.assertEqual([record.file for record in corpus.regressions], ["regression-deep-nesting.json"])
+
+    def test_guard_may_be_a_sparktests_case(self) -> None:
+        (self.root / "Tests").mkdir()
+        (self.root / "Tests" / "TestExample.cpp").write_text(
+            "TEST(ExampleParser_RejectsDeepNesting)\n{\n}\n", encoding="utf-8"
+        )
+        self.fixture.add_regression(guard_test="ExampleParser_RejectsDeepNesting")
+        self.assertEqual(len(self.fixture.load_corpora()), 1)
+
+    def test_undeclared_regression_fixture_is_rejected(self) -> None:
+        self.fixture.add_regression(declare=False)
+        with self.assertPolicyError("undeclared regression fixtures"):
+            self.fixture.load_corpora()
+
+    def test_declared_fixture_that_is_not_a_seed_is_rejected(self) -> None:
+        self.fixture.add_regression(seed=False)
+        with self.assertPolicyError("names fixtures that are not corpus seeds"):
+            self.fixture.load_corpora()
+
+    def test_unresolvable_guard_test_is_rejected(self) -> None:
+        self.fixture.add_regression(guard_test="NoSuchGuardTest")
+        with self.assertPolicyError("neither a registered CTest nor a Tests/ TEST case"):
+            self.fixture.load_corpora()
+
+    def test_vendored_registration_is_not_a_guard(self) -> None:
+        vendored = self.root / "ThirdParty" / "lib"
+        vendored.mkdir(parents=True)
+        (vendored / "CMakeLists.txt").write_text("add_test(NAME VendoredGuard COMMAND x)\n", encoding="utf-8")
+        self.fixture.add_regression(guard_test="VendoredGuard")
+        with self.assertPolicyError("neither a registered CTest"):
+            self.fixture.load_corpora()
+
+    def test_import_placeholders_are_rejected(self) -> None:
+        for key in ("finding", "guard_test"):
+            with self.subTest(key=key):
+                self.fixture.corpus["corpora"][0]["regressions"] = []
+                for seed in (self.root / "FuzzerTests" / "corpora" / "example").glob("regression-*"):
+                    seed.unlink()
+                self.fixture.rewrite_cmake(FUZZ_CMAKE)
+                self.fixture.add_regression(**{key: "TODO"})
+                with self.assertPolicyError("import placeholder"):
+                    self.fixture.load_corpora()
+
+    def test_digest_must_cover_the_new_fixture(self) -> None:
+        self.fixture.add_regression()
+        (self.root / "FuzzerTests" / "corpora" / "example" / "regression-deep-nesting.json").write_bytes(b"[[2]]")
+        with self.assertPolicyError("corpus content changed"):
+            self.fixture.load_corpora()
+
+    def test_smoke_replay_must_cover_the_new_fixture(self) -> None:
+        self.fixture.add_regression()
+        self.fixture.rewrite_cmake(FUZZ_CMAKE)
+        with self.assertPolicyError("must pass exactly -runs=4"):
+            self.fixture.load_corpora()
+
+    def test_record_fields_are_strict(self) -> None:
+        cases = (
+            ({"found_by": "luck"}, "found_by must be one of"),
+            ({"fixed_commit": "abc123"}, "fixed_commit does not match"),
+            ({"finding": "line one\nline two"}, "must be one line"),
+            ({"unexpected": "x"}, "unknown keys: unexpected"),
+        )
+        for overrides, pattern in cases:
+            with self.subTest(overrides=overrides):
+                self.fixture.corpus["corpora"][0]["regressions"] = []
+                for seed in (self.root / "FuzzerTests" / "corpora" / "example").glob("regression-*"):
+                    seed.unlink()
+                self.fixture.rewrite_cmake(FUZZ_CMAKE)
+                self.fixture.add_regression(**overrides)
+                with self.assertPolicyError(pattern):
+                    self.fixture.load_corpora()
+
+    def test_fixture_names_must_carry_the_regression_prefix(self) -> None:
+        self.fixture.add_regression(name="deep-nesting.json")
+        with self.assertPolicyError(r"\.file does not match"):
+            self.fixture.load_corpora()
+
+
 class TestGateBehavior(FixtureTestCase):
     def test_blockers_make_the_gate_report_not_passed(self) -> None:
         report = check_fuzz_policy.build_check_report(
@@ -1798,6 +1907,14 @@ class TestRepositoryIntegration(unittest.TestCase):
     def test_ctest_entries_run_from_the_source_root(self) -> None:
         module = (REPO_ROOT / "cmake" / "SparkFuzzPolicy.cmake").read_text(encoding="utf-8")
         self.assertEqual(module.count('WORKING_DIRECTORY "${source_root}"'), 3)
+
+    def test_every_committed_regression_fixture_is_declared_and_guarded(self) -> None:
+        fixtures = sorted(path.name for path in (REPO_ROOT / "FuzzerTests" / "corpora").rglob("regression-*"))
+        self.assertGreaterEqual(len(fixtures), 5)
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        corpora = corpus_manifest.load_corpora(REPO_ROOT, inventory)
+        declared = sorted(record.file for corpus in corpora for record in corpus.regressions)
+        self.assertEqual(declared, fixtures)
 
     def test_committed_paths_use_canonical_case(self) -> None:
         # A pathspec is laundered to the caller's case by git on a

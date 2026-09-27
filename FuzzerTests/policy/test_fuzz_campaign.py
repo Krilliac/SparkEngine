@@ -30,7 +30,11 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "fuzz-policy"))
 
+import corpus_manifest  # noqa: E402
+import import_regression  # noqa: E402
+import policy_common  # noqa: E402
 import run_campaign  # noqa: E402
+from test_fuzz_policy import SEEDS, PolicyFixture, corpus_digest  # noqa: E402
 
 FAKE_FUZZER = textwrap.dedent(
     """\
@@ -145,6 +149,26 @@ class ParseCtestTests(unittest.TestCase):
             with self.subTest(finding):
                 self.assertEqual(run_campaign.exit_status([result("setup-error"), result(finding)]), 1)
 
+    def test_unimported_findings_are_reproducers_no_regression_seed_holds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / "corpus"
+            corpus.mkdir()
+            (corpus / "regression-known.bin").write_bytes(b"known")
+            # A plain seed with the same bytes is not a declared regression fixture.
+            (corpus / "seed-new").write_bytes(b"fresh")
+            result = run_campaign.TargetResult(name="FuzzThingSmoke", binary="b", corpus=str(corpus))
+            result.artifacts = [
+                {"raw": "t/artifacts/crash-1", "raw_sha256": hashlib.sha256(b"raw").hexdigest(),
+                 "minimized": "t/minimized/crash-1.min", "minimized_sha256": hashlib.sha256(b"known").hexdigest()},
+                {"raw": "t/artifacts/crash-2", "raw_sha256": hashlib.sha256(b"fresh").hexdigest(), "minimized": None},
+            ]
+            pending = run_campaign.unimported_findings([result])
+        self.assertEqual(
+            pending,
+            [{"target": "FuzzThingSmoke", "reproducer": "t/artifacts/crash-2", "minimized": False,
+              "sha256": hashlib.sha256(b"fresh").hexdigest()}],
+        )
+
     def test_stats_fall_back_to_progress_lines(self) -> None:
         self.assertEqual(run_campaign.parse_run_stats("#2\tINITED\n#900\tpulse\n"), {"number_executed_units": 900})
         stats = run_campaign.parse_run_stats("stat::number_executed_units: 5\nstat::peak_rss_mb: 31\n")
@@ -256,6 +280,8 @@ class CampaignEndToEnd(unittest.TestCase):
         self.assertEqual(artifact["minimized_bytes"], 1)
         self.assertTrue((self.output / artifact["minimize_log"]).is_file())
         self.assertTrue((self.output / target["log"]).is_file())
+        (pending,) = summary["unimported_findings"]
+        self.assertEqual((pending["reproducer"], pending["minimized"]), (artifact["minimized"], True))
         minimize_argv = self._argv()[1]
         self.assertIn("-minimize_crash=1", minimize_argv)
         self.assertIn("-timeout=1", minimize_argv)
@@ -395,6 +421,118 @@ class CampaignEndToEnd(unittest.TestCase):
                 code, _ = self._run("clean")
                 self.assertEqual(code, 2)
                 self.assertFalse(self.output.exists())
+
+
+class ImportRegressionRoundTrip(unittest.TestCase):
+    """import_regression.py lands a campaign reproducer that the policy then holds to account."""
+
+    REPRODUCER = b'[[[[[[[[[[1]]]]]]]]]]'
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="fuzz-import-test-")
+        self.root = Path(self._tmp.name) / "repo"
+        self.root.mkdir()
+        self.fixture = PolicyFixture(self.root)
+        self.fixture.make_fuzzed()
+        self.output = Path(self._tmp.name) / "campaign"
+        (self.output / "FuzzExampleParserSmoke" / "minimized").mkdir(parents=True)
+        (self.output / "FuzzExampleParserSmoke" / "artifacts").mkdir()
+        self.raw = self.output / "FuzzExampleParserSmoke" / "artifacts" / "crash-1"
+        self.raw.write_bytes(self.REPRODUCER + b"   padding")
+        self.minimized = self.output / "FuzzExampleParserSmoke" / "minimized" / "crash-1.min"
+        self.minimized.write_bytes(self.REPRODUCER)
+        self.summary = self.output / "campaign-summary.json"
+        self.write_summary("FuzzExampleParserSmoke")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def write_summary(self, target_name: str) -> None:
+        artifact = {
+            "raw": self.raw.relative_to(self.output).as_posix(),
+            "raw_sha256": hashlib.sha256(self.raw.read_bytes()).hexdigest(),
+            "minimized": self.minimized.relative_to(self.output).as_posix(),
+            "minimized_sha256": hashlib.sha256(self.minimized.read_bytes()).hexdigest(),
+        }
+        self.summary.write_text(
+            json.dumps({"schema_version": 1, "targets": [{"name": target_name, "artifacts": [artifact]}]}),
+            encoding="utf-8",
+        )
+
+    def run_import(self, reproducer: Path | None = None) -> Path:
+        return import_regression.import_regression(
+            self.root, self.summary, reproducer or self.minimized, parser_id="example-parser", slug="deep-nesting"
+        )
+
+    def manifest(self) -> dict:
+        return json.loads((self.root / "tools" / "fuzz-policy" / "corpus-manifest.json").read_text(encoding="utf-8"))
+
+    def test_import_updates_seed_digest_budget_and_replay_count_consistently(self) -> None:
+        destination = self.run_import()
+        self.assertEqual(destination.name, "regression-deep-nesting.json")
+        self.assertEqual(destination.read_bytes(), self.REPRODUCER)
+        corpus = self.manifest()["corpora"][0]
+        self.assertEqual(corpus["content_digest"], corpus_digest(self.root, "FuzzerTests/corpora/example"))
+        self.assertEqual(corpus["regressions"], [{"file": "regression-deep-nesting.json", "finding": "TODO",
+                                                  "found_by": "campaign", "guard_test": "TODO"}])
+        self.assertIn(f"-runs={len(SEEDS) + 1}", self.fixture.fuzz_cmake.read_text(encoding="utf-8"))
+
+        # The import cannot land half-done: the placeholders fail the gate...
+        with self.assertRaisesRegex(policy_common.PolicyError, "import placeholder"):
+            self.fixture.load_corpora()
+        # ...and recording the finding and its guard test is all that remains.
+        document = self.manifest()
+        document["corpora"][0]["regressions"][0].update(
+            finding="Ten nested arrays exhausted the parser stack.", guard_test="FuzzExampleParserSmoke"
+        )
+        self.fixture.write_corpus(json.dumps(document))
+        (corpus_record,) = self.fixture.load_corpora()
+        self.assertEqual(corpus_record.seed_count, len(SEEDS) + 1)
+
+    def test_budget_grows_when_the_corpus_is_full(self) -> None:
+        self.fixture.corpus["corpora"][0]["budget"]["max_corpus_entries"] = len(SEEDS)
+        self.fixture.write_corpus()
+        self.run_import()
+        self.assertEqual(self.manifest()["corpora"][0]["budget"]["max_corpus_entries"], len(SEEDS) + 1)
+
+    def test_raw_reproducer_is_refused_when_a_minimized_one_exists(self) -> None:
+        with self.assertRaisesRegex(policy_common.PolicyError, "import the minimized reproducer"):
+            self.run_import(self.raw)
+
+    def test_reproducer_outside_the_campaign_is_refused(self) -> None:
+        stray = Path(self._tmp.name) / "stray.json"
+        stray.write_bytes(self.REPRODUCER)
+        with self.assertRaisesRegex(policy_common.PolicyError, "is not a reproducer recorded in"):
+            self.run_import(stray)
+
+    def test_reproducer_changed_since_the_campaign_is_refused(self) -> None:
+        self.minimized.write_bytes(b"[1]")
+        with self.assertRaisesRegex(policy_common.PolicyError, "no longer matches the sha256"):
+            self.run_import()
+
+    def test_reproducer_from_another_target_is_refused(self) -> None:
+        self.write_summary("FuzzOtherParserSmoke")
+        with self.assertRaisesRegex(policy_common.PolicyError, "not this parser's smoke"):
+            self.run_import()
+
+    def test_nothing_is_written_when_the_replay_count_is_out_of_sync(self) -> None:
+        self.fixture.rewrite_cmake(self.fixture.fuzz_cmake.read_text(encoding="utf-8").replace("-runs=3", "-runs=9"))
+        manifest_before = self.manifest()
+        with self.assertRaisesRegex(policy_common.PolicyError, "expected exactly -runs=3"):
+            self.run_import()
+        self.assertFalse((self.root / "FuzzerTests" / "corpora" / "example" / "regression-deep-nesting.json").exists())
+        self.assertEqual(self.manifest(), manifest_before)
+
+    def test_manifest_digest_matches_the_policy_scanner(self) -> None:
+        self.run_import()
+        corpus = self.manifest()["corpora"][0]
+        budget = corpus_manifest.ResourceBudget(**corpus["budget"])
+        deadline = policy_common.Deadline(30, "test")
+        _, _, digest, seeds = corpus_manifest.scan_corpus(
+            policy_common.canonical_root(self.root), corpus["corpus_dir"], budget, "test", deadline
+        )
+        self.assertEqual(digest, corpus["content_digest"])
+        self.assertIn("regression-deep-nesting.json", seeds)
 
 
 if __name__ == "__main__":

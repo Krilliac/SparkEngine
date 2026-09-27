@@ -321,7 +321,14 @@ def build_check_report(
         },
         "corpus": {
             key: corpus[key]
-            for key in ("corpus_count", "seed_count", "seed_bytes", "bound_target_count", "max_staleness_days")
+            for key in (
+                "corpus_count",
+                "seed_count",
+                "seed_bytes",
+                "regression_count",
+                "bound_target_count",
+                "max_staleness_days",
+            )
         },
         "closure_blockers": blockers,
     }

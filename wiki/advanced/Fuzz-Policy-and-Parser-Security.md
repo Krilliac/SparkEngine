@@ -260,7 +260,8 @@ the campaign when its smoke is registered. For each target it:
 - rewrites `campaign-summary.json` after every target (`complete` stays `false` until
   the last one finishes, so a cancelled job still uploads partial results) with
   per-target status, duration, executed units, crash-free wall time, peak RSS, new
-  units and artifact SHA-256s.
+  units and artifact SHA-256s, plus `unimported_findings`: every reproducer whose bytes
+  no committed `regression-*` seed of that target's corpus holds yet.
 
 It exits 1 on any finding (crash, hang, abnormal exit, UBSan report or corpus change).
 Without a finding it exits 2 when the campaign could not be set up (bad arguments, no
@@ -269,14 +270,49 @@ targets, a budget above `--max-campaign-seconds`) or when a target could not run
 The workflow passes `--max-campaign-seconds 6000`, so `seconds_per_target` times the
 discovered target count must fit 100 of the job's 180 minutes.
 The workflow uploads the whole output directory as `fuzz-campaign-<run id>` for 90
-days. To land a finding, reproduce with the minimized file, fix the parser, and commit
-that file as a `regression-*` seed with an updated `corpus-manifest.json` digest.
+days. To land a finding, reproduce with the minimized file, fix the parser, and import
+the reproducer with `tools/fuzz-policy/import_regression.py`, which copies it into the
+parser's corpus as `regression-<slug>.<ext>`, refreshes `content_digest` and
+`last_verified`, grows `max_corpus_entries`/`max_corpus_bytes` when needed, and raises
+the smoke's `-runs=N`. It refuses a raw reproducer when a minimized one exists, a file
+the campaign did not record, bytes that no longer match the recorded SHA-256, and a
+reproducer found by another target.
 
 ```bash
 python3 tools/fuzz-policy/run_campaign.py --build-dir build/fuzz-policy \
   --output /tmp/fuzz-campaign --seconds 30
 git status --porcelain -- FuzzerTests/corpora   # must print nothing
+python3 tools/fuzz-policy/import_regression.py /tmp/fuzz-campaign/campaign-summary.json \
+  /tmp/fuzz-campaign/<target>/minimized/<crash>.min --parser sparkpak-reader --slug <name>
 ```
+
+### Regression fixtures
+
+Every found issue lands with a minimized regression fixture, and the policy enforces
+it. Each `corpus-manifest.json` entry carries a `regressions` array of
+`{file, finding, found_by, guard_test, fixed_commit?}` records:
+
+- every `regression-*` seed in the corpus is declared, and every declared `file` is a
+  seed, so a fixture can be neither dropped silently nor landed undocumented;
+- `finding` is one line describing the defect, and `found_by` is `campaign`, `smoke`,
+  `review` or `report`;
+- `guard_test` names the test that fails without the fix: a CTest registered in a
+  first-party CMake listfile (the fuzz smoke itself qualifies when only the sanitizer
+  replay catches the bug) or a `TEST(...)` case under `Tests/`. Vendored and build trees
+  do not count;
+- `fixed_commit`, when present, is the full commit SHA of the fix;
+- the import tool writes `finding` and `guard_test` as the placeholder `TODO`, which the
+  policy rejects, so an import cannot land half-done;
+- the smoke's `-runs=N` must equal the corpus seed count, so the blocking replay covers
+  every fixture, and `content_digest` covers its bytes.
+
+The five fixtures that predate the rule are backfilled: the SparkPak campaign findings
+(`regression-deflate-empty-output.spk` guarded by `FuzzArchiveSmoke`, and
+`regression-toc-ratio-bomb.spk` by
+`SparkPak_ProductionRejectsTocHeaderThatOverstatesDeflateOutput`) and the three `.stex`
+review findings guarded by `SecurityParsers_StexMipSizeNotMatchingDimensionsRejected` and
+`SecurityParsers_StexHeaderCountsDoNotSizeAllocations`. The check report's
+`corpus.regression_count` records how many are declared.
 
 A workflow file proves nothing until a hosted run is recorded; no scheduled-campaign
 history exists yet, so `runtime_evidence.scheduled_campaign` stays `false`.
@@ -298,7 +334,8 @@ history exists yet, so `runtime_evidence.scheduled_campaign` stays `false`.
    within every declared limit, and pinned by `content_digest`.
 5. Bind the exact input, timeout, memory, depth, and smoke limits in the harness and the
    CMake registration, then run the commands above under ASan/UBSan.
-6. Persist each minimized crash input as a regression and regenerate the snapshot.
+6. Persist each minimized crash input as a declared regression fixture (see
+   [Regression fixtures](#regression-fixtures)) and regenerate the snapshot.
 
 Do not change a parser to `fuzzed` based on an upstream library campaign or a unit test
 that bypasses the production entry point. Adding an exclusion ticket requires editing

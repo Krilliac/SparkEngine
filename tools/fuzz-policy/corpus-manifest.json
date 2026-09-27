@@ -15,7 +15,8 @@
         "max_corpus_entries": 8,
         "max_corpus_bytes": 4096,
         "smoke_seconds": 10
-      }
+      },
+      "regressions": []
     },
     {
       "id": "neural-weights-nnw-corpus",
@@ -31,7 +32,8 @@
         "max_corpus_entries": 8,
         "max_corpus_bytes": 4096,
         "smoke_seconds": 10
-      }
+      },
+      "regressions": []
     },
     {
       "id": "crash-manifest-corpus",
@@ -47,7 +49,8 @@
         "max_corpus_entries": 8,
         "max_corpus_bytes": 4096,
         "smoke_seconds": 10
-      }
+      },
+      "regressions": []
     },
     {
       "id": "texture-stex-corpus",
@@ -63,7 +66,30 @@
         "max_corpus_entries": 8,
         "max_corpus_bytes": 4096,
         "smoke_seconds": 10
-      }
+      },
+      "regressions": [
+        {
+          "file": "regression-mip-size-mismatch.stex",
+          "finding": "A mip smaller than its dimensions require was accepted, so consumers read past the buffer.",
+          "found_by": "review",
+          "guard_test": "SecurityParsers_StexMipSizeNotMatchingDimensionsRejected",
+          "fixed_commit": "e5f857c210a667435f4d3c81859fb05de400a442"
+        },
+        {
+          "file": "regression-miplevels-bomb.stex",
+          "finding": "mipLevels=0xFFFFFFFF sized a 16 GiB mip-size table allocation from a 21-byte file.",
+          "found_by": "review",
+          "guard_test": "SecurityParsers_StexHeaderCountsDoNotSizeAllocations",
+          "fixed_commit": "e5f857c210a667435f4d3c81859fb05de400a442"
+        },
+        {
+          "file": "regression-mipsize-bomb.stex",
+          "finding": "One mip declaring 0xFFFFFFF0 bytes allocated about 4 GiB before the short file was detected.",
+          "found_by": "review",
+          "guard_test": "SecurityParsers_StexHeaderCountsDoNotSizeAllocations",
+          "fixed_commit": "e5f857c210a667435f4d3c81859fb05de400a442"
+        }
+      ]
     },
     {
       "id": "scene-manifest-corpus",
@@ -79,7 +105,8 @@
         "max_corpus_entries": 8,
         "max_corpus_bytes": 32768,
         "smoke_seconds": 10
-      }
+      },
+      "regressions": []
     },
     {
       "id": "sparkpak-reader-corpus",
@@ -95,7 +122,23 @@
         "max_corpus_entries": 11,
         "max_corpus_bytes": 32768,
         "smoke_seconds": 10
-      }
+      },
+      "regressions": [
+        {
+          "file": "regression-deflate-empty-output.spk",
+          "finding": "A deflate entry declaring zero output bytes made ReadFile hand miniz a null destination (UBSan).",
+          "found_by": "campaign",
+          "guard_test": "FuzzArchiveSmoke",
+          "fixed_commit": "721cc1935a289f03f25f874a5fd66195e8c0fd2d"
+        },
+        {
+          "file": "regression-toc-ratio-bomb.spk",
+          "finding": "ReadTOC allocated the header's tocRawSize (up to 256 MB) from a TOC stream of any size.",
+          "found_by": "campaign",
+          "guard_test": "SparkPak_ProductionRejectsTocHeaderThatOverstatesDeflateOutput",
+          "fixed_commit": "721cc1935a289f03f25f874a5fd66195e8c0fd2d"
+        }
+      ]
     }
   ]
 }

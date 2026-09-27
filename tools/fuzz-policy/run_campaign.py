@@ -29,7 +29,9 @@ For each target the runner:
 * runs ``-minimize_crash=1`` on every crash/leak/timeout/OOM artifact and
   retains both the raw and minimized reproducer for upload;
 * re-hashes the committed seed and generated corpora afterwards and treats any
-  change as a finding.
+  change as a finding;
+* lists every reproducer that no committed ``regression-*`` seed holds yet
+  under ``unimported_findings``, each owed a fixture via import_regression.py.
 
 ``campaign-summary.json`` is rewritten after every target (``complete`` is
 false until the last one finishes), so a job cancelled mid-campaign still
@@ -485,6 +487,29 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def unimported_findings(results: list[TargetResult]) -> list[dict[str, Any]]:
+    """Reproducers no ``regression-*`` seed of their target's committed corpus holds yet.
+
+    Each one still owes a minimized regression fixture and a guard test; land
+    it with tools/fuzz-policy/import_regression.py.
+    """
+    pending: list[dict[str, Any]] = []
+    for result in results:
+        corpus = Path(result.corpus)
+        committed = {
+            hashlib.sha256(seed.read_bytes()).hexdigest()
+            for seed in (corpus.iterdir() if corpus.is_dir() else ())
+            if seed.is_file() and seed.name.startswith("regression-")
+        }
+        for artifact in result.artifacts:
+            role = "minimized" if artifact.get("minimized") else "raw"
+            digest = artifact.get(f"{role}_sha256")
+            if digest not in committed:
+                pending.append({"target": result.name, "reproducer": artifact[role], "minimized": role == "minimized",
+                                "sha256": digest})
+    return pending
+
+
 def write_summary(output: Path, args: argparse.Namespace, started_at: datetime, results: list[TargetResult],
                   target_count: int) -> None:
     """Atomically (re)write campaign-summary.json with the targets run so far."""
@@ -499,6 +524,7 @@ def write_summary(output: Path, args: argparse.Namespace, started_at: datetime, 
         "complete": len(results) == target_count,
         "passed": len(results) == target_count and all(r.status == "clean" for r in results),
         "targets": [r.as_json() for r in results],
+        "unimported_findings": unimported_findings(results),
     }
     staging = output / "campaign-summary.json.tmp"
     staging.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
