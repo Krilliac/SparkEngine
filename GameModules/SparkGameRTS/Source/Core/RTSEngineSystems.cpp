@@ -5,9 +5,6 @@
 
 #include "RTSEngineSystems.h"
 #include "RTSPersistence.h"
-#include "Engine/AI/AISystem.h"
-#include "Engine/AI/BehaviorTree.h"
-#include "Engine/AI/NavMesh.h"
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
 #include "Graphics/WeatherSystem.h"
@@ -40,7 +37,8 @@ namespace RTS
         console.LogInfo("[RTS] Initializing engine system integrations...");
         SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems initializing");
 
-        SetupAI();
+        // The Swarm opponent is decided inside the fixed-step skirmish tick (RTSSkirmishSimulation), so no engine
+        // behavior tree is registered: no RTS entity carries an AIComponent that could run one.
         SetupEvents();
         SetupAudio();
         SetupWeather();
@@ -48,8 +46,8 @@ namespace RTS
         SetupSaveSystem();
         SetupCoroutines();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems initialized (7 subsystems wired)");
-        console.LogInfo("[RTS] Engine system integrations initialized (7 subsystems wired)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems initialized (6 subsystems wired)");
+        console.LogInfo("[RTS] Engine system integrations initialized (6 subsystems wired)");
         return true;
     }
 
@@ -83,92 +81,6 @@ namespace RTS
         m_systems = {};
         m_simulation = nullptr;
         console.LogInfo("[RTS] Engine system integrations shut down");
-    }
-
-    // =========================================================================
-    // AI / BehaviorTree / NavMesh
-    // =========================================================================
-
-    void RTSEngineSystems::SetupAI()
-    {
-        auto* ai = m_context->GetAI();
-        if (!ai)
-            return;
-
-        // --- Behavior trees for RTS unit archetypes ---
-
-        // Worker: gather resources -> return to base -> build if ordered
-        Spark::AI::AIAgentConfig workerConfig;
-        workerConfig.moveSpeed = 3.5f;
-        workerConfig.detectionRange = 10.0f;
-        workerConfig.attackRange = 0.0f; // Workers don't fight
-        workerConfig.canUseCover = false;
-        workerConfig.canSprint = false;
-
-        auto workerTree = std::make_unique<Spark::AI::BehaviorTree>("rts_worker");
-        auto workerRoot = std::make_unique<Spark::AI::SelectorNode>("WorkerRoot");
-        workerRoot->AddChild(
-            std::make_unique<Spark::AI::ActionNode>("Gather",
-                                                    [](float, Spark::AI::Blackboard& bb) -> Spark::AI::NodeStatus
-                                                    {
-                                                        bool hasResource = bb.Get<bool>("hasResource", false);
-                                                        if (!hasResource)
-                                                        {
-                                                            bb.Set("gathering", true);
-                                                            return Spark::AI::NodeStatus::Running;
-                                                        }
-                                                        return Spark::AI::NodeStatus::Success;
-                                                    }));
-        workerRoot->AddChild(
-            std::make_unique<Spark::AI::ActionNode>("ReturnToBase",
-                                                    [](float, Spark::AI::Blackboard& bb) -> Spark::AI::NodeStatus
-                                                    {
-                                                        bool hasResource = bb.Get<bool>("hasResource", false);
-                                                        if (hasResource)
-                                                        {
-                                                            bb.Set("returning", true);
-                                                            return Spark::AI::NodeStatus::Running;
-                                                        }
-                                                        return Spark::AI::NodeStatus::Success;
-                                                    }));
-        workerRoot->AddChild(std::make_unique<Spark::AI::ActionNode>(
-            "Build",
-            [](float, Spark::AI::Blackboard& bb) -> Spark::AI::NodeStatus
-            {
-                bool buildOrdered = bb.Get<bool>("buildOrdered", false);
-                return buildOrdered ? Spark::AI::NodeStatus::Running : Spark::AI::NodeStatus::Failure;
-            }));
-        workerTree->SetRoot(std::move(workerRoot));
-        ai->RegisterBehavior("rts_worker", std::move(workerTree));
-
-        // Soldier: patrol -> engage -> retreat if low health
-        Spark::AI::AIAgentConfig soldierConfig;
-        soldierConfig.moveSpeed = 5.0f;
-        soldierConfig.detectionRange = 25.0f;
-        soldierConfig.attackRange = 12.0f;
-        soldierConfig.accuracy = 0.6f;
-
-        auto soldierTree = Spark::AI::FPSBehaviors::CreateCombatBehavior(soldierConfig);
-        ai->RegisterBehavior("rts_soldier", std::move(soldierTree));
-
-        // Scout: explore fog, flee on contact
-        auto scoutTree = Spark::AI::FPSBehaviors::CreateFleeBehavior(40.0f);
-        ai->RegisterBehavior("rts_scout", std::move(scoutTree));
-
-        // --- NavMesh configuration for RTS maps ---
-        auto& navMgr = Spark::AI::NavMeshManager::GetInstance();
-        // RTS maps use larger walkable areas with wider agent radius for group movement
-        Spark::AI::NavMeshBuildSettings rtsSettings;
-        rtsSettings.cellSize = 0.5f;    // Coarser for large RTS maps
-        rtsSettings.agentRadius = 0.8f; // Wider for unit formations
-        rtsSettings.agentHeight = 2.0f;
-        rtsSettings.agentMaxClimb = 0.5f; // Flatter terrain in RTS
-        // NavMesh will be built at map load from terrain geometry
-        (void)navMgr;
-        (void)rtsSettings;
-
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS AI: 3 behavior trees registered");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] AI: 3 behavior trees registered (worker, soldier, scout)");
     }
 
     // =========================================================================

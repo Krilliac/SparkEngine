@@ -14,6 +14,7 @@
 
 #include "../GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.h"
 #include "../GameModules/SparkGameRTS/Source/Core/RTSPersistence.h"
 #include "../GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.h"
@@ -21,6 +22,7 @@
 #include "../GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.h"
 #include "../GameModules/SparkGameRTS/Source/Unit/RTSUnitSystem.h"
+#include "Engine/AI/AISystem.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -698,6 +700,56 @@ TEST(RTSSkirmish_PathfindingPreservesPerTickDeterminism)
             }
         }
     }
+}
+
+// =============================================================================
+// Engine AI bridge
+// =============================================================================
+
+namespace
+{
+    /// Engine context exposing only a real AISystem, so the module bridge sees an AI service it could register into.
+    class RTSAIContext final : public Spark::IEngineContext
+    {
+      public:
+        explicit RTSAIContext(Spark::AI::AISystem* ai) : m_ai(ai) {}
+
+        GraphicsEngine* GetGraphics() override { return nullptr; }
+        const GraphicsEngine* GetGraphics() const override { return nullptr; }
+        InputManager* GetInput() override { return nullptr; }
+        const InputManager* GetInput() const override { return nullptr; }
+        Timer* GetTimer() override { return nullptr; }
+        const Timer* GetTimer() const override { return nullptr; }
+        Spark::EventBus* GetEventBus() override { return nullptr; }
+        const Spark::EventBus* GetEventBus() const override { return nullptr; }
+        ::AudioEngine* GetAudio() override { return nullptr; }
+        const ::AudioEngine* GetAudio() const override { return nullptr; }
+        PhysicsSystem* GetPhysics() override { return nullptr; }
+        const PhysicsSystem* GetPhysics() const override { return nullptr; }
+        Spark::AI::AISystem* GetAI() override { return m_ai; }
+        const Spark::AI::AISystem* GetAI() const override { return m_ai; }
+        uint32_t GetEngineVersion() const override { return 0; }
+        uint32_t GetSDKVersion() const override { return 0; }
+
+      private:
+        Spark::AI::AISystem* m_ai = nullptr;
+    };
+} // namespace
+
+// The Swarm opponent decides inside the fixed-step tick and no RTS entity carries an AIComponent, so the module's
+// engine bridge must not leave behavior-tree templates in the engine AISystem that nothing would ever instantiate.
+TEST(RTSSkirmish_EngineBridgeRegistersNoUnattachedBehaviorTrees)
+{
+    Spark::AI::AISystem ai;
+    RTSAIContext context(&ai);
+    RTSEngineSystems bridge;
+    ASSERT_TRUE(bridge.Initialize(&context));
+
+    for (const char* archetype : {"rts_worker", "rts_soldier", "rts_scout"})
+    {
+        EXPECT_TRUE(ai.CreateBehaviorInstance(archetype) == nullptr);
+    }
+    bridge.Shutdown();
 }
 
 #endif // SPARK_TEST_HAS_IMGUI

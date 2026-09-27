@@ -1,6 +1,6 @@
 /**
  * @file RTSEngineSystems.h
- * @brief Wires SparkEngine subsystems (AI, events, audio, weather, destruction,
+ * @brief Wires SparkEngine subsystems (events, audio, weather, destruction,
  *        save, coroutines) into the RTS game module
  * @author Spark Engine Team
  * @date 2026
@@ -8,6 +8,11 @@
  * RTSEngineSystems owns the configuration and subscription state for every
  * engine service the RTS module consumes. It is created, updated, and
  * destroyed by SparkGameRTSModule alongside the six gameplay subsystems.
+ * It registers no engine behavior trees: the RTS opponent is decided inside
+ * the fixed-step skirmish tick, and no RTS entity carries an AIComponent.
+ *
+ * Thread affinity: game thread only. Lifetime: owned by SparkGameRTSModule,
+ * Initialize() on module load and Shutdown() on unload.
  */
 
 #pragma once
@@ -23,7 +28,7 @@ namespace RTS
     /**
      * @brief Bridges SparkEngine services into the RTS module
      *
-     * Registers AI behavior trees, event subscriptions, music tracks,
+     * Registers event subscriptions, music tracks,
      * weather effects, destruction patterns, save-state serializers,
      * and coroutine-based timers for RTS gameplay.
      */
@@ -82,7 +87,6 @@ namespace RTS
         bool HasMatchState() const;
 
         // Setup helpers called from Initialize()
-        void SetupAI();
         void SetupEvents();
         void SetupAudio();
         void SetupWeather();
