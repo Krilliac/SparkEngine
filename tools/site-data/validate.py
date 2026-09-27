@@ -658,6 +658,9 @@ def adapter_name_production_errors(repo_root: Path, source_paths: Iterable[str] 
                     f"{relative}:{number}: adapter reports {match.group(1)!r}; no adapter in this repository "
                     "is production (docs/specs/online-services.md section 6)"
                 )
+    return errors
+
+
 # INST-130: the nightly also publishes SparkInstaller-Linux-x64 and
 # SparkInstaller-macOS-arm64 (release.yml build-installer). Those installers are
 # experimental and owned by their platform capability and PLT-* work, never by
