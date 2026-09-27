@@ -68,6 +68,7 @@ REQUIRED_CI_JOBS = (
     "aggregate-test-stats",
     "module-evidence",
     "network-security",
+    "golden-linux",
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
 MINGW_WINE_JOB = "build-linux-mingw-wine"
@@ -1964,6 +1965,105 @@ def experimental_module_lifecycle_errors(workflows: dict[str, dict], tests_cmake
     return errors
 
 
+GOLDEN_LINUX_JOB = "golden-linux"
+GOLDEN_LINUX_TESTS = {"SparkOpenGLGoldenTests": "opengl-golden", "VulkanGoldenTests": "vulkan-golden"}
+GOLDEN_LINUX_LABEL_SELECTOR = "-L '^(opengl-golden|vulkan-golden)$'"
+GOLDEN_LINUX_EXCLUDE = "--exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'"
+GOLDEN_MANIFEST = REPO_ROOT / "Tests" / "GoldenImages" / "manifest.json"
+
+
+def golden_linux_errors(document: dict, tests_cmake: str, manifest: dict) -> list[str]:
+    """CI-110: exactly one required, Mesa-pinned lane compares the Linux golden baselines."""
+
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    errors: list[str] = []
+    lane = jobs.get(GOLDEN_LINUX_JOB)
+    if not isinstance(lane, dict):
+        errors.append(f"{GOLDEN_LINUX_JOB} job is missing")
+    else:
+        if lane.get("runs-on") != "ubuntu-24.04":
+            errors.append(f"{GOLDEN_LINUX_JOB} does not run on ubuntu-24.04, the row the baselines were reviewed on")
+        for field in ("if", "continue-on-error", "strategy"):
+            if field in lane:
+                errors.append(f"{GOLDEN_LINUX_JOB} declares job-level {field}")
+        pin = str((lane.get("env") or {}).get("SPARK_GOLDEN_MESA_VERSION") or "")
+        reviewed = {
+            entry.get("reviewer", "")
+            for entry in manifest.get("entries", [])
+            if entry.get("backendRow") == "opengl-llvmpipe"
+        }
+        if not pin or not reviewed or not all(pin in reviewer for reviewer in reviewed):
+            errors.append(
+                f"{GOLDEN_LINUX_JOB} SPARK_GOLDEN_MESA_VERSION {pin!r} is not the Mesa build every "
+                "opengl-llvmpipe manifest entry was reviewed on"
+            )
+        steps = [step for step in lane.get("steps") or [] if isinstance(step, dict)]
+        runs = [str(step.get("run", "")) for step in steps]
+        mesa_checks = [
+            run for run in runs if "dpkg-query -W -f='${Version}'" in run and "$SPARK_GOLDEN_MESA_VERSION" in run
+        ]
+        if len(mesa_checks) != 1 or not all(
+            package in mesa_checks[0] and "exit 1" in mesa_checks[0]
+            for package in ("libgl1-mesa-dri", "mesa-vulkan-drivers")
+        ):
+            errors.append(f"{GOLDEN_LINUX_JOB} does not fail on a Mesa build other than the reviewed one")
+        if not any("grep -Fq 'EGL found' cmake-configure.log" in run for run in runs):
+            errors.append(f"{GOLDEN_LINUX_JOB} does not require the headless EGL path it renders through")
+        compares = [run for run in runs if GOLDEN_LINUX_LABEL_SELECTOR in run and "--output-junit" in run]
+        if len(compares) != 1:
+            errors.append(f"{GOLDEN_LINUX_JOB} must compare the goldens in exactly one ctest step with JUnit")
+        else:
+            for fragment in (GOLDEN_LINUX_LABEL_SELECTOR, "--no-tests=error", "--output-junit", "set -euo pipefail"):
+                if fragment not in compares[0]:
+                    errors.append(f"{GOLDEN_LINUX_JOB} golden comparison is missing {fragment!r}")
+        registration = [run for run in runs if "--show-only=json-v1" in run and GOLDEN_LINUX_LABEL_SELECTOR in run]
+        if len(registration) != 1 or not all(name in registration[0] for name in GOLDEN_LINUX_TESTS):
+            errors.append(f"{GOLDEN_LINUX_JOB} does not assert that every golden CTest entry is registered")
+        mesa_index = next((i for i, run in enumerate(runs) if run in mesa_checks), None)
+        compare_index = next((i for i, run in enumerate(runs) if run in compares), None)
+        if mesa_index is None or compare_index is None or mesa_index > compare_index:
+            errors.append(f"{GOLDEN_LINUX_JOB} must check the Mesa pin before comparing")
+        for step in steps:
+            name = step.get("name", step.get("uses", "?"))
+            if "continue-on-error" in step:
+                errors.append(f"{GOLDEN_LINUX_JOB} step {name!r} declares continue-on-error")
+            is_upload = str(step.get("uses", "")).startswith("actions/upload-artifact@")
+            if "if" in step and not (is_upload and step["if"] == "always()"):
+                errors.append(f"{GOLDEN_LINUX_JOB} step {name!r} is conditional")
+        uploads = [step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact@")]
+        if not any(
+            step.get("if") == "always()"
+            and "golden-junit.xml" in str((step.get("with") or {}).get("path"))
+            and "Tests/Output/" in str((step.get("with") or {}).get("path"))
+            for step in uploads
+        ):
+            errors.append(f"{GOLDEN_LINUX_JOB} does not publish its JUnit and diffs on failure (if: always())")
+
+    gate = jobs.get("required-ci-gate")
+    if not isinstance(gate, dict) or GOLDEN_LINUX_JOB not in (gate.get("needs") or []):
+        errors.append(f"{GOLDEN_LINUX_JOB} is not a required-ci-gate dependency")
+
+    for job_key in ("build-linux-gcc", "build-linux-clang"):
+        job = jobs.get(job_key)
+        full_runs = [
+            step["run"]
+            for step in (job or {}).get("steps") or []
+            if isinstance(step, dict) and step.get("name") == "Run Tests" and "ctest" in str(step.get("run"))
+        ]
+        if not full_runs or any(GOLDEN_LINUX_EXCLUDE not in run for run in full_runs):
+            errors.append(f"{job_key} full ctest run does not exclude the golden CTest entries")
+
+    names, policies = parse_cmake(tests_cmake)
+    for name, label in GOLDEN_LINUX_TESTS.items():
+        policy = policies.get(name)
+        labels = {part for value in (policy.labels if policy else []) for part in value.split(";") if part}
+        if name not in names or label not in labels:
+            errors.append(f"Tests/CMakeLists.txt does not register {name} with the {label} label")
+    return errors
+
+
 def format_filter_suffixes(script: str) -> set[str]:
     """Return the file suffixes routed to clang-format by check-format-changed.sh's case arm."""
 
@@ -3503,6 +3603,72 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertNotEqual(mutated, self.tests_cmake)
                 errors = experimental_module_lifecycle_errors(baseline, mutated)
                 self.assertTrue(any(message in error for error in errors), errors)
+
+    def _golden_inputs(self) -> tuple[dict, dict]:
+        return parse_workflow_yaml(self.build), json.loads(GOLDEN_MANIFEST.read_text(encoding="utf-8"))
+
+    def test_golden_linux_is_the_single_required_mesa_pinned_comparison(self) -> None:
+        self.assertIn(GOLDEN_LINUX_JOB, REQUIRED_CI_JOBS)
+        document, manifest = self._golden_inputs()
+        self.assertEqual(golden_linux_errors(document, self.tests_cmake, manifest), [])
+
+    def test_golden_linux_contract_rejects_each_regression(self) -> None:
+        baseline, manifest = self._golden_inputs()
+
+        def lane_steps(document):
+            return document["jobs"][GOLDEN_LINUX_JOB]["steps"]
+
+        def edit_runs(document, old, new):
+            for step in lane_steps(document):
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(old, new)
+
+        def strip_exclusion(document, job_key):
+            for step in document["jobs"][job_key]["steps"]:
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(GOLDEN_LINUX_EXCLUDE, "")
+
+        cases = (
+            (lambda d: d["jobs"].pop(GOLDEN_LINUX_JOB), "job is missing"),
+            (lambda d: d["jobs"][GOLDEN_LINUX_JOB].update({"runs-on": "ubuntu-latest"}), "ubuntu-24.04"),
+            (lambda d: d["jobs"][GOLDEN_LINUX_JOB].update({"continue-on-error": True}), "job-level continue-on-error"),
+            (
+                lambda d: d["jobs"][GOLDEN_LINUX_JOB]["env"].update({"SPARK_GOLDEN_MESA_VERSION": "25.3.0-1"}),
+                "reviewed on",
+            ),
+            (lambda d: edit_runs(d, "exit 1", "true"), "Mesa build other than the reviewed one"),
+            (lambda d: edit_runs(d, " mesa-vulkan-drivers; do", "; do"), "Mesa build other than the reviewed one"),
+            (lambda d: edit_runs(d, "grep -Fq 'EGL found' cmake-configure.log", ""), "headless EGL path"),
+            (lambda d: edit_runs(d, "--output-junit golden-junit.xml", ""), "exactly one ctest step with JUnit"),
+            (lambda d: edit_runs(d, "--output-on-failure --no-tests=error", "--output-on-failure"), "--no-tests=error"),
+            (lambda d: edit_runs(d, '"VulkanGoldenTests"]', "]"), "every golden CTest entry is registered"),
+            (lambda d: lane_steps(d).reverse(), "Mesa pin before comparing"),
+            (
+                lambda d: [
+                    s.update({"continue-on-error": True}) for s in lane_steps(d) if "golden-junit.xml" in str(s.get("run"))
+                ],
+                "declares continue-on-error",
+            ),
+            (
+                lambda d: [s.pop("if", None) for s in lane_steps(d) if str(s.get("uses", "")).startswith("actions/upload")],
+                "on failure (if: always())",
+            ),
+            (lambda d: d["jobs"]["required-ci-gate"]["needs"].remove(GOLDEN_LINUX_JOB), "required-ci-gate dependency"),
+            (lambda d: strip_exclusion(d, "build-linux-gcc"), "build-linux-gcc full ctest"),
+            (lambda d: strip_exclusion(d, "build-linux-clang"), "build-linux-clang full ctest"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(baseline)
+                change(document)
+                errors = golden_linux_errors(document, self.tests_cmake, manifest)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+        label_line = 'LABELS "vulkan;vulkan-lavapipe;vulkan-golden;rendering"'
+        self.assertIn(label_line, self.tests_cmake)
+        mutated = self.tests_cmake.replace(label_line, 'LABELS "vulkan;vulkan-lavapipe;rendering"')
+        errors = golden_linux_errors(baseline, mutated, manifest)
+        self.assertTrue(any("VulkanGoldenTests with the vulkan-golden label" in error for error in errors), errors)
 
     def test_msan_is_verified_but_remains_optional(self) -> None:
         msan_block = named_step(self.build, "Run Tests under MSan")

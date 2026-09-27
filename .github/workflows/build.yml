@@ -2616,11 +2616,14 @@ jobs:
 
     # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
     # advisory experimental-module-lifecycle job; this required lane excludes it.
+    # CI-110: the Mesa-pinned golden-linux lane is the only one that compares
+    # the golden baselines, so the two golden CTest entries are excluded here.
     - name: Run Tests
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
           --label-exclude '^experimental-modules$' \
+          --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$' \
           --output-on-failure --no-tests=error --parallel 2 \
           --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
@@ -2807,11 +2810,14 @@ jobs:
 
     # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
     # advisory experimental-module-lifecycle job; this required lane excludes it.
+    # CI-110: the Mesa-pinned golden-linux lane is the only one that compares
+    # the golden baselines, so the two golden CTest entries are excluded here.
     - name: Run Tests
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
           --label-exclude '^experimental-modules$' \
+          --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$' \
           --output-on-failure --no-tests=error --parallel 2 \
           --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
@@ -2884,6 +2890,105 @@ jobs:
         name: SparkEngine-Linux-Clang-${{ matrix.config }}
         path: SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  # ===========================================================================
+  # Linux golden images (CI-110 / RHI-230 / RHI-240)
+  # The committed opengl-llvmpipe and vulkan-lavapipe baselines belong to one
+  # reviewed Mesa build (Tests/GoldenImages/manifest.json), so this is the only
+  # lane that compares them; build-linux-gcc and build-linux-clang exclude the
+  # two golden CTest entries. A runner with a different Mesa fails here instead
+  # of comparing against a rasterizer nobody reviewed.
+  # ===========================================================================
+  golden-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SPARK_GOLDEN_MESA_VERSION: 25.2.8-0ubuntu0.24.04.2
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        # llvmpipe (libgl1-mesa-dri through headless EGL) renders the OpenGL
+        # row, Lavapipe (mesa-vulkan-drivers) plus the Khronos validation layer
+        # the Vulkan row.
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libegl-dev libegl-mesa0 libgl1-mesa-dri libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
+
+    - name: Assert the reviewed Mesa build
+      run: |
+        set -euo pipefail
+        for package in libgl1-mesa-dri mesa-vulkan-drivers; do
+          installed=$(dpkg-query -W -f='${Version}' "$package")
+          if [ "$installed" != "$SPARK_GOLDEN_MESA_VERSION" ]; then
+            echo "::error::$package is $installed, but the golden baselines were reviewed on Mesa $SPARK_GOLDEN_MESA_VERSION. Re-render and re-review the baselines (Tests/GoldenImages/README.md) instead of comparing against an unreviewed rasterizer."
+            exit 1
+          fi
+        done
+
+    - name: Setup ccache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.ccache
+        key: ccache-golden-linux-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-golden-linux-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-golden-linux-
+
+    - name: Configure CMake
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release \
+          -DCMAKE_C_COMPILER=gcc-14 \
+          -DCMAKE_CXX_COMPILER=g++-14 \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+        # No display server runs here: GLDevice must bootstrap through EGL
+        # (Mesa surfaceless llvmpipe), which only exists when configure found it.
+        grep -Fq 'EGL found' cmake-configure.log
+
+    # --no-tests=error only fails on zero matches, so each golden entry must
+    # be registered by name: a configure that silently drops one row cannot
+    # turn this lane into a comparison of the other row alone.
+    - name: Assert both golden CTest entries are registered
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' \
+          --no-tests=error --show-only=json-v1 > golden-ctest-inventory.json
+        python3 -c 'import json, sys; names = sorted(t["name"] for t in json.load(open("golden-ctest-inventory.json"))["tests"]); expected = ["SparkOpenGLGoldenTests", "VulkanGoldenTests"]; sys.exit(0 if names == expected else f"golden CTest entries {names} != {expected}")'
+
+    - name: Build SparkTests and SPIR-V shaders
+      run: |
+        set -euo pipefail
+        cmake --build build/linux-gcc-release --parallel $(nproc) \
+          --target SparkTests SparkSpirvShaders 2>&1 | tee cmake-build.log
+
+    - name: Compare golden images
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' \
+          --output-on-failure --no-tests=error \
+          --output-junit golden-junit.xml 2>&1 | tee golden-results.log
+
+    - name: Upload golden results and diffs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: golden-linux-${{ github.sha }}
+        path: |
+          build/linux-gcc-release/golden-junit.xml
+          build/linux-gcc-release/SparkTests-opengl-golden-junit.xml
+          build/linux-gcc-release/SparkTests-opengl-golden.log
+          build/linux-gcc-release/SparkTests-opengl-golden-output.log
+          build/linux-gcc-release/Tests/Output/
+          golden-ctest-inventory.json
+          golden-results.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
   # ===========================================================================
   # Linux MinGW Cross-Compilation — Build Windows D3D11/D3D12 code on Linux
@@ -4446,6 +4551,7 @@ jobs:
       - aggregate-test-stats
       - module-evidence
       - network-security
+      - golden-linux
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -4455,7 +4561,7 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","golden-linux"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
 

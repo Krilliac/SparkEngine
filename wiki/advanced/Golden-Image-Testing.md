@@ -313,6 +313,21 @@ int main()
 
 For GPU-less CI environments, use NullRHIDevice or Mesa llvmpipe for software rendering. The capture interface works with any RHI backend.
 
+### The golden-linux lane
+
+The `golden-linux` job in `.github/workflows/build.yml` (CI-110) is the only CI lane that compares the committed Linux baselines. It is a `required-ci-gate` dependency. It runs on `ubuntu-24.04` and:
+
+1. fails unless `libgl1-mesa-dri` and `mesa-vulkan-drivers` are exactly `25.2.8-0ubuntu0.24.04.2`, the Mesa build the `opengl-llvmpipe` baselines were reviewed on. A different rasterizer means re-rendering and re-reviewing the baselines, never comparing against them;
+2. configures the `linux-gcc-release` preset and requires the headless EGL path (Mesa surfaceless llvmpipe, no display server);
+3. asserts that both `SparkOpenGLGoldenTests` and `VulkanGoldenTests` are registered, because `--no-tests=error` alone would pass with one row missing;
+4. runs `ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' --output-on-failure --no-tests=error`, and uploads the JUnit, logs and `Tests/Output/` diffs even when the comparison fails.
+
+`build-linux-gcc` and `build-linux-clang` exclude those two CTest entries, so each baseline is compared once per run. `.github/scripts/test-workflow-failure-propagation.py` keeps this structure in place. A hosted match of the baselines is not recorded yet; the first hosted `golden-linux` run supplies it.
+
+```bash
+ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' --output-on-failure --no-tests=error
+```
+
 ## Integration
 
 ### With the RHI
