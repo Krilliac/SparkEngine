@@ -27,7 +27,7 @@ otherwise. The release-readiness work item is `NET-110`. The capability row is
 | Layer | What ships in the engine | Where |
 |---|---|---|
 | Transport | UDP client/server transport behind `ITransport`, reliability, replication, prediction, lag compensation, packet validation, and a fail-closed bind policy (loopback or private LAN only) | `SparkEngine/Source/Engine/Networking/` ([Networking](../subsystems/Networking.md)) |
-| Authentication hooks | Integration points only. `IGatewayAuthenticator::Authenticate` accepts an opaque admission credential and returns a result. `KeyFileAuthenticator` is the local reference: owner-local key file, HMAC credentials, replay rejection. `NetworkManager::RegisterSensitiveHandler` erases received payload copies for credential-bearing messages. `Spark::PasswordHash` provides PBKDF2-HMAC-SHA256 helpers for any account store you build yourself | `SparkGateway/src/GatewayCoordinator.h`, `SparkGateway/src/GatewaySecurity.h`, `SparkEngine/Source/Engine/Networking/NetworkManager.h`, `SparkEngine/Source/Utils/PasswordHash.h` |
+| Authentication hooks | Integration points only. `IGatewayAuthenticator::Authenticate` accepts an opaque admission credential and returns a result. `KeyFileAuthenticator` is the local reference: owner-local key file, HMAC credentials, replay rejection. `LocalFixtureAuthenticator` is the local, deterministic stand-in for identity, entitlement and moderation. `IAreaPlacementPolicy` is where a matchmaker chooses the area for an admission, and `LocalDeterministicPlacement` is its local, deterministic default. `NetworkManager::RegisterSensitiveHandler` erases received payload copies for credential-bearing messages. `Spark::PasswordHash` provides PBKDF2-HMAC-SHA256 helpers for any account store you build yourself | `SparkGateway/src/GatewayCoordinator.h`, `SparkGateway/src/GatewaySecurity.h`, `SparkGateway/src/GatewayLocalAdapters.h`, `SparkEngine/Source/Engine/Networking/NetworkManager.h`, `SparkEngine/Source/Utils/PasswordHash.h` |
 | Server processes | `SparkServer` (headless authoritative module host), `SparkGateway` (admission and fenced area handoff), `SparkDaemon` / `SparkOrchestrator` (owner-local supervision), `SparkCollabServer` (editor collaboration) | [External Services and Orchestration](../../docs/guides/External-Services-and-Orchestration.md), [Dedicated Server](../subsystems/Dedicated-Server.md), [Area Server Architecture](../subsystems/Area-Server-Architecture.md) |
 | Platform service interface | `IOnlinePlatform` and `OnlineServiceManager`. The default `NullOnlinePlatform` works offline and keeps everything in process memory. `SteamPlatform`, `EpicPlatform`, and `ConsolePlatform` are compile-only stubs that report no capabilities and fail every call | `SparkEngine/Source/Engine/OnlineServices/OnlineServices.h` ([Online Services](../gameplay-tools/Online-Services.md)) |
 
@@ -46,7 +46,8 @@ and connect them through the hooks above:
   checks.
 - **Matchmaking and lobbies:** skill rating, queues, party formation, and
   session discovery beyond LAN. `NullOnlinePlatform` session calls are local
-  only.
+  only. A matchmaker places players through `IAreaPlacementPolicy`; the engine's
+  `LocalDeterministicPlacement` is a local stand-in, not a matchmaking service.
 - **Fleet management:** provisioning, scaling, placement, health-driven
   replacement, and regional routing of server processes. `SparkDaemon` looks
   after processes on a single host only. It is not a fleet control plane.
@@ -90,6 +91,42 @@ sketch below is a summary.
   [External Services and Orchestration](../../docs/guides/External-Services-and-Orchestration.md).
 - Production secrets never live in the engine's shipped configuration (OD-22).
 
+## Running locally with deterministic adapters
+
+Because those services are out of engine scope, the engine runs locally by putting a
+local, deterministic adapter at each seam a product service would plug into
+(spec section 6.1):
+
+| Product service | Engine seam | Local stand-in |
+|---|---|---|
+| Platform services (B1) | `IOnlinePlatform` | `NullOnlinePlatform` |
+| Identity, entitlement, moderation (B2, B4) | `IGatewayAuthenticator` | `LocalFixtureAuthenticator`, from `SparkGateway --admission-fixture <path>` or `[Security] admission_fixture` |
+| Matchmaking (B9) | `IAreaPlacementPolicy` | `LocalDeterministicPlacement`, the default policy of `GatewayCoordinator` |
+| Fleet (B8) | Health snapshots, `GatewayCoordinator::BeginDrain` | `SparkDaemon` on one host plus `BeginDrain` |
+
+An admission fixture is a small strict JSON file (64 KiB at most):
+
+```json
+{"version": 1, "principals": [
+  {"credential": "dev-alice-01", "principalId": "alice", "entitled": true, "moderation": "none"},
+  {"credential": "dev-mallory-02", "principalId": "mallory", "entitled": true, "moderation": "banned"}]}
+```
+
+A client sends the `credential` as its opaque admission credential. An unknown
+credential, a banned principal and an unentitled one are rejected with the fixed
+reasons `Unknown credential`, `Principal is banned` and `Principal is not entitled`,
+and the credential never reaches a log or a reason. A fixture that is malformed,
+oversized or inconsistent is rejected as a whole, and the gateway then admits
+nobody. The fixture is for owner-local development: it holds credentials in
+plain text, so it is not a secret store.
+
+`LocalDeterministicPlacement` puts each admission in the online area with the
+fewest sessions that is below its `max_clients`, and breaks ties by the lowest area
+id. Whatever policy is installed, `GatewayCoordinator` admits only to a registered,
+online area with free capacity. Neither adapter reads a clock or a random source,
+so the same admission script on a fresh gateway gives a byte-identical result.
+The `OnlineServicesLocalStack` CTest checks that.
+
 ## When to Use
 
 - Before you write a website, README, store page, or wiki claim about online
@@ -119,6 +156,9 @@ profile ships no online services and no multiplayer support claim.
 | `Spark::OnlineServices::NullOnlinePlatform` | Offline, in-memory default. It never contacts a network service |
 | `IGatewayAuthenticator` | Checks product-issued admission credentials |
 | `KeyFileAuthenticator` | Local reference authenticator (owner-local key file) |
+| `LocalFixtureAuthenticator` | Local, deterministic admission from a principal fixture file |
+| `IAreaPlacementPolicy` | Chooses the area for an admission. A product matchmaker implements it |
+| `LocalDeterministicPlacement` | Local, deterministic default placement: fewest sessions, then lowest area id |
 | `Spark::PasswordHash` | PBKDF2 helpers for product-owned account stores |
 
 ## Performance Notes
@@ -164,5 +204,6 @@ surface plus this page, the Online Services page, and `docs/site/readiness.json`
 ## Source & Freshness
 
 Written 2026-09-24 for `NET-110` from OD-08 and the current sources listed
-above. When an online-service claim or the owner decision changes, update this
+above. Updated 2026-09-27 for the local, deterministic adapters in
+`SparkGateway/src/GatewayLocalAdapters.h`. When an online-service claim or the owner decision changes, update this
 page.

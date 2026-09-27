@@ -1457,6 +1457,22 @@
       }
     },
     {
+      "id": "gateway-admission-fixture",
+      "description": "LocalFixtureAuthenticator admission fixture: a strict JSON principal list (Json::ParseBounded, 64 KiB, depth 4, duplicate keys rejected) read from the path SparkGateway --admission-fixture names.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkGateway/src/GatewayLocalAdapters.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
       "id": "tf-account-database",
       "description": "TerraFront account/character database JSON reader, including the backup/restore revision and sidecar-digest readers.",
       "trust_boundary": "untrusted-file",

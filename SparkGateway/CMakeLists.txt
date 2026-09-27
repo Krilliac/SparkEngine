@@ -27,6 +27,8 @@ add_library(SparkGatewayCore STATIC
     src/GatewayApplication.h
     src/GatewayCoordinator.cpp
     src/GatewayCoordinator.h
+    src/GatewayLocalAdapters.cpp
+    src/GatewayLocalAdapters.h
 )
 target_compile_features(SparkGatewayCore PUBLIC cxx_std_23)
 target_include_directories(SparkGatewayCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")

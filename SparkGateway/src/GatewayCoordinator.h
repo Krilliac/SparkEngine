@@ -12,6 +12,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -48,6 +49,44 @@ namespace Spark::Gateway
         /** [any transport thread, thread-safe] Validate an opaque credential. Never log it. */
         [[nodiscard]] virtual AuthenticationResult Authenticate(const AdmissionRequest& request) = 0;
         [[nodiscard]] virtual bool IsReady() const = 0;
+    };
+
+    /** One registered area as the coordinator sees it when an admission is placed. */
+    struct AreaSnapshot
+    {
+        Net::AreaID areaId = Net::INVALID_AREA;
+        /** WorldServer routing mirror, refreshed from IAreaControlPlane::IsEndpointReady. */
+        bool online = false;
+        /** Gateway sessions whose authoritative area this is. */
+        uint32_t sessions = 0;
+        /** Configured AreaServerConfig::maxClients. */
+        uint32_t capacity = 0;
+    };
+
+    /** What a placement policy may see of an authenticated admission. The credential is never passed on. */
+    struct PlacementRequest
+    {
+        std::string_view principalId;
+        std::string_view sessionId;
+        XMFLOAT3 spawnPosition{0.0f, 0.0f, 0.0f};
+    };
+
+    /**
+     * Area placement seam (boundary B9 in docs/specs/online-services.md). A product matchmaker
+     * implements it; LocalDeterministicPlacement (GatewayLocalAdapters.h) is the local default.
+     */
+    class IAreaPlacementPolicy
+    {
+      public:
+        virtual ~IAreaPlacementPolicy() = default;
+        /**
+         * [transport thread, called under the coordinator lock; must not call back into the
+         * coordinator] Choose one of @p areas for an authenticated admission, or return
+         * Net::INVALID_AREA to reject it. The coordinator rejects an area that is not in
+         * @p areas, is offline or is full, and contains an exception as a rejection.
+         */
+        [[nodiscard]] virtual Net::AreaID Place(const PlacementRequest& request,
+                                                std::span<const AreaSnapshot> areas) = 0;
     };
 
     enum class HandoffOperationResult : uint8_t
@@ -159,8 +198,12 @@ namespace Spark::Gateway
     class GatewayCoordinator
     {
       public:
+        /** Places admissions with an owned LocalDeterministicPlacement. */
         GatewayCoordinator(Net::WorldServer& worldServer, IGatewayAuthenticator& authenticator,
                            IAreaControlPlane& controlPlane);
+        /** Places admissions with @p placement (not owned; must outlive the coordinator). */
+        GatewayCoordinator(Net::WorldServer& worldServer, IGatewayAuthenticator& authenticator,
+                           IAreaControlPlane& controlPlane, IAreaPlacementPolicy& placement);
         ~GatewayCoordinator();
 
         GatewayCoordinator(const GatewayCoordinator&) = delete;
@@ -198,6 +241,8 @@ namespace Spark::Gateway
         };
 
         [[nodiscard]] const AreaEndpoint* FindEndpoint(Net::AreaID areaId) const;
+        /** [m_mutex held] Registered areas in registration order with their session load. */
+        [[nodiscard]] std::vector<AreaSnapshot> SnapshotAreas() const;
         /**
          * World, adapters, areas and drain state allow routing. Admit() gates on this rather than
          * IsReady() so a fail-fast admission reaches the guard and is counted as rejectedWhileOpen.
@@ -208,6 +253,9 @@ namespace Spark::Gateway
         // Owned front over the caller's (non-owned) authenticator; set once in the constructor.
         std::unique_ptr<GuardedGatewayAuthenticator> m_authenticator;
         IAreaControlPlane* m_controlPlane = nullptr;
+        // Set by the three-argument constructor only; m_placement points at it or at the caller's policy.
+        std::unique_ptr<IAreaPlacementPolicy> m_ownedPlacement;
+        IAreaPlacementPolicy* m_placement = nullptr;
         std::vector<std::pair<Net::AreaID, AreaEndpoint>> m_endpoints;
         std::unordered_map<std::string, SessionRecord> m_sessions;
         bool m_accepting = true;

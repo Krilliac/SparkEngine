@@ -1442,7 +1442,8 @@ if(TARGET SparkGatewayCore)
     target_sources(SparkTests PRIVATE
         TestSparkGatewayCoordinator.cpp
         TestGatewaySecurity.cpp
-        TestGatewayAreaControl.cpp)
+        TestGatewayAreaControl.cpp
+        TestOnlineServicesLocalStack.cpp)
     target_link_libraries(SparkTests PRIVATE SparkGatewayCore SparkGatewaySecurity)
 endif()
 if(TARGET SparkCooker)
@@ -2152,6 +2153,16 @@ if(TARGET SparkGatewayCore)
     add_test(NAME GatewayGuardedAuthenticator COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(GatewayGuardedAuthenticator PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SparkGateway_GuardedAuthenticator_;SPARK_TEST_EXPECT_COUNT=7"
+        LABELS "online-services;gateway;unit"
+        TIMEOUT 30)
+
+    # NET-110: the engine runs locally with deterministic adapters (docs/specs/online-services.md
+    # section 6): GatewayCoordinator + WorldServer + NullOnlinePlatform with LocalFixtureAuthenticator
+    # and LocalDeterministicPlacement give a byte-identical admission transcript across fresh runs.
+    # Exact count: a dropped test fails.
+    add_test(NAME OnlineServicesLocalStack COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(OnlineServicesLocalStack PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_LocalStack_;SPARK_TEST_EXPECT_COUNT=6"
         LABELS "online-services;gateway;unit"
         TIMEOUT 30)
 endif()

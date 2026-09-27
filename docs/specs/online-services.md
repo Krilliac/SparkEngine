@@ -1,7 +1,7 @@
 # SparkEngine Online-Services Boundary Specification
 
-**Contract version:** 1.0  
-**Date:** 2026-09-25  
+**Contract version:** 1.1  
+**Date:** 2026-09-27  
 **Status:** Normative boundary contract. The failure budgets in this document are requirements. Where the current code does not yet enforce a budget, the document says so.  
 **Work item:** `NET-110` (outside the `stable-v1` profile). **Owner decision:** OD-08 in [`docs/readiness/OWNER-DECISIONS.md`](../readiness/OWNER-DECISIONS.md).  
 **Capability row:** `services.production` in `docs/site/readiness.json` (`implementation: absent`, `support: unsupported`).
@@ -33,7 +33,7 @@ The key words MUST, MUST NOT, SHOULD, and MAY are used as described in RFC 2119.
 | `NetworkManager` / `ITransport` / `UDPTransport` | `SparkEngine/Source/Engine/Networking/` | Gameplay UDP transport, reliability, replication. The bind policy (`NetworkBindPolicy.h`) allows only loopback or a private LAN | Experimental. Transport security is still a placeholder (`NET-100`) |
 | `DedicatedServer` | `SparkEngine/Source/Engine/Networking/DedicatedServer.h` | Headless authoritative tick loop, map rotation, trusted in-process administration, LAN discovery | Development/reference |
 | `SparkServer` | `SparkServer/src/` | Headless module host. Publishes a JSON health snapshot (`ServerHealth.h`) and hosts `LocalAreaControlService` | Development/reference |
-| `SparkGateway` (`GatewayCoordinator`, `IGatewayAuthenticator`, `IAreaControlPlane`) | `SparkGateway/src/` | Admission, routing, and the fenced cross-area handoff control plane | Development/reference, owner-local only |
+| `SparkGateway` (`GatewayCoordinator`, `IGatewayAuthenticator`, `IAreaControlPlane`, `IAreaPlacementPolicy`) | `SparkGateway/src/` | Admission, placement, routing, and the fenced cross-area handoff control plane | Development/reference, owner-local only |
 | `SparkDaemon` / `SparkOrchestrator` | `SparkDaemon/src/` | Supervises allowlisted processes on a single host | Development/reference, single host |
 | `Spark::PasswordHash` | `SparkEngine/Source/Utils/PasswordHash.h` | PBKDF2-HMAC-SHA256 helpers for an account store that the product builds | Library helper |
 
@@ -42,7 +42,7 @@ The key words MUST, MUST NOT, SHOULD, and MAY are used as described in RFC 2119.
 | Service | What the product owns | Engine seam it plugs into |
 |---|---|---|
 | Identity and accounts | Sign-up, login, recovery, credential storage, issuing admission credentials | `IGatewayAuthenticator::Authenticate`, `IOnlinePlatform::Login` |
-| Matchmaking and lobbies | Queues, skill rating, parties, session discovery beyond the LAN | `IOnlinePlatform::FindSessions` / `CreateSession` / `JoinSession`, `GatewayCoordinator::Admit` |
+| Matchmaking and lobbies | Queues, skill rating, parties, session discovery beyond the LAN | `IOnlinePlatform::FindSessions` / `CreateSession` / `JoinSession`, `IAreaPlacementPolicy::Place` (consulted by `GatewayCoordinator::Admit`) |
 | Fleet | Provisioning, scaling, placement, regional routing, health-driven replacement | Reads `SparkServer` health snapshots and launches `SparkServer` / `SparkGateway` processes |
 | Moderation and abuse | Reports, sanctions, chat filtering policy, ban lists | The authenticator rejects sanctioned principals. The server kicks through trusted in-process administration |
 | Entitlement | Ownership checks and DLC grants | `IGatewayAuthenticator` (admission), plus product code in the game module |
@@ -112,12 +112,12 @@ either subgraph. `NullOnlinePlatform` stands in for B1 during local development 
 | B1 | Game ↔ platform/product adapter | Process → vendor SDK or product API | The adapter. Its results are advisory client state and are never proof of identity to a server | Synchronous `IOnlinePlatform` calls on the game thread | Only `NullOnlinePlatform` (local, deterministic) and fail-closed stubs exist |
 | B2 | Client ↔ identity service | Device → product | Product identity service | None in the engine | Product-owned |
 | B3 | Client ↔ gateway admission | Untrusted network → `SparkGateway` | Nothing on the client side. The credential is opaque and bounded (`GatewayMaximumCredentialSize` = 512 bytes, body ≤ 4096 bytes) | `LocalGatewayIngressService` (owner-local named pipe) → `GatewayCoordinator::Admit` | Owner-local reference only. There is no internet-facing ingress |
-| B4 | Gateway ↔ credential issuer | `SparkGateway` → product identity, entitlement, moderation | `IGatewayAuthenticator` implementation | `KeyFileAuthenticator`: `v1.<unix-ms>.<nonce>.<hmac-sha256>` with a 60 s replay window and a 4096-entry replay ledger | The local reference is complete. Product adapters are product-owned |
+| B4 | Gateway ↔ credential issuer | `SparkGateway` → product identity, entitlement, moderation | `IGatewayAuthenticator` implementation | `KeyFileAuthenticator`: `v1.<unix-ms>.<nonce>.<hmac-sha256>` with a 60 s replay window and a 4096-entry replay ledger. `LocalFixtureAuthenticator` answers identity, entitlement and moderation from a bounded principal fixture | The local reference and the local, deterministic stand-in are complete. Product adapters are product-owned |
 | B5 | Client ↔ gameplay server | Untrusted network → `SparkServer` / `DedicatedServer` | Server is authoritative. Client input is validated (`PacketValidator`) | `NetworkManager` UDP. The bind policy allows loopback or a private LAN only | Experimental and unauthenticated. Blocked on `NET-100` |
 | B6 | Gateway ↔ area servers | Process ↔ process on one host | Same operating-system user, holder of the area-control key | HMAC-SHA256 frames, ±60 s timestamp window, nonce replay ledger, per-session epoch fence persisted to an epoch-state file, one audit record per frame | Owner-local reference |
 | B7 | Supervisor ↔ servers | Process ↔ process on one host | Same host operator | `SparkDaemon` orchestration allowlist | Single host only. Not a fleet |
-| B8 | Fleet ↔ servers | Product control plane → operator hosts | Product fleet | Reads `SparkServer` health JSON, launches or drains processes | Product-owned. The engine provides only the health snapshot and `GatewayCoordinator::BeginDrain` |
-| B9 | Matchmaking ↔ gateway placement | Product → `SparkGateway` | Product matchmaker | None in the engine. Placement today is `WorldServer` area selection inside `Admit` | Product-owned |
+| B8 | Fleet ↔ servers | Product control plane → operator hosts | Product fleet | Reads `SparkServer` health JSON, launches or drains processes | Product-owned. The engine provides only the health snapshot and `GatewayCoordinator::BeginDrain`. The local stand-in is `SparkDaemon` supervision plus `BeginDrain`, with no new code |
+| B9 | Matchmaking ↔ gateway placement | Product → `SparkGateway` | Product matchmaker, through the `IAreaPlacementPolicy` it gives `GatewayCoordinator` | `Admit` asks the placement policy for an area and accepts only a registered, online area below its `maxClients`. The default policy is `LocalDeterministicPlacement` | Product-owned. The local, deterministic stand-in is complete |
 
 Invariants that hold across every boundary:
 
@@ -175,13 +175,15 @@ field is `ok`, or it lists each capability with over-budget calls (for example
 `maxCallMicroseconds`. In a running engine the `online_status` console command (registered by
 `RegisterEngineConsoleCommands()`) prints this status.
 
-### 5.2 Gateway admission and authentication (boundaries B3, B4)
+### 5.2 Gateway admission, authentication and placement (boundaries B3, B4, B9)
 
 | Call | Budget | Failure semantics |
 |---|---|---|
-| `GatewayCoordinator::Admit` | Bounded input: body ≤ 4096 bytes, credential ≤ 512 bytes. Local ingress I/O deadline **2 s** per frame | Fails closed with a `RouteFailure` (`NotReady`, `InvalidRequest`, `AuthenticationFailed`, `DuplicateSession`, `CapacityReached`, `NoAreaAvailable`). Rejected requests create no session. `BeginDrain` rejects new admissions |
+| `GatewayCoordinator::Admit` | Bounded input: body ≤ 4096 bytes, credential ≤ 512 bytes. Local ingress I/O deadline **2 s** per frame | Fails closed with a `RouteFailure` (`NotReady`, `InvalidRequest`, `AuthenticationFailed`, `DuplicateSession`, `CapacityReached`, `NoAreaAvailable`). Rejected requests create no session. `NoAreaAvailable` also covers a placement the coordinator refuses (section 5.2, `IAreaPlacementPolicy::Place`). `BeginDrain` rejects new admissions |
 | `IGatewayAuthenticator::Authenticate` | MUST be thread-safe and MUST complete within **2 s**, the ingress deadline. A product authenticator that calls a remote identity service MUST NOT retry inside that window, and it SHOULD open a circuit (reject immediately with a reason) after **5** consecutive backend failures for **30 s** | Any failure returns `accepted = false` with a `reason`. An unready authenticator (`IsReady() == false`) makes the coordinator not ready, so every admission is rejected. `GatewayCoordinator` wraps every authenticator in `GuardedGatewayAuthenticator`, which enforces these budgets for any adapter: an exception becomes the rejection `Authentication backend fault` (the exception text, which may hold the credential, is never surfaced or logged); a call over the 2 s budget is rejected even if the adapter accepted it; exceptions and overruns are faults, and 5 consecutive faults open a 30 s circuit that rejects with `Authentication backend unavailable (circuit open)` without calling the adapter, followed by one probe. A rejection is a healthy answer and resets the fault streak. A reason that echoes the credential is redacted. `GatewayCoordinator::GetAuthenticationHealth()` returns the accepted, rejected, fault, overrun and fail-fast counters, and opening or closing the circuit is logged. `SparkGateway` publishes them, with the circuit state and slowest call, as the `authentication` object of its health JSON (`--health-file` and the status line), and `GatewayCoordinator::IsReady()` (the health `ready` field) is false while the open circuit is failing admissions fast. It turns true again when the cooldown ends, so the probe admission can arrive. Tested by `SparkGateway_GuardedAuthenticator_*` |
 | `KeyFileAuthenticator` | Timestamp within the 60 s replay window. Replay ledger bounded at 4096 entries | Wrong MAC, a stale or future timestamp, or a replayed nonce is rejected. A full ledger fails closed |
+| `LocalFixtureAuthenticator` | Fixture read once at startup: at most 64 KiB, strict JSON (`Json::ParseBounded`, depth 4, repeated keys rejected). One in-memory lookup per call, no clock, no randomness, no I/O | A malformed, oversized or inconsistent fixture (unknown key, repeated credential or principal, empty or non-printable field, `moderation` other than `none` / `banned`) leaves the authenticator not ready, so the gateway admits nobody. Rejections use fixed reasons, checked in this order: `Unknown credential`, `Principal is banned`, `Principal is not entitled`. Neither the load errors nor the reasons contain a credential. `SparkGateway --admission-fixture <path>` (or `[Security] admission_fixture`) selects it instead of `KeyFileAuthenticator` |
+| `IAreaPlacementPolicy::Place` (boundary B9) | Called under the coordinator lock on the transport thread, so it MUST NOT block or call back into the coordinator. It receives the authenticated principal, the session id, the spawn position and every registered area with its online flag, session count and `maxClients`. It never receives the credential | `GatewayCoordinator` accepts the answer only if it is a registered, online area below capacity, and otherwise fails the admission with `NoAreaAvailable`. An exception from the policy is contained as `NoAreaAvailable` with the reason `Area placement policy fault`. The default `LocalDeterministicPlacement` picks the area with the fewest sessions and breaks ties by the lowest `AreaID`, whatever order the areas are listed in |
 
 ### 5.3 Area control plane (boundary B6)
 
@@ -214,6 +216,8 @@ No adapter in this repository is production. The labels below are the only permi
 | `SteamTransport` | B5 | **stub** | `Send` / `Receive` fail with "transport unavailable (Steamworks SDK not linked)" |
 | `UDPTransport` | B5 | **local/LAN, experimental** | Loopback or private LAN only, unauthenticated |
 | `KeyFileAuthenticator` | B4 | **local reference** | Owner-local key file. Not an identity service |
+| `LocalFixtureAuthenticator` | B4 | **local, deterministic** | Stands in for identity, entitlement and moderation from a bounded principal fixture file. Not a secret store and not an identity service |
+| `LocalDeterministicPlacement` | B9 | **local, deterministic** | The default `IAreaPlacementPolicy`: fewest sessions, then lowest `AreaID`. Stands in for a matchmaker. It is not a matchmaking service |
 | `LocalAreaControlPlane` / `LocalAreaControlService` | B6 | **local reference** | Same host, same OS user |
 | `LocalGatewayIngressService` | B3 | **local reference** | Owner-local named pipe, not internet-facing |
 | `SparkDaemon` orchestration | B7 | **local reference** | Single host |
@@ -241,9 +245,29 @@ so a product adapter is admitted only through them:
 - `Console_GetStatus()` (Health and Budget fields) and the gateway health JSON `authentication` object are wired into
   the product's telemetry before the adapter takes production traffic.
 
+### 6.1 Local deterministic stack
+
+OD-08 keeps identity, matchmaking, fleet, entitlement and moderation out of engine scope, so the engine runs locally
+by standing a local, deterministic adapter in at each engine seam those services plug into:
+
+- B1 (platform services): `NullOnlinePlatform`.
+- B2 and B4 (identity, entitlement, moderation): `LocalFixtureAuthenticator`, selected with
+  `SparkGateway --admission-fixture <path>`.
+- B9 (matchmaking): `LocalDeterministicPlacement`, the policy `GatewayCoordinator` uses unless a product policy is
+  passed to it.
+- B8 (fleet): `SparkDaemon` supervision on one host plus `GatewayCoordinator::BeginDrain`. No other code stands in
+  for a fleet.
+- Administration (acting on a sanction, such as a kick): the trusted in-process administration of `DedicatedServer`,
+  which is already local. A ban takes effect at the next admission through the fixture's `moderation` field.
+
+None of these reads a clock or a random source for its decisions, and `WorldServer` allocates area ids in
+registration order, so a fixed admission script on a fresh stack gives a byte-identical result. The
+`OnlineServicesLocalStack` CTest runs that script twice and compares both runs with one fixed transcript (section 8).
+
 ## 7. Versioning
 
-This document is contract version 1.0. A change that alters a budget, a failure result, or a boundary in a way an
+This document is contract version 1.1. Version 1.1 added the `IAreaPlacementPolicy` placement seam, per-area
+capacity at admission, and the local, deterministic adapters of section 6.1. A change that alters a budget, a failure result, or a boundary in a way an
 existing adapter could observe bumps the major version. Additive clarifications bump the minor version. Changes to
 `IOnlinePlatform`, `IGatewayAuthenticator`, or `IAreaControlPlane` virtual signatures MUST update this document in the
 same change.
@@ -257,6 +281,7 @@ same change.
 | This document names every boundary and adapter | `validate_online_service_boundary` also runs `online_service_spec_contract_errors`: section 3 must hold a Mermaid diagram whose `B<n>` edge labels equal the section 4 rows, which run contiguously from B1 and each name who is trusted and the enforcing mechanism. Every section 2.1 symbol must still occur in the source path the row names, and every tracked class outside `Tests/` that implements `IOnlinePlatform`, `IGatewayAuthenticator`, `IAreaControlPlane` or `ITransport` must be in the section 6 register with a permitted label. `OnlineServiceBoundaryTests` covers each rejection | none |
 | Null adapter deterministic, stubs fail closed | `Tests/TestOnlineServices.cpp` `OnlineServices_Null*` and stub tests. The `OnlineServices_Contract_*` conformance suite (ctest `OnlineServicesContract`, label `online-services`, exact count 5) runs the section 5.1 failure semantics and the section 6 labels against `NullOnlinePlatform`, `SteamPlatform`, `EpicPlatform` and `ConsolePlatform`, checks `Console_GetStatus()` for each, and compares two fresh runs of the Null adapter against one fixed expected transcript. Friends and presence are checked for success and failure only: the Null adapter has no friends to read back and `SetPresence()` has no getter | A new adapter must be added to the suite before it is shipped |
 | Degraded-dependency budgets (section 5.1 circuit breaker) | `Tests/TestOnlineServices.cpp` `OnlineServices_Degraded_*` (ctest `OnlineServicesDegraded`, label `online-services`, exact count 11) drives a fault-injecting adapter through `SetPlatform()` / `GetPlatform()`. It covers exception containment and token redaction (including a one-character token), opening after 5 consecutive failures, fail-fast without reaching the adapter, per-capability isolation, the probe after the cooldown, reset on success and on platform change, the Logout bypass, the Null-adapter exemption, budget-overrun counting with a rate-limited warning, the trip-on-overrun circuit, the `Console_GetStatus()` health and budget fields, and the `online_status` console command that prints them. `Tests/TestSparkGatewayCoordinator.cpp` `SparkGateway_GuardedAuthenticator_*` (ctest `GatewayGuardedAuthenticator`, labels `online-services;gateway`, exact count 7) covers the admission-side guard, and its `SparkGateway_GuardedAuthenticator_GatewayHealthReportsCircuit` case in `Tests/TestGatewayAreaControl.cpp` starts a real `GatewayApplication`, opens the circuit through its ingress and asserts the counters and `ready: false` in the health JSON | A slow call is measured, not preempted. The 10 s remote timeout and retry budgets remain adapter responsibilities with no production adapter to measure |
+| Engine runs locally with deterministic adapters (section 6.1) | `Tests/TestOnlineServicesLocalStack.cpp` `OnlineServices_LocalStack_*` (ctest `OnlineServicesLocalStack`, labels `online-services;gateway`, exact count 6). A `GatewayCoordinator` + `WorldServer` + `NullOnlinePlatform` stack with `LocalFixtureAuthenticator` and `LocalDeterministicPlacement` runs one admission script (accepts, unknown, banned and unentitled rejections, every area full, a disconnect, drain) twice from fresh state, and both transcripts must equal one fixed expected transcript. The suite also checks that no credential reaches a log or a reason, that a placement tie resolves to the lowest `AreaID` in any input order, that the coordinator refuses an unknown, full or throwing placement, that 14 kinds of oversized or malformed fixture fail closed, and that `SparkGateway` options select the fixture authenticator | none for the local stack. Product adapters are product-owned (OD-08) |
 | Versioned client/server compatibility | Gateway protocol constants only | `SessionCompatibility_*` tests after `NET-100` protocol negotiation |
 | Hosted CI | none | `service-contract` and `network-integration` jobs (planned) |
 
@@ -264,5 +289,6 @@ same change.
 
 Written 2026-09-25 for `NET-110` from `OnlineServices.h`, `SparkGateway/src/GatewayCoordinator.h`,
 `GatewaySecurity.h`, `GatewayAreaControl.h/.cpp`, `NetworkManager.h`, `DedicatedServer.h`, `NetworkBindPolicy.h`,
-`SteamTransport.h`, and `SparkServer/src/ServerHealth.h` at that date. Update it when any of those interfaces, the
+`SteamTransport.h`, and `SparkServer/src/ServerHealth.h` at that date. Updated 2026-09-27 for the placement seam and
+the local, deterministic adapters in `SparkGateway/src/GatewayLocalAdapters.h`. Update it when any of those interfaces, the
 budgets above, or owner decision OD-08 change.

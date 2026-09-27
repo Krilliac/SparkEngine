@@ -5,6 +5,8 @@
 
 #include "GatewayApplication.h"
 #include "GatewayAreaControl.h"
+#include "GatewayLocalAdapters.h"
+#include "GatewaySecurity.h"
 
 #include "Utils/ConfigParser.h"
 
@@ -142,6 +144,9 @@ namespace Spark::Gateway
             const std::string keyFile = config.GetString("Security", "key_file");
             if (!keyFile.empty())
                 options.keyFile = keyFile;
+            const std::string admissionFixture = config.GetString("Security", "admission_fixture");
+            if (!admissionFixture.empty())
+                options.admissionFixture = admissionFixture;
             const std::string stopFile = config.GetString("Status", "stop_file");
             if (!stopFile.empty())
                 options.stopFile = stopFile;
@@ -164,6 +169,8 @@ namespace Spark::Gateway
                "  --port <1..65535>            Override the client-facing coordinator port\n"
                "  --health-file <path>         Publish a JSON health snapshot\n"
                "  --key-file <path>            Owner-only >=256-bit local authentication key\n"
+               "  --admission-fixture <path>   Admit from a local, deterministic principal fixture\n"
+               "                               instead of key-file credentials (development only)\n"
                "  --generate-key <path>        Create a new owner-only 256-bit key, then exit\n"
                "  --stop-file <path>           Stop when this sentinel file appears\n"
                "  --status-interval-ms <ms>    Health/status cadence\n"
@@ -219,7 +226,8 @@ namespace Spark::Gateway
                 ++index;
             else if (argument == "--generate-key")
                 ++index;
-            else if (argument == "--health-file" || argument == "--key-file" || argument == "--stop-file")
+            else if (argument == "--health-file" || argument == "--key-file" || argument == "--stop-file" ||
+                     argument == "--admission-fixture")
             {
                 const auto value = requireValue(index);
                 if (!value)
@@ -228,6 +236,8 @@ namespace Spark::Gateway
                     options.healthFile = *value;
                 else if (argument == "--key-file")
                     options.keyFile = *value;
+                else if (argument == "--admission-fixture")
+                    options.admissionFixture = *value;
                 else
                     options.stopFile = *value;
             }
@@ -268,6 +278,13 @@ namespace Spark::Gateway
         return {std::move(options), {}};
     }
 
+    std::unique_ptr<IGatewayAuthenticator> CreateGatewayAuthenticator(const GatewayOptions& options)
+    {
+        if (!options.admissionFixture.empty())
+            return std::make_unique<LocalFixtureAuthenticator>(options.admissionFixture);
+        return std::make_unique<KeyFileAuthenticator>(options.keyFile);
+    }
+
     GatewayApplication::GatewayApplication(GatewayOptions options, std::unique_ptr<IGatewayAuthenticator> authenticator,
                                            std::unique_ptr<IAreaControlPlane> controlPlane)
         : m_options(std::move(options)), m_authenticator(std::move(authenticator)),
@@ -294,7 +311,7 @@ namespace Spark::Gateway
         }
         if (!m_authenticator->IsReady())
         {
-            SetError("Gateway authentication key is unavailable or insecure");
+            SetError("Gateway authenticator is not ready (key file or admission fixture unavailable or invalid)");
             return false;
         }
         m_worldServer = std::make_unique<Net::WorldServer>();
