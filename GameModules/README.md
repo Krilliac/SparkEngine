@@ -177,7 +177,10 @@ zero). Its baseline is 51 engine-private headers and one copied file,
 CTest also holds it to a reviewed one-way ceiling in
 `Tests/Tools/test_module_private_dependencies.py`, which regeneration cannot
 raise. Lower the ceiling together with the inventory whenever an include or copied
-file is removed.
+file is removed. Its entry also records `engineBuildCoupling`, which shows whether
+the `SparkGameFPS` target links `SparkEngineLib` and whether it adds
+`SparkEngine/Source` to its include path. Both are `true` today. Once either is
+recorded `false`, reintroducing it fails the check.
 
 ## Module Lifecycle
 

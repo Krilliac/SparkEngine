@@ -165,7 +165,11 @@
       "privateEngineHeaderCount": 51,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
-      ]
+      ],
+      "engineBuildCoupling": {
+        "linksSparkEngineLib": true,
+        "engineSourceIncludeDirectory": true
+      }
     },
     {
       "name": "SparkGameMMO",

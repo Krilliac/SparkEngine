@@ -160,6 +160,10 @@ PRIVATE_DEPENDENCY_KEYS = ("privateEngineHeaders", "privateEngineHeaderCount", "
 # ratcheted like a prototype's. SparkGameFPS must reach zero; the ratchet
 # measures the gap and forbids growth, it does not close it.
 RATCHETED_RELEASE_MODULES = frozenset({"SparkGameFPS"})
+# MOD-310's build-system half: whether SparkGameFPS links SparkEngineLib or adds
+# SparkEngine/Source to its include path. Published for SparkGameFPS only.
+ENGINE_BUILD_COUPLING_KEY = "engineBuildCoupling"
+_TARGET_CALL_PATTERN = re.compile(r"\b(target_link_libraries|target_include_directories)\s*\(", re.IGNORECASE)
 
 
 def _within(path: Path, root: Path) -> str | None:
@@ -247,6 +251,44 @@ def _private_dependency_payload(module_dir: Path, repo_root: Path) -> dict[str, 
     return {"privateEngineHeaders": headers, "privateEngineHeaderCount": len(headers), "copiedInfrastructureFiles": copied}
 
 
+def _engine_build_coupling(module_dir: Path) -> dict[str, bool]:
+    """Measure how the module's own CMake target couples to engine internals.
+
+    Comments are stripped first, so only live target_link_libraries /
+    target_include_directories calls on the module's target count, whatever
+    platform branch guards them.
+    """
+    cmake = module_dir / "CMakeLists.txt"
+    text = _strip_cmake_comments(cmake.read_text(encoding="utf-8", errors="replace")) if cmake.is_file() else ""
+    coupling = {"linksSparkEngineLib": False, "engineSourceIncludeDirectory": False}
+    for match in _TARGET_CALL_PATTERN.finditer(text):
+        end = text.find(")", match.end())
+        tokens = [token.strip('"') for token in text[match.end() : len(text) if end < 0 else end].split()]
+        if not tokens or tokens[0] != module_dir.name:
+            continue
+        if match.group(1).lower() == "target_link_libraries":
+            coupling["linksSparkEngineLib"] |= "SparkEngineLib" in tokens
+        else:
+            coupling["engineSourceIncludeDirectory"] |= any(
+                "ENGINE_SOURCE_DIR" in token or ENGINE_PRIVATE_ROOT.as_posix() in token for token in tokens
+            )
+    return coupling
+
+
+def _validate_engine_build_coupling(
+    name: str, measured: dict[str, bool], committed: Any, location: str
+) -> list[tuple[str, str]]:
+    """Report drift from the committed coupling and forbid re-coupling what was removed."""
+    findings: list[tuple[str, str]] = []
+    if committed != measured:
+        findings.append((location, f"{ENGINE_BUILD_COUPLING_KEY} drift for {name}: expected {measured!r}"))
+    if isinstance(committed, dict):
+        for key, coupled in measured.items():
+            if coupled and committed.get(key) is False:
+                findings.append((location, f"{name} regained engine build coupling {key}; its committed inventory records it removed"))
+    return findings
+
+
 def _validate_private_dependencies(
     repo_root: Path, module_dir: Path, entry: dict[str, Any], location: str
 ) -> list[tuple[str, str]]:
@@ -310,6 +352,8 @@ def _module_payload(module_dir: Path, repo_root: Path, applicability: dict[str, 
     # setup code.
     if _is_ratcheted(name, applicability):
         payload.update(_private_dependency_payload(module_dir, repo_root))
+    if name == "SparkGameFPS":
+        payload[ENGINE_BUILD_COUPLING_KEY] = _engine_build_coupling(module_dir)
     return payload
 
 
@@ -402,7 +446,7 @@ def validate(repo_root: Path) -> list[tuple[str, str]]:
             continue
         expected = _module_payload(actual[name], repo_root, authoritative[name]["profileApplicability"])
         for key, value in expected.items():
-            if key not in PRIVATE_DEPENDENCY_KEYS and entry.get(key) != value:
+            if key not in PRIVATE_DEPENDENCY_KEYS and key != ENGINE_BUILD_COUPLING_KEY and entry.get(key) != value:
                 findings.append((location, f"{key} drift for {name}: expected {value!r}"))
         if _is_ratcheted(name, authoritative[name]["profileApplicability"]):
             findings.extend(_validate_private_dependencies(repo_root, actual[name], entry, location))
@@ -416,7 +460,14 @@ def validate(repo_root: Path) -> list[tuple[str, str]]:
             )
         if expected["assetsDirectory"] and expected["assetFileCount"] and not expected["assetManifest"]:
             findings.append((location, f"payload asset directory has no manifest for {name}"))
+        if name != "SparkGameFPS" and ENGINE_BUILD_COUPLING_KEY in entry:
+            findings.append((location, f"{ENGINE_BUILD_COUPLING_KEY} is published only for SparkGameFPS: {name}"))
         if name == "SparkGameFPS":
+            findings.extend(
+                _validate_engine_build_coupling(
+                    name, expected[ENGINE_BUILD_COUPLING_KEY], entry.get(ENGINE_BUILD_COUPLING_KEY), location
+                )
+            )
             if expected["cmakeDeclarationParseError"]:
                 findings.append((location, "FPS CMake add_custom_command has unbalanced parentheses"))
             for dependency in expected["sharedRootDependencies"]:

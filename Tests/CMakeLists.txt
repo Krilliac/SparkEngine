@@ -3284,7 +3284,7 @@ add_test(
     NAME FPSPublicSDK_PrivateIncludeRatchet
     COMMAND ${Python3_EXECUTABLE} -B
         ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_private_dependencies.py
-        FPSPrivateIncludeRatchetTests)
+        FPSPrivateIncludeRatchetTests FPSBuildCouplingTests)
 set_tests_properties(FPSPublicSDK_PrivateIncludeRatchet PROPERTIES
     LABELS "module;stable-v1;fps;sdk;readiness;unit;python"
     TIMEOUT 120)

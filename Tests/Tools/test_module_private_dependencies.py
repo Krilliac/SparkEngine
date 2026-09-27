@@ -14,7 +14,7 @@ engine-source include paths" (MOD-310) criteria; it does not satisfy them.
 SparkGameFPS additionally has a reviewed one-way ceiling below, which
 regenerating the inventory cannot raise.
 
-FPSPrivateIncludeRatchetTests is also registered on its own as the CTest
+FPSPrivateIncludeRatchetTests and FPSBuildCouplingTests are also registered as the CTest
 FPSPublicSDK_PrivateIncludeRatchet.
 """
 
@@ -207,6 +207,55 @@ class FPSPrivateIncludeRatchetTests(unittest.TestCase):
             [f"{FPS_MODULE} gained engine-private header not listed in its committed inventory: Utils/Logger.h"],
             findings(),
         )
+
+
+class FPSBuildCouplingTests(unittest.TestCase):
+    """MOD-310's build-system half: SparkGameFPS linking SparkEngineLib or including SparkEngine/Source."""
+
+    def setUp(self) -> None:
+        temp = tempfile.TemporaryDirectory(prefix="fps-build-coupling-")
+        self.addCleanup(temp.cleanup)
+        self.module = Path(temp.name) / FPS_MODULE
+        self.module.mkdir()
+
+    def measure(self, cmake: str) -> dict[str, bool]:
+        (self.module / "CMakeLists.txt").write_text(cmake, encoding="utf-8")
+        return module_content._engine_build_coupling(self.module)
+
+    def test_committed_inventory_matches_the_fps_cmake(self) -> None:
+        measured = module_content._engine_build_coupling(ROOT / "GameModules" / FPS_MODULE)
+        self.assertEqual(measured, _committed_entries(ROOT)[FPS_MODULE][module_content.ENGINE_BUILD_COUPLING_KEY])
+
+    def test_comment_only_mentions_are_ignored(self) -> None:
+        coupling = self.measure(
+            "# target_link_libraries(SparkGameFPS PRIVATE SparkEngineLib)\n"
+            "#[[ target_include_directories(SparkGameFPS PRIVATE \"${ENGINE_SOURCE_DIR}\") ]]\n"
+            'target_include_directories(SparkGameFPS PRIVATE "Source" "${SPARK_SDK_INCLUDE_DIR}")\n'
+            "target_link_libraries(SparkGameFPS PRIVATE SparkSDK)\n"
+        )
+        self.assertEqual({"linksSparkEngineLib": False, "engineSourceIncludeDirectory": False}, coupling)
+
+    def test_link_and_include_are_detected_on_the_module_target_only(self) -> None:
+        coupling = self.measure(
+            "if(WIN32)\n    target_link_libraries(SparkGameFPS PRIVATE SparkEngineLib)\nendif()\n"
+            "target_include_directories(OtherTarget PRIVATE ${CMAKE_SOURCE_DIR}/SparkEngine/Source)\n"
+        )
+        self.assertEqual({"linksSparkEngineLib": True, "engineSourceIncludeDirectory": False}, coupling)
+        coupling = self.measure('target_include_directories(SparkGameFPS PRIVATE\n    "${ENGINE_SOURCE_DIR}"\n)\n')
+        self.assertEqual({"linksSparkEngineLib": False, "engineSourceIncludeDirectory": True}, coupling)
+
+    def test_recoupling_a_removed_dependency_fails_by_name(self) -> None:
+        committed = {"linksSparkEngineLib": False, "engineSourceIncludeDirectory": True}
+        measured = {"linksSparkEngineLib": True, "engineSourceIncludeDirectory": True}
+        messages = [message for _, message in module_content._validate_engine_build_coupling(FPS_MODULE, measured, committed, LOCATION)]
+        self.assertEqual(
+            [
+                f"engineBuildCoupling drift for {FPS_MODULE}: expected {measured!r}",
+                f"{FPS_MODULE} regained engine build coupling linksSparkEngineLib; its committed inventory records it removed",
+            ],
+            messages,
+        )
+        self.assertEqual([], module_content._validate_engine_build_coupling(FPS_MODULE, committed, dict(committed), LOCATION))
 
 
 class RatchetMutationTests(unittest.TestCase):
