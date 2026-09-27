@@ -13,6 +13,7 @@
 #include "Spark/IEngineContext.h"
 #include "Enums/RTSEnums.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -54,6 +55,14 @@ namespace RTS
         /// non-finite or negative range is ignored, so a restored save cannot turn this into an unbounded loop.
         void UpdateVision(RTSFaction faction, float unitX, float unitY, float visionRange);
         void ClearCurrentVision(RTSFaction faction);
+
+        /// Number of grid cells UpdateVision would visit for these arguments (0 when it would visit none).
+        size_t VisionCellCost(RTSFaction faction, float unitX, float unitY, float visionRange) const;
+
+        /// Per-faction cap on the cells one vision refresh visits (RTSSkirmishSimulation::RefreshVision).
+        /// A legitimate army is far below it (a range-12 unit costs at most 625 cells, so ~1600 such units
+        /// fit); only a crafted save with MAX_RECORDS units at maximum range reaches it.
+        static constexpr size_t MAX_VISION_CELLS_PER_REFRESH = size_t{1} << 20;
 
         // === Queries ===
         bool IsVisible(RTSFaction faction, float worldX, float worldY) const;

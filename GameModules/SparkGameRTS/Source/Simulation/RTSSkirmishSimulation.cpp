@@ -415,16 +415,37 @@ namespace RTS
     void RTSSkirmishSimulation::RefreshVision()
     {
         auto& [units, buildings, resources, commands, fog, match] = m_systems;
+        m_lastVisionCellWork = 0;
         for (int factionIndex = 0; factionIndex < static_cast<int>(RTSFaction::Count); ++factionIndex)
         {
             const auto faction = static_cast<RTSFaction>(factionIndex);
             fog->ClearCurrentVision(faction);
+
+            // Bounded per faction and tick whatever a save holds; ids are walked in ascending order, so which
+            // units reveal under the cap is deterministic.
+            size_t remainingCells = RTSFogOfWarSystem::MAX_VISION_CELLS_PER_REFRESH;
             for (uint32_t unitId : units->GetUnitsByFaction(faction))
             {
-                if (const UnitData* unit = units->GetUnit(unitId))
-                    fog->UpdateVision(faction, unit->posX, unit->posY, unit->visionRange);
+                const UnitData* unit = units->GetUnit(unitId);
+                if (!unit)
+                {
+                    continue;
+                }
+                const size_t cost = fog->VisionCellCost(faction, unit->posX, unit->posY, unit->visionRange);
+                if (cost > remainingCells)
+                {
+                    continue;
+                }
+                remainingCells -= cost;
+                m_lastVisionCellWork += cost;
+                fog->UpdateVision(faction, unit->posX, unit->posY, unit->visionRange);
             }
         }
+    }
+
+    size_t RTSSkirmishSimulation::GetLastVisionCellWork() const
+    {
+        return m_lastVisionCellWork;
     }
 
     void RTSSkirmishSimulation::UpdateEliminations()

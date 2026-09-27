@@ -164,6 +164,21 @@ namespace RTS
         }
     }
 
+    size_t RTSFogOfWarSystem::VisionCellCost(RTSFaction faction, float unitX, float unitY, float visionRange) const
+    {
+        const auto it = m_grids.find(faction);
+        if (it == m_grids.end())
+        {
+            return 0;
+        }
+        const CellRect rect = ClipDisc(it->second, WorldToGrid(unitX), WorldToGrid(unitY), visionRange);
+        if (rect.minX > rect.maxX || rect.minY > rect.maxY)
+        {
+            return 0;
+        }
+        return static_cast<size_t>(rect.maxX - rect.minX + 1) * static_cast<size_t>(rect.maxY - rect.minY + 1);
+    }
+
     void RTSFogOfWarSystem::ClearCurrentVision(RTSFaction faction)
     {
         auto it = m_grids.find(faction);

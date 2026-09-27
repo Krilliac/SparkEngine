@@ -297,11 +297,18 @@ TEST(SEC2GM_RTSFogVisionIsClippedToTheGrid)
 
 TEST(SEC2GM_RTSRestoreRejectsUnboundedVisionRange)
 {
+    // The bound is a gameplay range (templates use 7-12), not the map size: a map-sized 1024 is refused.
+    EXPECT_TRUE(RTS::RTSUnitSystem::MAX_VISION_RANGE >= 12.0f);
+    EXPECT_TRUE(RTS::RTSUnitSystem::MAX_VISION_RANGE <= 64.0f);
+
     RTS::UnitData unit;
     unit.unitId = 1;
-    unit.visionRange = 10000.0f;
     RTS::RTSUnitSystem units;
-    EXPECT_FALSE(units.RestoreState({unit}, 2));
+    for (const float range : {10000.0f, 1024.0f, RTS::RTSUnitSystem::MAX_VISION_RANGE + 1.0f})
+    {
+        unit.visionRange = range;
+        EXPECT_FALSE(units.RestoreState({unit}, 2));
+    }
     unit.visionRange = RTS::RTSUnitSystem::MAX_VISION_RANGE;
     EXPECT_TRUE(units.RestoreState({unit}, 2));
 
@@ -321,9 +328,100 @@ TEST(SEC2GM_RTSRestoreRejectsUnboundedVisionRange)
     ASSERT_FALSE(snapshot.units.empty());
     std::string error;
     EXPECT_TRUE(RTS::RTSPersistence::Validate(snapshot, error));
-    snapshot.units.front().visionRange = 10000.0f;
+    snapshot.units.front().visionRange = 1024.0f;
     EXPECT_FALSE(RTS::RTSPersistence::Validate(snapshot, error));
     EXPECT_FALSE(error.empty());
+    snapshot.units.front().visionRange = RTS::RTSUnitSystem::MAX_VISION_RANGE;
+    EXPECT_TRUE(RTS::RTSPersistence::Validate(snapshot, error));
+}
+
+TEST(SEC2GM_RTSVisionRefreshWorkIsBoundedAtRecordCap)
+{
+    RTS::RTSUnitSystem units;
+    RTS::RTSBuildingSystem buildings;
+    RTS::RTSResourceSystem resources;
+    RTS::RTSCommandSystem commands;
+    RTS::RTSFogOfWarSystem fog;
+    RTS::RTSMatchSystem match;
+    RTS::RTSSkirmishSimulation simulation;
+    const RTS::RTSSkirmishSystems systems{&units, &buildings, &resources, &commands, &fog, &match};
+    ASSERT_TRUE(simulation.Initialize(nullptr, systems));
+    ASSERT_TRUE(simulation.StartDefaultSkirmish());
+
+    constexpr size_t factionCount = static_cast<size_t>(RTS::RTSFaction::Count);
+    constexpr size_t refreshCap = factionCount * RTS::RTSFogOfWarSystem::MAX_VISION_CELLS_PER_REFRESH;
+
+    // A legitimate skirmish is far below the cap, so every unit still reveals its own cell.
+    simulation.Step();
+    EXPECT_TRUE(simulation.GetLastVisionCellWork() > 0);
+    EXPECT_TRUE(simulation.GetLastVisionCellWork() < RTS::RTSFogOfWarSystem::MAX_VISION_CELLS_PER_REFRESH);
+    for (const RTS::RTSFaction faction : {RTS::RTSFaction::Human, RTS::RTSFaction::Swarm})
+    {
+        for (const uint32_t unitId : units.GetUnitsByFaction(faction))
+        {
+            const RTS::UnitData* unit = units.GetUnit(unitId);
+            ASSERT_TRUE(unit != nullptr);
+            EXPECT_TRUE(fog.IsVisible(faction, unit->posX, unit->posY));
+        }
+    }
+
+    // A crafted save that passes validation: the widest fog grid, MAX_RECORDS units, every one at the maximum
+    // vision range and spread so their discs are not clipped by the grid edge.
+    RTS::RTSPersistenceSnapshot snapshot = RTS::RTSPersistence::Capture(systems, simulation);
+    ASSERT_FALSE(snapshot.units.empty());
+    constexpr int dimension = RTS::RTSFogOfWarSystem::MAX_MAP_DIMENSION;
+    for (RTS::FogGrid& grid : snapshot.fog)
+    {
+        grid.width = dimension;
+        grid.height = dimension;
+        grid.cells.assign(static_cast<size_t>(dimension) * static_cast<size_t>(dimension),
+                          RTS::RTSVisibility::Unexplored);
+    }
+    for (RTS::UnitData& existing : snapshot.units)
+    {
+        existing.visionRange = RTS::RTSUnitSystem::MAX_VISION_RANGE;
+    }
+    uint32_t nextId = snapshot.nextUnitId;
+    for (size_t index = 0; snapshot.units.size() < RTS::RTSPersistence::MAX_RECORDS; ++index)
+    {
+        RTS::UnitData unit;
+        unit.unitId = nextId++;
+        unit.type = RTS::RTSUnitType::Scout;
+        unit.faction = (index % 2 == 0) ? RTS::RTSFaction::Human : RTS::RTSFaction::Swarm;
+        unit.damage = 0.0f;
+        unit.attackSpeed = 0.0f;
+        unit.visionRange = RTS::RTSUnitSystem::MAX_VISION_RANGE;
+        unit.posX = 70.0f + static_cast<float>(index % 96) * 9.0f;
+        unit.posY = 70.0f + static_cast<float>(index / 96) * 8.0f;
+        snapshot.units.push_back(unit);
+    }
+    snapshot.nextUnitId = nextId;
+    snapshot.tick = 1; // keep the AI's once-a-second decision pass out of the measured tick
+    std::string error;
+    ASSERT_TRUE(RTS::RTSPersistence::Apply(snapshot, systems, simulation, error));
+    ASSERT_EQ(units.GetUnitCount(), RTS::RTSPersistence::MAX_RECORDS);
+
+    // Without the per-refresh cap this one tick would visit every unit's full disc rectangle.
+    size_t uncappedWork = 0;
+    for (const RTS::UnitData& unit : snapshot.units)
+    {
+        uncappedWork += fog.VisionCellCost(unit.faction, unit.posX, unit.posY, unit.visionRange);
+    }
+    EXPECT_TRUE(uncappedWork > 20 * refreshCap);
+
+    simulation.Step();
+    EXPECT_TRUE(simulation.GetLastVisionCellWork() <= refreshCap);
+    EXPECT_TRUE(simulation.GetLastVisionCellWork() > 0);
+
+    // Units are revealed in ascending id order, so the lowest-id unit of each faction still sees.
+    for (const RTS::RTSFaction faction : {RTS::RTSFaction::Human, RTS::RTSFaction::Swarm})
+    {
+        const std::vector<uint32_t> ids = units.GetUnitsByFaction(faction);
+        ASSERT_FALSE(ids.empty());
+        const RTS::UnitData* first = units.GetUnit(ids.front());
+        ASSERT_TRUE(first != nullptr);
+        EXPECT_TRUE(fog.IsVisible(faction, first->posX, first->posY));
+    }
 }
 
 #ifdef ENABLE_NETWORKING

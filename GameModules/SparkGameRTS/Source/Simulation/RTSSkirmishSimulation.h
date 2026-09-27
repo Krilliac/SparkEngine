@@ -15,6 +15,7 @@
 
 #include "Enums/RTSEnums.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace Spark
@@ -99,6 +100,15 @@ namespace RTS
          */
         uint64_t ComputeStateHash() const;
 
+        /**
+         * @brief Fog cells the most recent vision refresh visited, summed over factions.
+         *
+         * Each faction's refresh is capped at RTSFogOfWarSystem::MAX_VISION_CELLS_PER_REFRESH: units are
+         * revealed in ascending id order and a unit whose disc would exceed the remaining budget reveals
+         * nothing that tick, so a restored save cannot make one tick's fog work grow with units * range^2.
+         */
+        size_t GetLastVisionCellWork() const;
+
       private:
         void RunAIOpponents();
         void ResolveCombat();
@@ -109,6 +119,7 @@ namespace RTS
         RTSSkirmishSystems m_systems;
         double m_accumulatedSeconds{0.0};
         uint64_t m_tick{0};
+        size_t m_lastVisionCellWork{0};
     };
 
 } // namespace RTS
