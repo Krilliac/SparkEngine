@@ -656,6 +656,9 @@ add_executable(SparkTests
     # DATA-120 / OD-22: no plaintext password, session token, or DB credential
     # at rest (TF account store above + MMO KV store + shipped config scan).
     TestDATA120SecretsAtRest.cpp
+    # MOD-320: MMO character IDs and per-character state across a cold restart
+    # (MMOPersistenceSystem below; the character-system case needs the ImGui block).
+    TestMOD320MMOPersistenceReal.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp"
     # W7/W8 outfit persistence + secondary-motion chain math — both module

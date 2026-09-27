@@ -32,6 +32,7 @@
     "files": [
       "Tests/TestGameModuleMMO.cpp",
       "Tests/TestMMOCredentialSecurity.cpp",
+      "Tests/TestMOD320MMOPersistenceReal.cpp",
       "Tests/harden/Test_gamemodules_mmochat_di.cpp"
     ],
     "prefixes": [
@@ -42,6 +43,10 @@
       {
         "prefix": "MMOCredentials_",
         "count": 3
+      },
+      {
+        "prefix": "MMOPersistence_",
+        "count": 10
       }
     ]
   },

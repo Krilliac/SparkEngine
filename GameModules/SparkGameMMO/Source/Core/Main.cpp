@@ -230,6 +230,7 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     {
         return failLoad("[MMO] Failed to initialize character system");
     }
+    m_characterSystem->SetPersistence(m_persistenceSystem.get());
 
     m_loginUI = std::make_unique<MMO::MMOLoginUI>();
     if (!m_loginUI->Initialize(context, m_accountSystem.get(), m_characterSystem.get()))
@@ -245,6 +246,12 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
             MMO::CharacterSaveData saved;
             if (m_persistenceSystem && m_persistenceSystem->LoadCharacter(characterId, saved) && !saved.name.empty())
             {
+                if (saved.accountId != 0 && saved.accountId != accountId)
+                {
+                    Spark::SimpleConsole::GetInstance().LogError("[MMO] Character " + std::to_string(characterId) +
+                                                                 " belongs to another account");
+                    return;
+                }
                 // Legacy records did not persist accountId; the authenticated
                 // login flow is authoritative for ownership during migration.
                 saved.accountId = accountId;

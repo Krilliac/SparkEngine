@@ -118,18 +118,25 @@ namespace MMO
         LoadCharacter = 1102,
         DeleteCharacter = 1103,
         ListCharacters = 1104,
+        LoadNextCharacterId = 1105,
+        SaveNextCharacterId = 1106,
 
-        // Inventory
-        SaveInventorySlot = 1200,
-        LoadInventory = 1201,
-        ClearInventory = 1202,
+        // Inventory. The whole inventory is one "inventory_<id>" record; the
+        // per-slot "inv_<id>_<slot>" keys of earlier builds are only listed and
+        // deleted when their character is deleted.
+        ListLegacyInventorySlots = 1201,
+        DeleteLegacyInventorySlot = 1202,
         SaveCurrency = 1203,
         LoadCurrency = 1204,
+        SaveInventory = 1205,
+        LoadInventory = 1206,
+        DeleteInventory = 1207,
+        DeleteCurrency = 1208,
 
         // Reputation
         SaveReputation = 1300,
         LoadReputation = 1301,
-        ClearReputation = 1302,
+        DeleteReputation = 1302,
         LoadReputationValue = 1303,
 
         // Achievements
@@ -138,12 +145,17 @@ namespace MMO
         SaveAchievementStat = 1402,
         LoadAchievementStats = 1403,
         LoadAchievementStatValue = 1404,
+        DeleteAchievement = 1405,
+        DeleteAchievementStat = 1406,
 
         // Crafting
         SaveCraftingSkill = 1500,
         LoadCraftingSkills = 1501,
         SaveKnownRecipe = 1502,
         LoadKnownRecipes = 1503,
+        LoadCraftingSkillValue = 1504,
+        DeleteCraftingSkill = 1505,
+        DeleteKnownRecipe = 1506,
 
         // Guilds
         SaveGuild = 1600,
@@ -155,7 +167,8 @@ namespace MMO
         // Lockouts
         SaveLockout = 1700,
         LoadLockouts = 1701,
-        ClearExpiredLockouts = 1702,
+        LoadLockoutValue = 1703,
+        DeleteLockout = 1704,
 
         // Boss kills
         SaveBossKill = 1800,
@@ -185,7 +198,13 @@ namespace MMO
 
         // === Character Persistence ===
 
-        /// Create a new character record, returns character ID (sync)
+        /// Reserve a character ID that no earlier run handed out. The advanced
+        /// counter is durable before the ID is returned, so a restart never
+        /// reissues it. Returns 0 when not initialized, the counter cannot be
+        /// persisted, or the 32-bit ID space is exhausted.
+        uint32_t AllocateCharacterId();
+
+        /// Create a new character record with an allocated ID, returns the ID or 0 (sync)
         uint32_t CreateCharacter(const std::string& name, uint32_t accountId);
 
         /// Load character data synchronously (call at login)
@@ -194,13 +213,15 @@ namespace MMO
         /// Save character data asynchronously (call periodically)
         void SaveCharacterAsync(const CharacterSaveData& data);
 
-        /// Save character data synchronously (call at logout/shutdown)
+        /// Save character data synchronously (call at logout/shutdown). The
+        /// character row and every subsystem record commit as one transaction.
         bool SaveCharacterSync(const CharacterSaveData& data);
 
         /// Delete a character and all associated data
         bool DeleteCharacter(uint32_t characterId);
 
-        /// List all characters for an account
+        /// (characterId, name) of every stored character owned by accountId.
+        /// Records without a stored owner (pre-accountId builds) are never listed.
         std::vector<std::pair<uint32_t, std::string>> ListCharacters(uint32_t accountId);
 
         // === World Persistence ===
@@ -228,24 +249,31 @@ namespace MMO
         std::string GetStatusString() const;
 
       private:
+        using Transaction = Spark::Persistence::Transaction;
+
         void RegisterPreparedStatements();
         void CreateSchema();
+        void SeedCharacterIdCounter();
+        Transaction BuildCharacterSave(const CharacterSaveData& data) const;
+        void AppendKeyDeletes(Transaction& tx, MMOStmtId listStmt, MMOStmtId deleteStmt, uint32_t charId,
+                              const std::string& family);
 
-        // Subsystem save/load helpers
-        void SaveInventory(uint32_t charId, const InventoryData& inv);
-        void LoadInventory(uint32_t charId, InventoryData& inv);
-        void SaveReputationState(uint32_t charId, const ReputationState& state);
+        // Subsystem save/load helpers. Saves append to the character's save transaction.
+        void SaveInventory(Transaction& tx, uint32_t charId, const InventoryData& inv) const;
+        bool LoadInventory(uint32_t charId, InventoryData& inv);
+        void SaveReputationState(Transaction& tx, uint32_t charId, const ReputationState& state) const;
         void LoadReputationState(uint32_t charId, ReputationState& state);
-        void SaveAchievementState(uint32_t charId, const AchievementState& state);
+        void SaveAchievementState(Transaction& tx, uint32_t charId, const AchievementState& state) const;
         void LoadAchievementState(uint32_t charId, AchievementState& state);
-        void SaveCraftingState(uint32_t charId, const CraftingState& state);
+        void SaveCraftingState(Transaction& tx, uint32_t charId, const CraftingState& state) const;
         void LoadCraftingState(uint32_t charId, CraftingState& state);
-        void SaveLockouts(uint32_t charId, const DungeonPlayerState& state);
+        void SaveLockouts(Transaction& tx, uint32_t charId, const DungeonPlayerState& state) const;
         void LoadLockouts(uint32_t charId, DungeonPlayerState& state);
 
         Spark::IEngineContext* m_context{nullptr};
         std::unique_ptr<Spark::Persistence::AsyncDatabasePool> m_db;
         bool m_initialized{false};
+        uint64_t m_nextCharacterId = 1; ///< next ID AllocateCharacterId hands out; > UINT32_MAX when exhausted
 
         float m_autoSaveInterval = 300.0f; // 5 minutes
         float m_autoSaveTimer = 0.0f;
