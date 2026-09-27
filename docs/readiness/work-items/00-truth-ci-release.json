@@ -1492,7 +1492,7 @@
       "wave": 6,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence. 2026-09-24 progress: tools/release_notes.py now renders the stable RELEASE_BODY (release.yml step 'Render fail-closed stable release notes', after the signature bundle and before draft staging) from the stable-v1 profile in docs/site/readiness.json (support matrix, supported hosts, experimental/unsupported capabilities, excluded gates, limitations verbatim), the single CHANGELOG.md [X.Y.Z] section and its migration subsection, the frozen SHA256SUMS lines, and fixed sha256sum/openssl/gh attestation verification instructions with the pinned signer fingerprint. It fails closed on a missing or duplicated version section, empty or inconsistent SHA256SUMS, an SBOM or SHA256SUMS absent from the expected asset list, or a missing signature control asset whose public key does not match the pinned fingerprint. ReleaseProfileRehearsal_ReleaseNotes (Tests/Tools/test_release_notes.py, 22 cases) passes locally; it covers only the notes, so the ReleaseProfileRehearsal_Qualification* rehearsal selector stays planned. No hosted stable run has rendered these notes yet.",
+      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence. 2026-09-24 progress: tools/release_notes.py now renders the stable RELEASE_BODY (release.yml step 'Render fail-closed stable release notes', after the signature bundle and before draft staging) from the stable-v1 profile in docs/site/readiness.json (support matrix, supported hosts, experimental/unsupported capabilities, excluded gates, limitations verbatim), the single CHANGELOG.md [X.Y.Z] section and its migration subsection, the frozen SHA256SUMS lines, and fixed sha256sum/openssl/gh attestation verification instructions with the pinned signer fingerprint. It fails closed on a missing or duplicated version section, empty or inconsistent SHA256SUMS, an SBOM or SHA256SUMS absent from the expected asset list, or a missing signature control asset whose public key does not match the pinned fingerprint. ReleaseProfileRehearsal_ReleaseNotes (Tests/Tools/test_release_notes.py, 22 cases) passes locally; it covers only the notes. No hosted stable run has rendered these notes yet. 2026-09-27: tools/release_qualification.py (CTest ReleaseProfileRehearsal_Qualification, Tests/Tools/test_release_qualification.py) qualifies a candidate from the ledger and the exact-SHA gate record and runs in release.yml profile-required-gates, so the ReleaseProfileRehearsal_Qualification* selector is promoted out of plannedTestSelectors; it refuses the current contract while REL-190 is blocked, and no hosted run has retained a qualification report.",
       "dependencies": [
         "REL-100", "REL-110", "PLT-200", "RHI-210", "HEAD-220", "EDT-210",
         "SDK-240", "PERF-100", "OPS-100", "GOV-400", "DOC-400", "INST-130",
@@ -1554,7 +1554,7 @@
           "criterionDigest": "sha256:f24b9e8fd483",
           "state": "unmet",
           "evidence": [],
-          "note": "profile-required-gates now exists in release.yml, but the release-approval job does not, and the ReleaseProfileRehearsal_Qualification* selector is still planned. Blocking on failure also needs a hosted run."
+          "note": "profile-required-gates now exists in release.yml and runs the ReleaseProfileRehearsal_Qualification rehearsal, but the release-approval job does not exist. Blocking on failure also needs a hosted run."
         },
         {
           "criterionDigest": "sha256:90bdc7c18dcd",
@@ -1575,7 +1575,7 @@
       "definitionOfDone": ["All supported-host rehearsals pass at the candidate SHA", "Qualification sign-off and protected approval evidence are retained", "No planned qualification job or selector remains"],
       "profileApplicability": {"stable-v1": "shared"},
       "plannedCiJobs": ["release-approval"],
-      "plannedTestSelectors": ["ReleaseProfileRehearsal_Qualification*"]
+      "plannedTestSelectors": []
     },
     {
       "id": "REL-200",
