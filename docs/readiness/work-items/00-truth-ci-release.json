@@ -717,7 +717,6 @@
       ],
       "plannedTestSelectors": [
         "TestRegistration_*",
-        "GoldenImage_*",
         "CoverageBudget_*"
       ]
     },

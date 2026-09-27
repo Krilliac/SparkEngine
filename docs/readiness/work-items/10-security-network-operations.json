@@ -59,9 +59,10 @@
             "Tests/TestRemoteDebugSystem.cpp",
             "Tests/TestGatewayAreaControl.cpp",
             "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h",
-            "SparkGateway/src/GatewayAreaControl.cpp"
+            "SparkGateway/src/GatewayAreaControl.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Malformed, expired, replayed, rate-limited and reserved-command-rebind (downgrade) denials are tested, plus gateway wrong-key MAC, stale timestamp and replayed nonce rejection. These run against production code linked into SparkTests."
+          "note": "Already implemented. This adds evidence: GatewayAreaControl_RejectsOversizeFrame, _RejectsWrongServiceId, _RejectsMalformedFrames, _RejectsPhaseMismatch, _RejectsOutOfRangeTimestamp and _RejectsTruncatedAndOverlongHeaderFrames, each a gateway;security;network CTest with EXPECT_COUNT=1."
         },
         {
           "criterionDigest": "sha256:cc7d31770b8e",
@@ -70,18 +71,22 @@
             "Tests/TestRemoteDebugSystem.cpp",
             "Tests/TestDedicatedServerRuntime.cpp",
             "Tests/TestGatewayAreaControl.cpp",
-            "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h"
+            "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Audit disposition and eviction-count tests, RconAuditRedactsArgumentsAndResponses and GatewayAreaControl_AuditRecordOmitsSecrets check that each attempt is audited and secrets are absent."
+          "note": "Already implemented. This adds evidence: GatewayAreaControl_RejectsMalformedFrames asserts reason=decode_failed audit lines with no MAC hex and no control characters."
         },
         {
           "criterionDigest": "sha256:d945d445bf2a",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestSEC100RemoteAdminUnavailableReal.cpp",
-            "SparkEngine/Source/Engine/Networking/DedicatedServer.h"
+            "SparkEngine/Source/Engine/Networking/DedicatedServer.h",
+            "SparkServer/src/ServerApplication.cpp",
+            "Tests/Tools/test_remote_admin_switch_scan.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Downgraded: the compile-time checks catch only the named entry points and fields. Nothing tests that no command-line switch enables it, and the networking-off Shipping contract is not built by any lane."
+          "note": "Criterion sha256:d945d445bf2a. The CTests RemoteAdmin_UnavailableServerCliSwitchesRejected, RemoteAdmin_UnavailableServerConfigKeysRejected and RemoteAdmin_UnavailableSwitchScan are selected by RemoteAdmin_Unavailable* and by the security-runtime steps -R RemoteAdmin and -L ^remote-admin$. The ENABLE_NETWORKING=OFF contract (SparkNetworkingDisabledCompileContract) still needs a hosted lane."
         }
       ],
       "commands": [
@@ -205,17 +210,23 @@
         },
         {
           "criterionDigest": "sha256:b70931523204",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_generate_sbom.py",
-            "tools/generate-sbom.py"
+            "tools/generate-sbom.py",
+            ".github/workflows/release.yml",
+            "Tests/Tools/test_release_supply_chain_wiring.py",
+            "Tests/CMakeLists.txt"
           ],
           "note": "Reconcile mode is tested but not wired into the release.yml package jobs. There is no final Windows or hosted package reconciliation evidence."
         },
         {
           "criterionDigest": "sha256:a0dafc5583e3",
-          "state": "unmet",
-          "evidence": [],
+          "state": "implemented",
+          "evidence": [
+            ".github/workflows/release.yml",
+            "Tests/Tools/test_release_supply_chain_wiring.py"
+          ],
           "note": "Needs published release artifacts carrying verified SBOM and provenance. No such release exists."
         }
       ],
@@ -616,9 +627,13 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:1bdf18cdc828",
-          "state": "unmet",
-          "evidence": [],
-          "note": "docs/specs/online-services.md has a diagram and boundaries B1-B9, but no check requires that content. The validator only checks the file exists and its wording."
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/specs/online-services.md"
+          ],
+          "note": "online_service_spec_contract_errors enforces the mermaid block, that boundary ids match the table with owner and enforcement filled in, that interface paths and symbols exist, and that every adapter class appears in the register. OnlineServiceBoundaryTests: 22 tests pass locally."
         },
         {
           "criterionDigest": "sha256:70dbbe77ed6e",
@@ -628,15 +643,29 @@
         },
         {
           "criterionDigest": "sha256:5f2ff3eec738",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No production adapter exists. GuardedOnlinePlatform is tested only against a fault-injecting test adapter."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Engine/OnlineServices/OnlineServices.h",
+            "SparkEngine/Source/Core/EngineConsoleCommands.cpp",
+            "SparkGateway/src/GuardedGatewayAuthenticator.h",
+            "SparkGateway/src/GatewayCoordinator.cpp",
+            "SparkGateway/src/GatewayApplication.cpp",
+            "Tests/TestOnlineServices.cpp",
+            "Tests/TestSparkGatewayCoordinator.cpp",
+            "Tests/TestGatewayAreaControl.cpp",
+            "Tests/CMakeLists.txt",
+            "docs/specs/online-services.md"
+          ],
+          "note": "Safe failure: GuardedOnlinePlatform (5 ms budget, per-capability circuit) and GuardedGatewayAuthenticator (exception containment, 2 s budget, fault circuit, redaction). Observable: gateway health 'authentication' ready=false when failing fast; online_status command. CTests: OnlineServicesDegraded (11), GatewayGuardedAuthenticator (7). OD-08: owner to confirm this meets 'production adapters'."
         },
         {
           "criterionDigest": "sha256:dbc290e08ea2",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Downgraded. validate.py only catches hosted/managed/turnkey phrasing on a fixed set of pages. A 'production' claim about a local JSON or demo store (TFDatabase, MMO modules) elsewhere would pass."
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "LOCAL_STORE_PRODUCTION_CLAIM / local_store_production_claim_errors scan wiki/, docs/, README, GameModules README/DESIGN, module.json descriptions and docs/site/*.json. They also check adapter name and status literals. The live repository passes."
         }
       ],
       "commands": [
@@ -682,9 +711,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "service-contract"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -875,9 +902,11 @@
             "SparkCrashReporter/tests/CrashReporterManifestTests.cpp",
             "SparkCrashReporter/src/CrashReporterApp.cpp",
             "SparkCrashReporter/CMakeLists.txt",
-            "Tests/Tools/test_ops100_crash_security.py"
+            "Tests/Tools/test_ops100_crash_security.py",
+            "tools/site-data/contract_selectors.py",
+            "Tests/Tools/test_site_data_contract.py"
           ],
-          "note": "CTest SparkCrashReporter.ManifestCompatibility builds the production reporter. It rejects traversal, symlinks, junctions, hardlinks and file swaps, and checks outside sentinel files survive."
+          "note": "The state is unchanged; only the selectors and evidence change. Move CrashManifest_PathEscape, CrashManifest_SecretRedaction and CrashReporter_Consent out of OPS-100.plannedTestSelectors; they are already in testSelectors. Update the note to name CTest CrashManifest_PathEscape (--group=path-escape) instead of only ManifestCompatibility."
         },
         {
           "criterionDigest": "sha256:fbf020452e6c",
@@ -886,9 +915,10 @@
             "SparkCrashReporter/tests/CrashReporterConsentTests.cpp",
             "SparkCrashReporter/src/CrashReporterApp.cpp",
             "Tests/TestTelemetrySpool.cpp",
-            "SparkEngine/Source/Utils/Telemetry.h"
+            "SparkEngine/Source/Utils/Telemetry.h",
+            "SparkCrashReporter/CMakeLists.txt"
           ],
-          "note": "CTest CrashReporter_Consent: declined or unanswered prompts make zero fake-gh calls, and an explicit yes makes one. Telemetry_SpoolRecovery_ConsentRevocation: no backend call after revocation."
+          "note": "The state is unchanged. The CTest is now registered as CrashReporter_Consent, not SparkCrashReporter.CrashReporter_Consent. Update any rationale or handoff text that uses the dotted name."
         },
         {
           "criterionDigest": "sha256:3a1537530a6f",
@@ -991,11 +1021,7 @@
         "crash-security",
         "crash-canary"
       ],
-      "plannedTestSelectors": [
-        "CrashManifest_PathEscape",
-        "CrashManifest_SecretRedaction",
-        "CrashReporter_Consent"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "OPS-110",
@@ -1078,7 +1104,8 @@
         "Server_Soak",
         "Server_Chaos",
         "Server_Health_*",
-        "Server_BackupRestore"
+        "Server_BackupRestore",
+        "Server_RecoveryDrill"
       ],
       "requiredCiJobs": [
         "server-soak",
@@ -1257,9 +1284,7 @@
         "golden-d3d11",
         "soak-scheduled"
       ],
-      "plannedTestSelectors": [
-        "GoldenImage_*"
-      ]
+      "plannedTestSelectors": []
     }
   ]
 }

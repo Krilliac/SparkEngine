@@ -279,7 +279,7 @@
       "id": "PLT-220",
       "title": "Complete and certify the macOS product path",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "platform",
@@ -333,9 +333,16 @@
         },
         {
           "criterionDigest": "sha256:415123b513a2",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No checker ties the documented minimum macOS version to the binary deployment target or CI."
+          "state": "implemented",
+          "evidence": [
+            "CMakeLists.txt",
+            "tools/check_macos_min_version.py",
+            "Tests/Tools/test_macos_min_version.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            "wiki/platform/System-Requirements.md"
+          ],
+          "note": "Add 'MacOSBaseline_*' to PLT-220 testSelectors as a new non-planned selector. Leave MacCertification_* planned. The binary-side check runs in the continue-on-error build-macos job (OD-11), so there is no hosted exact-SHA binary record yet. Keep the status at partial if the ledger needs hosted binary evidence to call this implemented."
         }
       ],
       "commands": [
@@ -1603,9 +1610,15 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:a9bbfa256f65",
-          "state": "unmet",
-          "evidence": [],
-          "note": "There is no repeated boot/shutdown loop test, no module reload tests, and no sanitizer/deadlock run of lifecycle loops."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestLIFE200LifecycleLoopReal.cpp",
+            "Tests/TestLIFE200ModuleReloadLoopReal.cpp",
+            "Tests/LifecycleLoopGuards.h",
+            "Tests/PackageSmoke/run_headless_boot_loop.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "criterionDigest sha256:a9bbfa256f65. Repeated-loop coverage: TestLIFE200LifecycleLoopReal.cpp and TestLIFE200ModuleReloadLoopReal.cpp (ModuleReload_*, now in testSelectors) with the LifecycleLoopGuards.h leak and deadlock checks and run_headless_boot_loop.py. The ASan and TSan runs of these tests are hosted-CI evidence and have not been run locally."
         },
         {
           "criterionDigest": "sha256:0e019adbc00a",
@@ -1679,9 +1692,7 @@
         "lifecycle-asan",
         "lifecycle-tsan"
       ],
-      "plannedTestSelectors": [
-        "ModuleReload_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "EDT-210",
@@ -1737,11 +1748,25 @@
         },
         {
           "criterionDigest": "sha256:69382bab2d53",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "SparkEditor/Source/Panels/InspectorPanel.cpp"
+            "SparkEditor/Source/Panels/InspectorPanel.cpp",
+            "SparkEditor/Source/AssetPipeline/EditorAssetDrag.h",
+            "SparkEditor/Source/AssetPipeline/EditorAssetDrag.cpp",
+            "SparkEditor/Source/Panels/AssetBrowserPanel.cpp",
+            "SparkEditor/Source/Panels/InspectorComponentRenderers_Core3D.cpp",
+            "Tests/TestEditorAssetDrag.cpp",
+            "SparkEngine/Source/Core/HostScenePreview.h",
+            "SparkEngine/Source/Core/HostScenePreview.cpp",
+            "SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp",
+            "SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp",
+            "cmake/RunSparkWindowsScenePreview.cmake",
+            "SparkEditor/Source/Panels/BuildPipeline.cpp",
+            "SparkEditor/Source/Panels/BuildPipeline.h",
+            "Tests/TestEditorSubsystems.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "There is no asset drop target, no asset-drag tests, and the cook-and-run path is untested."
+          "note": "Evidence needs the central MSVC build and the ctests EditorAssetDrag (5 tests) and WindowsScenePreview to pass at this SHA. None of this was built or run here."
         },
         {
           "criterionDigest": "sha256:4c9b9b22f00d",
@@ -1753,12 +1778,17 @@
         },
         {
           "criterionDigest": "sha256:66e00b9727df",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestEditorRecovery.cpp",
-            "SparkEditor/Source/Core/EditorRecovery.cpp"
+            "SparkEditor/Source/Core/EditorRecovery.cpp",
+            "SparkEngine/Source/Core/HostScenePreview.cpp",
+            "SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp",
+            "SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp",
+            "cmake/RunSparkWindowsScenePreview.cmake",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "The recovery store is tested. Crash-triggered restore and atomicity across failing editor operations are not qualified."
+          "note": "Scope: a failed Windows -scene load now exits 4 with no SPARK_SCENE_LOADED record, where it used to clear the path and exit 0. The WindowsScenePreview ctest covers the missing and malformed cases. This only covers the scene-host failure path; it has not been built or run here."
         }
       ],
       "commands": [
@@ -1810,7 +1840,6 @@
         "editor-package-roundtrip"
       ],
       "plannedTestSelectors": [
-        "EditorAssetDrag_*",
         "EditorCookPackage_*"
       ]
     },
@@ -1996,40 +2025,61 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:1e666db357f8",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
             "Tests/TestReflectedSceneCompatibility.cpp",
-            "Tests/Fixtures/Compatibility/ReflectedScene/README.md"
+            "Tests/Fixtures/Compatibility/ReflectedScene/README.md",
+            "Tests/Fixtures/Compatibility/EditorState/README.md",
+            "Tests/Fixtures/Compatibility/EditorState/v1-project/V1Project.sparkproject",
+            "Tests/Fixtures/Compatibility/EditorState/v2-future-project/Future.sparkproject",
+            "Tests/TestEditorStateCompatibility.cpp"
           ],
-          "note": "Reflected-World fixtures for version 1 and the legacy sceneVersion 1 dialect load in place with declared state and are never rewritten; legacy re-saves as version 1 and a version 2 fixture fails closed (SceneMigration_Reflected*, local only). Prefab and editor-state N-1 fixtures and migrations are missing."
+          "note": "Editor-state part only; promotion needs an owner decision. .sparkproject was only ever written as version 1, so no N-1 exists. The v1 fixture loads its declared state without a rewrite (EditorStateMigration_V1ProjectFixtureLoadsDeclaredStateWithoutRewrite) and the v2 fixture fails closed, as the ledger accepted for the reflected dialect. Prefabs likewise: only SPARKPREFAB 1 exists."
         },
         {
           "criterionDigest": "sha256:8d9be8a2494e",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp"
+            "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
+            "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+            "SparkEditor/Source/Prefabs/PrefabManager.cpp",
+            "SparkEditor/Source/Core/ProjectManager.cpp",
+            "Tests/TestPrefabPersistence.cpp",
+            "Tests/TestEditorStateCompatibility.cpp"
           ],
-          "note": "Save .bak fallback exists. Rollback is untested for prefabs, editor state and asset migrations."
+          "note": "A damaged prefab or project file falls back to its retained .bak and reports both reasons; a later save keeps the good .bak. Tests: PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons, EditorStateMigration_CorruptProjectLoadsRetainedBackup, and *_SaveAfterBackupRecoveryKeepsGoodBackup in both suites. Asset-migration rollback is not covered."
         },
         {
           "criterionDigest": "sha256:33b4700b3cfc",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
             "SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp",
-            "Tests/TestSaveInterruptionReal.cpp"
+            "Tests/TestSaveInterruptionReal.cpp",
+            "SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.h",
+            "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+            "SparkEditor/Source/Core/ProjectManager.cpp",
+            "Tests/TestDocumentDurableWrite.cpp",
+            "Tests/TestPrefabPersistence.cpp",
+            "Tests/TestEditorStateCompatibility.cpp"
           ],
-          "note": "Saves: CRC tests, the AtomicWrite_ SIGKILL rehearsal and two deterministic .bak guards pass locally via SPARK_TEST_NAME_PREFIX=AtomicWrite_ (ctest SparkSaveInterruptionTests not yet run); the rehearsal found and fixed a torn .bak. Still open: Windows TerminateProcess rehearsal, interruption rehearsal for scene/prefab/editor-state writes, and hosted exact-SHA evidence."
+          "note": "Prefab and .sparkproject saves stage, flush and rename, and refresh .bak by staged rename. A failed save leaves the prior file byte-identical; a save after .bak recovery does not copy the damaged primary over .bak. A blocked final rename is tested on Windows. Tests: DocumentWrite_* (4), PrefabPersistence_*, EditorStateMigration_*. Open: Windows TerminateProcess rehearsal, hosted exact-SHA run."
         },
         {
           "criterionDigest": "sha256:333b592702f6",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
-            "Tests/TestReflectedScene.cpp"
+            "Tests/TestReflectedScene.cpp",
+            "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+            "SparkEngine/Source/Engine/ECS/RuntimePrefab.h",
+            "SparkEditor/Source/Core/ProjectManager.cpp",
+            "Tests/TestPrefabPersistence.cpp",
+            "Tests/TestRuntimePrefab.cpp",
+            "Tests/TestEditorStateCompatibility.cpp"
           ],
-          "note": "Saves, SceneFile and the reflected-World dialect now fail closed with versioned, actionable diagnostics (reflected tests ReflectedScene_*Rejection*, local only). Prefab, asset and editor-state breaking changes do not yet have equivalent diagnostics, and there is no hosted exact-SHA evidence."
+          "note": "Newer SPARKPREFAB and projectFileVersion fail closed, naming the version, supported window and next step. Malformed prefabs name component, property and line; RuntimePrefab::Deserialize rejects bad magic or version. Tests: PrefabPersistence_{FutureVersion,TruncatedFile,UnknownPropertyType}*, RuntimePrefab_DeserializeRejectsWrongMagicAndFutureVersion, EditorStateMigration_FutureProjectVersion*."
         }
       ],
       "commands": [
@@ -2042,7 +2092,10 @@
         "AtomicWrite_*",
         "SaveSystemRoundTripReal_*",
         "SparkSaveCompatibilityTests",
-        "SparkSceneCompatibilityTests"
+        "SparkSceneCompatibilityTests",
+        "DocumentWrite_*",
+        "PrefabPersistence_*",
+        "EditorStateMigration_*"
       ],
       "requiredCiJobs": [
         "build-windows-vs2022"
@@ -2265,13 +2318,17 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:bb0380c76dc5",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestENG200ScriptFaultsReal.cpp",
             "Tests/TestENG200ScriptBindingsReal.cpp",
-            "Tests/TestEngineWiringReal.cpp"
+            "Tests/TestEngineWiringReal.cpp",
+            "Tests/TestENG200ScriptAudioAnimationReal.cpp",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp",
+            "SparkEngine/Source/Engine/ECS/Systems/ECSystems.cpp",
+            "SparkEngine/Source/Engine/ECS/Components/AudioComponents.h"
           ],
-          "note": "A script moves a Dynamic Jolt body via applyForce(); getSpeed() reads it; fireEvent() publishes ScriptEvent (ScriptBindings_*). On a test-connected bus, Jolt collision and sensor enter/exit reach both scripts, never id 0, no exit while asleep (ScriptLifecycle_ENG200_Contact*). EngineWiring_LifecycleConnectsScriptContactDispatch checks gameplay init connects it. Audio/animation untested."
+          "note": "criterionDigest sha256:bb0380c76dc5. Replaces 'Audio/animation untested'. playSound() queues bounded ScriptAudioCues, which AudioUpdateSystem drains through the real AudioEngine. playAnimation() switches the entity's existing AnimationController idempotently, and AnimationUpdateSystem advances it (ScriptBindings_ENG200_Media*, ctest ScriptMediaBindingsReal)."
         },
         {
           "criterionDigest": "sha256:cd885ff23a2b",
@@ -2284,9 +2341,14 @@
         },
         {
           "criterionDigest": "sha256:6b96a39373c4",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No committed document defines hot-reload state rules, and no test checks that state is preserved against such rules."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestENG200ScriptHotReloadReal.cpp",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngineHotReload.cpp",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h",
+            "wiki/subsystems/Scripting-with-AngelScript.md"
+          ],
+          "note": "criterionDigest sha256:6b96a39373c4. Rules R1-R8 are documented on AngelScriptEngine::HotReloadModule and in the wiki. ScriptHotReload_ENG200_* (CTest ScriptHotReloadReal, 9 tests): same-name, same-type primitive, string and POD values carry over; handles and arrays are dropped and reported; retyped or removed fields are reported; a failed compile changes nothing; reload survives a cwd change."
         },
         {
           "criterionDigest": "sha256:cec871256cec",

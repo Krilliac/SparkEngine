@@ -542,11 +542,16 @@
         },
         {
           "criterionDigest": "sha256:bd643b216c0e",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "GameModules/SparkGame/README.md"
+            "GameModules/SparkGame/README.md",
+            "tools/check-module-positioning.py",
+            "Tests/Tools/test_check_module_positioning.py",
+            "Tests/CMakeLists.txt",
+            "GameModules/README.md",
+            "wiki/getting-started/Game-Modules.md"
           ],
-          "note": "The README disclaims being a game, but no validator enforces the public label."
+          "note": "criterionDigest sha256:bd643b216c0e. The checker fails on finished/playable-game or FPS/arena/shooter claims about SparkGame in the root README, module READMEs and the wiki, and when the module README loses its disclaimers. CTest: ModulePositioning_SparkGameLabelIsShowcase. It failed on GameModules/README.md:273 before the fix."
         }
       ],
       "commands": [
@@ -855,7 +860,7 @@
       "id": "MOD-320",
       "title": "Finish MMO as a secure persistent integrated world",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -912,19 +917,26 @@
         },
         {
           "criterionDigest": "sha256:1e28d56271ea",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+            "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp",
+            "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h",
+            "Tests/TestMOD320MMOPersistenceReal.cpp"
           ],
-          "note": "No cold-restart test shows inventory, reputation or world state persisting."
+          "note": "Tests: MMOPersistence_InventoryRoundTripsExactSlotsThroughColdRestart, _RemovedItemDoesNotReappearAfterRestart, _AsyncSaveIsDurableAfterShutdown, _DeleteCharacterRemovesInventoryAndReputationKeys, _CraftingAndLockoutValuesSurviveColdRestart. Needs the central build and CTest run."
         },
         {
           "criterionDigest": "sha256:e2c9ec3b616a",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+            "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp",
+            "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h",
+            "GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.cpp",
+            "GameModules/SparkGameMMO/Source/Core/Main.cpp",
+            "Tests/TestMOD320MMOPersistenceReal.cpp",
+            "GameModules/SparkGameMMO/module.json"
           ],
-          "note": "CreateCharacter still builds the character ID from GetTimestamp(), so timestamp identity remains."
+          "note": "Tests: MMOPersistence_CharacterIdsAreUniqueWithinOneSecond, _CharacterIdCounterSurvivesColdRestart, _LegacyTimestampIdsSeedCounter, _ListCharactersFiltersByAccountAndReturnsNames, _CharacterSystemAllocatesDurableIdsAndDeletesRecords. Needs the central MSVC build and CTest run. It also needs the Tools/clang-tidy-budget.json change listed under risks, or CI-110 fails."
         },
         {
           "criterionDigest": "sha256:96c5cc4ecb96",
@@ -974,8 +986,7 @@
         "module-MMO-integration"
       ],
       "plannedTestSelectors": [
-        "MMOAccount_*",
-        "MMOPersistence_*"
+        "MMOAccount_*"
       ]
     },
     {
@@ -1377,11 +1388,17 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:578c759ffd23",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "GameModules/SparkGameOpenWorld/README.md"
+            "GameModules/SparkGameOpenWorld/README.md",
+            "Tests/TestMOD360OpenWorldTraversalReal.cpp",
+            "GameModules/SparkGameOpenWorld/Source/Player/OWPlayerController.cpp",
+            "GameModules/SparkGameOpenWorld/Source/Player/OWPlayerController.h",
+            "GameModules/SparkGameOpenWorld/Source/Core/Main.cpp",
+            "GameModules/SparkGameOpenWorld/module.json",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "No OpenWorldTraversal_* test and no input-driven player controller exist. Region streaming manifests now name existing content (OpenWorldAssets_*), but nothing traverses two regions or completes gather/event/settlement interactions."
+          "note": "criterionDigest sha256:578c759ffd23. OpenWorldTraversal_* (5 tests; CTest ModuleManifest_SparkGameOpenWorld_OpenWorldTraversal) drives real systems via OWPlayerController input from Emerald Meadows into Ironwood Forest: visit Meadowbrook, harvest Oak and Ironwood, complete the Timberhold harvest festival, visit Timberhold. No rendered player or packaged run; settlement visits are session-only."
         },
         {
           "criterionDigest": "sha256:88b1748c5bdb",
@@ -1452,9 +1469,7 @@
       "plannedCiJobs": [
         "module-OpenWorld"
       ],
-      "plannedTestSelectors": [
-        "OpenWorldTraversal_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-370",
@@ -1877,9 +1892,19 @@
         },
         {
           "criterionDigest": "sha256:885e584f6fb7",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No committed multi-client test shows forged inventory, equipment or ability state is rejected and audited."
+          "state": "implemented",
+          "evidence": [
+            "GameModules/SparkGameMMOFPS/Source/Net/TFLoadoutWire.h",
+            "GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.h",
+            "GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Net/TFServerSimOnboarding.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServer.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Console/TFCommands.cpp",
+            "Tests/TestTFServerValidation.cpp",
+            "Tests/TestTFLoadoutWire.cpp"
+          ],
+          "note": "Unit-level evidence only. The live multi-process proof (a forged packet produces [TF-AUDIT] and the client loadout is unchanged) belongs to TF-110/harness-combat-forged-reconnect."
         },
         {
           "criterionDigest": "sha256:b9afc7b58a80",

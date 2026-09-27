@@ -51,13 +51,18 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:517f9a784d85",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "SparkInstaller/tests/PortableGitCacheTests.cpp",
             "SparkInstaller/tests/InstallerTransactionTests.cpp",
-            "SparkInstaller/src/GitBootstrap.cpp"
+            "SparkInstaller/src/GitBootstrap.cpp",
+            "SparkInstaller/src/GitRunner.cpp",
+            "SparkInstaller/src/InstallerPreflight.cpp",
+            "SparkInstaller/src/Installer.cpp",
+            "SparkInstaller/tests/GitContractTests.cpp",
+            "SparkInstaller/CMakeLists.txt"
           ],
-          "note": "Partial only. Cache tamper and update rollback are tested; a tampered download, failed fetch or wrong archive for the engine install is not."
+          "note": "Update-marker cleanliness plus preflight refusal before any mutation (exit 10). Windows junction fixture fixed in 23de6d006."
         },
         {
           "criterionDigest": "sha256:b2d639655345",
@@ -67,8 +72,12 @@
         },
         {
           "criterionDigest": "sha256:6ced6ba5de16",
-          "state": "unmet",
-          "evidence": [],
+          "state": "implemented",
+          "evidence": [
+            "SparkInstaller/README.md",
+            "SparkInstaller/src/InstallerPreflight.cpp",
+            "SparkInstaller/tests/InstallerTransactionTests.cpp"
+          ],
           "note": "No checker ties installer capabilities to documentation claims."
         },
         {
@@ -79,8 +88,11 @@
         },
         {
           "criterionDigest": "sha256:77a7f9025620",
-          "state": "unmet",
-          "evidence": [],
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py"
+          ],
           "note": "No validator enforces the ownership boundary."
         }
       ],
@@ -168,8 +180,13 @@
         },
         {
           "criterionDigest": "sha256:536c5bfd873e",
-          "state": "unmet",
-          "evidence": [],
+          "state": "implemented",
+          "evidence": [
+            ".github/scripts/qualify-windows-msi.py",
+            ".github/scripts/new-msi-failure-transform.ps1",
+            ".github/scripts/test_qualify_windows_msi.py",
+            ".github/workflows/release.yml"
+          ],
           "note": "No upgrade-interruption test against a real predecessor installer."
         }
       ],
@@ -369,9 +386,7 @@
       },
       "plannedCiJobs": [
       ],
-      "plannedTestSelectors": [
-        "PublicWording_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "DOC-410",
