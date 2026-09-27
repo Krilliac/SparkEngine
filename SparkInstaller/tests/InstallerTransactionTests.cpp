@@ -1,13 +1,17 @@
 #include "Installer.h"
 #include "InstallState.h"
+#include "ProcessRunner.h"
 
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace
 {
@@ -35,6 +39,13 @@ namespace
             return 97;
 
         const std::string_view command = argv[1];
+        if (const char* logPath = std::getenv("SPARK_FAKE_TOOL_LOG"); logPath && *logPath)
+        {
+            std::ofstream invocationLog(logPath, std::ios::binary | std::ios::app);
+            invocationLog << command << '\n';
+            if (!invocationLog)
+                return 94;
+        }
         if (command == "--version" || command == "fetch" || command == "-S" || command == "status")
             return 0;
         if (command == "checkout")
@@ -343,6 +354,175 @@ namespace
         fs::remove_all(root, error);
         return failures;
     }
+
+    void SetToolLogEnvironment(const std::string& value)
+    {
+#ifdef _WIN32
+        (void)_putenv_s("SPARK_FAKE_TOOL_LOG", value.c_str());
+#else
+        if (value.empty())
+            (void)unsetenv("SPARK_FAKE_TOOL_LOG");
+        else
+            (void)setenv("SPARK_FAKE_TOOL_LOG", value.c_str(), 1);
+#endif
+    }
+
+    // Commands the fake git/cmake tool was invoked with while a preflight case ran.
+    std::vector<std::string> ReadToolLog(const fs::path& logPath)
+    {
+        std::vector<std::string> commands;
+        std::ifstream in(logPath, std::ios::binary);
+        std::string line;
+        while (std::getline(in, line))
+        {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            if (!line.empty())
+                commands.push_back(line);
+        }
+        return commands;
+    }
+
+    enum class PreflightDestination
+    {
+        Fresh,
+        Link,
+        CorruptMarkerUpdate
+    };
+
+    // Runs the installer against a fixture that preflight must refuse and
+    // proves it returns exit 10 before any git or build command ran. The only
+    // tolerated tool invocation is the read-only `cmake --version` probe.
+    int RunPreflightRefusalTest(const fs::path& executable, const std::string& name, PreflightDestination kind,
+                                const std::string& expectedCode, bool impossibleFreeSpace, bool missingCMake)
+    {
+        const fs::path root = MakeTestRoot();
+        std::error_code error;
+        fs::create_directories(root / "tools", error);
+        int failures = Check(!error, name + ": could not create preflight test root");
+        if (failures != 0)
+            return failures;
+
+        const fs::path fakeGit = root / "tools" /
+                                 (
+#ifdef _WIN32
+                                     "git.exe"
+#else
+                                     "git"
+#endif
+                                 );
+        fs::copy_file(executable, fakeGit, fs::copy_options::overwrite_existing, error);
+        failures += Check(!error, name + ": could not create fake git executable");
+#ifndef _WIN32
+        if (!error)
+        {
+            fs::permissions(fakeGit, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
+                            fs::perm_options::add, error);
+            failures += Check(!error, name + ": could not make fake git executable runnable");
+        }
+#endif
+
+        fs::path destination = root / "install";
+        const fs::path linkTarget = root / "real-install";
+        if (kind == PreflightDestination::Link)
+        {
+            fs::create_directories(linkTarget, error);
+            failures += Check(!error, name + ": could not create link target");
+#ifdef _WIN32
+            // A junction needs no symlink privilege and is the Windows link
+            // shape std::filesystem does not portably report.
+            SparkBuild::ProcessRunner runner;
+            std::string output;
+            failures +=
+                Check(runner.RunSync("mklink /J \"" + destination.string() + "\" \"" + linkTarget.string() + "\"",
+                                     root.string(), output) == 0,
+                      name + ": could not create junction fixture: " + output);
+#else
+            fs::create_directory_symlink(linkTarget, destination, error);
+            failures += Check(!error, name + ": could not create symlink fixture");
+#endif
+        }
+        else if (kind == PreflightDestination::CorruptMarkerUpdate)
+        {
+            fs::create_directories(destination / ".git", error);
+            failures += Check(!error, name + ": could not create fake engine checkout");
+            std::ofstream cmakeLists(destination / "CMakeLists.txt");
+            cmakeLists << "cmake_minimum_required(VERSION 3.25)\n";
+            cmakeLists.close();
+            std::ofstream marker(destination / SparkInstaller::InstallState::FileName(), std::ios::binary);
+            marker << "{ \"schema\": 1, truncated";
+            marker.close();
+            failures += Check(static_cast<bool>(cmakeLists) && static_cast<bool>(marker),
+                              name + ": could not create corrupt marker fixture");
+        }
+
+        const fs::path toolLog = root / "tool-invocations.log";
+        SetToolLogEnvironment(toolLog.string());
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+
+        std::string log;
+        SparkInstaller::InstallerContext context;
+        context.frontend = SparkInstaller::Frontend::Headless;
+        context.destination = destination.string();
+        context.ref = "Working";
+        context.skipSubmoduleUpdate = true;
+        context.configManager.config.cmakePath =
+            missingCMake ? (root / "missing" / "cmake-does-not-exist").string() : executable.string();
+        context.configManager.config.buildPath = (destination / "build").string();
+        // Isolate each case: only the free-space case can fail the space check.
+        context.minFreeBytes = impossibleFreeSpace ? std::numeric_limits<std::uintmax_t>::max() : 0;
+        context.log = [&log](const std::string& line)
+        {
+            log += line;
+            log.push_back('\n');
+        };
+
+        const int result = SparkInstaller::Installer::Run(context);
+        SetToolLogEnvironment("");
+
+        failures += Check(result == 10, name + ": preflight refusal did not return exit 10 (got " +
+                                            std::to_string(result) + ")\n" + log);
+        failures += Check(log.find("error: preflight failed") != std::string::npos,
+                          name + ": preflight refusal was not reported");
+        failures += Check(log.find("preflight " + expectedCode + ":") != std::string::npos,
+                          name + ": expected preflight failure " + expectedCode + " was not reported");
+        for (const std::string& command : ReadToolLog(toolLog))
+        {
+            failures += Check(command == "--version",
+                              name + ": tool command `" + command + "` ran before preflight refused the run");
+        }
+        if (kind == PreflightDestination::Fresh)
+        {
+            failures += Check(!fs::exists(destination), name + ": refused install created the destination");
+        }
+        else if (kind == PreflightDestination::Link)
+        {
+            failures += Check(fs::is_empty(linkTarget, error), name + ": refused install wrote through the link");
+            fs::remove(destination, error);
+        }
+
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    int RunPreflightTests(const fs::path& executable)
+    {
+        int failures = 0;
+        failures += RunPreflightRefusalTest(executable, "insufficient free space", PreflightDestination::Fresh,
+                                            "insufficient-free-space",
+                                            /*impossibleFreeSpace=*/true, /*missingCMake=*/false);
+        failures +=
+            RunPreflightRefusalTest(executable, "missing cmake", PreflightDestination::Fresh, "cmake-unavailable",
+                                    /*impossibleFreeSpace=*/false, /*missingCMake=*/true);
+        failures +=
+            RunPreflightRefusalTest(executable, "linked destination", PreflightDestination::Link, "destination-link",
+                                    /*impossibleFreeSpace=*/false, /*missingCMake=*/false);
+        failures += RunPreflightRefusalTest(executable, "corrupt marker update",
+                                            PreflightDestination::CorruptMarkerUpdate, "corrupt-install-marker",
+                                            /*impossibleFreeSpace=*/false, /*missingCMake=*/false);
+        return failures;
+    }
 } // namespace
 
 int main(int argc, char* argv[])
@@ -354,5 +534,6 @@ int main(int argc, char* argv[])
     const int persistenceFailure = RunInstallStatePersistenceFailureTest(executable);
     const int rollbackFailure = RunUpdateBuildFailureRollbackTest(executable);
     const int finalHeadFailure = RunPostBuildHeadCommitFailureTest(executable);
-    return persistenceFailure == 0 && rollbackFailure == 0 && finalHeadFailure == 0 ? 0 : 1;
+    const int preflightFailure = RunPreflightTests(executable);
+    return persistenceFailure == 0 && rollbackFailure == 0 && finalHeadFailure == 0 && preflightFailure == 0 ? 0 : 1;
 }

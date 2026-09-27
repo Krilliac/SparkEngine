@@ -2,7 +2,9 @@
 
 #include "Config.h"
 
+#include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace SparkInstaller
@@ -35,6 +37,10 @@ namespace SparkInstaller
 
         bool skipBuild = false;
         bool skipSubmoduleUpdate = false;
+
+        // Free-space floor enforced by preflight. Unset selects
+        // Preflight::DefaultMinFreeBytes (measured clone or clone+build budget).
+        std::optional<std::uintmax_t> minFreeBytes;
 
         LogSink log = nullptr;
     };

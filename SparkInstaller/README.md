@@ -12,8 +12,8 @@ taste, and builds the engine on your machine.
 
 1. Detect Git — on Windows, auto-download [MinGit][mingit] if absent; on
    Linux/macOS, print install instructions and exit cleanly.
-2. Detect CMake — delegate to `SparkBuildCore` which can download a pinned
-   CMake release if needed.
+2. Verify CMake 3.25+ runs from PATH (or from `CMakePath` in the SparkBuild
+   configuration). The installer does not download CMake.
 3. Prompt for destination directory and ref (branch / tag).
 4. Let you pick a build preset: **Defaults**, **All on**, **Minimal**,
    **Linux-friendly**, **Shipping**, or **Development**.
@@ -23,7 +23,9 @@ taste, and builds the engine on your machine.
 
 **Update mode** (destination contains an existing install):
 
-1. Read the prior `.sparkengine-install.json` to recover ref + options.
+1. Validate the prior `.sparkengine-install.json`; a marker that exists but
+   does not parse refuses the update. The TUI and GUI wizards also read it to
+   recover ref + options.
 2. Verify the existing checkout has no tracked or untracked changes; refuse the
    update when local changes could make rollback ambiguous.
 3. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
@@ -32,6 +34,47 @@ taste, and builds the engine on your machine.
 
 The same binary handles both modes — it picks automatically based on what's
 in the destination.
+
+## Preflight
+
+Before it bootstraps Git, creates a directory, clones or fetches, the installer
+runs read-only checks and reports every failure at once. Any failure exits with
+code **10** and leaves the destination exactly as it was.
+
+| Check | Failure code |
+|---|---|
+| The destination, or its nearest existing ancestor when it does not exist yet, is not a symlink or NTFS junction. | `destination-link` |
+| That directory exists as a directory and accepts a create + remove of a `.sparkinstaller-preflight-<pid>` probe file. | `destination-not-directory`, `destination-not-writable` |
+| Free space on that volume meets the disk budget below. | `insufficient-free-space`, `free-space-unknown` |
+| `cmake --version` runs (skipped with `--skip-build`). | `cmake-unavailable` |
+| Update mode: an existing `.sparkengine-install.json` parses. | `corrupt-install-marker` |
+
+### Disk budget
+
+Measured on Windows on 2026-09-27: a fresh clone with submodules takes about
+1.45 GiB (1.03 GiB git pack plus 0.42 GiB checkout), and a `windows-release`
+tree built with the default options (tests and game modules on) takes about
+40.5 GiB. The installer therefore requires:
+
+| Run | Free space required |
+|---|---|
+| Install with a build | 40 GiB |
+| Install with `--skip-build` | 2 GiB |
+| Update (the existing build tree is rebuilt in place) | 2 GiB |
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success. |
+| 2 | Invalid arguments or unresolvable destination. |
+| 3 | Git is unavailable and could not be bootstrapped. |
+| 4 | Install destination exists and is not empty. |
+| 5 | Clone, fetch, checkout or submodule update failed, or the existing install has local changes. |
+| 6 | CMake configure failed. |
+| 7 | CMake build failed. |
+| 8 | The installed commit or the install marker could not be recorded. |
+| 10 | Preflight refused the run; nothing was changed. |
 
 ## Usage
 

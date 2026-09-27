@@ -26,6 +26,8 @@ set(INSTALLER_SOURCES
     src/Installer.h
     src/Installer.cpp
     src/InstallerContext.h
+    src/InstallerPreflight.h
+    src/InstallerPreflight.cpp
     src/GitRunner.h
     src/GitRunner.cpp
     src/GitBootstrap.h
@@ -165,6 +167,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
     add_executable(SparkInstallerTransactionTests
         tests/InstallerTransactionTests.cpp
         src/Installer.cpp
+        src/InstallerPreflight.cpp
         src/InstallState.cpp
         src/GitRunner.cpp
         src/GitBootstrap.cpp

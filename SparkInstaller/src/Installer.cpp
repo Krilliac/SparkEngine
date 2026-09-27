@@ -5,6 +5,7 @@
 #include "GitBootstrap.h"
 #include "GitRunner.h"
 #include "InstallState.h"
+#include "InstallerPreflight.h"
 #include "ProcessRunner.h"
 
 #include <filesystem>
@@ -62,6 +63,18 @@ namespace SparkInstaller
             ctx.mode = Mode::Install;
 
         Emit(ctx.log, ctx.mode == Mode::Install ? "Mode: Install" : "Mode: Update");
+
+        // --- Preflight ----------------------------------------------------
+        // Every check runs before git bootstrap, directory creation, clone or
+        // fetch, so a refused run leaves the destination exactly as found.
+        const auto preflightFailures = Preflight::Run(ctx);
+        if (!preflightFailures.empty())
+        {
+            for (const auto& failure : preflightFailures)
+                Emit(ctx.log, "preflight " + failure.code + ": " + failure.message);
+            Emit(ctx.log, "error: preflight failed; nothing was changed");
+            return 10;
+        }
 
         // --- Git ----------------------------------------------------------
         auto gitBoot = GitBootstrap::Ensure(ctx.log);
