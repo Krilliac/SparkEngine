@@ -31,7 +31,7 @@ struct HealthComponent;
  * - CoroutineScheduler chained delayed actions through IEngineContext::GetCoroutineScheduler():
  *   spawn a target, wait 3 s, deal 25 damage (EntityDamagedEvent), wait 2 s, heal it back
  * - WeatherSystem cycling through weather types on a timer
- * - LocalizationSystem string table loading and formatted lookups
+ * - LocalizationSystem: validated en/fr string tables (Assets/Localization/SparkGame) for the status labels
  * - TimeOfDaySystem day/night cycle configuration
  * - ECS entity creation with NameComponent, Transform, HealthComponent
  * - MeshRenderer placement of the Blender-authored Engine Showcase kit (Assets/Models/Showcase/Kit)
@@ -62,6 +62,12 @@ class GameplayShowcase
 
     /** @brief Return a status summary of all showcase subsystems */
     std::string GetStatus() const;
+
+    /**
+     * @brief Switch the host localization to a loaded language (showcase_language)
+     * @return Status string; names the loaded languages when @p languageCode is not one of them
+     */
+    std::string SetLanguage(const std::string& languageCode);
 
     /** @brief Cycle to the next weather type */
     std::string CycleWeather();

@@ -112,6 +112,7 @@ void SparkGameDefaultModule::OnUnload()
     console.UnregisterCommand("showcase_save");
     console.UnregisterCommand("showcase_load");
     console.UnregisterCommand("showcase_spawn");
+    console.UnregisterCommand("showcase_language");
 
     // This callback's std::function manager lives in this dynamic module.
     // Remove it while the image is still mapped so host-static registry
@@ -230,4 +231,16 @@ void SparkGameDefaultModule::RegisterConsoleCommands()
             return m_showcase->SpawnEntity(name);
         },
         "Spawn a showcase entity (optional: name)", "Showcase", "showcase_spawn [name]");
+
+    console.RegisterCommand(
+        "showcase_language",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (!m_showcase)
+                return "Showcase not initialized";
+            if (args.empty())
+                return "Usage: showcase_language <en|fr>";
+            return m_showcase->SetLanguage(args[0]);
+        },
+        "Switch the showcase status language", "Showcase", "showcase_language <en|fr>");
 }

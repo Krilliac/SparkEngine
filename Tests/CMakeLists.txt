@@ -1106,6 +1106,9 @@ target_sources(SparkTests PRIVATE
     TestSaveInterruptionReal.cpp
     TestMOD360OpenWorldPersistenceReal.cpp
     TestMOD360OpenWorldTraversalReal.cpp
+    # MOD-300: SparkGame showcase string tables (ShowcaseLocalization links without the module image).
+    TestMOD300ShowcaseLocalizationReal.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGame/Source/Core/ShowcaseLocalization.cpp"
     TestSecurityParsersReal.cpp
     TestTextureStexBoundsReal.cpp
     TestShaderCompilerReal.cpp
@@ -1946,6 +1949,14 @@ if(TARGET SparkGame AND NOT WIN32)
     add_test(NAME SparkGameShowcase_QuickLoadRestoresExactState COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(SparkGameShowcase_QuickLoadRestoresExactState PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=SparkGameShowcase_QuickLoadRestoresExactState;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "module;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+    # The module loads its en/fr string tables into the host LocalizationSystem and
+    # showcase_language relabels showcase_status.
+    add_test(NAME SparkGameShowcase_StatusIsLocalized COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SparkGameShowcase_StatusIsLocalized PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=SparkGameShowcase_StatusIsLocalized;SPARK_TEST_EXPECT_COUNT=1"
         LABELS "module;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)

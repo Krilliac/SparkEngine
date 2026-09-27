@@ -1,7 +1,8 @@
 /**
  * @file TestSparkGameShowcase.cpp
  * @brief MOD-300: the SparkGame showcase, loaded as the real module image, drives its coroutine sequence
- *        through IEngineContext::GetCoroutineScheduler() and restores its exact state on quickload.
+ *        through IEngineContext::GetCoroutineScheduler(), restores its exact state on quickload, and
+ *        localizes its status output through IEngineContext::GetLocalization().
  *
  * Each test loads the built libSparkGame image through ModuleManager with a host context that supplies a real
  * World, EventBus and the engine CoroutineScheduler, then steps the scheduler with an exactly representable
@@ -16,6 +17,7 @@
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/Events/EventSystem.h"
+#include "Engine/Localization/LocalizationSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/EventBus.h"
 #include "Utils/SparkConsole.h"
@@ -49,8 +51,9 @@ namespace
     {
       public:
         ShowcaseHostContext(World* world, Spark::EventBus* eventBus, Spark::CoroutineScheduler* scheduler,
-                            Spark::SaveSystem* saveSystem = nullptr)
-            : m_world(world), m_eventBus(eventBus), m_scheduler(scheduler), m_saveSystem(saveSystem)
+                            Spark::SaveSystem* saveSystem = nullptr, Spark::LocalizationSystem* localization = nullptr)
+            : m_world(world), m_eventBus(eventBus), m_scheduler(scheduler), m_saveSystem(saveSystem),
+              m_localization(localization)
         {
         }
 
@@ -72,6 +75,8 @@ namespace
         const Spark::CoroutineScheduler* GetCoroutineScheduler() const override { return m_scheduler; }
         Spark::SaveSystem* GetSaveSystem() override { return m_saveSystem; }
         const Spark::SaveSystem* GetSaveSystem() const override { return m_saveSystem; }
+        Spark::LocalizationSystem* GetLocalization() override { return m_localization; }
+        const Spark::LocalizationSystem* GetLocalization() const override { return m_localization; }
         uint32_t GetEngineVersion() const override { return SPARK_ENGINE_VERSION_PACKED; }
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
 
@@ -80,6 +85,28 @@ namespace
         Spark::EventBus* m_eventBus;
         Spark::CoroutineScheduler* m_scheduler;
         Spark::SaveSystem* m_saveSystem;
+        Spark::LocalizationSystem* m_localization;
+    };
+
+    /// Makes the repository root the working directory, where the module resolves its content paths.
+    class ScopedWorkingDirectory final
+    {
+      public:
+        explicit ScopedWorkingDirectory(const std::filesystem::path& directory)
+            : m_previous(std::filesystem::current_path())
+        {
+            std::filesystem::current_path(directory);
+        }
+        ~ScopedWorkingDirectory()
+        {
+            std::error_code error;
+            std::filesystem::current_path(m_previous, error);
+        }
+        ScopedWorkingDirectory(const ScopedWorkingDirectory&) = delete;
+        ScopedWorkingDirectory& operator=(const ScopedWorkingDirectory&) = delete;
+
+      private:
+        std::filesystem::path m_previous;
     };
 
     /// Initializes the shared console for the test (module commands need it) and restores it afterwards.
@@ -497,6 +524,39 @@ TEST(SparkGameShowcase_QuickLoadRestoresExactState)
     // Shutdown destroys every tracked showcase entity, including the restored ones.
     showcase.manager.ShutdownAllAfterPreflight();
     EXPECT_EQ(SnapshotShowcase(world).size(), size_t{0});
+}
+
+TEST(SparkGameShowcase_StatusIsLocalized)
+{
+    ConsoleScope consoleScope;
+    auto& scheduler = CleanScheduler();
+    ScopedWorkingDirectory workingDirectory(SPARK_TEST_SOURCE_DIR);
+    auto& localization = Spark::LocalizationSystem::Get();
+    const std::string previousLanguage = localization.GetCurrentLanguage();
+    World world;
+    Spark::EventBus eventBus;
+    ShowcaseHostContext context(&world, &eventBus, &scheduler, nullptr, &localization);
+    {
+        LoadedShowcase showcase;
+        ASSERT_TRUE(showcase.manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
+        showcase.manager.InitializeAll(&context);
+        ASSERT_TRUE(showcase.manager.GetModule(MODULE_NAME) != nullptr);
+
+        // The module loaded its en/fr tables into the host system; French relabels the status output.
+        EXPECT_EQ(CommandResult(consoleScope.console, "showcase_language fr"), std::string("Language set to fr"));
+        EXPECT_EQ(StatusLine(consoleScope.console, "S\xC3\xA9quence de coroutine: "),
+                  std::string("S\xC3\xA9quence de coroutine: scheduled"));
+        EXPECT_EQ(StatusLine(consoleScope.console, "Langue: "), std::string("Langue: fr"));
+
+        EXPECT_STR_CONTAINS(CommandResult(consoleScope.console, "showcase_language de"),
+                            "Language 'de' is not loaded (available: ");
+        EXPECT_EQ(StatusLine(consoleScope.console, "Langue: "), std::string("Langue: fr"));
+
+        EXPECT_EQ(CommandResult(consoleScope.console, "showcase_language en"), std::string("Language set to en"));
+        EXPECT_EQ(CoroutineStatusLine(consoleScope.console), std::string("Coroutine sequence: scheduled"));
+        EXPECT_EQ(StatusLine(consoleScope.console, "Language: "), std::string("Language: en"));
+    }
+    localization.SetCurrentLanguage(previousLanguage);
 }
 
 #endif

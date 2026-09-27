@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 1223,
+  "fileCount": 1225,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1466,6 +1466,20 @@
       "size": 52456,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original SparkEngine startup splash and wordmark produced by Assets/Engine/Branding/generate_splash.py [engine-branding]"
+    },
+    {
+      "path": "Localization/SparkGame/showcase_en.json",
+      "sha256": "26551fc7423d43381fde89589b269c97edb07f40ddefab5795be7d90ddd7e468",
+      "size": 614,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-authored scene, data, script, model, or documentation file covered by the repository LICENSE [repository-authored]"
+    },
+    {
+      "path": "Localization/SparkGame/showcase_fr.json",
+      "sha256": "954435e5d92281ac19c8c577734fb35de449519d3f0196cce9f785138f0f7d82",
+      "size": 686,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-authored scene, data, script, model, or documentation file covered by the repository LICENSE [repository-authored]"
     },
     {
       "path": "MMO/asset_manifest.json",

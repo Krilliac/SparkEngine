@@ -21,6 +21,12 @@ SparkGame is the base showcase module. It demonstrates how a game module reaches
   the step reached on its `Coroutine sequence:` line. If a step loses its target the sequence is cancelled and the
   line keeps the first failure (`failed: ...`). A host without a scheduler gets a logged warning and the line reads
   `unavailable (host exposes no CoroutineScheduler)`.
+- loads the English and French showcase string tables (`Assets/Localization/SparkGame/showcase_en.json`,
+  `showcase_fr.json`) into the host's `LocalizationSystem` (`IEngineContext::GetLocalization()`), after checking
+  that both files parse and define every key `Source/Core/ShowcaseLocalization.h` lists; one bad table loads
+  neither. Every `showcase_status` label is looked up in the host's current language (`showcase_language en|fr`
+  switches it). A host without a `LocalizationSystem`, or tables that fail the check, leaves the labels in English
+  and logs a warning.
 - places the Engine Showcase exhibit: four `MeshRenderer` props (`display_pedestal`, `info_signpost`,
   `supply_crate`, `light_pylon` from `Assets/Models/Showcase/Kit/`) in a row 4 m behind the spawned entities,
   facing them. They are removed with the other showcase entities on unload.
@@ -39,18 +45,20 @@ PYTHONHOME=/usr xvfb-run -a blender -b --factory-startup --python-exit-code 1 \
 python3 tools/blender/validate_kit.py Art/Blender/SparkGame/provenance.json
 ```
 
-`xvfb-run` is only needed for the preview render on a host without an EGL/GPU context. Every mesh path the source
-names is recorded in `asset-references.json`.
+`xvfb-run` is only needed for the preview render on a host without an EGL/GPU context. Every mesh and string-table
+path the source names is recorded in `asset-references.json`; the string tables are repository-authored.
 
-Console commands: `showcase_status`, `showcase_weather`, `showcase_save`, `showcase_load`, and `showcase_spawn`.
+Console commands: `showcase_status`, `showcase_weather`, `showcase_save`, `showcase_load`, `showcase_spawn`, and
+`showcase_language`.
 `OnUnload()` removes the module's validation rules and tears the showcase down before the library is unmapped.
 Teardown stops the lifecycle coroutine first; `StopCoroutine()` outside a scheduler tick destroys it immediately, so
 no step callable that lives in this image is left in the scheduler.
 
 ## Known limitations
 
-- There are no localization resources. `SetupLocalization()` loads no string table; lookups fall back to the
-  keys themselves.
+- Only the `showcase_status` labels are localized; status values (coroutine stage, weather names, clock) and
+  other console output stay in English. Loading replaces any `en`/`fr` table the host already had, which is the
+  documented contract for the one game module a process loads.
 - The module has no networking. The exhibit props are placed but not yet reviewed in a rendered run, and the
   `_lod1`/`_collision` variants are exported but not used by the module.
 - Still outstanding under MOD-300: rendered showcase output (`OnRender`), exact-state quickload evidence, and a
@@ -62,8 +70,13 @@ no step callable that lives in this image is left in the scheduler.
 `ModuleManager` with a host context that supplies a real `World`, `EventBus`, and the engine `CoroutineScheduler`,
 then steps the scheduler with a fixed 1/64 s delta. The tests cover the full spawn, damage, and heal sequence;
 stopping and destroying the coroutine at shutdown before unload; cancelling the sequence when its target is lost;
-and the missing-scheduler warning. They are registered on Linux only (the test loads the `.so`); there is no Windows
-lane for them yet.
+and the missing-scheduler warning. `SparkGameShowcase_StatusIsLocalized` gives the host a `LocalizationSystem` and
+checks that `showcase_language fr` relabels `showcase_status`. They are registered on Linux only (the test loads the
+`.so`); there is no Windows lane for them yet.
+
+`SparkGameShowcase_Localization*` (`Tests/TestMOD300ShowcaseLocalizationReal.cpp`, every platform) links
+`ShowcaseLocalization.cpp` directly: both shipped tables load and resolve every key, and a table with a missing key
+or a missing file is rejected without changing the loaded languages.
 
 `ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload` (`Tests/TestModuleABI.cpp`) checks that
 `OnUnload()` releases the validation rules this module registers.

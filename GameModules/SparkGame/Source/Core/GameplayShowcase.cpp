@@ -8,6 +8,7 @@
  */
 
 #include "GameplayShowcase.h"
+#include "ShowcaseLocalization.h"
 
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/Events/EventSystem.h"
@@ -20,6 +21,8 @@
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
+#include <filesystem>
+#include <string_view>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -183,21 +186,35 @@ void GameplayShowcase::SetupEventSubscriptions()
 
 void GameplayShowcase::SetupLocalization()
 {
+    // The host's system, never LocalizationSystem::Get(): SparkEngineLib is linked statically into this
+    // module, so the singleton here would be a module-local copy the host never reads.
+    auto& console = Spark::SimpleConsole::GetInstance();
     auto* localization = m_context->GetLocalization();
     if (!localization)
+    {
+        console.LogWarning("[Showcase] Host exposes no LocalizationSystem; status labels stay in English");
         return;
+    }
 
-    // Register showcase string entries directly (no file dependency)
-    // In a real game, these would come from Data/Localization/en.json
-    auto& loc = Spark::LocalizationSystem::Get();
+    // Content paths resolve from the working directory, like the exhibit meshes.
+    std::error_code cwdError;
+    const std::filesystem::path root = std::filesystem::current_path(cwdError);
+    std::string error;
+    if (cwdError || !ShowcaseLocalization::LoadShowcaseStrings(*localization, root, &error))
+    {
+        const std::string reason = cwdError ? cwdError.message() : error;
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "Showcase string tables not loaded: %s", reason.c_str());
+        console.LogWarning("[Showcase] Showcase string tables not loaded (" + reason +
+                           "); status labels stay in English");
+        return;
+    }
 
-    // We can't LoadLanguage from a file that doesn't exist, so set entries manually
-    // by accessing the current language's table via SetCurrentLanguage + Format usage.
-    // The localization system returns the key itself if no entry exists, which is
-    // acceptable for a showcase — the keys are human-readable.
-
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Showcase] Localization system available — using key fallback for showcase strings");
+    localization->SetFallbackLanguage("en");
+    const auto languages = localization->GetAvailableLanguages();
+    if (std::find(languages.begin(), languages.end(), localization->GetCurrentLanguage()) == languages.end())
+        localization->SetCurrentLanguage("en");
+    console.LogInfo("[Showcase] Loaded showcase strings (en, fr); current language: " +
+                    localization->GetCurrentLanguage());
 }
 
 // =============================================================================
@@ -399,33 +416,55 @@ void GameplayShowcase::HealCoroutineTarget()
 
 std::string GameplayShowcase::GetStatus() const
 {
-    std::string status = "=== Gameplay Showcase Status ===\n";
-    status += "Spawned entities: " + std::to_string(m_spawnedEntities.size()) + "\n";
-    status += "Damage events: " + std::to_string(m_totalDamageEvents) + "\n";
-    status += "Kill events: " + std::to_string(m_totalKillEvents) + "\n";
-    status += "Weather changes: " + std::to_string(m_totalWeatherChanges) + "\n";
-    status += "Total damage dealt: " + std::to_string(static_cast<int>(m_totalDamageDealt)) + "\n";
-    status += "Coroutine sequence: " + m_coroutineStage + "\n";
+    const Spark::LocalizationSystem* localization = m_context ? m_context->GetLocalization() : nullptr;
+    auto line = [localization](std::string_view key, const std::string& value)
+    { return ShowcaseLocalization::ShowcaseText(localization, key) + ": " + value + "\n"; };
+
+    std::string status = ShowcaseLocalization::ShowcaseText(localization, "showcase.status.title") + "\n";
+    if (localization)
+        status += line("showcase.status.language", localization->GetCurrentLanguage());
+    status += line("showcase.status.spawned", std::to_string(m_spawnedEntities.size()));
+    status += line("showcase.status.damage_events", std::to_string(m_totalDamageEvents));
+    status += line("showcase.status.kill_events", std::to_string(m_totalKillEvents));
+    status += line("showcase.status.weather_changes", std::to_string(m_totalWeatherChanges));
+    status += line("showcase.status.total_damage", std::to_string(static_cast<int>(m_totalDamageDealt)));
+    status += line("showcase.status.coroutine", m_coroutineStage);
 
     // Weather info
     auto* weather = m_context ? m_context->GetWeather() : nullptr;
     if (weather)
     {
         const auto& state = weather->GetCurrentState();
-        status += "Current weather: " + std::string(Spark::WeatherSystem::GetWeatherTypeName(state.type)) + "\n";
-        status += "Weather timer: " + std::to_string(static_cast<int>(m_weatherTimer)) + "s / " +
-                  std::to_string(static_cast<int>(WeatherCycleInterval)) + "s\n";
+        status += line("showcase.status.weather", Spark::WeatherSystem::GetWeatherTypeName(state.type));
+        status +=
+            line("showcase.status.weather_timer", std::to_string(static_cast<int>(m_weatherTimer)) + "s / " +
+                                                      std::to_string(static_cast<int>(WeatherCycleInterval)) + "s");
     }
 
     // Time of day info
     auto* timeOfDay = m_context ? m_context->GetTimeOfDay() : nullptr;
     if (timeOfDay)
     {
-        status += "Time of day: " + timeOfDay->GetTimeString() + "\n";
-        status += "Day count: " + std::to_string(timeOfDay->GetDayCount()) + "\n";
+        status += line("showcase.status.time_of_day", timeOfDay->GetTimeString());
+        status += line("showcase.status.day_count", std::to_string(timeOfDay->GetDayCount()));
     }
 
     return status;
+}
+
+std::string GameplayShowcase::SetLanguage(const std::string& languageCode)
+{
+    auto* localization = m_context ? m_context->GetLocalization() : nullptr;
+    if (!localization)
+        return "Localization system not available";
+    if (!localization->SetCurrentLanguage(languageCode))
+    {
+        std::string available;
+        for (const auto& code : localization->GetAvailableLanguages())
+            available += (available.empty() ? "" : ", ") + code;
+        return "Language '" + languageCode + "' is not loaded (available: " + available + ")";
+    }
+    return "Language set to " + languageCode;
 }
 
 std::string GameplayShowcase::CycleWeather()

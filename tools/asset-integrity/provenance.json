@@ -545,6 +545,8 @@
         "LICENSE"
       ],
       "files": {
+        "Localization/SparkGame/showcase_en.json": "26551fc7423d43381fde89589b269c97edb07f40ddefab5795be7d90ddd7e468",
+        "Localization/SparkGame/showcase_fr.json": "954435e5d92281ac19c8c577734fb35de449519d3f0196cce9f785138f0f7d82",
         "MMOFPS/ATTRIBUTION.md": "65318dd2c40c9003642cba3e0a56b91263817aa3dfa480bdd6a3a53ab134426b",
         "MMOFPS/asset_manifest.json": "a73a7cc5b2e91edc5d67e7dd58eb8e4affcbbfd37582a62ed0ac514aa4f581bf",
         "Materials/Arena_CenterBuilding.json": "cec075631416fa25358777c3b4602bbd9c5656383e58a8827cc2927a0775322f",

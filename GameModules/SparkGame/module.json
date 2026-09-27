@@ -9,17 +9,26 @@
       {
         "directory": "Assets/Models/Showcase",
         "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Localization/SparkGame",
+        "manifest": "Assets/assets.integrity.json"
       }
     ]
   },
   "tests": {
     "files": [
-      "Tests/TestModuleABI.cpp"
+      "Tests/TestModuleABI.cpp",
+      "Tests/TestMOD300ShowcaseLocalizationReal.cpp"
     ],
     "prefixes": [
       {
         "prefix": "ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload",
         "count": 1
+      },
+      {
+        "prefix": "SparkGameShowcase_Localization",
+        "count": 2
       }
     ]
   },

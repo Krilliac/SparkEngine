@@ -1,8 +1,20 @@
 {
   "manifestVersion": 1,
   "module": "SparkGame",
-  "description": "Every asset path SparkGame source names (the Engine Showcase exhibit props placed by GameplayShowcase::SpawnExhibit), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "description": "Every asset path SparkGame source names (the Engine Showcase exhibit props placed by GameplayShowcase::SpawnExhibit and the showcase string tables loaded by ShowcaseLocalization), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
   "references": [
+    {
+      "path": "Assets/Localization/SparkGame/showcase_en.json",
+      "sha256": "26551fc7423d43381fde89589b269c97edb07f40ddefab5795be7d90ddd7e468",
+      "kind": "localization string table (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Localization/SparkGame/showcase_fr.json",
+      "sha256": "954435e5d92281ac19c8c577734fb35de449519d3f0196cce9f785138f0f7d82",
+      "kind": "localization string table (JSON)",
+      "provenanceRule": "repository-authored"
+    },
     {
       "path": "Assets/Models/Showcase/Kit/display_pedestal.obj",
       "sha256": "6ba3a6374df480ffd8a050a6e3ee305feb8462896527472c5f251ae5e3c3a6a3",

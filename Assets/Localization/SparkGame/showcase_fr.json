@@ -1,0 +1,14 @@
+{
+  "showcase.status.title": "=== État de la vitrine de gameplay ===",
+  "showcase.status.spawned": "Entités créées",
+  "showcase.status.damage_events": "Événements de dégâts",
+  "showcase.status.kill_events": "Événements d'élimination",
+  "showcase.status.weather_changes": "Changements de météo",
+  "showcase.status.total_damage": "Dégâts infligés au total",
+  "showcase.status.coroutine": "Séquence de coroutine",
+  "showcase.status.weather": "Météo actuelle",
+  "showcase.status.weather_timer": "Minuteur météo",
+  "showcase.status.time_of_day": "Heure de la journée",
+  "showcase.status.day_count": "Nombre de jours",
+  "showcase.status.language": "Langue"
+}
