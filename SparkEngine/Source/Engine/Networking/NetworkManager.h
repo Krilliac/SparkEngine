@@ -713,6 +713,7 @@ namespace Spark::Net
 
         friend struct NetworkManagerClientIdTestAccess;
         friend struct NetworkManagerEndpointLifecycleTestAccess;
+        friend struct NetworkManagerTransportSecurityTestAccess;
 
         // Outermost lock for public API/lifecycle access. Recursive because
         // Update dispatches user handlers which may call SendMessage or query
@@ -740,6 +741,14 @@ namespace Spark::Net
         /// Client-side: fail a Connecting handshake closed (state, socket, and queued lifecycle traffic).
         void AbandonClientHandshake(ConnectRejectReason reason, std::string text);
         void HandleDisconnect(const NetworkMessage& msg);
+        /// Server-side: forget one client everywhere it is tracked (client/address tables,
+        /// reliability state, delta baselines, interest scope, owned entities). The single
+        /// removal path for graceful disconnect, heartbeat timeout and kick. Requires
+        /// m_apiMutex; must not be called with m_clientsMutex held.
+        void RemoveClientState(ClientID clientID);
+        /// Server-side: release the process-global per-connection state (delta baselines,
+        /// interest scope) of every admitted client before the client table is cleared.
+        void ReleaseAllClientConnectionState();
         /// Requires m_apiMutex. There is no hidden network worker; Update owns the socket pump.
         [[nodiscard]] bool IsEndpointLifecycleIdle() const;
 

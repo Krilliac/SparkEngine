@@ -270,6 +270,7 @@ namespace Spark::Net
             m_connectionState = ConnectionState::Disconnected;
             m_localClientID = INVALID_CLIENT;
         }
+        ReleaseAllClientConnectionState();
         {
             std::lock_guard<std::mutex> clientLock(m_clientsMutex);
             m_clients.clear();
@@ -421,6 +422,7 @@ namespace Spark::Net
         m_clientAddresses.clear();
 #endif // ENABLE_NETWORKING
 
+        ReleaseAllClientConnectionState();
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients.clear();
@@ -604,6 +606,7 @@ namespace Spark::Net
             m_role = NetworkRole::None;
             m_localClientID = INVALID_CLIENT;
         }
+        ReleaseAllClientConnectionState();
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients.clear();
@@ -863,10 +866,11 @@ namespace Spark::Net
         ASSERT_MSG(client != INVALID_CLIENT, "NetworkManager::KickClient — client ID must not be INVALID_CLIENT");
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Kicking client %u: %s", client, reason.c_str());
 
-        std::lock_guard<std::mutex> lock(m_clientsMutex);
-        auto it = m_clients.find(client);
-        if (it == m_clients.end())
-            return;
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            if (!m_clients.contains(client))
+                return;
+        }
 
         NetworkMessage msg;
         msg.type = MessageType::Disconnect;
@@ -876,16 +880,7 @@ namespace Spark::Net
         msg.payload = buf.GetData();
         SendToClient(client, msg);
 
-        m_clients.erase(it);
-#ifdef ENABLE_NETWORKING
-        m_clientAddresses.erase(client);
-#endif
-        // Drop the peer's reliability state so a future client reusing the ID
-        // starts with fresh sequence/dedup/ordered bookkeeping.
-        m_peers.erase(client);
-        // Drop any interest-management scope tied to this connection so
-        // a future client reusing the ID starts with "see everything".
-        ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(client));
+        RemoveClientState(client);
     }
 
     // --------------------------------------------------------------------------
@@ -1037,10 +1032,16 @@ namespace Spark::Net
 
     void NetworkManager::HandleDisconnect(const NetworkMessage& msg)
     {
-        ClientID clientID = msg.senderID;
+        const ClientID clientID = msg.senderID;
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnecting", clientID);
+        RemoveClientState(clientID);
+    }
 
-        // Unregister from delta snapshot tracking before removing the client
+    void NetworkManager::RemoveClientState(ClientID clientID)
+    {
+        // Every per-connection record is dropped here, so a timed-out, kicked or
+        // departed client leaves nothing behind in the process-global singletons
+        // and a future connection reusing the ID starts fresh.
         DeltaSnapshotManager::GetInstance().UnregisterConnection(clientID);
 
         // Drop interest-management scope so a future connection reusing this
@@ -1083,6 +1084,24 @@ namespace Spark::Net
         }
     }
 
+    void NetworkManager::ReleaseAllClientConnectionState()
+    {
+        std::vector<ClientID> clientIDs;
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            clientIDs.reserve(m_clients.size());
+            for (const auto& [id, info] : m_clients)
+                clientIDs.push_back(id);
+        }
+        auto& deltaManager = DeltaSnapshotManager::GetInstance();
+        auto& scopeFilter = ConnectionScopeFilter::GetInstance();
+        for (const ClientID id : clientIDs)
+        {
+            deltaManager.UnregisterConnection(id);
+            scopeFilter.RemoveConnection(static_cast<uint32_t>(id));
+        }
+    }
+
     // --------------------------------------------------------------------------
     // CheckConnectionTimeouts
     // --------------------------------------------------------------------------
@@ -1107,33 +1126,7 @@ namespace Spark::Net
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Network, "Client %u timed out (no heartbeat for %.1fs)", id,
                                m_connectionTimeout);
-
-                // Clean up owned entities
-                std::vector<uint32_t> ownedEntities;
-                {
-                    std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
-                    for (const auto& [netID, entity] : m_replicatedEntities)
-                    {
-                        if (entity.ownerID == id)
-                            ownedEntities.push_back(netID);
-                    }
-                }
-                for (uint32_t netID : ownedEntities)
-                    UnregisterReplicatedEntity(netID);
-
-                {
-                    std::lock_guard<std::mutex> lock(m_clientsMutex);
-                    m_clients.erase(id);
-#ifdef ENABLE_NETWORKING
-                    m_clientAddresses.erase(id);
-#endif
-                }
-
-                // Drop the timed-out peer's reliability state.
-                m_peers.erase(id);
-
-                // Drop interest-management scope for timed-out clients.
-                ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(id));
+                RemoveClientState(id);
             }
         }
         else if (m_role == NetworkRole::Client)

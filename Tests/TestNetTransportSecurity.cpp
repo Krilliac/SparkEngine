@@ -9,6 +9,7 @@
  */
 
 #include "TestFramework.h"
+#include "Engine/Networking/DeltaSnapshotManager.h"
 #include "Engine/Networking/NetworkManager.h"
 
 #ifdef ENABLE_NETWORKING
@@ -212,6 +213,74 @@ TEST(NetTransportSec_ClientInputIsNotRetainedAndReachesObserverAttributed)
     }
     nm.StopServer();
     nm.Shutdown();
+}
+
+// ============================================================================
+// Finding 40: only the graceful Disconnect path released a client's
+// DeltaSnapshotManager state; heartbeat timeout, kick and server stop leaked
+// it into the process-global singleton for the life of the process.
+// ============================================================================
+
+TEST(NetTransportSec_TimeoutKickAndStopReleaseDeltaState)
+{
+    auto& deltas = DeltaSnapshotManager::GetInstance();
+    auto& nm = FreshManager();
+    ASSERT_TRUE(nm.StartServer(0, 4, NetworkEndpointPolicy::Loopback()));
+    RawPeer silent(nm.GetBoundPort());
+    RawPeer kicked(nm.GetBoundPort());
+    RawPeer stopped(nm.GetBoundPort());
+    ASSERT_TRUE(silent.IsReady() && kicked.IsReady() && stopped.IsReady());
+
+    // Heartbeat timeout: the raw peer never heartbeats, so 1 s steps pass the 10 s limit.
+    const ClientID silentId = AdmitPeer(nm, silent);
+    ASSERT_TRUE(silentId != INVALID_CLIENT);
+    EXPECT_TRUE(deltas.HasConnection(silentId));
+    EXPECT_TRUE(PumpUntil(nm, [&] { return !nm.GetClients().contains(silentId); }, 20, 1.0f));
+    EXPECT_FALSE(deltas.HasConnection(silentId));
+
+    // Server-initiated kick.
+    const ClientID kickedId = AdmitPeer(nm, kicked);
+    ASSERT_TRUE(kickedId != INVALID_CLIENT);
+    EXPECT_TRUE(deltas.HasConnection(kickedId));
+    nm.KickClient(kickedId, "test kick");
+    EXPECT_FALSE(nm.GetClients().contains(kickedId));
+    EXPECT_FALSE(deltas.HasConnection(kickedId));
+
+    // Whole-server stop.
+    const ClientID stoppedId = AdmitPeer(nm, stopped);
+    ASSERT_TRUE(stoppedId != INVALID_CLIENT);
+    EXPECT_TRUE(deltas.HasConnection(stoppedId));
+    nm.StopServer();
+    EXPECT_FALSE(deltas.HasConnection(stoppedId));
+
+    silent.Close();
+    kicked.Close();
+    stopped.Close();
+    nm.Shutdown();
+}
+
+TEST(NetTransportSec_DeltaReRegistrationStartsFromEmptyBaseline)
+{
+    auto& deltas = DeltaSnapshotManager::GetInstance();
+    constexpr uint32_t connectionId = 0x5EC40u;
+    constexpr uint32_t entityId = 0x5EC41u;
+    deltas.UnregisterConnection(connectionId);
+    deltas.RegisterConnection(connectionId);
+
+    FieldSnapshot field;
+    field.fieldIndex = 0;
+    field.serializedValue = {0x2A};
+    deltas.RecordEntityState(entityId, {field});
+    EXPECT_FALSE(deltas.BuildDeltaPacket(connectionId, entityId).empty());
+    EXPECT_EQ(deltas.GetPendingDeltaCount(connectionId), static_cast<size_t>(1));
+
+    // A reused ID must not inherit the earlier connection's pending deltas or baseline.
+    deltas.RegisterConnection(connectionId);
+    EXPECT_EQ(deltas.GetPendingDeltaCount(connectionId), static_cast<size_t>(0));
+    EXPECT_FALSE(deltas.BuildDeltaPacket(connectionId, entityId).empty());
+
+    deltas.UnregisterConnection(connectionId);
+    EXPECT_FALSE(deltas.HasConnection(connectionId));
 }
 
 #endif // ENABLE_NETWORKING
