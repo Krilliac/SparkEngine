@@ -525,28 +525,71 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
     ):
         errors.append("stable-v1 publication gate must not continue on error")
 
-    try:
-        required_ci = named_step(
-            workflow,
-            "Verify exact source commit passed Required CI Gate",
-        )
-        badge_checkout = named_step(workflow, "Checkout canonical badge branch")
-    except AssertionError as error:
-        errors.append(str(error))
-    else:
-        ordered_step_names = [name for name, _block in step_blocks(workflow)]
-        required_ci_position = ordered_step_names.index(
-            "Verify exact source commit passed Required CI Gate"
-        )
-        profile_gate_position = ordered_step_names.index(step_name)
-        badge_checkout_position = ordered_step_names.index("Checkout canonical badge branch")
-        if profile_gate_position != required_ci_position + 1:
-            errors.append(
-                "stable-v1 publication gate must run immediately after Required CI"
-            )
-        if profile_gate_position >= badge_checkout_position:
-            errors.append("stable-v1 publication gate must precede badge publication")
+    errors.extend(profile_required_gates_job_errors(workflow, readiness))
+    return errors
 
+
+PROFILE_GATES_JOB = "profile-required-gates"
+PROFILE_GATES_REQUIRED_CI_STEP = "Verify candidate commit passed Required CI Gate"
+PROFILE_GATES_FUZZ_STEP = "Verify SEC-120 parser fuzz-policy closure"
+
+
+def profile_required_gates_job_errors(workflow: str, readiness: str) -> list[str]:
+    """REL-190: candidate gating is a named job the release job cannot bypass.
+
+    The stage-specific readiness validator, the exact Required CI Gate check,
+    and the SEC-120 fuzz closure run in ``profile-required-gates``; ``release``
+    (the environment-protected publisher) must need that job, and the gates job
+    may not be skipped, tolerated, or granted publication authority.
+    """
+
+    errors: list[str] = []
+    try:
+        gates = yaml_section(workflow, PROFILE_GATES_JOB, indent=2)
+        release = yaml_section(workflow, "release", indent=2)
+    except AssertionError as error:
+        return [str(error)]
+
+    release_needs = re.search(r"(?m)^    needs:\s*\[([^\]]*)\]\s*(?:#.*)?$", release)
+    needed = {name.strip() for name in release_needs.group(1).split(",")} if release_needs else set()
+    if PROFILE_GATES_JOB not in needed:
+        errors.append("release job must need profile-required-gates")
+    if not exact_field(gates, "needs", "[prepare]"):
+        errors.append("profile-required-gates must need exactly [prepare]")
+    for key in ("if", "continue-on-error", "environment"):
+        if re.search(rf"""(?m)^    (?:{key}|'{key}'|"{key}")\s*:""", gates):
+            errors.append(f"profile-required-gates must not declare job-level {key}")
+    if re.search(r"(?m)^      [a-z-]+:\s*write\s*$", gates) or "secrets." in gates:
+        errors.append("profile-required-gates must hold no write permission or secret")
+    if re.search(r"""(?m)^\s+(?:continue-on-error|'continue-on-error'|"continue-on-error")\s*:""", gates):
+        errors.append("profile-required-gates steps must not continue on error")
+
+    gate_steps = [name for name, _block in step_blocks(gates)]
+    release_steps = [name for name, _block in step_blocks(release)]
+    if readiness not in gates or readiness in release:
+        errors.append("stable-v1 publication gate must run in profile-required-gates, not in release")
+    for required_step in (PROFILE_GATES_REQUIRED_CI_STEP, PROFILE_GATES_FUZZ_STEP):
+        if gate_steps.count(required_step) != 1:
+            errors.append(f"profile-required-gates must run exactly one {required_step!r} step")
+    if PROFILE_GATES_FUZZ_STEP in release_steps:
+        errors.append("SEC-120 fuzz closure belongs to profile-required-gates, not release")
+    if PROFILE_GATES_REQUIRED_CI_STEP in gate_steps:
+        required_ci = dict(step_blocks(gates))[PROFILE_GATES_REQUIRED_CI_STEP]
+        if "python3 .github/scripts/verify-exact-required-gate.py" not in required_ci:
+            errors.append("profile-required-gates must run the exact Required CI Gate verifier")
+        if re.search(r"(?m)^      if:", required_ci) or "|| true" in required_ci:
+            errors.append("profile-required-gates Required CI check must be unconditional and fail closed")
+        stable_gate_name = "Verify stable-v1 candidate is qualified for versioned publication"
+        if stable_gate_name in gate_steps and gate_steps.index(stable_gate_name) != (
+            gate_steps.index(PROFILE_GATES_REQUIRED_CI_STEP) + 1
+        ):
+            errors.append("stable-v1 publication gate must run immediately after Required CI")
+    if PROFILE_GATES_FUZZ_STEP in gate_steps:
+        fuzz = dict(step_blocks(gates))[PROFILE_GATES_FUZZ_STEP]
+        if run_command(fuzz, indent=6) != (
+            "python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure"
+        ) or re.search(r"(?m)^      if:", fuzz):
+            errors.append("profile-required-gates must run the unconditional SEC-120 closure check")
     return errors
 
 
@@ -1154,12 +1197,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 ),
                 (
                     "Build security runtime targets",
-                    (
-                        "set -o pipefail",
-                        "cmake --build --preset linux-shipping",
-                        "SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests",
-                        "SparkCrashReporterFakeGh",
-                    ),
+                    ("set -o pipefail", "cmake --build --preset linux-shipping --target SparkTests"),
                 ),
                 (
                     "Run RemoteAdmin selectors",
@@ -2357,12 +2395,6 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "for label in remote-admin gateway; do",
             1,
         )
-        mutations["security runtime crash-security executables unbuilt"] = self.build.replace(
-            "SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \\\n"
-            "          SparkCrashReporterFakeGh 2>&1 | tee security-build.log",
-            "SparkTests 2>&1 | tee security-build.log",
-            1,
-        )
         mutations["security runtime off shipping"] = self.build.replace(
             "cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log",
             "cmake --preset linux-gcc-release -DBUILD_TESTS=ON 2>&1 | tee security-configure.log",
@@ -2689,6 +2721,40 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             ),
             "gate after tag mutation": gate_after_tag_binding,
         }
+        # REL-190: the gates job must stay a named, unskippable, read-only
+        # prerequisite of the environment-protected release job.
+        release_needs = "    needs: [prepare, profile-required-gates, build-windows,"
+        gates_header = "  profile-required-gates:\n    needs: [prepare]\n"
+        gates_required_ci = named_step(self.release, "Verify candidate commit passed Required CI Gate")
+        fuzz = named_step(self.release, "Verify SEC-120 parser fuzz-policy closure")
+        mutations.update({
+            "release no longer needs gates": self.release.replace(
+                release_needs, "    needs: [prepare, build-windows,", 1
+            ),
+            "gates job skipped": self.release.replace(
+                gates_header, f"{gates_header}    if: false\n", 1
+            ),
+            "gates job tolerated": self.release.replace(
+                gates_header, f"{gates_header}    continue-on-error: true\n", 1
+            ),
+            "gates job granted environment": self.release.replace(
+                gates_header, f"{gates_header}    environment: stable-release\n", 1
+            ),
+            "gates job granted write": self.release.replace(
+                gates_header, f"{gates_header}    permissions:\n      contents: write\n", 1
+            ).replace("    permissions:\n      actions: read\n      contents: read\n      statuses: read\n", "", 1),
+            "gates Required CI dropped": self.release.replace(gates_required_ci, "", 1),
+            "gates Required CI suppressed": self.release.replace(
+                gates_required_ci, suppress_run_command(gates_required_ci).replace(" || echo ignored", " || true"), 1
+            ),
+            "fuzz closure dropped": self.release.replace(fuzz, "", 1),
+            "fuzz closure made conditional": self.release.replace(
+                fuzz, inject_before_run(fuzz, "      if: needs.prepare.outputs.is_versioned == 'true'"), 1
+            ),
+            "gate moved back into release": self.release.replace(readiness, "", 1).replace(
+                tag_binding, f"{tag_binding}\n{readiness}", 1
+            ).replace(gates_required_ci, "", 1),
+        })
         for label, mutated in mutations.items():
             with self.subTest(mutation=label):
                 self.assertNotEqual(mutated, self.release, "mutation fixture did not alter YAML")

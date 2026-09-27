@@ -14,7 +14,9 @@ class WorkflowTests(unittest.TestCase):
         publisher = self.workflow["jobs"]["release"]
         self.assertEqual(publisher["environment"], "${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}")
         scripts = "\n".join(step.get("run", "") for step in publisher["steps"])
-        self.assertEqual(scripts.count("--require-candidate-ready"), 2)
+        # Candidate qualification runs in profile-required-gates; the publisher
+        # keeps only the recheck immediately before the acceptance PATCH.
+        self.assertEqual(scripts.count("--require-candidate-ready"), 1)
         self.assertNotIn("--require-ready", scripts)
         self.assertEqual(scripts.count("verify_release_environment.py"), 2)
         publish = next(step["run"] for step in publisher["steps"] if step["name"] == "Publish complete stable versioned release")
@@ -83,6 +85,30 @@ class WorkflowTests(unittest.TestCase):
         attestation = next(step for step in steps if step["name"] == "Verify published release attestation as a consumer")
         self.assertEqual(attestation["if"], "needs.prepare.outputs.is_versioned == 'true'")
 
+    def test_profile_required_gates_block_the_publisher_without_authority(self):
+        gates = self.workflow["jobs"]["profile-required-gates"]
+        self.assertEqual(gates["needs"], ["prepare"])
+        self.assertEqual(gates["permissions"], {"actions": "read", "contents": "read", "statuses": "read"})
+        for key in ("if", "environment", "continue-on-error"):
+            self.assertNotIn(key, gates)
+        self.assertNotIn("secrets.", str(gates))
+        names = [step["name"] for step in gates["steps"]]
+        self.assertEqual(names, [
+            "Checkout exact candidate source",
+            "Verify candidate commit passed Required CI Gate",
+            "Verify stable-v1 candidate is qualified for versioned publication",
+            "Verify SEC-120 parser fuzz-policy closure",
+        ])
+        for step in gates["steps"]:
+            self.assertNotIn("continue-on-error", step)
+        self.assertIn("verify-exact-required-gate.py", gates["steps"][1]["run"])
+        self.assertNotIn("if", gates["steps"][1])
+        self.assertNotIn("if", gates["steps"][3])
+        self.assertIn("profile-required-gates", self.workflow["jobs"]["release"]["needs"])
+        release_names = [step["name"] for step in self.workflow["jobs"]["release"]["steps"]]
+        self.assertNotIn("Verify stable-v1 candidate is qualified for versioned publication", release_names)
+        self.assertNotIn("Verify SEC-120 parser fuzz-policy closure", release_names)
+
     def test_independent_consumer_has_no_publication_authority(self):
         consumer = self.workflow["jobs"]["verify-stable-publication"]
         self.assertEqual(consumer["needs"], ["prepare", "release"])
@@ -132,9 +158,15 @@ class WorkflowTests(unittest.TestCase):
     def test_all_versioned_readiness_boundaries_select_the_matching_stage(self):
         release = self.workflow["jobs"]["release"]
         scripts = "\n".join(step.get("run", "") for step in release["steps"])
-        self.assertEqual(scripts.count("--require-predecessor-candidate"), 2)
-        self.assertEqual(scripts.count("--require-candidate-ready"), 2)
+        self.assertEqual(scripts.count("--require-predecessor-candidate"), 1)
+        self.assertEqual(scripts.count("--require-candidate-ready"), 1)
         self.assertIn('needs.prepare.outputs.version }}" == "0.9.0"', scripts)
+
+        gates = self.workflow["jobs"]["profile-required-gates"]
+        gate_scripts = "\n".join(step.get("run", "") for step in gates["steps"])
+        self.assertEqual(gate_scripts.count("--require-predecessor-candidate"), 1)
+        self.assertEqual(gate_scripts.count("--require-candidate-ready"), 1)
+        self.assertIn('needs.prepare.outputs.version }}" == "0.9.0"', gate_scripts)
 
         consumer = self.workflow["jobs"]["verify-stable-publication"]
         consumer_scripts = "\n".join(step.get("run", "") for step in consumer["steps"])

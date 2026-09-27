@@ -2108,8 +2108,9 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
         self.assertIn("      statuses: read", release)
         self.assertEqual(
             release.count("python3 .github/scripts/verify-exact-required-gate.py"),
-            4,
-            "publication must verify at entry, before both mutation boundaries, and from the independent consumer",
+            5,
+            "publication must verify in profile-required-gates, at release entry, before both mutation "
+            "boundaries, and from the independent consumer",
         )
         self.assertIn(
             "build-matrix-trusted-receipt-${{ github.event.workflow_run.head_sha }}-"

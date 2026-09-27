@@ -2934,9 +2934,14 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             "    - name: Publish complete nightly rolling release"
         )
 
+        # REL-190: candidate qualification runs in the profile-required-gates
+        # job, which the release job needs, so it precedes every release step.
+        release_job = text.index("\n  release:\n")
+        gates_job = text.index("\n  profile-required-gates:\n")
+        self.assertLess(gates_job, readiness)
+        self.assertLess(readiness, release_job)
         ordered = (
             required,
-            readiness,
             freeze,
             collect,
             inspect,

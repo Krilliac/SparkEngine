@@ -1047,10 +1047,64 @@ jobs:
           retention-days: 7
 
   # ===========================================================================
+  # Profile-required candidate gates (REL-190)
+  # ===========================================================================
+  # Candidate gating is its own named job so an unqualified candidate fails as
+  # a red profile-required-gates job and the environment-protected release job
+  # never starts: no stable-release approval is requested and no publication
+  # mutation can begin. It holds no write permission, secret, or environment.
+  # The release job still re-verifies the exact Required CI Gate to freeze its
+  # evidence, and the stable publish step revalidates readiness immediately
+  # before the acceptance PATCH.
+  profile-required-gates:
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      statuses: read
+    steps:
+    - name: Checkout exact candidate source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+
+    - name: Verify candidate commit passed Required CI Gate
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        GITHUB_OUTPUT="$RUNNER_TEMP/profile-required-gates-exact-ci.out" \
+          python3 .github/scripts/verify-exact-required-gate.py
+
+    - name: Verify stable-v1 candidate is qualified for versioned publication
+      if: needs.prepare.outputs.is_versioned == 'true'
+      shell: bash
+      # Strict validation, no waiver: every requiredCiJobs/testSelectors and
+      # path reference in the contract must resolve. The --allow-legacy-contract
+      # waiver was retired once the contract validated strictly; never
+      # reintroduce it to make a versioned publication green.
+      run: |
+        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+          python3 tools/site-data/validate.py --require-predecessor-candidate
+        else
+          python3 tools/site-data/validate.py --require-candidate-ready
+        fi
+
+    - name: Verify SEC-120 parser fuzz-policy closure
+      # SEC-120 is release-blocking: publication must fail while any inventoried
+      # parser still lacks a sanitizer-backed fuzz target and bounded corpus.
+      # The structural gate in build.yml blocks merges; this blocks releases.
+      run: python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure
+
+  # ===========================================================================
   # Publish GitHub Release (versioned or rolling "latest")
   # ===========================================================================
   release:
-    needs: [prepare, build-windows, build-linux, build-macos, build-installer]
+    needs: [prepare, profile-required-gates, build-windows, build-linux, build-macos, build-installer]
     runs-on: ubuntu-latest
     environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
     outputs:
@@ -1153,20 +1207,6 @@ jobs:
         TARGET_SHA: ${{ github.sha }}
       run: python3 .github/scripts/verify-exact-required-gate.py
 
-    - name: Verify stable-v1 candidate is qualified for versioned publication
-      if: needs.prepare.outputs.is_versioned == 'true'
-      shell: bash
-      # Strict validation, no waiver: every requiredCiJobs/testSelectors and
-      # path reference in the contract must resolve. The --allow-legacy-contract
-      # waiver was retired once the contract validated strictly; never
-      # reintroduce it to make a versioned publication green.
-      run: |
-        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
-          python3 tools/site-data/validate.py --require-predecessor-candidate
-        else
-          python3 tools/site-data/validate.py --require-candidate-ready
-        fi
-
     - name: Freeze durable exact CI evidence release asset
       env:
         EXACT_SOURCE_COMMIT: ${{ github.sha }}
@@ -1229,12 +1269,6 @@ jobs:
         set -euo pipefail
         python3 tools/site-data/exact_evidence.py write \
           --output "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
-
-    # SEC-120 is release-blocking: publication must fail while any inventoried
-    # parser still lacks a sanitizer-backed fuzz target and bounded corpus.
-    # The structural gate in build.yml blocks merges; this blocks releases.
-    - name: Verify SEC-120 parser fuzz-policy closure
-      run: python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure
 
     # Download counters are durable generated state on one moving tag. Keeping
     # them off Working lets branch protection stay strict and leaves the source
