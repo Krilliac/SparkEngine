@@ -1,0 +1,22 @@
+{
+  "sceneVersion": 1,
+  "name": "Legacy Editor Starter",
+  "entities": [
+    {"id": 1, "name": "Directional Light", "parent": -1, "components": [
+      {"type": "Transform", "position": [0, 10, 0], "rotation": [50, -30, 0], "scale": [1, 1, 1]},
+      {"type": "DirectionalLight", "color": [1, 0.95, 0.8], "intensity": 1.2, "castShadows": true}
+    ]},
+    {"id": 2, "name": "Main Camera", "parent": -1, "components": [
+      {"type": "Transform", "position": [0, 2, -5], "rotation": [10, 0, 0], "scale": [1, 1, 1]},
+      {"type": "Camera", "fov": 70, "nearClip": 0.2, "farClip": 500}
+    ]},
+    {"id": 3, "name": "Player", "parent": -1, "components": [
+      {"type": "Transform", "position": [4, 0, 6], "rotation": [0, 90, 0], "scale": [1, 1, 1]},
+      {"type": "CharacterController", "height": 1.9, "radius": 0.4}
+    ]},
+    {"id": 4, "name": "Crate", "parent": 3, "components": [
+      {"type": "Transform", "position": [0.5, 1, 0], "rotation": [0, 0, 0], "scale": [0.5, 0.5, 0.5]},
+      {"type": "MeshRenderer", "mesh": "Assets/Models/crate.obj", "materialPath": "Assets/Materials/wood.json"}
+    ]}
+  ]
+}

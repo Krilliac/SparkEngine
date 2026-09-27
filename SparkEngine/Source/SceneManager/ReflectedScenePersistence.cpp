@@ -183,24 +183,37 @@ namespace Spark
         return true;
     }
 
-    bool LoadWorld(World& world, const std::string& path)
+    bool LoadWorld(World& world, const std::string& path, std::string* error)
     {
+        if (error)
+            error->clear();
+
         const std::filesystem::path primary = std::filesystem::u8path(path);
         std::filesystem::path backup = primary;
         backup += ".bak";
 
-        const auto loadCandidate = [&](const std::filesystem::path& candidatePath) -> bool
+        const auto loadCandidate = [&](const std::filesystem::path& candidatePath, std::string& reason) -> bool
         {
+            std::error_code existsError;
+            if (!std::filesystem::exists(candidatePath, existsError))
+            {
+                reason = "file does not exist";
+                return false;
+            }
+
             std::string text;
             if (!ReadTextFile(candidatePath, text))
+            {
+                reason = "file could not be read";
                 return false;
+            }
 
             // Deserialize into an isolated world first. A malformed document
             // can fail after creating entities or components; applying that
             // attempt directly to the caller would contaminate a later backup
             // recovery (and could leave a live editor document partially read).
             World staged;
-            if (!DeserializeInto(staged, text))
+            if (!DeserializeInto(staged, text, SceneDeserializeMode::Permissive, &reason))
                 return false;
 
             // The editor and runtime replace the loaded document. Install only
@@ -210,14 +223,23 @@ namespace Spark
             return true;
         };
 
-        if (loadCandidate(primary))
+        std::string primaryReason;
+        if (loadCandidate(primary, primaryReason))
             return true;
 
-        if (!loadCandidate(backup))
+        std::string backupReason;
+        if (!loadCandidate(backup, backupReason))
+        {
+            if (error)
+            {
+                *error = "Scene '" + path + "' was rejected: " + primaryReason + ". Previous-good backup '" + path +
+                         ".bak' was not usable: " + backupReason + ".";
+            }
             return false;
+        }
 
-        SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] recovering %s from previous-good backup",
-                       path.c_str());
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] recovering %s from previous-good backup (%s)",
+                       path.c_str(), primaryReason.c_str());
         return true;
     }
 } // namespace Spark

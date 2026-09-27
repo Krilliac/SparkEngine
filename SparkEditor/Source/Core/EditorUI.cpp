@@ -2613,12 +2613,13 @@ namespace SparkEditor
         // corrupts the World currently being edited.
         auto fresh = std::make_unique<::World>();
         std::string loadedPath = path;
+        std::string loadError;
         const bool loaded = m_projectManager && m_projectManager->HasOpenProject()
-                                ? m_projectManager->LoadProjectScene(path, *fresh, loadedPath)
-                                : Spark::LoadWorld(*fresh, path);
+                                ? m_projectManager->LoadProjectScene(path, *fresh, loadedPath, &loadError)
+                                : Spark::LoadWorld(*fresh, path, &loadError);
         if (!loaded)
         {
-            console.LogError("Failed to open scene (Spark::LoadWorld): " + path);
+            console.LogError("Failed to open scene: " + (loadError.empty() ? path : loadError));
             return false;
         }
 

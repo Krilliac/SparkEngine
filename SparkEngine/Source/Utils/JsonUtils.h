@@ -73,6 +73,8 @@ namespace Spark::Json
         uint32_t maxDepth = 128u;
         /// Maximum number of JSON values the document may produce.
         size_t maxNodes = 4000000u;
+        /// Reject an object that repeats a key instead of keeping the last value.
+        bool rejectDuplicateKeys = false;
     };
 
     /**
@@ -847,6 +849,8 @@ namespace Spark::Json
                         return Fail("expected ':' after object key");
 
                     SkipWhitespace();
+                    if (m_limits.rejectDuplicateKeys && obj.HasKey(keyVal.AsString()))
+                        return Fail("duplicate object key");
                     obj[keyVal.AsString()] = ParseValue();
                     SkipWhitespace();
 

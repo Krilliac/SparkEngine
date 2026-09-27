@@ -131,7 +131,10 @@ namespace SparkEditor
         /// @brief Resolve an existing scene only when it remains inside the open project root.
         bool ResolveProjectScenePath(const std::string& scenePath, std::string& resolvedPath) const;
         /// @brief Read and deserialize a contained scene from one verified file handle.
-        bool LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath) const;
+        /// @param error When non-null, set on failure to an actionable reason (containment,
+        ///        read failure, or the scene's version/schema rejection).
+        bool LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath,
+                              std::string* error = nullptr) const;
         /// @brief Persist a successfully opened/saved scene as project-relative state.
         /// Rejects missing files and paths outside the current project root.
         bool RecordOpenedScene(const std::string& scenePath);

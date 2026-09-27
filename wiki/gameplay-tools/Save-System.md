@@ -167,6 +167,31 @@ whether a newer or compatible older build is required. OD-03 forbids unlimited
 backward compatibility: the next format bump (v5) moves the window to v4-v5, drops
 the v3->v4 step, and must ship a real v4 fixture that migrates.
 
+### Reflected-World scenes
+
+The editor's File > Open/Save and the engine's `-scene` launch read and write the
+reflected-World JSON dialect (`Spark::DeserializeInto` / `Spark::LoadWorld` in
+`SparkEngine/Source/SceneManager/`). That dialect has only ever written
+`"version": 1`; the one older input it reads is the pre-reflection editor dialect
+(`"sceneVersion": 1`), which migrates in memory and is rewritten as version 1 on
+the next save. Every rejection fails closed without touching the caller's world
+and returns a reason through the optional `std::string* error` argument:
+
+- version rejections name the field (`version` or `sceneVersion`), the file's
+  value, the supported window ("reads reflected scene version 1 and the legacy
+  editor 'sceneVersion': 1 dialect, and writes version 1"), and the next step
+  (open it with the newer build, or no migration exists);
+- a missing, duplicated, or non-integer version field is reported as such;
+- schema rejections name the entity index and name plus the offending id,
+  parent, component type, or field (strict crash-recovery records are checked
+  field by field against this build's reflected schema);
+- `LoadWorld` reports why the primary was rejected and why `<path>.bak` could not
+  be used (including "file does not exist").
+
+`EditorUI::OpenScene`, `ProjectManager::LoadProjectScene`, and both `-scene`
+launch paths print this reason. Tests: `ReflectedScene_*` in
+`Tests/TestReflectedScene.cpp`.
+
 ### Module persisted schemas
 
 SaveSystem versions the envelope; each game module owns the meaning of the

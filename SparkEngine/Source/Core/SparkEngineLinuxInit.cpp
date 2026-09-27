@@ -440,9 +440,10 @@ bool LoadLinuxLaunchScene(int argc, char* argv[])
     // and ShutdownEngine tears it down with every other engine-lifetime object.
     // LoadWorld replaces the world only when a candidate fully deserializes.
     extern std::unique_ptr<::World> g_engineEcsWorld;
-    if (!g_engineEcsWorld || !Spark::LoadWorld(*g_engineEcsWorld, *scenePath))
+    std::string loadError;
+    if (!g_engineEcsWorld || !Spark::LoadWorld(*g_engineEcsWorld, *scenePath, &loadError))
     {
-        console.LogError("[-scene] Failed to load '" + *scenePath + "'");
+        console.LogError("[-scene] Failed to load '" + *scenePath + "'" + (loadError.empty() ? "" : ": " + loadError));
         return false;
     }
 

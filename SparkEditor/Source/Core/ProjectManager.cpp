@@ -698,7 +698,9 @@ namespace SparkEditor
                 ~DescriptorCloser() { ::close(descriptor); }
             } closer{descriptor};
 
-            struct stat information{};
+            struct stat information
+            {
+            };
             if (::fstat(descriptor, &information) != 0 || !S_ISREG(information.st_mode) || information.st_size < 0 ||
                 static_cast<uint64_t>(information.st_size) > kMaximumSceneDocumentBytes)
             {
@@ -1336,8 +1338,7 @@ namespace SparkEditor
                     std::string storedPath = PathToUtf8(relative);
                     std::replace(storedPath.begin(), storedPath.end(), '\\', '/');
                     if (std::none_of(m_currentProject.scenes.begin(), m_currentProject.scenes.end(),
-                                     [&](const std::string& scene)
-                                     {
+                                     [&](const std::string& scene) {
                                          return ProjectPathsEqual(PathToUtf8(staging / PathFromUtf8(scene)),
                                                                   PathToUtf8(candidate));
                                      }))
@@ -1745,11 +1746,20 @@ namespace SparkEditor
         return true;
     }
 
-    bool ProjectManager::LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath) const
+    bool ProjectManager::LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath,
+                                          std::string* error) const
     {
         resolvedPath.clear();
-        if (!m_hasOpenProject || scenePath.empty())
+        const auto fail = [error](std::string message)
+        {
+            if (error)
+                *error = std::move(message);
             return false;
+        };
+        if (error)
+            error->clear();
+        if (!m_hasOpenProject || scenePath.empty())
+            return fail("no project is open or the scene path is empty");
 
         const fs::path projectRoot = PathFromUtf8(NormalizeProjectPath(m_currentProject.path));
         fs::path candidate = PathFromUtf8(scenePath);
@@ -1761,15 +1771,17 @@ namespace SparkEditor
         // The handle-derived final path below remains the security authority
         // for symlinks, junctions, and concurrent path replacement.
         if (!IsPathInsideRoot(projectRoot, candidate))
-            return false;
+            return fail("Scene '" + scenePath + "' is outside the open project");
 
         std::string sceneDocument;
         if (!ReadContainedFileFromHandle(projectRoot, candidate, resolvedPath, sceneDocument))
-            return false;
-        if (!Spark::DeserializeInto(world, sceneDocument))
+            return fail("Scene '" + scenePath + "' could not be read inside the open project");
+        std::string reason;
+        if (!Spark::DeserializeInto(world, sceneDocument, Spark::SceneDeserializeMode::Permissive, &reason))
         {
+            const std::string rejectedPath = resolvedPath;
             resolvedPath.clear();
-            return false;
+            return fail("Scene '" + rejectedPath + "' was rejected: " + reason);
         }
         return true;
     }

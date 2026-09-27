@@ -281,6 +281,134 @@ TEST(ReflectedScene_RejectsUnknownAndAmbiguousVersionsWithoutMutation)
     EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
 }
 
+TEST(ReflectedScene_VersionRejectionNamesFileVersionAndSupportedWindow)
+{
+    World world;
+    world.CreateEntity("KeepMe");
+    std::string error;
+
+    EXPECT_FALSE(
+        DeserializeInto(world, R"json({"version":999,"entities":[]})json", SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "'version' 999 is unsupported");
+    EXPECT_STR_CONTAINS(error, "reads reflected scene version 1");
+    EXPECT_STR_CONTAINS(error, "'sceneVersion': 1");
+    EXPECT_STR_CONTAINS(error, "writes version 1");
+    EXPECT_STR_CONTAINS(error, "newer SparkEngine build");
+
+    EXPECT_FALSE(
+        DeserializeInto(world, R"json({"version":0,"entities":[]})json", SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "'version' 0 is unsupported");
+    EXPECT_STR_CONTAINS(error, "no migration exists");
+
+    EXPECT_FALSE(DeserializeInto(world, R"json({"sceneVersion":2,"entities":[]})json", SceneDeserializeMode::Permissive,
+                                 &error));
+    EXPECT_STR_CONTAINS(error, "'sceneVersion' 2 is unsupported");
+
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version":1,"sceneVersion":1,"entities":[]})json",
+                                 SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "both 'version' and 'sceneVersion'");
+
+    EXPECT_FALSE(DeserializeInto(world, R"json({"entities":[]})json", SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "no 'version' field");
+
+    EXPECT_FALSE(DeserializeInto(world, R"json({"sceneVersion":"1","entities":[]})json",
+                                 SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "'sceneVersion' must be an integer, found string");
+
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+
+    // A successful load clears a stale diagnostic from an earlier rejection.
+    World accepted;
+    EXPECT_TRUE(
+        DeserializeInto(accepted, R"json({"version":1,"entities":[]})json", SceneDeserializeMode::Permissive, &error));
+    EXPECT_TRUE(error.empty());
+}
+
+TEST(ReflectedScene_SchemaRejectionExplainsTheOffendingElement)
+{
+    World world;
+    std::string error;
+
+    EXPECT_FALSE(DeserializeInto(world, "[]", SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "root must be a JSON object, found array");
+
+    EXPECT_FALSE(DeserializeInto(world, "not a scene", SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "root must be a JSON object, found null");
+
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version":1})json", SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "no 'entities' array");
+
+    EXPECT_FALSE(
+        DeserializeInto(world, R"json({"version":1,"entities":[{"id":3,"name":"First"},{"id":3,"name":"Second"}]})json",
+                        SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "entity #1 ('Second') repeats id 3");
+
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version":1,"entities":[{"id":-4,"name":"Neg"}]})json",
+                                 SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "entity #0 ('Neg') has id -4");
+
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version":1,"entities":[{"id":1,"parent":"x"}]})json",
+                                 SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "entity #0 has parent \"x\"");
+
+    const char* unknownComponent = R"json({"version":1,"entities":[
+        {"id":1,"name":"Crate","parent":-1,"components":[{"type":"NoSuchComponent","fields":{}}]}]})json";
+    EXPECT_FALSE(DeserializeInto(world, unknownComponent, SceneDeserializeMode::StrictRecovery, &error));
+    EXPECT_STR_CONTAINS(error, "crash-recovery record entity #0 ('Crate')");
+    EXPECT_STR_CONTAINS(error, "'NoSuchComponent'");
+
+    const char* missingField = R"json({"version":1,"entities":[
+        {"id":1,"name":"Crate","parent":-1,"components":[{"type":"Transform","fields":{}}]}]})json";
+    EXPECT_FALSE(DeserializeInto(world, missingField, SceneDeserializeMode::StrictRecovery, &error));
+    EXPECT_STR_CONTAINS(error, "is missing field 'Transform.");
+
+    const char* legacyRecovery = R"json({"sceneVersion":1,"entities":[]})json";
+    EXPECT_FALSE(DeserializeInto(world, legacyRecovery, SceneDeserializeMode::StrictRecovery, &error));
+    EXPECT_STR_CONTAINS(error, "legacy 'sceneVersion' dialect");
+
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(0));
+}
+
+TEST(ReflectedScene_LoadWorldReportsPrimaryVersionAndBackupReason)
+{
+    TemporaryReflectedScene file;
+    {
+        std::ofstream future(file.Path(), std::ios::binary | std::ios::trunc);
+        future << R"({"version":7,"entities":[]})";
+    }
+
+    World world;
+    world.CreateEntity("Unchanged");
+    std::string error;
+    EXPECT_FALSE(LoadWorld(world, file.Path().string(), &error));
+    EXPECT_STR_CONTAINS(error, file.Path().string());
+    EXPECT_STR_CONTAINS(error, "'version' 7 is unsupported");
+    EXPECT_STR_CONTAINS(error, "writes version 1");
+    EXPECT_STR_CONTAINS(error, ".bak' was not usable: file does not exist");
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+
+    {
+        std::ofstream backup(file.Path().string() + ".bak", std::ios::binary | std::ios::trunc);
+        backup << R"({"sceneVersion":"one","entities":[]})";
+    }
+    EXPECT_FALSE(LoadWorld(world, file.Path().string(), &error));
+    EXPECT_STR_CONTAINS(error, "'version' 7 is unsupported");
+    EXPECT_STR_CONTAINS(error, ".bak' was not usable: scene 'sceneVersion' must be an integer");
+
+    const std::filesystem::path missing = file.Path().string() + ".absent";
+    EXPECT_FALSE(LoadWorld(world, missing.string(), &error));
+    EXPECT_STR_CONTAINS(error, "was rejected: file does not exist");
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+
+    {
+        std::ofstream valid(file.Path(), std::ios::binary | std::ios::trunc);
+        valid << R"({"version":1,"entities":[{"id":0,"name":"Loaded"}]})";
+    }
+    EXPECT_TRUE(LoadWorld(world, file.Path().string(), &error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+}
+
 TEST(ReflectedScene_SaveIsAtomicAndLoadRecoversPreviousGoodBackup)
 {
     TemporaryReflectedScene file;

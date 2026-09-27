@@ -76,7 +76,8 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     bool haveModules = GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules();
     if (!g_scenePath.empty() && !haveModules)
     {
-        if (Spark::LoadWorld(g_sceneWorld, g_scenePath))
+        std::string sceneLoadError;
+        if (Spark::LoadWorld(g_sceneWorld, g_scenePath, &sceneLoadError))
         {
             // Explicit scene preview renders this dedicated world rather than
             // the ordinary runtime world. Publish that same instance through
@@ -94,7 +95,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         }
         else
         {
-            console.LogError(std::format("[-scene] Failed to load '{}'", g_scenePath));
+            console.LogError(std::format("[-scene] Failed to load '{}': {}", g_scenePath, sceneLoadError));
             g_scenePath.clear();
         }
     }
