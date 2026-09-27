@@ -1229,42 +1229,6 @@
       }
     },
     {
-      "id": "wic-material-texture",
-      "description": "Windows WIC image decode for material textures.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Graphics/MaterialTextureLoading.cpp"
-      ],
-      "formats": [
-        ".png",
-        ".jpg",
-        ".bmp"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
-      "id": "wic-pbr-material-texture",
-      "description": "Windows WIC image decode for PBR material binding.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Graphics/PBRMaterialBinding.cpp"
-      ],
-      "formats": [
-        ".png",
-        ".jpg",
-        ".bmp"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
       "id": "animation-skel-sanim",
       "description": "Binary SKEL/ANIM skeleton and clip readers.",
       "trust_boundary": "untrusted-file",
@@ -2412,22 +2376,6 @@
       }
     },
     {
-      "id": "pbr-material-file",
-      "description": "Windows Material::LoadFromFile line-oriented material description reader (stof/stoi fields, texture paths, defines).",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Graphics/PBRMaterialLightingWindows.cpp"
-      ],
-      "formats": [
-        ".mat"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
       "id": "benchmark-baseline-json",
       "description": "BenchmarkFramework baseline reader: hand-rolled JSON line scrape of a baseline file named at runtime through the shipped benchmark console commands.",
       "trust_boundary": "untrusted-file",
@@ -3352,39 +3300,6 @@
       ]
     },
     {
-      "source_file": "SparkEngine/Source/Graphics/MaterialConsoleOps.cpp",
-      "classification": "delegating-call-site",
-      "justification": "Console reload calls Material::LoadFromFile, implemented in the inventoried PBRMaterialLightingWindows.cpp.",
-      "detected_by": [
-        "parse-entry"
-      ],
-      "delegates_to": [
-        "pbr-material-file"
-      ]
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MaterialSystem.cpp",
-      "classification": "delegating-call-site",
-      "justification": "MaterialSystem load/reload paths call Material::LoadFromFile, implemented in the inventoried PBRMaterialLightingWindows.cpp.",
-      "detected_by": [
-        "parse-entry"
-      ],
-      "delegates_to": [
-        "pbr-material-file"
-      ]
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MaterialSystem.h",
-      "classification": "delegating-call-site",
-      "justification": "Declares Material::LoadFromFile, implemented in the inventoried PBRMaterialLightingWindows.cpp.",
-      "detected_by": [
-        "parse-entry"
-      ],
-      "delegates_to": [
-        "pbr-material-file"
-      ]
-    },
-    {
       "source_file": "SparkEngine/Source/Graphics/Mesh.h",
       "classification": "delegating-call-site",
       "justification": "Declares Mesh::LoadFromFile, implemented in the inventoried MeshLinux.cpp and MeshWindows.cpp.",
@@ -3450,14 +3365,6 @@
       ],
       "delegates_to": [
         "neural-texture-ntex"
-      ]
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/PBRMaterialLightingLinux.cpp",
-      "classification": "not-a-parser",
-      "justification": "The Linux Material::LoadFromFile logs that file loading is unsupported and returns false without opening the file.",
-      "detected_by": [
-        "parse-entry"
       ]
     },
     {

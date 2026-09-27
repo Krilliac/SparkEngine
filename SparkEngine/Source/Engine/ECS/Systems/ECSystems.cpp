@@ -30,6 +30,7 @@
 #include <chrono>
 #include <sstream>
 #include <cmath>
+#include <cstddef>
 
 using namespace DirectX;
 namespace Spark::ECS
@@ -347,14 +348,12 @@ namespace Spark::ECS
     // LifecycleSystem
     // ============================================================================
 
-    void LifecycleSystem::Update(World& world, float deltaTime)
+    void LifecycleSystem::Update(World& world, float /*deltaTime*/)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
-        // Two-phase death processing: collect first, then fire callbacks.
-        // This avoids iterator invalidation if a death callback destroys
-        // the entity or modifies HealthComponent on other entities.
-        // Uses persistent m_deadEntities to avoid heap allocation every frame.
-
+        // Only the latch lives here: the gameplay system that dealt the lethal damage owns the
+        // death response and the EntityKilledEvent (see the class documentation).
+        std::size_t newDeaths = 0;
         auto healthView = world.GetEntitiesWith<HealthComponent>();
         for (auto entity : healthView)
         {
@@ -362,31 +361,13 @@ namespace Spark::ECS
             if (health.isDead && !health.deathProcessed)
             {
                 health.deathProcessed = true;
-                m_deadEntities.MarkForDeletion(entity);
+                ++newDeaths;
             }
         }
 
-        if (m_deadEntities.GetPendingCount() > 0)
+        if (newDeaths > 0)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::ECS, "LifecycleSystem: %zu entities died this frame",
-                           m_deadEntities.GetPendingCount());
-        }
-
-        if (m_onDeath)
-        {
-            m_deadEntities.Flush(
-                [&](entt::entity& entity)
-                {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "LifecycleSystem: firing death callback for entity %u",
-                                    static_cast<uint32_t>(entity));
-                    m_onDeath(entity);
-                });
-        }
-        else
-        {
-            SPARK_WARN_IF(Spark::LogCategory::ECS, !m_deadEntities.IsEmpty(),
-                          "LifecycleSystem: entities died but no death callback is registered");
-            m_deadEntities.FlushAll();
+            SPARK_LOG_INFO(Spark::LogCategory::ECS, "LifecycleSystem: %zu entities died this frame", newDeaths);
         }
     }
 

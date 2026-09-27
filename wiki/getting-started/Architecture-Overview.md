@@ -249,7 +249,7 @@ Frame Start
     ├── 5. AI            — AIUpdateSystem ticks behavior trees, pathfinding
     ├── 6. Particles     — ParticleUpdateSystem spawns and simulates particles
     ├── 7. Audio         — AudioUpdateSystem updates 3D source positions
-    ├── 8. Lifecycle     — LifecycleSystem processes death events
+    ├── 8. Lifecycle     — LifecycleSystem latches new deaths
     ├── 9. Projectiles   — ProjectileSystem advances projectile movement
     ├── 10. Decals       — DecalSystem manages decal lifetimes
     └── 11. Rendering    — RenderSystem submits draw calls to GPU

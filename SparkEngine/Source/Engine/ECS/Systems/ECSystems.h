@@ -29,7 +29,7 @@
  * 2. **AnimationUpdateSystem** – Evaluates skeleton animation, produces bone matrices.
  * 3. **AIUpdateSystem** – Reads Transform, runs behavior trees, writes velocity/target.
  * 4. **AudioUpdateSystem** – Reads Transform, updates 3D audio source positions.
- * 5. **LifecycleSystem** – Processes health, death callbacks, active/inactive entities.
+ * 5. **LifecycleSystem** – Latches each new death (`HealthComponent::deathProcessed`).
  * 6. **RenderSystem** – Reads Transform + MeshRenderer, submits draw calls to GPU.
  *
  * ## Usage
@@ -293,78 +293,39 @@ namespace Spark::ECS
 
     /**
  * @class LifecycleSystem
- * @brief Manages entity activation state and death events.
+ * @brief Latches each entity death exactly once.
  *
- * The LifecycleSystem monitors `ActiveComponent` and `HealthComponent` each frame:
+ * Every frame the system visits each `HealthComponent` and, for an entity whose
+ * `isDead` flag is set but whose death has not been seen yet, sets
+ * `HealthComponent::deathProcessed`. The latch lets invariant checks
+ * (`InvalidStateDetector`, module authority checks) tell a fresh death from one
+ * that has already been observed.
  *
- * - **Inactive entities** – entities with `ActiveComponent::active == false` are
- *   skipped by most other systems, achieving a cheap "disabled" state without
- *   removing components. The LifecycleSystem itself still visits them to detect
- *   re-activation.
+ * The system does not handle deaths. Loot, score, despawn and the
+ * `EntityKilledEvent` belong to the gameplay system that applied the lethal
+ * damage (for example `AbilitySystem`, which publishes `EntityKilledEvent` on the
+ * EventBus); republishing from here would deliver every kill twice.
  *
- * - **Death detection** – entities with `HealthComponent::isDead == true` trigger
- *   the registered death callback (`m_onDeath`). The callback receives the EntityID
- *   so the game can handle loot drops, score, sound effects, and eventual entity
- *   destruction.
+ * Code that brings an entity back to life must clear both flags, through
+ * `HealthComponent::Revive()` or `HealthComponent::SetHealth()`, so that a later
+ * death is latched again.
  *
- * ### Death callback
- * Register a callback before any enemies can die:
- * @code
- *   lifecycleSys->SetDeathCallback([&](EntityID id) {
- *       // Drop loot, play death sound, award score...
- *       world.DestroyEntity(id);
- *   });
- * @endcode
- *
- * @note The callback is invoked **once** per entity per death event. The entity
- *       is NOT automatically destroyed; the callback is responsible for that.
- *       To prevent the callback firing again, either destroy the entity or clear
- *       the `HealthComponent::isDead` flag.
+ * - Thread affinity: game thread (runs in `Phase::Gameplay`).
+ * - Ownership: owned by the `SystemManager`; holds no per-entity state.
+ * - Allocation: none per frame.
  */
     class LifecycleSystem : public ISystem
     {
       public:
         /**
-     * @brief Callback signature invoked when an entity's health reaches zero.
-     *
-     * @param entityID  The EntityID of the entity that died.
-     */
-        using DeathCallback = std::function<void(EntityID)>;
-
-        /**
-     * @brief Scan all entities for death and activation state changes.
-     *
-     * - Fires `m_onDeath` for each entity with `HealthComponent::isDead == true`.
-     * - (Future) handles re-activation of entities that transition to `active == true`.
+     * @brief Latch `deathProcessed` on every entity that died since the last update.
      *
      * @param world      The ECS World to query.
-     * @param deltaTime  Frame time (seconds). May be used for deferred actions.
+     * @param deltaTime  Frame time (seconds). Unused.
      */
         void Update(World& world, float deltaTime) override;
 
         const char* GetName() const override { return "LifecycleSystem"; }
-
-        /**
-     * @brief Register the callback invoked when an entity's HealthComponent marks it dead.
-     *
-     * Only one callback can be registered; subsequent calls overwrite the previous one.
-     * Pass an empty `std::function` to remove the callback.
-     *
-     * @param cb  Callback function receiving the EntityID of the dead entity.
-     */
-        void SetDeathCallback(DeathCallback cb) { m_onDeath = cb; }
-
-      private:
-        /**
-     * @brief Callback invoked when `HealthComponent::isDead` is detected.
-     *
-     * Set via `SetDeathCallback()`. May be empty (no-op) if not registered.
-     */
-        DeathCallback m_onDeath;
-
-        /// Persistent deferred queue — avoids heap allocation every frame.
-        /// Cleared at the end of each Update() via Flush().
-        Spark::DeferredQueue<entt::entity> m_deadEntities;
     };
 
     // =============================================================================

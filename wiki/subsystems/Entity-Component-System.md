@@ -302,7 +302,7 @@ Systems are processed by `SystemManager::UpdateAll()` in registration order. The
 3. AIUpdateSystem         — Perception, behavior trees, pathfinding, movement
 4. AudioUpdateSystem      — Update 3D audio source positions from transforms
 5. ParticleUpdateSystem   — Spawn, simulate, and cull particles
-6. LifecycleSystem        — Process death events, active/inactive toggling
+6. LifecycleSystem        — Latch new deaths (HealthComponent::deathProcessed)
 7. DecalSystem            — Manage decal lifetimes and fade-out
 8. ProjectileSystem       — Advance projectile positions, check expiration
 9. RenderSystem           — Submit draw calls to the GPU
@@ -317,7 +317,7 @@ Systems are processed by `SystemManager::UpdateAll()` in registration order. The
 | `AnimationUpdateSystem` | `AnimationUpdateSystem()` | Evaluates animation state machines, blends layers, solves IK |
 | `AIUpdateSystem` | `AIUpdateSystem()` | Ticks behavior trees, updates perception and pathfinding |
 | `AudioUpdateSystem` | `AudioUpdateSystem(AudioEngine*)` | Syncs 3D audio positions from transforms |
-| `LifecycleSystem` | `LifecycleSystem()` | Monitors health/death, entity activation state |
+| `LifecycleSystem` | `LifecycleSystem()` | Latches each new death once (`HealthComponent::deathProcessed`) |
 | `ParticleUpdateSystem` | `ParticleUpdateSystem()` | Advances particle simulation |
 | `DecalSystem` | `DecalSystem()` | Manages decal lifetimes and fade-out |
 | `ProjectileSystem` | `ProjectileSystem()` | Advances projectile movement and expiration |
@@ -337,19 +337,25 @@ It operates in two phases:
 1. **Pre-simulate** -- Write kinematic body positions from ECS Transform to Jolt
 2. **Post-simulate** -- Read dynamic body positions from Jolt back to ECS Transform
 
-### LifecycleSystem Callbacks
+### LifecycleSystem Death Latch
+
+`LifecycleSystem` has no death callback. Each frame it sets `HealthComponent::deathProcessed` on every entity whose
+`isDead` flag is set and whose death it has not seen yet. Invariant checks (`InvalidStateDetector`, the MMO module's
+authority check) use the latch to tell a fresh death from one already observed.
+
+Death *handling* (loot, score, despawn) belongs to the gameplay system that applied the lethal damage, and that system
+publishes `Spark::EntityKilledEvent` on the EventBus (`AbilitySystem` does so for ability kills). Subscribe to the
+event instead of the ECS system:
 
 ```cpp
-auto* lifecycle = mgr.AddSystem<LifecycleSystem>();
-lifecycle->SetDeathCallback([&](EntityID id) {
-    // Drop loot, play death sound, award score
-    SpawnLoot(id);
-    audio.PlaySound("death");
-    world.DestroyEntity(id);
+eventBus->Subscribe<Spark::EntityKilledEvent>([&](const Spark::EntityKilledEvent& e) {
+    SpawnLoot(e.entityId);
 });
 ```
 
-The callback fires once per entity when `HealthComponent::isDead == true`. The entity is NOT automatically destroyed; the callback is responsible for that.
+Code that brings an entity back must clear both flags, via `HealthComponent::Revive()` or, for an authoritative
+health write such as a network snapshot or respawn, `HealthComponent::SetHealth()`. Otherwise the next death is never
+latched and `deathProcessed=true, isDead=false` trips `InvalidStateDetector`.
 
 ### DecalSystem and ProjectileSystem Callbacks
 

@@ -354,6 +354,7 @@ add_executable(SparkTests
     TestECSystemsReal.cpp
     TestNetworkManagerReal.cpp
     TestMaterialSystemReal.cpp
+    TestUnwiredSystemRemoval.cpp
     TestAssetPipelineReal.cpp
     TestMMOAssetImport.cpp
     TestENG220ObjImportReal.cpp
@@ -2009,6 +2010,15 @@ set_tests_properties(TFScramAuth PROPERTIES
     LABELS "network-security;persistence;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
+
+# Unwired-system removal: MaterialSystem/Material expose no file import, export, reload or
+# hot-reload path, and LifecycleSystem latches deaths (no unregistered callback) with
+# HealthComponent::SetHealth re-arming the latch on respawn.
+add_test(NAME UnwiredSystemRemoval COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(UnwiredSystemRemoval PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=UnwiredSys_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "rendering;security;unit"
+    TIMEOUT 60)
 
 # DATA-120: TFDatabase multi-row transactions, schema migration, the TERRAFRONT
 # durable-commit primitive (SavePaths::WriteDurableReplace), and the real

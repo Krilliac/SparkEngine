@@ -14,10 +14,13 @@ exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
 crash-free-duration evidence remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **136 explicitly inventoried parsers, 6
-fuzzed and 130 blocked**, **6 bound corpora with 48 seeds (32590 bytes)**, **0 deferred
-candidates and 119 OD-21 exemptions**, and **2051 source files scanned across 17
-first-party roots**. Those counts are not fuzz coverage.
+For the recorded source-tree state it reports **135 explicitly inventoried parsers, 6
+fuzzed and 129 blocked**, **6 bound corpora with 48 seeds (32590 bytes)**, **0 deferred
+candidates and 115 OD-21 exemptions**, and **2084 source files scanned across 17
+first-party roots**. The unwired material file import path (`Material::LoadFromFile`,
+`Material::LoadTexture` and `MaterialSystem::LoadTextureFromFile`, inventoried as
+`pbr-material-file`, `wic-pbr-material-texture` and `wic-material-texture`) was deleted
+rather than fuzzed, so those three parsers left the inventory. Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
 

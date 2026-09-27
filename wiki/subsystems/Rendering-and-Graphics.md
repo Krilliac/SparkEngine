@@ -59,7 +59,7 @@ integration; individual capabilities retain their own verification boundaries.
 | File | Responsibility |
 |------|---------------|
 | `GraphicsEngine.h` | Central engine class -- device creation, frame management, render dispatch |
-| `MaterialSystem.h` | PBR material management, texture slots, variants, hot-reload |
+| `MaterialSystem.h` | PBR material management, texture slots, variants (in-memory; no file import) |
 | `TextureSystem.h` | Texture loading, streaming, LRU eviction, quality settings |
 | `LightManager.h` | Per-frame light culling, tile binning, shadow atlas |
 | `LightingSystem.h` | Deferred lighting pass, light components, environment lighting |
@@ -668,7 +668,7 @@ graphics.ProcessDrawList(viewMatrix, projMatrix);
 
 - `GraphicsEngine` -- Main thread for all render operations. Uses `std::atomic<bool> m_frameInProgress` for frame state. Metrics access protected by `std::mutex m_metricsMutex`.
 - `TextureSystem` -- Main thread for render operations. Background worker threads for async texture loading and streaming. Cache access protected by `std::mutex m_texturesMutex`.
-- `MaterialSystem` -- Metrics access protected by `std::mutex m_metricsMutex`. Hot-reload runs on main thread only.
+- `MaterialSystem` -- Main thread only. Metrics access protected by `std::mutex m_metricsMutex`.
 - `LightManager` -- Single-threaded (call from main render thread only).
 
 ---

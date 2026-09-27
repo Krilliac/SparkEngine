@@ -399,12 +399,17 @@ TEST(ARPGDungeon_MirroredDeathsDoNotReachEngineLifecycle)
         EXPECT_TRUE(health->deathProcessed);
     }
 
-    // The gameplay systems own these deaths: the engine LifecycleSystem must not fire for the mirrors.
+    // The gameplay systems own these deaths: the mirrors arrive already latched, so the engine
+    // LifecycleSystem has nothing left to record for them and leaves both flags untouched.
     Spark::ECS::LifecycleSystem lifecycle;
-    uint32_t engineDeaths = 0;
-    lifecycle.SetDeathCallback([&engineDeaths](EntityID) { ++engineDeaths; });
     lifecycle.Update(run.world, 0.016f);
-    EXPECT_EQ(engineDeaths, 0u);
+    for (const uint32_t actor : {*heroActor, *targetActor})
+    {
+        const HealthComponent* health = run.world.GetComponent<HealthComponent>(run.Entity(actor));
+        ASSERT_TRUE(health != nullptr);
+        EXPECT_TRUE(health->isDead);
+        EXPECT_TRUE(health->deathProcessed);
+    }
 
     // A revived hero clears both flags so a later death is mirrored again.
     run.heroes.GetHero(hero->heroId)->health = hero->maxHealth;
