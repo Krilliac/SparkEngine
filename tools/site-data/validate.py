@@ -198,9 +198,7 @@ GENERATED_PATHS = {"docs/readiness/ENGINE_READINESS_HANDOFF.md"}
 # itself (Validator.validate_work_item_presets): an entry whose preset now
 # exists, whose owner is done or missing, or that the owner no longer
 # references is an error.
-PLANNED_CMAKE_PRESETS = {
-    "macos-shipping": "PLT-220",
-}
+PLANNED_CMAKE_PRESETS: dict[str, str] = {}
 
 WORK_ITEM_REQUIRED_KEYS = {
     "id", "title", "priority", "status", "blocking", "wave", "area", "owner",

@@ -132,8 +132,11 @@ Capabilities:
 - **CMake presets** — `macos-debug` / `macos-release` default to `ENABLE_METAL=ON`,
   `ENABLE_VULKAN=OFF`, `ENABLE_DXR=OFF`, `ENABLE_SDL2=ON`, `ENABLE_OPENGL=ON`.
   `macos-metal` adds Metal explicitly; `macos-moltenvk` opts into Vulkan via Homebrew
-  MoltenVK. (Current preset set verified 2026-06-08: `macos-debug`, `macos-release`,
-  `macos-metal`, `macos-moltenvk`.)
+  MoltenVK. `macos-shipping` (PLT-220) mirrors `linux-shipping`: MinSizeRel, no editor,
+  console or dev commands, stripped symbols, tests off, Metal + OpenGL, `arm64` only (OD-11)
+  and `CMAKE_OSX_DEPLOYMENT_TARGET=13.3`, parity-checked by `tools/check_macos_min_version.py`.
+  No hosted CI leg builds it yet. (Current preset set: `macos-debug`, `macos-release`,
+  `macos-metal`, `macos-moltenvk`, `macos-shipping`.)
 - **`CMAKE_OSX_DEPLOYMENT_TARGET=13.3`** (Ventura) pinned when unset via `SPARK_MACOS_MIN_VERSION` — C++23
   `std::format` of floating-point values needs libc++ floating-point `to_chars` (macOS 13.3+).
 - **OBJCXX** — `enable_language(OBJCXX)` runs only behind `SPARK_METAL_AVAILABLE`; `.mm`
@@ -241,7 +244,7 @@ Updates / status changes since the original:
 - **Input** — `InputManager.cpp` now has macOS/SDL branches (originally Win32-only).
   Status: **Resolved.**
 - **CMake presets** — current set is `macos-debug`, `macos-release`, `macos-metal`,
-  `macos-moltenvk`, matching the documented end-state.
+  `macos-moltenvk` and the Apple Silicon `macos-shipping` preset (PLT-220).
 - **OpenGL 4.1 cap** — still an open constraint (fallback only).
 - **Hardware-RT remaining items** (deeper kernels, per-draw constants, GPU compute
   ports on non-Windows, golden-image CI harness) — still **Open**.

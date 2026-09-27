@@ -597,39 +597,61 @@ class WorkItemPresetResolutionTests(ContractTestCase):
         )
 
     def test_planned_preset_is_owner_scoped_and_prunes_itself(self) -> None:
-        self.assertEqual(
-            self.preset_errors("PLT-220", ["cmake --preset macos-shipping", "cmake --build build/macos-shipping"]),
-            [],
-        )
-        for identifier, command in (
-            ("RHI-220", "cmake --preset macos-shipping"),
-            ("PLT-220", "ctest --test-dir build/macos-shipping -L metal --no-tests=error"),
-        ):
-            with self.subTest(identifier=identifier, command=command):
-                self.assertEqual(len(self.preset_errors(identifier, [command])), 1)
+        # A fictitious preset: the mechanism must not depend on a live planned entry.
+        planned = {"macos-notarized": "PLT-220"}
+        with mock.patch.object(site_data_validate, "PLANNED_CMAKE_PRESETS", planned):
+            self.assertEqual(
+                self.preset_errors(
+                    "PLT-220", ["cmake --preset macos-notarized", "cmake --build build/macos-notarized"]
+                ),
+                [],
+            )
+            for identifier, command in (
+                ("RHI-220", "cmake --preset macos-notarized"),
+                ("PLT-220", "ctest --test-dir build/macos-notarized -L metal --no-tests=error"),
+            ):
+                with self.subTest(identifier=identifier, command=command):
+                    self.assertEqual(len(self.preset_errors(identifier, [command])), 1)
 
         items = self.items_of(self.mutable)
+        uses = {"macos-notarized": {"PLT-220"}}
         cases = (
             ({"linux-gcc-release": "PLT-220"}, "preset now exists in CMakePresets.json"),
-            ({"macos-shipping": "NOPE-000"}, "owner NOPE-000 is not a work item"),
-            ({"macos-shipping": "RHI-220"}, "owner RHI-220 no longer references this preset"),
+            ({"macos-notarized": "NOPE-000"}, "owner NOPE-000 is not a work item"),
+            ({"macos-notarized": "RHI-220"}, "owner RHI-220 no longer references this preset"),
         )
-        for planned, fragment in cases:
-            with self.subTest(planned=planned):
+        for entries, fragment in cases:
+            with self.subTest(planned=entries):
                 validator = site_data_validate.Validator(self.mutable)
-                with mock.patch.object(site_data_validate, "PLANNED_CMAKE_PRESETS", planned):
-                    validator.validate_planned_presets(items, {"macos-shipping": {"PLT-220"}})
+                with mock.patch.object(site_data_validate, "PLANNED_CMAKE_PRESETS", entries):
+                    validator.validate_planned_presets(items, uses)
                 self.assertTrue(any(fragment in error for error in validator.errors), validator.errors)
 
         done = copy.deepcopy(items)
         done["PLT-220"]["status"] = "done"
         validator = site_data_validate.Validator(self.mutable)
-        validator.validate_planned_presets(done, {"macos-shipping": {"PLT-220"}})
+        with mock.patch.object(site_data_validate, "PLANNED_CMAKE_PRESETS", planned):
+            validator.validate_planned_presets(done, uses)
         self.assertTrue(any("owner PLT-220 is done" in error for error in validator.errors), validator.errors)
 
         validator = site_data_validate.Validator(self.mutable)
-        validator.validate_planned_presets(items, {"macos-shipping": {"PLT-220"}})
+        with mock.patch.object(site_data_validate, "PLANNED_CMAKE_PRESETS", planned):
+            validator.validate_planned_presets(items, uses)
         self.assertEqual(validator.errors, [])
+
+    def test_macos_shipping_preset_resolves_for_its_owner(self) -> None:
+        # PLT-220 promoted macos-shipping from a planned entry to a real Darwin preset.
+        self.assertNotIn("macos-shipping", site_data_validate.PLANNED_CMAKE_PRESETS)
+        index = contract_selectors.cmake_preset_index()
+        self.assertTrue(index.exists("configure", "macos-shipping"))
+        self.assertTrue(index.exists("build", "macos-shipping"))
+        self.assertFalse(index.builds_tests("macos-shipping"))
+        self.assertEqual(
+            self.preset_errors(
+                "RHI-220", ["cmake --preset macos-shipping", "cmake --build build/macos-shipping"]
+            ),
+            [],
+        )
 
 
 class LegalContractConsistencyTests(ContractTestCase):

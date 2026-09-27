@@ -373,6 +373,34 @@
             }
         },
         {
+            "name": "macos-shipping",
+            "displayName": "macOS Shipping (Apple Silicon, experimental, no dev tools)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "13.3",
+                "SPARK_NATIVE_ARCH": "OFF",
+                "ENABLE_EDITOR": "OFF",
+                "ENABLE_PROFILING": "OFF",
+                "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
+                "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
+                "STRIP_DEBUG_SYMBOLS": "ON",
+                "SPARK_STRICT_DEPS": "ON",
+                "BUILD_TESTS": "OFF",
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "ON",
+                "ENABLE_METAL": "ON",
+                "ENABLE_SDL2": "ON",
+                "ENABLE_DXR": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
             "name": "minimal",
             "displayName": "Minimal Build (core only)",
             "inherits": "default",
@@ -468,6 +496,10 @@
         {
             "name": "macos-moltenvk",
             "configurePreset": "macos-moltenvk"
+        },
+        {
+            "name": "macos-shipping",
+            "configurePreset": "macos-shipping"
         },
         {
             "name": "linux-mingw-release",

@@ -179,7 +179,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DENABLE_NETWORKING=O
 **Notes:**
 
 - Presets are defined in `CMakePresets.json` and are authoritative.
-- Available presets include: `windows-debug`, `windows-release`, `windows-shipping`, `windows-development`, `linux-gcc-debug`, `linux-gcc-release`, `linux-clang-debug`, `linux-clang-release`, `linux-shipping`, `linux-development`, `linux-mingw-release`, `linux-mingw-debug`, `macos-debug`, `macos-release`, `macos-metal`, `macos-moltenvk`, plus the CI-specific `ci-linux-asan` and `ci-linux-tsan`.
+- Available presets include: `windows-debug`, `windows-release`, `windows-shipping`, `windows-development`, `linux-gcc-debug`, `linux-gcc-release`, `linux-clang-debug`, `linux-clang-release`, `linux-shipping`, `linux-development`, `linux-mingw-release`, `linux-mingw-debug`, `macos-debug`, `macos-release`, `macos-metal`, `macos-moltenvk`, `macos-shipping` (Apple Silicon, experimental), `linux-fuzz`, `minimal`, plus the CI-specific `ci-linux-asan` and `ci-linux-tsan`.
 - Note: the sanitizer/GCC/Clang CI jobs use manual `cmake -B build` flag invocations rather than the matching preset, so to reproduce those jobs exactly use the commands in [CI Reproducible Builds](CI-Reproducible-Builds.md), not the preset.
 - If a preset produces unexpected behavior, check `CMakePresets.json` for the exact flags it sets rather than guessing.
 - Delete `build/` if switching between preset and manual configure — the cache will conflict.
