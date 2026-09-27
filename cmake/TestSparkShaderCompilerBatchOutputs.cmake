@@ -7,6 +7,7 @@
 #
 # Case 1: -o preserves the relative layout (two artifacts, exit 0).
 # Case 2: a same-directory stem collision fails before compiling anything.
+# Case 3: a symlinked (or junctioned) source keeps its artifact under -o.
 
 foreach(_required SPARK_SHADER_COMPILER SPARK_SHADER_FIXTURE SPARK_SHADER_OUTPUT_DIR)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
@@ -73,4 +74,58 @@ if(EXISTS "${_collide_root}/BasicVS.cso")
     message(FATAL_ERROR "Colliding batch wrote ${_collide_root}/BasicVS.cso before rejecting the plan")
 endif()
 
-message(STATUS "SparkShaderCompiler batch outputs: layout preserved and collisions rejected")
+# Case 3: a linked source must not steer its artifact out of -o. The first layout fix
+# built the relative path with fs::relative(), which resolves links (weakly_canonical):
+# <batch>/x.hlsl -> <elsewhere>/deep/Evil.hlsl became ../elsewhere/deep/Evil.hlsl and the
+# compile created <elsewhere>/deep/Evil.cso. The relative path is now lexical, so the
+# artifact is <out>/x.cso. A directory junction is tried as well (created without
+# privileges); whether the iterator descends into it is up to the STL, but if it does,
+# its artifact must also stay under <out>.
+set(_link_root "${SPARK_SHADER_OUTPUT_DIR}/link-src")
+set(_link_out "${SPARK_SHADER_OUTPUT_DIR}/link-out")
+set(_elsewhere "${SPARK_SHADER_OUTPUT_DIR}/elsewhere")
+file(MAKE_DIRECTORY "${_link_root}/plain" "${_elsewhere}/deep" "${_elsewhere}/lib")
+file(COPY_FILE "${SPARK_SHADER_FIXTURE}" "${_link_root}/plain/BasicVS.hlsl")
+file(COPY_FILE "${SPARK_SHADER_FIXTURE}" "${_elsewhere}/deep/Evil.hlsl")
+file(COPY_FILE "${SPARK_SHADER_FIXTURE}" "${_elsewhere}/lib/Junction.hlsl")
+file(CREATE_LINK "${_elsewhere}/deep/Evil.hlsl" "${_link_root}/x.hlsl" RESULT _symlink_result SYMBOLIC)
+file(TO_NATIVE_PATH "${_link_root}/lib" _junction_native)
+file(TO_NATIVE_PATH "${_elsewhere}/lib" _junction_target_native)
+execute_process(
+    COMMAND cmd /c mklink /J "${_junction_native}" "${_junction_target_native}"
+    RESULT_VARIABLE _junction_result
+    OUTPUT_QUIET ERROR_QUIET)
+if(NOT _symlink_result EQUAL 0 AND NOT _junction_result EQUAL 0)
+    message(FATAL_ERROR "Could not create a file symlink (${_symlink_result}) or a junction (${_junction_result}); "
+                        "the link-escape case would check nothing")
+endif()
+
+execute_process(
+    COMMAND "${SPARK_SHADER_COMPILER}" -batch "${_link_root}" -backend d3d11 -o "${_link_out}"
+    WORKING_DIRECTORY "${SPARK_SHADER_OUTPUT_DIR}"
+    RESULT_VARIABLE _result
+    OUTPUT_VARIABLE _stdout
+    ERROR_VARIABLE _stderr)
+file(GLOB_RECURSE _escaped LIST_DIRECTORIES false "${_elsewhere}/*.cso" "${_elsewhere}/*.spv")
+if(_escaped)
+    message(FATAL_ERROR "Linked batch source wrote outside -o: ${_escaped}\nstdout:\n${_stdout}\nstderr:\n${_stderr}")
+endif()
+if(NOT _result EQUAL 0)
+    message(FATAL_ERROR "Linked batch failed (${_result})\nstdout:\n${_stdout}\nstderr:\n${_stderr}")
+endif()
+if(NOT EXISTS "${_link_out}/plain/BasicVS.cso")
+    message(FATAL_ERROR "Linked batch did not compile the plain source\nstdout:\n${_stdout}\nstderr:\n${_stderr}")
+endif()
+if(_symlink_result EQUAL 0)
+    if(NOT EXISTS "${_link_out}/x.cso")
+        message(FATAL_ERROR "Symlinked source was not compiled to ${_link_out}/x.cso\n"
+                            "stdout:\n${_stdout}\nstderr:\n${_stderr}")
+    endif()
+else()
+    message(STATUS "File symlink unavailable (${_symlink_result}); junction case only")
+endif()
+if(_junction_result EQUAL 0)
+    execute_process(COMMAND cmd /c rmdir "${_junction_native}" OUTPUT_QUIET ERROR_QUIET)
+endif()
+
+message(STATUS "SparkShaderCompiler batch outputs: layout preserved, collisions rejected, links contained")

@@ -17,6 +17,7 @@ endif()
 
 set(COMPILER_SOURCES
     src/main.cpp
+    src/BatchOutputPath.h
 )
 
 # RHI sources needed for shader compilation

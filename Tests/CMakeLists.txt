@@ -2337,11 +2337,12 @@ endif()
 
 # SEC2 rendering lane (TestSEC2RenderingHardeningReal.cpp): daemon shader-blob length
 # bounds, the shared UpdateBuffer range check, D3D11 UpdateBuffer, D3D12 render-target
-# clamping and D3D12 fence-deferred resource/descriptor release. Exact counts per
-# family so a filter that selects nothing cannot pass.
+# clamping, D3D12 fence-deferred resource/descriptor release and SparkShaderCompiler
+# -batch output containment. Exact counts per family so a filter that selects nothing
+# cannot pass.
 add_test(NAME SEC2Render_Portable COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SEC2Render_Portable PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Render_Portable_;SPARK_TEST_EXPECT_COUNT=3"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Render_Portable_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "security;rendering;unit"
     TIMEOUT 60)
 if(WIN32)

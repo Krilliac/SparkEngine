@@ -11,6 +11,13 @@
  *     16 MiB daemon frame cap is rejected even when the bytes are present.
  *   - SEC2Render_Portable_BufferRangeCheckRejectsOverflow: the shared UpdateBuffer
  *     range predicate rejects out-of-range and wrapping offset + size.
+ *   - SEC2Render_Portable_ShaderBatchRelativePathRejectsEscapes: SparkShaderCompiler
+ *     -batch -o joins each source's path relative to the batch root under -o; a
+ *     relative path that is rooted or climbs with `..` must be refused.
+ *   - SEC2Render_Portable_ShaderBatchRelativePathIgnoresSymlinks: the relative path is
+ *     computed lexically from the iterated path. std::filesystem::relative() resolved a
+ *     file symlink to its target and produced `../<elsewhere>/...`, so the artifact was
+ *     written outside -o.
  *
  * Windows D3D11 (hardware or WARP):
  *   - SEC2Render_D3D11_UpdateBufferRejectsOutOfRange: UpdateBuffer used to memcpy past
@@ -30,8 +37,15 @@
 #include "Graphics/RHI/RHIResources.h"
 #include "Graphics/ShaderDaemonBridge.h"
 
+#include "../SparkShaderCompiler/src/BatchOutputPath.h"
+
+#include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <optional>
+#include <system_error>
 #include <limits>
 #include <memory>
 #include <string>
@@ -121,6 +135,83 @@ TEST(SEC2Render_Portable_BufferRangeCheckRejectsOverflow)
     constexpr uint64_t kMax = std::numeric_limits<uint64_t>::max();
     EXPECT_FALSE(IsBufferRangeValid(16, kMax, 2));
     EXPECT_FALSE(IsBufferRangeValid(16, 2, kMax));
+}
+
+TEST(SEC2Render_Portable_ShaderBatchRelativePathRejectsEscapes)
+{
+    namespace fs = std::filesystem;
+    using SparkShaderCompiler::SafeBatchRelativePath;
+
+    const auto generic = [](const std::optional<fs::path>& path)
+    { return path ? path->generic_string() : std::string("<rejected>"); };
+
+    // Paths the directory iterator returns: batchRoot / <relative>.
+    EXPECT_EQ(generic(SafeBatchRelativePath("shaders/a/BasicVS.hlsl", "shaders")), std::string("a/BasicVS.hlsl"));
+    EXPECT_EQ(generic(SafeBatchRelativePath("shaders/BasicVS.hlsl", "shaders/")), std::string("BasicVS.hlsl"));
+    EXPECT_EQ(generic(SafeBatchRelativePath("./BasicVS.hlsl", ".")), std::string("BasicVS.hlsl"));
+    EXPECT_EQ(generic(SafeBatchRelativePath("src/a/../BasicVS.hlsl", "src/a/..")), std::string("BasicVS.hlsl"));
+    EXPECT_EQ(generic(SafeBatchRelativePath("../shaders/b/X.vs", "../shaders")), std::string("b/X.vs"));
+
+    // Anything that would leave the output directory once joined under -o.
+    EXPECT_FALSE(SafeBatchRelativePath("shaders/../elsewhere/foo.hlsl", "shaders").has_value());
+    EXPECT_FALSE(SafeBatchRelativePath("elsewhere/foo.hlsl", "shaders").has_value());
+    EXPECT_FALSE(SafeBatchRelativePath("../../elsewhere/foo.hlsl", "shaders").has_value());
+    EXPECT_FALSE(SafeBatchRelativePath("shaders", "shaders").has_value());
+    EXPECT_FALSE(SafeBatchRelativePath("", "shaders").has_value());
+    EXPECT_FALSE(SafeBatchRelativePath("/etc/foo.hlsl", "shaders").has_value());
+#ifdef _WIN32
+    EXPECT_FALSE(SafeBatchRelativePath("D:/elsewhere/foo.hlsl", "C:/shaders").has_value());
+    EXPECT_FALSE(SafeBatchRelativePath("D:foo.hlsl", "shaders").has_value());
+#endif
+}
+
+TEST(SEC2Render_Portable_ShaderBatchRelativePathIgnoresSymlinks)
+{
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path sandbox = fs::temp_directory_path() / ("spark_sec2_batch_" + std::to_string(stamp));
+    struct Cleanup
+    {
+        fs::path path;
+        ~Cleanup()
+        {
+            std::error_code ignored;
+            fs::remove_all(path, ignored);
+        }
+    } cleanup{sandbox};
+
+    const fs::path batchRoot = sandbox / "batch";
+    const fs::path elsewhere = sandbox / "elsewhere" / "deep";
+    fs::create_directories(batchRoot);
+    fs::create_directories(elsewhere);
+    {
+        std::ofstream target(elsewhere / "foo.hlsl", std::ios::binary);
+        target << "float4 main() : SV_Position { return 0; }\n";
+    }
+    std::error_code linkError;
+    fs::create_symlink(elsewhere / "foo.hlsl", batchRoot / "x.hlsl", linkError);
+    if (linkError)
+        SKIP_TEST("cannot create a file symlink on this host (Windows without Developer Mode)");
+
+    // Discover the source the way -batch does: the iterator reports the link as a regular file.
+    std::optional<fs::path> discovered;
+    for (const auto& entry : fs::recursive_directory_iterator(batchRoot))
+    {
+        if (entry.is_regular_file())
+            discovered = entry.path();
+    }
+    ASSERT_TRUE(discovered.has_value());
+
+    // The pre-fix computation: relative() canonicalises through the link and escapes.
+    std::error_code relativeError;
+    const fs::path resolved = fs::relative(*discovered, batchRoot, relativeError);
+    EXPECT_FALSE(relativeError);
+    EXPECT_EQ(resolved.begin() != resolved.end() ? resolved.begin()->string() : std::string(), std::string(".."));
+
+    const std::optional<fs::path> contained = SparkShaderCompiler::SafeBatchRelativePath(*discovered, batchRoot);
+    ASSERT_TRUE(contained.has_value());
+    EXPECT_EQ(contained->generic_string(), std::string("x.hlsl"));
 }
 
 #ifdef _WIN32

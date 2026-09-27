@@ -39,6 +39,7 @@
 #include <cctype>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <system_error>
 #include <utility>
 
@@ -47,6 +48,8 @@ namespace fs = std::filesystem;
 // Include the RHI shader compilation API
 #include "../../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
 #include "../../SparkEngine/Source/Graphics/RHI/RHITypes.h"
+
+#include "BatchOutputPath.h"
 
 #ifndef SPARK_SHADER_COMPILER_VERSION
 #error "SPARK_SHADER_COMPILER_VERSION must be supplied by the build system"
@@ -261,14 +264,17 @@ struct BatchOutput
     std::string output;
 };
 
-/// Map every batch input to its output path. Without -o the artifact sits beside its
-/// source; with -o it keeps the source's path relative to the batch root, so files
-/// that share a name in different subdirectories no longer flatten onto one artifact.
-static std::vector<BatchOutput> PlanBatchOutputs(const std::vector<std::string>& shaderFiles,
-                                                 const std::string& batchDir, const std::string& outputDir,
-                                                 Spark::RHI::GraphicsBackend requestedBackend)
+/// Map every batch input to its output path into @p plan. Without -o the artifact sits
+/// beside its source; with -o it keeps the source's path relative to the batch root, so
+/// files that share a name in different subdirectories no longer flatten onto one
+/// artifact. That relative path is computed lexically (SafeBatchRelativePath) and must
+/// stay under -o: a source whose relative path is rooted or climbs with `..` fails the
+/// whole plan (returns false) before anything is created or compiled.
+static bool PlanBatchOutputs(const std::vector<std::string>& shaderFiles, const std::string& batchDir,
+                             const std::string& outputDir, Spark::RHI::GraphicsBackend requestedBackend,
+                             std::vector<BatchOutput>& plan)
 {
-    std::vector<BatchOutput> plan;
+    plan.clear();
     plan.reserve(shaderFiles.size());
     for (const std::string& shaderPath : shaderFiles)
     {
@@ -281,16 +287,21 @@ static std::vector<BatchOutput> PlanBatchOutputs(const std::vector<std::string>&
         }
         else
         {
-            std::error_code ec;
-            fs::path relative = fs::relative(fs::path(shaderPath), fs::path(batchDir), ec);
-            if (ec || relative.empty())
-                relative = fs::path(shaderPath).filename();
-            const fs::path outName = InferOutputPath(relative.filename().string(), fileBackend);
-            item.output = (fs::path(outputDir) / relative.parent_path() / outName).string();
+            const std::optional<fs::path> relative =
+                SparkShaderCompiler::SafeBatchRelativePath(fs::path(shaderPath), fs::path(batchDir));
+            if (!relative)
+            {
+                std::cerr << "Error: '" << shaderPath << "' has no contained path relative to batch directory '"
+                          << batchDir << "'; refusing to write outside '" << outputDir << "'; nothing was compiled\n";
+                plan.clear();
+                return false;
+            }
+            const fs::path outName = InferOutputPath(relative->filename().string(), fileBackend);
+            item.output = (fs::path(outputDir) / relative->parent_path() / outName).string();
         }
         plan.push_back(std::move(item));
     }
-    return plan;
+    return true;
 }
 
 /// Print every pair of inputs that would write the same artifact. Returns true when
@@ -697,6 +708,17 @@ int main(int argc, char* argv[])
 
         std::cout << "Batch compiling " << shaderFiles.size() << " shader(s) from " << config.batchDir << "\n";
 
+        // Plan every destination before creating or compiling anything. The output name
+        // drops the source extension, so a/common.hlsl + b/common.hlsl (flattened under
+        // -o) or X.vs + X.ps (same directory) used to land on one file: the later compile
+        // silently replaced the earlier artifact and both still counted as successes.
+        std::vector<BatchOutput> plan;
+        if (!PlanBatchOutputs(shaderFiles, config.batchDir, config.outputFile, config.targetBackend, plan))
+            return 1;
+        // -validate writes nothing, so shared destinations cannot overwrite anything there.
+        if (!config.validateOnly && !ReportBatchCollisions(plan))
+            return 1;
+
         // In batch mode -o names an output directory; ensure it exists up front so
         // per-file writes below don't all fail on a missing path.
         if (!config.outputFile.empty())
@@ -710,16 +732,6 @@ int main(int argc, char* argv[])
                 return 1;
             }
         }
-
-        // Plan every destination before compiling anything. The output name drops the
-        // source extension, so a/common.hlsl + b/common.hlsl (flattened under -o) or
-        // X.vs + X.ps (same directory) used to land on one file: the later compile
-        // silently replaced the earlier artifact and both still counted as successes.
-        const std::vector<BatchOutput> plan =
-            PlanBatchOutputs(shaderFiles, config.batchDir, config.outputFile, config.targetBackend);
-        // -validate writes nothing, so shared destinations cannot overwrite anything there.
-        if (!config.validateOnly && !ReportBatchCollisions(plan))
-            return 1;
 
         auto batchStart = std::chrono::high_resolution_clock::now();
         int successCount = 0;
