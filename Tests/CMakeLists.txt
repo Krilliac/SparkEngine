@@ -2242,7 +2242,7 @@ set(_spark_life_selectors
     "EngineWiring_=11"
     "ModuleHotReload_=15"
     "LIFE200_=${_spark_life_life200_count}"
-    "LifecycleLoop_=5"
+    "LifecycleLoop_=6"
     "ModuleReload_=3")
 if(NOT WIN32)
     list(APPEND _spark_life_selectors "EngineLifecycle_=22")
@@ -2259,7 +2259,7 @@ foreach(_spark_life_selector IN LISTS _spark_life_selectors)
         RUN_SERIAL TRUE
         TIMEOUT 120)
 endforeach()
-# LifecycleLoop_ boots the production lifecycle about 80 times and ModuleReload_ cycles a
+# LifecycleLoop_ boots the production lifecycle about 120 times and ModuleReload_ cycles a
 # module image 90 times; ASan/TSan builds need more than the family default. Each
 # cycle is separately bounded by an in-process deadlock watchdog.
 set_tests_properties(Lifecycle_LifecycleLoop Lifecycle_ModuleReload PROPERTIES TIMEOUT 600)

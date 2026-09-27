@@ -7,18 +7,19 @@
  * initialize -> update -> shutdown against a live EngineContext. A cycle must
  * publish the engine-lifetime services, withdraw every one of them at
  * shutdown, and leave the host console registry, the ECS phase pipeline and
- * the process thread count exactly where the first cycle left them. A second
- * loop alternates a rolled-back startup with a clean one, so a failed boot can
+ * the process thread count exactly where a warm-up boot left them. The same
+ * loop runs again after a lifecycle someone booted and never shut down, whose
+ * running debug systems must not skew that baseline. Another loop alternates a rolled-back startup with a clean one, so a failed boot can
  * neither latch the services dead nor leak what it had already started.
  *
- * A third test injects a failing stage at every boundary between the
+ * A fault test injects a failing stage at every boundary between the
  * production init stages (before InitDebug, after InitDebug, after
  * InitNetworking, after InitGameplay), failing by returning false, throwing a
  * std::exception and throwing a non-std value; each rolled-back boot must
  * leave no published service, ECS phase system, console command or thread
- * behind, keep its root latched, and let the next boot start cleanly. A fourth
+ * behind, keep its root latched, and let the next boot start cleanly. Another
  * proves an Update stage that throws escapes RunUpdate without poisoning the
- * root: every such cycle still shuts down to the same footprint. A fifth boots
+ * root: every such cycle still shuts down to the same footprint. The last boots
  * beside a script engine another owner started: each boot must publish and
  * withdraw its own engine, never adopt or shut down the foreign one, so the
  * script console commands a boot registers do not depend on test order.
@@ -222,56 +223,94 @@ namespace
     {
         return Spark::Core::Lifecycle::GetPhaseSystemManagerImpl().GetSystemCount();
     }
+
+    /// Boots and shuts down a clean production root; returns the footprint it leaves.
+    CycleFootprint CleanCycle(EngineContext& ctx, const Spark::SimpleConsole& console)
+    {
+        auto root = MakeProductionRoot();
+        EXPECT_TRUE(root->RunInitialize());
+        EXPECT_TRUE(ServicesPublished(ctx));
+        root->RunUpdate(1.0f / 60.0f);
+        EXPECT_TRUE(root->RunShutdown());
+        EXPECT_TRUE(ServicesWithdrawn(ctx));
+        EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
+        root.reset();
+        return SampleFootprint(console);
+    }
+
+    /// The body of the repeated boot/shutdown loop: kBootCycles production boots,
+    /// each of which must publish, withdraw and leave the warm-up's footprint.
+    void RunRepeatedBootShutdownLoop(EngineContext& ctx, const Spark::SimpleConsole& console)
+    {
+        LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
+
+        // Warm-up: process-lifetime state (lazy singletons, pools) starts here,
+        // and a lifecycle an earlier caller left running is shut down. Sampling
+        // the baseline from a boot that inherited running debug systems would
+        // miss the console commands they register only on a fresh Initialize.
+        watchdog.Arm("warm-up boot before repeated boot/shutdown cycles");
+        const CycleFootprint baseline = CleanCycle(ctx, console);
+        watchdog.Disarm();
+        ASSERT_TRUE(baseline.threads > 0);
+
+        std::size_t baselinePhaseSystems = 0;
+        for (int cycle = 0; cycle < kBootCycles; ++cycle)
+        {
+            watchdog.Arm("production boot/shutdown cycle " + std::to_string(cycle));
+            auto root = MakeProductionRoot();
+            ASSERT_TRUE(root->IsConfigurationValid());
+            ASSERT_TRUE(root->RunInitialize());
+            EXPECT_TRUE(ServicesPublished(ctx));
+
+            // The phase pipeline is rebuilt per boot, never accumulated across boots.
+            const std::size_t phaseSystems = PhaseSystemCount();
+            if (cycle == 0)
+                baselinePhaseSystems = phaseSystems;
+            EXPECT_TRUE(phaseSystems > 0);
+            EXPECT_EQ(phaseSystems, baselinePhaseSystems);
+
+            for (int frame = 0; frame < kUpdatesPerCycle; ++frame)
+                root->RunUpdate(1.0f / 60.0f);
+
+            ASSERT_TRUE(root->RunShutdown());
+            EXPECT_TRUE(root->GetState() == LifecycleRootState::ShutDown);
+            EXPECT_TRUE(ServicesWithdrawn(ctx));
+            EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
+            // The debug stage enabled and ticked the overlay singleton; shutdown undoes both.
+            EXPECT_FALSE(Spark::DebugOverlay::GetInstance().IsEnabled());
+            EXPECT_EQ(Spark::DebugOverlay::GetInstance().GetFrameCount(), std::uint64_t{0});
+            root.reset();
+            watchdog.Disarm();
+
+            // Every cycle leaves exactly the warm-up's footprint behind.
+            const CycleFootprint footprint = SampleFootprint(console);
+            EXPECT_EQ(footprint.consoleCommands, baseline.consoleCommands);
+            EXPECT_LE(footprint.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
+        }
+    }
 } // namespace
 
 TEST(LifecycleLoop_ProductionStagesRepeatedBootShutdownLeavesNoStaleServices)
 {
     EngineContext* ctx = PrepareContext();
     ConsoleScope consoleScope;
-    LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
+    RunRepeatedBootShutdownLoop(*ctx, consoleScope.console);
+}
 
-    CycleFootprint baseline;
-    std::size_t baselinePhaseSystems = 0;
-    for (int cycle = 0; cycle < kBootCycles; ++cycle)
-    {
-        watchdog.Arm("production boot/shutdown cycle " + std::to_string(cycle));
-        auto root = MakeProductionRoot();
-        ASSERT_TRUE(root->IsConfigurationValid());
-        ASSERT_TRUE(root->RunInitialize());
-        EXPECT_TRUE(ServicesPublished(*ctx));
+TEST(LifecycleLoop_RepeatedBootsAfterAnUnfinishedLifecycleKeepOneFootprint)
+{
+    // An earlier caller booted the debug and gameplay systems and never shut
+    // them down, before the host console was up (a test fixture that only
+    // tears down gameplay does this). Its debug systems stay initialized, so
+    // their console commands are missing until they are shut down and started
+    // again; a loop that took its baseline from the first boot saw them appear
+    // on the second one.
+    EngineContext* ctx = PrepareContext();
+    ASSERT_TRUE(Spark::Core::Lifecycle::InitializeDebugSystemsImpl());
+    ASSERT_TRUE(Spark::Core::Lifecycle::InitializeGameplaySystemsImpl());
 
-        // The phase pipeline is rebuilt per boot, never accumulated across boots.
-        const std::size_t phaseSystems = PhaseSystemCount();
-        if (cycle == 0)
-            baselinePhaseSystems = phaseSystems;
-        EXPECT_TRUE(phaseSystems > 0);
-        EXPECT_EQ(phaseSystems, baselinePhaseSystems);
-
-        for (int frame = 0; frame < kUpdatesPerCycle; ++frame)
-            root->RunUpdate(1.0f / 60.0f);
-
-        ASSERT_TRUE(root->RunShutdown());
-        EXPECT_TRUE(root->GetState() == LifecycleRootState::ShutDown);
-        EXPECT_TRUE(ServicesWithdrawn(*ctx));
-        EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
-        // The debug stage enabled and ticked the overlay singleton; shutdown undoes both.
-        EXPECT_FALSE(Spark::DebugOverlay::GetInstance().IsEnabled());
-        EXPECT_EQ(Spark::DebugOverlay::GetInstance().GetFrameCount(), std::uint64_t{0});
-        root.reset();
-        watchdog.Disarm();
-
-        // The first cycle may start process-lifetime state (lazy singletons,
-        // pools); every later cycle must leave exactly that footprint behind.
-        const CycleFootprint footprint = SampleFootprint(consoleScope.console);
-        if (cycle == 0)
-        {
-            baseline = footprint;
-            ASSERT_TRUE(baseline.threads > 0);
-            continue;
-        }
-        EXPECT_EQ(footprint.consoleCommands, baseline.consoleCommands);
-        EXPECT_LE(footprint.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
-    }
+    ConsoleScope consoleScope;
+    RunRepeatedBootShutdownLoop(*ctx, consoleScope.console);
 }
 
 TEST(LifecycleLoop_FailedBootThenCleanBootRepublishesServices)
@@ -344,20 +383,6 @@ namespace
         FaultCase{InjectedFault::ThrowStdException, "throw std::exception"},
         FaultCase{InjectedFault::ThrowUnknown, "throw non-std value"},
     };
-
-    /// Boots and shuts down a clean production root; returns the footprint it leaves.
-    CycleFootprint CleanCycle(EngineContext& ctx, const Spark::SimpleConsole& console)
-    {
-        auto root = MakeProductionRoot();
-        EXPECT_TRUE(root->RunInitialize());
-        EXPECT_TRUE(ServicesPublished(ctx));
-        root->RunUpdate(1.0f / 60.0f);
-        EXPECT_TRUE(root->RunShutdown());
-        EXPECT_TRUE(ServicesWithdrawn(ctx));
-        EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
-        root.reset();
-        return SampleFootprint(console);
-    }
 
     /// True when RunUpdate let a stage exception reach the caller.
     bool UpdateEscaped(LifecycleCompositionRoot& root)
