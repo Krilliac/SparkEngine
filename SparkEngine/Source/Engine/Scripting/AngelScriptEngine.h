@@ -681,11 +681,60 @@ void ASPrint(const std::string& message);
 EntityID ASCreateEntity(const std::string& name);
 
 /**
- * @brief Get an entity's Transform component (callable from AngelScript as `getTransform()`)
- * @param entity The entity to query
- * @return Pointer to the entity's Transform, or nullptr if not found
+ * @brief Script-side `Transform@` handle: names an entity, never points into ECS storage.
+ *
+ * A script may keep the handle past the entity's lifetime (in a global, across
+ * frames). It therefore holds only the EntityID and re-resolves the entity's
+ * Transform in the bound World (AngelScriptEngine::GetBoundWorld) on every
+ * property access. When the World is unbound, the entity was destroyed or the
+ * Transform removed, a read returns (0, 0, 0), a write is dropped, and the
+ * executing script context gets a script exception; native memory is never
+ * touched. EnTT entity ids carry a version, so a recycled slot does not match.
+ *
+ * - Thread affinity: game thread (script execution only).
+ * - Ownership: AngelScript reference counting; created by ASGetTransform with
+ *   one reference and destroyed by the last Release().
+ * - Allocation: one small heap object per getTransform() call; per-access
+ *   property reads and writes do not allocate.
  */
-Transform* ASGetTransform(EntityID entity);
+class ScriptTransformRef
+{
+  public:
+    explicit ScriptTransformRef(EntityID entity) noexcept : m_entity(entity) {}
+    ScriptTransformRef(const ScriptTransformRef&) = delete;
+    ScriptTransformRef& operator=(const ScriptTransformRef&) = delete;
+
+    void AddRef() noexcept;
+    void Release() noexcept;
+
+    /// True while the entity is alive in the bound World and has a Transform.
+    bool IsValid() const noexcept;
+    EntityID GetEntity() const noexcept { return m_entity; }
+
+    DirectX::XMFLOAT3 GetPosition() const noexcept;
+    void SetPosition(const DirectX::XMFLOAT3& value) noexcept;
+    DirectX::XMFLOAT3 GetRotation() const noexcept;
+    void SetRotation(const DirectX::XMFLOAT3& value) noexcept;
+    DirectX::XMFLOAT3 GetScale() const noexcept;
+    void SetScale(const DirectX::XMFLOAT3& value) noexcept;
+
+  private:
+    ~ScriptTransformRef() = default;
+
+    /// The live Transform, or nullptr after raising a script exception.
+    Transform* Resolve() const noexcept;
+
+    EntityID m_entity;
+    int m_refCount = 1; ///< Game-thread only, like every script call
+};
+
+/**
+ * @brief Get a handle to an entity's Transform (callable from AngelScript as `getTransform()`)
+ * @param entity The entity to query
+ * @return A new handle (one reference, owned by the caller), or nullptr when the
+ *         entity is not alive in the bound World or has no Transform
+ */
+ScriptTransformRef* ASGetTransform(EntityID entity);
 
 /**
  * @brief Check if a key was pressed this frame (callable from AngelScript as `getKeyDown()`)

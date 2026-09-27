@@ -96,38 +96,6 @@ EntityID ASCreateEntity(const std::string& name)
     return entity;
 }
 
-Transform* ASGetTransform(EntityID entity)
-{
-    if (entity == entt::null)
-    {
-        LogWarning("ASGetTransform: called with null entity.");
-        return nullptr;
-    }
-
-    auto* ctx = EngineContext::Get();
-    if (!ctx)
-    {
-        LogError("ASGetTransform: EngineContext not available.");
-        return nullptr;
-    }
-
-    auto* world = ctx->GetSystem<World>();
-    if (!world)
-    {
-        LogWarning("ASGetTransform: no World registered in EngineContext.");
-        return nullptr;
-    }
-
-    if (!world->HasComponent<Transform>(entity))
-    {
-        LogWarning("ASGetTransform: entity " + std::to_string(static_cast<uint32_t>(entity)) +
-                   " has no Transform component or is not valid.");
-        return nullptr;
-    }
-
-    return world->GetComponent<Transform>(entity);
-}
-
 /**
  * @brief Convert a script key name string to a Windows virtual key code.
  *
@@ -272,51 +240,6 @@ void ASDestroyEntity(EntityID entity)
         world->DestroyEntity(entity);
 }
 
-DirectX::XMFLOAT3 ASGetPosition(EntityID entity)
-{
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
-        return world->GetComponent<Transform>(entity)->position;
-    return {0.0f, 0.0f, 0.0f};
-}
-
-void ASSetPosition(EntityID entity, const DirectX::XMFLOAT3& pos)
-{
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
-        world->GetComponent<Transform>(entity)->position = pos;
-}
-
-DirectX::XMFLOAT3 ASGetRotation(EntityID entity)
-{
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
-        return world->GetComponent<Transform>(entity)->rotation;
-    return {0.0f, 0.0f, 0.0f};
-}
-
-void ASSetRotation(EntityID entity, const DirectX::XMFLOAT3& rot)
-{
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
-        world->GetComponent<Transform>(entity)->rotation = rot;
-}
-
-float ASGetHealth(EntityID entity)
-{
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<HealthComponent>(entity))
-        return world->GetComponent<HealthComponent>(entity)->health;
-    return 0.0f;
-}
-
-void ASSetHealth(EntityID entity, float health)
-{
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<HealthComponent>(entity))
-        world->GetComponent<HealthComponent>(entity)->health = health;
-}
-
 namespace
 {
     /// The bound World when @p entity is alive in it, else nullptr.
@@ -328,12 +251,21 @@ namespace
         return world;
     }
 
+    /// The entity's @p T in the bound World, or nullptr when the World, entity or
+    /// component is missing. Checks liveness first: World::HasComponent and
+    /// GetComponent treat a destroyed entity as a fatal precondition failure, and a
+    /// script can name one (a stale id, or its own destroyEntity() target).
+    template <typename T> T* FindScriptComponent(EntityID entity)
+    {
+        World* world = FindBoundWorldFor(entity);
+        return world ? world->GetRegistry().try_get<T>(entity) : nullptr;
+    }
+
     /// The entity's RigidBodyComponent in the bound World, or nullptr when the
     /// World, entity or component is missing.
     RigidBodyComponent* FindScriptRigidBody(EntityID entity)
     {
-        World* world = FindBoundWorldFor(entity);
-        return world ? world->GetRegistry().try_get<RigidBodyComponent>(entity) : nullptr;
+        return FindScriptComponent<RigidBodyComponent>(entity);
     }
 
     bool IsFiniteVector(const DirectX::XMFLOAT3& v)
@@ -354,6 +286,42 @@ namespace
         return std::none_of(name.begin(), name.end(), [](unsigned char ch) { return std::iscntrl(ch) != 0; });
     }
 } // namespace
+
+DirectX::XMFLOAT3 ASGetPosition(EntityID entity)
+{
+    const Transform* transform = FindScriptComponent<Transform>(entity);
+    return transform ? transform->position : DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f};
+}
+
+void ASSetPosition(EntityID entity, const DirectX::XMFLOAT3& pos)
+{
+    if (Transform* transform = FindScriptComponent<Transform>(entity))
+        transform->position = pos;
+}
+
+DirectX::XMFLOAT3 ASGetRotation(EntityID entity)
+{
+    const Transform* transform = FindScriptComponent<Transform>(entity);
+    return transform ? transform->rotation : DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f};
+}
+
+void ASSetRotation(EntityID entity, const DirectX::XMFLOAT3& rot)
+{
+    if (Transform* transform = FindScriptComponent<Transform>(entity))
+        transform->rotation = rot;
+}
+
+float ASGetHealth(EntityID entity)
+{
+    const HealthComponent* health = FindScriptComponent<HealthComponent>(entity);
+    return health ? health->health : 0.0f;
+}
+
+void ASSetHealth(EntityID entity, float health)
+{
+    if (HealthComponent* component = FindScriptComponent<HealthComponent>(entity))
+        component->health = health;
+}
 
 float ASGetSpeed(EntityID entity)
 {
@@ -1298,15 +1266,51 @@ void AngelScriptEngine::RegisterMathTypes()
 
 void AngelScriptEngine::RegisterComponentTypes()
 {
-    // Register Transform as a reference type so scripts can manipulate it
-    // through the pointer returned by getTransform().
-    m_engine->RegisterObjectType("Transform", 0, asOBJ_REF | asOBJ_NOCOUNT);
-    m_engine->RegisterObjectProperty("Transform", "Vector3 position", asOFFSET(Transform, position));
-    m_engine->RegisterObjectProperty("Transform", "Vector3 rotation", asOFFSET(Transform, rotation));
-    m_engine->RegisterObjectProperty("Transform", "Vector3 scale", asOFFSET(Transform, scale));
-
     // Register EntityID as a simple typedef (uint32).
     m_engine->RegisterTypedef("EntityID", "uint32");
+
+    // `Transform@` is a reference-counted ScriptTransformRef that stores only the
+    // EntityID; position/rotation/scale are virtual properties that re-resolve the
+    // entity on every access. It must never be a raw pointer into ECS storage: a
+    // script can keep the handle past destroyEntity() or World teardown.
+    int result = m_engine->RegisterObjectType("Transform", 0, asOBJ_REF);
+    const auto check = [&result](const char* what)
+    {
+        if (result < 0)
+            LogError(std::string("Transform script type registration failed at '") + what +
+                     "', AngelScript error code " + std::to_string(result));
+    };
+    check("type");
+    result = m_engine->RegisterObjectBehaviour("Transform", asBEHAVE_ADDREF, "void f()",
+                                               asMETHOD(ScriptTransformRef, AddRef), asCALL_THISCALL);
+    check("addref");
+    result = m_engine->RegisterObjectBehaviour("Transform", asBEHAVE_RELEASE, "void f()",
+                                               asMETHOD(ScriptTransformRef, Release), asCALL_THISCALL);
+    check("release");
+    result = m_engine->RegisterObjectMethod("Transform", "bool isValid() const", asMETHOD(ScriptTransformRef, IsValid),
+                                            asCALL_THISCALL);
+    check("isValid");
+    result = m_engine->RegisterObjectMethod("Transform", "EntityID get_entity() const property",
+                                            asMETHOD(ScriptTransformRef, GetEntity), asCALL_THISCALL);
+    check("entity");
+    result = m_engine->RegisterObjectMethod("Transform", "Vector3 get_position() const property",
+                                            asMETHOD(ScriptTransformRef, GetPosition), asCALL_THISCALL);
+    check("get_position");
+    result = m_engine->RegisterObjectMethod("Transform", "void set_position(const Vector3 &in) property",
+                                            asMETHOD(ScriptTransformRef, SetPosition), asCALL_THISCALL);
+    check("set_position");
+    result = m_engine->RegisterObjectMethod("Transform", "Vector3 get_rotation() const property",
+                                            asMETHOD(ScriptTransformRef, GetRotation), asCALL_THISCALL);
+    check("get_rotation");
+    result = m_engine->RegisterObjectMethod("Transform", "void set_rotation(const Vector3 &in) property",
+                                            asMETHOD(ScriptTransformRef, SetRotation), asCALL_THISCALL);
+    check("set_rotation");
+    result = m_engine->RegisterObjectMethod("Transform", "Vector3 get_scale() const property",
+                                            asMETHOD(ScriptTransformRef, GetScale), asCALL_THISCALL);
+    check("get_scale");
+    result = m_engine->RegisterObjectMethod("Transform", "void set_scale(const Vector3 &in) property",
+                                            asMETHOD(ScriptTransformRef, SetScale), asCALL_THISCALL);
+    check("set_scale");
 }
 
 bool AngelScriptEngine::RegisterGuardedFunction(const char* declaration, const char* scriptVisibleName,
@@ -1372,7 +1376,9 @@ namespace
     // Generic script function: get any reflected field by component type and field name
     std::string ASGetComponentField(uint32_t entityId, const std::string& compType, const std::string& fieldName)
     {
-        auto* world = AngelScriptEngine::GetBoundWorld();
+        // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
+        // treat a destroyed entity as a fatal precondition failure.
+        World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));
         if (!world)
             return "";
 
@@ -1396,7 +1402,9 @@ namespace
     void ASSetComponentField(uint32_t entityId, const std::string& compType, const std::string& fieldName,
                              const std::string& value)
     {
-        auto* world = AngelScriptEngine::GetBoundWorld();
+        // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
+        // treat a destroyed entity as a fatal precondition failure.
+        World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));
         if (!world)
             return;
 
@@ -1419,7 +1427,9 @@ namespace
     // Generic script function: check if entity has a component by type name
     bool ASHasComponent(uint32_t entityId, const std::string& compType)
     {
-        auto* world = AngelScriptEngine::GetBoundWorld();
+        // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
+        // treat a destroyed entity as a fatal precondition failure.
+        World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));
         if (!world)
             return false;
         return Spark::ComponentFactory::Get().HasComponent(compType, world, entityId);

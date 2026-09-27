@@ -179,3 +179,192 @@ TEST(SEC3VisualScript_ScriptFilePathRejectsPathsAndDeviceNames)
     EXPECT_FALSE(VisualScriptGraphIO::ScriptFilePath(directory, std::string(257, 'a'), ".vscript").has_value());
     EXPECT_TRUE(VisualScriptGraphIO::ScriptFilePath(directory, std::string(256, 'a'), ".vscript").has_value());
 }
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+
+#include "Engine/Scripting/AngelScriptEngine.h"
+#include "Utils/SparkConsole.h"
+
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <fstream>
+
+namespace
+{
+    std::string g_sec3Trace; ///< Output of the last debugTrace(1, ...) call
+
+    void CaptureSec3Trace(uint32_t nodeId, const char* /*nodeName*/, const char* output)
+    {
+        if (nodeId == 1)
+            g_sec3Trace = output ? output : "";
+    }
+
+    /// A real, initialized AngelScriptEngine bound to a fresh World.
+    struct Sec3ScriptFixture
+    {
+        AngelScriptEngine engine;
+        World world;
+        bool ready = false;
+
+        Sec3ScriptFixture()
+        {
+            g_sec3Trace.clear();
+            ASSetDebugTraceCallback(&CaptureSec3Trace);
+            ready = engine.Initialize();
+            AngelScriptEngine::BindWorld(&world);
+        }
+
+        ~Sec3ScriptFixture()
+        {
+            AngelScriptEngine::BindWorld(nullptr);
+            engine.Shutdown();
+            ASSetDebugTraceCallback(nullptr);
+        }
+
+        Sec3ScriptFixture(const Sec3ScriptFixture&) = delete;
+        Sec3ScriptFixture& operator=(const Sec3ScriptFixture&) = delete;
+
+        bool Compile(const char* source, const char* moduleName)
+        {
+            const bool compiled = engine.CompileScriptFromString(source, moduleName);
+            if (!compiled)
+                std::printf("  compile diagnostic: %s\n", engine.GetLastError().c_str());
+            return compiled;
+        }
+    };
+
+    bool NearVector(const DirectX::XMFLOAT3& v, float x, float y, float z)
+    {
+        return std::fabs(v.x - x) < 1e-5f && std::fabs(v.y - y) < 1e-5f && std::fabs(v.z - z) < 1e-5f;
+    }
+} // namespace
+
+TEST(SEC3Script_RetainedTransformHandleCannotReachAnotherEntity)
+{
+    Sec3ScriptFixture fx;
+    EXPECT_TRUE(fx.ready);
+
+    // A and B share the Transform pool; destroying A swaps B into A's slot, which
+    // is where a raw pointer kept from getTransform(A) pointed.
+    const EntityID a = fx.world.CreateEntity("A");
+    fx.world.AddComponent<Transform>(a);
+    const EntityID b = fx.world.CreateEntity("B");
+    fx.world.AddComponent<Transform>(b).position = {1.0f, 2.0f, 3.0f};
+    const EntityID host = fx.world.CreateEntity("Host");
+
+    const char* const script = "class Keeper\n"
+                               "{\n"
+                               "    Transform@ kept;\n"
+                               "    void Start()\n"
+                               "    {\n"
+                               "        EntityID a = getEntityByName(\"A\");\n"
+                               "        @kept = getTransform(a);\n"
+                               "        destroyEntity(a);\n"
+                               "    }\n"
+                               "    void Update(float dt)\n"
+                               "    {\n"
+                               "        kept.position = Vector3(42.0f, 42.0f, 42.0f);\n"
+                               "    }\n"
+                               "}\n";
+    EXPECT_TRUE(fx.Compile(script, "SEC3Keeper"));
+    EXPECT_TRUE(fx.engine.AttachScript(host, "Keeper", "SEC3Keeper"));
+
+    fx.engine.CallStart(host);
+    EXPECT_FALSE(fx.world.GetRegistry().valid(a));
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(host));
+
+    fx.engine.CallUpdate(host, 0.016f);
+
+    // B is untouched, and the stale write surfaced as a script fault instead.
+    EXPECT_TRUE(NearVector(fx.world.GetComponent<Transform>(b)->position, 1.0f, 2.0f, 3.0f));
+    EXPECT_TRUE(fx.engine.IsScriptFaulted(host));
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "Transform handle used after its entity was destroyed");
+
+    fx.engine.DetachScript(host);
+}
+
+TEST(SEC3Script_LiveTransformHandleReadsAndWrites)
+{
+    Sec3ScriptFixture fx;
+    EXPECT_TRUE(fx.ready);
+
+    const EntityID mover = fx.world.CreateEntity("Mover");
+    fx.world.AddComponent<Transform>(mover);
+    const EntityID bare = fx.world.CreateEntity("Bare");
+    (void)bare;
+
+    const char* const script =
+        "class Probe\n"
+        "{\n"
+        "    void Start()\n"
+        "    {\n"
+        "        Transform@ t = getTransform(getEntityByName(\"Mover\"));\n"
+        "        t.position = Vector3(5.0f, 6.0f, 7.0f);\n"
+        "        t.rotation = Vector3(0.5f, 0.0f, 0.0f);\n"
+        "        t.scale = Vector3(2.0f, 2.0f, 2.0f);\n"
+        "        Transform@ none = getTransform(getEntityByName(\"Bare\"));\n"
+        "        debugTrace(1, \"t\", \"\" + int(t.position.y) + \"|\" + (t.isValid() ? 1 : 0) + \"|\" +\n"
+        "                   (none is null ? 1 : 0) + \"|\" + t.entity);\n"
+        "    }\n"
+        "}\n";
+    EXPECT_TRUE(fx.Compile(script, "SEC3Probe"));
+    EXPECT_TRUE(fx.engine.AttachScript(mover, "Probe", "SEC3Probe"));
+    fx.engine.CallStart(mover);
+
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(mover));
+    const Transform& transform = *fx.world.GetComponent<Transform>(mover);
+    EXPECT_TRUE(NearVector(transform.position, 5.0f, 6.0f, 7.0f));
+    EXPECT_TRUE(NearVector(transform.rotation, 0.5f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearVector(transform.scale, 2.0f, 2.0f, 2.0f));
+    EXPECT_EQ(g_sec3Trace, "6|1|1|" + std::to_string(static_cast<uint32_t>(mover)));
+
+    fx.engine.DetachScript(mover);
+}
+
+TEST(SEC3Script_StaleEntityIdAccessorsAreSafe)
+{
+    Sec3ScriptFixture fx;
+    EXPECT_TRUE(fx.ready);
+
+    const EntityID doomed = fx.world.CreateEntity("Doomed");
+    fx.world.AddComponent<Transform>(doomed).position = {9.0f, 9.0f, 9.0f};
+    HealthComponent health;
+    health.health = 50.0f;
+    fx.world.AddComponent<HealthComponent>(doomed, health);
+    const EntityID host = fx.world.CreateEntity("Host");
+
+    // Every entity-id accessor on a destroyed id used to reach World::HasComponent /
+    // GetComponent, whose "invalid entity" precondition is a fatal assertion.
+    const char* const script = "class Stale\n"
+                               "{\n"
+                               "    void Start()\n"
+                               "    {\n"
+                               "        EntityID d = getEntityByName(\"Doomed\");\n"
+                               "        destroyEntity(d);\n"
+                               "        destroyEntity(d);\n"
+                               "        Vector3 p = getPosition(d);\n"
+                               "        setPosition(d, Vector3(1.0f, 1.0f, 1.0f));\n"
+                               "        Vector3 r = getRotation(d);\n"
+                               "        setRotation(d, r);\n"
+                               "        float h = getHealth(d);\n"
+                               "        setHealth(d, 5.0f);\n"
+                               "        bool has = hasComponent(d, \"Transform\");\n"
+                               "        string f = getComponentField(d, \"Transform\", \"position\");\n"
+                               "        setComponentField(d, \"Transform\", \"position\", \"1,1,1\");\n"
+                               "        debugTrace(1, \"s\", \"\" + int(p.x) + \"|\" + int(h) + \"|\" + (has ? 1 : 0) "
+                               "+ \"|\" + f + \"|\" + int(getSpeed(d)));\n"
+                               "    }\n"
+                               "}\n";
+    EXPECT_TRUE(fx.Compile(script, "SEC3Stale"));
+    EXPECT_TRUE(fx.engine.AttachScript(host, "Stale", "SEC3Stale"));
+    fx.engine.CallStart(host);
+
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(host));
+    EXPECT_FALSE(fx.world.GetRegistry().valid(doomed));
+    EXPECT_EQ(g_sec3Trace, std::string("0|0|0||0"));
+
+    fx.engine.DetachScript(host);
+}
+
+#endif // SPARK_ANGELSCRIPT_SUPPORT

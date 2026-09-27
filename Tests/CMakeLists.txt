@@ -1420,6 +1420,15 @@ if(SPARK_ANGELSCRIPT_AVAILABLE)
         TIMEOUT 120)
     # ENG-200: AngelScriptEngine::HotReloadModule() state rules R1-R8 against real
     # .as files, and reload after a working-directory change (TestENG200ScriptHotReloadReal.cpp).
+    # SEC3: script-API trust-boundary regressions against the real VM
+    # (TestSEC3ScriptingHardening.cpp): a retained Transform@ never reaches another
+    # entity, stale entity ids are safe, hot reload commits the staged module, and
+    # the sandbox function policy is fixed once the API is registered.
+    add_test(NAME SEC3ScriptHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SEC3ScriptHardening PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Script_;SPARK_TEST_EXPECT_COUNT=3"
+        LABELS "scripting;scripting-integration;security;integration"
+        TIMEOUT 120)
     add_test(NAME ScriptHotReloadReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(ScriptHotReloadReal PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptHotReload_ENG200_;SPARK_TEST_EXPECT_COUNT=9"
