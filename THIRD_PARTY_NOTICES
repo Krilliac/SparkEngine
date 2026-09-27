@@ -1189,7 +1189,7 @@ THE SOFTWARE.
 ===============================================================================
 Path:             ThirdParty/Utils/stb (vendored)
 Source:           https://github.com/nothings/stb
-Version:          snapshot (stb_image.h blob edff2054dfc231fe42c34bf620c913a90842c5c8)
+Version:          repo-authored hardened stub derived from the stb_image v2.30 API (stb_image.h blob 171777073167bd4dee30e8a1c8ed8e737fc5047b)
 Declared license: Public Domain / MIT
 
 -------------------------------------------------------------------------------

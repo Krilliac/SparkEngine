@@ -40,7 +40,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parents[1]
@@ -77,6 +77,9 @@ _ENTRY_LINE_RE = re.compile(r'^\s*"(.*)"\s*$')
 _VARIABLE_RE = re.compile(r"\$\{([A-Za-z0-9_]+)\}")
 _GITLINK_RECORD_RE = re.compile(r"^160000 commit ([0-9a-f]{40})\s")
 _SHA1_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+# A manifest version that pins a single tracked file: "(<file> blob <40-hex>)".
+_BLOB_CLAIM_RE = re.compile(r"\(([^()\s]+) blob ([0-9a-f]{40})\)")
+_BLOB_RECORD_RE = re.compile(r"^100(?:644|755) blob ([0-9a-f]{40})\t")
 
 _SET_OPEN = "set(SPARK_THIRDPARTY_AUDIT_ENTRIES"
 
@@ -222,6 +225,67 @@ def sha256_file(path: Path) -> str:
     return manifest_digest(raw)
 
 
+def head_blob_lookup(repo_root: Path) -> Callable[[str], str | None]:
+    """Return a lookup of the blob id HEAD records for a repository-relative file."""
+
+    def _lookup(relative: str) -> str | None:
+        try:
+            completed = subprocess.run(
+                ["git", "ls-tree", "HEAD", "--", relative],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError as exc:  # pragma: no cover - git absent
+            raise AuthorityError(f"cannot run git to resolve {relative!r}: {exc}") from exc
+        if completed.returncode != 0:
+            raise AuthorityError(
+                f"git ls-tree failed for {relative!r}: {completed.stderr.strip()[:200]}"
+            )
+        match = _BLOB_RECORD_RE.match(completed.stdout.strip())
+        return match.group(1) if match else None
+
+    return _lookup
+
+
+def verify_blob_claims(
+    entries: list[dict[str, str]], lookup: Callable[[str], str | None]
+) -> int:
+    """Refuse a manifest version that names a file blob HEAD does not hold.
+
+    A version such as ``snapshot (stb_image.h blob <40-hex>)`` is an identity
+    claim about a tracked file under the entry's local path.  When that file
+    is rewritten the claim goes stale silently, and every record derived from
+    the manifest (this authority, THIRD_PARTY_NOTICES) then ships a blob that
+    no longer exists at that path.  Returns the number of claims verified.
+    """
+    verified = 0
+    for entry in entries:
+        claims = _BLOB_CLAIM_RE.findall(entry["version"])
+        for file_name, claimed in claims:
+            if "/" in file_name or "\\" in file_name or file_name in (".", ".."):
+                raise AuthorityError(
+                    f"manifest entry {entry['name']!r} names blob file {file_name!r}; "
+                    "use a bare file name under the entry's local path"
+                )
+            relative = f"{entry['localPath'].strip().rstrip('/')}/{file_name}"
+            actual = lookup(relative)
+            if actual is None:
+                raise AuthorityError(
+                    f"manifest entry {entry['name']!r} claims blob {claimed} for "
+                    f"{relative!r}, but HEAD tracks no such file"
+                )
+            if actual != claimed:
+                raise AuthorityError(
+                    f"manifest entry {entry['name']!r} claims blob {claimed} for "
+                    f"{relative!r}, but HEAD holds blob {actual}; update the version "
+                    f"in {LOCK_RELPATH} and regenerate the derived records"
+                )
+            verified += 1
+    return verified
+
+
 def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
     """Derive the third-party section of the authority from the manifest."""
     lock_path = repo_root / LOCK_RELPATH
@@ -234,6 +298,7 @@ def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
 
     entries, gitlink_vars = parse_lock(text)
     resolved = resolve_gitlinks(repo_root, gitlink_vars)
+    verify_blob_claims(entries, head_blob_lookup(repo_root))
 
     derived: list[dict[str, Any]] = []
     seen: set[str] = set()

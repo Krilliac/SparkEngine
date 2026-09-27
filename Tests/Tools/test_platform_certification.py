@@ -2272,6 +2272,47 @@ class TestDependencyAuthority(unittest.TestCase):
         for entry in document["thirdParty"]:
             self.assertNotIn("${", entry["version"], entry["name"])
 
+    def test_manifest_blob_claims_match_the_files_head_tracks(self) -> None:
+        # A "(<file> blob <sha>)" version is an identity claim; the stb_image
+        # stub was rewritten while the manifest still named the old blob.
+        text = (REPO_ROOT / da.LOCK_RELPATH).read_text(encoding="utf-8")
+        entries, _ = da.parse_lock(text)
+        verified = da.verify_blob_claims(entries, da.head_blob_lookup(REPO_ROOT))
+        self.assertGreaterEqual(verified, 3)
+        stb = next(entry for entry in entries if entry["name"] == "stb_image")
+        self.assertIn("repo-authored", stb["version"])
+
+    def test_a_stale_blob_claim_is_refused(self) -> None:
+        entry = da._split_entry(
+            "stb_image|u|snapshot (stb_image.h blob " + "a" * 40 + ")|MIT|"
+            "ThirdParty/Utils/stb|f|m|fb|WARN|notice"
+        )
+        seen: list[str] = []
+
+        def lookup(relative: str) -> str:
+            seen.append(relative)
+            return "b" * 40
+
+        with self.assertRaises(da.AuthorityError) as raised:
+            da.verify_blob_claims([entry], lookup)
+        self.assertIn("HEAD holds blob " + "b" * 40, str(raised.exception))
+        self.assertEqual(seen, ["ThirdParty/Utils/stb/stb_image.h"])
+
+    def test_a_blob_claim_for_an_untracked_file_is_refused(self) -> None:
+        entry = da._split_entry(
+            "x|u|snapshot (gone.h blob " + "a" * 40 + ")|MIT|ThirdParty/X|f|m|fb|WARN|n"
+        )
+        with self.assertRaises(da.AuthorityError) as raised:
+            da.verify_blob_claims([entry], lambda _relative: None)
+        self.assertIn("HEAD tracks no such file", str(raised.exception))
+
+    def test_a_blob_claim_naming_a_path_is_refused(self) -> None:
+        entry = da._split_entry(
+            "x|u|snapshot (../a.h blob " + "a" * 40 + ")|MIT|ThirdParty/X|f|m|fb|WARN|n"
+        )
+        with self.assertRaises(da.AuthorityError):
+            da.verify_blob_claims([entry], lambda _relative: "a" * 40)
+
     def test_a_manifest_entry_with_too_few_fields_is_refused(self) -> None:
         with self.assertRaises(da.AuthorityError):
             da._split_entry("name|url|version")
