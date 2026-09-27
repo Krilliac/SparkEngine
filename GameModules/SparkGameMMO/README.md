@@ -18,8 +18,19 @@ Character IDs come from a counter stored in the database (`meta_next_character_i
 counter and from every stored `character_<id>` key, so a restarted server never reissues an ID an earlier run
 used. Each character save is one transaction: the character row, the whole inventory as one
 `inventory_<id>` record that keeps every slot index, and the reputation, achievement, crafting and lockout
-records commit together, and the pool's single worker applies queued saves in order. Deleting a character
-deletes every record keyed by its ID.
+records commit together, and the pool's single worker applies queued saves in order. A save also deletes the
+records the character no longer has, so a lost faction, achievement, stat, skill, recipe or expired lockout
+stays gone after a restart. Loads refuse out-of-range skill levels, unknown disciplines and difficulties,
+unparsable values and expired lockouts. Deleting a character deletes every record keyed by its ID.
+
+Guilds are world state. On load the module reads every `guild_<id>` and `gm_<guild>_<player>` record and the
+`meta_next_guild_id` counter, and `MMOGuildSystem::RestoreGuilds` rebuilds the guilds. The rank permissions are
+reset to their defaults, which nothing changes at runtime. Each auto-save and the unload path save the whole guild
+set in one transaction, deleting disbanded guilds and departed members. A malformed world record, or a guild set
+that fails validation, disables persistence for that run and leaves the store untouched for repair. Guild
+activity logs and per-member level, note and contribution are not persisted. Boss kills (`bosskill_<boss>_<time>`)
+are an append-only log that `MMOPersistenceSystem` saves and loads, but nothing records kills yet:
+`MMOWorldBossSystem` keeps no kill history.
 The `mmo_*` console commands (`mmo_help` lists them) drive the systems.
 
 Account passwords are stored only as `Spark::PasswordHash` hashes, never as plaintext.
@@ -31,8 +42,8 @@ Account passwords are stored only as `Spark::PasswordHash` hashes, never as plai
   character-select list is not rebuilt from the database after a restart: a stored character's owner ID could
   name a different account in the new process. `MMOPersistenceSystem::ListCharacters` is ready for that once
   accounts are durable.
-- World state is not restored: nothing calls `SaveWorldAsync` or `LoadWorld`, and `LoadWorld` only counts the
-  stored guild and boss-kill keys.
+- Persistence uses the engine's key-value fallback store, and the restart tests restart it inside one process.
+  No test yet restarts a server with two connected clients.
 - Two dungeons have no authored scene. Each world area carries an exact-case `sceneFile` under
   `Assets/Scenes/MMO/` (for example `Assets/Scenes/MMO/town_square.scene`), and the Shadow Crypt dungeon uses
   `Assets/Scenes/MMO/shadow_crypt.scene`. Forgotten Mine and Void Spire have no scene yet, so they stay registered
@@ -53,6 +64,8 @@ registered scene path exists with exact case and that each scene's `areaId` head
 - `Tests/TestMMOCredentialSecurity.cpp` (`MMOCredentials_*`) covers password handling in the account system.
 - `Tests/TestMOD320MMOPersistenceReal.cpp` (`MMOPersistence_*`) reopens a real store after shutdown: unique and
   restart-stable character IDs, owner-filtered character lists, exact inventory slots, ordered async saves,
-  crafting and lockout values, and complete character deletion.
+  crafting and lockout values, removed progression that stays removed, refused out-of-range records, complete
+  character deletion, guilds and members (including disbanded guilds and invalid restores), malformed world
+  records, and the boss-kill log.
 - `Tests/harden/Test_gamemodules_mmochat_di.cpp` (`MMO_ChatSystem_ResolvesNetworkViaInjectedContext`) checks that
   chat uses the injected engine context's `NetworkManager`.

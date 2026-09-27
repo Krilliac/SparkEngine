@@ -72,6 +72,14 @@ namespace
             return false;
         }
     }
+
+    MMO::WorldSaveData CaptureWorld(const MMO::MMOGuildSystem& guilds)
+    {
+        MMO::WorldSaveData world;
+        world.guilds = guilds.CaptureGuilds();
+        world.nextGuildId = guilds.GetNextGuildId();
+        return world;
+    }
 } // namespace
 
 // =============================================================================
@@ -218,6 +226,21 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
         console.LogWarning("[MMO] Persistence system unavailable (non-fatal)");
         m_persistenceSystem.reset();
     }
+    else
+    {
+        // Guilds come back before anything can change them. A world store that
+        // does not load or validate disables persistence for this run, so no
+        // save overwrites records an operator still has to repair.
+        MMO::WorldSaveData world;
+        std::string error = "stored world records are unreadable";
+        if (!m_persistenceSystem->LoadWorld(world) ||
+            !m_guildSystem->RestoreGuilds(std::move(world.guilds), world.nextGuildId, &error))
+        {
+            console.LogError("[MMO] World state not restored (" + error + "); persistence disabled for this run");
+            m_persistenceSystem->Shutdown();
+            m_persistenceSystem.reset();
+        }
+    }
 
     m_accountSystem = std::make_unique<MMO::MMOAccountSystem>();
     if (!m_accountSystem->Initialize(context))
@@ -359,11 +382,16 @@ void SparkGameMMOModule::OnUnload()
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Unloading Spark MMO module...");
 
-    if (m_gameplaySession && m_persistenceSystem)
+    if (m_persistenceSystem)
     {
-        const auto save = m_gameplaySession->BuildSaveData();
-        if (save.accountId != 0 && save.characterId != 0)
-            m_persistenceSystem->SaveCharacterSync(save);
+        if (m_gameplaySession)
+        {
+            const auto save = m_gameplaySession->BuildSaveData();
+            if (save.accountId != 0 && save.characterId != 0)
+                m_persistenceSystem->SaveCharacterSync(save);
+        }
+        if (m_guildSystem)
+            m_persistenceSystem->SaveWorldSync(CaptureWorld(*m_guildSystem));
     }
 
     UnregisterConsoleCommands();
@@ -519,6 +547,7 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
             const auto save = m_gameplaySession->BuildSaveData();
             if (save.accountId != 0 && save.characterId != 0)
                 m_persistenceSystem->SaveCharacterAsync(save);
+            m_persistenceSystem->SaveWorldAsync(CaptureWorld(*m_guildSystem));
             m_persistenceSystem->ResetAutoSaveTimer();
         }
     }

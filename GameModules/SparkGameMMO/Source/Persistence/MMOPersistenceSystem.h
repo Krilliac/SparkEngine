@@ -84,13 +84,18 @@ namespace MMO
         uint64_t lastSave = 0;
     };
 
-    /// @brief World-level persistent state (guild data, auction house, etc.)
+    /// @brief World-level persistent state
     struct WorldSaveData
     {
+        /// Every guild. A save replaces the stored set, so a guild or member
+        /// missing here is deleted. Guild logs, rank permissions (always the
+        /// defaults) and per-member level, note, contribution and online state
+        /// are not persisted.
         std::vector<Guild> guilds;
         uint32_t nextGuildId = 1;
 
-        // Boss kill history for lockout tracking
+        /// Boss kill history, an append-only log: a save adds these records and
+        /// never deletes stored ones; a load returns every stored record.
         struct BossKillRecord
         {
             uint32_t bossDefId = 0;
@@ -169,6 +174,11 @@ namespace MMO
         SaveGuildMember = 1602,
         LoadGuildMembers = 1603,
         DeleteGuildMember = 1604,
+        DeleteGuild = 1605,
+        LoadGuildValue = 1606,
+        LoadGuildMemberValue = 1607,
+        LoadNextGuildId = 1608,
+        SaveNextGuildId = 1609,
 
         // Lockouts
         SaveLockout = 1700,
@@ -179,6 +189,7 @@ namespace MMO
         // Boss kills
         SaveBossKill = 1800,
         LoadBossKills = 1801,
+        LoadBossKillValue = 1802,
     };
 
     /**
@@ -232,10 +243,18 @@ namespace MMO
 
         // === World Persistence ===
 
-        /// Save world-level data (guilds, boss history) async
+        /// Save guilds, the guild ID counter and new boss kills as one
+        /// transaction queued behind earlier saves (the auto-save path).
+        /// The saved guild set replaces the stored one, so call it only after
+        /// LoadWorld's guilds were restored.
         void SaveWorldAsync(const WorldSaveData& data);
 
-        /// Load world-level data sync (at startup)
+        /// SaveWorldAsync, waiting for the commit (the unload path).
+        bool SaveWorldSync(const WorldSaveData& data);
+
+        /// Load every stored guild, member and boss kill (at startup). Returns
+        /// false, leaving @p outData empty, on a store error or any malformed
+        /// record, so the caller can refuse to save over a store it cannot read.
         bool LoadWorld(WorldSaveData& outData);
 
         // === Configuration ===
@@ -272,6 +291,10 @@ namespace MMO
         /// The stored value @p getStmt returns, or nullopt when the key is absent.
         std::optional<std::string> GetValue(MMOStmtId getStmt, Params params);
         KeySet ScanCharacterKeys(uint32_t charId);
+        Transaction BuildWorldSave(const WorldSaveData& data);
+        KeySet ScanGuildKeys();
+        bool LoadGuilds(WorldSaveData& outData);
+        bool LoadBossKills(WorldSaveData& outData);
 
         // Subsystem save/load helpers. Saves append to the character's save
         // transaction and add every record they write to @p written.
@@ -294,6 +317,8 @@ namespace MMO
         /// Per character saved this run: every record it may have in the store
         /// (the keys found on its first save plus every key a save wrote since).
         std::map<uint32_t, KeySet> m_characterKeys;
+        /// The same for guild and guild-member records, once a world save ran.
+        std::optional<KeySet> m_guildKeys;
 
         float m_autoSaveInterval = 300.0f; // 5 minutes
         float m_autoSaveTimer = 0.0f;

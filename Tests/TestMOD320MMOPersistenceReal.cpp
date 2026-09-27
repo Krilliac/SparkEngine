@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <set>
 #include <sstream>
 #include <string>
@@ -68,6 +69,30 @@ namespace
         stack.itemDefId = itemDefId;
         stack.count = count;
         return stack;
+    }
+
+    MMO::GuildMember Member(uint32_t playerId, const std::string& name, MMO::GuildRank rank)
+    {
+        MMO::GuildMember member;
+        member.playerId = playerId;
+        member.name = name;
+        member.rank = rank;
+        return member;
+    }
+
+    /// Run raw key-value commands against a store file, bypassing the module's
+    /// encoders (records an older or damaged build could have left behind).
+    void WriteRawRecords(const fs::path& path, const std::vector<std::string>& commands)
+    {
+        Spark::Persistence::AsyncDatabasePool raw;
+        ASSERT_TRUE(raw.Open(path.string(), 1));
+        for (size_t i = 0; i < commands.size(); ++i)
+        {
+            const auto id = static_cast<Spark::Persistence::PreparedStatementID>(i + 1);
+            raw.PrepareStatement(id, commands[i]);
+            ASSERT_TRUE(raw.SyncQuery(id).success);
+        }
+        raw.Close();
     }
 } // namespace
 
@@ -481,20 +506,9 @@ TEST(MMOPersistence_ExpiredAndOutOfRangeProgressionIsNotRestored)
 
     // Records the module never writes: an expired lockout, out-of-range skill
     // levels, disciplines and difficulties, and unparsable values.
-    const std::vector<std::string> records = {
-        "SET lockout_77_3_1 1234.5", "SET lockout_77_4_0 -5.0", "SET lockout_77_5_0 nan", "SET lockout_77_6_9 100",
-        "SET craft_77_0 7|345",      "SET craft_77_1 250|3",    "SET craft_77_2 0|10",    "SET craft_77_9 5|5",
-        "SET rep_77_4 abc",          "SET rep_77_5 -700"};
-    {
-        Spark::Persistence::AsyncDatabasePool raw;
-        ASSERT_TRUE(raw.Open(path.string(), 1));
-        for (size_t i = 0; i < records.size(); ++i)
-        {
-            raw.PrepareStatement(static_cast<Spark::Persistence::PreparedStatementID>(i + 1), records[i]);
-            ASSERT_TRUE(raw.SyncQuery(static_cast<Spark::Persistence::PreparedStatementID>(i + 1)).success);
-        }
-        raw.Close();
-    }
+    WriteRawRecords(path, {"SET lockout_77_3_1 1234.5", "SET lockout_77_4_0 -5.0", "SET lockout_77_5_0 nan",
+                           "SET lockout_77_6_9 100", "SET craft_77_0 7|345", "SET craft_77_1 250|3",
+                           "SET craft_77_2 0|10", "SET craft_77_9 5|5", "SET rep_77_4 abc", "SET rep_77_5 -700"});
 
     MMO::MMOPersistenceSystem restarted;
     ASSERT_TRUE(restarted.Initialize(nullptr, path.string()));
@@ -520,6 +534,119 @@ TEST(MMOPersistence_ExpiredAndOutOfRangeProgressionIsNotRestored)
     const std::set<std::string> expectedKeys = {"craft_77_0", "lockout_77_3_1", "rep_77_5"};
     EXPECT_TRUE(familyKeys == expectedKeys);
     fs::remove(path);
+}
+
+TEST(MMOPersistence_LoadWorldIsNotANoOp)
+{
+    const fs::path path = FreshPath("test_mod320_world_load.db");
+    MMO::WorldSaveData world;
+    world.nextGuildId = 9;
+    MMO::Guild guild;
+    guild.id = 4;
+    guild.name = "Pipe|Dream 100%";
+    guild.tag = "P|D";
+    guild.motd = "Raid at 8 | bring 50% more pots, it's '%7C' night";
+    guild.leaderId = 21;
+    guild.bankCurrency = 7500;
+    guild.maxMembers = 30;
+    guild.members = {Member(21, "Lead|er", MMO::GuildRank::Leader), Member(22, "O'Brien", MMO::GuildRank::Officer)};
+    world.guilds = {guild};
+    MMO::Guild quiet = guild;
+    quiet.id = 6;
+    quiet.name = "Quiet";
+    quiet.motd.clear();
+    quiet.leaderId = 31;
+    quiet.members = {Member(31, "Hush", MMO::GuildRank::Leader)};
+    world.guilds.push_back(quiet);
+    {
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        ASSERT_TRUE(persistence.SaveWorldSync(world));
+        persistence.Shutdown();
+    }
+
+    MMO::MMOPersistenceSystem restarted;
+    ASSERT_TRUE(restarted.Initialize(nullptr, path.string()));
+    MMO::WorldSaveData loaded;
+    ASSERT_TRUE(restarted.LoadWorld(loaded));
+    EXPECT_EQ(loaded.nextGuildId, uint32_t{9});
+    ASSERT_EQ(loaded.guilds.size(), size_t{2});
+    const MMO::Guild& first = loaded.guilds[0];
+    EXPECT_EQ(first.id, uint32_t{4});
+    EXPECT_EQ(first.name, guild.name);
+    EXPECT_EQ(first.tag, guild.tag);
+    EXPECT_EQ(first.motd, guild.motd);
+    EXPECT_EQ(first.leaderId, uint32_t{21});
+    EXPECT_EQ(first.bankCurrency, 7500);
+    EXPECT_EQ(first.maxMembers, 30);
+    ASSERT_EQ(first.members.size(), size_t{2});
+    EXPECT_EQ(first.members[0].playerId, uint32_t{21});
+    EXPECT_EQ(first.members[0].name, std::string("Lead|er"));
+    EXPECT_TRUE(first.members[0].rank == MMO::GuildRank::Leader);
+    EXPECT_EQ(first.members[1].name, std::string("O'Brien"));
+    EXPECT_TRUE(first.members[1].rank == MMO::GuildRank::Officer);
+    EXPECT_EQ(loaded.guilds[1].id, uint32_t{6});
+    EXPECT_TRUE(loaded.guilds[1].motd.empty());
+    EXPECT_EQ(loaded.guilds[1].members.size(), size_t{1});
+    restarted.Shutdown();
+    fs::remove(path);
+}
+
+TEST(MMOPersistence_BossKillHistoryRoundTrips)
+{
+    const fs::path path = FreshPath("test_mod320_boss_kills.db");
+    MMO::WorldSaveData::BossKillRecord dragon{7, 1790000000u, 25};
+    MMO::WorldSaveData::BossKillRecord giant{3, 1790000500u, 12};
+    {
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        MMO::WorldSaveData world;
+        world.bossKillHistory = {dragon};
+        ASSERT_TRUE(persistence.SaveWorldSync(world));
+        // The history is a log: a save without the earlier kill keeps it.
+        world.bossKillHistory = {giant};
+        ASSERT_TRUE(persistence.SaveWorldSync(world));
+        persistence.Shutdown();
+    }
+
+    MMO::MMOPersistenceSystem restarted;
+    ASSERT_TRUE(restarted.Initialize(nullptr, path.string()));
+    MMO::WorldSaveData loaded;
+    ASSERT_TRUE(restarted.LoadWorld(loaded));
+    ASSERT_EQ(loaded.bossKillHistory.size(), size_t{2});
+    EXPECT_EQ(loaded.bossKillHistory[0].bossDefId, uint32_t{7});
+    EXPECT_EQ(loaded.bossKillHistory[0].killTime, uint64_t{1790000000u});
+    EXPECT_EQ(loaded.bossKillHistory[0].participantCount, 25);
+    EXPECT_EQ(loaded.bossKillHistory[1].bossDefId, uint32_t{3});
+    EXPECT_EQ(loaded.bossKillHistory[1].participantCount, 12);
+    restarted.Shutdown();
+    fs::remove(path);
+}
+
+TEST(MMOPersistence_MalformedWorldRecordFailsLoad)
+{
+    // Each store holds one record no build writes; LoadWorld must refuse the
+    // whole world rather than hand back a partial one a save would then persist.
+    const std::vector<std::string> damaged = {
+        "SET guild_4 1|Name",    "SET guild_5 1||tag|1|0|50|", "SET guild_6 1|Bad%zz|t|1|0|50|m",
+        "SET gm_4_21 1|9|Ghost", "SET bosskill_7_x 3",         "SET meta_next_guild_id zero"};
+    for (const std::string& record : damaged)
+    {
+        const fs::path path = FreshPath("test_mod320_world_malformed.db");
+        WriteRawRecords(path, {"SET guild_4 1|Keep|K|21|0|50|hello", "SET gm_4_21 1|4|Lead", record});
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        MMO::WorldSaveData loaded;
+        loaded.nextGuildId = 42;
+        const bool ok = persistence.LoadWorld(loaded);
+        if (ok)
+            std::cerr << "  accepted malformed record: " << record << "\n";
+        EXPECT_FALSE(ok);
+        EXPECT_TRUE(loaded.guilds.empty());
+        EXPECT_EQ(loaded.nextGuildId, uint32_t{1});
+        persistence.Shutdown();
+        fs::remove(path);
+    }
 }
 
 #ifdef SPARK_TEST_HAS_IMGUI
@@ -580,5 +707,173 @@ TEST(MMOPersistence_CharacterSystemAllocatesDurableIdsAndDeletesRecords)
     EXPECT_EQ(refused.errorMessage, std::string("Character id allocation failed"));
     characters.Shutdown();
     fs::remove(path);
+}
+
+namespace
+{
+    MMO::WorldSaveData CaptureWorld(const MMO::MMOGuildSystem& guilds)
+    {
+        MMO::WorldSaveData world;
+        world.guilds = guilds.CaptureGuilds();
+        world.nextGuildId = guilds.GetNextGuildId();
+        return world;
+    }
+
+    /// A fresh guild system restored from the world stored at @p path, as the
+    /// module does on load.
+    void RestoreFromStore(const fs::path& path, MMO::MMOGuildSystem& guilds)
+    {
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        MMO::WorldSaveData world;
+        ASSERT_TRUE(persistence.LoadWorld(world));
+        std::string error;
+        ASSERT_TRUE(guilds.RestoreGuilds(std::move(world.guilds), world.nextGuildId, &error));
+        EXPECT_TRUE(error.empty());
+        persistence.Shutdown();
+    }
+} // namespace
+
+TEST(MMOPersistence_GuildsAndMembersSurviveColdRestart)
+{
+    const fs::path path = FreshPath("test_mod320_guilds.db");
+    uint32_t raiders = 0;
+    uint32_t crafters = 0;
+    {
+        MMO::MMOGuildSystem guilds;
+        ASSERT_TRUE(guilds.Initialize(nullptr));
+        raiders = guilds.CreateGuild("Raiders", "RDR", 21, "Lead");
+        crafters = guilds.CreateGuild("Crafters", "CRF", 31, "Smith");
+        ASSERT_TRUE(raiders != 0 && crafters != 0);
+        ASSERT_TRUE(guilds.InviteMember(raiders, 21, 22, "Second"));
+        ASSERT_TRUE(guilds.InviteMember(raiders, 21, 23, "Third"));
+        ASSERT_TRUE(guilds.PromoteMember(raiders, 21, 22));
+        ASSERT_TRUE(guilds.SetMotd(raiders, 21, "Raid at 8 | 100% attendance"));
+        ASSERT_TRUE(guilds.DepositCurrency(raiders, 640));
+
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        ASSERT_TRUE(persistence.SaveWorldSync(CaptureWorld(guilds)));
+        persistence.Shutdown();
+    }
+
+    MMO::MMOGuildSystem restored;
+    ASSERT_TRUE(restored.Initialize(nullptr));
+    RestoreFromStore(path, restored);
+    ASSERT_EQ(restored.GetGuildCount(), size_t{2});
+    const MMO::Guild* guild = restored.GetGuild(raiders);
+    ASSERT_TRUE(guild != nullptr);
+    EXPECT_EQ(guild->name, std::string("Raiders"));
+    EXPECT_EQ(guild->tag, std::string("RDR"));
+    EXPECT_EQ(guild->motd, std::string("Raid at 8 | 100% attendance"));
+    EXPECT_EQ(guild->leaderId, uint32_t{21});
+    EXPECT_EQ(guild->bankCurrency, 640);
+    ASSERT_EQ(guild->members.size(), size_t{3});
+    EXPECT_EQ(guild->members[1].playerId, uint32_t{22});
+    EXPECT_EQ(guild->members[1].name, std::string("Second"));
+    EXPECT_TRUE(guild->members[1].rank == MMO::GuildRank::Member);
+    EXPECT_TRUE(guild->members[2].rank == MMO::GuildRank::Initiate);
+    EXPECT_EQ(restored.GetGuild(crafters)->members.size(), size_t{1});
+
+    // Permissions are live again, and the ID counter does not reissue an ID.
+    EXPECT_TRUE(restored.HasPerm(raiders, 21, MMO::GuildPermission::Invite));
+    EXPECT_FALSE(restored.HasPerm(raiders, 23, MMO::GuildPermission::Invite));
+    EXPECT_TRUE(restored.WithdrawCurrency(raiders, 21, 40));
+    EXPECT_GT(restored.CreateGuild("Newcomers", "NEW", 41, "Fresh"), std::max(raiders, crafters));
+    restored.Shutdown();
+    fs::remove(path);
+}
+
+TEST(MMOPersistence_DisbandedGuildDoesNotReturnAfterRestart)
+{
+    const fs::path path = FreshPath("test_mod320_disband.db");
+    uint32_t doomed = 0;
+    uint32_t kept = 0;
+    {
+        MMO::MMOGuildSystem guilds;
+        ASSERT_TRUE(guilds.Initialize(nullptr));
+        doomed = guilds.CreateGuild("Doomed", "DMD", 21, "Lead");
+        kept = guilds.CreateGuild("Kept", "KPT", 31, "Stays");
+        ASSERT_TRUE(guilds.InviteMember(kept, 31, 32, "Kicked"));
+
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        // The disband is queued behind the save that still holds the guild.
+        persistence.SaveWorldAsync(CaptureWorld(guilds));
+        ASSERT_TRUE(guilds.DisbandGuild(doomed, 21));
+        ASSERT_TRUE(guilds.RemoveMember(kept, 31, 32));
+        persistence.SaveWorldAsync(CaptureWorld(guilds));
+        persistence.Shutdown();
+    }
+
+    for (const std::string& key : StoredKeys(path))
+    {
+        EXPECT_FALSE(key.starts_with("guild_" + std::to_string(doomed)));
+        EXPECT_FALSE(key.starts_with("gm_" + std::to_string(doomed) + "_"));
+        EXPECT_NE(key, "gm_" + std::to_string(kept) + "_32");
+    }
+    MMO::MMOGuildSystem restored;
+    ASSERT_TRUE(restored.Initialize(nullptr));
+    RestoreFromStore(path, restored);
+    EXPECT_EQ(restored.GetGuildCount(), size_t{1});
+    EXPECT_TRUE(restored.GetGuild(doomed) == nullptr);
+    ASSERT_TRUE(restored.GetGuild(kept) != nullptr);
+    EXPECT_EQ(restored.GetGuild(kept)->members.size(), size_t{1});
+    restored.Shutdown();
+    fs::remove(path);
+}
+
+TEST(MMOPersistence_InvalidGuildRestoreLeavesStateUnchanged)
+{
+    MMO::MMOGuildSystem guilds;
+    ASSERT_TRUE(guilds.Initialize(nullptr));
+    const uint32_t existing = guilds.CreateGuild("Existing", "EXT", 5, "Owner");
+    ASSERT_NE(existing, uint32_t{0});
+
+    MMO::Guild valid;
+    valid.id = 8;
+    valid.name = "Valid";
+    valid.leaderId = 21;
+    valid.members = {Member(21, "Lead", MMO::GuildRank::Leader)};
+
+    MMO::Guild leaderless = valid;
+    leaderless.id = 9;
+    leaderless.name = "Leaderless";
+    leaderless.leaderId = 99;
+    MMO::Guild demotedLeader = valid;
+    demotedLeader.id = 10;
+    demotedLeader.name = "Demoted";
+    demotedLeader.members[0].rank = MMO::GuildRank::Officer;
+    MMO::Guild duplicateId = valid;
+    duplicateId.name = "Twin";
+    MMO::Guild duplicateName = valid;
+    duplicateName.id = 11;
+    MMO::Guild overFull = valid;
+    overFull.id = 12;
+    overFull.name = "Crowded";
+    overFull.maxMembers = 1;
+    overFull.members.push_back(Member(22, "Extra", MMO::GuildRank::Member));
+    MMO::Guild repeatedMember = valid;
+    repeatedMember.id = 13;
+    repeatedMember.name = "Echo";
+    repeatedMember.members.push_back(Member(21, "Lead again", MMO::GuildRank::Member));
+
+    for (const MMO::Guild& bad : {leaderless, demotedLeader, duplicateId, duplicateName, overFull, repeatedMember})
+    {
+        std::string error;
+        EXPECT_FALSE(guilds.RestoreGuilds({valid, bad}, 20, &error));
+        EXPECT_FALSE(error.empty());
+        EXPECT_EQ(guilds.GetGuildCount(), size_t{1});
+        EXPECT_TRUE(guilds.GetGuild(existing) != nullptr);
+        EXPECT_TRUE(guilds.GetGuild(valid.id) == nullptr);
+        EXPECT_EQ(guilds.GetNextGuildId(), existing + 1);
+    }
+
+    // The valid set alone is accepted, and the counter never falls behind a restored ID.
+    std::string error;
+    ASSERT_TRUE(guilds.RestoreGuilds({valid}, 2, &error));
+    EXPECT_TRUE(guilds.GetGuild(existing) == nullptr);
+    EXPECT_EQ(guilds.GetNextGuildId(), uint32_t{9});
+    guilds.Shutdown();
 }
 #endif

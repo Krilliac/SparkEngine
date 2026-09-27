@@ -23,6 +23,7 @@
 #include <sstream>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 
 namespace MMO
 {
@@ -110,16 +111,76 @@ namespace MMO
             }
         }
 
+        /// Fields between separators. Empty fields, a trailing one included, are
+        /// kept (an empty guild MOTD is a field); empty text has no fields.
         std::vector<std::string> Split(const std::string& text, char separator)
         {
             std::vector<std::string> parts;
-            std::istringstream stream(text);
-            std::string part;
-            while (std::getline(stream, part, separator))
+            if (text.empty())
             {
-                parts.push_back(part);
+                return parts;
             }
+            size_t begin = 0;
+            for (size_t end = text.find(separator); end != std::string::npos; end = text.find(separator, begin))
+            {
+                parts.push_back(text.substr(begin, end - begin));
+                begin = end + 1;
+            }
+            parts.push_back(text.substr(begin));
             return parts;
+        }
+
+        /// Percent-escape '%' and the '|' field separator in free text.
+        std::string EscapeField(const std::string& text)
+        {
+            std::string escaped;
+            escaped.reserve(text.size());
+            for (const char c : text)
+            {
+                if (c == '%')
+                {
+                    escaped += "%25";
+                }
+                else if (c == '|')
+                {
+                    escaped += "%7C";
+                }
+                else
+                {
+                    escaped += c;
+                }
+            }
+            return escaped;
+        }
+
+        /// Inverse of EscapeField; nullopt on any other '%' sequence.
+        std::optional<std::string> UnescapeField(const std::string& text)
+        {
+            std::string plain;
+            plain.reserve(text.size());
+            for (size_t i = 0; i < text.size(); ++i)
+            {
+                if (text[i] != '%')
+                {
+                    plain += text[i];
+                    continue;
+                }
+                const std::string_view code = std::string_view(text).substr(i + 1, 2);
+                if (code == "25")
+                {
+                    plain += '%';
+                }
+                else if (code == "7C")
+                {
+                    plain += '|';
+                }
+                else
+                {
+                    return std::nullopt;
+                }
+                i += 2;
+            }
+            return plain;
         }
 
         /// First column of a single-row KV result as a string, or nullptr.
@@ -338,6 +399,86 @@ namespace MMO
                 tx.Append(Sid(families[key.first].remove), std::move(*params));
             }
         }
+
+        // Guild records: "guild_<guildId>" and "gm_<guildId>_<playerId>".
+        constexpr size_t kGuildFamily = 0;
+        constexpr size_t kGuildMemberFamily = 1;
+        constexpr std::array<KeyFamily, 2> kGuildFamilies{{
+            {"guild_", MMOStmtId::LoadGuilds, MMOStmtId::DeleteGuild},
+            {"gm_", MMOStmtId::LoadGuildMembers, MMOStmtId::DeleteGuildMember},
+        }};
+
+        /// "1|name|tag|leaderId|bankCurrency|maxMembers|motd", free text escaped.
+        std::string EncodeGuildRecord(const Guild& guild)
+        {
+            return std::format("1|{}|{}|{}|{}|{}|{}", EscapeField(guild.name), EscapeField(guild.tag), guild.leaderId,
+                               guild.bankCurrency, guild.maxMembers, EscapeField(guild.motd));
+        }
+
+        bool ParseGuildRecord(const std::string& text, Guild& out)
+        {
+            const std::vector<std::string> fields = Split(text, '|');
+            if (fields.size() != 7 || fields[0] != "1")
+            {
+                return false;
+            }
+            auto name = UnescapeField(fields[1]);
+            auto tag = UnescapeField(fields[2]);
+            const auto leaderId = ParseInteger<uint32_t>(fields[3]);
+            const auto bankCurrency = ParseInteger<int>(fields[4]);
+            const auto maxMembers = ParseInteger<int>(fields[5]);
+            auto motd = UnescapeField(fields[6]);
+            if (!name || name->empty() || !tag || !leaderId || !bankCurrency || *bankCurrency < 0 || !maxMembers ||
+                *maxMembers <= 0 || !motd)
+            {
+                return false;
+            }
+            out.name = std::move(*name);
+            out.tag = std::move(*tag);
+            out.leaderId = *leaderId;
+            out.bankCurrency = *bankCurrency;
+            out.maxMembers = *maxMembers;
+            out.motd = std::move(*motd);
+            return true;
+        }
+
+        /// "1|rank|name", the name escaped.
+        std::string EncodeGuildMemberRecord(const GuildMember& member)
+        {
+            return std::format("1|{}|{}", static_cast<int>(member.rank), EscapeField(member.name));
+        }
+
+        bool ParseGuildMemberRecord(const std::string& text, GuildMember& out)
+        {
+            const std::vector<std::string> fields = Split(text, '|');
+            if (fields.size() != 3 || fields[0] != "1")
+            {
+                return false;
+            }
+            const auto rank = ParseInteger<int>(fields[1]);
+            auto name = UnescapeField(fields[2]);
+            if (!rank || *rank < 0 || *rank >= static_cast<int>(GuildRank::Count) || !name)
+            {
+                return false;
+            }
+            out.rank = static_cast<GuildRank>(*rank);
+            out.name = std::move(*name);
+            return true;
+        }
+
+        /// Two '_'-separated IDs (guild and player, or boss and kill time).
+        template <typename First, typename Second>
+        std::optional<std::pair<First, Second>> ParseIdPair(const std::string& suffix)
+        {
+            const std::vector<std::string> parts = Split(suffix, '_');
+            const auto first = parts.size() == 2 ? ParseInteger<First>(parts[0]) : std::nullopt;
+            const auto second = parts.size() == 2 ? ParseInteger<Second>(parts[1]) : std::nullopt;
+            if (!first || !second)
+            {
+                return std::nullopt;
+            }
+            return std::make_pair(*first, *second);
+        }
     } // namespace
 
     // =========================================================================
@@ -389,6 +530,7 @@ namespace MMO
         m_initialized = false;
         m_nextCharacterId = 1;
         m_characterKeys.clear();
+        m_guildKeys.reset();
     }
 
     void MMOPersistenceSystem::Update(float dt)
@@ -466,12 +608,17 @@ namespace MMO
         m_db->PrepareStatement(Sid(MMOStmtId::LoadKnownRecipes), "KEYS recipe_?0_");
         m_db->PrepareStatement(Sid(MMOStmtId::DeleteKnownRecipe), "DELETE recipe_?0_?1");
 
-        // Guilds (?1 is the full pipe-delimited guild blob built by SaveWorldAsync)
+        // Guilds (?1 / ?2 are the records EncodeGuildRecord / EncodeGuildMemberRecord build)
         m_db->PrepareStatement(Sid(MMOStmtId::SaveGuild), "SET guild_?0 ?1");
         m_db->PrepareStatement(Sid(MMOStmtId::LoadGuilds), "KEYS guild_");
-        m_db->PrepareStatement(Sid(MMOStmtId::SaveGuildMember), "SET gm_?0_?1 ?2|?3");
-        m_db->PrepareStatement(Sid(MMOStmtId::LoadGuildMembers), "KEYS gm_?0_");
+        m_db->PrepareStatement(Sid(MMOStmtId::LoadGuildValue), "GET guild_?0");
+        m_db->PrepareStatement(Sid(MMOStmtId::DeleteGuild), "DELETE guild_?0");
+        m_db->PrepareStatement(Sid(MMOStmtId::SaveGuildMember), "SET gm_?0_?1 ?2");
+        m_db->PrepareStatement(Sid(MMOStmtId::LoadGuildMembers), "KEYS gm_");
+        m_db->PrepareStatement(Sid(MMOStmtId::LoadGuildMemberValue), "GET gm_?0_?1");
         m_db->PrepareStatement(Sid(MMOStmtId::DeleteGuildMember), "DELETE gm_?0_?1");
+        m_db->PrepareStatement(Sid(MMOStmtId::LoadNextGuildId), "GET meta_next_guild_id");
+        m_db->PrepareStatement(Sid(MMOStmtId::SaveNextGuildId), "SET meta_next_guild_id ?0");
 
         // Lockouts
         m_db->PrepareStatement(Sid(MMOStmtId::SaveLockout), "SET lockout_?0_?1_?2 ?3");
@@ -482,6 +629,7 @@ namespace MMO
         // Boss kills
         m_db->PrepareStatement(Sid(MMOStmtId::SaveBossKill), "SET bosskill_?0_?1 ?2");
         m_db->PrepareStatement(Sid(MMOStmtId::LoadBossKills), "KEYS bosskill_");
+        m_db->PrepareStatement(Sid(MMOStmtId::LoadBossKillValue), "GET bosskill_?0_?1");
     }
 
     void MMOPersistenceSystem::CreateSchema()
@@ -1045,65 +1193,203 @@ namespace MMO
     // World Persistence
     // =========================================================================
 
+    MMOPersistenceSystem::Transaction MMOPersistenceSystem::BuildWorldSave(const WorldSaveData& data)
+    {
+        Transaction tx;
+        KeySet written;
+        tx.Append(Sid(MMOStmtId::SaveNextGuildId), {MakeInt(data.nextGuildId)});
+        for (const Guild& guild : data.guilds)
+        {
+            tx.Append(Sid(MMOStmtId::SaveGuild), {MakeInt(guild.id), MakeString(EncodeGuildRecord(guild))});
+            written.emplace(kGuildFamily, std::to_string(guild.id));
+            for (const GuildMember& member : guild.members)
+            {
+                tx.Append(Sid(MMOStmtId::SaveGuildMember),
+                          {MakeInt(guild.id), MakeInt(member.playerId), MakeString(EncodeGuildMemberRecord(member))});
+                written.emplace(kGuildMemberFamily, std::format("{}_{}", guild.id, member.playerId));
+            }
+        }
+        for (const auto& kill : data.bossKillHistory)
+        {
+            tx.Append(Sid(MMOStmtId::SaveBossKill),
+                      {MakeInt(kill.bossDefId), MakeInt(static_cast<int64_t>(kill.killTime)),
+                       MakeInt(kill.participantCount)});
+        }
+
+        // Disbanded guilds and departed members are deleted from the same kind
+        // of in-memory record set as BuildCharacterSave uses, for the same
+        // reason: an earlier world save can still be queued.
+        if (!m_guildKeys)
+        {
+            m_guildKeys = ScanGuildKeys();
+        }
+        AppendKeyDeletes(tx, kGuildFamilies, *m_guildKeys, written, {});
+        m_guildKeys->insert(written.begin(), written.end());
+        return tx;
+    }
+
+    MMOPersistenceSystem::KeySet MMOPersistenceSystem::ScanGuildKeys()
+    {
+        KeySet keys;
+        for (size_t family = 0; family < kGuildFamilies.size(); ++family)
+        {
+            const auto suffixes = ListKeySuffixes(kGuildFamilies[family].list, {}, kGuildFamilies[family].prefix);
+            for (const std::string& suffix : suffixes.value_or(std::vector<std::string>{}))
+            {
+                keys.emplace(family, suffix);
+            }
+        }
+        return keys;
+    }
+
     void MMOPersistenceSystem::SaveWorldAsync(const WorldSaveData& data)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Saving world data: %zu guilds, %zu boss kills", data.guilds.size(),
-                        data.bossKillHistory.size());
         if (!m_initialized)
         {
             return;
         }
-
-        // Save guilds
-        for (const auto& guild : data.guilds)
-        {
-            std::ostringstream guildStr;
-            guildStr << guild.name << "|" << guild.tag << "|" << guild.leaderId << "|" << guild.bankCurrency << "|"
-                     << guild.motd;
-
-            m_db->AsyncQuery(Sid(MMOStmtId::SaveGuild), {MakeInt(guild.id), MakeString(guildStr.str())});
-
-            // Save members
-            for (const auto& member : guild.members)
-            {
-                m_db->AsyncQuery(Sid(MMOStmtId::SaveGuildMember),
-                                 {MakeInt(guild.id), MakeInt(member.playerId), MakeString(member.name),
-                                  MakeInt(static_cast<int64_t>(member.rank))});
-            }
-        }
-
-        // Save boss kill history
-        for (const auto& kill : data.bossKillHistory)
-        {
-            m_db->AsyncQuery(Sid(MMOStmtId::SaveBossKill),
-                             {MakeInt(kill.bossDefId), MakeInt(static_cast<int64_t>(kill.killTime)),
-                              MakeInt(kill.participantCount)});
-        }
+        m_db->AsyncTransaction(BuildWorldSave(data));
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Async save world: %zu guilds, %zu new boss kills",
+                        data.guilds.size(), data.bossKillHistory.size());
     }
 
-    bool MMOPersistenceSystem::LoadWorld(WorldSaveData& outData)
+    bool MMOPersistenceSystem::SaveWorldSync(const WorldSaveData& data)
     {
         if (!m_initialized)
         {
             return false;
         }
-
-        // Load guilds
-        auto guildResult = m_db->SyncQuery(Sid(MMOStmtId::LoadGuilds));
-        if (guildResult.success)
+        const QueryResult result = m_db->AsyncTransaction(BuildWorldSave(data)).get();
+        if (!result.success)
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Loaded " + std::to_string(guildResult.rows.size()) +
-                                                        " guild records from database");
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: world save failed: %s",
+                            result.errorMessage.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    bool MMOPersistenceSystem::LoadWorld(WorldSaveData& outData)
+    {
+        outData = WorldSaveData{};
+        if (!m_initialized)
+        {
+            return false;
         }
 
-        // Load boss kill history
-        auto bossResult = m_db->SyncQuery(Sid(MMOStmtId::LoadBossKills));
-        if (bossResult.success)
+        WorldSaveData loaded;
+        if (const auto counter = GetValue(MMOStmtId::LoadNextGuildId, {}))
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Loaded " + std::to_string(bossResult.rows.size()) +
-                                                        " boss kill records from database");
+            const auto next = ParseInteger<uint32_t>(*counter);
+            if (!next || *next == 0)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt guild ID counter '%s'",
+                                counter->c_str());
+                return false;
+            }
+            loaded.nextGuildId = *next;
+        }
+        if (!LoadGuilds(loaded) || !LoadBossKills(loaded))
+        {
+            return false;
         }
 
+        outData = std::move(loaded);
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            std::format("[MMO] Loaded {} guilds and {} boss kills from database", outData.guilds.size(),
+                        outData.bossKillHistory.size()));
+        return true;
+    }
+
+    bool MMOPersistenceSystem::LoadGuilds(WorldSaveData& outData)
+    {
+        const auto guildIds = ListKeySuffixes(MMOStmtId::LoadGuilds, {}, "guild_");
+        const auto memberKeys = ListKeySuffixes(MMOStmtId::LoadGuildMembers, {}, "gm_");
+        if (!guildIds || !memberKeys)
+        {
+            return false;
+        }
+
+        std::map<uint32_t, Guild> guilds;
+        for (const std::string& suffix : *guildIds)
+        {
+            Guild guild;
+            const auto id = ParseInteger<uint32_t>(suffix);
+            const auto text = id && *id != 0 ? GetValue(MMOStmtId::LoadGuildValue, {MakeInt(*id)}) : std::nullopt;
+            if (!text || !ParseGuildRecord(*text, guild))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt guild record 'guild_%s'",
+                                suffix.c_str());
+                return false;
+            }
+            guild.id = *id;
+            guilds.emplace(*id, std::move(guild));
+        }
+
+        for (const std::string& suffix : *memberKeys)
+        {
+            GuildMember member;
+            const auto ids = ParseIdPair<uint32_t, uint32_t>(suffix);
+            const auto text =
+                ids ? GetValue(MMOStmtId::LoadGuildMemberValue, {MakeInt(ids->first), MakeInt(ids->second)})
+                    : std::nullopt;
+            if (!text || !ParseGuildMemberRecord(*text, member))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt guild member record 'gm_%s'",
+                                suffix.c_str());
+                return false;
+            }
+            const auto guild = guilds.find(ids->first);
+            if (guild == guilds.end())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "MMOPersistence: member record 'gm_%s' has no guild; the next world save deletes it",
+                               suffix.c_str());
+                continue;
+            }
+            member.playerId = ids->second;
+            guild->second.members.push_back(std::move(member));
+        }
+
+        for (auto& [id, guild] : guilds)
+        {
+            std::sort(guild.members.begin(), guild.members.end(),
+                      [](const GuildMember& a, const GuildMember& b) { return a.playerId < b.playerId; });
+            outData.guilds.push_back(std::move(guild));
+        }
+        return true;
+    }
+
+    bool MMOPersistenceSystem::LoadBossKills(WorldSaveData& outData)
+    {
+        // Key "bosskill_<bossDefId>_<killTime>", value = participant count
+        const auto kills = ListKeySuffixes(MMOStmtId::LoadBossKills, {}, "bosskill_");
+        if (!kills)
+        {
+            return false;
+        }
+        for (const std::string& suffix : *kills)
+        {
+            const auto ids = ParseIdPair<uint32_t, uint64_t>(suffix);
+            const auto text = ids ? GetValue(MMOStmtId::LoadBossKillValue,
+                                             {MakeInt(ids->first), MakeInt(static_cast<int64_t>(ids->second))})
+                                  : std::nullopt;
+            const auto participants = text ? ParseInteger<int>(*text) : std::nullopt;
+            if (!participants || *participants < 0)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt boss kill record 'bosskill_%s'",
+                                suffix.c_str());
+                return false;
+            }
+            WorldSaveData::BossKillRecord record;
+            record.bossDefId = ids->first;
+            record.killTime = ids->second;
+            record.participantCount = *participants;
+            outData.bossKillHistory.push_back(record);
+        }
+        std::sort(outData.bossKillHistory.begin(), outData.bossKillHistory.end(),
+                  [](const WorldSaveData::BossKillRecord& a, const WorldSaveData::BossKillRecord& b)
+                  { return std::tie(a.killTime, a.bossDefId) < std::tie(b.killTime, b.bossDefId); });
         return true;
     }
 
