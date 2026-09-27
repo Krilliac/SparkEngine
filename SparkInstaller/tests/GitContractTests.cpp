@@ -3,6 +3,7 @@
 #include "ProcessRunner.h"
 
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -11,6 +12,12 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 // Defined in PortableGitCacheTests.cpp; returns the number of failed checks.
 int RunPortableGitCacheTests();
@@ -198,7 +205,16 @@ int main(int argc, char* argv[])
         Check(SparkInstaller::GitBootstrap::IsGitAvailableOnPath(), "shell-less `git --version` PATH discovery failed");
 
     const auto fakeGit = std::filesystem::absolute(argv[0]);
-    const auto testRoot = std::filesystem::temp_directory_path() / "SparkInstallerGitContractTests";
+    // Unique per process: CTest registers this binary twice (SparkInstallerGitTests and
+    // Installer_Tamper), and a shared fixed root made parallel runs corrupt each other's repos.
+#if defined(_WIN32)
+    const long long processId = _getpid();
+#else
+    const long long processId = getpid();
+#endif
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto testRoot = std::filesystem::temp_directory_path() /
+                          ("SparkInstallerGitContractTests_" + std::to_string(processId) + "_" + std::to_string(stamp));
     std::error_code filesystemError;
     std::filesystem::remove_all(testRoot, filesystemError);
     filesystemError.clear();
