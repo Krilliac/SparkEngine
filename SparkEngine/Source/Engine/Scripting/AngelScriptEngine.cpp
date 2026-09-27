@@ -26,6 +26,7 @@
 #include <new>
 #include <algorithm>
 #include <cctype>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -318,19 +319,37 @@ void ASSetHealth(EntityID entity, float health)
 
 namespace
 {
-    /// The entity's RigidBodyComponent in the bound World, or nullptr when the
-    /// World, entity or component is missing.
-    RigidBodyComponent* FindScriptRigidBody(EntityID entity)
+    /// The bound World when @p entity is alive in it, else nullptr.
+    World* FindBoundWorldFor(EntityID entity)
     {
         auto* world = AngelScriptEngine::GetBoundWorld();
         if (!world || entity == entt::null || !world->GetRegistry().valid(entity))
             return nullptr;
-        return world->GetRegistry().try_get<RigidBodyComponent>(entity);
+        return world;
+    }
+
+    /// The entity's RigidBodyComponent in the bound World, or nullptr when the
+    /// World, entity or component is missing.
+    RigidBodyComponent* FindScriptRigidBody(EntityID entity)
+    {
+        World* world = FindBoundWorldFor(entity);
+        return world ? world->GetRegistry().try_get<RigidBodyComponent>(entity) : nullptr;
     }
 
     bool IsFiniteVector(const DirectX::XMFLOAT3& v)
     {
         return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    }
+
+    /// Longest sound or animation name a script may request.
+    constexpr size_t kMaxScriptAssetNameLength = 128;
+
+    /// Non-empty, bounded, and free of control characters (names end up in logs and asset lookups).
+    bool IsValidScriptAssetName(const std::string& name)
+    {
+        if (name.empty() || name.size() > kMaxScriptAssetNameLength)
+            return false;
+        return std::none_of(name.begin(), name.end(), [](unsigned char ch) { return std::iscntrl(ch) != 0; });
     }
 } // namespace
 
@@ -391,20 +410,86 @@ void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force)
     body->ApplyForce(force);
 }
 
-// Scripts call these from Update() every frame (EnemyPatrol requests "walk" each tick), so they log at
-// Debug: an Info line per call flooded the log with megabytes of output per minute of play.
+// Scripts call playSound()/playAnimation() from Update() every frame (EnemyPatrol requests "walk" each tick), so
+// both stay cheap and idempotent, and warn at most once per call site: they only record the request on the entity
+// in the bound World, on the game thread that runs the script. AudioUpdateSystem and AnimationUpdateSystem act on
+// it the next time their ECS phase runs.
 void ASPlaySound(EntityID entity, const std::string& soundName)
 {
-    (void)entity;
-    (void)soundName; // Debug logging compiles out under NDEBUG.
-    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "[Script] PlaySound: %s", soundName.c_str());
+    World* world = FindBoundWorldFor(entity);
+    if (!world)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playSound ignored: entity %u is not alive in the bound World.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+    if (!IsValidScriptAssetName(soundName))
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playSound ignored on entity %u: the sound name must be 1-%zu printable characters.",
+                       static_cast<uint32_t>(entity), kMaxScriptAssetNameLength);
+        return;
+    }
+
+    auto& registry = world->GetRegistry();
+    auto& cues = registry.get_or_emplace<ScriptAudioCues>(entity);
+    ++cues.requested;
+    if (cues.pending.size() >= ScriptAudioCues::kMaxPending)
+    {
+        ++cues.dropped;
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playSound('%s') dropped on entity %u: %zu cues are already pending.",
+                       soundName.c_str(), static_cast<uint32_t>(entity), ScriptAudioCues::kMaxPending);
+        return;
+    }
+
+    ScriptAudioCues::Cue cue;
+    cue.soundName = soundName;
+    if (const Transform* transform = registry.try_get<Transform>(entity))
+    {
+        cue.position = transform->position;
+        cue.positional = true;
+    }
+    cues.pending.push_back(std::move(cue));
 }
 
 void ASPlayAnimation(EntityID entity, const std::string& animName)
 {
-    (void)entity;
-    (void)animName; // Debug logging compiles out under NDEBUG.
-    SPARK_LOG_DEBUG(Spark::LogCategory::Animation, "[Script] PlayAnimation: %s", animName.c_str());
+    World* world = FindBoundWorldFor(entity);
+    AnimationController* controller = world ? world->GetRegistry().try_get<AnimationController>(entity) : nullptr;
+    if (!controller)
+    {
+        // A controller is authored with the entity's clip list; creating one here would animate nothing.
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playAnimation ignored: entity %u has no AnimationController in the bound World.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+    if (!IsValidScriptAssetName(animName))
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playAnimation ignored on entity %u: the clip name must be 1-%zu printable characters.",
+                       static_cast<uint32_t>(entity), kMaxScriptAssetNameLength);
+        return;
+    }
+    const auto& clips = controller->availableAnimations;
+    if (!clips.empty() && std::find(clips.begin(), clips.end(), animName) == clips.end())
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playAnimation('%s') ignored: entity %u does not list that clip.", animName.c_str(),
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+
+    // Re-requesting the clip that is already playing (the per-frame "walk") must not restart it.
+    if (controller->playing && controller->currentAnimation == animName)
+        return;
+
+    controller->currentAnimation = animName;
+    controller->currentTime = 0.0f;
+    controller->normalizedTime = 0.0f;
+    controller->playing = true;
 }
 
 EntityID ASGetEntityByName(const std::string& name)

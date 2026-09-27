@@ -171,8 +171,10 @@ trigger callback installed.
 | `void applyForce(EntityID, const Vector3 &in)` | Adds a world-space force (N) to the entity's Dynamic Jolt body through its `RigidBodyComponent`; integrated over the next physics step and wakes the body. Static/Kinematic bodies, entities without a body yet, and non-finite forces are ignored with a one-time warning. |
 | `float getSpeed(EntityID)` | Live linear speed (m/s) of the entity's Jolt body; falls back to the component's cached velocity before the body exists, and 0 without a `RigidBodyComponent`. |
 | `void fireEvent(const string &in)` | Publishes `Spark::ScriptEvent{eventName, sourceEntity}` synchronously on `EngineContext::GetEventBus()`. `sourceEntity` is the entity whose script is executing (`AngelScriptEngine::GetExecutingEntity()`), including from the constructor. Dropped with a one-time warning when no bus is registered. |
+| `void playSound(EntityID, const string &in)` | Queues a one-shot cue in the entity's `ScriptAudioCues` (bound World). The next `AudioUpdateSystem` tick (Audio phase) starts it through `AudioEngine::PlaySound3D` at the position the entity had when the script asked (or `PlaySound` for an entity without a `Transform`), using the entity's `AudioSourceComponent` volume/pitch/rolloff when present. At most 16 cues wait per entity; extra requests and cues the AudioEngine refuses (sound not loaded, no device, no free voice) are counted in `ScriptAudioCues::dropped`. |
+| `void playAnimation(EntityID, const string &in)` | Switches the entity's existing `AnimationController` to the clip, restarting it from time 0; `AnimationUpdateSystem` advances it. Re-requesting the clip that is already playing is a no-op, so scripts can call it every frame. No controller is created for an entity without one, and a clip missing from a non-empty `availableAnimations` is ignored. |
 
-All three run on the game thread that dispatches the script callbacks and never fault the calling script.
+All five run on the game thread that dispatches the script callbacks and never fault the calling script. Invalid input (dead entity, empty or over-128-character names, control characters) is ignored with a one-time warning. `playSound()`/`playAnimation()` are covered by `Tests/TestENG200ScriptAudioAnimationReal.cpp` (CTest `ScriptMediaBindingsReal`).
 
 ## Engine API (Available in Scripts)
 
@@ -216,7 +218,7 @@ The `ScriptAPIRegistry` in `ScriptHotReload.h` documents every function register
 
 | Signature | Description |
 |-----------|-------------|
-| `void PlaySound(const string &in)` | Play a sound effect by name |
+| `void playSound(EntityID, const string &in)` | Play a one-shot sound at the entity (see [Physics and Event Bindings](#physics-and-event-bindings-angelscriptengine)) |
 | `void PlaySoundAt(const string &in, Vector3)` | Play 3D sound at position |
 | `void StopSound(const string &in)` | Stop a playing sound |
 | `void SetVolume(float)` | Set master volume [0, 1] |
@@ -257,7 +259,7 @@ The `ScriptAPIRegistry` in `ScriptHotReload.h` documents every function register
 
 | Signature | Description |
 |-----------|-------------|
-| `void PlayAnimation(uint, const string &in)` | Play animation clip on entity |
+| `void playAnimation(EntityID, const string &in)` | Switch the entity's AnimationController to a clip (see [Physics and Event Bindings](#physics-and-event-bindings-angelscriptengine)) |
 | `void SetAnimationSpeed(uint, float)` | Set animation playback speed |
 
 ### Debug Functions

@@ -233,6 +233,20 @@ namespace Spark::ECS
  * 2. Computes per-frame velocity from position delta for Doppler effects.
  * 3. Writes position and velocity to the underlying `AudioSource` via the AudioEngine.
  *
+ * ### Script sound cues
+ * Afterwards it drains every `ScriptAudioCues` queue that the script
+ * `playSound()` binding filled since the last tick: each cue starts as a one-shot
+ * through AudioEngine::PlaySound3D (at the position the entity had when the
+ * script asked) or AudioEngine::PlaySound (entity without a Transform), using
+ * the entity's AudioSourceComponent volume, pitch and rolloff when it has one.
+ * A cue AudioEngine refuses (sound not loaded, no device, no free voice) is
+ * counted in `ScriptAudioCues::dropped` and never retried; the queue is always
+ * emptied, keeping its capacity.
+ *
+ * ### Contract
+ * Game thread only (the Audio phase, after scripts ran). Allocates nothing
+ * per frame beyond what AudioEngine does to start a voice.
+ *
  * ### Listener position
  * The 3D audio listener (typically the camera / player head) must be updated
  * separately via `AudioEngine::Console_SetListenerPosition()` or by the Player
@@ -255,7 +269,8 @@ namespace Spark::ECS
      * @brief Sync 3D audio source positions from entity transforms.
      *
      * Iterates all entities with AudioSourceComponent + Transform.
-     * Writes world position and computed velocity to the AudioEngine.
+     * Writes world position and computed velocity to the AudioEngine, then
+     * starts and clears the script sound cues queued since the last tick.
      *
      * @param world      The ECS World to query.
      * @param deltaTime  Frame time used to compute position-delta velocity (seconds).
@@ -265,6 +280,9 @@ namespace Spark::ECS
         const char* GetName() const override { return "AudioUpdateSystem"; }
 
       private:
+        /** @brief Start and clear every pending script playSound() cue (see "Script sound cues"). */
+        void DrainScriptAudioCues(World& world);
+
         /** @brief Non-owning pointer to the XAudio2-based audio engine. */
         AudioEngine* m_audio;
     };

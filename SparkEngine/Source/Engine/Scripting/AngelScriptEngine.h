@@ -692,10 +692,29 @@ float ASGetSpeed(EntityID entity);
  */
 void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force);
 
-/** @brief Play a sound effect on an entity (callable as `playSound()`) */
+/**
+ * @brief Queue a one-shot sound on an entity (callable as `playSound()`)
+ *
+ * Appends a cue to the entity's ScriptAudioCues in the bound World (added on
+ * first use); the next AudioUpdateSystem tick starts it, as a 3D sound at the
+ * entity's current position when it has a Transform. Ignored with a one-time
+ * warning when the entity is not alive in the bound World or the name is empty,
+ * longer than 128 characters, or contains control characters. At most
+ * ScriptAudioCues::kMaxPending cues wait per entity; further requests are
+ * counted as dropped.
+ */
 void ASPlaySound(EntityID entity, const std::string& soundName);
 
-/** @brief Play an animation on an entity (callable as `playAnimation()`) */
+/**
+ * @brief Switch an entity's AnimationController to a clip (callable as `playAnimation()`)
+ *
+ * Sets currentAnimation, restarts playback from time 0 and marks it playing;
+ * AnimationUpdateSystem advances it. Requesting the clip that is already
+ * playing is a no-op, so scripts may call it every frame. Ignored with a
+ * one-time warning when the entity has no AnimationController in the bound
+ * World (none is created), the name is invalid (see ASPlaySound), or the
+ * controller lists availableAnimations and the clip is not among them.
+ */
 void ASPlayAnimation(EntityID entity, const std::string& animName);
 
 /** @brief Find an entity by name (callable as `getEntityByName()`) */

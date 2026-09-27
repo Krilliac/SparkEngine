@@ -379,6 +379,7 @@ add_executable(SparkTests
     TestAngelScriptEngine.cpp
     TestENG200ScriptFaultsReal.cpp
     TestENG200ScriptBindingsReal.cpp
+    TestENG200ScriptAudioAnimationReal.cpp
     TestScriptHotReload.cpp
     TestVRSystem.cpp
     TestSeamlessAreaManager.cpp
@@ -1330,11 +1331,12 @@ endif()
 if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_PHYSICS)
     # ENG-200: script physics/event bindings against the real AngelScript VM and
-    # Jolt world (TestENG200ScriptBindingsReal.cpp); the count pins all five.
+    # Jolt world (TestENG200ScriptBindingsReal.cpp) plus the audio/animation
+    # bindings (TestENG200ScriptAudioAnimationReal.cpp); the count pins all ten.
     if(SPARK_ANGELSCRIPT_AVAILABLE)
         add_test(NAME ScriptBindingsReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
         set_tests_properties(ScriptBindingsReal PROPERTIES
-            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_;SPARK_TEST_EXPECT_COUNT=5"
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_;SPARK_TEST_EXPECT_COUNT=10"
             LABELS "scripting;scripting-integration;physics;integration"
             TIMEOUT 120)
         # ENG-200: engine-owned collision/trigger dispatch from the real Jolt world
@@ -1345,6 +1347,15 @@ if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
             LABELS "scripting;scripting-integration;physics;integration"
             TIMEOUT 120)
     endif()
+endif()
+# ENG-200: script playSound()/playAnimation() through the real AudioUpdateSystem and
+# AnimationUpdateSystem (TestENG200ScriptAudioAnimationReal.cpp); needs no physics.
+if(SPARK_ANGELSCRIPT_AVAILABLE)
+    add_test(NAME ScriptMediaBindingsReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(ScriptMediaBindingsReal PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_ENG200_Media;SPARK_TEST_EXPECT_COUNT=5"
+        LABELS "scripting;scripting-integration;audio;animation;integration"
+        TIMEOUT 120)
 endif()
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_VULKAN)

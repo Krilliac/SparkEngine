@@ -257,7 +257,8 @@ namespace Spark::Scripting
                 {"GetVelocity", "Vector3 GetVelocity(uint)", APICategory::Physics, "Get linear velocity"},
 
                 // Audio
-                {"PlaySound", "void PlaySound(const string &in)", APICategory::Audio, "Play a sound effect by name"},
+                {"playSound", "void playSound(EntityID, const string &in)", APICategory::Audio,
+                 "Play a one-shot sound at the entity (started by the next AudioUpdateSystem tick)"},
                 {"PlaySoundAt", "void PlaySoundAt(const string &in, Vector3)", APICategory::Audio,
                  "Play 3D sound at position"},
                 {"StopSound", "void StopSound(const string &in)", APICategory::Audio, "Stop a playing sound"},
@@ -287,8 +288,8 @@ namespace Spark::Scripting
                 {"GetRandomNavPoint", "Vector3 GetRandomNavPoint()", APICategory::AI, "Random walkable NavMesh point"},
 
                 // Animation
-                {"PlayAnimation", "void PlayAnimation(uint, const string &in)", APICategory::Animation,
-                 "Play animation clip on entity"},
+                {"playAnimation", "void playAnimation(EntityID, const string &in)", APICategory::Animation,
+                 "Switch the entity's AnimationController to a clip (no-op if already playing it)"},
                 {"SetAnimationSpeed", "void SetAnimationSpeed(uint, float)", APICategory::Animation,
                  "Set animation playback speed"},
 

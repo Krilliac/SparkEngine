@@ -292,7 +292,53 @@ namespace Spark::ECS
             source->Position = transform.position;
             audio.previousPosition = transform.position;
         }
+
+        DrainScriptAudioCues(world);
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.Audio", 0.0);
+    }
+
+    void AudioUpdateSystem::DrainScriptAudioCues(World& world)
+    {
+        auto view = world.GetEntitiesWith<ScriptAudioCues>();
+        for (auto entity : view)
+        {
+            auto& cues = view.get<ScriptAudioCues>(entity);
+            if (cues.pending.empty())
+                continue;
+
+            // An authored AudioSourceComponent supplies the entity's mix and rolloff; otherwise play at unity.
+            const AudioSourceComponent* authored = world.GetRegistry().try_get<AudioSourceComponent>(entity);
+            const float volume = authored ? authored->volume : 1.0f;
+            const float pitch = authored ? authored->pitch : 1.0f;
+
+            for (const auto& cue : cues.pending)
+            {
+                // Check the name first: AudioEngine logs a console error for every unknown-sound request.
+                AudioSource* source = nullptr;
+                if (m_audio->GetSound(cue.soundName))
+                {
+                    source = cue.positional ? m_audio->PlaySound3D(cue.soundName, cue.position, volume, pitch, false)
+                                            : m_audio->PlaySound(cue.soundName, volume, pitch, false);
+                }
+                if (!source)
+                {
+                    // Unknown sound, no audio device, or no free voice: the request is counted, never retried.
+                    ++cues.dropped;
+                    SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Audio,
+                                   "AudioUpdateSystem: script sound '%s' on entity %u could not be played "
+                                   "(not loaded, no audio device, or no free voice).",
+                                   cue.soundName.c_str(), static_cast<uint32_t>(entity));
+                    continue;
+                }
+                if (cue.positional && authored)
+                {
+                    source->MinDistance = authored->minDistance;
+                    source->MaxDistance = authored->maxDistance;
+                }
+                ++cues.played;
+            }
+            cues.pending.clear();
+        }
     }
 
     // ============================================================================
