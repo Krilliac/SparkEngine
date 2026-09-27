@@ -6,7 +6,8 @@
 # MSVC projects and build.zig do, with these deliberate differences:
 #   * no assembly: HAVE_AMD64_ASM / HAVE_AVX_ASM stay undefined, so the portable
 #     C and intrinsics implementations are used on every platform;
-#   * feature probes (HAVE_*) use check_symbol_exists instead of autoconf;
+#   * feature probes (HAVE_*) use check_symbol_exists / check_c_source_compiles
+#     with configure.ac's own probe programs instead of autoconf;
 #   * include/sodium/version.h is generated from version.h.in into the build tree.
 #
 # There is no fallback: NetworkEncryption.cpp has no ENABLE_NETWORKING guard and
@@ -132,6 +133,64 @@ else()
         SPARK_SODIUM_HAVE_TI_MODE)
     if(SPARK_SODIUM_HAVE_TI_MODE)
         target_compile_definitions(spark_sodium PRIVATE HAVE_TI_MODE=1)
+    endif()
+
+    # Hardening and barrier macros. Upstream build.zig (initLibConfig) defines
+    # HAVE_ATOMIC_OPS, HAVE_C11_MEMORY_FENCES, HAVE_GCC_MEMORY_FENCES and
+    # HAVE_INLINE_ASM for every target, and HAVE_WEAK_SYMBOLS for Linux, macOS
+    # and WASI; configure.ac probes each of them with AC_LINK_IFELSE ("whether
+    # we can use inline asm code", "if weak symbols are supported", "if atomic
+    # operations are supported", "if C11 memory fences are supported", "if gcc
+    # memory fences are supported"). The probes below are those programs.
+    # Without the fence macros private/common.h turns ACQUIRE_FENCE into
+    # (void) 0, dropping the barrier between tag verification and decryption in
+    # crypto_aead_chacha20poly1305_ietf_decrypt_detached (the AEAD open used by
+    # NetworkEncryption.cpp). Without HAVE_INLINE_ASM the compiler barriers in
+    # sodium_memzero, the softaes table lookups and the ML-KEM cmov disappear.
+    # MSVC is unaffected: upstream's MSVC projects define none of these.
+    check_c_source_compiles("
+        #ifdef __FILC__
+        # error inline assembly is not supported with FilC
+        #endif
+        int main(void) {
+            int a = 42;
+            int *pnt = &a;
+            __asm__ __volatile__ (\"\" : : \"r\"(pnt) : \"memory\");
+            return 0;
+        }"
+        SPARK_SODIUM_HAVE_INLINE_ASM)
+    check_c_source_compiles("
+        #if !defined(__ELF__) && !defined(__APPLE_CC__)
+        # error Support for weak symbols may not be available
+        #endif
+        __attribute__((weak)) void __dummy(void *x) { (void) x; }
+        void f(void *x) { __dummy(x); }
+        int main(void) { f((void *) 0); return 0; }"
+        SPARK_SODIUM_HAVE_WEAK_SYMBOLS)
+    check_c_source_compiles("
+        int main(void) {
+            static volatile int _sodium_lock;
+            __sync_lock_test_and_set(&_sodium_lock, 1);
+            __sync_lock_release(&_sodium_lock);
+            return 0;
+        }"
+        SPARK_SODIUM_HAVE_ATOMIC_OPS)
+    check_c_source_compiles("
+        #include <stdatomic.h>
+        int main(void) { atomic_thread_fence(memory_order_acquire); return 0; }"
+        SPARK_SODIUM_HAVE_C11_MEMORY_FENCES)
+    check_c_source_compiles("
+        int main(void) { __atomic_thread_fence(__ATOMIC_ACQUIRE); return 0; }"
+        SPARK_SODIUM_HAVE_GCC_MEMORY_FENCES)
+    foreach(_macro HAVE_INLINE_ASM HAVE_WEAK_SYMBOLS HAVE_ATOMIC_OPS HAVE_C11_MEMORY_FENCES HAVE_GCC_MEMORY_FENCES)
+        if(SPARK_SODIUM_${_macro})
+            target_compile_definitions(spark_sodium PRIVATE ${_macro}=1)
+        endif()
+    endforeach()
+    # The AEAD open path depends on the acquire fence: refuse a GCC/Clang build
+    # in which neither fence form is available rather than ship it silently.
+    if(NOT SPARK_SODIUM_HAVE_C11_MEMORY_FENCES AND NOT SPARK_SODIUM_HAVE_GCC_MEMORY_FENCES)
+        message(FATAL_ERROR "libsodium needs C11 or GCC memory fences (ACQUIRE_FENCE); neither probe compiled")
     endif()
 
     # sodium_init()'s critical section uses pthreads on POSIX (Win32 primitives
