@@ -29,9 +29,21 @@
 #include "Engine/Networking/DedicatedServer.h"
 #include "Engine/RemoteDebug/RemoteDebugSystem.h"
 
+#include <array>
+#include <chrono>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string>
+#include <string_view>
 #include <vector>
+
+// SparkServer's option parser exists wherever the server core is built
+// (ENABLE_NETWORKING); the networking-off product has no server to configure.
+#if __has_include("ServerApplication.h")
+#include "ServerApplication.h"
+#define SPARK_TEST_HAS_SERVER_OPTIONS 1
+#endif
 
 namespace
 {
@@ -146,3 +158,116 @@ TEST(RemoteAdmin_UnavailableLocalGrantCannotAdminister)
     EXPECT_TRUE(LastAuditIs(*system.GetServer(), RemoteDebugAuditDecision::AuthorizationDenied));
     system.Shutdown();
 }
+
+#ifdef SPARK_TEST_HAS_SERVER_OPTIONS
+
+namespace
+{
+    Spark::Server::ParseResult ParseServerWith(std::string_view flag, std::string_view value)
+    {
+        std::vector<std::string_view> arguments{"--module", "Game.dll", flag};
+        if (!value.empty())
+            arguments.push_back(value);
+        return Spark::Server::ParseServerOptions(arguments);
+    }
+
+    /** @brief One uniquely named server INI in the temp directory, removed on scope exit. */
+    class ScopedServerConfig
+    {
+      public:
+        explicit ScopedServerConfig(const std::string& contents)
+        {
+            const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+            m_path = std::filesystem::temp_directory_path() / ("spark_sec100_server_" + std::to_string(nonce) + ".ini");
+            std::ofstream output(m_path, std::ios::binary);
+            output << contents;
+        }
+
+        ~ScopedServerConfig()
+        {
+            std::error_code ignored;
+            std::filesystem::remove(m_path, ignored);
+        }
+
+        ScopedServerConfig(const ScopedServerConfig&) = delete;
+        ScopedServerConfig& operator=(const ScopedServerConfig&) = delete;
+
+        Spark::Server::ParseResult Parse() const
+        {
+            const std::string path = m_path.string();
+            const std::array<std::string_view, 4> arguments{"--config", path, "--module", "Game.dll"};
+            return Spark::Server::ParseServerOptions(arguments);
+        }
+
+      private:
+        std::filesystem::path m_path;
+    };
+} // namespace
+
+TEST(RemoteAdmin_UnavailableServerCliSwitchesRejected)
+{
+    struct RemoteAdminSwitch
+    {
+        std::string_view flag;
+        std::string_view value;
+    };
+    constexpr std::array<RemoteAdminSwitch, 8> switches{{{"--rcon", {}},
+                                                         {"--rcon-password", "x"},
+                                                         {"--rcon-port", "27015"},
+                                                         {"--remote-admin", {}},
+                                                         {"--enable-remote-administration", {}},
+                                                         {"--admin-port", "1"},
+                                                         {"--admin-password", "x"},
+                                                         {"--remote-debug", "9999"}}};
+
+    // The same command line without the switch is accepted, so each rejection
+    // below is the switch itself and not an otherwise invalid invocation.
+    const std::array<std::string_view, 2> baseline{"--module", "Game.dll"};
+    ASSERT_TRUE(Spark::Server::ParseServerOptions(baseline).options.has_value());
+
+    for (const RemoteAdminSwitch& candidate : switches)
+    {
+        const Spark::Server::ParseResult result = ParseServerWith(candidate.flag, candidate.value);
+        EXPECT_FALSE(result.options.has_value());
+        EXPECT_STR_CONTAINS(result.error, std::string(candidate.flag));
+    }
+}
+
+TEST(RemoteAdmin_UnavailableServerConfigKeysRejected)
+{
+    const std::string validConfig = "[Server]\nname=Arena\n[Network]\nport=27015\n";
+    const ScopedServerConfig accepted(validConfig);
+    ASSERT_TRUE(accepted.Parse().options.has_value());
+
+    constexpr std::array<std::string_view, 8> reservedKeys{"rcon",           "rcon_password",    "rcon_port",
+                                                           "enable_rcon",    "remote_admin",     "remote_admin_port",
+                                                           "admin_password", "remote_debug_port"};
+    constexpr std::array<std::string_view, 2> hostSections{"Server", "Network"};
+    for (const std::string_view key : reservedKeys)
+    {
+        for (const std::string_view section : hostSections)
+        {
+            const ScopedServerConfig config(validConfig + "[" + std::string(section) + "]\n" + std::string(key) +
+                                            "=1\n");
+            const Spark::Server::ParseResult result = config.Parse();
+            EXPECT_FALSE(result.options.has_value());
+            EXPECT_STR_CONTAINS(result.error, "OD-05");
+            EXPECT_STR_CONTAINS(result.error, std::string(section) + "." + std::string(key));
+        }
+    }
+
+    // Case does not smuggle a key past the check, and a dedicated section is
+    // rejected even when it holds no reserved key.
+    const ScopedServerConfig mixedCase(validConfig + "[Server]\nRCON_Password=x\n");
+    EXPECT_STR_CONTAINS(mixedCase.Parse().error, "OD-05");
+    constexpr std::array<std::string_view, 3> reservedSections{"RCON", "RemoteAdmin", "admin"};
+    for (const std::string_view section : reservedSections)
+    {
+        const ScopedServerConfig config(validConfig + "[" + std::string(section) + "]\nenabled=true\n");
+        const Spark::Server::ParseResult result = config.Parse();
+        EXPECT_FALSE(result.options.has_value());
+        EXPECT_STR_CONTAINS(result.error, "OD-05");
+    }
+}
+
+#endif // SPARK_TEST_HAS_SERVER_OPTIONS

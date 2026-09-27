@@ -2073,6 +2073,33 @@ foreach(_remote_admin_selector IN ITEMS
         TIMEOUT 30)
 endforeach()
 
+# OD-05 through SparkServer's operator surface: no command-line switch or config
+# key enables remote administration. The option parser exists only where the
+# server core is built.
+if(TARGET SparkServerCore)
+    foreach(_remote_admin_server_selector IN ITEMS
+            RemoteAdmin_UnavailableServerCliSwitchesRejected
+            RemoteAdmin_UnavailableServerConfigKeysRejected)
+        add_test(NAME ${_remote_admin_server_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(${_remote_admin_server_selector} PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME=${_remote_admin_server_selector};SPARK_TEST_EXPECT_COUNT=1"
+            LABELS "remote-admin;security;unit"
+            RUN_SERIAL TRUE
+            TIMEOUT 30)
+    endforeach()
+endif()
+
+# OD-05 static ratchet: no argv comparison or config-key read in the engine,
+# server, gateway or editor sources names a remote-administration switch.
+add_test(
+    NAME RemoteAdmin_UnavailableSwitchScan
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_remote_admin_switch_scan -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(RemoteAdmin_UnavailableSwitchScan PROPERTIES
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    LABELS "remote-admin;security;unit;python"
+    TIMEOUT 120)
+
 foreach(_remote_debug_epoch_selector IN ITEMS
         RemoteDebug_ResponseEpochStartListening
         RemoteDebug_ResponseEpochStopListening)

@@ -122,6 +122,37 @@ namespace Spark::Server
             return true;
         }
 
+        // OD-05: stable-v1 ships no remote administration. A config that tries to
+        // turn it on fails closed instead of being silently ignored, so an
+        // operator never believes an RCON password or admin port is in force.
+        bool RejectRemoteAdministrationKeys(const ConfigParser& config, std::string& error)
+        {
+            constexpr std::array<std::string_view, 3> reservedSections{"rcon", "remoteadmin", "admin"};
+            constexpr std::array<std::string_view, 8> reservedKeys{
+                "rcon",         "rcon_password",     "rcon_port",      "enable_rcon",
+                "remote_admin", "remote_admin_port", "admin_password", "remote_debug_port"};
+            constexpr std::string_view unavailable = "remote administration is unavailable in stable-v1 (OD-05): ";
+            for (const std::string& section : config.GetSections())
+            {
+                const std::string loweredSection = LowerAscii(section);
+                if (std::ranges::find(reservedSections, std::string_view(loweredSection)) != reservedSections.end())
+                {
+                    error = std::string(unavailable) + "remove section [" + section + "]";
+                    return false;
+                }
+                for (const std::string& key : config.GetKeys(section))
+                {
+                    const std::string loweredKey = LowerAscii(key);
+                    if (std::ranges::find(reservedKeys, std::string_view(loweredKey)) != reservedKeys.end())
+                    {
+                        error = std::string(unavailable) + "remove " + section + "." + key;
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
         bool ReadStrictNetworkBool(const ConfigParser& config, std::string_view key, bool& value, std::string& error)
         {
             const std::string keyText(key);
@@ -149,7 +180,7 @@ namespace Spark::Server
                 error = "Cannot load server config: " + path.string();
                 return false;
             }
-            if (!ValidateUniqueNetworkBoundaryKeys(config, error))
+            if (!RejectRemoteAdministrationKeys(config, error) || !ValidateUniqueNetworkBoundaryKeys(config, error))
                 return false;
 
             options.server.serverName = config.GetString("Server", "name", options.server.serverName);
