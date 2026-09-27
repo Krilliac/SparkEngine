@@ -22,6 +22,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #ifndef SPARK_PLATFORM_WINDOWS
