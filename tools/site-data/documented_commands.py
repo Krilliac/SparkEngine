@@ -20,14 +20,18 @@ Rules, per documented invocation:
   of the repository's configure scripts (``generate.sh``/``generate.bat``/
   ``build.sh``/``build.ps1`` all configure ``build``). A code block that
   configures presets (and nothing ad hoc) may only use those presets' trees.
+  ``cd`` is followed, so ``cd MyGame; cmake -B build`` configures ``MyGame/build``;
+  ``cd`` into the directory a documented ``git clone`` created is the repository
+  root, and a ``cd`` that cannot be followed makes relative trees unresolvable.
 * An ad-hoc ``-B`` configure must not write into a preset's ``binaryDir``. An
   ad-hoc configure with a generator the presets use must state the ``-A``/``-T``
   values those presets pin (only the toolset version before the first comma is
   compared); a generator no preset uses carries no pin to compare.
 * A preset tree built with a multi-config generator must name its preset's
-  configuration (``--config`` / ``-C``). ``cmake --install`` and ``cpack`` fall
-  back to Release there, so they may omit it only for a Release preset. A stated
-  configuration must always match the preset's.
+  configuration (``--config`` / ``-C``); a preset without a generator counts as
+  multi-config unless its condition pins a non-Windows host. ``cmake --install``
+  and ``cpack`` fall back to Release there, so they may omit it only for a Release
+  preset. A stated configuration must always match the preset's.
 
 Tree paths that are placeholders (``$VAR``, ``<dir>``, ``%DIR%``, ``~``) or absolute
 are not resolvable and are skipped rather than guessed.
@@ -45,24 +49,31 @@ from pathlib import Path
 from common import REPO_ROOT, SiteDataError, read_bytes_stable
 from contract_selectors import CMakePresetIndex, cmake_preset_index
 
-# Hand-written Markdown that documents how to build, test, or package the engine.
-DOCUMENT_FILES = (
-    "README.md",
-    "CLAUDE.md",
-    ".github/copilot-instructions.md",
-)
+# Hand-written Markdown that documents how to build, test, or package the engine:
+# every root-level page (README, CLAUDE.md, TROUBLESHOOTING.md, CONTRIBUTING.md,
+# AGENTS.md, ...), the Copilot instructions, and the trees below.
+DOCUMENT_FILES = (".github/copilot-instructions.md",)
+DOCUMENT_ROOT_GLOB = "*.md"
 DOCUMENT_ROOTS = (
     "wiki",
     "docs",
     ".github/prompts",
+    ".claude/skills",
+    ".codex/skills",
+    "SparkBuild",
+    "SparkSDK",
+    "FuzzerTests",
+    "GameModules",
+    "Templates",
 )
 # Excluded with a reason: generated pages are checked at their source, and dated
-# implementation plans are historical records of what was run at the time.
+# implementation plans and the changelog are historical records of what was run at the time.
 EXCLUDED_PREFIXES = (
     "docs/api/",  # generated from headers
     "wiki/reference/",  # symbol, file-tree and class indexes generated from sources
     "docs/readiness/ENGINE_READINESS_HANDOFF.md",  # rendered from work items; validate.py checks their commands
     "docs/superpowers/",  # dated implementation plans (historical)
+    "CHANGELOG.md",  # release history (historical)
 )
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 
@@ -84,6 +95,9 @@ _PLACEHOLDER = re.compile(r"[$<>{}%~*\[\]]|\.\.\.")
 # Repository scripts that configure the ad-hoc tree ``build`` (mkdir build; cd build; cmake ..).
 CONFIGURE_SCRIPTS = {"generate.sh", "generate.bat", "build.sh", "build.ps1"}
 _INTERPRETERS = {"bash", "sh", "zsh", "pwsh", "powershell", "call", "&", "cmd", "/c", "-file"}
+# `git clone` options whose value is the next token (not the repository or directory operand).
+_GIT_CLONE_VALUE_OPTIONS = {"-b", "--branch", "-o", "--origin", "--depth", "-c", "--config", "-j", "--jobs",
+                            "--reference", "--separate-git-dir", "-u", "--upload-pack", "--template"}
 # Without a configuration, a multi-config install or package step uses this one.
 INSTALL_DEFAULT_CONFIGURATION = "Release"
 
@@ -108,15 +122,15 @@ class _DocumentState:
     block_presets: list[str] = field(default_factory=list)
     block_adhoc: bool = False
     cwd: str | None = None
+    # Directory a documented `git clone` of the repository creates; `cd` into it is the repository root.
+    clone_dir: str | None = None
 
 
 def documented_markdown(root: Path = REPO_ROOT) -> list[Path]:
     """The Markdown documents whose build commands are checked, in stable order."""
-    paths: set[Path] = set()
-    for relative in DOCUMENT_FILES:
-        candidate = root / relative
-        if candidate.is_file() and not candidate.is_symlink():
-            paths.add(candidate)
+    paths: set[Path] = set(root.glob(DOCUMENT_ROOT_GLOB))
+    paths.update(root / relative for relative in DOCUMENT_FILES)
+    paths = {path for path in paths if path.is_file() and not path.is_symlink()}
     for relative in DOCUMENT_ROOTS:
         base = root / relative
         if not base.is_dir():
@@ -216,23 +230,35 @@ def _segments(line: str) -> list[list[str]]:
     return [segment for segment in segments if segment]
 
 
-def _normalize_tree(value: str, cwd: str | None) -> str | None:
-    """A repository-relative build tree, or None when it cannot be resolved."""
-    if not value or _PLACEHOLDER.search(value):
+# Working directory after a ``cd`` the checker cannot follow (placeholder,
+# absolute path, above the repository root): relative trees there are unresolvable.
+UNRESOLVED_CWD = "\0unresolved"
+
+
+def _resolve_path(value: str, cwd: str | None) -> str | None:
+    """``value`` relative to ``cwd`` as a repository-relative path ("" is the root), or None."""
+    if not value or cwd == UNRESOLVED_CWD or _PLACEHOLDER.search(value):
         return None
     normalized = value.replace("\\", "/")
     if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
         return None
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    normalized = normalized.rstrip("/")
-    if normalized in {"", "."}:
-        return cwd
-    if normalized.split("/", 1)[0] == "..":
-        return None
-    if cwd:
-        return f"{cwd}/{normalized}"
-    return normalized
+    parts = cwd.split("/") if cwd else []
+    for part in normalized.split("/"):
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not parts:
+                return None
+            parts.pop()
+        else:
+            parts.append(part)
+    return "/".join(parts)
+
+
+def _normalize_tree(value: str, cwd: str | None) -> str | None:
+    """A repository-relative build tree, or None when it cannot be resolved."""
+    resolved = _resolve_path(value, cwd)
+    return resolved or None
 
 
 def _option_value(arguments: list[str], index: int, flag: str) -> tuple[str | None, int]:
@@ -314,13 +340,31 @@ class _Checker:
                 state.adhoc_trees.add("build")
                 state.block_adhoc = True
             return
+        if len(tokens) >= 3 and tokens[0] == "git" and tokens[1] == "clone":
+            operands: list[str] = []
+            arguments = iter(tokens[2:])
+            for token in arguments:
+                if token in _GIT_CLONE_VALUE_OPTIONS:
+                    next(arguments, None)
+                elif not token.startswith("-"):
+                    operands.append(token)
+            if operands:
+                name = operands[1] if len(operands) > 1 else operands[0].rstrip("/").rsplit("/", 1)[-1]
+                state.clone_dir = name.removesuffix(".git")
+            return
         position = next((i for i, token in enumerate(tokens) if _TOOL.match(token) or token == "cd"), None)
         if position is None:
             return
         if tokens[position] == "cd":
             target = tokens[position + 1] if position + 1 < len(tokens) else ""
-            tree = _normalize_tree(target, state.cwd) if target not in {"-", "~"} else None
-            state.cwd = tree if tree and tree.split("/", 1)[0].startswith("build") else None
+            if not target:
+                state.cwd = UNRESOLVED_CWD  # `cd` alone goes to $HOME
+                return
+            resolved = _resolve_path(target, state.cwd) if target != "-" else None
+            if state.clone_dir and resolved == state.clone_dir:
+                resolved = ""  # into the fresh clone: the repository root
+            # Keep the whole directory: `cd MyGame; cmake -B build` configures MyGame/build, not build.
+            state.cwd = UNRESOLVED_CWD if resolved is None else (resolved or None)
             return
         tool = _TOOL.match(tokens[position]).group(1).lower()
         parsed = _parse(tool, tokens[position + 1:])
@@ -340,14 +384,14 @@ class _Checker:
             self.check_tree_use(line, f"cmake --{mode} {raw}", _normalize_tree(raw, state.cwd), parsed, state)
         elif mode == "ctest" and not parsed["presets"]:
             raw = str(parsed["tree"]) if "tree" in parsed else None
-            tree = _normalize_tree(raw, state.cwd) if raw is not None else state.cwd
+            tree = _normalize_tree(raw if raw is not None else ".", state.cwd)
             described = f"ctest --test-dir {raw}" if raw is not None else f"ctest (run in {state.cwd})"
             self.check_tree_use(line, described, tree, parsed, state)
         elif mode == "cpack" and not parsed["presets"]:
             # cpack reads <tree>/CPackConfig.cmake, from --config or the working directory.
             raw = str(parsed["cpack_config"]) if "cpack_config" in parsed else None
             if raw is None:
-                tree = state.cwd
+                tree = _normalize_tree(".", state.cwd)
                 described = f"cpack (run in {state.cwd})"
             else:
                 directory = raw.replace("\\", "/").rpartition("/")[0]
@@ -432,7 +476,7 @@ class _Checker:
                 action = "installs or packages" if installing else "builds or tests"
                 self.report(
                     line,
-                    f"`{command}` omits `{flag} {expected}`: preset {owner!r} uses a multi-config "
+                    f"`{command}` omits `{flag} {expected}`: preset {owner!r} may use a multi-config "
                     f"generator, which otherwise {action} {default}",
                 )
             return

@@ -38,7 +38,14 @@ FIXTURE_PRESETS = {
             "toolset": "v143",
             "cacheVariables": {"CMAKE_BUILD_TYPE": "MinSizeRel"},
         },
-        {"name": "linux-gcc-release", "inherits": "default", "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}},
+        {
+            "name": "linux-gcc-release",
+            "inherits": "default",
+            "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux"},
+            "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"},
+        },
+        # No generator and no host condition: Visual Studio (multi-config) on Windows.
+        {"name": "minimal", "inherits": "default", "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}},
     ],
     "buildPresets": [
         {"name": "windows-release", "configurePreset": "windows-release", "configuration": "Release"},
@@ -257,9 +264,47 @@ class DocumentedCommandRules(unittest.TestCase):
         self.assertEqual(len(self.findings(fenced("cat build.sh\nctest --test-dir build"))), 1)
 
     def test_toolset_host_suffix_matches_the_pinned_version(self):
-        self.assertEqual(self.findings(fenced('cmake -B out -G "Visual Studio 17 2022" -A x64 -T v143,host=x64')), [])
+        host_suffix = fenced('cmake -B out -G "Visual Studio 17 2022" -A x64 -T v143,host=x64')
+        self.assertEqual(self.findings(host_suffix), [])
         messages = self.findings(fenced('cmake -B out -G "Visual Studio 17 2022" -A x64 -T v145'))
         self.assertEqual(len(messages), 1, messages)
+
+    def test_generatorless_preset_without_host_condition_needs_configuration(self):
+        messages = self.findings(fenced("cmake --preset minimal\ncmake --build build/minimal"))
+        self.assertEqual(len(messages), 1, messages)
+        self.assertIn("--config Release", messages[0])
+        configured = fenced("cmake --preset minimal\ncmake --build build/minimal --config Release")
+        self.assertEqual(self.findings(configured), [])
+
+    def test_cd_into_subproject_keeps_its_trees_out_of_the_repository_root(self):
+        # README shape: a game project configured in MyGame/build must not declare the root tree build.
+        subproject = fenced("cp -r Templates/EmptyProject MyGame && cd MyGame\ncmake -B build\ncmake --build build")
+        self.assertEqual(self.findings(subproject), [])
+        messages = self.findings(subproject + fenced("ctest --test-dir build -C Release"))
+        self.assertEqual(len(messages), 1, messages)
+        self.assertIn("'build' is neither", messages[0])
+        # Leaving the subproject returns to the root; an unfollowable cd resolves nothing.
+        self.assertEqual(self.findings(fenced("cd MyGame\ncmake -B build\ncd ..\nctest --test-dir MyGame/build")), [])
+        self.assertEqual(self.findings(fenced("cd $HOME/elsewhere\ncmake --build build")), [])
+        self.assertEqual(len(self.findings(fenced("cd $HOME/elsewhere\ncmake -B build")
+                                           + fenced("cmake --build build"))), 1)
+
+    def test_cd_into_a_fresh_clone_is_the_repository_root(self):
+        text = fenced(
+            """
+            git clone --recurse-submodules https://github.com/Krilliac/SparkEngine.git
+            cd SparkEngine
+            ./generate.sh release -g Ninja
+            cmake --preset windows-release
+            """
+        ) + fenced("cmake --install build --prefix out\ncmake --build build/windows-release --config Release")
+        self.assertEqual(self.findings(text), [])
+        # Option values are not the clone directory; an explicit directory operand is.
+        named = fenced("git clone --depth 1 -b Working https://example.invalid/SparkEngine.git engine\ncd engine\n"
+                       "./build.sh release") + fenced("ctest --test-dir build")
+        self.assertEqual(self.findings(named), [])
+        elsewhere = fenced("git clone https://example.invalid/SparkEngine.git\ncd Other\n./build.sh release")
+        self.assertEqual(len(self.findings(elsewhere + fenced("ctest --test-dir build"))), 1)
 
     def test_line_numbers_point_at_the_command(self):
         text = "Intro\n\n```bash\ncmake --preset linux-gcc-release\n\ncmake --build build\n```\n"
@@ -270,10 +315,15 @@ class DocumentedCommandRules(unittest.TestCase):
 class DocumentationSurface(unittest.TestCase):
     def test_surface_covers_quick_starts_and_excludes_generated_pages(self):
         documents = {path.relative_to(REPO_ROOT).as_posix() for path in documented_commands.documented_markdown()}
-        for required in ("README.md", "CLAUDE.md", "wiki/getting-started/Getting-Started.md",
-                         "wiki/advanced/Build-System-and-CMake-Modules.md", ".github/prompts/build-test.prompt.md"):
+        for required in ("README.md", "CLAUDE.md", "TROUBLESHOOTING.md", "CONTRIBUTING.md", "AGENTS.md",
+                         "wiki/getting-started/Getting-Started.md", "wiki/advanced/Build-System-and-CMake-Modules.md",
+                         ".github/prompts/build-test.prompt.md", "SparkBuild/README.md", "SparkSDK/README.md",
+                         "FuzzerTests/README.md", "Templates/README.md", "GameModules/README.md",
+                         ".claude/skills/sparkengine-build-ci-and-dependencies/SKILL.md",
+                         ".codex/skills/sparkengine-build-ci-and-dependencies/SKILL.md"):
             self.assertIn(required, documents)
         self.assertFalse(any(path.startswith(("docs/api/", "wiki/reference/")) for path in documents))
+        self.assertNotIn("CHANGELOG.md", documents)
 
     def test_repository_documentation_agrees_with_presets(self):
         findings = documented_commands.check_documents()

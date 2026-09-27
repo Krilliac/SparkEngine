@@ -331,10 +331,24 @@ class CMakePresetIndex:
         return next((tree for tree, name in self.binary_dirs.items() if name == configure_name), None)
 
     def is_multi_config(self, configure_name: str) -> bool:
-        """True when the preset pins a multi-config generator (Visual Studio, Ninja Multi-Config, Xcode)."""
-        generator = self._configure[configure_name].get("generator")
+        """True when the preset's tree may use a multi-config generator (Visual Studio, Ninja Multi-Config, Xcode).
+
+        A preset without a generator uses the host default, which is Visual
+        Studio on Windows; it is single-config only when its condition pins a
+        non-Windows host.
+        """
+        resolved = self._configure[configure_name]
+        generator = resolved.get("generator")
         if not isinstance(generator, str):
-            return False
+            condition = resolved.get("condition")
+            pins_non_windows_host = (
+                isinstance(condition, dict)
+                and condition.get("type") == "equals"
+                and condition.get("lhs") == "${hostSystemName}"
+                and isinstance(condition.get("rhs"), str)
+                and condition["rhs"] != "Windows"
+            )
+            return not pins_non_windows_host
         return generator.startswith("Visual Studio") or generator in {"Ninja Multi-Config", "Xcode"}
 
     def generator_pins(self, generator: str) -> set[tuple[str | None, str | None]]:

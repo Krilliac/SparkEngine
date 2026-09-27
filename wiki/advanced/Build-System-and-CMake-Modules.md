@@ -208,8 +208,14 @@ multi-config, so a tree built or tested without `--config`/`-C` produces Debug.
 `tools/site-data/documented_commands.py` (run by `tools/site-data/validate.py`
 and the `BuildOptions_DocumentedCommandsMatchPresets` CTest) resolves every
 `cmake`/`ctest`/`cpack` command in the shell code blocks and inline code spans
-of `README.md`, `CLAUDE.md`, `wiki/`, `docs/` and `.github/prompts/` against
-`CMakePresets.json`. It fails when:
+of every root-level Markdown page (`README.md`, `CLAUDE.md`, `TROUBLESHOOTING.md`,
+`CONTRIBUTING.md`, `AGENTS.md`, ...), `wiki/`, `docs/`, `.github/prompts/`, the
+Copilot instructions, the `.claude/skills/` and `.codex/skills/` runbooks, and the
+Markdown under `SparkBuild/`, `SparkSDK/`, `FuzzerTests/`, `GameModules/` and
+`Templates/` against `CMakePresets.json`. A `cd` is followed: `cd MyGame` then
+`cmake -B build` configures `MyGame/build`, not the root `build`, and `cd` into
+the directory a documented `git clone` created is the repository root. It fails
+when:
 
 - `--preset` names no visible preset of that family;
 - a build, install, test or package tree (`cmake --build`/`--install`,
@@ -220,7 +226,9 @@ of `README.md`, `CLAUDE.md`, `wiki/`, `docs/` and `.github/prompts/` against
 - a block that configured presets then uses any other tree, including another
   preset's (the classic `cmake --preset <name>` then `cmake --build build`);
 - an ad-hoc `-B` configure writes into a preset's tree;
-- a multi-config preset tree omits its preset's configuration, or any stated
+- a multi-config preset tree omits its preset's configuration (a preset with no
+  generator counts as multi-config unless its condition pins a non-Windows host,
+  because Visual Studio is the Windows default), or any stated
   configuration differs from it. `cmake --install` and `cpack` default a
   multi-config tree to Release, so they may omit it only for a Release preset;
   `--build` and `ctest` default to Debug;
@@ -229,8 +237,8 @@ of `README.md`, `CLAUDE.md`, `wiki/`, `docs/` and `.github/prompts/` against
   states the same toolset). A generator no preset uses has no pin to compare.
 
 Placeholders (`<preset>`, `$VAR`, `~`) and absolute paths are skipped. Generated
-pages (`docs/api/`, `wiki/reference/`, the readiness handoff) and dated plans
-under `docs/superpowers/` are out of scope.
+pages (`docs/api/`, `wiki/reference/`, the readiness handoff), dated plans
+under `docs/superpowers/` and the `CHANGELOG.md` history are out of scope.
 
 ### Configured-target build-matrix evidence
 

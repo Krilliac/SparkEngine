@@ -182,7 +182,7 @@ For a release-configured development build with networking and DXR disabled:
 
 ```bash
 cmake --preset minimal
-cmake --build build/minimal
+cmake --build build/minimal --config Release
 ```
 
 This preset effectively disables networking and DXR. Its AI, animation, save,

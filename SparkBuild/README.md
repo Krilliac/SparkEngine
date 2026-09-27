@@ -31,7 +31,7 @@ A cross-platform terminal UI build tool for configuring and compiling [SparkEngi
 ### Windows
 
 ```bash
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -T v143
 cmake --build build --config Release --parallel
 ```
 
