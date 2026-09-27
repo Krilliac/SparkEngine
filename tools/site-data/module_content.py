@@ -597,9 +597,27 @@ def _registered_test_names(repo_root: Path, cmake_text: str) -> list[tuple[str, 
             source = Path(directory) / file_name
             if source.relative_to(tests_root).as_posix() not in registered:
                 continue
-            text = _strip_cpp_comments(source.read_text(encoding="utf-8", errors="replace"))
-            names.extend(_test_definitions_by_platform(text))
+            status = source.stat()
+            names.extend(_source_test_definitions(str(source), (status.st_mtime_ns, status.st_size, status.st_ino)))
     return names
+
+
+# Every validation reads all ~700 registered Tests/ sources, and the module-manifest and
+# site-data suites validate in-process dozens of times over a mostly unchanged tree. The
+# parse is a pure function of the file, so memoize it by path plus a stat signature
+# (mtime, size, file id): an edited, replaced or recreated file is a new key.
+@functools.lru_cache(maxsize=8192)
+def _source_test_definitions(path: str, signature: tuple[int, int, int]) -> tuple[tuple[str, frozenset[str]], ...]:
+    del signature  # part of the cache key only
+    text = _strip_cpp_comments(Path(path).read_text(encoding="utf-8", errors="replace"))
+    return tuple(_test_definitions_by_platform(text))
+
+
+@functools.lru_cache(maxsize=1024)
+def _source_test_names(path: str, signature: tuple[int, int, int]) -> tuple[str, ...]:
+    """Every TEST( name in the comment-stripped file, memoized like _source_test_definitions."""
+    del signature  # part of the cache key only
+    return tuple(TEST_DEFINITION_PATTERN.findall(_strip_cpp_comments(Path(path).read_text(encoding="utf-8", errors="replace"))))
 
 
 def _manifest_path(repo_root: Path, value: Any, location: str, findings: list[tuple[str, str]], *, kind: str) -> Path | None:
@@ -630,6 +648,35 @@ def _resolved_entry_paths(base: str, paths: tuple[str, ...]) -> frozenset[Path]:
     return frozenset((Path(base) / path).resolve() for path in paths)
 
 
+def _files_under(directory: Path) -> list[tuple[Path, Path]]:
+    """(path, resolved path) of every file ``directory.rglob("*")`` yields where ``is_file()`` holds.
+
+    Walks like Path.walk (descends entries where ``is_dir(follow_symlinks=False)``) but
+    takes file and link type from the scandir entry instead of stat-ing every path, and
+    resolves each directory once: a file that is not itself a link resolves to its
+    resolved directory plus its name. Asset roots hold thousands of files, and the manifest
+    suites check them dozens of times per run.
+    """
+    files: list[tuple[Path, Path]] = []
+    pending = [(directory, directory.resolve())]
+    while pending:
+        current, resolved_current = pending.pop()
+        try:
+            entries = list(os.scandir(current))
+        except OSError:
+            continue
+        for entry in entries:
+            path = current / entry.name
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append((path, path.resolve()))  # few directories; covers junctions too
+                elif entry.is_file():
+                    files.append((path, path.resolve() if entry.is_symlink() else resolved_current / entry.name))
+            except OSError:
+                continue
+    return files
+
+
 def _asset_root_coverage(repo_root: Path, directory: Path, manifest: Path, location: str) -> list[tuple[str, str]]:
     """Require the named manifest to list every file under the asset root.
 
@@ -651,8 +698,8 @@ def _asset_root_coverage(repo_root: Path, directory: Path, manifest: Path, locat
         str(base), tuple(entry["path"] for entry in listed if isinstance(entry, dict) and isinstance(entry.get("path"), str))
     )
     uncovered = sorted(
-        path.relative_to(repo_root).as_posix() for path in directory.rglob("*")
-        if path.is_file() and path != manifest and path.resolve() not in covered
+        path.relative_to(repo_root).as_posix() for path, resolved in _files_under(directory)
+        if path != manifest and resolved not in covered
     )
     if uncovered:
         return [(f"{location}.manifest", f"asset manifest does not list {len(uncovered)} file(s) under the root, first: {uncovered[0]}")]
@@ -750,8 +797,9 @@ def _validate_selector_count(
 
 
 def _validate_manifest_tests(
-    repo_root: Path, tests: Any, location: str, registered_names: list[tuple[str, frozenset[str]]]
+    repo_root: Path, tests: Any, location: str, registered_names: list[tuple[str, frozenset[str]]], cmake_text: str
 ) -> list[tuple[str, str]]:
+    """``cmake_text`` is the comment-stripped Tests/CMakeLists.txt (empty when it is missing)."""
     if not isinstance(tests, dict) or set(tests) != {"files", "prefixes"}:
         return [(location, "tests must contain exactly files and prefixes")]
     files, prefixes = tests["files"], tests["prefixes"]
@@ -760,8 +808,6 @@ def _validate_manifest_tests(
         return [(f"{location}.files", "must be a non-empty list of unique test source paths")]
     if not isinstance(prefixes, list) or not prefixes:
         return [(f"{location}.prefixes", "must be a non-empty list of {prefix, count} selectors")]
-    cmake_path = repo_root / TESTS_CMAKE_RELATIVE
-    cmake_text = _strip_cmake_comments(cmake_path.read_text(encoding="utf-8")) if cmake_path.is_file() else ""
     names_by_file: dict[str, list[str]] = {}
     for index, value in enumerate(files):
         file_location = f"{location}.files[{index}]"
@@ -773,8 +819,8 @@ def _validate_manifest_tests(
             continue
         if not _is_registered_test_source(cmake_text, value[len("Tests/"):]):
             findings.append((file_location, f"test source is not registered in {TESTS_CMAKE_RELATIVE.as_posix()}: {value}"))
-        text = _strip_cpp_comments(source.read_text(encoding="utf-8", errors="replace"))
-        names_by_file[value] = TEST_DEFINITION_PATTERN.findall(text)
+        status = source.stat()
+        names_by_file[value] = list(_source_test_names(str(source), (status.st_mtime_ns, status.st_size, status.st_ino)))
     valid_prefixes: list[str] = []
     for index, entry in enumerate(prefixes):
         entry_location = f"{location}.prefixes[{index}]"
@@ -807,12 +853,8 @@ def _validate_manifest_tests(
         # compiled test) and SPARK_TEST_EXPECT_COUNT=<count>. Checking the same
         # count here catches drift without a build; the CTest re-checks it on
         # each platform.
-        selected = {
-            platform: sum(
-                1 for name, platforms in registered_names if name.startswith(prefix) and platform in platforms
-            )
-            for platform in TEST_PLATFORMS
-        }
+        matching = [platforms for name, platforms in registered_names if name.startswith(prefix)]
+        selected = {platform: sum(1 for platforms in matching if platform in platforms) for platform in TEST_PLATFORMS}
         findings.extend(_validate_selector_count(prefix, count, selected, entry_location))
     for value, names in names_by_file.items():
         if not any(name.startswith(prefix) for name in names for prefix in valid_prefixes):
@@ -891,7 +933,7 @@ def validate_module_manifests(
                 findings.append((location, f"{key} disagrees with {EVIDENCE_RELATIVE.as_posix()}: expected {evidence.get(key)!r}"))
         _manifest_path(repo_root, manifest["sourceDirectory"], f"{location}.sourceDirectory", findings, kind="directory")
         findings.extend(_validate_manifest_assets(repo_root, module_dir, manifest["assets"], f"{location}.assets"))
-        findings.extend(_validate_manifest_tests(repo_root, manifest["tests"], f"{location}.tests", registered_names))
+        findings.extend(_validate_manifest_tests(repo_root, manifest["tests"], f"{location}.tests", registered_names, cmake_text))
         docs = manifest["docs"]
         readme = docs.get("readme") if isinstance(docs, dict) and set(docs) == {"readme"} else None
         expected_readme = f"{module_dir.relative_to(repo_root).as_posix()}/README.md"

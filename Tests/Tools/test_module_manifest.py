@@ -66,27 +66,42 @@ def _link(link: Path, target: Path) -> None:
 
 
 class ManifestMutationTests(unittest.TestCase):
-    """Mutations run against a scratch mirror; the checked-in tree is never edited."""
+    """Mutations run against a scratch mirror; the checked-in tree is never edited.
 
-    def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory(prefix="module-manifest-")
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+    The mirror is built once per class (on Windows each directory link is a
+    ``mklink /J`` subprocess and each Tests/ file a copy, so a per-test mirror
+    cost minutes). Every file a mutation may edit, delete or recreate is a real
+    copy listed in ``mutable``; setUp rewrites any of them that differ from the
+    pristine bytes, so each test starts from the clean baseline. A new mutation
+    that edits some other mirrored file must add it to ``mutable`` in setUpClass.
+    """
+
+    root: Path
+    mutable: dict[Path, bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        temp = tempfile.TemporaryDirectory(prefix="module-manifest-")
+        cls.addClassCleanup(temp.cleanup)
+        cls.root = root = Path(temp.name)
         # Large read-only inputs are linked; every file a mutation edits is copied.
-        _link(self.root / "Assets", ROOT / "Assets")
-        tests = self.root / "Tests"
+        copied = {"CMakeLists.txt", "TestModuleABI.cpp"}
+        _link(root / "Assets", ROOT / "Assets")
+        tests = root / "Tests"
         tests.mkdir()
         for entry in (ROOT / "Tests").iterdir():
-            if entry.name == "CMakeLists.txt":
+            if entry.name in copied:
                 shutil.copy2(entry, tests / entry.name)
             else:
                 _link(tests / entry.name, entry)
-        shutil.copytree(ROOT / module_content.WORK_ITEMS_RELATIVE, self.root / module_content.WORK_ITEMS_RELATIVE)
-        evidence = self.root / module_content.EVIDENCE_RELATIVE
+        shutil.copytree(ROOT / module_content.WORK_ITEMS_RELATIVE, root / module_content.WORK_ITEMS_RELATIVE)
+        evidence = root / module_content.EVIDENCE_RELATIVE
         evidence.parent.mkdir(parents=True)
         shutil.copy2(ROOT / module_content.EVIDENCE_RELATIVE, evidence)
+        mutable = [tests / name for name in sorted(copied)] + [evidence]
+        mutable += sorted((root / module_content.WORK_ITEMS_RELATIVE).iterdir())
         for name, source_dir in _discovered(ROOT).items():
-            module_dir = self.root / "GameModules" / name
+            module_dir = root / "GameModules" / name
             module_dir.mkdir(parents=True)
             for child in ("Source", "Assets"):
                 if (source_dir / child).is_dir():
@@ -99,6 +114,19 @@ class ManifestMutationTests(unittest.TestCase):
                 shutil.copy2(source_dir / "README.md", readme)
             else:
                 readme.write_text(f"# {name}\n", encoding="utf-8")
+            mutable += [module_dir / module_content.MODULE_MANIFEST_NAME, readme]
+        for path in mutable:
+            if not path.is_file() or path.is_symlink():  # a restore write must never reach the real tree
+                raise AssertionError(f"mutable mirror file must be a real copy: {path}")
+        cls.mutable = {path: path.read_bytes() for path in mutable}
+
+    def setUp(self) -> None:
+        self.root = type(self).root
+        # Compare bytes, not stat: a same-size rewrite within one clock tick keeps mtime.
+        for path, pristine in self.mutable.items():
+            if not path.is_file() or path.read_bytes() != pristine:
+                path.unlink(missing_ok=True)
+                path.write_bytes(pristine)
 
     def messages(self) -> list[str]:
         findings = module_content.validate_module_manifests(self.root, _discovered(self.root), _authoritative(self.root))
