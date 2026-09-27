@@ -95,6 +95,18 @@ namespace SparkEditor
         void TestCrashHandler();
         void TestAssertionHandler();
 
+#ifdef _WIN32
+        /**
+         * @brief MINIDUMP_TYPE flags every editor crash dump is written with.
+         *
+         * Stacks, thread and module lists only: a full-memory dump would carry
+         * the whole editor heap (session tokens, project credentials, clipboard
+         * contents) into a file users are asked to share. Matches the engine
+         * crash handler's MiniDumpNormal default.
+         */
+        static std::uint32_t CrashDumpType();
+#endif
+
       private:
         EditorCrashHandler() = default;
         ~EditorCrashHandler();

@@ -659,6 +659,11 @@ namespace SparkEditor
         return result;
     }
 
+    std::uint32_t EditorCrashHandler::CrashDumpType()
+    {
+        return static_cast<std::uint32_t>(MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules);
+    }
+
     bool EditorCrashHandler::SaveCrashDump(EXCEPTION_POINTERS* exceptionPointers, const std::string& filePath)
     {
         if (!exceptionPointers)
@@ -690,8 +695,7 @@ namespace SparkEditor
         mei.ClientPointers = TRUE;
 
         BOOL success = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile,
-                                         static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData),
-                                         &mei, nullptr, nullptr);
+                                         static_cast<MINIDUMP_TYPE>(CrashDumpType()), &mei, nullptr, nullptr);
 
         CloseHandle(hFile);
 

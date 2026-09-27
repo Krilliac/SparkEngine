@@ -18,10 +18,15 @@
 #include "Core/EditorCrashHandler.h"
 #include "Utils/StackTrace.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
+
+#ifdef _WIN32
+#include <dbghelp.h>
+#endif
 
 namespace
 {
@@ -195,6 +200,24 @@ TEST(EditorCrashHandlerReal_ShutdownWithoutInitializeLeavesTheFilterAlone)
 
     handler.Shutdown();
     EXPECT_TRUE(CurrentUnhandledExceptionFilter() == before);
+}
+
+// OPS-100: an editor dump must not carry the whole heap (tokens, credentials,
+// clipboard) into a file users are asked to share.
+TEST(EditorCrashHandler_DefaultDumpExcludesFullMemory)
+{
+    const std::uint32_t dumpType = SparkEditor::EditorCrashHandler::CrashDumpType();
+    EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithFullMemory), 0u);
+    EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithPrivateReadWriteMemory), 0u);
+    EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithIndirectlyReferencedMemory), 0u);
+    EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithHandleData), 0u);
+    EXPECT_NE(dumpType & static_cast<std::uint32_t>(MiniDumpWithThreadInfo), 0u);
+
+    // The writer must use that selection, not a hard-coded full-memory type.
+    const std::string source = ReadSourceFile("SparkEditor/Source/Core/EditorCrashHandler.cpp");
+    ASSERT_FALSE(source.empty());
+    EXPECT_TRUE(source.contains("static_cast<MINIDUMP_TYPE>(CrashDumpType())"));
+    EXPECT_FALSE(source.contains("MiniDumpWithFullMemory"));
 }
 
 #else
