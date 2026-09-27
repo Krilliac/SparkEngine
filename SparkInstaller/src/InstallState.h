@@ -21,6 +21,9 @@ namespace SparkInstaller
 
         // Filename located at <destination>/.sparkengine-install.json.
         static std::string FileName() { return ".sparkengine-install.json"; }
+        // Written when a failed update could not restore and rebuild the
+        // previous commit; the tree's binaries do not match its source.
+        static std::string RepairRequiredFileName() { return ".sparkengine-install.repair-required"; }
 
         static bool Load(const std::string& destination, InstallState& out);
         bool Save(const std::string& destination) const;

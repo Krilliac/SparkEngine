@@ -19,6 +19,8 @@ namespace
     namespace fs = std::filesystem;
 
     constexpr std::string_view kFakeHeadCommit = "fake-head-commit";
+    // HEAD the fake git reports after a non-detached checkout of the update ref.
+    constexpr std::string_view kFakeNewCommit = "fake-new-commit";
 
     int Check(bool condition, const std::string& message)
     {
@@ -34,6 +36,28 @@ namespace
         return fs::temp_directory_path() / ("SparkInstallerTransactionTests_" + std::to_string(stamp));
     }
 
+    bool WriteTextFile(const fs::path& path, std::string_view contents)
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << contents;
+        out.close();
+        return static_cast<bool>(out);
+    }
+
+    std::string ReadFirstLine(const fs::path& path)
+    {
+        std::ifstream in(path, std::ios::binary);
+        std::string line;
+        std::getline(in, line);
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        return line;
+    }
+
+    // The fake git and cmake share this executable. It keeps a tiny model of
+    // the checkout in its working directory: fake-git-head is HEAD after a
+    // checkout (a detached checkout restores the named commit, a ref checkout
+    // moves to kFakeNewCommit), and fake-cmake-build-count counts builds.
     int RunFakeTool(int argc, char* argv[])
     {
         if (argc < 2)
@@ -51,13 +75,28 @@ namespace
             return 0;
         if (command == "checkout")
         {
-            std::ofstream lastCheckout("fake-git-last-checkout", std::ios::binary | std::ios::trunc);
-            if (argc > 2)
-                lastCheckout << argv[argc - 1];
-            return lastCheckout ? 0 : 96;
+            if (argc < 3)
+                return 96;
+            const std::string target = argv[argc - 1];
+            const bool detached = std::string_view(argv[2]) == "--detach";
+            const bool written = WriteTextFile("fake-git-last-checkout", target) &&
+                                 WriteTextFile("fake-git-head", detached ? std::string_view(target) : kFakeNewCommit);
+            return written ? 0 : 96;
         }
         if (command == "--build")
-            return fs::exists("force-build-failure") ? 42 : 0;
+        {
+            int builds = 0;
+            if (const std::string count = ReadFirstLine("fake-cmake-build-count"); !count.empty())
+                builds = std::stoi(count);
+            if (!WriteTextFile("fake-cmake-build-count", std::to_string(builds + 1)))
+                return 93;
+            if (fs::exists("force-build-failure"))
+                return 42;
+            // The update ref's build is broken; every earlier commit still builds.
+            if (fs::exists("force-build-failure-on-new-ref") && ReadFirstLine("fake-git-head") == kFakeNewCommit)
+                return 43;
+            return 0;
+        }
         if (command == "show-ref")
             return 1;
         if (command == "rev-parse")
@@ -70,7 +109,12 @@ namespace
                 if (!initialHeadRead)
                     return 96;
             }
-            std::cout << kFakeHeadCommit << '\n';
+            if (const std::string head = ReadFirstLine("fake-git-head"); !head.empty())
+                std::cout << head << '\n';
+            else if (const char* initialHead = std::getenv("SPARK_FAKE_HEAD"); initialHead && *initialHead)
+                std::cout << initialHead << '\n';
+            else
+                std::cout << kFakeHeadCommit << '\n';
             return 0;
         }
         return 98;
@@ -128,15 +172,25 @@ namespace
         bool m_ok = false;
     };
 
-    int RunInstallStatePersistenceFailureTest(const fs::path& executable)
+    // An empty value unsets the variable.
+    void SetEnvironment(const char* name, const std::string& value)
     {
-        const fs::path root = MakeTestRoot();
+#ifdef _WIN32
+        (void)_putenv_s(name, value.c_str());
+#else
+        if (value.empty())
+            (void)unsetenv(name);
+        else
+            (void)setenv(name, value.c_str(), 1);
+#endif
+    }
+
+    // Copies this executable to <root>/tools/git(.exe) so PATH resolves the fake.
+    int CreateFakeGit(const fs::path& root, const fs::path& executable, const std::string& name)
+    {
         std::error_code error;
         fs::create_directories(root / "tools", error);
-        int failures = Check(!error, "could not create transaction test root");
-        if (failures != 0)
-            return failures;
-
+        int failures = Check(!error, name + ": could not create test root");
         const fs::path fakeGit = root / "tools" /
                                  (
 #ifdef _WIN32
@@ -146,34 +200,43 @@ namespace
 #endif
                                  );
         fs::copy_file(executable, fakeGit, fs::copy_options::overwrite_existing, error);
-        failures += Check(!error, "could not create fake git executable");
+        failures += Check(!error, name + ": could not create fake git executable");
 #ifndef _WIN32
         if (!error)
         {
             fs::permissions(fakeGit, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
                             fs::perm_options::add, error);
-            failures += Check(!error, "could not make fake git executable runnable");
+            failures += Check(!error, name + ": could not make fake git executable runnable");
         }
 #endif
+        return failures;
+    }
 
-        const fs::path destination = root / "install";
+    // A destination that mode detection classifies as an existing engine clone.
+    int CreateFakeCheckout(const fs::path& destination, const std::string& name)
+    {
+        std::error_code error;
         fs::create_directories(destination / ".git", error);
-        failures += Check(!error, "could not create fake engine checkout");
-        std::ofstream cmakeLists(destination / "CMakeLists.txt");
-        cmakeLists << "cmake_minimum_required(VERSION 3.25)\n";
-        cmakeLists.close();
-        failures += Check(static_cast<bool>(cmakeLists), "could not create fake engine CMakeLists");
+        int failures = Check(!error, name + ": could not create fake engine checkout");
+        failures += Check(WriteTextFile(destination / "CMakeLists.txt", "cmake_minimum_required(VERSION 3.25)\n"),
+                          name + ": could not create fake engine CMakeLists");
+        return failures;
+    }
 
-        // A directory at the marker path makes the final atomic replacement fail
-        // after the update and build have completed, without relying on ACLs or a
-        // read-only filesystem.
-        fs::create_directories(destination / SparkInstaller::InstallState::FileName(), error);
-        failures += Check(!error, "could not create marker replacement failure fixture");
+    int SaveInstallState(const fs::path& destination, std::string_view commit, const std::string& name)
+    {
+        SparkInstaller::InstallState state;
+        state.ref = "Working";
+        state.commit = std::string(commit);
+        state.generator = "Ninja";
+        state.buildType = "Release";
+        state.installerVersion = "1.0.0";
+        return Check(state.Save(destination.string()), name + ": could not create prior valid install state");
+    }
 
-        ScopedPathPrefix pathPrefix(root / "tools");
-        failures += Check(pathPrefix.IsSet(), "could not prepend fake git to PATH");
-
-        std::string log;
+    SparkInstaller::InstallerContext MakeContext(const fs::path& destination, const fs::path& executable,
+                                                 std::string& log)
+    {
         SparkInstaller::InstallerContext context;
         context.frontend = SparkInstaller::Frontend::Headless;
         context.destination = destination.string();
@@ -186,7 +249,29 @@ namespace
             log += line;
             log.push_back('\n');
         };
+        return context;
+    }
 
+    int RunInstallStatePersistenceFailureTest(const fs::path& executable)
+    {
+        const std::string name = "install-state persistence failure";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / "install";
+        failures += CreateFakeCheckout(destination, name);
+
+        // A directory at the marker path makes the final atomic replacement fail
+        // after the update and build have completed, without relying on ACLs or a
+        // read-only filesystem.
+        std::error_code error;
+        fs::create_directories(destination / SparkInstaller::InstallState::FileName(), error);
+        failures += Check(!error, "could not create marker replacement failure fixture");
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), "could not prepend fake git to PATH");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
         const int result = SparkInstaller::Installer::Run(context);
         failures += Check(result != 0, "installer accepted a failed install-state replacement as success");
         failures += Check(log.find("could not write install state file") != std::string::npos,
@@ -200,145 +285,163 @@ namespace
         return failures;
     }
 
-    int RunUpdateBuildFailureRollbackTest(const fs::path& executable)
+    // Every build fails, so the rollback restores the previous commit but
+    // cannot rebuild it: the install must be reported as needing repair.
+    int RunUpdateRollbackRebuildFailureTest(const fs::path& executable)
     {
+        const std::string name = "rollback rebuild failure";
         const fs::path root = MakeTestRoot();
-        std::error_code error;
-        fs::create_directories(root / "tools", error);
-        int failures = Check(!error, "could not create rollback test root");
-        if (failures != 0)
-            return failures;
-
-        const fs::path fakeGit = root / "tools" /
-                                 (
-#ifdef _WIN32
-                                     "git.exe"
-#else
-                                     "git"
-#endif
-                                 );
-        fs::copy_file(executable, fakeGit, fs::copy_options::overwrite_existing, error);
-        failures += Check(!error, "could not create rollback fake git executable");
-#ifndef _WIN32
-        if (!error)
-        {
-            fs::permissions(fakeGit, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
-                            fs::perm_options::add, error);
-            failures += Check(!error, "could not make rollback fake git executable runnable");
-        }
-#endif
-
+        int failures = CreateFakeGit(root, executable, name);
         const fs::path destination = root / "install";
-        fs::create_directories(destination / ".git", error);
-        failures += Check(!error, "could not create rollback engine checkout");
-        std::ofstream cmakeLists(destination / "CMakeLists.txt");
-        cmakeLists << "cmake_minimum_required(VERSION 3.25)\n";
-        cmakeLists.close();
-        failures += Check(static_cast<bool>(cmakeLists), "could not create rollback CMakeLists");
-        std::ofstream forceFailure(destination / "force-build-failure");
-        forceFailure << "fail";
-        forceFailure.close();
-        failures += Check(static_cast<bool>(forceFailure), "could not create build failure fixture");
+        failures += CreateFakeCheckout(destination, name);
+        failures += Check(WriteTextFile(destination / "force-build-failure", "fail"),
+                          name + ": could not create build failure fixture");
 
         ScopedPathPrefix pathPrefix(root / "tools");
-        failures += Check(pathPrefix.IsSet(), "could not prepend rollback fake git to PATH");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
 
         std::string log;
-        SparkInstaller::InstallerContext context;
-        context.frontend = SparkInstaller::Frontend::Headless;
-        context.destination = destination.string();
-        context.ref = "Working";
-        context.skipSubmoduleUpdate = true;
-        context.configManager.config.cmakePath = executable.string();
-        context.configManager.config.buildPath = (destination / "build").string();
-        context.log = [&log](const std::string& line)
-        {
-            log += line;
-            log.push_back('\n');
-        };
-
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
         const int result = SparkInstaller::Installer::Run(context);
-        failures += Check(result != 0, "installer reported success after update build failure");
-
-        std::ifstream lastCheckout(destination / "fake-git-last-checkout", std::ios::binary);
-        std::string restoredCommit;
-        std::getline(lastCheckout, restoredCommit);
         failures +=
-            Check(restoredCommit == kFakeHeadCommit, "failed update did not restore the previously working commit");
+            Check(result == 9, name + ": expected repair-required exit 9, got " + std::to_string(result) + "\n" + log);
+        failures += Check(ReadFirstLine(destination / "fake-git-last-checkout") == kFakeHeadCommit,
+                          name + ": failed update did not restore the previously working commit");
+        failures += Check(ReadFirstLine(destination / "fake-cmake-build-count") == "2",
+                          name + ": rollback did not rebuild the restored commit exactly once");
         failures += Check(log.find("rolling back update") != std::string::npos,
-                          "failed update did not report that rollback was attempted");
+                          name + ": failed update did not report that rollback was attempted");
+        failures += Check(fs::is_regular_file(destination / SparkInstaller::InstallState::RepairRequiredFileName()),
+                          name + ": failed rollback rebuild did not write the repair-required marker");
         failures += Check(log.find("Done. Engine built at:") == std::string::npos,
-                          "installer reported completion after update build failure");
+                          name + ": installer reported completion after update build failure");
 
+        std::error_code error;
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    // Only the new ref fails to build: rollback restores and rebuilds the
+    // previous commit, so the install is working again and the original
+    // build failure is what the run reports.
+    int RunUpdateRollbackRebuildTest(const fs::path& executable)
+    {
+        const std::string name = "rollback rebuild";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / "install";
+        failures += CreateFakeCheckout(destination, name);
+        failures += Check(WriteTextFile(destination / "force-build-failure-on-new-ref", "fail"),
+                          name + ": could not create new-ref build failure fixture");
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+        const int result = SparkInstaller::Installer::Run(context);
+        failures += Check(result == 7, name + ": expected the original build failure exit 7, got " +
+                                           std::to_string(result) + "\n" + log);
+        failures += Check(ReadFirstLine(destination / "fake-git-last-checkout") == kFakeHeadCommit,
+                          name + ": rollback did not restore the previous commit");
+        failures += Check(ReadFirstLine(destination / "fake-cmake-build-count") == "2",
+                          name + ": rollback did not rebuild the restored commit exactly once");
+        failures += Check(log.find("rebuilt " + std::string(kFakeHeadCommit)) != std::string::npos,
+                          name + ": rollback did not report the verified rebuild\n" + log);
+        failures += Check(!fs::exists(destination / SparkInstaller::InstallState::RepairRequiredFileName()),
+                          name + ": a successful rollback rebuild left a repair-required marker");
+        failures += Check(log.find("Done. Engine built at:") == std::string::npos,
+                          name + ": installer reported completion after update build failure");
+
+        std::error_code error;
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    // HEAD differs from the recorded build, as after an update interrupted
+    // between checkout and the install-state write. A later failure must roll
+    // back to the recorded build, not to the half-updated HEAD.
+    int RunInterruptedUpdateRollbackTargetTest(const fs::path& executable)
+    {
+        const std::string name = "interrupted update rollback target";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / "install";
+        failures += CreateFakeCheckout(destination, name);
+        failures += SaveInstallState(destination, "verified-old", name);
+        failures += Check(WriteTextFile(destination / "force-build-failure-on-new-ref", "fail"),
+                          name + ": could not create new-ref build failure fixture");
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+        SetEnvironment("SPARK_FAKE_HEAD", "interrupted-head");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+        const int result = SparkInstaller::Installer::Run(context);
+        SetEnvironment("SPARK_FAKE_HEAD", "");
+
+        failures += Check(result == 7, name + ": expected the original build failure exit 7, got " +
+                                           std::to_string(result) + "\n" + log);
+        failures += Check(ReadFirstLine(destination / "fake-git-last-checkout") == "verified-old",
+                          name + ": rollback restored the half-updated HEAD instead of the recorded build");
+        failures += Check(log.find("Interrupted update detected") != std::string::npos,
+                          name + ": the interrupted update was not reported");
+        failures += Check(log.find("rebuilt verified-old") != std::string::npos,
+                          name + ": rollback did not rebuild the recorded commit\n" + log);
+
+        std::error_code error;
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    // A successful update supersedes an earlier failed rollback.
+    int RunUpdateClearsRepairMarkerTest(const fs::path& executable)
+    {
+        const std::string name = "update clears repair marker";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / "install";
+        failures += CreateFakeCheckout(destination, name);
+        failures += Check(WriteTextFile(destination / SparkInstaller::InstallState::RepairRequiredFileName(),
+                                        "earlier rollback failed\n"),
+                          name + ": could not create repair-required fixture");
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+        const int result = SparkInstaller::Installer::Run(context);
+        failures += Check(result == 0, name + ": update failed, exit " + std::to_string(result) + "\n" + log);
+        SparkInstaller::InstallState loaded;
+        failures +=
+            Check(SparkInstaller::InstallState::Load(destination.string(), loaded) && loaded.commit == kFakeNewCommit,
+                  name + ": successful update did not record the new commit");
+        failures += Check(!fs::exists(destination / SparkInstaller::InstallState::RepairRequiredFileName()),
+                          name + ": successful update left the repair-required marker");
+
+        std::error_code error;
         fs::remove_all(root, error);
         return failures;
     }
 
     int RunPostBuildHeadCommitFailureTest(const fs::path& executable)
     {
+        const std::string name = "final head verification";
         const fs::path root = MakeTestRoot();
-        std::error_code error;
-        fs::create_directories(root / "tools", error);
-        int failures = Check(!error, "could not create final-head verification test root");
-        if (failures != 0)
-            return failures;
-
-        const fs::path fakeGit = root / "tools" /
-                                 (
-#ifdef _WIN32
-                                     "git.exe"
-#else
-                                     "git"
-#endif
-                                 );
-        fs::copy_file(executable, fakeGit, fs::copy_options::overwrite_existing, error);
-        failures += Check(!error, "could not create final-head fake git executable");
-#ifndef _WIN32
-        if (!error)
-        {
-            fs::permissions(fakeGit, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
-                            fs::perm_options::add, error);
-            failures += Check(!error, "could not make final-head fake git executable runnable");
-        }
-#endif
-
+        int failures = CreateFakeGit(root, executable, name);
         const fs::path destination = root / "install";
-        fs::create_directories(destination / ".git", error);
-        failures += Check(!error, "could not create final-head engine checkout");
-        std::ofstream cmakeLists(destination / "CMakeLists.txt");
-        cmakeLists << "cmake_minimum_required(VERSION 3.25)\n";
-        cmakeLists.close();
-        failures += Check(static_cast<bool>(cmakeLists), "could not create final-head CMakeLists");
-
-        SparkInstaller::InstallState previousState;
-        previousState.ref = "Working";
-        previousState.commit = std::string(kFakeHeadCommit);
-        previousState.generator = "Ninja";
-        previousState.buildType = "Release";
-        previousState.installerVersion = "1.0.0";
-        failures += Check(previousState.Save(destination.string()), "could not create prior valid install state");
-        std::ofstream failFinalHead(destination / "force-final-head-failure");
-        failFinalHead << "fail";
-        failFinalHead.close();
-        failures += Check(static_cast<bool>(failFinalHead), "could not create final-head failure fixture");
+        failures += CreateFakeCheckout(destination, name);
+        failures += SaveInstallState(destination, kFakeHeadCommit, name);
+        failures += Check(WriteTextFile(destination / "force-final-head-failure", "fail"),
+                          "could not create final-head failure fixture");
 
         ScopedPathPrefix pathPrefix(root / "tools");
         failures += Check(pathPrefix.IsSet(), "could not prepend final-head fake git to PATH");
 
         std::string log;
-        SparkInstaller::InstallerContext context;
-        context.frontend = SparkInstaller::Frontend::Headless;
-        context.destination = destination.string();
-        context.ref = "Working";
-        context.skipSubmoduleUpdate = true;
-        context.configManager.config.cmakePath = executable.string();
-        context.configManager.config.buildPath = (destination / "build").string();
-        context.log = [&log](const std::string& line)
-        {
-            log += line;
-            log.push_back('\n');
-        };
-
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
         const int result = SparkInstaller::Installer::Run(context);
         failures += Check(result != 0, "installer reported success without verifying the installed commit");
 
@@ -352,23 +455,12 @@ namespace
         failures += Check(log.find("Done. Engine built at:") == std::string::npos,
                           "installer reported completion after final commit verification failed");
 
+        std::error_code error;
         fs::remove_all(root, error);
         return failures;
     }
 
-    void SetToolLogEnvironment(const std::string& value)
-    {
-#ifdef _WIN32
-        (void)_putenv_s("SPARK_FAKE_TOOL_LOG", value.c_str());
-#else
-        if (value.empty())
-            (void)unsetenv("SPARK_FAKE_TOOL_LOG");
-        else
-            (void)setenv("SPARK_FAKE_TOOL_LOG", value.c_str(), 1);
-#endif
-    }
-
-    // Commands the fake git/cmake tool was invoked with while a preflight case ran.
+    // Commands the fake git/cmake tool was invoked with while a case ran.
     std::vector<std::string> ReadToolLog(const fs::path& logPath)
     {
         std::vector<std::string> commands;
@@ -398,30 +490,8 @@ namespace
                                 const std::string& expectedCode, bool impossibleFreeSpace, bool missingCMake)
     {
         const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
         std::error_code error;
-        fs::create_directories(root / "tools", error);
-        int failures = Check(!error, name + ": could not create preflight test root");
-        if (failures != 0)
-            return failures;
-
-        const fs::path fakeGit = root / "tools" /
-                                 (
-#ifdef _WIN32
-                                     "git.exe"
-#else
-                                     "git"
-#endif
-                                 );
-        fs::copy_file(executable, fakeGit, fs::copy_options::overwrite_existing, error);
-        failures += Check(!error, name + ": could not create fake git executable");
-#ifndef _WIN32
-        if (!error)
-        {
-            fs::permissions(fakeGit, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
-                            fs::perm_options::add, error);
-            failures += Check(!error, name + ": could not make fake git executable runnable");
-        }
-#endif
 
         fs::path destination = root / "install";
         const fs::path linkTarget = root / "real-install";
@@ -450,42 +520,26 @@ namespace
         }
         else if (kind == PreflightDestination::CorruptMarkerUpdate)
         {
-            fs::create_directories(destination / ".git", error);
-            failures += Check(!error, name + ": could not create fake engine checkout");
-            std::ofstream cmakeLists(destination / "CMakeLists.txt");
-            cmakeLists << "cmake_minimum_required(VERSION 3.25)\n";
-            cmakeLists.close();
-            std::ofstream marker(destination / SparkInstaller::InstallState::FileName(), std::ios::binary);
-            marker << "{ \"schema\": 1, truncated";
-            marker.close();
-            failures += Check(static_cast<bool>(cmakeLists) && static_cast<bool>(marker),
-                              name + ": could not create corrupt marker fixture");
+            failures += CreateFakeCheckout(destination, name);
+            failures += Check(
+                WriteTextFile(destination / SparkInstaller::InstallState::FileName(), "{ \"schema\": 1, truncated"),
+                name + ": could not create corrupt marker fixture");
         }
 
         const fs::path toolLog = root / "tool-invocations.log";
-        SetToolLogEnvironment(toolLog.string());
+        SetEnvironment("SPARK_FAKE_TOOL_LOG", toolLog.string());
         ScopedPathPrefix pathPrefix(root / "tools");
         failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
 
         std::string log;
-        SparkInstaller::InstallerContext context;
-        context.frontend = SparkInstaller::Frontend::Headless;
-        context.destination = destination.string();
-        context.ref = "Working";
-        context.skipSubmoduleUpdate = true;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
         context.configManager.config.cmakePath =
             missingCMake ? (root / "missing" / "cmake-does-not-exist").string() : executable.string();
-        context.configManager.config.buildPath = (destination / "build").string();
         // Isolate each case: only the free-space case can fail the space check.
         context.minFreeBytes = impossibleFreeSpace ? std::numeric_limits<std::uintmax_t>::max() : std::uintmax_t{0};
-        context.log = [&log](const std::string& line)
-        {
-            log += line;
-            log.push_back('\n');
-        };
 
         const int result = SparkInstaller::Installer::Run(context);
-        SetToolLogEnvironment("");
+        SetEnvironment("SPARK_FAKE_TOOL_LOG", "");
 
         failures += Check(result == 10, name + ": preflight refusal did not return exit 10 (got " +
                                             std::to_string(result) + ")\n" + log);
@@ -537,9 +591,13 @@ int main(int argc, char* argv[])
         return RunFakeTool(argc, argv);
 
     const fs::path executable = fs::absolute(argv[0]);
-    const int persistenceFailure = RunInstallStatePersistenceFailureTest(executable);
-    const int rollbackFailure = RunUpdateBuildFailureRollbackTest(executable);
-    const int finalHeadFailure = RunPostBuildHeadCommitFailureTest(executable);
-    const int preflightFailure = RunPreflightTests(executable);
-    return persistenceFailure == 0 && rollbackFailure == 0 && finalHeadFailure == 0 && preflightFailure == 0 ? 0 : 1;
+    int failures = 0;
+    failures += RunInstallStatePersistenceFailureTest(executable);
+    failures += RunUpdateRollbackRebuildFailureTest(executable);
+    failures += RunUpdateRollbackRebuildTest(executable);
+    failures += RunInterruptedUpdateRollbackTargetTest(executable);
+    failures += RunUpdateClearsRepairMarkerTest(executable);
+    failures += RunPostBuildHeadCommitFailureTest(executable);
+    failures += RunPreflightTests(executable);
+    return failures == 0 ? 0 : 1;
 }

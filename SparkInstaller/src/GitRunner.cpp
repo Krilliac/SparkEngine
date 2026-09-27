@@ -66,10 +66,13 @@ namespace SparkInstaller
         // They are not in the engine's .gitignore (and an older ref being
         // updated from would not carry a new ignore rule), so the update
         // cleanliness check must recognize them explicitly.
-        // The ".tmp" sibling is InstallState::Save's atomic-replace staging file.
-        std::array<std::string, 2> InstallerOwnedPaths()
+        // The ".tmp" sibling is InstallState::Save's atomic-replace staging file;
+        // the repair-required marker records a rollback that could not rebuild
+        // the previous commit.
+        std::array<std::string, 3> InstallerOwnedPaths()
         {
-            return {InstallState::FileName(), InstallState::FileName() + ".tmp"};
+            return {InstallState::FileName(), InstallState::FileName() + ".tmp",
+                    InstallState::RepairRequiredFileName()};
         }
 
         bool IsInstallerOwnedUntrackedLine(std::string_view line)

@@ -9,6 +9,7 @@
 #include "ProcessRunner.h"
 
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <stdexcept>
 
@@ -30,6 +31,79 @@ namespace SparkInstaller
             if (!fs::exists(dest, ec) || !fs::is_directory(dest, ec))
                 return false;
             return fs::exists(dest / "CMakeLists.txt", ec) && fs::exists(dest / ".git", ec);
+        }
+
+        // Configure and build ctx.destination with SparkBuildCore. Returns 0 on
+        // success, 6 when configure fails and 7 when the build fails.
+        int ConfigureAndBuild(InstallerContext& ctx, const LogSink& log)
+        {
+            ctx.configManager.config.enginePath = ctx.destination;
+            if (ctx.configManager.config.buildPath.empty())
+                ctx.configManager.config.buildPath = (fs::path(ctx.destination) / "build").string();
+
+            std::error_code ec;
+            fs::create_directories(ctx.configManager.config.buildPath, ec);
+
+            std::string configureCmd;
+            try
+            {
+                configureCmd = ctx.configManager.BuildCMakeConfigureCommand();
+            }
+            catch (const std::invalid_argument& error)
+            {
+                Emit(log, std::string("error: unsafe CMake configure input: ") + error.what());
+                return 6;
+            }
+            Emit(log, "Configuring: " + configureCmd);
+            {
+                SparkBuild::ProcessRunner runner;
+                std::string out;
+                int rc = runner.RunSync(configureCmd, ctx.destination, out);
+                if (!out.empty())
+                    Emit(log, out);
+                if (rc != 0)
+                {
+                    Emit(log, "error: cmake configure exited " + std::to_string(rc));
+                    return 6;
+                }
+            }
+
+            std::string buildCmd;
+            try
+            {
+                buildCmd = ctx.configManager.BuildCMakeBuildCommand();
+            }
+            catch (const std::invalid_argument& error)
+            {
+                Emit(log, std::string("error: unsafe CMake build input: ") + error.what());
+                return 7;
+            }
+            Emit(log, "Building: " + buildCmd);
+            {
+                SparkBuild::ProcessRunner runner;
+                std::string out;
+                int rc = runner.RunSync(buildCmd, ctx.destination, out);
+                if (!out.empty())
+                    Emit(log, out);
+                if (rc != 0)
+                {
+                    Emit(log, "error: cmake build exited " + std::to_string(rc));
+                    return 7;
+                }
+            }
+            return 0;
+        }
+
+        // Records that the tree at destination no longer matches a verified
+        // build. Best effort: exit code 9 already reports the condition.
+        void WriteRepairRequiredMarker(const fs::path& destination, const std::string& reason, const LogSink& log)
+        {
+            const fs::path marker = destination / InstallState::RepairRequiredFileName();
+            std::ofstream out(marker, std::ios::binary | std::ios::trunc);
+            out << reason << '\n';
+            out.close();
+            if (!out)
+                Emit(log, "error: could not write repair-required marker " + marker.string());
         }
     } // namespace
 
@@ -98,26 +172,56 @@ namespace SparkInstaller
                 Emit(ctx.log, "error: could not determine the current install commit; refusing update");
                 return 5;
             }
+            // A recorded commit that differs from HEAD means an earlier update
+            // was interrupted after checkout and before its build was recorded.
+            // Only the recorded commit is a verified build, so it is the
+            // rollback target rather than the half-updated HEAD.
+            InstallState recorded;
+            if (InstallState::Load(ctx.destination, recorded) && recorded.commit != previousCommit)
+            {
+                Emit(ctx.log, "Interrupted update detected: HEAD " + previousCommit +
+                                  " differs from the last verified build " + recorded.commit +
+                                  "; rollback will restore " + recorded.commit);
+                previousCommit = recorded.commit;
+            }
         }
 
-        const auto rollbackUpdate = [&](const std::string& reason)
+        // Restore the previous commit and rebuild it so the install is again
+        // the verified build it was before this run. Returns failureCode when
+        // that succeeds (or for a fresh install, which has nothing to restore)
+        // and 9 when the install needs repair. Never re-enters itself.
+        const auto rollbackUpdate = [&](const std::string& reason, int failureCode)
         {
             if (!isUpdate)
-                return true;
+                return failureCode;
 
             Emit(ctx.log, "Update failed (" + reason + "); rolling back update to " + previousCommit);
+            std::string repairReason;
             if (!git.CheckoutCommit(previousCommit, ctx.destination, ctx.log))
+                repairReason = "could not check out " + previousCommit;
+            else if (!ctx.skipSubmoduleUpdate && !git.UpdateSubmodules(ctx.destination, ctx.log))
+                repairReason = "restored " + previousCommit + " but not its submodules";
+            else if (!ctx.skipBuild)
             {
-                Emit(ctx.log, "error: update rollback failed; the install requires manual repair");
-                return false;
+                const int rebuild = ConfigureAndBuild(ctx, ctx.log);
+                if (rebuild != 0)
+                    repairReason = "restored " + previousCommit + " but its rebuild exited " + std::to_string(rebuild);
             }
-            if (!ctx.skipSubmoduleUpdate && !git.UpdateSubmodules(ctx.destination, ctx.log))
+            if (repairReason.empty() && git.HeadCommit(ctx.destination) != previousCommit)
+                repairReason = "restored checkout does not report HEAD " + previousCommit;
+
+            if (!repairReason.empty())
             {
-                Emit(ctx.log, "error: update rollback restored the commit but not its submodules");
-                return false;
+                Emit(ctx.log, "error: update rollback failed (" + repairReason + ") after exit " +
+                                  std::to_string(failureCode) + "; the install requires repair (exit 9)");
+                WriteRepairRequiredMarker(
+                    dest, "update to " + ctx.ref + " failed (" + reason + "); rollback failed: " + repairReason,
+                    ctx.log);
+                return 9;
             }
-            Emit(ctx.log, "Update rollback complete.");
-            return true;
+            Emit(ctx.log, ctx.skipBuild ? "Update rollback complete; restored " + previousCommit
+                                        : "Update rollback complete; rebuilt " + previousCommit);
+            return failureCode;
         };
 
         // --- Install mode: clone ------------------------------------------
@@ -150,14 +254,12 @@ namespace SparkInstaller
             if (!git.Fetch(ctx.destination, ctx.log) || !git.CheckoutRef(ctx.ref, ctx.destination, ctx.log))
             {
                 Emit(ctx.log, "error: git fetch/checkout failed");
-                (void)rollbackUpdate("git fetch/checkout failure");
-                return 5;
+                return rollbackUpdate("git fetch/checkout failure", 5);
             }
             if (!ctx.skipSubmoduleUpdate && !git.UpdateSubmodules(ctx.destination, ctx.log))
             {
                 Emit(ctx.log, "error: submodule update failed");
-                (void)rollbackUpdate("submodule update failure");
-                return 5;
+                return rollbackUpdate("submodule update failure", 5);
             }
         }
 
@@ -168,64 +270,8 @@ namespace SparkInstaller
         }
 
         // --- Configure + build via SparkBuildCore -------------------------
-        ctx.configManager.config.enginePath = ctx.destination;
-        if (ctx.configManager.config.buildPath.empty())
-            ctx.configManager.config.buildPath = (fs::path(ctx.destination) / "build").string();
-
-        std::error_code ec;
-        fs::create_directories(ctx.configManager.config.buildPath, ec);
-
-        std::string configureCmd;
-        try
-        {
-            configureCmd = ctx.configManager.BuildCMakeConfigureCommand();
-        }
-        catch (const std::invalid_argument& error)
-        {
-            Emit(ctx.log, std::string("error: unsafe CMake configure input: ") + error.what());
-            (void)rollbackUpdate("unsafe CMake configure input");
-            return 6;
-        }
-        Emit(ctx.log, "Configuring: " + configureCmd);
-        {
-            SparkBuild::ProcessRunner runner;
-            std::string out;
-            int rc = runner.RunSync(configureCmd, ctx.destination, out);
-            if (!out.empty())
-                Emit(ctx.log, out);
-            if (rc != 0)
-            {
-                Emit(ctx.log, "error: cmake configure exited " + std::to_string(rc));
-                (void)rollbackUpdate("CMake configure failure");
-                return 6;
-            }
-        }
-
-        std::string buildCmd;
-        try
-        {
-            buildCmd = ctx.configManager.BuildCMakeBuildCommand();
-        }
-        catch (const std::invalid_argument& error)
-        {
-            Emit(ctx.log, std::string("error: unsafe CMake build input: ") + error.what());
-            (void)rollbackUpdate("unsafe CMake build input");
-            return 7;
-        }
-        Emit(ctx.log, "Building: " + buildCmd);
-        {
-            SparkBuild::ProcessRunner runner;
-            std::string out;
-            int rc = runner.RunSync(buildCmd, ctx.destination, out);
-            if (!out.empty())
-                Emit(ctx.log, out);
-            if (rc != 0)
-            {
-                Emit(ctx.log, "error: cmake build exited " + std::to_string(rc));
-                (void)rollbackUpdate("CMake build failure");
-                return 7;
-            }
-        }
+        if (const int buildResult = ConfigureAndBuild(ctx, ctx.log); buildResult != 0)
+            return rollbackUpdate(buildResult == 6 ? "CMake configure failure" : "CMake build failure", buildResult);
 
         // --- Persist state ------------------------------------------------
         InstallState state;
@@ -234,8 +280,7 @@ namespace SparkInstaller
         if (state.commit.empty())
         {
             Emit(ctx.log, "error: could not determine the installed commit; refusing to report success");
-            (void)rollbackUpdate("installed commit verification failure");
-            return 8;
+            return rollbackUpdate("installed commit verification failure", 8);
         }
         state.generator = SparkBuild::GeneratorToString(ctx.configManager.config.generator);
         state.buildType = SparkBuild::BuildTypeToString(ctx.configManager.config.buildType);
@@ -245,7 +290,16 @@ namespace SparkInstaller
         if (!state.Save(ctx.destination))
         {
             Emit(ctx.log, "error: could not write install state file");
-            (void)rollbackUpdate("install-state persistence failure");
+            return rollbackUpdate("install-state persistence failure", 8);
+        }
+
+        // The recorded build now matches the tree, so an earlier failed
+        // rollback no longer applies.
+        std::error_code repairMarkerError;
+        fs::remove(dest / InstallState::RepairRequiredFileName(), repairMarkerError);
+        if (repairMarkerError)
+        {
+            Emit(ctx.log, "error: could not remove the repair-required marker: " + repairMarkerError.message());
             return 8;
         }
 

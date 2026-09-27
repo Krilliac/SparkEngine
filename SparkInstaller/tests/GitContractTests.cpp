@@ -114,6 +114,8 @@ namespace
                           "could not write real-git install marker");
         failures += Check(WriteTextFile(repository / ".sparkengine-install.json.tmp", "{}\n"),
                           "could not write real-git install marker staging file");
+        failures += Check(WriteTextFile(repository / ".sparkengine-install.repair-required", "rollback failed\n"),
+                          "could not write real-git repair-required marker");
         failures += Check(git.WorkingTreeClean(repository.string(), {}),
                           "real git status: installer marker files blocked an update of a clean install");
 

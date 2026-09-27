@@ -28,9 +28,22 @@ taste, and builds the engine on your machine.
    recover ref + options.
 2. Verify the existing checkout has no tracked or untracked changes; refuse the
    update when local changes could make rollback ambiguous.
-3. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
-4. Re-run configure + build with the stored options.
-5. Update `.sparkengine-install.json` with the new commit + timestamp.
+3. Record the rollback target: the current `HEAD`, or the commit in
+   `.sparkengine-install.json` when the two differ. A difference means an
+   earlier update was interrupted after its checkout and before its build was
+   recorded, so only the recorded commit is a verified build.
+4. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
+5. Re-run configure + build with the stored options.
+6. Update `.sparkengine-install.json` with the new commit + timestamp, and
+   remove any `.sparkengine-install.repair-required` marker.
+
+If any step after the fetch fails, the installer restores the rollback target
+(`git checkout --detach` + submodule update), rebuilds it, and verifies that
+`HEAD` is that commit again. The run then exits with the original failure code
+and the install is the verified build it was before. If the restore, the
+rebuild or the verification fails, the installer writes
+`.sparkengine-install.repair-required` (with the reason) and exits **9**; a
+later successful update clears it.
 
 The same binary handles both modes — it picks automatically based on what's
 in the destination.
@@ -74,6 +87,7 @@ tree built with the default options (tests and game modules on) takes about
 | 6 | CMake configure failed. |
 | 7 | CMake build failed. |
 | 8 | The installed commit or the install marker could not be recorded. |
+| 9 | An update failed and its rollback could not restore and rebuild the previous commit; the install requires repair (see `.sparkengine-install.repair-required`). |
 | 10 | Preflight refused the run; nothing was changed. |
 
 ## Usage
