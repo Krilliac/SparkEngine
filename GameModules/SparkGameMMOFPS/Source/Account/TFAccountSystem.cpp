@@ -225,9 +225,23 @@ namespace Terrafront
 
     // === Session map ===
 
-    void TFAccountSystem::BindSession(uint32_t clientId, uint64_t accountId)
+    bool TFAccountSystem::BindSession(uint32_t clientId, uint64_t accountId)
     {
+        // One live connection per account: a second connection that proves the
+        // same credentials must not get its own runtime copy of the account's
+        // characters (both copies would later persist to the same rows, letting
+        // a stale wallet overwrite a spend). The first session keeps the account
+        // until ClearSession (disconnect / logout cleanup).
+        if (accountId == 0)
+            return false;
+        if (const auto owner = m_accountOwners.find(accountId); owner != m_accountOwners.end())
+            return owner->second == clientId;
+
+        if (const auto previous = m_sessions.find(clientId); previous != m_sessions.end())
+            m_accountOwners.erase(previous->second);
         m_sessions[clientId] = accountId;
+        m_accountOwners[accountId] = clientId;
+        return true;
     }
 
     uint64_t TFAccountSystem::AccountForClient(uint32_t clientId) const
@@ -238,7 +252,13 @@ namespace Terrafront
 
     void TFAccountSystem::ClearSession(uint32_t clientId)
     {
-        m_sessions.erase(clientId);
+        const auto it = m_sessions.find(clientId);
+        if (it == m_sessions.end())
+            return;
+        if (const auto owner = m_accountOwners.find(it->second);
+            owner != m_accountOwners.end() && owner->second == clientId)
+            m_accountOwners.erase(owner);
+        m_sessions.erase(it);
     }
 
 } // namespace Terrafront

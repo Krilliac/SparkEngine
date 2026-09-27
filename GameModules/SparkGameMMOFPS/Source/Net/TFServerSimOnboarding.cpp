@@ -265,8 +265,16 @@ namespace Terrafront
             rep.ok = r.ok ? 1 : 0;
             rep.err = static_cast<uint8_t>(r.err);
             rep.accountId = r.accountId;
-            if (r.ok)
-                m_ctx->account->BindSession(sender, r.accountId);
+            if (r.ok && !m_ctx->account->BindSession(sender, r.accountId))
+            {
+                // Valid credentials, but the account already has a live
+                // connection: refuse a second, independent session of it.
+                rep.ok = 0;
+                rep.err = static_cast<uint8_t>(TFAuthErr::AccountInUse);
+                rep.accountId = 0;
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF] login from client %u refused: account already bound to another session", sender);
+            }
         }
         SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
     }
@@ -482,6 +490,19 @@ namespace Terrafront
         const uint64_t acctId = m_ctx->account->AccountForClient(sender);
         if (acctId == 0)
             return; // not logged in
+
+        // One resident session per character: a second PlayerId entering the
+        // same character would get its own runtime xp/rank/flux copy, and both
+        // copies persist to the same row (a stale wallet can undo a spend).
+        // Checked before EnterWorld so the rejected request never re-acquires
+        // the character's persistence baseline.
+        if (IsCharacterResidentElsewhere(m_activeCharacter, sender, req.charId))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] player %u EnterWorldReq refused: character %llu is resident in another session",
+                           sender, static_cast<unsigned long long>(req.charId));
+            return;
+        }
 
         TFCharacterRecord rec;
         if (!m_ctx->characters->EnterWorld(acctId, req.charId, rec))

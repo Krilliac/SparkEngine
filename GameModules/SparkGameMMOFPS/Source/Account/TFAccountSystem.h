@@ -28,7 +28,8 @@ namespace Terrafront
         ServerError,
         NotLoggedIn,
         SessionActive,
-        RemoteOnboardingDisabled
+        RemoteOnboardingDisabled,
+        AccountInUse // credentials valid, but another connection holds the account
     };
 
     struct TFAuthResult
@@ -46,8 +47,13 @@ namespace Terrafront
         TFAuthResult Register(const std::string& username, const std::string& password); // min length 3
         TFAuthResult Login(const std::string& username, const std::string& password);
 
-        // session layer (Task 4): bind a connection to an account
-        void BindSession(uint32_t clientId, uint64_t accountId);
+        /**
+         * @brief Bind a connection to an account (session layer, Task 4).
+         * @return false when accountId is 0 or the account is already bound to a
+         *         different connection (one live session per account); the
+         *         existing binding is left untouched.
+         */
+        bool BindSession(uint32_t clientId, uint64_t accountId);
         uint64_t AccountForClient(uint32_t clientId) const; // 0 if not logged in
         void ClearSession(uint32_t clientId);
 
@@ -77,8 +83,9 @@ namespace Terrafront
 
       private:
         TFDatabase* m_db = nullptr;
-        RandomFillFn m_randomFill = nullptr;               // nullptr -> Spark::SecureRandom::Fill
-        std::unordered_map<uint32_t, uint64_t> m_sessions; // clientId -> accountId
+        RandomFillFn m_randomFill = nullptr;                    // nullptr -> Spark::SecureRandom::Fill
+        std::unordered_map<uint32_t, uint64_t> m_sessions;      // clientId -> accountId
+        std::unordered_map<uint64_t, uint32_t> m_accountOwners; // accountId -> clientId (exclusive)
     };
 
 } // namespace Terrafront

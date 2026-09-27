@@ -11,6 +11,8 @@
 #include "TestFramework.h"
 #include "Account/TFAccountSystem.h"
 #include "Net/TFClientMsgRouting.h"
+#include "Net/TFClientSessionState.h"
+#include "Net/TFOnboardingSessionRules.h"
 #include "Net/TFRepProtocol.h"
 
 #include <algorithm>
@@ -18,6 +20,7 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace Terrafront;
@@ -148,4 +151,54 @@ TEST(TFSec_StoredHashParametersAreBoundedBeforeDerivation)
     EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", shortSalt));
     const std::string badHexSalt = std::string("pbkdf2-sha256$150000$") + std::string(32, 'z') + "$" + dk;
     EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", badHexSalt));
+}
+
+// Two connections with the same credentials used to both bind the account and
+// both enter the same character, each with its own runtime wallet that later
+// persisted to the same row (a stale session could restore spent flux). The
+// account now binds to one live connection until its session is cleared.
+TEST(TFSec_AccountBindsToOneLiveConnection)
+{
+    TFAccountSystem accounts;
+    constexpr uint32_t kFirst = 11;
+    constexpr uint32_t kSecond = 22;
+    constexpr uint64_t kAccount = 7;
+
+    EXPECT_TRUE(accounts.BindSession(kFirst, kAccount));
+    EXPECT_TRUE(accounts.BindSession(kFirst, kAccount)); // idempotent for the owner
+    EXPECT_FALSE(accounts.BindSession(kSecond, kAccount));
+    EXPECT_EQ(accounts.AccountForClient(kSecond), uint64_t{0});
+    EXPECT_EQ(accounts.AccountForClient(kFirst), kAccount); // refusal leaves the owner intact
+    EXPECT_FALSE(accounts.BindSession(kSecond, 0));
+
+    // Clearing a non-owner is a no-op for the owner's binding.
+    accounts.ClearSession(kSecond);
+    EXPECT_EQ(accounts.AccountForClient(kFirst), kAccount);
+    EXPECT_FALSE(accounts.BindSession(kSecond, kAccount));
+
+    // Disconnect/logout cleanup releases the account for the next connection.
+    accounts.ClearSession(kFirst);
+    EXPECT_EQ(accounts.AccountForClient(kFirst), uint64_t{0});
+    EXPECT_TRUE(accounts.BindSession(kSecond, kAccount));
+    EXPECT_EQ(accounts.AccountForClient(kSecond), kAccount);
+
+    // Rebinding a connection to another account releases its previous one.
+    EXPECT_TRUE(accounts.BindSession(kSecond, kAccount + 1));
+    EXPECT_TRUE(accounts.BindSession(kFirst, kAccount));
+
+    // The refused login is not a logged-in client view.
+    TFClientSessionState state;
+    state.ApplyLoginReply(false, 0, TFAuthErr::AccountInUse);
+    EXPECT_FALSE(state.loggedIn);
+    EXPECT_EQ(state.accountId, uint64_t{0});
+}
+
+TEST(TFSec_CharacterIsResidentInOneSessionOnly)
+{
+    std::unordered_map<uint32_t, uint64_t> active{{1u, 100u}, {2u, 200u}};
+    EXPECT_TRUE(IsCharacterResidentElsewhere(active, 3u, uint64_t{100}));
+    EXPECT_FALSE(IsCharacterResidentElsewhere(active, 1u, uint64_t{100})); // its own session
+    EXPECT_FALSE(IsCharacterResidentElsewhere(active, 3u, uint64_t{300}));
+    active.erase(1u); // disconnect cleanup
+    EXPECT_FALSE(IsCharacterResidentElsewhere(active, 3u, uint64_t{100}));
 }

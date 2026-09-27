@@ -49,6 +49,8 @@ namespace Terrafront
                 return "Disconnect before changing accounts.";
             case TFAuthErr::RemoteOnboardingDisabled:
                 return "Login and registration are available only from this machine.";
+            case TFAuthErr::AccountInUse:
+                return "That account is already signed in on another connection.";
             default:
                 return "Unknown error.";
             }
