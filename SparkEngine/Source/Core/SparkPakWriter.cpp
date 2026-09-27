@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <unordered_set>
 
 #ifdef SPARK_MINIZ_AVAILABLE
 #include <miniz.h>
@@ -160,6 +161,23 @@ namespace Spark
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "SparkPakWriter::Finalize — writing %zu files to '%s'", m_files.size(),
                        outputPath.c_str());
+
+        // SparkPakReader refuses an archive with a duplicate path hash, so never
+        // produce one: fail before creating the output file.
+        {
+            std::unordered_set<uint64_t> seenHashes;
+            seenHashes.reserve(m_files.size());
+            for (const auto& staged : m_files)
+            {
+                if (!seenHashes.insert(PakFNV1a(staged.virtualPath)).second)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakWriter: duplicate virtual path '%s'",
+                                    staged.virtualPath.c_str());
+                    return false;
+                }
+            }
+        }
+
 #ifdef _WIN32
         FILE* file = _wfopen(std::filesystem::path(outputPath).wstring().c_str(), L"wb");
 #else

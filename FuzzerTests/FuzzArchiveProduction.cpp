@@ -23,7 +23,7 @@
  *  - a read never returns more than the per-entry decompression budget, nor
  *    more than the whole archive could expand to at the per-entry ratio cap.
  *
- * The 256 MB TOC and per-entry budgets lie far above the smoke's -max_len, so
+ * The 64 MB TOC and 256 MB per-entry budgets lie far above the smoke's -max_len, so
  * their boundary behaviour is pinned by the SparkPak_Production* tests in
  * Tests/TestSparkPak.cpp; this target proves the reader stays inside its
  * invariants for arbitrary bytes below them.

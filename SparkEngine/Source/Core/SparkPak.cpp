@@ -36,9 +36,18 @@ namespace Spark
 
     namespace
     {
-        constexpr uint64_t kMaxTocBytes = 256ull * 1024ull * 1024ull;   // 256 MB
-        constexpr uint32_t kMaxFileCount = 10'000'000u;                 // 10M entries
+        // TOC bounds. Every parsed entry becomes a hash-map node holding a
+        // std::string, so the entry count, not the TOC byte size, drives mount-time
+        // memory: 2M entries cost a few hundred MB of heap, 10M cost over a gigabyte.
+        // 64 MB of raw TOC holds ~2.3M minimum-size entries, far beyond any cooked
+        // archive, and a deflated TOC reaching it is under 70 KB on disk.
+        constexpr uint64_t kMaxTocBytes = 64ull * 1024ull * 1024ull;    // 64 MB
+        constexpr uint32_t kMaxFileCount = 2'000'000u;                  // 2M entries
         constexpr uint32_t kMaxEntryBytes = 2u * 1024u * 1024u * 1024u; // 2 GB
+
+        // Smallest entry a valid TOC can hold: 27 fixed bytes plus a path of at
+        // least one byte (IsVirtualPathSafe rejects the empty path).
+        constexpr uint64_t kMinTocEntryBytes = 28ull;
 
         // A .spk is untrusted input (every archive found in ./Data is mounted at
         // startup). kMaxEntryBytes alone lets a 100-byte entry declare a 2 GB
@@ -178,7 +187,22 @@ namespace Spark
             return false;
         }
 
-        if (!ReadHeader() || !ReadTOC())
+        // Every .spk in ./Data is mounted at startup, so a hostile TOC must fail
+        // this archive's mount instead of throwing std::bad_alloc out of the
+        // startup path (ReadTOC is bounded, but the bound still allows hundreds of
+        // MB of map nodes on a memory-starved machine).
+        bool parsed = false;
+        try
+        {
+            parsed = ReadHeader() && ReadTOC();
+        }
+        catch (const std::bad_alloc&)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakReader: out of memory reading the TOC of '%s'",
+                            filePath.c_str());
+            parsed = false;
+        }
+        if (!parsed)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakReader: invalid header/TOC in '%s'", filePath.c_str());
             Close();
@@ -241,6 +265,10 @@ namespace Spark
             return false;
         if (m_header.fileCount > kMaxFileCount)
             return false;
+        // A declared count the raw TOC cannot physically hold is corrupt; refusing
+        // it here keeps the reserve and parse loop below proportional to real data.
+        if (static_cast<uint64_t>(m_header.fileCount) * kMinTocEntryBytes > m_header.tocRawSize)
+            return false;
         if (m_header.tocOffset < sizeof(PakHeader) || m_header.tocOffset >= fileSize)
             return false;
         if (m_header.tocSize > fileSize - m_header.tocOffset)
@@ -285,12 +313,9 @@ namespace Spark
         const uint8_t* ptr = tocRaw.data();
         const uint8_t* end = ptr + tocRaw.size();
 
-        // Reserve conservatively — use the smaller of the declared count and the
-        // raw TOC size divided by the minimum per-entry size (27 bytes). This keeps
-        // a corrupted-but-bounded fileCount from reserving an absurdly large hash map.
-        constexpr size_t kMinEntryBytes = 27;
-        const size_t maxPossibleEntries = tocRaw.size() / kMinEntryBytes;
-        m_entries.reserve(std::min<size_t>(m_header.fileCount, maxPossibleEntries));
+        // fileCount was checked against tocRawSize / kMinTocEntryBytes above, so this
+        // reserve is proportional to bytes that were actually read and inflated.
+        m_entries.reserve(m_header.fileCount);
         for (uint32_t i = 0; i < m_header.fileCount; ++i)
         {
             // Need at least: pathHash(8) + dataOffset(8) + compressedSize(4) + originalSize(4) + compression(1) +
@@ -327,6 +352,18 @@ namespace Spark
                 return false;
             }
 
+            // Lookups (Exists/ReadFile) key on PakFNV1a(requested path) while
+            // ListFiles reports the stored path. An unbound on-disk hash would let an
+            // archive serve one payload under a path it never lists, so the stored
+            // hash must be the hash of the stored path (Tools/spark-cli/spark_pak.py
+            // enforces the same rule offline).
+            if (entry.pathHash != PakFNV1a(entry.virtualPath))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPak: path hash does not match stored path '%s'",
+                                entry.virtualPath.c_str());
+                return false;
+            }
+
             // Validate every untrusted entry while opening the archive, before a
             // later lookup can allocate from its declared sizes. File data is
             // written before the TOC, so the subtraction form below both rejects
@@ -348,9 +385,21 @@ namespace Spark
             // per-entry refusal in ReadFile, so one over-compressible or hostile entry
             // cannot fail Open() and unmount every other asset in the archive.
 
-            auto hash = entry.pathHash;
-            m_entries.emplace(hash, std::move(entry));
+            // A duplicate path (or colliding hash) would silently shadow one entry,
+            // leaving a listed name whose bytes are another entry's.
+            const uint64_t hash = entry.pathHash;
+            if (!m_entries.emplace(hash, std::move(entry)).second)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPak: duplicate TOC entry for path hash %016llx",
+                                static_cast<unsigned long long>(hash));
+                return false;
+            }
         }
+
+        // The writer emits exactly fileCount entries; trailing bytes mean the count
+        // and the TOC disagree.
+        if (ptr != end)
+            return false;
 
         // Build iteration list
         m_entryList.clear();
