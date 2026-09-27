@@ -459,4 +459,27 @@ namespace Spark::Scripting
         return graph;
     }
 
+    std::expected<std::filesystem::path, std::string> VisualScriptGraphIO::ScriptFilePath(
+        const std::filesystem::path& directory, std::string_view scriptName, std::string_view extension)
+    {
+        if (scriptName.size() > kMaxNameBytes || !IsIdentifier(scriptName))
+        {
+            return std::unexpected("Script name '" + std::string(scriptName.substr(0, kMaxNameBytes)) +
+                                   "' must be an identifier ([A-Za-z_][A-Za-z0-9_]*, at most " +
+                                   std::to_string(kMaxNameBytes) + " bytes)");
+        }
+
+        // Windows opens these as devices whatever the directory or extension ("NUL.as").
+        std::string upper(scriptName);
+        std::transform(upper.begin(), upper.end(), upper.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+        const bool reserved = upper == "CON" || upper == "PRN" || upper == "AUX" || upper == "NUL" ||
+                              (upper.size() == 4 && (upper.starts_with("COM") || upper.starts_with("LPT")) &&
+                               std::isdigit(static_cast<unsigned char>(upper[3])) != 0);
+        if (reserved)
+            return std::unexpected("Script name '" + std::string(scriptName) + "' is a reserved device name");
+
+        return directory / (std::string(scriptName) + std::string(extension));
+    }
+
 } // namespace Spark::Scripting

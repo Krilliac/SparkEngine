@@ -384,6 +384,9 @@ add_executable(SparkTests
     TestAreaAssetLoader.cpp
     TestEventResponseSystem.cpp
     TestVisualScriptCompiler.cpp
+    # SEC3: visual-script emitter depth budgets, editor script-name paths, the
+    # script Transform@ handle, stale entity ids, hot-reload commit and sandbox policy lock.
+    TestSEC3ScriptingHardening.cpp
     # MOD-390: the SparkGameVisualScript demo world builder (the module's real
     # OnLoad/vs_restart load, spawn and rollback path) driven against a live
     # World and AngelScriptEngine.
@@ -1431,6 +1434,14 @@ if(SPARK_ANGELSCRIPT_AVAILABLE)
         LABELS "scripting;scripting-integration;visual-script;integration"
         TIMEOUT 180)
 endif()
+# SEC3: the visual-script emitter fails deeply nested control flow and long pure
+# data chains with a compile error instead of overflowing the stack, and editor
+# script names cannot become paths (TestSEC3ScriptingHardening.cpp; no VM needed).
+add_test(NAME SEC3VisualScriptHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SEC3VisualScriptHardening PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3VisualScript_;SPARK_TEST_EXPECT_COUNT=4"
+    LABELS "scripting;visual-script;security;unit"
+    TIMEOUT 120)
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_VULKAN)
 endif()

@@ -16,6 +16,21 @@ namespace Spark::Scripting::Detail
         /// EmitPinChains all stop, so a hostile graph fails in bounded time and
         /// output instead of walking an exponential number of paths.
         constexpr size_t kMaxEmittedSteps = size_t{1} << 20;
+
+        /// Upper bound on nested execution chains (Branch, ForLoop and Sequence
+        /// bodies and exec fan-out). Emission recurses about four native frames
+        /// per level and indents every nested line, so an unbounded chain of
+        /// nested Branch nodes (the parser admits 16,384 nodes) would overflow
+        /// the stack and grow the output quadratically. Real graphs nest a
+        /// handful of levels.
+        constexpr size_t kMaxChainDepth = 64;
+
+        /// Upper bound on the length of a chain of pure data nodes feeding one
+        /// statement; CollectPure recurses once per producer.
+        constexpr size_t kMaxDataDepth = 256;
+
+        /// Upper bound on the generated source of one method body.
+        constexpr size_t kMaxBodyBytes = size_t{16} << 20;
     } // namespace
 
     VisualScriptEmitter::VisualScriptEmitter(const VisualScriptGraph& graph, bool debugMode,
@@ -107,12 +122,26 @@ namespace Spark::Scripting::Detail
 
     bool VisualScriptEmitter::StepLimitReached() const
     {
-        return m_emittedSteps > kMaxEmittedSteps;
+        return m_halted || m_emittedSteps > kMaxEmittedSteps;
+    }
+
+    void VisualScriptEmitter::Halt(const std::string& reason)
+    {
+        if (!m_halted)
+            m_errors.push_back(reason);
+        m_halted = true;
     }
 
     /// Emit one statement node with the pure data nodes it consumes.
     void VisualScriptEmitter::EmitStep(const ScriptNode& node, const std::string& indent, std::string& code)
     {
+        if (m_halted)
+            return;
+        if (code.size() > kMaxBodyBytes)
+        {
+            Halt("Graph generates more than " + std::to_string(kMaxBodyBytes) + " bytes of source");
+            return;
+        }
         if (++m_emittedSteps > kMaxEmittedSteps)
         {
             if (m_emittedSteps == kMaxEmittedSteps + 1)
@@ -264,13 +293,21 @@ namespace Spark::Scripting::Detail
         std::vector<const ScriptNode*> order;
         std::unordered_set<uint32_t> done;
         std::unordered_set<uint32_t> visiting{node.id};
-        CollectPure(node, order, done, visiting);
+        CollectPure(node, order, done, visiting, 0);
         return order;
     }
 
     void VisualScriptEmitter::CollectPure(const ScriptNode& node, std::vector<const ScriptNode*>& order,
-                                          std::unordered_set<uint32_t>& done, std::unordered_set<uint32_t>& visiting)
+                                          std::unordered_set<uint32_t>& done, std::unordered_set<uint32_t>& visiting,
+                                          size_t depth)
     {
+        if (depth >= kMaxDataDepth)
+        {
+            Halt("Data chain into node " + std::to_string(node.id) + " is deeper than " +
+                 std::to_string(kMaxDataDepth) + " nodes");
+            return;
+        }
+
         // One producer per input pin (the first wire, as ResolveInput reads it), in pin order.
         std::vector<const ScriptConnection*> inputs;
         for (const auto* conn : Incoming(node.id))
@@ -284,6 +321,8 @@ namespace Spark::Scripting::Detail
 
         for (const auto* conn : inputs)
         {
+            if (m_halted)
+                return;
             const auto* producer = FindNode(conn->fromNode);
             if (!producer || !IsPureNode(*producer) || done.count(producer->id) != 0)
                 continue;
@@ -292,7 +331,7 @@ namespace Spark::Scripting::Detail
                 m_errors.push_back("Data cycle through node " + std::to_string(producer->id));
                 continue;
             }
-            CollectPure(*producer, order, done, visiting);
+            CollectPure(*producer, order, done, visiting, depth + 1);
             visiting.erase(producer->id);
             done.insert(producer->id);
             order.push_back(producer);
@@ -352,6 +391,14 @@ namespace Spark::Scripting::Detail
     /// Walk an execution chain: each node, then the node its execution output leads to.
     void VisualScriptEmitter::EmitChain(uint32_t startNode, const std::string& indent, std::string& code)
     {
+        if (m_chainDepth >= kMaxChainDepth)
+        {
+            Halt("Graph nests execution flow deeper than " + std::to_string(kMaxChainDepth) + " levels");
+            return;
+        }
+        // Balanced on every return path: the loop below only breaks, never returns.
+        ++m_chainDepth;
+
         std::vector<uint32_t> entered;
         uint32_t current = startNode;
         while (!StepLimitReached())
@@ -403,6 +450,7 @@ namespace Spark::Scripting::Detail
 
         for (uint32_t id : entered)
             m_onPath.erase(id);
+        --m_chainDepth;
     }
 
 } // namespace Spark::Scripting::Detail

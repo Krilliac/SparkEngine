@@ -1164,14 +1164,20 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button("Save"))
         {
-            std::string savePath = std::string(m_savePath) + std::string(m_scriptName) + ".vscript";
-            SaveGraph(savePath);
+            // The typed name becomes a file name: only an identifier is accepted, so the
+            // file cannot land outside m_savePath (see VisualScriptGraphIO::ScriptFilePath).
+            if (const auto savePath = VisualScriptGraphIO::ScriptFilePath(m_savePath, m_scriptName, ".vscript"))
+                SaveGraph(savePath->string());
+            else
+                m_compileErrors = {"Save refused: " + savePath.error()};
         }
         ImGui::SameLine();
         if (ImGui::Button("Load"))
         {
-            std::string loadPath = std::string(m_savePath) + std::string(m_scriptName) + ".vscript";
-            LoadGraph(loadPath);
+            if (const auto loadPath = VisualScriptGraphIO::ScriptFilePath(m_savePath, m_scriptName, ".vscript"))
+                LoadGraph(loadPath->string());
+            else
+                m_compileErrors = {"Load refused: " + loadPath.error()};
         }
 
         ImGui::SameLine();
@@ -1244,6 +1250,17 @@ namespace SparkEditor
 
     void VisualScriptPanel::CompileGraph()
     {
+        // Validate the output file name before compiling: the generated .as is
+        // written as m_savePath + name, so the name must not carry a path.
+        const auto outPath = VisualScriptGraphIO::ScriptFilePath(m_savePath, m_scriptName, ".as");
+        if (!outPath)
+        {
+            m_compileErrors = {"Compile refused: " + outPath.error()};
+            m_compileSuccess = false;
+            m_lastCompiledSource.clear();
+            return;
+        }
+
         const VisualScriptGraph graph = BuildGraph();
         auto result = VisualScriptCompiler::Compile(graph, m_debugCompile);
         m_compileErrors = result.errors;
@@ -1254,8 +1271,7 @@ namespace SparkEditor
         {
             // Write the generated .as byte for byte (binary: no CRLF translation), so a
             // graph regenerates exactly the script checked in beside it.
-            std::string outPath = std::string(m_savePath) + std::string(m_scriptName) + ".as";
-            std::ofstream file(outPath, std::ios::binary);
+            std::ofstream file(*outPath, std::ios::binary);
             if (file.is_open())
             {
                 file << result.angelScriptSource;

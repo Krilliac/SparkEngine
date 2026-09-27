@@ -93,6 +93,23 @@ namespace Spark::Scripting
         static std::expected<void, std::string> SaveFile(const std::filesystem::path& path,
                                                          const VisualScriptGraph& graph);
 
+        /**
+         * @brief The file of script @p scriptName in @p directory: directory / (scriptName + extension)
+         *
+         * Editor script names become file names, so a name is accepted only as a
+         * plain identifier ([A-Za-z_][A-Za-z0-9_]*, at most 256 bytes, the rule
+         * a loaded graph's className follows) that is not a Windows reserved
+         * device name (CON, NUL, COM1, ...). Such a name has no separator, dot
+         * or drive prefix, so the result always stays directly inside @p directory.
+         * @param directory Output directory
+         * @param scriptName Name typed by the user
+         * @param extension Extension with its dot (".as", ".vscript")
+         * @return The path, or a message naming why @p scriptName was refused
+         */
+        static std::expected<std::filesystem::path, std::string> ScriptFilePath(const std::filesystem::path& directory,
+                                                                                std::string_view scriptName,
+                                                                                std::string_view extension);
+
         /// Stable file name of a node type ("OnStart", "Branch", ...), or nullptr for an unknown value.
         static const char* NodeTypeName(ScriptNodeType type);
 

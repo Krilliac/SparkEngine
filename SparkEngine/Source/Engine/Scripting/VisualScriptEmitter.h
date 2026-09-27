@@ -113,12 +113,15 @@ namespace Spark::Scripting::Detail
         std::string ResolveInput(const ScriptNode& node, uint32_t inputIndex) const;
         std::vector<const ScriptNode*> PureDependencies(const ScriptNode& node);
         void CollectPure(const ScriptNode& node, std::vector<const ScriptNode*>& order,
-                         std::unordered_set<uint32_t>& done, std::unordered_set<uint32_t>& visiting);
+                         std::unordered_set<uint32_t>& done, std::unordered_set<uint32_t>& visiting, size_t depth);
         void EmitControlFlow(const ScriptNode& node, const std::vector<std::string>& inputs, const std::string& indent,
                              std::string& code);
         bool HasExecTarget(const ScriptNode& node, uint32_t pin) const;
         void EmitChain(uint32_t startNode, const std::string& indent, std::string& code);
+        /// True once emission must stop: the step budget is spent or Halt() was called.
         bool StepLimitReached() const;
+        /// Record @p reason (first call only) and stop all further emission.
+        void Halt(const std::string& reason);
 
         bool m_debugMode;
         std::vector<std::string>& m_errors;
@@ -127,6 +130,8 @@ namespace Spark::Scripting::Detail
         std::unordered_map<uint32_t, std::vector<const ScriptConnection*>> m_incoming;
         std::unordered_set<uint32_t> m_onPath; ///< Nodes on the chain being emitted (cycle guard)
         size_t m_emittedSteps = 0;
+        size_t m_chainDepth = 0; ///< Execution chains currently being emitted (nesting depth)
+        bool m_halted = false;   ///< A depth or size budget was exceeded; emission stops
     };
 
 } // namespace Spark::Scripting::Detail
