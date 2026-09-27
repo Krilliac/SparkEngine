@@ -243,7 +243,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestStringPool.cpp",
         "Tests/TestSubsystemConsoleCommands.cpp",
         "Tests/TestTFCaptureMath.cpp",
-        "Tests/TestTFDamageModel.cpp",
         "Tests/TestTacticalPointSystem.cpp",
         "Tests/TestTemporalEffects.cpp",
         "Tests/TestTerrainRenderer.cpp",
