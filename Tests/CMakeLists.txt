@@ -4454,8 +4454,8 @@ if(Python3_Interpreter_FOUND)
             LABELS "release;integrity;python"
             TIMEOUT 120)
         # REL-190: fail-closed stable release notes generator and its
-        # release.yml wiring. This is only the notes check; it does not satisfy
-        # the full ReleaseProfileRehearsal_Qualification* rehearsal selector.
+        # release.yml wiring. This is only the notes check; the candidate
+        # qualification rehearsal is ReleaseProfileRehearsal_Qualification below.
         add_test(
             NAME ReleaseProfileRehearsal_ReleaseNotes
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_release_notes.py)
@@ -4463,6 +4463,18 @@ if(Python3_Interpreter_FOUND)
             LABELS "release;integrity;python"
             TIMEOUT 120)
     endif()
+
+    # REL-190: tools/release_qualification.py, which profile-required-gates runs
+    # for a versioned candidate: stage readiness, every required item's CI jobs
+    # able to block publication, and a well-formed exact-SHA record. The real
+    # contract must be refused while REL-190 is blocked.
+    add_test(
+        NAME ReleaseProfileRehearsal_Qualification
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_release_qualification.py -v)
+    set_tests_properties(ReleaseProfileRehearsal_Qualification PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "release;integrity;python"
+        TIMEOUT 120)
 
     # REL-110: protected stable-release approval event recorder, its consumer
     # digest binding, and the release.yml wiring.

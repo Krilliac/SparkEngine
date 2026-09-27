@@ -1167,6 +1167,34 @@ jobs:
       # The structural gate in build.yml blocks merges; this blocks releases.
       run: python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure
 
+    - name: Qualify candidate and record the release qualification report
+      # REL-190: stage readiness, every transitive qualification item's
+      # requiredCiJobs able to block publication, and a well-formed exact-SHA
+      # record for this commit. Runs even after an earlier gate failed so the
+      # refusal and its reasons are retained; it can only fail the job.
+      if: ${{ !cancelled() && needs.prepare.outputs.is_versioned == 'true' }}
+      shell: bash
+      env:
+        CANDIDATE_SHA: ${{ github.sha }}
+      run: |
+        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+          stage=predecessor
+        else
+          stage=stable-v1
+        fi
+        python3 tools/release_qualification.py --stage "$stage" --candidate-sha "$CANDIDATE_SHA" \
+          --exact-ci "$RUNNER_TEMP/profile-required-gates-exact-ci.out" \
+          --output "$RUNNER_TEMP/release-qualification.json"
+
+    - name: Retain the release qualification report
+      if: ${{ always() && needs.prepare.outputs.is_versioned == 'true' }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: release-qualification-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/release-qualification.json
+        if-no-files-found: warn
+        retention-days: 90
+
   # ===========================================================================
   # Publish GitHub Release (versioned or rolling "latest")
   # ===========================================================================

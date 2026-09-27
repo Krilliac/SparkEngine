@@ -285,7 +285,10 @@ class ReleaseStageTests(unittest.TestCase):
         self.assertIn("REL-190", items["REL-200"]["dependencies"])
         self.assertIn("REL-190", profile["blockingWorkItemIds"])
         self.assertNotIn("REL-190", profile["publicationFinalization"]["workItemIds"])
-        self.assertIn("ReleaseProfileRehearsal_Qualification*", items["REL-190"]["plannedTestSelectors"])
+        # The rehearsal selector is registered (tools/release_qualification.py),
+        # so it is a live selector, no longer planned; REL-190 stays unfinished.
+        self.assertIn("ReleaseProfileRehearsal_Qualification*", items["REL-190"]["testSelectors"])
+        self.assertNotIn("ReleaseProfileRehearsal_Qualification*", items["REL-190"].get("plannedTestSelectors", []))
         self.assertEqual(items["REL-200"]["plannedTestSelectors"], [])
         self.assertEqual(items["REL-200"]["plannedCiJobs"], [])
         self.assertTrue(any("REL-190" in error for error in candidate_readiness_errors(contract)))

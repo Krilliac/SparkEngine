@@ -148,8 +148,58 @@ def resolve_ci_job(value: str) -> bool:
 REQUIRED_GATE_WORKFLOW = WORKFLOW_ROOT / "build.yml"
 REQUIRED_GATE_JOB = "required-ci-gate"
 _NEEDS_INLINE = re.compile(r"^    needs:\s*\[([^\]]*)\]\s*(?:#.*)?$")
+_NEEDS_SCALAR = re.compile(r"^    needs:\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:#.*)?$")
 _NEEDS_BLOCK = re.compile(r"^    needs:\s*(?:#.*)?$")
 _NEEDS_ENTRY = re.compile(r"^      -\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:#.*)?$")
+
+
+def workflow_job_needs(workflow: Path) -> dict[str, frozenset[str]]:
+    """Every job in one workflow file mapped to the jobs its ``needs:`` names.
+
+    Same structural line parser as :func:`workflow_job_ids`: a job is a
+    two-space-indented key inside ``jobs:``, and ``needs:`` is a four-space key
+    in inline-list, scalar, or block-list form.
+    """
+    if not workflow.is_file():
+        raise SiteDataError(f"{workflow.relative_to(REPO_ROOT).as_posix()} does not exist")
+    text = read_bytes_stable(workflow, MAX_WORKFLOW_BYTES, f"workflow {workflow.name}").decode(
+        "utf-8", errors="replace"
+    )
+    needs: dict[str, set[str]] = {}
+    current: str | None = None
+    in_jobs = False
+    in_needs = False
+    for line in text.splitlines():
+        top = _TOP_LEVEL_KEY.match(line)
+        if top:
+            in_jobs = top.group(1) == "jobs"
+            current = None
+            continue
+        if not in_jobs:
+            continue
+        job = _JOB_KEY.match(line)
+        if job:
+            current = job.group(1)
+            needs[current] = set()
+            in_needs = False
+            continue
+        if current is None:
+            continue
+        inline = _NEEDS_INLINE.match(line) or _NEEDS_SCALAR.match(line)
+        if inline:
+            needs[current].update(entry.strip() for entry in inline.group(1).split(",") if entry.strip())
+            in_needs = False
+            continue
+        if _NEEDS_BLOCK.match(line):
+            in_needs = True
+            continue
+        if in_needs:
+            entry = _NEEDS_ENTRY.match(line)
+            if entry:
+                needs[current].add(entry.group(1))
+            elif line.strip() and not line.lstrip().startswith("#"):
+                in_needs = False
+    return {job: frozenset(jobs) for job, jobs in needs.items()}
 
 
 @functools.lru_cache(maxsize=1)
@@ -160,37 +210,12 @@ def required_gate_jobs() -> frozenset[str]:
     required aggregate red, so it cannot be the CI evidence behind a claim that
     something is release-validated.
     """
-    if not REQUIRED_GATE_WORKFLOW.is_file():
-        raise SiteDataError(f"{REQUIRED_GATE_WORKFLOW.relative_to(REPO_ROOT).as_posix()} does not exist")
-    text = read_bytes_stable(REQUIRED_GATE_WORKFLOW, MAX_WORKFLOW_BYTES, "workflow build.yml").decode(
-        "utf-8", errors="replace"
-    )
-    lines = text.splitlines()
-    header = f"  {REQUIRED_GATE_JOB}:"
-    start = next((index for index, line in enumerate(lines) if line.split("#", 1)[0].rstrip() == header), None)
-    if start is None:
+    needs = workflow_job_needs(REQUIRED_GATE_WORKFLOW)
+    if REQUIRED_GATE_JOB not in needs:
         raise SiteDataError(f"build.yml defines no {REQUIRED_GATE_JOB} job")
-    jobs: set[str] = set()
-    in_needs = False
-    for line in lines[start + 1:]:
-        if _JOB_KEY.match(line) or _TOP_LEVEL_KEY.match(line):
-            break
-        inline = _NEEDS_INLINE.match(line)
-        if inline:
-            jobs.update(entry.strip() for entry in inline.group(1).split(",") if entry.strip())
-            break
-        if _NEEDS_BLOCK.match(line):
-            in_needs = True
-            continue
-        if in_needs:
-            entry = _NEEDS_ENTRY.match(line)
-            if entry:
-                jobs.add(entry.group(1))
-            elif line.strip() and not line.lstrip().startswith("#"):
-                break
-    if not jobs:
+    if not needs[REQUIRED_GATE_JOB]:
         raise SiteDataError(f"{REQUIRED_GATE_JOB} in build.yml needs no jobs")
-    return frozenset(jobs)
+    return needs[REQUIRED_GATE_JOB]
 
 
 @functools.lru_cache(maxsize=4096)

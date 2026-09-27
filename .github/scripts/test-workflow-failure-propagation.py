@@ -587,6 +587,18 @@ PROFILE_GATES_CHECKOUT_STEP = "Checkout exact candidate source"
 PROFILE_GATES_REQUIRED_CI_STEP = "Verify candidate commit passed Required CI Gate"
 PROFILE_GATES_READINESS_STEP = "Verify stable-v1 candidate is qualified for versioned publication"
 PROFILE_GATES_FUZZ_STEP = "Verify SEC-120 parser fuzz-policy closure"
+PROFILE_GATES_QUALIFY_STEP = "Qualify candidate and record the release qualification report"
+PROFILE_GATES_REPORT_STEP = "Retain the release qualification report"
+PROFILE_GATES_QUALIFY_RUN = (
+    'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
+    "stage=predecessor",
+    "else",
+    "stage=stable-v1",
+    "fi",
+    'python3 tools/release_qualification.py --stage "$stage" --candidate-sha "$CANDIDATE_SHA" '
+    '--exact-ci "$RUNNER_TEMP/profile-required-gates-exact-ci.out" '
+    '--output "$RUNNER_TEMP/release-qualification.json"',
+)
 # The v0.9 bootstrap and ordinary v1 qualification are distinct stages. Pin both
 # exact validators and the version branch so neither path can be weakened by a
 # waiver, a swapped selector, or a successful no-op.
@@ -685,6 +697,8 @@ def profile_required_gates_job_errors(workflow: str) -> list[str]:
         PROFILE_GATES_REQUIRED_CI_STEP,
         PROFILE_GATES_READINESS_STEP,
         PROFILE_GATES_FUZZ_STEP,
+        PROFILE_GATES_QUALIFY_STEP,
+        PROFILE_GATES_REPORT_STEP,
     ]
     if [step.get("name") for step in steps] != expected_order:
         errors.append(f"profile-required-gates must run exactly the steps {expected_order} in order")
@@ -724,6 +738,29 @@ def profile_required_gates_job_errors(workflow: str) -> list[str]:
         "python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure"
     ]:
         errors.append("profile-required-gates must run the unconditional SEC-120 closure check")
+
+    qualify = by_name.get(PROFILE_GATES_QUALIFY_STEP, {})
+    if (
+        set(qualify) != {"name", "if", "shell", "env", "run"}
+        or qualify.get("if") != "${{ !cancelled() && needs.prepare.outputs.is_versioned == 'true' }}"
+        or qualify.get("shell") != "bash"
+        or qualify.get("env") != {"CANDIDATE_SHA": "${{ github.sha }}"}
+        or normalized_run_lines(qualify.get("run")) != list(PROFILE_GATES_QUALIFY_RUN)
+    ):
+        errors.append("profile-required-gates must run the exact versioned-only release qualification step")
+
+    report = by_name.get(PROFILE_GATES_REPORT_STEP, {})
+    report_with = report.get("with")
+    if (
+        set(report) != {"name", "if", "uses", "with"}
+        or report.get("if") != "${{ always() && needs.prepare.outputs.is_versioned == 'true' }}"
+        or not str(report.get("uses", "")).startswith("actions/upload-artifact@")
+        or not isinstance(report_with, dict)
+        or report_with.get("path") != "${{ runner.temp }}/release-qualification.json"
+        or not isinstance(report_with.get("retention-days"), int)
+        or report_with["retention-days"] < 90
+    ):
+        errors.append("profile-required-gates must retain the release qualification report for 90 days")
 
     release_steps = release.get("steps")
     release_step_names = {
@@ -3087,6 +3124,8 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         checkout = named_step(self.release, PROFILE_GATES_CHECKOUT_STEP)
         required_ci = named_step(self.release, PROFILE_GATES_REQUIRED_CI_STEP)
         fuzz = named_step(self.release, PROFILE_GATES_FUZZ_STEP)
+        qualify = named_step(self.release, PROFILE_GATES_QUALIFY_STEP)
+        report = named_step(self.release, PROFILE_GATES_REPORT_STEP)
         tag_binding = named_step(self.release, "Bind stable release tag to workflow commit")
         for fixture in (release_header, gates_header, gates_permissions):
             self.assertEqual(self.release.count(fixture), 1, fixture)
@@ -3251,6 +3290,27 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "readiness gate moved back into release": (
                 move_into_release(readiness),
                 f"{PROFILE_GATES_READINESS_STEP!r} belongs to profile-required-gates, not release",
+            ),
+            "qualification dropped": (self.release.replace(qualify, "", 1), "must run exactly the steps"),
+            "qualification suppressed": (
+                self.release.replace(qualify, suppress_run_command(qualify).replace(" || echo ignored", " || true"), 1),
+                "exact versioned-only release qualification step",
+            ),
+            "qualification tolerated": (
+                self.release.replace(qualify, inject_before_run(qualify, "      continue-on-error: true"), 1),
+                "exact versioned-only release qualification step",
+            ),
+            "qualification checks another commit": (
+                replace_in(qualify, "CANDIDATE_SHA: ${{ github.sha }}", "CANDIDATE_SHA: ${{ github.event.before }}"),
+                "exact versioned-only release qualification step",
+            ),
+            "qualification stage swapped": (
+                replace_in(qualify, "stage=predecessor", "stage=stable-v1"),
+                "exact versioned-only release qualification step",
+            ),
+            "qualification report not retained": (
+                replace_in(report, "retention-days: 90", "retention-days: 1"),
+                "retain the release qualification report for 90 days",
             ),
             "fuzz closure moved back into release": (
                 move_into_release(fuzz),

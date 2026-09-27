@@ -98,12 +98,18 @@ class WorkflowTests(unittest.TestCase):
             "Verify candidate commit passed Required CI Gate",
             "Verify stable-v1 candidate is qualified for versioned publication",
             "Verify SEC-120 parser fuzz-policy closure",
+            "Qualify candidate and record the release qualification report",
+            "Retain the release qualification report",
         ])
         for step in gates["steps"]:
             self.assertNotIn("continue-on-error", step)
         self.assertIn("verify-exact-required-gate.py", gates["steps"][1]["run"])
         self.assertNotIn("if", gates["steps"][1])
         self.assertNotIn("if", gates["steps"][3])
+        qualify = gates["steps"][4]
+        self.assertIn("tools/release_qualification.py", qualify["run"])
+        self.assertIn("profile-required-gates-exact-ci.out", qualify["run"])
+        self.assertEqual(gates["steps"][5]["with"]["path"], "${{ runner.temp }}/release-qualification.json")
         self.assertIn("profile-required-gates", self.workflow["jobs"]["release"]["needs"])
         release_names = [step["name"] for step in self.workflow["jobs"]["release"]["steps"]]
         self.assertNotIn("Verify stable-v1 candidate is qualified for versioned publication", release_names)
