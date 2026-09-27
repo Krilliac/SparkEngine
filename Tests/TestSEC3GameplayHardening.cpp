@@ -28,6 +28,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -78,6 +79,14 @@ namespace
     {
         std::ofstream out(path, std::ios::binary | std::ios::trunc);
         out.write(text.data(), static_cast<std::streamsize>(text.size()));
+    }
+
+    /// UTF-8 form of a path (engine path strings are UTF-8), without the code-page
+    /// conversion path::string() performs on Windows.
+    std::string Utf8(const fs::path& path)
+    {
+        const std::u8string utf8 = path.u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
     }
 
     /// Records every log message while installed; the baseline logger is restored afterwards.
@@ -468,4 +477,71 @@ TEST(SEC3Gameplay_ModScanRefusesSymlinkedManifest)
     Spark::ModSystem mods;
     EXPECT_EQ(mods.ScanForMods(modsRoot.string()), size_t{0});
     EXPECT_TRUE(mods.GetModInfo("linked") == nullptr);
+}
+
+// SEC4 #3: on Windows MSVC reports an NTFS junction as file_type::junction, not a symlink,
+// so an is_symlink()-only guard accepted a junctioned mod directory pointing outside the
+// mods tree. A junction needs no privilege, so this test never skips on Windows; POSIX
+// exercises the same guard with a directory symlink.
+TEST(SEC3Gameplay_ModScanRefusesLinkedOrJunctionedModDirectory)
+{
+    ScratchDir dir("mods_junction");
+    const fs::path modsRoot = dir.path / "Mods";
+    const fs::path outside = dir.path / "Outside";
+    fs::create_directories(modsRoot / "Plain");
+    fs::create_directories(outside);
+    WriteText(modsRoot / "Plain" / "mod.json", R"({"id":"plain","name":"Plain","version":"1.0"})");
+    WriteText(outside / "mod.json", R"({"id":"escaped","name":"Escaped","version":"1.0"})");
+
+    const fs::path link = modsRoot / "Evil";
+#if defined(_WIN32)
+    const std::wstring command =
+        L"cmd /c mklink /J \"" + link.wstring() + L"\" \"" + outside.wstring() + L"\" >nul 2>&1";
+    ASSERT_EQ(_wsystem(command.c_str()), 0);
+    std::error_code statusError;
+    ASSERT_TRUE(fs::symlink_status(link, statusError).type() != fs::file_type::directory);
+#else
+    std::error_code linkError;
+    fs::create_directory_symlink(outside, link, linkError);
+    ASSERT_FALSE(static_cast<bool>(linkError));
+#endif
+    // The link really resolves to a directory holding a valid manifest, so only the
+    // link guard can keep it out.
+    ASSERT_TRUE(fs::is_regular_file(link / "mod.json"));
+
+    Spark::ModSystem mods;
+    EXPECT_EQ(mods.ScanForMods(Utf8(modsRoot)), size_t{1});
+    EXPECT_TRUE(mods.GetModInfo("plain") != nullptr);
+    EXPECT_TRUE(mods.GetModInfo("escaped") == nullptr);
+
+    std::error_code removeError;
+    fs::remove(link, removeError); // remove the link itself before remove_all walks the tree
+}
+
+// SEC4 #4: a mod folder whose name is outside the Windows ANSI code page made
+// entry.path().string() throw std::system_error out of ScanForMods, aborting the whole
+// scan. The name must be handled as UTF-8 end to end: scanned, stored, and walked again
+// by LoadMod's script-content check.
+TEST(SEC3Gameplay_ModScanHandlesNonAnsiModDirectoryName)
+{
+    ScratchDir dir("mods_unicode_dir");
+    const fs::path modsRoot = dir.path / "Mods";
+    const fs::path unicodeMod = modsRoot / fs::path(u8"雪☃\U0001F600");
+    const fs::path asciiMod = modsRoot / "zz_ascii";
+    fs::create_directories(unicodeMod / "Assets");
+    fs::create_directories(asciiMod);
+    WriteText(unicodeMod / "mod.json", R"({"id":"snow","name":"Snow","version":"1.0"})");
+    WriteText(unicodeMod / "Assets" / "readme.txt", "texture pack\n");
+    WriteText(asciiMod / "mod.json", R"({"id":"ascii","name":"Ascii","version":"1.0"})");
+
+    Spark::ModSystem mods;
+    EXPECT_EQ(mods.ScanForMods(Utf8(modsRoot)), size_t{2});
+    ASSERT_TRUE(mods.GetModInfo("ascii") != nullptr);
+    const Spark::ModInfo* snow = mods.GetModInfo("snow");
+    ASSERT_TRUE(snow != nullptr);
+    EXPECT_EQ(snow->path, Utf8(unicodeMod));
+
+    // LoadMod re-opens the stored path; it must reach the same directory and find no scripts.
+    EXPECT_TRUE(mods.LoadMod("snow"));
+    EXPECT_TRUE(mods.IsModActive("snow"));
 }

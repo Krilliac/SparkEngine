@@ -7,6 +7,7 @@
 
 #include "ModSystem.h"
 #include "../../Core/FaultIsolation.h"
+#include "../../Utils/FileUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -14,15 +15,108 @@
 #include <exception>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+#endif
 
 namespace Spark
 {
 
     namespace
     {
+        /// UTF-8 rendering of a native path. Never path::string(): on Windows that converts
+        /// through the ANSI code page and throws for a name the code page cannot represent.
+        std::string PathToUtf8(const std::filesystem::path& path)
+        {
+            const std::u8string utf8 = path.u8string();
+            return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+        }
+
+        /// True when @p path is a Windows reparse point (symlink, junction, mount point, or any
+        /// other tag) or its attributes cannot be read. MSVC reports a junction as
+        /// file_type::junction rather than a symlink, so is_symlink() alone misses it.
+        bool IsReparsePointOrUnreadable([[maybe_unused]] const std::filesystem::path& path)
+        {
+#ifdef _WIN32
+            const DWORD attributes = ::GetFileAttributesW(path.c_str());
+            return attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+            return false;
+#endif
+        }
+
+        /// A mod directory must be a real directory that is a direct child of the scanned
+        /// mods root: not a symlink, not a junction or other reparse point, and its canonical
+        /// location must still sit directly under the canonical root. Anything that cannot be
+        /// inspected is refused.
+        bool IsPlainChildDirectory(const std::filesystem::directory_entry& entry,
+                                   const std::filesystem::path& canonicalRoot)
+        {
+            namespace fs = std::filesystem;
+            std::error_code ec;
+            const fs::file_status status = entry.symlink_status(ec);
+            // An exact type match rejects file_type::symlink and MSVC's file_type::junction.
+            if (ec || status.type() != fs::file_type::directory)
+                return false;
+            if (IsReparsePointOrUnreadable(entry.path()))
+                return false;
+            const fs::path canonicalEntry = fs::canonical(entry.path(), ec);
+            return !ec && canonicalEntry.parent_path() == canonicalRoot;
+        }
+
+        /// Returns the manifest path of @p entry when it is an acceptable mod directory:
+        /// a plain child directory of the mods root holding a plain-file mod.json.
+        /// Everything else (files, links, junctions, unreadable entries, missing or linked
+        /// manifests) yields nullopt. Throws only if a name cannot be rendered as UTF-8.
+        std::optional<std::filesystem::path> AcceptedModManifest(const std::filesystem::directory_entry& entry,
+                                                                 const std::filesystem::path& canonicalRoot)
+        {
+            namespace fs = std::filesystem;
+            std::error_code ec;
+            if (!entry.is_directory(ec) || ec)
+                return std::nullopt; // plain files (and dangling links) in the mods root are not mods
+
+            // Reject symlinks, junctions and other reparse points, and anything whose real
+            // location is not directly under the mods root, so a crafted mods directory cannot
+            // redirect us outside the intended sandbox (e.g. into /etc or the player's home
+            // directory). A status query that fails is treated the same way: unknown is not safe.
+            if (!IsPlainChildDirectory(entry, canonicalRoot))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "ModSystem: skipping linked, reparse-point or unreadable mod directory '%s'",
+                               PathToUtf8(entry.path()).c_str());
+                return std::nullopt;
+            }
+
+            // The manifest itself must be a plain file inside the mod directory. A symlinked
+            // mod.json could point outside the mods tree or at a file whose reported size
+            // lies (procfs), so it is refused like a symlinked mod directory.
+            fs::path manifestPath = entry.path() / "mod.json";
+            const fs::file_status manifestStatus = fs::symlink_status(manifestPath, ec);
+            if (manifestStatus.type() == fs::file_type::not_found)
+                return std::nullopt;
+            if (ec || manifestStatus.type() != fs::file_type::regular || IsReparsePointOrUnreadable(manifestPath))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "ModSystem: skipping mod '%s' whose mod.json is a link or not a regular file",
+                               PathToUtf8(entry.path()).c_str());
+                return std::nullopt;
+            }
+            return manifestPath;
+        }
+
         enum class ModScriptScan
         {
             None,   ///< No script content found
@@ -64,7 +158,10 @@ namespace Spark
             try
             {
                 std::error_code ec;
-                fs::recursive_directory_iterator it(modPath, fs::directory_options::none, ec);
+                const fs::path root = FileUtils::PathFromUtf8(modPath);
+                if (root.empty())
+                    return ModScriptScan::Unknown;
+                fs::recursive_directory_iterator it(root, fs::directory_options::none, ec);
                 if (ec)
                     return ModScriptScan::Unknown;
 
@@ -104,57 +201,51 @@ namespace Spark
         m_modsDirectory = modsDirectory;
         size_t found = 0;
 
+        // The mods directory is untrusted: every filesystem query uses the error_code
+        // overloads and every path stays an fs::path, converted to UTF-8 only for storage
+        // and logging. One unreadable entry or unrepresentable name skips that entry; it
+        // never throws out of the scan and never discards the mods already found.
         namespace fs = std::filesystem;
-        if (!fs::exists(modsDirectory))
+        const fs::path root = FileUtils::PathFromUtf8(modsDirectory);
+        std::error_code ec;
+        if (root.empty() || !fs::is_directory(root, ec))
         {
             return 0;
         }
-
-        for (const auto& entry : fs::directory_iterator(modsDirectory))
+        const fs::path canonicalRoot = fs::canonical(root, ec);
+        if (ec)
         {
-            if (!entry.is_directory())
-            {
-                continue;
-            }
-            // Reject symlinks so a crafted mods directory cannot redirect us outside
-            // the intended sandbox (e.g. into /etc or the player's home directory).
-            // A status query that fails is treated the same way: unknown is not safe.
-            std::error_code symEc;
-            const fs::file_status status = entry.symlink_status(symEc);
-            if (symEc || fs::is_symlink(status))
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Core,
-                               "ModSystem: skipping symlinked or unreadable mod directory '%s'",
-                               entry.path().string().c_str());
-                continue;
-            }
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "ModSystem: cannot resolve mods directory '%s' (%s)",
+                           modsDirectory.c_str(), ec.message().c_str());
+            return 0;
+        }
 
-            std::string modJsonPath = entry.path().string() + "/mod.json";
-            if (!fs::exists(modJsonPath))
+        fs::directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
+        const fs::directory_iterator end;
+        for (; !ec && it != end; it.increment(ec))
+        {
+            try
             {
-                continue;
+                const std::optional<fs::path> manifestPath = AcceptedModManifest(*it, canonicalRoot);
+                ModInfo info;
+                if (manifestPath && ParseModJson(PathToUtf8(*manifestPath), info))
+                {
+                    info.path = PathToUtf8(it->path());
+                    m_modStates[info.id] = ModState::Available;
+                    m_mods[info.id] = std::move(info);
+                    ++found;
+                }
             }
-            // The manifest itself must be a plain file inside the mod directory. A symlinked
-            // mod.json could point outside the mods tree or at a file whose reported size
-            // lies (procfs), so it is refused like a symlinked mod directory.
-            std::error_code manifestEc;
-            const fs::file_status manifestStatus = fs::symlink_status(modJsonPath, manifestEc);
-            if (manifestEc || !fs::is_regular_file(manifestStatus))
+            catch (const std::exception& error)
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Core,
-                               "ModSystem: skipping mod '%s' whose mod.json is a symlink or not a regular file",
-                               entry.path().string().c_str());
-                continue;
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "ModSystem: skipping uninspectable mods-directory entry (%s)",
+                               error.what());
             }
-
-            ModInfo info;
-            if (ParseModJson(modJsonPath, info))
-            {
-                info.path = entry.path().string();
-                m_mods[info.id] = info;
-                m_modStates[info.id] = ModState::Available;
-                ++found;
-            }
+        }
+        if (ec)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "ModSystem: scan of '%s' stopped early (%s)",
+                           modsDirectory.c_str(), ec.message().c_str());
         }
 
         return found;

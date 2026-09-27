@@ -4,6 +4,7 @@
  */
 
 #include "ModSystem.h"
+#include "../../Utils/FileUtils.h"
 #include "../../Utils/JsonUtils.h"
 #include "../../Utils/LogMacros.h"
 
@@ -33,13 +34,16 @@ namespace Spark
         /// inspected.
         bool ReadModManifestFile(const std::string& path, std::string& outContent)
         {
+            // Engine path strings are UTF-8; the narrow std::filesystem / fstream constructors
+            // would decode them in the Windows ANSI code page and miss a non-ASCII mod folder.
+            const std::filesystem::path nativePath = FileUtils::PathFromUtf8(path);
             std::error_code ec;
-            if (!std::filesystem::is_regular_file(path, ec) || ec)
+            if (nativePath.empty() || !std::filesystem::is_regular_file(nativePath, ec) || ec)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: '%s' is not a regular file", path.c_str());
                 return false;
             }
-            const auto fileSize = std::filesystem::file_size(path, ec);
+            const auto fileSize = std::filesystem::file_size(nativePath, ec);
             if (ec)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: cannot stat '%s' (%s)", path.c_str(),
@@ -53,7 +57,7 @@ namespace Spark
                 return false;
             }
 
-            std::ifstream file(path, std::ios::binary);
+            std::ifstream file(nativePath, std::ios::binary);
             if (!file.is_open())
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: cannot open '%s' (errno=%d)", path.c_str(),
@@ -82,7 +86,7 @@ namespace Spark
     bool ModSystem::SaveConfig(const std::string& filePath) const
     {
         SPARK_LOG_INFO(Spark::LogCategory::Game, "ModSystem::SaveConfig to '%s'", filePath.c_str());
-        std::ofstream file(filePath);
+        std::ofstream file(FileUtils::PathFromUtf8(filePath));
         if (!file.is_open())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem::SaveConfig failed to open '%s'", filePath.c_str());
