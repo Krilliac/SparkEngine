@@ -123,6 +123,16 @@ if(REPORTER_SOURCES)
                              TIMEOUT 60
                              LABELS "crash-security;security;unit")
 
+        # OPS-100 selectors: the path-escape and secret-redaction subsets of the
+        # manifest suite, each failing closed when its group runs no checks.
+        add_test(NAME CrashManifest_PathEscape
+                 COMMAND SparkCrashReporterManifestTests --group=path-escape)
+        add_test(NAME CrashManifest_SecretRedaction
+                 COMMAND SparkCrashReporterManifestTests --group=secret-redaction)
+        set_tests_properties(CrashManifest_PathEscape CrashManifest_SecretRedaction PROPERTIES
+                             TIMEOUT 60
+                             LABELS "crash-security;security;unit")
+
         # OPS-100: an unanswered or non-explicit consent prompt transmits nothing.
         add_executable(SparkCrashReporterConsentTests
             tests/CrashReporterConsentTests.cpp
@@ -148,9 +158,9 @@ if(REPORTER_SOURCES)
         else()
             target_link_libraries(SparkCrashReporterConsentTests PRIVATE Threads::Threads)
         endif()
-        add_test(NAME SparkCrashReporter.CrashReporter_Consent
+        add_test(NAME CrashReporter_Consent
                  COMMAND SparkCrashReporterConsentTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
-        set_tests_properties(SparkCrashReporter.CrashReporter_Consent PROPERTIES
+        set_tests_properties(CrashReporter_Consent PROPERTIES
                              TIMEOUT 30
                              LABELS "crash-security;security;unit")
 

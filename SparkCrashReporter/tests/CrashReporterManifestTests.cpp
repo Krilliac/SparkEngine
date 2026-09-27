@@ -104,9 +104,11 @@ namespace
 
     int failures = 0;
     int skips = 0;
+    int checks = 0;
 
     void Check(bool condition, std::string_view message)
     {
+        ++checks;
         if (!condition)
         {
             std::cerr << "FAIL: " << message << '\n';
@@ -857,36 +859,80 @@ namespace
 
 int main(int argc, char* argv[])
 {
+    // Usage: SparkCrashReporterManifestTests [--group=all|path-escape|secret-redaction] [fake-gh]
+    // The named groups back the OPS-100 CrashManifest_* CTest selectors; "all"
+    // (the default) is the full ManifestCompatibility run and needs the fake gh.
+    std::string_view group = "all";
+    int firstPositional = 1;
+    constexpr std::string_view groupFlag = "--group=";
+    if (argc > 1 && std::string_view(argv[1]).starts_with(groupFlag))
+    {
+        group = std::string_view(argv[1]).substr(groupFlag.size());
+        firstPositional = 2;
+    }
+    if (group != "all" && group != "path-escape" && group != "secret-redaction")
+    {
+        std::cerr << "unknown test group '" << group << "' (expected all, path-escape or secret-redaction)\n";
+        return 2;
+    }
+    if (group != "all" && argc > firstPositional)
+    {
+        std::cerr << "test group '" << group << "' takes no positional arguments\n";
+        return 2;
+    }
+
     ScratchDirectory scratch;
 #ifdef _WIN32
     ScopedEnvironment configRoot("LOCALAPPDATA", (scratch.path / "private-config").string());
 #else
     ScopedEnvironment configRoot("XDG_CONFIG_HOME", (scratch.path / "private-config").string());
 #endif
-    TestEngineWriterSpacingAndEscapes(scratch.path);
-    TestWriterRoundTrip(scratch.path);
-    TestMalformedInputRejectedWithoutPartialMutation(scratch.path);
-    TestNoUploadPathIsTruthfulAndDoesNotExposeCredentials(scratch.path);
-    TestConsentArchiveAllowlistAndReporterResolution(scratch.path);
-    TestArtifactConfinementAndDisclosure(scratch.path);
-    TestPrivateArtifactDirectoryCreation(scratch.path);
-    TestManifestAndArtifactSubstitutionRejection(scratch.path);
-    TestIdentitySwapAndBoundedLogRead(scratch.path);
-    TestSequentialNonfatalManifestLifecycle(scratch.path);
-    TestMalformedReadyManifestFailsClosed(scratch.path);
-    TestManifestPublicationNames();
-    TestUtf8CrashArtifactPathConversion();
-    if (argc == 2)
-        TestAutomaticIssuesAreOptInBoundedAndIdempotent(scratch.path, argv[1]);
-    else
-        Check(false, "fake gh executable path must be supplied");
-
-    if (failures != 0)
+    if (group == "path-escape")
     {
-        std::cerr << failures << " CrashReporter manifest test(s) failed\n";
+        TestArtifactConfinementAndDisclosure(scratch.path);
+        TestPrivateArtifactDirectoryCreation(scratch.path);
+        TestManifestAndArtifactSubstitutionRejection(scratch.path);
+        TestIdentitySwapAndBoundedLogRead(scratch.path);
+        TestMalformedInputRejectedWithoutPartialMutation(scratch.path);
+    }
+    else if (group == "secret-redaction")
+    {
+        TestNoUploadPathIsTruthfulAndDoesNotExposeCredentials(scratch.path);
+        TestWriterRoundTrip(scratch.path);
+    }
+    else
+    {
+        TestEngineWriterSpacingAndEscapes(scratch.path);
+        TestWriterRoundTrip(scratch.path);
+        TestMalformedInputRejectedWithoutPartialMutation(scratch.path);
+        TestNoUploadPathIsTruthfulAndDoesNotExposeCredentials(scratch.path);
+        TestConsentArchiveAllowlistAndReporterResolution(scratch.path);
+        TestArtifactConfinementAndDisclosure(scratch.path);
+        TestPrivateArtifactDirectoryCreation(scratch.path);
+        TestManifestAndArtifactSubstitutionRejection(scratch.path);
+        TestIdentitySwapAndBoundedLogRead(scratch.path);
+        TestSequentialNonfatalManifestLifecycle(scratch.path);
+        TestMalformedReadyManifestFailsClosed(scratch.path);
+        TestManifestPublicationNames();
+        TestUtf8CrashArtifactPathConversion();
+        if (argc == firstPositional + 1)
+            TestAutomaticIssuesAreOptInBoundedAndIdempotent(scratch.path, argv[firstPositional]);
+        else
+            Check(false, "fake gh executable path must be supplied");
+    }
+
+    // A group that selected nothing must not report success.
+    if (checks == 0)
+    {
+        std::cerr << "test group '" << group << "' executed no checks\n";
         return 1;
     }
-    std::cout << "CrashReporter manifest compatibility tests passed";
+    if (failures != 0)
+    {
+        std::cerr << failures << " CrashReporter manifest test(s) failed in group '" << group << "'\n";
+        return 1;
+    }
+    std::cout << "CrashReporter manifest tests passed (group " << group << ", " << checks << " checks)";
     if (skips != 0)
         std::cout << " with " << skips << " explicitly reported fixture skip(s)";
     std::cout << '\n';

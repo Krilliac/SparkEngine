@@ -2619,6 +2619,37 @@ class SelectorResolutionTests(ContractTestCase):
         self.assertEqual([], errors)
         self.assertEqual([], legacy)
 
+    def test_product_directory_ctest_registrations_resolve(self) -> None:
+        # OPS-100's crash selectors are registered in SparkCrashReporter/CMakeLists.txt,
+        # not Tests/CMakeLists.txt; a resolver blind to product directories
+        # reported them missing.
+        for name in ("CrashManifest_PathEscape", "CrashManifest_SecretRedaction", "CrashReporter_Consent"):
+            self.assertTrue(contract_selectors.resolve_test_selector(name), name)
+
+    def test_registration_scan_skips_vendored_build_and_hidden_trees(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw).resolve()
+            registrations = {
+                "SparkProduct/CMakeLists.txt": "add_test(NAME ProductOnly_Case COMMAND x)",
+                "cmake/SparkPolicy.cmake": "add_test(NAME ModuleOnly_Case COMMAND x)",
+                "ThirdParty/lib/CMakeLists.txt": "add_test(NAME Vendored_Case COMMAND x)",
+                "build/windows-release/CMakeLists.txt": "add_test(NAME BuildTree_Case COMMAND x)",
+                ".claude/worktrees/copy/CMakeLists.txt": "add_test(NAME WorktreeCopy_Case COMMAND x)",
+                "Tests/CMakeLists.txt": "set(UNRELATED ON)",
+            }
+            for relative, text in registrations.items():
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                site_data_common.write_bytes_atomic(root / relative, text.encode("utf-8"))
+            contract_selectors.reset_caches()
+            try:
+                with mock.patch.object(contract_selectors, "REPO_ROOT", root), mock.patch.object(
+                    contract_selectors, "TEST_ROOT", root / "Tests"
+                ):
+                    targets = contract_selectors.test_selector_targets()
+            finally:
+                contract_selectors.reset_caches()
+        self.assertEqual({"ProductOnly_Case", "ModuleOnly_Case"}, set(targets))
+
     def test_unresolvable_job_is_an_error_by_default(self) -> None:
         errors, legacy = self.selectors_of(
             {"requiredCiJobs": ["no-such-workflow-job"], "testSelectors": []}

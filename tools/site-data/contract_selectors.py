@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import fnmatch
 import functools
+import os
 import re
 import shlex
 import sys
@@ -23,7 +24,10 @@ from common import REPO_ROOT, SiteDataError, read_bytes_stable
 
 WORKFLOW_ROOT = REPO_ROOT / ".github" / "workflows"
 TEST_ROOT = REPO_ROOT / "Tests"
-TEST_CMAKE = TEST_ROOT / "CMakeLists.txt"
+# Directories never searched for CTest registrations: vendored projects, build
+# trees, and dot-directories (VCS metadata, agent worktrees holding whole
+# checkout copies). Asset trees hold no CMake and are large to walk.
+_REGISTRATION_SKIP_DIRS = frozenset({"ThirdParty", "Assets", "Art", "node_modules"})
 # The build-matrix inventory owns CMakePresets.json parsing and inheritance
 # resolution; work-item commands are resolved through the same code so the two
 # contracts cannot disagree about what a preset means.
@@ -76,6 +80,30 @@ def workflow_job_ids() -> frozenset[str]:
     return frozenset(identifiers)
 
 
+def test_registration_files() -> list[Path]:
+    """First-party CMake files that register CTests.
+
+    Tests are registered next to the product they cover (SparkCrashReporter,
+    SparkServer, SparkBuild, ...) as well as in Tests/CMakeLists.txt, so every
+    CMakeLists.txt and cmake/*.cmake module containing ``add_test(`` counts.
+    """
+    registrations: list[Path] = []
+    for directory, subdirectories, files in os.walk(REPO_ROOT):
+        subdirectories[:] = sorted(
+            name
+            for name in subdirectories
+            if not name.startswith(".")
+            and not name.startswith("build")
+            and name not in _REGISTRATION_SKIP_DIRS
+            and not os.path.islink(os.path.join(directory, name))
+        )
+        current = Path(directory)
+        for name in sorted(files):
+            if name == "CMakeLists.txt" or (name.endswith(".cmake") and current.name == "cmake"):
+                registrations.append(current / name)
+    return registrations
+
+
 @functools.lru_cache(maxsize=1)
 def test_selector_targets() -> frozenset[str]:
     """Everything a test selector may legitimately name.
@@ -84,10 +112,13 @@ def test_selector_targets() -> frozenset[str]:
     identifiers the SparkTests harness selects through SPARK_TEST_NAME.
     """
     targets: set[str] = set()
-    if TEST_CMAKE.is_file():
-        cmake = read_bytes_stable(TEST_CMAKE, MAX_TEST_SOURCE_BYTES, "Tests/CMakeLists.txt").decode(
-            "utf-8", errors="replace"
-        )
+    for path in test_registration_files():
+        if path.is_symlink() or not path.is_file():
+            continue
+        display = path.relative_to(REPO_ROOT).as_posix()
+        cmake = read_bytes_stable(path, MAX_TEST_SOURCE_BYTES, display).decode("utf-8", errors="replace")
+        if "add_test(" not in cmake:
+            continue
         for match in _CTEST_NAME.finditer(cmake):
             targets.add(match.group(1))
         for match in _CTEST_LABELS.finditer(cmake):
