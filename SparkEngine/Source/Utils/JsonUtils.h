@@ -709,12 +709,19 @@ namespace Spark::Json
                             result += ParseUnicodeEscape();
                             break;
                         default:
+                            // RFC 8259 allows only the escapes above. The lenient
+                            // path keeps its historical "drop the backslash"
+                            // result; the strict path reports the recorded error.
+                            RecordError("invalid escape character in string");
                             result += esc;
                             break;
                         }
                     }
                     else
                     {
+                        // Raw bytes below 0x20 must be escaped inside a string.
+                        if (static_cast<unsigned char>(c) < 0x20)
+                            RecordError("unescaped control character in string");
                         result += c;
                     }
                 }
@@ -1104,7 +1111,8 @@ namespace Spark::Json
      *  - non-JSON prefixes and malformed constructs anywhere in the document,
      *  - unterminated strings, arrays, and objects (truncated files),
      *  - trailing content after the root value (torn/partially overwritten files),
-     *  - numbers that overflow double, invalid \u escapes.
+     *  - numbers that overflow double, invalid \u escapes,
+     *  - escapes RFC 8259 does not define (`\q`) and raw bytes below 0x20 inside strings.
      *
      * Always uses the built-in recursive-descent parser — never the nlohmann
      * backend — so acceptance is deterministic across build configurations.

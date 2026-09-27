@@ -266,3 +266,32 @@ TEST(SerializationHardening_ModLoadOrderMustBeAnExactInt)
     EXPECT_EQ(good->loadOrder, 0);
     EXPECT_TRUE(good->enabled);
 }
+
+// Finding 73: ParseStrict accepted "\q" (dropping the backslash) and raw bytes
+// below 0x20 inside strings, although it promises to reject malformed JSON.
+TEST(SerializationHardening_JsonStrictRejectsUndefinedEscapesAndControlBytes)
+{
+    Json::Value value;
+    std::string error;
+
+    EXPECT_FALSE(Json::ParseStrict(R"({"path":"a\q"})", &value, &error));
+    EXPECT_STR_CONTAINS(error, "invalid escape character");
+
+    EXPECT_FALSE(Json::ParseStrict("{\"a\":\"x\x01y\"}", &value, &error));
+    EXPECT_STR_CONTAINS(error, "unescaped control character");
+
+    EXPECT_FALSE(Json::ParseStrict("{\"a\":\"line\nbreak\"}", &value, &error));
+    EXPECT_STR_CONTAINS(error, "unescaped control character");
+
+    const std::string rawNul("{\"a\":\"x\0y\"}", 11);
+    EXPECT_FALSE(Json::ParseStrict(rawNul, &value, &error));
+    EXPECT_STR_CONTAINS(error, "unescaped control character");
+
+    // The escaped forms are valid JSON and still parse.
+    ASSERT_TRUE(Json::ParseStrict(R"({"a":"x\u0000y","b":"\t\n\/"})", &value, &error));
+    EXPECT_EQ(value[std::string("a")].AsString(), std::string("x\0y", 3));
+    EXPECT_EQ(value[std::string("b")].AsString(), std::string("\t\n/"));
+
+    // Bounded parsing shares the rule.
+    EXPECT_FALSE(Json::ParseBounded(R"(["\q"])", Json::JsonLimits{}, &value, &error));
+}

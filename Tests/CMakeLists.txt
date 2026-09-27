@@ -1827,7 +1827,7 @@ set_tests_properties(SparkSceneCompatibilityTests PROPERTIES
 # loadOrder is validated, and ParseStrict rejects undefined escapes/control bytes.
 add_test(NAME SparkSerializationHardeningTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
 set_tests_properties(SparkSerializationHardeningTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SerializationHardening_;SPARK_TEST_EXPECT_COUNT=5"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SerializationHardening_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "security;scene;unit"
     TIMEOUT 60)
 
