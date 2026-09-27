@@ -52,6 +52,13 @@ MAX_JSON_REDACT_ENTRIES = 50_000
 MAX_JSON_REDACT_STRING = 4096
 
 
+class JsonScanLimitError(ValueError):
+    """A structured JSON scan could not visit every node within its bounds.
+
+    Raised instead of returning a partial finding list: a truncated scan must never read as a clean one.
+    """
+
+
 @dataclass(frozen=True)
 class SecretFinding:
     rule: str
@@ -190,7 +197,13 @@ def scan_text(text: str, *, location: str) -> list[SecretFinding]:
 
 
 def scan_json_values(value: Any, *, location: str) -> list[SecretFinding]:
-    """Find named credentials and token-shaped values in an already strict JSON tree."""
+    """Find named credentials and token-shaped values in an already strict JSON tree.
+
+    Raises JsonScanLimitError when the tree has more than MAX_JSON_REDACT_ENTRIES nodes or nests deeper
+    than MAX_JSON_REDACT_DEPTH. Callers must treat that as a failed inspection, never as a clean result:
+    a token written with JSON backslash-u escapes is invisible to the raw-byte scan, so the structured pass
+    is its only detector.
+    """
     findings: list[SecretFinding] = []
     pending: list[tuple[Any, str, int]] = [(value, location, 0)]
     visited = 0
@@ -198,9 +211,14 @@ def scan_json_values(value: Any, *, location: str) -> list[SecretFinding]:
         current, current_location, depth = pending.pop()
         visited += 1
         if visited > MAX_JSON_REDACT_ENTRIES:
-            break
+            raise JsonScanLimitError(
+                f"{_sanitize_location(location)}: JSON exceeds the structured-scan budget of "
+                f"{MAX_JSON_REDACT_ENTRIES} nodes"
+            )
         if depth > MAX_JSON_REDACT_DEPTH:
-            continue
+            raise JsonScanLimitError(
+                f"{_sanitize_location(location)}: JSON nesting exceeds structured-scan depth {MAX_JSON_REDACT_DEPTH}"
+            )
         safe_loc = _sanitize_location(current_location)
         if isinstance(current, dict):
             for key, child in current.items():
@@ -445,7 +463,16 @@ def _try_redact_json(text: str) -> tuple[str | None, list[SecretFinding]]:
     except (json.JSONDecodeError, RecursionError):
         return None, []
 
-    findings = scan_json_values(parsed, location="input")
+    try:
+        findings = scan_json_values(parsed, location="input")
+    except JsonScanLimitError:
+        # Too large to walk node by node. Scan the decoded document as one text instead: that sees tokens the
+        # source hid behind backslash-u escapes, so the finding list is never a truncated prefix of the tree.
+        try:
+            decoded = json.dumps(parsed, ensure_ascii=False)
+        except (ValueError, TypeError, RecursionError):
+            return None, []
+        findings = scan_text(decoded, location="input")
     redacted_tree = _redact_json_value(parsed, 0)
 
     try:
