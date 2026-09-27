@@ -67,7 +67,7 @@
       "file_count": 2
     },
     "ThirdParty/Utils/stb": {
-      "digest": "f34101878d6bcc48ff6f6ac577c2eebb9b5b203d4799edbc9395568af0852d5d",
+      "digest": "ab77139092057e9abe4548401a2966d2d6c7ea25c52b0475305e3ffce7817c24",
       "file_count": 4
     },
     "ThirdParty/Utils/tinyexr": {
@@ -213,9 +213,9 @@
       "type": "license"
     },
     "ThirdParty/Utils/stb/stb_image.h": {
-      "sha256": "944ad92741601aef94e8758ecc4241038f80635fefffbbaacc61f87054365087",
-      "git_blob": "edff2054dfc231fe42c34bf620c913a90842c5c8",
-      "size": 15225,
+      "sha256": "cef4203f79217e8d0faf0bf565b0d678c17029ae2b26c01be7c36e2cb25f3660",
+      "git_blob": "171777073167bd4dee30e8a1c8ed8e737fc5047b",
+      "size": 18070,
       "type": "source"
     },
     "ThirdParty/Utils/stb/stb_image_write.h": {
