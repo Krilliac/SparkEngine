@@ -168,7 +168,8 @@ TEST(ExecScript_RedactsSensitiveArgumentsInConsoleAndAudit)
     auto& console = Spark::SimpleConsole::GetInstance();
     EXPECT_TRUE(console.Initialize());
 
-    const std::string secret = "exec-redaction-Pa55word";
+    // Obviously fake redaction sentinel: it only has to be unique enough to prove it never reaches a sink.
+    const std::string sentinel = "fake-exec-redaction-sentinel-1";
     std::vector<std::string> received;
     console.RegisterSensitiveCommand("exec_login_probe",
                                      [&](const std::vector<std::string>& args)
@@ -176,9 +177,9 @@ TEST(ExecScript_RedactsSensitiveArgumentsInConsoleAndAudit)
                                          received = args;
                                          return std::string("[probe] login handled");
                                      });
-    console.SetAlias("exec_login_alias", "exec_login_probe aliasuser " + secret);
+    console.SetAlias("exec_login_alias", "exec_login_probe aliasuser " + sentinel);
 
-    EXPECT_EQ(console.RedactSensitiveArguments("exec_login_probe user " + secret),
+    EXPECT_EQ(console.RedactSensitiveArguments("exec_login_probe user " + sentinel),
               std::string("exec_login_probe <arguments-redacted>"));
     EXPECT_EQ(console.RedactSensitiveArguments("exec_login_alias"),
               std::string("exec_login_alias <arguments-redacted>"));
@@ -188,21 +189,21 @@ TEST(ExecScript_RedactsSensitiveArgumentsInConsoleAndAudit)
     const auto auditPath = UniqueTempPath("spark-exec-redact") += ".log";
     Spark::ExecScriptPlayer player;
     player.SetAuditPath(auditPath.string());
-    player.Load(Parse("t1 exec_login_probe user " + secret + "\n2 exec_login_alias\n"));
+    player.Load(Parse("t1 exec_login_probe user " + sentinel + "\n2 exec_login_alias\n"));
     EXPECT_EQ(player.RunDueAt(3, 1.0, console), size_t{2});
 
-    // The handler still receives the real credential.
+    // The handler still receives the unredacted argument.
     ASSERT_EQ(received.size(), size_t{2});
-    EXPECT_EQ(received[1], secret);
+    EXPECT_EQ(received[1], sentinel);
 
     const std::string audit = ReadWholeFile(auditPath);
     EXPECT_STR_CONTAINS(audit, "| ok  | exec_login_probe <arguments-redacted>\n");
     EXPECT_STR_CONTAINS(audit, "| ok  | exec_login_alias <arguments-redacted>\n");
     EXPECT_STR_CONTAINS(audit, "[probe] login handled");
-    EXPECT_TRUE(audit.find(secret) == std::string::npos);
+    EXPECT_TRUE(audit.find(sentinel) == std::string::npos);
 
     for (const auto& entry : console.GetLogHistory())
-        EXPECT_TRUE(entry.message.find(secret) == std::string::npos);
+        EXPECT_TRUE(entry.message.find(sentinel) == std::string::npos);
 
     console.RemoveAlias("exec_login_alias");
     EXPECT_TRUE(console.UnregisterCommand("exec_login_probe"));
@@ -216,9 +217,9 @@ TEST(ExecScript_UnregisteredCommandArgumentsAreRedactedFailClosed)
     EXPECT_TRUE(console.Initialize());
 
     // No module registered tf_login here: its credential must still stay out of every sink.
-    const std::string secret = "UnloadedModulePl41nS3cret";
+    const std::string sentinel = "FakeUnloadedModuleSentinel2";
     ASSERT_FALSE(console.HasCommand("tf_login"));
-    EXPECT_EQ(console.RedactSensitiveArguments("tf_login alice " + secret),
+    EXPECT_EQ(console.RedactSensitiveArguments("tf_login alice " + sentinel),
               std::string("tf_login <arguments-redacted>"));
 
     // A registered, non-sensitive command keeps its arguments for diagnosis.
@@ -228,14 +229,14 @@ TEST(ExecScript_UnregisteredCommandArgumentsAreRedactedFailClosed)
     const auto auditPath = UniqueTempPath("spark-exec-unloaded") += ".log";
     Spark::ExecScriptPlayer player;
     player.SetAuditPath(auditPath.string());
-    player.Load(Parse("t0.2 tf_login alice " + secret + "\n"));
+    player.Load(Parse("t0.2 tf_login alice " + sentinel + "\n"));
     EXPECT_EQ(player.RunDueAt(12, 0.2, console), size_t{1});
 
     const std::string audit = ReadWholeFile(auditPath);
     EXPECT_STR_CONTAINS(audit, "frame 12 t=0.2s | ERR | tf_login <arguments-redacted>\n");
-    EXPECT_TRUE(audit.find(secret) == std::string::npos);
+    EXPECT_TRUE(audit.find(sentinel) == std::string::npos);
     for (const auto& entry : console.GetLogHistory())
-        EXPECT_TRUE(entry.message.find(secret) == std::string::npos);
+        EXPECT_TRUE(entry.message.find(sentinel) == std::string::npos);
 
     EXPECT_TRUE(console.UnregisterCommand("exec_plain_probe"));
     std::error_code error;
@@ -383,14 +384,14 @@ TEST(ExecScript_LinuxHeadlessRunsTimelineWithRedactedAudit)
     ASSERT_FALSE(static_cast<bool>(error));
     const auto scriptPath = workDir / "timeline.cfg";
     const auto auditPath = workDir / "server-audit.log";
-    const std::string secret = "ExecAuditS3cretPw";
+    const std::string sentinel = "FakeExecAuditSentinel3";
     const std::string port = std::to_string(ProbeFreeUdpPort());
     {
         std::ofstream script(scriptPath, std::ios::binary);
         script << "# TF-110 Linux -exec parity\r\n"
                << "t1 tf_dedicated " << port << "\r\n"
                << "t2 tf_status\r\n"
-               << "t2 tf_register exec_audit_user " << secret << "\r\n";
+               << "t2 tf_register exec_audit_user " << sentinel << "\r\n";
     }
 
     const ScopedUnboundedFileSize fileSizeLimit;
@@ -446,8 +447,8 @@ TEST(ExecScript_LinuxHeadlessRunsTimelineWithRedactedAudit)
     EXPECT_STR_CONTAINS(audit, "| ok  | tf_status\n");
     EXPECT_STR_CONTAINS(audit, "[TF] TERRAFRONT  role=dedicated");
     EXPECT_STR_CONTAINS(audit, "| ok  | tf_register <arguments-redacted>\n");
-    EXPECT_TRUE(audit.find(secret) == std::string::npos);
-    EXPECT_TRUE(output.find(secret) == std::string::npos);
+    EXPECT_TRUE(audit.find(sentinel) == std::string::npos);
+    EXPECT_TRUE(output.find(sentinel) == std::string::npos);
     // The default trail must not be written when -exec-audit redirects it.
     EXPECT_FALSE(std::filesystem::exists(workDir / "exec_audit.log"));
 
