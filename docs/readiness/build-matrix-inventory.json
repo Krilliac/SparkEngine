@@ -8103,7 +8103,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "6df6b348873e9d00"
+            "runDigest": "3395b0c1cc4e8486"
           },
           {
             "index": 6,
@@ -8143,7 +8143,7 @@
               "LSAN_OPTIONS",
               "UBSAN_OPTIONS"
             ],
-            "runDigest": "c0d31683eba276b6"
+            "runDigest": "e2e24ee32383d340"
           },
           {
             "index": 9,
@@ -8167,7 +8167,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "51e01f4dd90e99da"
+            "runDigest": "0e1dc032f9e5b74f"
           },
           {
             "index": 11,
@@ -8352,7 +8352,7 @@
             "env": [
               "TSAN_OPTIONS"
             ],
-            "runDigest": "a6bf614507170cb8"
+            "runDigest": "6cfeab88097540c6"
           },
           {
             "index": 9,
@@ -8376,7 +8376,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "953b8d03bfeaedc8"
+            "runDigest": "6cf0edaec593fd53"
           },
           {
             "index": 11,
@@ -11858,7 +11858,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "b626b9c44fedd4ea"
+            "runDigest": "a9928a742b2cd432"
           },
           {
             "index": 3,
@@ -11870,7 +11870,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "790d5c81bba51632"
+            "runDigest": "9c47884f0d7c0306"
           },
           {
             "index": 4,
@@ -12526,7 +12526,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "afb9c3072264a1de"
+            "runDigest": "94a3f3cda23d5288"
           },
           {
             "index": 7,
@@ -12998,7 +12998,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -13008,8 +13008,8 @@
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
-          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
+          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
         },
@@ -16000,7 +16000,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -16010,8 +16010,8 @@
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
-          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
+          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
         },
@@ -19166,7 +19166,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
       "commandProvenance": "literal",
       "options": {
         "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -19176,8 +19176,8 @@
         "CMAKE_CXX_COMPILER": "g++-14",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
-        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
       },

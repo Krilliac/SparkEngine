@@ -314,13 +314,13 @@ render work allocates on the device.
 ```bash
 # ASan + UBSan + LSan (preset plus the CI job's flags; -g1 keeps the tree ~11 GiB)
 cmake --preset ci-linux-asan -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-  "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
-  "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
+  "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer" \
+  "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer" \
   "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined" "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined" \
   -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DCMAKE_C_FLAGS_DEBUG=-g1
 cmake --build build/ci-linux-asan --target SparkEngine SparkGameFPS SparkGame SparkTests -j4
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:check_initialization_order=1 \
-UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1:suppressions=$PWD/Tests/ubsan_suppressions.txt:print_suppressions=0 \
 LSAN_OPTIONS=suppressions=$PWD/Tests/lsan_suppressions.txt:print_suppressions=0 \
   ctest --test-dir build/ci-linux-asan -L nullrhi-headless --output-on-failure --no-tests=error
 

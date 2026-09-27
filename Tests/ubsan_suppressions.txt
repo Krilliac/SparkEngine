@@ -1,0 +1,15 @@
+# UndefinedBehaviorSanitizer runtime suppressions for the build-linux-asan lane
+# (owner decision OD-23).
+#
+# AngelScript allocates value-type script locals on its asDWORD script stack,
+# which is only 4-byte aligned, so a script `string` local can sit at 4 mod 8.
+# The AngelScript target is already built with -fno-sanitize=alignment, but the
+# std::string members that touch such an object are libstdc++ inline functions
+# whose COMDAT copy may come from an instrumented engine translation unit.
+#
+# Only the alignment check is recoverable in this lane (-fsanitize-recover=
+# alignment); every other UBSan check keeps aborting, and halt_on_error=1 still
+# stops the run on any alignment report outside the files listed here.
+# Keep this list to libstdc++'s basic_string implementation files.
+alignment:*/bits/basic_string.h
+alignment:*/bits/basic_string.tcc
