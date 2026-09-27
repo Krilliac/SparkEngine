@@ -154,15 +154,26 @@ namespace Spark::Persistence
  * - Every write publishes the whole store through SaveFileDurability::WriteFileAtomically
  *   (exclusive no-follow staging, flush, atomic replace, POSIX directory sync). A plain
  *   SET/DELETE whose publication fails is rolled back and reported as failed.
+ * - One size budget for writer and reader: a revision larger than the connection's store
+ *   budget (kMaxStoreFileBytes unless constructed lower) is never published. The write
+ *   that would produce it fails and is rolled back, so every acknowledged revision is one
+ *   the next Open() can load.
  * - Thread affinity: not internally synchronized; AsyncDatabasePool serializes access.
  */
     class SQLiteConnection : public IDatabaseConnection
     {
       public:
-        /// Largest store file Open() accepts; a bigger file fails the load instead of exhausting memory.
+        /// Largest store file Open() accepts and a write may publish; a bigger file fails the
+        /// load instead of exhausting memory, and a bigger revision fails the write.
         static constexpr std::uintmax_t kMaxStoreFileBytes = std::uintmax_t{1} << 30;
 
         SQLiteConnection() = default;
+        /// @param maxStoreFileBytes store budget for both load and publish; values above
+        ///        kMaxStoreFileBytes are clamped to it (the budget can only be lowered).
+        explicit SQLiteConnection(std::uintmax_t maxStoreFileBytes) noexcept
+            : m_maxStoreFileBytes(maxStoreFileBytes < kMaxStoreFileBytes ? maxStoreFileBytes : kMaxStoreFileBytes)
+        {
+        }
         SQLiteConnection(const SQLiteConnection&) = delete;
         SQLiteConnection& operator=(const SQLiteConnection&) = delete;
         ~SQLiteConnection() override;
@@ -192,6 +203,7 @@ namespace Spark::Persistence
 #else
         int m_lockFd = -1; ///< flock()ed descriptor of `<path>.lock`.
 #endif
+        std::uintmax_t m_maxStoreFileBytes = kMaxStoreFileBytes; ///< Shared load/publish budget.
         bool m_open = false;
         bool m_inTransaction = false;
         std::string m_dbPath;

@@ -698,6 +698,11 @@ namespace Spark::Persistence
         // temp file created exclusively (never through a link planted at that name),
         // flushed, and published by atomic replace plus, on POSIX, a directory sync
         // (DATA-120).
+        //
+        // The writer enforces the same budget LoadFromDisk does. Escaping can double a
+        // value, so a run of individually accepted SETs could otherwise publish a store the
+        // next Open() refuses, leaving the server unable to start. The check runs while the
+        // revision is built so an oversized store is refused before it is fully materialized.
         std::string revision;
         revision += kKVFormatMarker;
         revision += '\n';
@@ -707,6 +712,18 @@ namespace Spark::Persistence
             revision += '\t';
             revision += EscapeKVField(value);
             revision += '\n';
+            if (static_cast<std::uintmax_t>(revision.size()) > m_maxStoreFileBytes)
+            {
+                break;
+            }
+        }
+        if (static_cast<std::uintmax_t>(revision.size()) > m_maxStoreFileBytes)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: refusing to publish '%s' (%zu entries): the revision exceeds the "
+                            "%ju-byte store budget Open() enforces; the write is rejected",
+                            m_dbPath.c_str(), m_kvStore.size(), static_cast<std::uintmax_t>(m_maxStoreFileBytes));
+            return false;
         }
 
         std::error_code error;
@@ -752,12 +769,12 @@ namespace Spark::Persistence
 
         std::error_code sizeError;
         const std::uintmax_t size = std::filesystem::file_size(path, sizeError);
-        if (sizeError || size > kMaxStoreFileBytes)
+        if (sizeError || size > m_maxStoreFileBytes)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core,
                             "AsyncDatabase: refusing to load '%s': size %ju exceeds the %ju-byte store budget%s%s",
                             m_dbPath.c_str(), static_cast<std::uintmax_t>(sizeError ? 0 : size),
-                            static_cast<std::uintmax_t>(kMaxStoreFileBytes), sizeError ? ": " : "",
+                            static_cast<std::uintmax_t>(m_maxStoreFileBytes), sizeError ? ": " : "",
                             sizeError ? sizeError.message().c_str() : "");
             return false;
         }

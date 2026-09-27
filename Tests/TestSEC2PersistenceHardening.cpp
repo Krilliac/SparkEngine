@@ -25,6 +25,7 @@
 #include "Game/FPSLocalProfile.h"
 #include "Game/FPSQuickLoad.h"
 
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -351,6 +352,71 @@ TEST(SEC2Persist_AsyncDatabaseRefusesDamagedStore)
     ASSERT_TRUE(reopened.Open(valid.string()));
     EXPECT_EQ(GetValue(reopened, "carriage"), std::string("ends-with-cr\r"));
     reopened.Close();
+}
+
+// ============================================================================
+// Findings 47/44: the writer never publishes a store its own reader refuses
+// ============================================================================
+
+TEST(SEC2Persist_AsyncDatabaseNeverPublishesOverBudgetStore)
+{
+    Scratch scratch("kv_budget");
+    const fs::path store = scratch / "store.kv";
+
+    // "#!spark-kv-v2\n" (14) + "a\t1\n" (4) = 18 bytes. 24 raw backslashes escape to 48,
+    // so "big\t<48>\n" adds 53 and the revision would be 71 bytes: over a 64-byte budget
+    // although the unescaped data (47 bytes) fits. Without the writer-side check the SET
+    // succeeds and the next Open() refuses the store it published.
+    constexpr std::uintmax_t kBudget = 64;
+    const std::string backslashes(24, '\\');
+
+    std::string published;
+    {
+        SQLiteConnection connection(kBudget);
+        ASSERT_TRUE(connection.Open(store.string()));
+        ASSERT_TRUE(connection.ExecuteRaw("SET a 1").success);
+        published = ReadBytes(store);
+        ASSERT_EQ(published, std::string("#!spark-kv-v2\na\t1\n"));
+
+        const auto oversized = connection.ExecuteRaw("SET big " + backslashes);
+        EXPECT_FALSE(oversized.success);
+        EXPECT_STR_CONTAINS(oversized.errorMessage, "not persisted");
+        EXPECT_EQ(GetValue(connection, "big"), std::string("<absent>"));
+        EXPECT_EQ(ReadBytes(store), published);
+
+        // A transaction whose commit would exceed the budget is not committed either.
+        ASSERT_TRUE(connection.BeginTransaction());
+        ASSERT_TRUE(connection.ExecuteRaw("SET big " + backslashes).success);
+        EXPECT_FALSE(connection.CommitTransaction());
+        EXPECT_EQ(GetValue(connection, "big"), std::string("<absent>"));
+        EXPECT_EQ(GetValue(connection, "a"), std::string("1"));
+        EXPECT_EQ(ReadBytes(store), published);
+
+        // A value that fits after escaping is still accepted.
+        EXPECT_TRUE(connection.ExecuteRaw("SET b " + std::string(8, '\\')).success);
+        EXPECT_LE(static_cast<std::uintmax_t>(fs::file_size(store)), kBudget);
+        connection.Close();
+    }
+
+    // Every acknowledged revision reopens under the same budget.
+    SQLiteConnection reopened(kBudget);
+    ASSERT_TRUE(reopened.Open(store.string()));
+    EXPECT_EQ(GetValue(reopened, "a"), std::string("1"));
+    EXPECT_EQ(GetValue(reopened, "b"), std::string(8, '\\'));
+    EXPECT_EQ(GetValue(reopened, "big"), std::string("<absent>"));
+    reopened.Close();
+
+    // The lowered budget governs the reader too: a store over it is refused, untouched.
+    const fs::path large = scratch / "large.kv";
+    const std::string largeBytes = "#!spark-kv-v2\nbig\t" + std::string(64, 'x') + "\n";
+    WriteBytes(large, largeBytes);
+    SQLiteConnection lowBudget(kBudget);
+    EXPECT_FALSE(lowBudget.Open(large.string()));
+    EXPECT_EQ(ReadBytes(large), largeBytes);
+    SQLiteConnection defaultBudget;
+    ASSERT_TRUE(defaultBudget.Open(large.string()));
+    EXPECT_EQ(GetValue(defaultBudget, "big"), std::string(64, 'x'));
+    defaultBudget.Close();
 }
 
 // ============================================================================

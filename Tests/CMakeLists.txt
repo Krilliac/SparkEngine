@@ -1765,13 +1765,13 @@ set_tests_properties(SparkUtf8PathTests PROPERTIES
 
 # SEC2: persistence hardening. Staging files are created exclusively and never through a
 # planted link (SaveFileDurability, SaveSystem, AsyncDatabase); a rename is never reported
-# uncommitted; the KV store rolls back unpublished writes, refuses damaged files and admits
+# uncommitted; the KV store rolls back unpublished writes, never publishes a revision over the budget its loader enforces, refuses damaged files and admits
 # one authority; SaveSystem keeps every RigidBody/Light field and reports partial deletes;
 # the FPS quick-load validates the profile before replacing the world. The two POSIX
 # directory-sync cases SKIP on Windows.
 add_test(NAME SparkSEC2PersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkSEC2PersistenceTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=12"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=13"
     LABELS "persistence;save;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 60)
