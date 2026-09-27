@@ -8,6 +8,7 @@
 #ifdef _WIN32
 
 #include "D3D12Device.h"
+#include "../../../Utils/LogMacros.h"
 #include "../../../Utils/Validate.h"
 
 namespace Spark
@@ -197,8 +198,23 @@ namespace Spark
             void D3D12CommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                     IRHITexture* depthStencil)
             {
-                D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[8] = {};
-                for (uint32_t i = 0; i < count && i < 8; i++)
+                // D3D12 binds at most 8 targets. The old loop stopped filling at 8 but still
+                // passed the caller's count to OMSetRenderTargets, so the runtime read handles
+                // past the end of this stack array. Clamp once and use the same count for both.
+                constexpr uint32_t kMaxTargets = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
+                if (count > kMaxTargets)
+                {
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D12CommandList::SetRenderTargets: %u targets requested, D3D12 binds "
+                                            "at most %u - extra targets ignored",
+                                            count, kMaxTargets);
+                    count = kMaxTargets;
+                }
+                if (count > 0 && !renderTargets)
+                    count = 0;
+
+                D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[kMaxTargets] = {};
+                for (uint32_t i = 0; i < count; i++)
                 {
                     auto* tex = static_cast<D3D12Texture*>(renderTargets[i]);
                     if (tex && tex->GetRTVDescriptor().IsValid())
