@@ -28,7 +28,7 @@
 #include "Utils/CrashHandler.h"
 #include "Utils/MultiISA.h"
 #include <Spark/Version.h>
-#include <charconv>
+#include <cctype>
 #include <cmath>
 #include <csignal>
 #include <cstring>
@@ -39,6 +39,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include <locale>
+#include <sstream>
+#include <string>
+#include <string_view>
 
 // LeakSanitizer runs in every ASan build (GCC defines __SANITIZE_ADDRESS__,
 // Clang reports address_sanitizer through __has_feature) and in Clang
@@ -151,11 +155,25 @@ static bool ConfigureExecScriptArgs(int argc, char* argv[])
 
     if (const char* seconds = FindLinuxCommandLineValue(argc, argv, "-test-seconds"))
     {
+        // libc++ 18 (the clang-tidy lane and Clang on Linux/macOS) deletes the
+        // floating-point std::from_chars overload. Accept only a plain decimal
+        // number: the character screen keeps out signs, whitespace, "nan",
+        // "inf" and hex floats, and the classic-locale, no-skip stream must
+        // consume the whole value.
+        const std::string_view text(seconds);
+        const bool plainDecimal =
+            !text.empty() && (std::isdigit(static_cast<unsigned char>(text.front())) != 0 || text.front() == '.') &&
+            text.find_first_not_of("0123456789.eE+-") == std::string_view::npos;
         double limit = 0.0;
-        const char* end = seconds + std::strlen(seconds);
-        const auto [parsedEnd, error] = std::from_chars(seconds, end, limit);
-        // from_chars also accepts "nan", "inf" and negatives; none is a usable limit.
-        if (error != std::errc{} || parsedEnd != end || !std::isfinite(limit) || limit <= 0.0)
+        bool parsed = false;
+        if (plainDecimal)
+        {
+            std::istringstream limitStream{std::string(text)};
+            limitStream.imbue(std::locale::classic());
+            limitStream >> std::noskipws >> limit;
+            parsed = !limitStream.fail() && limitStream.peek() == std::char_traits<char>::eof();
+        }
+        if (!parsed || !std::isfinite(limit) || limit <= 0.0)
         {
             std::fprintf(stderr, "SparkEngine: -test-seconds expects a positive number, got '%s'\n", seconds);
             return false;

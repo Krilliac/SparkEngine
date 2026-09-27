@@ -145,6 +145,9 @@ jobs:
     - name: Test CTest timeout and label policy
       run: python3 Tests/Tools/test_validate_ctest_policy.py
 
+    - name: Test clang-tidy diagnostic budget ratchet
+      run: python3 Tests/Tools/test_clang_tidy_budget.py
+
     - name: Test shared build-directory lock
       run: python3 Tests/Tools/test_build_lock.py
 
@@ -952,15 +955,10 @@ jobs:
         set -o pipefail
         cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log
 
-    # SparkTests pulls in SparkServer, SparkGateway and SparkCrashReporter via
-    # add_dependencies; the crash-reporter unit executables selected by the
-    # crash-security label are standalone targets and are named explicitly.
     - name: Build security runtime targets
       run: |
         set -o pipefail
-        cmake --build --preset linux-shipping --parallel $(nproc) --target \
-          SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \
-          SparkCrashReporterFakeGh 2>&1 | tee security-build.log
+        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee security-build.log
 
     - name: Run RemoteAdmin selectors
       run: |
@@ -3479,6 +3477,11 @@ jobs:
             -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" \
             -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      # clang-tidy parses sources without building them, so headers generated
+      # at build time must exist first (SparkServer/src/main.cpp includes the
+      # stamped SparkServerBuildIdentity.h).
+      - name: Generate build-time headers
+        run: cmake --build build --target SparkServerBuildIdentity
       - name: Run clang-tidy
         id: clang-tidy-run
         run: |
@@ -3519,9 +3522,23 @@ jobs:
             echo "::error::clang-tidy source inventory is empty"
             exit 1
           fi
-          xargs -0 -r -n 1 -P 2 clang-tidy -p build --warnings-as-errors="" \
-            < clang-tidy-files.list 2>&1 | tee clang-tidy-output.log
-          ct_exit=${PIPESTATUS[0]}
+          clang-tidy --version > clang-tidy-version.txt || exit 1
+          cat clang-tidy-version.txt
+          # CI-110 budget ratchet: one log per translation unit so the parallel
+          # workers never interleave partial diagnostic lines, concatenated in
+          # sorted order so the parsed stream is deterministic.
+          rm -rf clang-tidy-logs
+          mkdir clang-tidy-logs || exit 1
+          xargs -0 -r -n 1 -P 2 bash -c \
+            'clang-tidy -p build --warnings-as-errors="" "$1" > "$0/${1//\//__}.log" 2>&1' \
+            clang-tidy-logs < clang-tidy-files.list
+          ct_exit=$?
+          log_count=$(find clang-tidy-logs -type f -name '*.log' | wc -l)
+          if [ "$log_count" -ne "$file_count" ]; then
+            echo "::error::clang-tidy produced $log_count logs for $file_count translation units"
+            exit 1
+          fi
+          find clang-tidy-logs -type f -name '*.log' -print0 | sort -z | xargs -0 cat > clang-tidy-output.log || exit 1
           echo ""
           echo "=== Last 50 lines of clang-tidy output ==="
           tail -50 clang-tidy-output.log
@@ -3530,8 +3547,21 @@ jobs:
           warn_count=$(grep -cE ':\s*(warning|error):' clang-tidy-output.log || true)
           echo "clang-tidy issues detected: $warn_count"
           echo "warn_count=$warn_count" >> "$GITHUB_OUTPUT"
-          # Warnings remain advisory; compiler/configuration failures are fatal.
+          # Individual warnings do not fail this step; compiler/configuration
+          # failures are fatal here and the budget step below blocks regressions.
           exit "$ct_exit"
+      # CI-110: distinct diagnostics per check must equal the committed budget.
+      # More is a regression, an unbudgeted check is new debt, fewer means the
+      # budget must be lowered in the same change. Regenerate from this lane's
+      # uploaded log with Tools/clang_tidy_budget.py update.
+      - name: Enforce clang-tidy diagnostic budget
+        run: |
+          python3 Tools/clang_tidy_budget.py check \
+            --log clang-tidy-output.log \
+            --budget Tools/clang-tidy-budget.json \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --clang-tidy-version-file clang-tidy-version.txt \
+            --summary "$GITHUB_STEP_SUMMARY"
       - name: Extract clang-tidy error summary
         if: always()
         run: |
@@ -3552,7 +3582,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: clang-tidy-output
-          path: clang-tidy-output.log
+          path: |
+            clang-tidy-output.log
+            clang-tidy-version.txt
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: ignore
 

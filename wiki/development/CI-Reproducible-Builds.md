@@ -334,8 +334,9 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 
 - `check-thirdparty-manifest` — `./tools/check-thirdparty-manifest-sync.sh`
 - `coverage` — GCC Debug with `--coverage` + lcov, per-subsystem thresholds
-- `clang-tidy` — Clang Debug static analysis; the job is blocking, while
-  individual diagnostics are advisory
+- `clang-tidy` — Clang Debug static analysis over every shipped-product
+  translation unit; configure/compile failures block, and the diagnostic
+  budget ratchet (below) blocks any change in per-check diagnostic counts
 - `todo-count` — fails if TODO count exceeds threshold (20)
 - `build-installer` — builds the `SparkInstaller` target
 - `report-ci-errors` — aggregates `ci-errors-*` artifacts from failed jobs; findings from advisory lanes (job-level `continue-on-error`, e.g. `build-linux-msan`) are listed but do not fail the report. The reporter is loaded from the trusted `Working` checkout, so a change to it takes effect only after it lands there
@@ -344,6 +345,70 @@ To verify CI-100's required-job failure propagation on the `Working` ref, run
 `gh workflow run build.yml --ref Working -f simulate_required_job_failure=true`. The manual-only input deliberately fails
 the required `validate-ci-tools` job; `Required CI Gate` must then fail as well.
 This is a red control run and cannot qualify a release commit.
+
+## clang-tidy diagnostic budget ratchet (CI-110, job `clang-tidy`)
+
+`--warnings-as-errors=""` keeps a single diagnostic from failing the analysis,
+so `Tools/clang_tidy_budget.py` turns the diagnostic stream into a ratchet
+against the committed `Tools/clang-tidy-budget.json`. The run step writes one
+log per translation unit (parallel workers never interleave partial lines),
+checks that there is a log for every translation unit, and concatenates them in
+sorted order. The budget step then deduplicates diagnostics by
+repository-relative path, line, column, check and message (a header reported by
+many translation units counts once), counts them per file and check, and fails
+when:
+
+- a (file, check) entry reports more diagnostics than its budget (a
+  regression; the error names the file and lists its diagnostics);
+- a (file, check) pair that is not in the budget reports anything;
+- an entry reports fewer than its budget (the budget is stale: lower it in the
+  same change so the cleanup cannot be spent by a later regression elsewhere);
+- the clang-tidy major version differs from the budget's
+  `clangTidyMajorVersion` (18 on ubuntu-24.04).
+
+Reproduce the lane locally (ubuntu-24.04 packages: `clang-tidy`, `libc++-dev`,
+`libc++abi-dev`), with the CI configure line and `-B <dir>` outside the repo:
+
+```bash
+cmake -S . -B /tmp/tidy-build -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_CXX_FLAGS="-stdlib=libc++" -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" \
+  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+# Build the file list and per-TU logs exactly as the "Run clang-tidy" step does
+# (with -p /tmp/tidy-build in place of -p build), concatenate them into
+# clang-tidy-output.log, then:
+clang-tidy --version > clang-tidy-version.txt
+python3 Tools/clang_tidy_budget.py check --log clang-tidy-output.log \
+  --clang-tidy-version-file clang-tidy-version.txt
+```
+
+To accept a reviewed change (lowering after a cleanup, or a deliberate raise),
+download the lane's `clang-tidy-output` artifact (the log plus
+`clang-tidy-version.txt`) and regenerate; `--repo-root` is the checkout the log
+was produced in:
+
+```bash
+python3 Tools/clang_tidy_budget.py update --log clang-tidy-output.log \
+  --clang-tidy-version-file clang-tidy-version.txt \
+  --repo-root /home/runner/work/SparkEngine/SparkEngine --measured-at <commit-or-run>
+```
+
+A local measurement is only valid when it runs over the exact tree CI will
+check out. Never measure the shared working tree: uncommitted edits by other
+agents change counts, and an untracked source file becomes a budget entry that
+a clean checkout reports as stale. Export the commit (`git archive <sha> | tar
+-x -C <dir>`), link the submodule directories in, point a copy of
+`compile_commands.json` at the export, run clang-tidy there, and pass the
+export as `--repo-root`. Every commit that changes C++ under the analyzed roots
+must carry the matching budget update, because an exact ratchet reports both
+new and removed diagnostics.
+
+`Tests/Tools/test_clang_tidy_budget.py` (run by `validate-ci-tools`) covers the
+regression, unbudgeted-check, stale-budget, toolchain-mismatch, empty-log and
+malformed-budget paths, rejects budget entries for files git does not track,
+and pins the workflow wiring. A full local run of the
+955 translation units takes hours on a loaded 4-core machine.
 
 ## Notes
 
@@ -365,6 +430,7 @@ This is a red control run and cannot qualify a release commit.
   - Windows VS 2022 / VS 2026 recipes switched to Ninja Multi-Config + sccache (2026-09-06); the Visual Studio-generator configure now applies only to `build-windows-shipping`'s preset.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
+  - 2026-09-26: added the CI-110 clang-tidy diagnostic budget ratchet (per-TU logs, `Tools/clang_tidy_budget.py`, `Tools/clang-tidy-budget.json`); the committed budget was measured locally with Ubuntu clang-tidy 18.1.3 and the lane's configure line, not yet on a hosted run.
   - 2026-09-25: added build-output reproducibility (BLD-100): the build-root prefix map, the GCC LTO seed, `tools/compare_build_outputs.py`, the `ReproducibleBuild_*` CTests and the advisory `reproducibility-windows` job, measured locally with GCC 13.3.
 
 ## Related Pages

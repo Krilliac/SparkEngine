@@ -11,6 +11,7 @@
 #include <charconv>
 #include <format>
 #include <fstream>
+#include <locale>
 #include <sstream>
 
 namespace Spark
@@ -32,11 +33,15 @@ namespace Spark
                 ++idx;
             if (idx >= line.size() || line[idx] != ' ')
                 return false;
+            // libc++ 18 (the clang-tidy lane and Clang on Linux/macOS) deletes
+            // the floating-point std::from_chars overload. The scanned span is
+            // digits and dots only, so a classic-locale, no-skip stream that
+            // must consume all of it keeps the strict whole-span contract.
             double seconds = 0.0;
-            const char* first = line.data() + 1;
-            const char* last = line.data() + idx;
-            const auto [end, error] = std::from_chars(first, last, seconds);
-            if (error != std::errc{} || end != last)
+            std::istringstream secondsStream(line.substr(1, idx - 1));
+            secondsStream.imbue(std::locale::classic());
+            secondsStream >> std::noskipws >> seconds;
+            if (secondsStream.fail() || secondsStream.peek() != std::char_traits<char>::eof())
                 return false;
             out.atSec = seconds;
             out.command = line.substr(idx + 1);
