@@ -6,6 +6,7 @@
  * UIDesignerSystem, LevelStreamingTypes, CommandPalette, VersionControlTypes.
  */
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Fixtures/ScopedEditorProfile.h"
 #include "Core/EditorTheme.h"
@@ -1729,6 +1730,20 @@ TEST(ProjectManager_ResolveProjectScenePathRejectsTraversalBeforeLoad)
         EXPECT_FALSE(manager.LoadProjectScene("Scenes/OutsideLink.sparkscene", linkedWorld, resolved));
         EXPECT_TRUE(resolved.empty());
     }
+
+    // A directory link out of the project runs on every host: an NTFS junction on
+    // Windows (no privilege needed, unlike the file symlink above), a symlink elsewhere.
+    const std::filesystem::path outsideDirectory = parent / "OutsideScenes";
+    std::filesystem::create_directories(outsideDirectory);
+    std::ofstream(outsideDirectory / "Escaped.sparkscene") << Spark::SerializeWorld(sourceWorld);
+    const std::filesystem::path linkedDirectory = root / "Scenes" / "LinkedScenes";
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(outsideDirectory, linkedDirectory));
+    EXPECT_FALSE(manager.ResolveProjectScenePath("Scenes/LinkedScenes/Escaped.sparkscene", resolved));
+    EXPECT_TRUE(resolved.empty());
+    World junctionWorld;
+    EXPECT_FALSE(manager.LoadProjectScene("Scenes/LinkedScenes/Escaped.sparkscene", junctionWorld, resolved));
+    EXPECT_TRUE(resolved.empty());
+    SparkTestLinks::RemoveDirectoryLink(linkedDirectory);
 
     manager.RemoveRecentProject((root / "Contained.sparkproject").string());
     manager.Shutdown();

@@ -16,6 +16,7 @@
  * - The FPS quick-load validates the profile before the world is replaced.
  */
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 
 #include "Engine/ECS/Components.h"
@@ -176,6 +177,19 @@ TEST(SEC2Persist_DocumentStagingIgnoresPlantedLinks)
         EXPECT_FALSE(fs::is_symlink(document));
         EXPECT_FALSE(fs::exists(fs::symlink_status(WithSuffix(document, ".tmp"))));
     }
+
+    // A directory link at the staging name runs on every host: an NTFS junction on
+    // Windows (no privilege needed, and not reported as a symlink or a directory), a
+    // symlink elsewhere. It is unlinked, never written through or emptied.
+    const fs::path linkedDirectory = scratch / "linked-target";
+    fs::create_directories(linkedDirectory);
+    WriteBytes(linkedDirectory / "canary.txt", kCanaryBytes);
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(linkedDirectory, WithSuffix(document, ".tmp")));
+    ASSERT_TRUE(SaveFileDurability::WriteFileAtomically(document, "fourth\n", false, error));
+    EXPECT_EQ(ReadBytes(document), std::string("fourth\n"));
+    EXPECT_EQ(ReadBytes(linkedDirectory / "canary.txt"), std::string(kCanaryBytes));
+    EXPECT_TRUE(fs::is_directory(linkedDirectory));
+    EXPECT_FALSE(fs::exists(fs::symlink_status(WithSuffix(document, ".tmp"))));
 
     // A directory squatting on the staging name is never removed; the write fails closed.
     fs::create_directories(WithSuffix(document, ".tmp") / "occupant");

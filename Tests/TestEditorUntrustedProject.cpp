@@ -10,6 +10,7 @@
  *    before reading it into memory.
  */
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Fixtures/ScopedEditorProfile.h"
 #include "Core/ProjectManager.h"
@@ -69,22 +70,9 @@ namespace
         return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
     }
 
-    // Directory link an unprivileged test can create: a symlink where allowed,
-    // otherwise (Windows without Developer Mode) an NTFS junction.
-    bool MakeDirectoryLink(const fs::path& target, const fs::path& link)
-    {
-        std::error_code error;
-        fs::create_directory_symlink(target, link, error);
-        if (!error)
-            return true;
-#if defined(_WIN32)
-        const std::wstring command =
-            L"cmd /c mklink /J \"" + link.wstring() + L"\" \"" + target.wstring() + L"\" >nul 2>&1";
-        return _wsystem(command.c_str()) == 0 && fs::exists(fs::symlink_status(link, error));
-#else
-        return false;
-#endif
-    }
+    // Directory links come from the shared helper: an NTFS junction on Windows
+    // (no privilege needed), a directory symlink elsewhere.
+    using SparkTestLinks::MakeDirectoryLink;
 
     // A cookable project: Assets, Scenes, Config and a project document.
     fs::path MakeProject(const fs::path& parent)
@@ -151,12 +139,12 @@ TEST(UntrustedProject_CookRefusesLinkedProjectContent)
     ASSERT_TRUE(Cook(project, "CleanCook") == BuildResult::Success);
     EXPECT_TRUE(fs::is_regular_file(project / "CleanCook" / "Config" / "EditorSettings.json"));
 
-    // A file link is the disclosure case; fall back to a directory link or junction
-    // where the host does not allow unprivileged file symlinks.
+    // A directory link (an NTFS junction on Windows, which needs no privilege) runs
+    // on every host. A file link is the other disclosure case; it is planted as well
+    // where the host allows unprivileged file symlinks.
+    ASSERT_TRUE(MakeDirectoryLink(outside, project / "Config" / "Linked"));
     std::error_code linkError;
     fs::create_symlink(outside / "secret.txt", project / "Config" / "secret.txt", linkError);
-    if (linkError && !MakeDirectoryLink(outside, project / "Config" / "Linked"))
-        SKIP_TEST("cannot create a symlink or junction on this host");
 
     EXPECT_TRUE(Cook(project, "LinkedCook") == BuildResult::Failed);
     EXPECT_FALSE(fs::exists(project / "LinkedCook" / "Config" / "secret.txt"));
@@ -171,8 +159,7 @@ TEST(UntrustedProject_CookRefusesOutputThroughProjectLink)
     fs::create_directories(outside);
 
     // The default cook output parent ("Build") shipped as a link out of the project.
-    if (!MakeDirectoryLink(outside, project / "Build"))
-        SKIP_TEST("cannot create a directory symlink or junction on this host");
+    ASSERT_TRUE(MakeDirectoryLink(outside, project / "Build"));
     EXPECT_TRUE(Cook(project, "Build/Output") == BuildResult::Failed);
     EXPECT_FALSE(fs::exists(outside / "Output"));
 
@@ -191,8 +178,7 @@ TEST(UntrustedProject_PackageRefusesOutputThroughProjectLink)
     const fs::path project = MakeProject(scratch.Root());
     const fs::path outside = scratch.Root() / "Elsewhere";
     fs::create_directories(outside);
-    if (!MakeDirectoryLink(outside, project / "Build"))
-        SKIP_TEST("cannot create a directory symlink or junction on this host");
+    ASSERT_TRUE(MakeDirectoryLink(outside, project / "Build"));
 
     BuildCookPanel::BuildSettings settings;
     settings.platform = BuildPipeline::NativeTargetPlatform();

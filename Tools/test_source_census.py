@@ -64,6 +64,9 @@ HARNESS_TESTS = frozenset({
     # Verifies the sanitizer harness and instrumented C++ runtime, not a
     # test-local copy of engine behavior. Non-MSan builds explicitly skip it.
     "Tests/TestMSanCanary.cpp",
+    # Verifies the shared directory-link helper (an NTFS junction on Windows) that
+    # the link-refusal tests depend on, so it cannot silently stop making links.
+    "Tests/TestFilesystemLinks.cpp",
 })
 
 # A file with no production header still exercises production code if it drives

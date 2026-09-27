@@ -1,3 +1,4 @@
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "AssetPipeline/EditorAssetDrag.h"
 
@@ -77,14 +78,12 @@ TEST(EditorAssetDrag_ProducerRejectsPathsOutsideAssetsRoot)
     // The root itself is not an asset.
     EXPECT_TRUE(MakeAssetDragReference(project.assets, project.assets).empty());
 
-#ifndef _WIN32
-    // A directory symlink inside Assets/ that points outside must not launder
-    // an external file into an Assets/... reference.
-    std::error_code ec;
-    fs::create_directory_symlink(project.root / "Sibling", project.assets / "Linked", ec);
-    EXPECT_FALSE(static_cast<bool>(ec));
+    // A directory link inside Assets/ that points outside (an NTFS junction on
+    // Windows, a symlink elsewhere) must not launder an external file into an
+    // Assets/... reference.
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(project.root / "Sibling", project.assets / "Linked"));
     EXPECT_TRUE(MakeAssetDragReference(project.assets / "Linked" / "rogue.obj", project.assets).empty());
-#endif
+    SparkTestLinks::RemoveDirectoryLink(project.assets / "Linked");
 }
 
 TEST(EditorAssetDrag_ProducerRejectsUnassignableTypes)

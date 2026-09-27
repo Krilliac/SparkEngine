@@ -1,6 +1,7 @@
 // TestFileUtils.cpp - Tests for file I/O and path utilities
 // Uses the actual FileUtils.h header
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Graphics/ProjectAssetPath.h"
 #include "Utils/FileUtils.h"
@@ -299,16 +300,11 @@ TEST(ProjectAssetPath_ConfinesUnicodeAssetsAndDerivesSceneRoot)
         EXPECT_TRUE(resolved->cacheKey != second->cacheKey);
 
     EXPECT_TRUE(WriteOnePixelBmp(fixture.outside / "secret.bmp", 1, 2, 3));
-    std::error_code linkError;
-    std::filesystem::create_directory_symlink(fixture.outside, fixture.root / "Assets" / "Escape", linkError);
-    if (!linkError)
-    {
-        EXPECT_FALSE(Spark::ResolveProjectAssetPath(rootUtf8, "Assets/Escape/secret.bmp").has_value());
-    }
-    else
-    {
-        std::cout << "[ INFO   ] ProjectAssetPath symlink escape check skipped: " << linkError.message() << "\n";
-    }
+    // A directory link out of the project (an NTFS junction on Windows, which needs
+    // no privilege) must not resolve as a project asset.
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(fixture.outside, fixture.root / "Assets" / "Escape"));
+    EXPECT_FALSE(Spark::ResolveProjectAssetPath(rootUtf8, "Assets/Escape/secret.bmp").has_value());
+    SparkTestLinks::RemoveDirectoryLink(fixture.root / "Assets" / "Escape");
 
     const std::filesystem::path scene = fixture.root / "Scenes" / "Nested" / "Level.sparkscene";
     std::filesystem::create_directories(scene.parent_path());

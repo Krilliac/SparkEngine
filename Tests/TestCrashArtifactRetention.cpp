@@ -2,6 +2,7 @@
 // directories InstallCrashHandler() leaves in the temp directory are pruned by
 // an owner-verified, age/count/byte-bounded policy (Utils/CrashArtifactRetention.h).
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Utils/CrashArtifactDirectory.h"
 #include "Utils/CrashArtifactRetention.h"
@@ -186,12 +187,14 @@ TEST(CrashRetention_NeverFollowsLinksOrRemovesForeignContent)
         std::ofstream keep(target / "keep.txt");
         keep << "must survive";
     }
+    // An NTFS junction on Windows (no privilege needed), a symlink elsewhere.
     const fs::path link = scratch.path / ("spark_crash_" + std::to_string(kExitedPid) + "_" + Suffix(21));
-    fs::create_directory_symlink(target, link, error);
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(target, link));
+    fs::last_write_time(target, fs::file_time_type::clock::now() - std::chrono::hours(24 * 30), error);
 
     EXPECT_EQ(PruneStaleCrashArtifactDirectories(scratch.path), static_cast<std::size_t>(0));
     EXPECT_TRUE(fs::exists(foreign / "nested"));
     EXPECT_TRUE(fs::exists(target / "keep.txt"));
-    if (!error)
-        EXPECT_TRUE(fs::is_symlink(fs::symlink_status(link)));
+    EXPECT_TRUE(SparkTestLinks::IsDirectoryLink(link));
+    SparkTestLinks::RemoveDirectoryLink(link);
 }

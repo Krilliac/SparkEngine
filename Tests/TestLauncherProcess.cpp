@@ -1,4 +1,5 @@
 /** @file TestLauncherProcess.cpp @brief SparkLauncher project-action command contract tests. */
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "../SparkLauncher/src/LauncherProcess.h"
 #include "Utils/JsonUtils.h"
@@ -166,6 +167,32 @@ TEST(LauncherProcess_GameLaunchFailsClosedForMissingInvalidAndAmbiguousModules)
     std::filesystem::remove(linkedModule, linkError);
     std::filesystem::remove(AbiSidecar(linkedModule), linkError);
 #endif
+
+    // Directory links run on every host: an NTFS junction on Windows (no privilege
+    // needed, and not reported as a symlink), a symlink elsewhere. A module reached
+    // through one that leads out of the project is refused.
+    const auto linkedModuleDirectory = project.parent_path() / "LinkedModules";
+    const auto outsideDirectoryModule = NativeModule(root / "outside-dir", "Linked");
+    Touch(outsideDirectoryModule);
+    Touch(AbiSidecar(outsideDirectoryModule));
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(outsideDirectoryModule.parent_path(), linkedModuleDirectory));
+    WriteModuleManifest(project.parent_path(), {"LinkedModules/" + outsideDirectoryModule.filename().string()});
+    auto escapingDirectoryLink = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
+    EXPECT_FALSE(escapingDirectoryLink.has_value());
+    if (!escapingDirectoryLink)
+        EXPECT_TRUE(escapingDirectoryLink.error().find("symlink escapes") != std::string::npos);
+    EXPECT_TRUE(SparkTestLinks::RemoveDirectoryLink(linkedModuleDirectory));
+
+    // So is a project build directory that is a link out of the project.
+    const auto buildLink = project.parent_path() / "build";
+    std::filesystem::create_directories(root / "outside-build");
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(root / "outside-build", buildLink));
+    WriteModuleManifest(project.parent_path(), {"Sample.dll"});
+    auto escapingBuild = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
+    EXPECT_FALSE(escapingBuild.has_value());
+    if (!escapingBuild)
+        EXPECT_TRUE(escapingBuild.error().find("build directory escapes") != std::string::npos);
+    EXPECT_TRUE(SparkTestLinks::RemoveDirectoryLink(buildLink));
 
     WriteModuleManifest(project.parent_path(), {"Sample.dll"});
     const auto debugModule = NativeModule(project.parent_path() / "build" / "Debug", "Sample");

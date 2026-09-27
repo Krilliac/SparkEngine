@@ -1,6 +1,7 @@
 // TestSparkPak.cpp — Unit tests for SparkPak archive format (read, write, compress, VFS)
 // Standalone test: writes temp archives, reads them back, verifies round-trip correctness.
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Core/SparkPak.h"
 #include "Core/SparkPakWriter.h"
@@ -718,20 +719,24 @@ TEST(SparkPak_ProductionAddDirectoryRejectsSymlinkOutsideRoot)
     const fs::path root = base / "root";
     const fs::path outside = base / "outside.bin";
     std::error_code ec;
+    // Start clean: unlink any link an aborted run left, then drop the rest.
+    SparkTestLinks::RemoveDirectoryLink(root / "linked-dir");
+    fs::remove_all(base, ec);
     fs::create_directories(root, ec);
     {
         std::ofstream(root / "inside.bin", std::ios::binary) << "inside";
         std::ofstream(outside, std::ios::binary) << "outside-secret";
     }
 
+    // A directory link out of the root runs on every host: an NTFS junction on
+    // Windows (no privilege needed), a symlink elsewhere.
+    fs::create_directories(base / "outside-dir", ec);
+    std::ofstream(base / "outside-dir" / "secret.bin", std::ios::binary) << "outside-secret";
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(base / "outside-dir", root / "linked-dir"));
+
+    // A file symlink as well where the host allows one; Windows needs Developer
+    // Mode or elevated symlink rights for it, so its absence is not a failure.
     fs::create_symlink(outside, root / "outside-link.bin", ec);
-    if (ec)
-    {
-        // Windows commonly requires Developer Mode or elevated symlink rights.
-        // The containment test is exercised on platforms where creation succeeds.
-        Cleanup();
-        return;
-    }
 
     Spark::SparkPakWriter writer;
     writer.AddDirectory(root);
@@ -743,7 +748,9 @@ TEST(SparkPak_ProductionAddDirectoryRejectsSymlinkOutsideRoot)
     EXPECT_TRUE(reader.Open(pakPath));
     EXPECT_TRUE(reader.Exists("inside.bin"));
     EXPECT_FALSE(reader.Exists("outside-link.bin"));
+    EXPECT_FALSE(reader.Exists("linked-dir/secret.bin"));
     reader.Close();
+    EXPECT_TRUE(SparkTestLinks::RemoveDirectoryLink(root / "linked-dir"));
     Cleanup();
 }
 

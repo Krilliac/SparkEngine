@@ -1125,6 +1125,8 @@ target_sources(SparkTests PRIVATE
     TestConsoleProcessPipeReal.cpp
     TestCrashArtifactRetention.cpp
     TestCrashHandlerGatingReal.cpp
+    # Shared directory-link helper (NTFS junction on Windows) for the link-refusal tests.
+    TestFilesystemLinks.cpp
     TestCrashSymbolication.cpp
     TestEditorCrashHandlerFilterReal.cpp
     TestEditorRecovery.cpp
@@ -2023,6 +2025,15 @@ add_test(NAME CrashArtifactRetention COMMAND $<TARGET_FILE:SparkTests> --warn-is
 set_tests_properties(CrashArtifactRetention PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=CrashRetention_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "crash-security;security;unit"
+    TIMEOUT 30)
+
+# SEC4: the shared directory-link helper creates a real NTFS junction on Windows
+# (no privilege needed) and a symlink elsewhere, so the link-refusal tests that use
+# it run on every host instead of skipping where create_symlink needs Developer Mode.
+add_test(NAME FilesystemLinkHelper COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(FilesystemLinkHelper PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=FsLinkHelper_;SPARK_TEST_EXPECT_COUNT=2"
+    LABELS "security;unit"
     TIMEOUT 30)
 
 # OPS-100: signal-path build-id records (bounded ELF note parsing, fixed-buffer

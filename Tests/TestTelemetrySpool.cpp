@@ -1,4 +1,5 @@
 // TestTelemetrySpool.cpp - Durable telemetry delivery and hostile spool coverage
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Utils/Telemetry.h"
 
@@ -885,19 +886,22 @@ TEST(Telemetry_SpoolRecovery_SymlinkRejection)
     }
     std::error_code symlinkError;
     fs::create_symlink(symlinkTarget, symlinked.Artifact(), symlinkError);
+    auto state = std::make_shared<BackendState>();
 #ifdef _WIN32
-    if (symlinkError)
-    {
-        SKIP_TEST("File symlink fixtures are unsupported: " + symlinkError.message());
-    }
+    // A file symlink needs Developer Mode or symlink privilege on Windows. Only this
+    // artifact case depends on it; the directory cases below use NTFS junctions,
+    // which need no privilege, so they run on every Windows host.
+    const bool fileSymlinkPlanted = !symlinkError;
 #else
     ASSERT_TRUE(!symlinkError);
+    const bool fileSymlinkPlanted = true;
 #endif
-
-    auto state = std::make_shared<BackendState>();
-    ExerciseRejectedArtifact(MakeSpoolConfig(symlinked.Root()), state);
-    EXPECT_TRUE(fs::is_symlink(fs::symlink_status(symlinked.Artifact())));
-    EXPECT_EQ(ReadFile(symlinkTarget), std::string("preserve-me"));
+    if (fileSymlinkPlanted)
+    {
+        ExerciseRejectedArtifact(MakeSpoolConfig(symlinked.Root()), state);
+        EXPECT_TRUE(fs::is_symlink(fs::symlink_status(symlinked.Artifact())));
+        EXPECT_EQ(ReadFile(symlinkTarget), std::string("preserve-me"));
+    }
 
     TempTelemetrySpool redirected("symlink-directory");
     const fs::path externalDirectory = redirected.Root() / "caller-owned-directory";
@@ -907,16 +911,7 @@ TEST(Telemetry_SpoolRecovery_SymlinkRejection)
         std::ofstream output(externalDirectory / "caller-owned.txt");
         output << "preserve-me";
     }
-    symlinkError.clear();
-    fs::create_directory_symlink(externalDirectory, linkedDirectory, symlinkError);
-#ifdef _WIN32
-    if (symlinkError)
-    {
-        SKIP_TEST("Directory symlink fixtures are unsupported: " + symlinkError.message());
-    }
-#else
-    ASSERT_TRUE(!symlinkError);
-#endif
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(externalDirectory, linkedDirectory));
 
     telemetry.Initialize(MakeSpoolConfig(linkedDirectory));
     state = std::make_shared<BackendState>();
@@ -944,16 +939,7 @@ TEST(Telemetry_SpoolRecovery_SymlinkRejection)
 
     const fs::path linkedParent = redirected.Root() / "parent-link";
     const fs::path finalLeaf = linkedParent / "new-spool";
-    symlinkError.clear();
-    fs::create_directory_symlink(externalDirectory, linkedParent, symlinkError);
-#ifdef _WIN32
-    if (symlinkError)
-    {
-        SKIP_TEST("Parent symlink fixtures are unsupported: " + symlinkError.message());
-    }
-#else
-    ASSERT_TRUE(!symlinkError);
-#endif
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(externalDirectory, linkedParent));
 
     {
         WorkingDirectoryGuard cwd(redirected.Root());
