@@ -21,6 +21,10 @@ namespace SparkInstaller
 
         // Filename located at <destination>/.sparkengine-install.json.
         static std::string FileName() { return ".sparkengine-install.json"; }
+        // Written into a fresh clone before it is activated at the destination
+        // and removed only after the first build succeeds and the install state
+        // is saved. Its presence without an install state means Resume install.
+        static std::string PendingFileName() { return ".sparkengine-install.pending"; }
         // Written when a failed update could not restore and rebuild the
         // previous commit; the tree's binaries do not match its source.
         static std::string RepairRequiredFileName() { return ".sparkengine-install.repair-required"; }

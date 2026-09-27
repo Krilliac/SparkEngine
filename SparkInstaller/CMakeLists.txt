@@ -186,7 +186,9 @@ if(SPARKINSTALLER_BUILD_TESTS)
         target_compile_options(SparkInstallerTransactionTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkInstallerTransactionTests COMMAND SparkInstallerTransactionTests)
-    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 15 LABELS installer)
+    # Each case drives the installer through the fake git/cmake executable;
+    # the fresh-install, resume and rollback cases spawn about 150 processes.
+    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 60 LABELS installer)
 
     if(WIN32)
         set(_sparkinstaller_platform "Windows")

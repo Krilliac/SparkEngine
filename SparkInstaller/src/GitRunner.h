@@ -19,9 +19,9 @@ namespace SparkInstaller
         // Refuse an update when tracked or untracked local changes could make
         // rollback ambiguous or cause checkout to replace user data. The only
         // tolerated entries are untracked installer-owned files (the install
-        // marker, its atomic-write .tmp sibling, and the repair-required
-        // marker), which the installer itself writes into the checkout; any
-        // other entry is dirty.
+        // marker, its atomic-write .tmp sibling, and the pending and
+        // repair-required markers), which the installer itself writes into
+        // the checkout; any other entry is dirty.
         bool WorkingTreeClean(const std::string& destination, const LogSink& log) const;
         bool CheckoutRef(const std::string& ref, const std::string& destination, const LogSink& log) const;
         // Restore an exact previously observed commit without forcing away

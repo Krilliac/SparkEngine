@@ -54,6 +54,12 @@ namespace
         return line;
     }
 
+    bool EnvironmentFlagSet(const char* name)
+    {
+        const char* value = std::getenv(name);
+        return value && std::string_view(value) == "1";
+    }
+
     // The fake git and cmake share this executable. It keeps a tiny model of
     // the checkout in its working directory: fake-git-head is HEAD after a
     // checkout (a detached checkout restores the named commit, a ref checkout
@@ -73,6 +79,17 @@ namespace
         }
         if (command == "--version" || command == "fetch" || command == "-S" || command == "status")
             return 0;
+        if (command == "clone")
+        {
+            // The destination is the last argument. A failing clone still
+            // leaves a partial tree behind, as an interrupted git clone does.
+            const fs::path cloned = argv[argc - 1];
+            std::error_code error;
+            fs::create_directories(cloned / ".git", error);
+            if (error || !WriteTextFile(cloned / "CMakeLists.txt", "cmake_minimum_required(VERSION 3.25)\n"))
+                return 92;
+            return EnvironmentFlagSet("SPARK_FAKE_CLONE_FAIL") ? 41 : 0;
+        }
         if (command == "checkout")
         {
             if (argc < 3)
@@ -90,7 +107,7 @@ namespace
                 builds = std::stoi(count);
             if (!WriteTextFile("fake-cmake-build-count", std::to_string(builds + 1)))
                 return 93;
-            if (fs::exists("force-build-failure"))
+            if (fs::exists("force-build-failure") || EnvironmentFlagSet("SPARK_FAKE_BUILD_FAIL"))
                 return 42;
             // The update ref's build is broken; every earlier commit still builds.
             if (fs::exists("force-build-failure-on-new-ref") && ReadFirstLine("fake-git-head") == kFakeNewCommit)
@@ -583,6 +600,159 @@ namespace
                                             /*impossibleFreeSpace=*/false, /*missingCMake=*/false);
         return failures;
     }
+
+    bool HasStagingSibling(const fs::path& parent, const std::string& destinationName)
+    {
+        const std::string prefix = "." + destinationName + ".sparkinstall-";
+        std::error_code error;
+        for (const fs::directory_entry& entry : fs::directory_iterator(parent, error))
+        {
+            if (entry.path().filename().string().rfind(prefix, 0) == 0)
+                return true;
+        }
+        return false;
+    }
+
+    // A failed clone happens in staging: the destination never appears and
+    // the partial staging tree is removed.
+    int RunFreshInstallCloneFailureTest(const fs::path& executable)
+    {
+        const std::string name = "fresh install clone failure";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / "install";
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+        SetEnvironment("SPARK_FAKE_CLONE_FAIL", "1");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+        context.minFreeBytes = std::uintmax_t{0};
+        const int result = SparkInstaller::Installer::Run(context);
+        SetEnvironment("SPARK_FAKE_CLONE_FAIL", "");
+
+        failures +=
+            Check(result == 5, name + ": expected clone failure exit 5, got " + std::to_string(result) + "\n" + log);
+        failures += Check(!fs::exists(destination), name + ": a failed clone created the destination");
+        failures += Check(!HasStagingSibling(root, "install"), name + ": the partial staging clone was left behind");
+
+        std::error_code error;
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    // A fresh install whose build fails stays pending; it is never mistaken
+    // for a working install to update, and the next run resumes it.
+    int RunFreshInstallBuildFailureResumeTest(const fs::path& executable)
+    {
+        const std::string name = "fresh install resume";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / "install";
+        const fs::path pendingMarker = destination / SparkInstaller::InstallState::PendingFileName();
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+
+        {
+            SetEnvironment("SPARK_FAKE_BUILD_FAIL", "1");
+            std::string log;
+            SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+            context.minFreeBytes = std::uintmax_t{0};
+            const int result = SparkInstaller::Installer::Run(context);
+            SetEnvironment("SPARK_FAKE_BUILD_FAIL", "");
+            failures += Check(result == 7,
+                              name + ": expected build failure exit 7, got " + std::to_string(result) + "\n" + log);
+            failures += Check(fs::is_regular_file(pendingMarker),
+                              name + ": the activated but unbuilt clone has no pending marker");
+            failures += Check(!SparkInstaller::InstallState::Exists(destination.string()),
+                              name + ": an unbuilt install recorded install state");
+            failures += Check(!HasStagingSibling(root, "install"), name + ": activation left the staging tree");
+        }
+        {
+            std::string log;
+            SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+            context.minFreeBytes = std::uintmax_t{0};
+            context.ref = "Other";
+            const int result = SparkInstaller::Installer::Run(context);
+            failures += Check(result == 4, name + ": a different ref resumed the pending clone, exit " +
+                                               std::to_string(result) + "\n" + log);
+            failures += Check(fs::is_regular_file(pendingMarker), name + ": a refused resume cleared the marker");
+        }
+        {
+            SetEnvironment("SPARK_FAKE_HEAD", "moved-head");
+            std::string log;
+            SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+            context.minFreeBytes = std::uintmax_t{0};
+            const int result = SparkInstaller::Installer::Run(context);
+            SetEnvironment("SPARK_FAKE_HEAD", "");
+            failures += Check(result == 5, name + ": a clone moved off its pending commit was resumed, exit " +
+                                               std::to_string(result) + "\n" + log);
+        }
+        {
+            const fs::path toolLog = root / "resume-tool-invocations.log";
+            SetEnvironment("SPARK_FAKE_TOOL_LOG", toolLog.string());
+            std::string log;
+            SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+            context.minFreeBytes = std::uintmax_t{0};
+            const int result = SparkInstaller::Installer::Run(context);
+            SetEnvironment("SPARK_FAKE_TOOL_LOG", "");
+            failures += Check(result == 0, name + ": resume failed, exit " + std::to_string(result) + "\n" + log);
+            failures += Check(log.find("Mode: Resume install") != std::string::npos,
+                              name + ": the pending clone was not detected as Resume install\n" + log);
+            bool built = false;
+            for (const std::string& command : ReadToolLog(toolLog))
+            {
+                failures += Check(command != "clone" && command != "fetch" && command != "checkout",
+                                  name + ": resume ran `git " + command + "`");
+                built = built || command == "--build";
+            }
+            failures += Check(built, name + ": resume did not build");
+            SparkInstaller::InstallState loaded;
+            failures += Check(SparkInstaller::InstallState::Load(destination.string(), loaded) &&
+                                  loaded.commit == kFakeHeadCommit,
+                              name + ": resume did not record the cloned commit");
+            failures += Check(!fs::exists(pendingMarker), name + ": a finished install kept its pending marker");
+        }
+
+        std::error_code error;
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    // The destination turned non-empty after the emptiness check: activation
+    // must refuse and leave both trees intact, and succeed once it is empty.
+    int RunActivateStagedTreeTest()
+    {
+        const std::string name = "staged tree activation";
+        const fs::path root = MakeTestRoot();
+        const fs::path staging = root / ".install.sparkinstall-test";
+        const fs::path destination = root / "install";
+        int failures = CreateFakeCheckout(staging, name);
+        std::error_code error;
+        fs::create_directories(destination, error);
+        failures += Check(!error && WriteTextFile(destination / "user.txt", "user data"),
+                          name + ": could not create the non-empty destination");
+
+        std::string activationError;
+        failures += Check(!SparkInstaller::detail::ActivateStagedTree(staging, destination, activationError),
+                          name + ": activation replaced a non-empty destination");
+        failures += Check(!activationError.empty(), name + ": refused activation gave no reason");
+        failures += Check(ReadFirstLine(destination / "user.txt") == "user data",
+                          name + ": refused activation changed the destination");
+        failures += Check(fs::exists(staging / "CMakeLists.txt"), name + ": refused activation lost the staged clone");
+
+        fs::remove(destination / "user.txt", error);
+        activationError.clear();
+        failures += Check(SparkInstaller::detail::ActivateStagedTree(staging, destination, activationError),
+                          name + ": activation into an empty destination failed: " + activationError);
+        failures += Check(fs::exists(destination / "CMakeLists.txt") && !fs::exists(staging),
+                          name + ": activation did not move the staged clone into place");
+
+        fs::remove_all(root, error);
+        return failures;
+    }
 } // namespace
 
 int main(int argc, char* argv[])
@@ -599,5 +769,8 @@ int main(int argc, char* argv[])
     failures += RunUpdateClearsRepairMarkerTest(executable);
     failures += RunPostBuildHeadCommitFailureTest(executable);
     failures += RunPreflightTests(executable);
+    failures += RunFreshInstallCloneFailureTest(executable);
+    failures += RunFreshInstallBuildFailureResumeTest(executable);
+    failures += RunActivateStagedTreeTest();
     return failures == 0 ? 0 : 1;
 }

@@ -8,10 +8,20 @@
 #include "InstallerPreflight.h"
 #include "ProcessRunner.h"
 
+#include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <system_error>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace SparkInstaller
 {
@@ -23,6 +33,59 @@ namespace SparkInstaller
         {
             if (log)
                 log(msg);
+        }
+
+        bool PendingMarkerExists(const fs::path& dest)
+        {
+            std::error_code ec;
+            return fs::is_regular_file(fs::symlink_status(dest / InstallState::PendingFileName(), ec));
+        }
+
+        // The pending marker holds the ref and the exact commit that was cloned,
+        // one "key=value" line each.
+        bool WritePendingMarker(const fs::path& tree, const std::string& ref, const std::string& commit)
+        {
+            std::ofstream out(tree / InstallState::PendingFileName(), std::ios::binary | std::ios::trunc);
+            out << "ref=" << ref << '\n' << "commit=" << commit << '\n';
+            out.close();
+            return static_cast<bool>(out);
+        }
+
+        bool ReadPendingMarker(const fs::path& tree, std::string& ref, std::string& commit)
+        {
+            constexpr std::uintmax_t kMaxPendingMarkerBytes = 4096;
+            const fs::path marker = tree / InstallState::PendingFileName();
+            std::error_code ec;
+            const std::uintmax_t size = fs::file_size(marker, ec);
+            if (ec || size > kMaxPendingMarkerBytes)
+                return false;
+            std::ifstream in(marker, std::ios::binary);
+            std::string line;
+            ref.clear();
+            commit.clear();
+            while (std::getline(in, line))
+            {
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+                if (line.rfind("ref=", 0) == 0)
+                    ref = line.substr(4);
+                else if (line.rfind("commit=", 0) == 0)
+                    commit = line.substr(7);
+            }
+            return !ref.empty() && !commit.empty();
+        }
+
+        // A sibling of the destination, so activation is a same-volume rename.
+        fs::path MakeStagingPath(const fs::path& dest)
+        {
+#ifdef _WIN32
+            const long long pid = _getpid();
+#else
+            const long long pid = getpid();
+#endif
+            const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+            return dest.parent_path() / ("." + dest.filename().string() + ".sparkinstall-" + std::to_string(pid) + "-" +
+                                         std::to_string(stamp));
         }
 
         bool PathLooksLikeEngineClone(const fs::path& dest)
@@ -129,14 +192,20 @@ namespace SparkInstaller
         ctx.destination = dest.string();
 
         // --- Mode detection ------------------------------------------------
+        // A pending marker without install state is a clone this installer
+        // activated but never finished building; it is never updated.
         if (InstallState::Exists(ctx.destination))
             ctx.mode = Mode::Update;
+        else if (PendingMarkerExists(dest))
+            ctx.mode = Mode::ResumeInstall;
         else if (PathLooksLikeEngineClone(dest))
             ctx.mode = Mode::Update; // existing clone without our marker
         else
             ctx.mode = Mode::Install;
 
-        Emit(ctx.log, ctx.mode == Mode::Install ? "Mode: Install" : "Mode: Update");
+        Emit(ctx.log, ctx.mode == Mode::Install         ? "Mode: Install"
+                      : ctx.mode == Mode::ResumeInstall ? "Mode: Resume install"
+                                                        : "Mode: Update");
 
         // --- Preflight ----------------------------------------------------
         // Every check runs before git bootstrap, directory creation, clone or
@@ -193,7 +262,11 @@ namespace SparkInstaller
         const auto rollbackUpdate = [&](const std::string& reason, int failureCode)
         {
             if (!isUpdate)
+            {
+                Emit(ctx.log, "Install not finished (" + reason + "); " + ctx.destination +
+                                  " stays marked pending and the next run resumes it.");
                 return failureCode;
+            }
 
             Emit(ctx.log, "Update failed (" + reason + "); rolling back update to " + previousCommit);
             std::string repairReason;
@@ -224,7 +297,7 @@ namespace SparkInstaller
             return failureCode;
         };
 
-        // --- Install mode: clone ------------------------------------------
+        // --- Install mode: clone into staging, then activate ---------------
         if (ctx.mode == Mode::Install)
         {
             std::error_code ec;
@@ -236,10 +309,72 @@ namespace SparkInstaller
                 return 4;
             }
 
-            Emit(ctx.log, "Cloning " + ctx.repoUrl + " @ " + ctx.ref + " -> " + ctx.destination);
-            if (!git.Clone(ctx.repoUrl, ctx.ref, ctx.destination, ctx.log))
+            // The staging path is new to this run (checked below), so removing
+            // it on failure can only delete what this run's clone wrote.
+            const fs::path staging = MakeStagingPath(dest);
+            if (fs::exists(fs::symlink_status(staging, ec)))
             {
-                Emit(ctx.log, "error: git clone failed");
+                Emit(ctx.log, "error: staging path already exists: " + staging.string());
+                return 5;
+            }
+            const auto discardStaging = [&staging]
+            {
+                std::error_code ignored;
+                fs::remove_all(staging, ignored);
+            };
+
+            Emit(ctx.log, "Cloning " + ctx.repoUrl + " @ " + ctx.ref + " -> " + staging.string());
+            if (!git.Clone(ctx.repoUrl, ctx.ref, staging.string(), ctx.log))
+            {
+                Emit(ctx.log, "error: git clone failed; " + ctx.destination + " was not changed");
+                discardStaging();
+                return 5;
+            }
+            const std::string stagedCommit = git.HeadCommit(staging.string());
+            if (stagedCommit.empty())
+            {
+                Emit(ctx.log, "error: could not determine the cloned commit; " + ctx.destination + " was not changed");
+                discardStaging();
+                return 5;
+            }
+            if (!WritePendingMarker(staging, ctx.ref, stagedCommit))
+            {
+                Emit(ctx.log,
+                     "error: could not write the pending-install marker; " + ctx.destination + " was not changed");
+                discardStaging();
+                return 8;
+            }
+
+            std::string activationError;
+            if (!detail::ActivateStagedTree(staging, dest, activationError))
+            {
+                Emit(ctx.log, "error: " + activationError + "; the clone is kept at " + staging.string());
+                return 4;
+            }
+            Emit(ctx.log, "Activated " + stagedCommit + " at " + ctx.destination);
+        }
+        else if (ctx.mode == Mode::ResumeInstall)
+        {
+            std::string pendingRef;
+            std::string pendingCommit;
+            if (!ReadPendingMarker(dest, pendingRef, pendingCommit))
+            {
+                Emit(ctx.log, "error: the pending-install marker in " + ctx.destination +
+                                  " cannot be read; remove the destination and install again");
+                return 8;
+            }
+            Emit(ctx.log, "Resuming the unfinished install of " + pendingRef + " @ " + pendingCommit);
+            if (pendingRef != ctx.ref)
+            {
+                Emit(ctx.log, "error: " + ctx.destination + " holds an unfinished install of ref " + pendingRef +
+                                  ", not " + ctx.ref + "; rerun with --ref " + pendingRef +
+                                  " or remove the destination");
+                return 4;
+            }
+            if (git.HeadCommit(ctx.destination) != pendingCommit)
+            {
+                Emit(ctx.log, "error: " + ctx.destination + " is no longer at the cloned commit " + pendingCommit +
+                                  "; refusing to resume");
                 return 5;
             }
         }
@@ -302,8 +437,56 @@ namespace SparkInstaller
             Emit(ctx.log, "error: could not remove the repair-required marker: " + repairMarkerError.message());
             return 8;
         }
+        // Removing the pending marker is a fresh install's commit point.
+        std::error_code pendingMarkerError;
+        fs::remove(dest / InstallState::PendingFileName(), pendingMarkerError);
+        if (pendingMarkerError)
+        {
+            Emit(ctx.log, "error: could not remove the pending-install marker: " + pendingMarkerError.message());
+            return 8;
+        }
 
         Emit(ctx.log, "Done. Engine built at: " + ctx.configManager.config.buildPath);
         return 0;
+    }
+
+    bool detail::ActivateStagedTree(const fs::path& staging, const fs::path& destination, std::string& error)
+    {
+        std::error_code ec;
+        const fs::file_status status = fs::symlink_status(destination, ec);
+        const bool existed = fs::exists(status);
+        if (existed)
+        {
+            if (fs::is_symlink(status) || !fs::is_directory(status))
+            {
+                error = destination.string() + " exists and is not a directory";
+                return false;
+            }
+            if (!fs::is_empty(destination, ec) || ec)
+            {
+                error = destination.string() + " is no longer empty";
+                return false;
+            }
+            // remove() deletes only an empty directory, so an entry created
+            // after the check makes it fail rather than delete anything.
+            if (!fs::remove(destination, ec) || ec)
+            {
+                error = "could not replace the empty destination " + destination.string() + ": " + ec.message();
+                return false;
+            }
+        }
+        // rename() never replaces a non-empty directory on any platform.
+        fs::rename(staging, destination, ec);
+        if (ec)
+        {
+            error = "could not move the staged clone to " + destination.string() + ": " + ec.message();
+            if (existed)
+            {
+                std::error_code ignored;
+                fs::create_directory(destination, ignored);
+            }
+            return false;
+        }
+        return true;
     }
 } // namespace SparkInstaller

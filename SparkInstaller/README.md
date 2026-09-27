@@ -17,9 +17,27 @@ taste, and builds the engine on your machine.
 3. Prompt for destination directory and ref (branch / tag).
 4. Let you pick a build preset: **Defaults**, **All on**, **Minimal**,
    **Linux-friendly**, **Shipping**, or **Development**.
-5. `git clone --recurse-submodules --branch <ref>` the repository.
-6. Run `cmake` configure + build for the chosen options.
-7. Write `.sparkengine-install.json` into the install root to mark it.
+5. `git clone --recurse-submodules --branch <ref>` the repository into a
+   hidden sibling staging directory, `.<name>.sparkinstall-<pid>-<stamp>`, on
+   the same volume as the destination. A failed or interrupted clone is removed
+   and the destination is never created or changed.
+6. Write `.sparkengine-install.pending` (the ref and the cloned commit) into the
+   staging tree, then activate it: remove the empty destination directory, if
+   there is one, and rename the staging tree into its place. A destination
+   that is no longer empty is never overwritten; the run exits 4 and keeps the
+   staging tree, whose path it reports.
+7. Run `cmake` configure + build for the chosen options.
+8. Write `.sparkengine-install.json` into the install root to mark it, then
+   remove the pending marker. That removal is the install's commit point.
+
+**Resume install mode** (destination holds `.sparkengine-install.pending` and
+no `.sparkengine-install.json`): an earlier install activated its clone but its
+configure or build failed or was interrupted, or it ran with `--skip-build`.
+The installer never updates such a tree. It refuses to resume when `--ref`
+differs from the pending ref (exit 4) or when `HEAD` is no longer the cloned
+commit (exit 5). Otherwise it skips clone and fetch, reruns configure + build,
+and then records the install as in steps 7 and 8. A failed resume keeps the
+pending marker.
 
 **Update mode** (destination contains an existing install):
 
@@ -45,8 +63,8 @@ rebuild or the verification fails, the installer writes
 `.sparkengine-install.repair-required` (with the reason) and exits **9**; a
 later successful update clears it.
 
-The same binary handles both modes — it picks automatically based on what's
-in the destination.
+The same binary handles all three modes — it picks automatically based on
+what's in the destination.
 
 ## Preflight
 
@@ -82,11 +100,11 @@ tree built with the default options (tests and game modules on) takes about
 | 0 | Success. |
 | 2 | Invalid arguments or unresolvable destination. |
 | 3 | Git is unavailable and could not be bootstrapped. |
-| 4 | Install destination exists and is not empty. |
-| 5 | Clone, fetch, checkout or submodule update failed, or the existing install has local changes. |
+| 4 | Install destination exists and is not empty (the staged clone is kept and reported when it appeared during the clone), or a pending install was started for a different ref. |
+| 5 | Clone, fetch, checkout or submodule update failed, the existing install has local changes, or a pending install is no longer at its cloned commit. |
 | 6 | CMake configure failed. |
 | 7 | CMake build failed. |
-| 8 | The installed commit or the install marker could not be recorded. |
+| 8 | The installed commit, the install marker or the pending-install marker could not be recorded, read or removed. |
 | 9 | An update failed and its rollback could not restore and rebuild the previous commit; the install requires repair (see `.sparkengine-install.repair-required`). |
 | 10 | Preflight refused the run; nothing was changed. |
 
@@ -108,7 +126,7 @@ sparkinstaller --headless \
 | `--repo <url>` | Override repo URL (defaults to `Krilliac/SparkEngine` on GitHub). |
 | `--gui` | Launch the ImGui wizard instead of the terminal UI. |
 | `--headless` | Non-interactive; fails if required inputs are missing. |
-| `--skip-build` | Clone only; do not configure or build. |
+| `--skip-build` | Clone only; do not configure or build. A fresh install stays pending and the next run without it resumes the build. |
 | `--skip-submodules` | Skip submodule update step in Update mode. |
 | `--help`, `--version` | Help / version. |
 

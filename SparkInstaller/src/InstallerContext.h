@@ -12,7 +12,10 @@ namespace SparkInstaller
     enum class Mode
     {
         Install,
-        Update
+        Update,
+        // The destination holds a clone this installer activated whose first
+        // configure or build never completed (pending marker, no install state).
+        ResumeInstall
     };
 
     enum class Frontend

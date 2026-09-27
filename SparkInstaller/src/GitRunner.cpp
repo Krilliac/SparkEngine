@@ -67,11 +67,11 @@ namespace SparkInstaller
         // updated from would not carry a new ignore rule), so the update
         // cleanliness check must recognize them explicitly.
         // The ".tmp" sibling is InstallState::Save's atomic-replace staging file;
-        // the repair-required marker records a rollback that could not rebuild
-        // the previous commit.
-        std::array<std::string, 3> InstallerOwnedPaths()
+        // the pending and repair-required markers record an unfinished fresh
+        // install and a rollback that could not rebuild the previous commit.
+        std::array<std::string, 4> InstallerOwnedPaths()
         {
-            return {InstallState::FileName(), InstallState::FileName() + ".tmp",
+            return {InstallState::FileName(), InstallState::FileName() + ".tmp", InstallState::PendingFileName(),
                     InstallState::RepairRequiredFileName()};
         }
 
