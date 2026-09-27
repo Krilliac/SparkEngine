@@ -30,6 +30,7 @@
 #include <cmath>
 #include <future>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -360,8 +361,14 @@ TEST(SEC2Console_FiniteFloatParserRejectsNanInfinityAndGarbage)
 {
     using SparkFPS::ConsolePolicy::ParseFiniteFloat;
 
-    for (const char* rejected : {"nan", "NaN", "-nan", "inf", "-inf", "infinity", "1e39", "-1e39", "", " 1", "1 ",
-                                 "1.5abc", "0x10", "++1", "abc"})
+    // The parser must not depend on the floating-point std::from_chars overload
+    // (deleted in libc++ 18). Its stream fallback hands characters to strtod on
+    // some libraries, so hex floats, INF/NAN spellings and bare signs must be
+    // rejected by the parser itself, not by the library.
+    for (const char* rejected :
+         {"nan", "NaN", "-nan", "inf", "-inf",   "infinity", "INF",     "+inf",   "1e39", "-1e39",
+          "",    " 1",  "1 ",   "\t1", "1.5abc", "0x10",     "0x1p3",   "-0X1P3", "++1",  "+-1",
+          "-",   "+",   ".",    "e5",  "1,5",    "1.0f",     "1.5e3.2", "abc"})
     {
         EXPECT_FALSE(ParseFiniteFloat(rejected).has_value());
     }
@@ -370,4 +377,9 @@ TEST(SEC2Console_FiniteFloatParserRejectsNanInfinityAndGarbage)
     EXPECT_NEAR(ParseFiniteFloat("-3").value_or(0.0f), -3.0f, 1e-6f);
     EXPECT_NEAR(ParseFiniteFloat("+0.25").value_or(0.0f), 0.25f, 1e-6f);
     EXPECT_NEAR(ParseFiniteFloat("1e3").value_or(0.0f), 1000.0f, 1e-3f);
+    EXPECT_NEAR(ParseFiniteFloat("-1.25E-2").value_or(0.0f), -0.0125f, 1e-6f);
+    EXPECT_NEAR(ParseFiniteFloat(".5").value_or(0.0f), 0.5f, 1e-6f);
+    // A token that is not NUL-terminated at its end must parse only its own span.
+    constexpr std::string_view kPrefix = std::string_view("7.5xyz").substr(0, 3);
+    EXPECT_NEAR(ParseFiniteFloat(kPrefix).value_or(0.0f), 7.5f, 1e-6f);
 }

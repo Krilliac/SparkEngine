@@ -5,7 +5,8 @@
  *
  * Contract:
  * - Thread affinity: none (constexpr / pure functions).
- * - Allocation: none.
+ * - Allocation: none, except ParseFiniteFloat, which builds a short-lived
+ *   string stream per token (console input only, never per frame).
  * - Used by: SparkGameModule::RegisterGameConsoleCommands (Core/Main.cpp) and
  *   the advanced console commands (Console/AdvancedConsoleCommands.cpp).
  */
@@ -13,11 +14,12 @@
 #pragma once
 
 #include <array>
-#include <charconv>
 #include <cmath>
+#include <locale>
 #include <optional>
+#include <sstream>
+#include <string>
 #include <string_view>
-#include <system_error>
 
 namespace SparkFPS::ConsolePolicy
 {
@@ -77,19 +79,37 @@ namespace SparkFPS::ConsolePolicy
      */
     [[nodiscard]] inline std::optional<float> ParseFiniteFloat(std::string_view token) noexcept
     {
-        if (token.empty())
+        // libc++ 18 (build-linux-clang, clang-tidy, MSan, macOS) deletes the
+        // floating-point std::from_chars overload, so this parses with a
+        // classic-locale, no-skip stream instead (same approach as
+        // Game::ParseAuthoredFiniteFloat and Core/ExecScript.cpp).
+        //
+        // Screen first: stream extraction on some standard libraries hands the
+        // accumulated characters to strtod, which would accept hex floats,
+        // "inf" and "nan". Only decimal digits, '.', exponent and signs pass,
+        // and the token must start with a digit, '.', or a sign.
+        if (token.empty() || token.find_first_not_of("0123456789.eE+-") != std::string_view::npos)
             return std::nullopt;
-        // from_chars rejects a leading '+'; accept it for console convenience.
-        if (token.front() == '+')
-            token.remove_prefix(1);
+        const char lead = token.front();
+        if (!((lead >= '0' && lead <= '9') || lead == '.' || lead == '+' || lead == '-'))
+            return std::nullopt;
 
-        float value = 0.0f;
-        const char* const first = token.data();
-        const char* const last = token.data() + token.size();
-        const auto [end, error] = std::from_chars(first, last, value, std::chars_format::general);
-        if (error != std::errc{} || end != last || !std::isfinite(value))
+        try
+        {
+            float value = 0.0f;
+            std::istringstream stream{std::string(token)};
+            stream.imbue(std::locale::classic());
+            stream >> std::noskipws >> value;
+            // Out-of-range input sets failbit; the whole token must be consumed.
+            if (stream.fail() || stream.peek() != std::char_traits<char>::eof() || !std::isfinite(value))
+                return std::nullopt;
+            return value;
+        }
+        catch (...)
+        {
+            // Allocation failure while building the stream: reject the token.
             return std::nullopt;
-        return value;
+        }
     }
 
 } // namespace SparkFPS::ConsolePolicy
