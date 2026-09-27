@@ -20,9 +20,9 @@
 #include <imgui.h>
 #endif
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <iterator>
 
 namespace MMO
 {
@@ -30,7 +30,7 @@ namespace MMO
     namespace
     {
         /// networkId (4) + position, rotation, velocity (3 x 12) + property count (2).
-        constexpr size_t kClientStateRequestSize = 4 + 3 * 12 + 2;
+        constexpr size_t kClientStateRequestSize = 42;
         /// Any coordinate past this is garbage or an exploit, not a world position (1000 km).
         constexpr float kMaxClientCoordinate = 1.0e6f;
         /// Sprinting players move at 10.5 m/s; this leaves headroom for knockback and lag.
@@ -326,7 +326,9 @@ namespace MMO
                             [this, nm](const Spark::Net::NetworkMessage& msg)
                             {
                                 if (nm->GetRole() == Spark::Net::NetworkRole::Server)
+                                {
                                     (void)ApplyClientStateRequest(*nm, msg);
+                                }
                             });
         m_serverPlayerEntities.clear();
 
@@ -344,7 +346,9 @@ namespace MMO
         const Spark::Net::ClientID sender = message.senderID;
         if (network.GetRole() != Spark::Net::NetworkRole::Server || sender == Spark::Net::INVALID_CLIENT ||
             message.payload.size() != kClientStateRequestSize)
+        {
             return 0;
+        }
 
         Spark::Net::NetBuffer buffer;
         buffer.WriteBytes(message.payload.data(), message.payload.size());
@@ -354,18 +358,26 @@ namespace MMO
         const DirectX::XMFLOAT3 velocity = buffer.ReadVector3();
         const uint16_t propertyCount = buffer.ReadUint16();
         if (buffer.HasError() || buffer.RemainingBytes() != 0 || propertyCount != 0)
+        {
             return 0;
+        }
         if (!IsPlausibleCoordinate(position) || !IsFiniteVector(rotation) || !IsPlausibleVelocity(velocity))
+        {
             return 0;
+        }
 
         uint32_t networkId = 0;
         if (const auto owned = m_serverPlayerEntities.find(sender); owned != m_serverPlayerEntities.end())
         {
             const auto snapshot = network.GetReplicatedEntitySnapshot(owned->second);
             if (snapshot && snapshot->ownerID == sender)
+            {
                 networkId = owned->second;
+            }
             else
+            {
                 m_serverPlayerEntities.erase(owned);
+            }
         }
 
         if (networkId == 0)
@@ -404,7 +416,10 @@ namespace MMO
 
         // NetworkManager already removed a departed client's owned entities; forget
         // the mapping so the table stays bounded by the admitted clients.
-        std::erase_if(m_serverPlayerEntities, [&clients](const auto& entry) { return !clients.contains(entry.first); });
+        for (auto owned = m_serverPlayerEntities.begin(); owned != m_serverPlayerEntities.end();)
+        {
+            owned = clients.contains(owned->first) ? std::next(owned) : m_serverPlayerEntities.erase(owned);
+        }
 
         // Detect new client connections and bridge to WorldServer
         if (m_worldServer && m_worldServer->IsRunning())

@@ -677,7 +677,9 @@ namespace Spark::Net
                 remainsAdmitted = m_clients.contains(event.senderID);
             }
             if (remainsAdmitted)
+            {
                 m_pendingFullSyncs.push_back(event.senderID);
+            }
         }
 
         // An initial sync walks every replicated entity and queues two reliable
@@ -694,7 +696,9 @@ namespace Spark::Net
             {
                 std::lock_guard<std::mutex> lock(m_clientsMutex);
                 if (!m_clients.contains(target))
+                {
                     continue;
+                }
             }
             ++fullSyncsStarted;
 
@@ -884,7 +888,9 @@ namespace Spark::Net
         // A client whose server went silent has just ended its session; nothing
         // of the ended lifecycle may be flushed or retransmitted below.
         if (m_lifecycleEpoch != updateLifecycleEpoch)
+        {
             return;
+        }
         TimeoutHandler timeoutHandler = m_timeoutHandler;
 
         // Update bandwidth stats every second

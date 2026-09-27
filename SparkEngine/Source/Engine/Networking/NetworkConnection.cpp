@@ -870,7 +870,9 @@ namespace Spark::Net
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             if (!m_clients.contains(client))
+            {
                 return;
+            }
         }
 
         NetworkMessage msg;
@@ -956,14 +958,16 @@ namespace Spark::Net
         SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", text.c_str());
     }
 
-    void NetworkManager::TerminateClientSession(std::string reason)
+    void NetworkManager::TerminateClientSession(const std::string& reason)
     {
         uint64_t endedLifecycleEpoch = 0;
         {
             std::lock_guard<std::mutex> stateLock(m_stateMutex);
             if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
                 m_connectionState == ConnectionState::Disconnected)
+            {
                 return;
+            }
             endedLifecycleEpoch = m_lifecycleEpoch;
             m_lastConnectionError = reason;
             m_connectionState = ConnectionState::Disconnected;
@@ -1082,11 +1086,13 @@ namespace Spark::Net
             {
                 NetBuffer buf;
                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                std::string supplied = buf.ReadString();
+                const std::string supplied = buf.ReadString();
                 if (!buf.HasError() && !supplied.empty())
+                {
                     reason += ": " + supplied;
+                }
             }
-            TerminateClientSession(std::move(reason));
+            TerminateClientSession(reason);
             return;
         }
 
@@ -1117,7 +1123,12 @@ namespace Spark::Net
         // Drop the peer's reliability state (sequence streams, unacked maps,
         // dedup window) so a reused ClientID starts fresh.
         m_peers.erase(clientID);
-        std::erase(m_pendingFullSyncs, clientID);
+        // Each admitted client is queued for its initial sync at most once.
+        const auto pendingSync = std::find(m_pendingFullSyncs.begin(), m_pendingFullSyncs.end(), clientID);
+        if (pendingSync != m_pendingFullSyncs.end())
+        {
+            m_pendingFullSyncs.erase(pendingSync);
+        }
 
         // Remove entities owned by this client
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Cleaning up entities owned by client %u", clientID);
@@ -1150,7 +1161,9 @@ namespace Spark::Net
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             clientIDs.reserve(m_clients.size());
             for (const auto& [id, info] : m_clients)
+            {
                 clientIDs.push_back(id);
+            }
         }
         m_pendingFullSyncs.clear();
         auto& deltaManager = DeltaSnapshotManager::GetInstance();
@@ -1298,7 +1311,9 @@ namespace Spark::Net
             // Client liveness: any validated datagram from the server endpoint
             // (heartbeats included) proves the session is still alive.
             if (role == NetworkRole::Client)
+            {
                 m_lastServerPacketTime = m_serverTime;
+            }
 
             // On the server, map sender address to a client ID
             if (role == NetworkRole::Server)

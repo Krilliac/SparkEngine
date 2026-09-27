@@ -782,7 +782,7 @@ namespace Spark::Net
         /// that went silent past m_connectionTimeout. Closes the socket, discards the
         /// lifecycle's queued traffic and replicated state, and leaves m_wasConnected set so
         /// auto-reconnect can run. Requires m_apiMutex.
-        void TerminateClientSession(std::string reason);
+        void TerminateClientSession(const std::string& reason);
         void HandleDisconnect(const NetworkMessage& msg);
         /// Server-side: forget one client everywhere it is tracked (client/address tables,
         /// reliability state, delta baselines, interest scope, owned entities). The single
