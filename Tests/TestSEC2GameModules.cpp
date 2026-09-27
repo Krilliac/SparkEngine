@@ -354,6 +354,38 @@ namespace
     };
 } // namespace
 
+TEST(SEC2GM_MMOChatRelayUsesServerIdentityAndDropsPrivateChannels)
+{
+    using MMO::ChatChannel;
+    using MMO::MMOChatSystem;
+
+    // A client claims to be "System" on Global chat; the relay carries the connection's name instead.
+    const std::vector<uint8_t> spoofed = MMOChatSystem::EncodeWirePayload(ChatChannel::Global, "System", "hi all");
+    const auto relayed = MMOChatSystem::BuildServerRelayPayload(spoofed, "alice");
+    ASSERT_TRUE(relayed.has_value());
+    const auto decoded = MMOChatSystem::DecodeWirePayload(*relayed);
+    ASSERT_TRUE(decoded.has_value());
+    EXPECT_TRUE(decoded->channel == ChatChannel::Global);
+    EXPECT_EQ(decoded->senderName, std::string("alice"));
+    EXPECT_EQ(decoded->text, std::string("hi all"));
+
+    const auto area = MMOChatSystem::EncodeWirePayload(ChatChannel::Area, "alice", "nearby");
+    EXPECT_TRUE(MMOChatSystem::BuildServerRelayPayload(area, "alice").has_value());
+
+    // Party and Whisper have no recipient on the wire; relaying them meant broadcasting them to everyone.
+    const auto party = MMOChatSystem::EncodeWirePayload(ChatChannel::Party, "alice", "party secret");
+    const auto whisper = MMOChatSystem::EncodeWirePayload(ChatChannel::Whisper, "alice", "for bob only");
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(party, "alice").has_value());
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(whisper, "alice").has_value());
+
+    // Malformed packets and connections without an identity are dropped.
+    std::vector<uint8_t> badChannel = spoofed;
+    badChannel[0] = 9;
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(badChannel, "alice").has_value());
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload({1}, "alice").has_value());
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(spoofed, "").has_value());
+}
+
 TEST(SEC2GM_MMOChatHotReloadTeardownKeepsReplacementHandler)
 {
     auto& network = Spark::Net::NetworkManager::GetInstance();

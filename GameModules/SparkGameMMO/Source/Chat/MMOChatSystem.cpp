@@ -83,46 +83,97 @@ namespace MMO
                                                                           .allowedFromServer = true,
                                                                           .stringFieldOffset = 1});
 
-        netMgr->RegisterHandler(kMMOChatMessageType,
-                                [this, netMgr](const Spark::Net::NetworkMessage& netMsg)
-                                {
-                                    if (netMsg.payload.size() < 2)
-                                        return;
-
-                                    Spark::Net::NetBuffer buf;
-                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                    const uint8_t channelValue = buf.ReadUint8();
-                                    std::string senderName = buf.ReadString();
-                                    std::string text = buf.ReadString();
-                                    if (buf.HasError() || channelValue > static_cast<uint8_t>(ChatChannel::Whisper) ||
-                                        senderName.empty() || text.empty())
-                                    {
-                                        return;
-                                    }
-                                    const auto channel = static_cast<ChatChannel>(channelValue);
-
-                                    // Validate before relaying. Routing by party/area is owned by the
-                                    // authoritative game service; this showcase relays accepted messages.
-                                    if (netMgr->GetRole() == Spark::Net::NetworkRole::Server)
-                                        netMgr->SendToAllExcept(netMsg.senderID, netMsg);
-
-                                    ChatMessage msg{};
-                                    msg.channel = channel;
-                                    msg.senderClientId = netMsg.senderID;
-                                    msg.senderName = senderName;
-                                    msg.text = text;
-                                    msg.timestamp = m_time;
-
-                                    m_history.push_back(msg);
-                                    if (m_history.size() > MAX_HISTORY)
-                                        m_history.pop_front();
-
-                                    auto& console = Spark::SimpleConsole::GetInstance();
-                                    console.LogInfo("[" + std::string(ChannelToString(channel)) + "] " + senderName +
-                                                    ": " + text);
-                                });
+        netMgr->RegisterHandler(kMMOChatMessageType, [this, netMgr](const Spark::Net::NetworkMessage& netMsg)
+                                { HandleNetworkChat(*netMgr, netMsg); });
 #endif
     }
+
+#ifdef ENABLE_NETWORKING
+    std::optional<MMOChatSystem::WirePayload> MMOChatSystem::DecodeWirePayload(const std::vector<uint8_t>& payload)
+    {
+        if (payload.size() < 2)
+            return std::nullopt;
+
+        Spark::Net::NetBuffer buf;
+        buf.WriteBytes(payload.data(), payload.size());
+        const uint8_t channelValue = buf.ReadUint8();
+        WirePayload decoded;
+        decoded.senderName = buf.ReadString();
+        decoded.text = buf.ReadString();
+        if (buf.HasError() || channelValue > static_cast<uint8_t>(ChatChannel::Whisper) || decoded.senderName.empty() ||
+            decoded.text.empty())
+            return std::nullopt;
+        decoded.channel = static_cast<ChatChannel>(channelValue);
+        return decoded;
+    }
+
+    std::vector<uint8_t> MMOChatSystem::EncodeWirePayload(ChatChannel channel, const std::string& senderName,
+                                                          const std::string& text)
+    {
+        Spark::Net::NetBuffer buf;
+        buf.WriteUint8(static_cast<uint8_t>(channel));
+        buf.WriteString(senderName);
+        buf.WriteString(text);
+        return std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
+    }
+
+    std::optional<std::vector<uint8_t>> MMOChatSystem::BuildServerRelayPayload(
+        const std::vector<uint8_t>& clientPayload, const std::string& authoritativeSenderName)
+    {
+        const std::optional<WirePayload> decoded = DecodeWirePayload(clientPayload);
+        if (!decoded || authoritativeSenderName.empty() || !IsNetworkRoutableChannel(decoded->channel))
+            return std::nullopt;
+        return EncodeWirePayload(decoded->channel, authoritativeSenderName, decoded->text);
+    }
+
+    void MMOChatSystem::HandleNetworkChat(Spark::Net::NetworkManager& netMgr, const Spark::Net::NetworkMessage& netMsg)
+    {
+        std::optional<WirePayload> decoded = DecodeWirePayload(netMsg.payload);
+        if (!decoded)
+            return;
+
+        if (netMgr.GetRole() == Spark::Net::NetworkRole::Server)
+        {
+            // Identity comes from the connection, never from the payload: rebuild the message with the
+            // name the server bound to this client, and relay only channels it can route correctly.
+            std::string senderName;
+            {
+                const auto clients = netMgr.GetClients();
+                const auto client = clients.find(netMsg.senderID);
+                if (client == clients.end())
+                    return;
+                senderName =
+                    client->second.name.empty() ? "Player" + std::to_string(netMsg.senderID) : client->second.name;
+            }
+            std::optional<std::vector<uint8_t>> relayPayload = BuildServerRelayPayload(netMsg.payload, senderName);
+            if (!relayPayload)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "MMO chat: dropped %s message from client %u (no server-side routing for it)",
+                               ChannelToString(decoded->channel), static_cast<unsigned>(netMsg.senderID));
+                return;
+            }
+            Spark::Net::NetworkMessage relay = netMsg;
+            relay.payload = std::move(*relayPayload);
+            netMgr.SendToAllExcept(netMsg.senderID, relay);
+            decoded->senderName = std::move(senderName);
+        }
+
+        ChatMessage msg{};
+        msg.channel = decoded->channel;
+        msg.senderClientId = netMsg.senderID;
+        msg.senderName = decoded->senderName;
+        msg.text = decoded->text;
+        msg.timestamp = m_time;
+
+        m_history.push_back(msg);
+        if (m_history.size() > MAX_HISTORY)
+            m_history.pop_front();
+
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[" + std::string(ChannelToString(msg.channel)) + "] " + msg.senderName + ": " + msg.text);
+    }
+#endif
 
     void MMOChatSystem::SendMessage(const std::string& channelName, const std::string& text)
     {
@@ -134,6 +185,18 @@ namespace MMO
         if (!m_initialized || text.empty() ||
             static_cast<uint8_t>(channel) > static_cast<uint8_t>(ChatChannel::Whisper))
             return;
+
+#ifdef ENABLE_NETWORKING
+        // Refuse to put a "private" message on the wire when nothing can route it privately.
+        if (auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+            netMgr && netMgr->GetRole() != Spark::Net::NetworkRole::None && !IsNetworkRoutableChannel(channel))
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning(
+                "[MMO Chat] " + std::string(ChannelToString(channel)) +
+                " chat is not available in networked sessions yet; message not sent");
+            return;
+        }
+#endif
 
         ChatMessage msg{};
         msg.channel = channel;
@@ -154,15 +217,10 @@ namespace MMO
         auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
         if (netMgr && netMgr->GetRole() != Spark::Net::NetworkRole::None)
         {
-            Spark::Net::NetBuffer buf;
-            buf.WriteUint8(static_cast<uint8_t>(channel));
-            buf.WriteString(msg.senderName);
-            buf.WriteString(text);
-
             Spark::Net::NetworkMessage netMsg;
             netMsg.type = kMMOChatMessageType;
             netMsg.channel = Spark::Net::ChannelType::ReliableOrdered;
-            netMsg.payload = std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
+            netMsg.payload = EncodeWirePayload(channel, msg.senderName, text);
 
             if (channel == ChatChannel::Global)
             {

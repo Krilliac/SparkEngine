@@ -5,13 +5,18 @@
  * @date 2026
  *
  * Demonstrates networked chat using the engine's reliable messaging channel:
- * - Area chat (visible only to players in the same area)
- * - Global chat (broadcast to all connected players via WorldServer)
- * - Party chat (visible to party members across areas)
- * - Whisper (direct player-to-player messages)
+ * - Area chat (every client of this area server)
+ * - Global chat (broadcast to all connected players)
+ * - Party chat and Whisper: local history only. The server drops them and a
+ *   networked client refuses to send them, because no recipient/party routing
+ *   exists yet (see IsNetworkRoutableChannel).
  *
- * Uses MessageType::ChatMessage on the ReliableOrdered channel for
- * guaranteed in-order delivery.
+ * Uses a module-owned message type (UserDefined + 1) on the ReliableOrdered
+ * channel. The server rebuilds every relayed payload with the sender name it
+ * bound to the connection; a client-supplied name is never forwarded.
+ *
+ * Thread affinity: game thread. Ownership: the network observer captures
+ * `this`; Shutdown removes it.
  */
 
 #pragma once
@@ -19,6 +24,7 @@
 #include "Spark/IEngineContext.h"
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -26,6 +32,11 @@
 #ifdef SendMessage
 #undef SendMessage
 #endif
+
+namespace Spark::Net
+{
+    struct NetworkMessage;
+}
 
 namespace MMO
 {
@@ -78,8 +89,47 @@ namespace MMO
         size_t GetChannelCount() const;
         const std::deque<ChatMessage>& GetHistory() const { return m_history; }
 
+        /// Area and Global are routable over the network. Party and Whisper are not: the wire format
+        /// carries no recipient or party id and this module keeps no server-side membership state, so the
+        /// only way to deliver them would be broadcasting "private" text to every connected client.
+        static constexpr bool IsNetworkRoutableChannel(ChatChannel channel)
+        {
+            return channel == ChatChannel::Area || channel == ChatChannel::Global;
+        }
+
+#ifdef ENABLE_NETWORKING
+        /// Decoded module chat payload: `uint8 channel`, then NetBuffer strings sender and text.
+        struct WirePayload
+        {
+            ChatChannel channel = ChatChannel::Area;
+            std::string senderName;
+            std::string text;
+        };
+
+        /// @return The payload, or nullopt when it is truncated, names an unknown channel or has an empty field.
+        static std::optional<WirePayload> DecodeWirePayload(const std::vector<uint8_t>& payload);
+        static std::vector<uint8_t> EncodeWirePayload(ChatChannel channel, const std::string& senderName,
+                                                      const std::string& text);
+
+        /**
+         * @brief Server relay policy for one client chat packet.
+         *
+         * The sender name is never taken from the client: the relayed payload is rebuilt with
+         * @p authoritativeSenderName, the name the server bound to the sending connection.
+         *
+         * @return The payload to fan out to the other clients, or nullopt to drop the packet (malformed,
+         *         or a channel that IsNetworkRoutableChannel rejects).
+         */
+        static std::optional<std::vector<uint8_t>> BuildServerRelayPayload(const std::vector<uint8_t>& clientPayload,
+                                                                           const std::string& authoritativeSenderName);
+#endif
+
       private:
         void SetupNetworkHandlers();
+#ifdef ENABLE_NETWORKING
+        /// Receive path for the module chat type: server validates, re-attributes and relays; client records.
+        void HandleNetworkChat(Spark::Net::NetworkManager& netMgr, const Spark::Net::NetworkMessage& netMsg);
+#endif
         static ChatChannel ParseChannelName(const std::string& name);
         static const char* ChannelToString(ChatChannel ch);
 
