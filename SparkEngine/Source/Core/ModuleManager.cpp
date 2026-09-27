@@ -872,7 +872,22 @@ bool ModuleManager::LoadModule(const std::string& path)
         return failLoad("Module path rejected — contains '..' traversal: " + path);
     }
 
+#ifdef _WIN32
+    // The image the sidecar hashes must be the image the loader maps. A bare
+    // or relative name would be hashed relative to the working directory but
+    // resolved by LoadLibrary through the DLL search order, so pin, validate
+    // and load one absolute path. LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR below also
+    // requires an absolute path.
+    std::error_code absolutePathError;
+    const std::filesystem::path modulePath = std::filesystem::absolute(PathFromUtf8(path), absolutePathError);
+    if (absolutePathError)
+    {
+        return failLoad(
+            std::format("Failed to resolve module path '{}' for validation: {}", path, absolutePathError.message()));
+    }
+#else
     const std::filesystem::path modulePath = PathFromUtf8(path);
+#endif
 
 #ifndef _WIN32
     // A compiler or build system may atomically replace the source .so/.dylib
@@ -893,7 +908,7 @@ bool ModuleManager::LoadModule(const std::string& path)
 
 #ifdef _WIN32
     // Prevent a concurrent rebuild, rename, or delete from changing the image
-    // between the sidecar hash check and LoadLibraryW. The loader may still
+    // between the sidecar hash check and LoadLibraryExW. The loader may still
     // acquire its own read handle, while writers and delete/replace operations
     // remain excluded until the mapped image has been opened.
     HANDLE pinnedModule = CreateFileW(modulePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
@@ -919,12 +934,18 @@ bool ModuleManager::LoadModule(const std::string& path)
     // Load the shared library only after the non-executing compatibility gate.
     void* handle = nullptr;
 #ifdef _WIN32
-    handle = LoadLibraryW(modulePath.c_str());
+    // The sidecar hash covers only this image. Its static imports are resolved
+    // from the module's own directory, then the application directory,
+    // AddDllDirectory entries and System32 -- never the current directory or
+    // PATH, where a planted dependency would run DllMain before the in-image
+    // descriptor is read. DynamicPluginHost uses the same search set.
+    handle = LoadLibraryExW(modulePath.c_str(), nullptr,
+                            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     CloseHandle(pinnedModule);
     if (!handle)
     {
         DWORD err = GetLastError();
-        return failLoad(std::format("Failed to load module '{}' with LoadLibraryW (error {})", path, err));
+        return failLoad(std::format("Failed to load module '{}' with LoadLibraryExW (error {})", path, err));
     }
 #else
     const std::string loadPath = PathToUtf8(validatedModulePath);

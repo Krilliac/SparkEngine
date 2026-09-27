@@ -17,7 +17,15 @@
 #include <string>
 #include <string_view>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -1086,3 +1094,41 @@ TEST(ModuleABI_ModulesOwningIdKeyedStateRefuseHotReload)
     EXPECT_GE(owners, size_t{3});
     EXPECT_EQ(missingOptOut, std::string{});
 }
+
+#ifdef _WIN32
+TEST(ModuleABI_WindowsModuleDependencyResolvesFromModuleDirectory)
+{
+    const std::filesystem::path moduleSource = PathFromUtf8(SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH);
+    const std::filesystem::path dependencySource = PathFromUtf8(SPARK_TEST_SIBLING_DEPENDENCY_PATH);
+    const std::wstring dependencyName = dependencySource.filename().wstring();
+    // An already-mapped copy would satisfy the import by name and hide the search order.
+    ASSERT_TRUE(GetModuleHandleW(dependencyName.c_str()) == nullptr);
+
+    const std::filesystem::path moduleDirectory =
+        std::filesystem::temp_directory_path() / "SparkModuleDependencySearch";
+    std::error_code ec;
+    std::filesystem::remove_all(moduleDirectory, ec);
+    ASSERT_TRUE(std::filesystem::create_directories(moduleDirectory));
+    const std::filesystem::path modulePath = moduleDirectory / moduleSource.filename();
+    std::filesystem::copy_file(moduleSource, modulePath);
+    std::filesystem::copy_file(SidecarPath(moduleSource), SidecarPath(modulePath));
+    std::filesystem::copy_file(dependencySource, moduleDirectory / dependencySource.filename());
+
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    const HMODULE dependency = GetModuleHandleW(dependencyName.c_str());
+    ASSERT_TRUE(dependency != nullptr);
+    std::wstring loadedPath(32768, L'\0');
+    const DWORD length = GetModuleFileNameW(dependency, loadedPath.data(), static_cast<DWORD>(loadedPath.size()));
+    ASSERT_TRUE(length > 0 && length < loadedPath.size());
+    loadedPath.resize(length);
+
+    // The module's own directory is searched first: ahead of the application
+    // directory (where the build also placed this dependency), and the loader
+    // never reaches the current directory or PATH for it.
+    EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path(loadedPath).parent_path(), moduleDirectory, ec));
+
+    manager.UnloadAll();
+    std::filesystem::remove_all(moduleDirectory, ec);
+}
+#endif

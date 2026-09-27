@@ -887,7 +887,8 @@ target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
     SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH="$<TARGET_FILE:SparkRegistryLifecycleModuleFixture>"
     SPARK_TEST_LEGACY_MODULE_PATH="$<TARGET_FILE:SparkLegacyModuleFixture>"
-    SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
+    SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>"
+    SPARK_TEST_SIBLING_DEPENDENCY_PATH="$<TARGET_FILE:SparkModuleSiblingDependency>")
 
 if(TARGET SparkGame)
     add_dependencies(SparkTests SparkGame)
@@ -2037,9 +2038,10 @@ set_tests_properties(LifecycleCompositionRootFailure PROPERTIES
 # label, so `ctest -L lifecycle` (and the sanitizer presets' build dirs) cover the
 # work item's selectors. Counts are exact per platform: a family that silently
 # loses tests fails its CTest instead of shrinking the evidence.
-#   ModuleABI_: 28 cross-platform, plus 2 Windows-only (wide-path loader, reload
-#   parent-directory cleanup) or 3 POSIX-only (verified shadow, read-only
-#   install, private stage), plus 1 POSIX test that needs the SparkGame module.
+#   ModuleABI_: 28 cross-platform, plus 3 Windows-only (wide-path loader, reload
+#   parent-directory cleanup, module-directory dependency search) or 3 POSIX-only
+#   (verified shadow, read-only install, private stage), plus 1 POSIX test that
+#   needs the SparkGame module.
 #   EngineLifecycle_: the whole family is compiled only on non-Windows hosts.
 #   LIFE200_: 3 in-process, plus 2 that reload the real SparkGame module.
 set(_spark_life_life200_count 3)
@@ -2048,7 +2050,7 @@ if(TARGET SparkGame)
 endif()
 set(_spark_life_module_abi_count 28)
 if(WIN32)
-    math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 2")
+    math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 3")
 else()
     math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 3")
     if(TARGET SparkGame)
