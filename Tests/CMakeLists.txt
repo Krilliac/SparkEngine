@@ -602,6 +602,7 @@ add_executable(SparkTests
     TestEditorAssetReference.cpp
     TestEditorAssetDrag.cpp
     TestEditorAssetDropWorldReal.cpp
+    TestEditorCookPackageReal.cpp
     TestDedicatedServerProcessController.cpp
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/DedicatedServerProcessController.cpp"
     TestServiceTopologyController.cpp
@@ -2648,6 +2649,28 @@ if(WIN32 AND TARGET SparkEngine AND SPARK_HEADLESS_SUPPORT)
         LABELS "editor;scene;windows;integration;process;editor-integration"
         RUN_SERIAL TRUE
         TIMEOUT 600)
+endif()
+
+# EDT-210: author -> cook -> package -> run. A mesh dragged onto a World entity through
+# the Asset Browser payload and the Inspector drop core is saved, cooked by the real
+# SparkCooker, packaged around the real SparkEngine host by AssembleNativePackage, and
+# the packaged ScenePreview host must load the scene and resolve (or, with the cooked
+# mesh removed, report missing) its Assets/... reference. Windows until the Linux host's
+# packaged-scene asset record is covered. EditorCookPackage_ needs this lane's
+# SPARK_ENGINE_EXECUTABLE and fails without it, so the main suite excludes the family.
+get_test_property(SparkEngineTests ENVIRONMENT _spark_main_suite_environment)
+string(REGEX REPLACE "(^|;)SPARK_TEST_EXCLUDE=([^;]*)" "\\1SPARK_TEST_EXCLUDE=\\2,EditorCookPackage_"
+    _spark_main_suite_environment "${_spark_main_suite_environment}")
+set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_spark_main_suite_environment}")
+unset(_spark_main_suite_environment)
+if(WIN32 AND TARGET SparkEngine AND TARGET SparkCooker AND SPARK_HEADLESS_SUPPORT)
+    add_dependencies(SparkTests SparkEngine SparkCooker)
+    add_test(NAME EditorCookPackageRoundTrip COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
+    set_tests_properties(EditorCookPackageRoundTrip PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorCookPackage_;SPARK_TEST_EXPECT_COUNT=2;SPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+        LABELS "editor;editor-integration;editor-package-roundtrip;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
 endif()
 
 # SEC3: an -exec script that cannot be loaded (missing, or a directory) fails the
