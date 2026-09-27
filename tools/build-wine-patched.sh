@@ -28,7 +28,10 @@
 #                    in docs/wine-upstream/ apply cleanly to 9.0; newer Wines
 #                    may need a refreshed patch series.
 #   PREFIX         — Install prefix (default: /opt/wine-patched)
-#   BUILD_DIR      — Build directory (default: /tmp/wine-build)
+#   BUILD_DIR      — Build directory (default: a fresh private mktemp -d directory).
+#                    A directory you supply must be owned by you, not a symlink,
+#                    not group/world-writable, and reached through no writable
+#                    non-sticky ancestor: this script runs its contents as root.
 #   JOBS           — make -j parallelism (default: $(nproc))
 
 set -euo pipefail
@@ -38,7 +41,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 WINE_VERSION="${WINE_VERSION:-9.0}"
 PREFIX="${PREFIX:-/opt/wine-patched}"
-BUILD_DIR="${BUILD_DIR:-/tmp/wine-build}"
+BUILD_DIR="${BUILD_DIR:-}"
 JOBS="${JOBS:-$(nproc)}"
 
 PATCH_DIR="$PROJECT_ROOT/docs/wine-upstream"
@@ -60,6 +63,29 @@ PATCH_2="$PATCH_DIR/0002-ntdll-refresh-stack-info-from-pthread-under-gVisor.patc
 info() { echo "[wine-build] $*"; }
 warn() { echo "[wine-build] WARN: $*" >&2; }
 fail() { echo "[wine-build] ERROR: $*" >&2; exit 1; }
+
+# Everything under the build directory is later executed as root (generators, configure, make, make install),
+# so nobody but the invoking user may be able to write to it or swap it out. A shared, predictable path such as
+# /tmp/wine-build lets any local user pre-create it and plant or race-edit the sources.
+require_private_dir() {
+    local dir="$1"
+    [[ -d "$dir" && ! -L "$dir" ]] || fail "build directory $dir is not a real directory"
+    [[ "$(stat -c %u "$dir")" == "$EUID" ]] || fail "build directory $dir is not owned by uid $EUID"
+    (( ( 8#$(stat -c %a "$dir") & 8#022 ) == 0 )) || fail "build directory $dir is group- or world-writable"
+
+    # An ancestor that others can write to without the sticky bit lets them rename the directory away and
+    # substitute their own.
+    local ancestor
+    ancestor="$(cd "$dir" && pwd -P)"
+    while [[ "$ancestor" != "/" ]]; do
+        ancestor="$(dirname "$ancestor")"
+        local mode
+        mode=$(( 8#$(stat -c %a "$ancestor") ))
+        if (( (mode & 8#022) != 0 && (mode & 8#1000) == 0 )); then
+            fail "build directory ancestor $ancestor is writable by others and not sticky"
+        fi
+    done
+}
 
 # ============================================================================
 # Check mode — report whether patched Wine is already installed
@@ -104,22 +130,26 @@ fi
 # ============================================================================
 
 info "Fetching Wine $WINE_VERSION source..."
-mkdir -p "$BUILD_DIR"
+if [[ -z "$BUILD_DIR" ]]; then
+    BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/wine-build.XXXXXXXX")"
+elif [[ ! -e "$BUILD_DIR" && ! -L "$BUILD_DIR" ]]; then
+    mkdir -m 0700 -- "$BUILD_DIR"
+fi
+require_private_dir "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-if [[ ! -f "wine-${WINE_VERSION}.tar.xz" ]]; then
-    if [[ -f "/tmp/wine_${WINE_VERSION}~repack.orig.tar.xz" ]]; then
-        # Reuse Debian's source tarball if already downloaded
-        cp "/tmp/wine_${WINE_VERSION}~repack.orig.tar.xz" "wine-${WINE_VERSION}.tar.xz"
-    else
-        apt-get source --download-only wine
-        cp "/tmp/wine_${WINE_VERSION}~repack.orig.tar.xz" "wine-${WINE_VERSION}.tar.xz" || \
-            fail "Could not locate Wine source tarball after apt-get source"
-    fi
-fi
+# The source comes only from `apt-get source`, which verifies every file it fetches (or reuses in this directory)
+# against the signed Sources index. No tarball found lying around elsewhere is ever trusted.
+apt-get source --download-only wine || fail "apt-get source wine failed (is deb-src enabled?)"
+shopt -s nullglob
+# Both entries are globs ([x] included) so nullglob drops whichever form apt-get did not produce.
+WINE_TARBALLS=( "wine_${WINE_VERSION}".orig.tar.[x]z "wine_${WINE_VERSION}"~*.orig.tar.xz )
+shopt -u nullglob
+[[ ${#WINE_TARBALLS[@]} -eq 1 ]] || \
+    fail "expected exactly one verified wine_${WINE_VERSION} orig tarball from apt-get source, found ${#WINE_TARBALLS[@]}"
 
 rm -rf "wine-${WINE_VERSION}"
-tar -xJf "wine-${WINE_VERSION}.tar.xz"
+tar -xJf "${WINE_TARBALLS[0]}"
 cd "wine-${WINE_VERSION}"
 
 # ============================================================================
@@ -205,15 +235,19 @@ if [[ $BUILD_ONLY -eq 1 ]]; then
 fi
 
 info "Verifying patched Wine with hello-world reproducer..."
-cat > /tmp/spark-wine-hello.c <<'EOF'
+# Inside the private build directory, never at a fixed /tmp path another user could pre-plant.
+VERIFY_DIR="$BUILD_DIR/verify"
+rm -rf "$VERIFY_DIR"
+mkdir -m 0700 "$VERIFY_DIR"
+cat > "$VERIFY_DIR/spark-wine-hello.c" <<'EOF'
 #include <stdio.h>
 int main(void) { printf("hello from patched wine\n"); return 42; }
 EOF
-x86_64-w64-mingw32-gcc /tmp/spark-wine-hello.c -o /tmp/spark-wine-hello.exe || \
+x86_64-w64-mingw32-gcc "$VERIFY_DIR/spark-wine-hello.c" -o "$VERIFY_DIR/spark-wine-hello.exe" || \
     fail "MinGW cross-compile failed"
 
-WINEPREFIX=/tmp/spark-wine-test "$PREFIX/bin/wine64" /tmp/spark-wine-hello.exe
-RC=$?
+RC=0
+WINEPREFIX="$VERIFY_DIR/wineprefix" "$PREFIX/bin/wine64" "$VERIFY_DIR/spark-wine-hello.exe" || RC=$?
 if [[ $RC -eq 42 ]]; then
     info "VERIFIED — patched Wine runs guest binaries to completion (rc=$RC)"
 else

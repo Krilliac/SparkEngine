@@ -3410,6 +3410,18 @@ set_tests_properties(SupplyChain_MinGWDirectXMathFetch PROPERTIES
     LABELS "supply-chain;security;unit;python"
     TIMEOUT 300)
 
+# The root-run Wine/MinGW setup scripts install packages only through APT's
+# signed-index verification and build Wine only inside a private directory. The
+# behavioral half drives the real shell functions with stub commands and needs
+# POSIX permissions, so it runs on the Linux/macOS lanes.
+add_test(
+    NAME SupplyChain_WineSetupScriptIntegrity
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_wine_setup_script_integrity -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(SupplyChain_WineSetupScriptIntegrity PROPERTIES
+    LABELS "supply-chain;security;unit;python"
+    TIMEOUT 300)
+
 # BLD-100 / OD-04: the stable-v1 x86-64 CPU floor is SSE4.2 + POPCNT.
 # CpuFloor_IsaBaselineChecker proves tools/check_isa_baseline.py rejects
 # AVX/AVX2/AVX-512/FMA/F16C/BMI/LZCNT/MOVBE and the legacy-encoded AES-NI,

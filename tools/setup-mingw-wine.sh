@@ -211,13 +211,18 @@ install_directxmath() {
 install_packages() {
     info "Installing system packages (mingw-w64, wine64, mesa-vulkan-drivers)..."
 
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>/dev/null || true
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        mingw-w64 wine64 mesa-vulkan-drivers cmake 2>/dev/null || {
-        warn "apt-get install failed — trying direct package download..."
-        install_packages_direct
-        return
-    }
+    # Packages come only through APT, which checks every .deb against the signed repository index. There is
+    # deliberately no direct-download fallback: re-fetching APT's URIs with wget drops that check, and an
+    # on-path attacker can force such a fallback simply by corrupting APT's own download. Fail closed instead.
+    if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
+        fail "apt-get update failed; fix the package sources and re-run"
+        exit 1
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        mingw-w64 wine64 mesa-vulkan-drivers cmake; then
+        fail "apt-get install failed; nothing was installed outside APT's verification"
+        exit 1
+    fi
 
     # Create wine64 symlink if needed
     if ! command -v wine64 &>/dev/null && [ -f /usr/lib/wine/wine64 ]; then
@@ -231,33 +236,6 @@ install_packages() {
         chmod +x /usr/bin/wineboot
         info "Created wineboot wrapper"
     fi
-}
-
-install_packages_direct() {
-    # Fallback: download .deb packages directly via wget
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-
-    local urls
-    urls=$(apt-get download --print-uris mingw-w64-x86-64-dev g++-mingw-w64-x86-64-posix \
-           gcc-mingw-w64-x86-64-posix gcc-mingw-w64-x86-64-posix-runtime \
-           gcc-mingw-w64-base binutils-mingw-w64-x86-64 mingw-w64-common \
-           libz-mingw-w64 wine64 libwine fonts-wine mesa-vulkan-drivers 2>&1 | \
-           grep "^'" | sed "s/' .*//" | sed "s/^'//") || true
-
-    local count=0
-    for url in $urls; do
-        wget -q "$url" -P "$tmp_dir/" 2>/dev/null && ((count++)) || warn "Failed: $url"
-    done
-
-    if [ "$count" -gt 0 ]; then
-        dpkg -i --force-depends "$tmp_dir"/*.deb 2>/dev/null || true
-        info "Installed $count packages via direct download"
-    else
-        fail "No packages could be downloaded"
-    fi
-
-    rm -rf "$tmp_dir"
 }
 
 # ============================================================================
