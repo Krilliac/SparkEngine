@@ -70,6 +70,7 @@ class ReleaseBundleTests(unittest.TestCase):
         )
         self.signature_manifest.write_text(json.dumps({
             "schemaVersion": 1, "algorithm": "detached-sha256",
+            "sourceCommit": "a" * 40, "signerFingerprint": self.fingerprint,
             "artifacts": [
                 {"name": name, "signature": name + ".sig", "artifactSha256": self._sha(name),
                  "signerFingerprint": self.fingerprint}
@@ -175,6 +176,34 @@ class ReleaseBundleTests(unittest.TestCase):
         data["sourceCommit"] = "b" * 40
         (self.root / self.names[2]).write_text(json.dumps(data), encoding="utf-8")
         with self.assertRaisesRegex(BundleError, "source commit"):
+            self._verify()
+
+    def _mutate_signature_manifest(self, mutate) -> None:
+        data = json.loads(self.signature_manifest.read_text(encoding="utf-8"))
+        mutate(data)
+        self.signature_manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_rejects_signature_manifest_source_commit_drift(self) -> None:
+        self._mutate_signature_manifest(lambda data: data.__setitem__("sourceCommit", "b" * 40))
+        with self.assertRaisesRegex(BundleError, "signature manifest source commit"):
+            self._verify()
+
+    def test_rejects_signature_manifest_signer_fingerprint_drift(self) -> None:
+        self._mutate_signature_manifest(lambda data: data.__setitem__("signerFingerprint", "0" * 64))
+        with self.assertRaisesRegex(BundleError, "signature manifest signer fingerprint"):
+            self._verify()
+
+    def test_rejects_signature_manifest_missing_identity_fields(self) -> None:
+        for key in ("sourceCommit", "signerFingerprint"):
+            with self.subTest(key=key):
+                self._write_inputs()
+                self._mutate_signature_manifest(lambda data, key=key: data.pop(key))
+                with self.assertRaisesRegex(BundleError, f"missing keys: {key}"):
+                    self._verify()
+
+    def test_rejects_signature_manifest_unknown_top_level_key(self) -> None:
+        self._mutate_signature_manifest(lambda data: data.__setitem__("note", "trust me"))
+        with self.assertRaisesRegex(BundleError, "unknown keys: note"):
             self._verify()
 
     def test_rejects_duplicate_json_keys(self) -> None:
