@@ -189,6 +189,11 @@ namespace SparkInstaller
             Emit(ctx.log, "error: could not resolve destination to absolute path: " + absErr.message());
             return 2;
         }
+        // A trailing separator ("C:\SparkEngine\") survives lexically_normal and
+        // leaves filename() empty, which would put the staging clone inside the
+        // destination instead of beside it. Drop it; a bare root keeps its own.
+        if (!dest.has_filename() && dest.has_relative_path())
+            dest = dest.parent_path();
         ctx.destination = dest.string();
 
         // --- Mode detection ------------------------------------------------

@@ -761,6 +761,47 @@ namespace
         return failures;
     }
 
+    // A destination typed with a trailing separator ("--dest C:\SparkEngine\")
+    // stages beside the destination, not inside it. Staging inside it would
+    // make activation find a non-empty destination and wedge every later run.
+    int RunFreshInstallTrailingSeparatorTest(const fs::path& executable)
+    {
+        const std::string name = "fresh install trailing separator";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / "install";
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+        SetEnvironment("SPARK_FAKE_BUILD_FAIL", "1");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination / "", executable, log);
+        context.minFreeBytes = std::uintmax_t{0};
+        const int result = SparkInstaller::Installer::Run(context);
+        SetEnvironment("SPARK_FAKE_BUILD_FAIL", "");
+
+        failures +=
+            Check(result == 7, name + ": expected build failure exit 7, got " + std::to_string(result) + "\n" + log);
+        failures += Check(fs::is_regular_file(destination / SparkInstaller::InstallState::PendingFileName()),
+                          name + ": the activated clone has no pending marker at the destination\n" + log);
+        failures += Check(fs::exists(destination / "CMakeLists.txt"),
+                          name + ": the clone was not activated at the destination");
+        failures += Check(!HasStagingSibling(root, "install"), name + ": activation left the staging tree");
+        std::error_code error;
+        if (fs::is_directory(destination, error))
+        {
+            for (const fs::directory_entry& entry : fs::directory_iterator(destination, error))
+            {
+                failures += Check(entry.path().filename().string().find(".sparkinstall-") == std::string::npos,
+                                  name + ": staging clone nested inside the destination: " + entry.path().string());
+            }
+        }
+
+        fs::remove_all(root, error);
+        return failures;
+    }
+
     // The destination turned non-empty after the emptiness check: activation
     // must refuse and leave both trees intact, and succeed once it is empty.
     int RunActivateStagedTreeTest()
@@ -812,6 +853,7 @@ int main(int argc, char* argv[])
     failures += RunPreflightTests(executable);
     failures += RunFreshInstallCloneFailureTest(executable);
     failures += RunFreshInstallBuildFailureResumeTest(executable);
+    failures += RunFreshInstallTrailingSeparatorTest(executable);
     failures += RunActivateStagedTreeTest();
     return failures == 0 ? 0 : 1;
 }
