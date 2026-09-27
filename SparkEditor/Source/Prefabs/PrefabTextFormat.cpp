@@ -48,10 +48,14 @@ namespace SparkEditor::PrefabTextFormat
             bool Next(std::string& line)
             {
                 if (!std::getline(m_input, line))
+                {
                     return false;
+                }
                 ++m_lineNumber;
                 if (!line.empty() && line.back() == '\r')
+                {
                     line.pop_back();
+                }
                 return true;
             }
 
@@ -66,7 +70,9 @@ namespace SparkEditor::PrefabTextFormat
         bool SplitKeyword(const std::string& line, std::string_view keyword, std::string& rest)
         {
             if (line.size() <= keyword.size() || !line.starts_with(keyword) || line[keyword.size()] != ' ')
+            {
                 return false;
+            }
             rest = line.substr(keyword.size() + 1);
             return true;
         }
@@ -86,7 +92,9 @@ namespace SparkEditor::PrefabTextFormat
             stream.imbue(std::locale::classic());
             (stream >> ... >> values);
             if (stream.fail())
+            {
                 return false;
+            }
             stream >> std::ws;
             return stream.eof();
         }
@@ -102,7 +110,9 @@ namespace SparkEditor::PrefabTextFormat
             bool Literal(std::string_view literal)
             {
                 if (!m_text.substr(m_pos).starts_with(literal))
+                {
                     return false;
+                }
                 m_pos += literal.size();
                 return true;
             }
@@ -111,9 +121,13 @@ namespace SparkEditor::PrefabTextFormat
             {
                 size_t end = m_text.find(' ', m_pos);
                 if (end == std::string_view::npos)
+                {
                     end = m_text.size();
+                }
                 if (end == m_pos)
+                {
                     return false;
+                }
                 word = m_text.substr(m_pos, end - m_pos);
                 m_pos = end;
                 return true;
@@ -124,7 +138,9 @@ namespace SparkEditor::PrefabTextFormat
             {
                 std::string_view word;
                 if (!Literal(" ") || !Word(word))
+                {
                     return false;
+                }
                 const auto [end, ec] = std::from_chars(word.data(), word.data() + word.size(), value);
                 return ec == std::errc{} && end == word.data() + word.size();
             }
@@ -132,20 +148,26 @@ namespace SparkEditor::PrefabTextFormat
             bool Quoted(std::string& out)
             {
                 if (!Literal("\""))
+                {
                     return false;
+                }
                 out.clear();
                 while (m_pos < m_text.size())
                 {
                     const char c = m_text[m_pos++];
                     if (c == '"')
+                    {
                         return true;
+                    }
                     if (c != '\\')
                     {
                         out += c;
                         continue;
                     }
                     if (m_pos == m_text.size())
+                    {
                         return false;
+                    }
                     switch (m_text[m_pos++])
                     {
                     case '\\':
@@ -180,7 +202,9 @@ namespace SparkEditor::PrefabTextFormat
         {
             std::string rest;
             if (!SplitKeyword(line, keyword, rest))
+            {
                 return false;
+            }
             TokenCursor cursor(rest);
             return cursor.Quoted(out) && cursor.AtEnd() && !out.empty();
         }
@@ -221,14 +245,18 @@ namespace SparkEditor::PrefabTextFormat
             char buffer[64];
             const auto [end, ec] = std::to_chars(buffer, buffer + sizeof(buffer), value);
             if (ec == std::errc{})
+            {
                 out.append(buffer, end);
+            }
         }
 
-        bool AddProperty(SerializedComponent& component, std::string propName, PrefabPropertyValue value,
+        bool AddProperty(SerializedComponent& component, const std::string& propName, PrefabPropertyValue value,
                          const std::string& location, std::string& reason)
         {
             if (component.properties.emplace(propName, std::move(value)).second)
+            {
                 return true;
+            }
             reason = location + "component '" + component.typeName + "' declares property '" + propName + "' twice";
             return false;
         }
@@ -256,7 +284,9 @@ namespace SparkEditor::PrefabTextFormat
             std::string value;
             std::getline(fields, value);
             if (!value.empty() && value.front() == ' ')
+            {
                 value.erase(0, 1);
+            }
 
             const auto malformed = [&]()
             {
@@ -269,28 +299,36 @@ namespace SparkEditor::PrefabTextFormat
             if (propType == "bool")
             {
                 if (value != "true" && value != "false")
+                {
                     return malformed();
+                }
                 parsed = (value == "true");
             }
             else if (propType == "int")
             {
                 int v = 0;
                 if (!ParseValues(value, v))
+                {
                     return malformed();
+                }
                 parsed = v;
             }
             else if (propType == "float")
             {
                 float v = 0.0f;
                 if (!ParseValues(value, v))
+                {
                     return malformed();
+                }
                 parsed = v;
             }
             else if (propType == "double")
             {
                 double v = 0.0;
                 if (!ParseValues(value, v))
+                {
                     return malformed();
+                }
                 parsed = v;
             }
             else if (propType == "string")
@@ -301,14 +339,18 @@ namespace SparkEditor::PrefabTextFormat
             {
                 XMFLOAT3 v{0.0f, 0.0f, 0.0f};
                 if (!ParseValues(value, v.x, v.y, v.z))
+                {
                     return malformed();
+                }
                 parsed = v;
             }
             else if (propType == "float4")
             {
                 XMFLOAT4 v{0.0f, 0.0f, 0.0f, 0.0f};
                 if (!ParseValues(value, v.x, v.y, v.z, v.w))
+                {
                     return malformed();
+                }
                 parsed = v;
             }
             else
@@ -316,7 +358,7 @@ namespace SparkEditor::PrefabTextFormat
                 reason = UnknownTypeReason(location, propName, component.typeName, propType);
                 return false;
             }
-            return AddProperty(component, std::move(propName), std::move(parsed), location, reason);
+            return AddProperty(component, propName, std::move(parsed), location, reason);
         }
 
         /// `  "<name>" <type> <value...>`, where a string value is quoted and numbers are one space apart.
@@ -392,14 +434,16 @@ namespace SparkEditor::PrefabTextFormat
                          "' has a malformed " + std::string(propType) + " value";
                 return false;
             }
-            return AddProperty(component, std::move(propName), std::move(parsed), location, reason);
+            return AddProperty(component, propName, std::move(parsed), location, reason);
         }
 
         /// `component <type>` (version 1, one bare word) or `component "<type>"` (version 2).
         bool ParseComponentLine(const std::string& line, bool quoted, std::string& typeName)
         {
             if (quoted)
+            {
                 return ParseQuotedLine(line, "component", typeName);
+            }
             return SplitKeyword(line, "component", typeName) && !typeName.empty() &&
                    typeName.find_first_of(" \t") == std::string::npos;
         }
@@ -496,7 +540,9 @@ namespace SparkEditor::PrefabTextFormat
                     return ParseResult::Rejected;
                 }
                 if (!parseProperty(line, reader.LineNumber(), component, reason))
+                {
                     return ParseResult::Rejected;
+                }
             }
             out.components.push_back(std::move(component));
         }
@@ -545,7 +591,9 @@ namespace SparkEditor::PrefabTextFormat
             std::vector<const std::pair<const std::string, PrefabPropertyValue>*> sorted;
             sorted.reserve(comp.properties.size());
             for (const auto& property : comp.properties)
+            {
                 sorted.push_back(&property);
+            }
             std::sort(sorted.begin(), sorted.end(), [](const auto* a, const auto* b) { return a->first < b->first; });
 
             for (const auto* property : sorted)

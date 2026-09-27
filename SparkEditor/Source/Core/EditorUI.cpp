@@ -233,10 +233,14 @@ namespace SparkEditor
             {
                 std::string openError;
                 if (!m_projectManager->OpenProject(config.projectPath, &openError))
+                {
                     console.LogWarning("Could not open startup project: " +
                                        (openError.empty() ? config.projectPath : openError));
+                }
                 else if (!openError.empty())
+                {
                     console.LogWarning(openError);
+                }
             }
 
             // Show project browser on startup if no project is loaded (skip in test mode)
@@ -1350,7 +1354,9 @@ namespace SparkEditor
         try
         {
             if (!m_layoutManager)
+            {
                 return false;
+            }
             if (!m_layoutManager->LoadLayout(layoutName))
             {
                 // A damaged or newer-version layout changes nothing; say why instead of failing silently.
@@ -2124,7 +2130,9 @@ namespace SparkEditor
             }
             // Opened from the retained .bak: say why, so the user knows the primary was damaged.
             if (!openError.empty())
+            {
                 ShowNotification(openError, "warning", 8.0f);
+            }
             return true;
         }
         case DocumentTransitionAction::CreateProject:

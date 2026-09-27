@@ -26,7 +26,7 @@ namespace SparkEditor
     {
         std::filesystem::path PathFromUtf8(const std::string& path)
         {
-            return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path.data()), path.size()));
+            return std::u8string(reinterpret_cast<const char8_t*>(path.data()), path.size());
         }
 
         PrefabTextFormat::ParseResult ReadPrefabFile(const std::filesystem::path& path,

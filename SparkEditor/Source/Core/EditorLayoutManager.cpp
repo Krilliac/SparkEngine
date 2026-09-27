@@ -300,7 +300,9 @@ namespace SparkEditor
 
         const std::string path = LayoutFilePath(name);
         if (!WriteLayoutFile(path, name, description, m_lastError))
+        {
             return false;
+        }
 
         m_currentLayoutName = name;
         return true;
@@ -601,7 +603,9 @@ namespace SparkEditor
         {
             cursor.SkipWhitespaceAndPunct();
             if (cursor.Eof())
+            {
                 break;
+            }
             if (contents[cursor.pos] == ']')
             {
                 closed = true;
@@ -623,9 +627,13 @@ namespace SparkEditor
         {
             const char c = contents[cursor.pos];
             if (c == '}')
+            {
                 ++closingBraces;
+            }
             else if (!std::isspace(static_cast<unsigned char>(c)))
+            {
                 break;
+            }
         }
         if (!closed || closingBraces != 2 || !cursor.Eof())
         {
@@ -662,7 +670,9 @@ namespace SparkEditor
         }
 
         if (!ReadLayoutFile(path))
+        {
             return false;
+        }
 
         m_currentLayoutName = name;
         return true;

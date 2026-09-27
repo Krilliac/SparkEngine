@@ -23,7 +23,7 @@ namespace SparkEditor
     {
         std::filesystem::path PathFromUtf8(const std::string& path)
         {
-            return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path.data()), path.size()));
+            return std::u8string(reinterpret_cast<const char8_t*>(path.data()), path.size());
         }
 
         std::string PathToUtf8(const std::filesystem::path& path)
@@ -36,7 +36,9 @@ namespace SparkEditor
         bool IsSafePrefabFileName(const std::string& name)
         {
             if (name.empty() || name == "." || name == "..")
+            {
                 return false;
+            }
             return std::none_of(name.begin(), name.end(),
                                 [](unsigned char c) { return c < 0x20 || c == '/' || c == '\\' || c == ':'; });
         }
@@ -264,7 +266,9 @@ namespace SparkEditor
             std::error_code typeError;
             // `.sparkprefab.bak` and `.sparkprefab.tmp` siblings have other extensions.
             if (entry->is_regular_file(typeError) && entry->path().extension() == ".sparkprefab")
+            {
                 files.push_back(entry->path());
+            }
         }
         if (error)
         {
@@ -278,9 +282,13 @@ namespace SparkEditor
         {
             std::string loadError;
             if (LoadPrefab(PathToUtf8(file), &loadError))
+            {
                 ++loaded;
+            }
             if (!loadError.empty())
+            {
                 diagnostics.push_back(std::move(loadError));
+            }
         }
         return loaded;
     }
@@ -292,7 +300,9 @@ namespace SparkEditor
         std::string loadError;
         const bool loaded = PrefabAsset::TryLoad(filePath, prefab, loadError);
         if (error)
+        {
             *error = loadError;
+        }
         if (!loaded)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "%s", loadError.c_str());

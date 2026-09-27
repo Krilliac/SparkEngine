@@ -10,6 +10,7 @@
 
 #include "PrefabAsset.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -21,7 +22,7 @@ namespace SparkEditor::PrefabTextFormat
         std::vector<SerializedComponent> components;
     };
 
-    enum class ParseResult
+    enum class ParseResult : std::uint8_t
     {
         Ok,
         Rejected,    ///< Damaged, malformed, or older than PrefabAsset::kOldestSupportedPrefabVersion
