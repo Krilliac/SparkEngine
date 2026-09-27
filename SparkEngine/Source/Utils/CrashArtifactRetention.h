@@ -173,6 +173,26 @@ namespace Spark::CrashHandlerDetail
         }
 #endif
 
+        /// Copy the leaf name of @p path into @p name when it is at most 64
+        /// ASCII characters. Generated names are ASCII; anything else is
+        /// rejected before a narrowing conversion could throw.
+        inline bool TryGetAsciiLeafName(const std::filesystem::path& path, std::string& name)
+        {
+            // filename() returns by value: keep it alive for as long as the
+            // reference returned by native() is read.
+            const std::filesystem::path leaf = path.filename();
+            const auto& nativeName = leaf.native();
+            if (nativeName.size() > 64 ||
+                !std::all_of(nativeName.begin(), nativeName.end(), [](auto character)
+                             { return character > 0 && static_cast<std::uint32_t>(character) < 0x80; }))
+                return false;
+            name.clear();
+            name.reserve(nativeName.size());
+            for (const auto character : nativeName)
+                name.push_back(static_cast<char>(character));
+            return true;
+        }
+
         struct RetentionCandidate
         {
             std::filesystem::path path;
@@ -230,17 +250,9 @@ namespace Spark::CrashHandlerDetail
             if (++examined > kMaxRetentionEntriesExamined)
                 break;
             const std::filesystem::directory_entry& entry = *it;
-            // Generated names are ASCII; anything else is skipped before a
-            // narrowing conversion could throw.
-            const auto& nativeName = entry.path().filename().native();
-            if (nativeName.size() > 64 ||
-                !std::all_of(nativeName.begin(), nativeName.end(), [](auto character)
-                             { return character > 0 && static_cast<std::uint32_t>(character) < 0x80; }))
-                continue;
             std::string name;
-            name.reserve(nativeName.size());
-            for (const auto character : nativeName)
-                name.push_back(static_cast<char>(character));
+            if (!Private::TryGetAsciiLeafName(entry.path(), name))
+                continue;
             unsigned long processId = 0;
             if (!ParseCrashArtifactDirectoryName(name, processId))
                 continue;

@@ -102,6 +102,26 @@ TEST(CrashRetention_ParsesOnlyGeneratedDirectoryNames)
     EXPECT_FALSE(ParseCrashArtifactDirectoryName("other_crash_12_" + Suffix(7), pid));
 }
 
+// The leaf name used to be read through a reference into the temporary that
+// path::filename() returns, a heap-use-after-free once the name outgrew the
+// small-string buffer (every generated name does). ASan flags that read, and
+// the MSVC Debug CRT's 0xDD fill made every name fail the ASCII check, so
+// the prune tests below removed nothing. This pins the converted value.
+TEST(CrashRetention_LeafNameIsCopiedFromALiveFilename)
+{
+    namespace Detail = Spark::CrashHandlerDetail::Private;
+    const std::string generated = "spark_crash_" + std::to_string(kExitedPid) + "_" + Suffix(0xABCDEF);
+    std::string name = "stale";
+    ASSERT_TRUE(Detail::TryGetAsciiLeafName(fs::temp_directory_path() / generated, name));
+    EXPECT_EQ(name, generated);
+    unsigned long pid = 0;
+    EXPECT_TRUE(ParseCrashArtifactDirectoryName(name, pid));
+    EXPECT_EQ(pid, kExitedPid);
+
+    EXPECT_FALSE(Detail::TryGetAsciiLeafName(fs::path("base") / std::string(65, 'a'), name));
+    EXPECT_FALSE(Detail::TryGetAsciiLeafName(fs::path("base") / fs::path(u8"spark_crash_é"), name));
+}
+
 TEST(CrashRetention_RemovesEmptyAndExpiredDirectoriesOfExitedProcesses)
 {
     RetentionScratch scratch;

@@ -1817,7 +1817,7 @@ set_tests_properties(CrashSettingsCredentials PROPERTIES
 # owner-verified age/count/byte retention policy before a new one is created.
 add_test(NAME CrashArtifactRetention COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(CrashArtifactRetention PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=CrashRetention_;SPARK_TEST_EXPECT_COUNT=4"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=CrashRetention_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "crash-security;security;unit"
     TIMEOUT 30)
 
