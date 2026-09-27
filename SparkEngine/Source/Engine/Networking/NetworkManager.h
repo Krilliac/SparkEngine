@@ -91,6 +91,29 @@ namespace Spark::Net
     using SequenceNumber = uint32_t;
     using NetworkTime = float;
 
+    /// Successor of a reliable-channel sequence. Reliable streams start at 1 and a
+    /// sequence of 0 is never tracked (it bypasses dedup, ACK and ordering), so a
+    /// stream that runs past 0xFFFFFFFF continues at 1 instead of emitting 0.
+    [[nodiscard]] constexpr SequenceNumber NextReliableSequence(SequenceNumber sequence) noexcept
+    {
+        return sequence == 0xFFFFFFFFu ? 1u : sequence + 1u;
+    }
+
+    /// Return @p next and advance it with NextReliableSequence.
+    [[nodiscard]] constexpr SequenceNumber TakeReliableSequence(SequenceNumber& next) noexcept
+    {
+        const SequenceNumber taken = next;
+        next = NextReliableSequence(next);
+        return taken;
+    }
+
+    /// RFC 1982 serial-number comparison: true when @p lhs is newer than @p rhs,
+    /// including across the uint32 wrap (half-range window).
+    [[nodiscard]] constexpr bool IsSequenceNewer(SequenceNumber lhs, SequenceNumber rhs) noexcept
+    {
+        return lhs != rhs && static_cast<uint32_t>(lhs - rhs) < 0x80000000u;
+    }
+
     constexpr uint16_t DEFAULT_PORT = 27015;
 
     /// Magic that opens every Connect payload ("SPNH", Spark network handshake). A Connect

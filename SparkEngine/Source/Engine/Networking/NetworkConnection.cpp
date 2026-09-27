@@ -698,7 +698,7 @@ namespace Spark::Net
         // reaches here for reliable traffic, so the peer is always the server.
         if (queued.channel != ChannelType::Unreliable)
         {
-            queued.sequence = GetPeerState(SERVER_PEER).nextOutgoingSequence++;
+            queued.sequence = TakeReliableSequence(GetPeerState(SERVER_PEER).nextOutgoingSequence);
         }
 
         m_outgoingQueue.push(queued);
@@ -752,7 +752,7 @@ namespace Spark::Net
         if (copy.channel != ChannelType::Unreliable)
         {
             PeerState& peer = GetPeerState(client);
-            copy.sequence = peer.nextOutgoingSequence++;
+            copy.sequence = TakeReliableSequence(peer.nextOutgoingSequence);
             peer.unacknowledgedMessages[copy.sequence] = copy;
             peer.reliableOriginalSendTime.try_emplace(copy.sequence, m_serverTime);
         }
@@ -777,7 +777,7 @@ namespace Spark::Net
         }
         if (copy.channel != ChannelType::Unreliable)
         {
-            copy.sequence = GetPeerState(client).nextOutgoingSequence++;
+            copy.sequence = TakeReliableSequence(GetPeerState(client).nextOutgoingSequence);
         }
         m_outgoingQueue.push(copy);
         m_stats.packetsSent++;

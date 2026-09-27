@@ -811,7 +811,7 @@ namespace Spark::Net
                     }
                     // This is the expected sequence — deliver it, then flush buffer
                     RecordReceivedSequence(peer, msg.sequence);
-                    peer.expectedOrderedSequence++;
+                    peer.expectedOrderedSequence = NextReliableSequence(peer.expectedOrderedSequence);
                 }
 
                 if (const MessageHandler observer = dispatchMessage(msg))

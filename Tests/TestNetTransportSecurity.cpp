@@ -29,6 +29,26 @@
 
 using namespace Spark::Net;
 
+namespace Spark::Net
+{
+    struct NetworkManagerTransportSecurityTestAccess
+    {
+        /// Position the client's outgoing reliable stream (to its server) at @p next.
+        static void SeedClientOutgoingSequence(NetworkManager& manager, SequenceNumber next)
+        {
+            std::lock_guard<std::recursive_mutex> apiLock(manager.m_apiMutex);
+            manager.GetPeerState(NetworkManager::SERVER_PEER).nextOutgoingSequence = next;
+        }
+
+        /// Position the server's in-order delivery expectation for @p client at @p next.
+        static void SeedExpectedOrderedSequence(NetworkManager& manager, ClientID client, SequenceNumber next)
+        {
+            std::lock_guard<std::recursive_mutex> apiLock(manager.m_apiMutex);
+            manager.GetPeerState(client).expectedOrderedSequence = next;
+        }
+    };
+} // namespace Spark::Net
+
 namespace
 {
     /// Wire format documented in NetworkManager::SerializeMessage:
@@ -66,6 +86,14 @@ namespace
         if (datagram.size() < NETWORK_WIRE_HEADER_SIZE)
             return 0;
         return static_cast<uint16_t>(datagram[4] | (datagram[5] << 8));
+    }
+
+    uint32_t WireSequence(const std::vector<uint8_t>& datagram)
+    {
+        if (datagram.size() < NETWORK_WIRE_HEADER_SIZE)
+            return 0;
+        return static_cast<uint32_t>(datagram[11]) | (static_cast<uint32_t>(datagram[12]) << 8) |
+               (static_cast<uint32_t>(datagram[13]) << 16) | (static_cast<uint32_t>(datagram[14]) << 24);
     }
 
     /// Non-blocking loopback UDP socket that speaks the raw wire format.
@@ -210,10 +238,10 @@ namespace
     }
 
     /// Admit one raw peer and return the ClientID the server assigned it.
-    ClientID AdmitPeer(NetworkManager& nm, const RawPeer& peer)
+    ClientID AdmitPeer(NetworkManager& nm, const RawPeer& peer, uint32_t connectSequence = 1)
     {
         const size_t before = nm.GetClients().size();
-        if (!peer.Send(BuildWire(MessageType::Connect, ChannelType::Reliable, 1, ConnectPayload())))
+        if (!peer.Send(BuildWire(MessageType::Connect, ChannelType::Reliable, connectSequence, ConnectPayload())))
             return INVALID_CLIENT;
         if (!PumpUntil(nm, [&] { return nm.GetClients().size() > before; }))
             return INVALID_CLIENT;
@@ -487,6 +515,95 @@ TEST(NetTransportSec_FullEntitySyncsAreBudgetedPerUpdate)
     }
 
     peers.clear();
+    nm.StopServer();
+    nm.Shutdown();
+}
+
+// ============================================================================
+// Finding 39: reliable sequence 0 skips dedup, ACK and ordering. No sender
+// emits it except at the uint32 wrap, where the stream then went 0xFFFFFFFF
+// -> 0 (an untracked, endlessly retransmitted message) and the receiver's
+// ordered expectation went to 0, wedging every later ReliableOrdered message.
+// ============================================================================
+
+TEST(NetTransportSec_ReliableSequenceHelpersSkipZeroAcrossWrap)
+{
+    static_assert(NextReliableSequence(1u) == 2u);
+    static_assert(NextReliableSequence(0xFFFFFFFFu) == 1u);
+    static_assert(IsSequenceNewer(1u, 0xFFFFFFFFu));
+    static_assert(!IsSequenceNewer(0xFFFFFFFFu, 1u));
+    static_assert(!IsSequenceNewer(5u, 5u));
+
+    SequenceNumber next = 0xFFFFFFFEu;
+    EXPECT_EQ(TakeReliableSequence(next), 0xFFFFFFFEu);
+    EXPECT_EQ(TakeReliableSequence(next), 0xFFFFFFFFu);
+    EXPECT_EQ(TakeReliableSequence(next), 1u);
+    EXPECT_EQ(next, 2u);
+}
+
+TEST(NetTransportSec_ClientReliableStreamWrapsToOneNotZero)
+{
+    auto& nm = FreshManager();
+    RawPeer fakeServer(0);
+    ASSERT_TRUE(fakeServer.IsReady());
+    sockaddr_in clientEndpoint{};
+    ASSERT_TRUE(ConnectClientToFakeServer(nm, fakeServer, clientEndpoint));
+    (void)fakeServer.DrainFrom();
+
+    NetworkManagerTransportSecurityTestAccess::SeedClientOutgoingSequence(nm, 0xFFFFFFFFu);
+    NetworkMessage message;
+    message.type = MessageType::UserDefined;
+    message.channel = ChannelType::Reliable;
+    message.payload = {0x01};
+    nm.SendMessage(message);
+    nm.SendMessage(message);
+
+    std::vector<uint32_t> sequences;
+    EXPECT_TRUE(PumpUntil(nm,
+                          [&]
+                          {
+                              for (const auto& datagram : fakeServer.DrainFrom())
+                              {
+                                  if (WireType(datagram.bytes) == static_cast<uint16_t>(MessageType::UserDefined))
+                                      sequences.push_back(WireSequence(datagram.bytes));
+                              }
+                              return sequences.size() >= 2;
+                          }));
+    ASSERT_TRUE(sequences.size() >= 2);
+    EXPECT_EQ(sequences[0], 0xFFFFFFFFu);
+    EXPECT_EQ(sequences[1], 1u);
+
+    nm.Disconnect();
+    fakeServer.Close();
+    nm.Shutdown();
+}
+
+TEST(NetTransportSec_OrderedDeliveryContinuesAcrossSequenceWrap)
+{
+    auto& nm = FreshManager();
+    ASSERT_TRUE(nm.StartServer(0, 2, NetworkEndpointPolicy::Loopback()));
+    std::vector<uint8_t> delivered;
+    nm.RegisterHandler(MessageType::UserDefined,
+                       [&](const NetworkMessage& message)
+                       {
+                           if (!message.payload.empty())
+                               delivered.push_back(message.payload.front());
+                       });
+    {
+        RawPeer peer(nm.GetBoundPort());
+        ASSERT_TRUE(peer.IsReady());
+        // Connect on a sequence far from the wrap so it cannot collide with the dedup window below.
+        const ClientID admitted = AdmitPeer(nm, peer, 100);
+        ASSERT_TRUE(admitted != INVALID_CLIENT);
+        NetworkManagerTransportSecurityTestAccess::SeedExpectedOrderedSequence(nm, admitted, 0xFFFFFFFFu);
+
+        ASSERT_TRUE(peer.Send(BuildWire(MessageType::UserDefined, ChannelType::ReliableOrdered, 0xFFFFFFFFu, {0xA1})));
+        ASSERT_TRUE(peer.Send(BuildWire(MessageType::UserDefined, ChannelType::ReliableOrdered, 1u, {0xA2})));
+        EXPECT_TRUE(PumpUntil(nm, [&] { return delivered.size() >= 2; }));
+        ASSERT_EQ(delivered.size(), static_cast<size_t>(2));
+        EXPECT_EQ(delivered[0], static_cast<uint8_t>(0xA1));
+        EXPECT_EQ(delivered[1], static_cast<uint8_t>(0xA2));
+    }
     nm.StopServer();
     nm.Shutdown();
 }
