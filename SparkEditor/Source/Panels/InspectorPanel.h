@@ -17,9 +17,11 @@
 // same reason).
 #include "Engine/ECS/Components.h"
 #include "InspectorPendingWorldEdit.h"
+#include <functional>
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace SparkEditor
 {
@@ -158,6 +160,10 @@ namespace SparkEditor
          * moved, the panel stopped rendering this entity, or an immediate
          * Add/Remove command is about to run.
          *
+         * Asset-path fields (see InspectorWorldAssetDrop.h) are also drop
+         * targets for Asset Browser drags; an accepted drop flushes the open
+         * gesture and records one "Assign ... Asset" entry of its own.
+         *
          * @param world  The live ECS World (owned by EditorUI).
          * @param entity The currently selected entity (already validated
          *               non-null and registry-valid by the caller).
@@ -194,10 +200,15 @@ namespace SparkEditor
          * Supports Bool, Int, Float, String (char[N] buffers), Vector3, Vector4.
          * Fields with hasRange use sliders; others use drag controls.
          *
-         * @param data    Pointer to the start of the data struct.
-         * @param fields  Vector of field descriptors (from TypeRegistry or inline).
+         * @param data       Pointer to the start of the data struct.
+         * @param fields     Vector of field descriptors (from TypeRegistry or inline).
+         * @param afterField Optional hook called right after each visible field's
+         *                   widget, while it is still ImGui's last item (the
+         *                   World-backed path attaches asset drop targets here).
+         *                   It must not write through @p data.
          */
-        static bool RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields);
+        static bool RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields,
+                                          const std::function<void(const Spark::FieldInfo&)>& afterField = {});
 
       private:
         SceneFile* m_scene = nullptr;                     ///< Non-owning pointer to the active scene.

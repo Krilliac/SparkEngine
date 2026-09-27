@@ -166,6 +166,13 @@ The generated inventory below tracks source `*Panel.h` headers rather than a fix
 - [Component](../subsystems/Entity-Component-System.md) editing with type-appropriate widgets
 - Material assignment and configuration
 - Component reflection via `ComponentReflection.h`
+- Asset drops onto World entities: dragging a mesh or material from the Asset
+  Browser onto `MeshRenderer`'s Mesh Path or Material Path field validates the
+  `Assets/...` reference against that slot's kind (wrong kind and path traversal
+  are refused), flushes any field edit still being typed, and records one
+  "Assign Mesh Asset" / "Assign Material Asset" undo step
+  (`Panels/InspectorWorldAssetDrop.h`). The assignment is saved with the
+  reflected scene. Regression coverage: `Tests/TestEditorAssetDropWorldReal.cpp`.
 
 ### Game Viewport
 
