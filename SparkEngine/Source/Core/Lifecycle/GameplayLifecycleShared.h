@@ -34,12 +34,15 @@ namespace Spark::Core::Lifecycle
     /// the context World and EventBus. Game modules compile and attach scripts in
     /// OnLoad, so every host calls this from its core init before loading modules;
     /// InitializeGameplaySystemsImpl calls it again for callers without a host.
-    /// Main thread only. Idempotent: returns true at once while the engine is up.
+    /// Main thread only. Idempotent: returns true at once while its own engine is
+    /// published and up; an engine some other owner started is never adopted.
     /// The engine object is process-static; ShutdownScriptingServiceImpl releases it.
     /// @return false when the EngineContext is missing or AngelScript fails to start.
     bool InitializeScriptingServiceImpl();
 
-    /// Shut the script engine down after every module OnUnload. Idempotent.
+    /// Withdraw the published script engine from the EngineContext and shut it
+    /// down after every module OnUnload. An engine that was never published (one
+    /// another owner started) is left alone. Idempotent.
     void ShutdownScriptingServiceImpl();
 
     /// Initialize every gameplay subsystem and the ECS phase pipeline.

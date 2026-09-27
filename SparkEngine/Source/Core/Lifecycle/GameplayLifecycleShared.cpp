@@ -775,8 +775,10 @@ namespace Spark::Core::Lifecycle
             return false;
         }
 
-        // Already published by the host core init; the gameplay stage calls this again.
-        if (ctx->GetScriptEngine() && AngelScriptEngine::GetInstance())
+        // Already published by the host core init; the gameplay stage calls this
+        // again. Only the published engine counts: GetInstance() alone can name an
+        // engine some other owner started, which is not this boot's service.
+        if (ctx->GetScriptEngine() != nullptr && ctx->GetScriptEngine() == AngelScriptEngine::GetInstance())
             return true;
 
         static AngelScriptEngine s_angelScript;
@@ -797,9 +799,17 @@ namespace Spark::Core::Lifecycle
 
     void ShutdownScriptingServiceImpl()
     {
-        // Shutdown() clears the singleton, so a second call (gameplay stage, then host teardown) is a no-op.
-        if (auto* scriptEngine = AngelScriptEngine::GetInstance())
-            scriptEngine->Shutdown();
+        // The context holds the engine InitializeScriptingServiceImpl published,
+        // and nothing else publishes one. Withdraw it before shutting it down so
+        // nothing reaches a dead engine through the context and the next boot
+        // starts it afresh; an engine another owner started is left alone. A
+        // second call (gameplay stage, then host teardown) finds nothing to do.
+        auto* ctx = EngineContext::Get();
+        AngelScriptEngine* scriptEngine = ctx != nullptr ? ctx->GetScriptEngine() : nullptr;
+        if (scriptEngine == nullptr)
+            return;
+        ctx->SetScriptEngine(nullptr);
+        scriptEngine->Shutdown();
     }
 
     static void InitScriptingAndPlatformSystems(EngineContext* ctx)

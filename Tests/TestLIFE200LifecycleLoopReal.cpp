@@ -18,7 +18,10 @@
  * leave no published service, ECS phase system, console command or thread
  * behind, keep its root latched, and let the next boot start cleanly. A fourth
  * proves an Update stage that throws escapes RunUpdate without poisoning the
- * root: every such cycle still shuts down to the same footprint.
+ * root: every such cycle still shuts down to the same footprint. A fifth boots
+ * beside a script engine another owner started: each boot must publish and
+ * withdraw its own engine, never adopt or shut down the foreign one, so the
+ * script console commands a boot registers do not depend on test order.
  *
  * A CycleWatchdog bounds every cycle: a deadlock aborts the run with the cycle
  * named instead of hanging until the CTest timeout. The Lifecycle_LifecycleLoop
@@ -36,6 +39,7 @@
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Systems/PhaseSystemManager.h"
 #include "Engine/Events/EventSystem.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
 #include "Utils/DebugOverlay.h"
 #include "Utils/SparkConsole.h"
 
@@ -198,16 +202,20 @@ namespace
 
     bool ServicesPublished(EngineContext& ctx)
     {
+        // The published script engine is the running singleton, never a stale
+        // pointer left by an earlier boot beside some other owner's engine.
         return ctx.GetConditions() != nullptr && ctx.GetAbilities() != nullptr && ctx.GetAI() != nullptr &&
                ctx.GetWeapons() != nullptr && ctx.GetWeapons() == GetEngineRuntime().weaponSystem.get() &&
-               ctx.GetComponentSerializers() != nullptr && ctx.GetInvalidStateDetector() != nullptr;
+               ctx.GetComponentSerializers() != nullptr && ctx.GetInvalidStateDetector() != nullptr &&
+               ctx.GetScriptEngine() != nullptr && ctx.GetScriptEngine() == AngelScriptEngine::GetInstance();
     }
 
     bool ServicesWithdrawn(EngineContext& ctx)
     {
         return ctx.GetConditions() == nullptr && ctx.GetAbilities() == nullptr && ctx.GetAI() == nullptr &&
                ctx.GetWeapons() == nullptr && GetEngineRuntime().weaponSystem == nullptr &&
-               ctx.GetComponentSerializers() == nullptr && ctx.GetInvalidStateDetector() == nullptr;
+               ctx.GetComponentSerializers() == nullptr && ctx.GetInvalidStateDetector() == nullptr &&
+               ctx.GetScriptEngine() == nullptr;
     }
 
     std::size_t PhaseSystemCount()
@@ -459,5 +467,55 @@ TEST(LifecycleLoop_ThrowingUpdateStageDoesNotLeakAcrossCycles)
         const CycleFootprint footprint = SampleFootprint(consoleScope.console);
         EXPECT_EQ(footprint.consoleCommands, baseline.consoleCommands);
         EXPECT_LE(footprint.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
+    }
+}
+
+namespace
+{
+    /// A script engine some other owner started. Shut down on scope exit, so a
+    /// failed assertion never leaves GetInstance() naming a destroyed engine.
+    struct ForeignScriptEngine final
+    {
+        AngelScriptEngine engine;
+        ~ForeignScriptEngine() { engine.Shutdown(); }
+    };
+} // namespace
+
+TEST(LifecycleLoop_ForeignScriptEngineIsNeitherAdoptedNorShutDown)
+{
+    EngineContext* ctx = PrepareContext();
+    ConsoleScope consoleScope;
+    LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
+
+    // Warm-up: this shutdown must withdraw the script service, or the next boot
+    // takes the stale pointer for a running engine of its own.
+    watchdog.Arm("warm-up boot before a foreign script engine starts");
+    const CycleFootprint baseline = CleanCycle(*ctx, consoleScope.console);
+    watchdog.Disarm();
+
+    ForeignScriptEngine foreign;
+    ASSERT_TRUE(foreign.engine.Initialize());
+    ASSERT_TRUE(AngelScriptEngine::GetInstance() == &foreign.engine);
+
+    for (int cycle = 0; cycle < kAlternatingRounds; ++cycle)
+    {
+        watchdog.Arm("boot beside a foreign script engine, cycle " + std::to_string(cycle));
+        auto root = MakeProductionRoot();
+        ASSERT_TRUE(root->RunInitialize());
+        // The boot starts and publishes its own engine rather than adopting the
+        // foreign one, so every boot registers the same script console commands.
+        EXPECT_TRUE(ServicesPublished(*ctx));
+        EXPECT_TRUE(ctx->GetScriptEngine() != &foreign.engine);
+        ASSERT_TRUE(root->RunShutdown());
+        EXPECT_TRUE(ServicesWithdrawn(*ctx));
+        root.reset();
+        watchdog.Disarm();
+
+        EXPECT_EQ(SampleFootprint(consoleScope.console).consoleCommands, baseline.consoleCommands);
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+        // The lifecycle's shutdown released only its own engine: the foreign one still compiles.
+        EXPECT_TRUE(foreign.engine.CompileScriptFromString("void ForeignProbe() {}\n",
+                                                           "LifecycleForeignProbe" + std::to_string(cycle)));
+#endif
     }
 }
