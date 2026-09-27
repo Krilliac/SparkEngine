@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2664,
+      "line": 2711,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1396,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2702,
+      "line": 2749,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1405,10 +1405,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2322,
+      "line": 2341,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2267",
+          "id": "Tests/CMakeLists.txt:2286",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1491,7 +1491,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1469,
+      "line": 1473,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2082,7 +2082,7 @@
       "target": "${TARGET_NAME}",
       "kind": "unresolved",
       "file": "cmake/SparkGameModule.cmake",
-      "line": 199,
+      "line": 245,
       "conditionFrames": [],
       "definitionScope": [
         "spark_add_game_module"
@@ -2465,7 +2465,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 776,
+      "line": 778,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2633,10 +2633,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 3222,
+      "line": 3283,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3220",
+          "id": "Tests/CMakeLists.txt:3281",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2679,7 +2679,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 738,
+      "line": 740,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2803,10 +2803,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1305,
+      "line": 1309,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1293",
+          "id": "Tests/CMakeLists.txt:1297",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -2821,7 +2821,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 891,
+      "line": 893,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3041,10 +3041,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 760,
+      "line": 762,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:759",
+          "id": "Tests/CMakeLists.txt:761",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3172,7 +3172,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 780,
+      "line": 782,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3182,7 +3182,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 771,
+      "line": 773,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3192,7 +3192,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 782,
+      "line": 784,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3222,10 +3222,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 751,
+      "line": 753,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:750",
+          "id": "Tests/CMakeLists.txt:752",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3262,7 +3262,7 @@
       "target": "SparkPreviousSdkModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 774,
+      "line": 776,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3272,7 +3272,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 778,
+      "line": 780,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3282,7 +3282,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 896,
+      "line": 898,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3342,7 +3342,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 784,
+      "line": 786,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3392,7 +3392,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 886,
+      "line": 888,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3402,7 +3402,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 727,
+      "line": 729,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3840,7 +3840,7 @@
       "declarations": [
         {
           "file": "cmake/SparkGameModule.cmake",
-          "line": 199,
+          "line": 245,
           "kind": "unresolved",
           "origin": "function-template",
           "definitionScope": [
@@ -4290,7 +4290,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 776,
+          "line": 778,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4454,7 +4454,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 3222,
+          "line": 3283,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4508,7 +4508,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 738,
+          "line": 740,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4634,7 +4634,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1305,
+          "line": 1309,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4652,7 +4652,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 891,
+          "line": 893,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5048,7 +5048,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 760,
+          "line": 762,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5184,7 +5184,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 780,
+          "line": 782,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5202,7 +5202,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 771,
+          "line": 773,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5220,7 +5220,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 782,
+          "line": 784,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5258,7 +5258,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 751,
+          "line": 753,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5314,7 +5314,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 774,
+          "line": 776,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5332,7 +5332,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 778,
+          "line": 780,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5350,7 +5350,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 896,
+          "line": 898,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5458,7 +5458,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 784,
+          "line": 786,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5532,7 +5532,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 886,
+          "line": 888,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5550,7 +5550,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 727,
+          "line": 729,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6560,7 +6560,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 61,
+        "stepCount": 63,
         "steps": [
           {
             "index": 0,
@@ -7080,6 +7080,30 @@
           },
           {
             "index": 43,
+            "name": "Test module asset reference checker",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "a98c5fd291ce3d86"
+          },
+          {
+            "index": 44,
+            "name": "Verify module asset references",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "a5c14134ea7be04c"
+          },
+          {
+            "index": 45,
             "name": "Test asset integrity verifier",
             "id": "",
             "uses": "",
@@ -7091,7 +7115,7 @@
             "runDigest": "c18e5af256707318"
           },
           {
-            "index": 44,
+            "index": 46,
             "name": "Verify repository asset integrity baseline",
             "id": "",
             "uses": "",
@@ -7103,7 +7127,7 @@
             "runDigest": "24c6f12eaf03dec2"
           },
           {
-            "index": 45,
+            "index": 47,
             "name": "Verify authored FPS material coverage",
             "id": "",
             "uses": "",
@@ -7115,7 +7139,7 @@
             "runDigest": "51b7760d2528df36"
           },
           {
-            "index": 46,
+            "index": 48,
             "name": "Validate module evidence manifest (declarative layer)",
             "id": "",
             "uses": "",
@@ -7127,7 +7151,7 @@
             "runDigest": "3207d199801cc28d"
           },
           {
-            "index": 47,
+            "index": 49,
             "name": "Run module evidence adversarial tests",
             "id": "",
             "uses": "",
@@ -7139,7 +7163,7 @@
             "runDigest": "1593673681e72374"
           },
           {
-            "index": 48,
+            "index": 50,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -7151,7 +7175,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 49,
+            "index": 51,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -7163,7 +7187,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 50,
+            "index": 52,
             "name": "Test strict Shipping and reproducible-build contract",
             "id": "",
             "uses": "",
@@ -7175,7 +7199,7 @@
             "runDigest": "f482dd9880b51693"
           },
           {
-            "index": 51,
+            "index": 53,
             "name": "Test the stable-v1 x86-64 SSE4.2 CPU floor (OD-04)",
             "id": "",
             "uses": "",
@@ -7187,7 +7211,7 @@
             "runDigest": "5b9864acc47d8f75"
           },
           {
-            "index": 52,
+            "index": 54,
             "name": "Test the Shipping private-symbol manifest (BLD-100)",
             "id": "",
             "uses": "",
@@ -7199,7 +7223,7 @@
             "runDigest": "bd2a7e36436cde54"
           },
           {
-            "index": 53,
+            "index": 55,
             "name": "Test the build-output reproducibility comparator (BLD-100)",
             "id": "",
             "uses": "",
@@ -7211,7 +7235,7 @@
             "runDigest": "b744945108bec918"
           },
           {
-            "index": 54,
+            "index": 56,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -7223,7 +7247,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 55,
+            "index": 57,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -7235,7 +7259,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 56,
+            "index": 58,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7247,7 +7271,7 @@
             "runDigest": ""
           },
           {
-            "index": 57,
+            "index": 59,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -7259,7 +7283,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 58,
+            "index": 60,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -7274,7 +7298,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 59,
+            "index": 61,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7286,7 +7310,7 @@
             "runDigest": ""
           },
           {
-            "index": 60,
+            "index": 62,
             "name": "Controlled required-job failure probe",
             "id": "",
             "uses": "",
@@ -8392,7 +8416,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "674581510adbe66a"
+            "runDigest": "df096ee1f6cc3deb"
           },
           {
             "index": 4,
@@ -12589,9 +12613,13 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee security-build.log",
+        "command": "cmake --build --preset linux-shipping --parallel $(nproc) --target  SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests  SparkCrashReporterFakeGh 2>&1 | tee security-build.log",
         "commandProvenance": "literal",
         "targets": [
+          "2>",
+          "SparkCrashReporterConsentTests",
+          "SparkCrashReporterFakeGh",
+          "SparkCrashReporterManifestTests",
           "SparkTests"
         ],
         "configuration": "",
@@ -16178,9 +16206,13 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee security-build.log",
+        "command": "cmake --build --preset linux-shipping --parallel $(nproc) --target  SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests  SparkCrashReporterFakeGh 2>&1 | tee security-build.log",
         "commandProvenance": "literal",
         "targets": [
+          "2>",
+          "SparkCrashReporterConsentTests",
+          "SparkCrashReporterFakeGh",
+          "SparkCrashReporterManifestTests",
           "SparkTests"
         ],
         "configuration": "",
@@ -17736,7 +17768,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 54,
+        "stepIndex": 56,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -17764,7 +17796,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 55,
+        "stepIndex": 57,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
