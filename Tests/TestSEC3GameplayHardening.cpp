@@ -193,3 +193,173 @@ TEST(SEC3Gameplay_DirectStorageFallbackReusesBoundedWorkerPool)
     loader.Shutdown();
     EXPECT_EQ(loader.GetIoWorkerCount(), size_t{0});
 }
+
+// ----------------------------------------------------------------------------
+// #10 NavMesh
+// ----------------------------------------------------------------------------
+
+TEST(SEC3Gameplay_NavMeshRejectsCountsBeyondFileSize)
+{
+    using namespace Spark::AI;
+    ScratchDir dir("navmesh");
+    auto& manager = NavMeshManager::GetInstance();
+
+    // ~60 bytes declaring 10M triangles: the old loader value-initialised ~800 MB first.
+    {
+        std::vector<char> buf = SnavHeader();
+        PutBytes(buf, uint32_t{0});          // vertexCount
+        PutBytes(buf, uint32_t{10'000'000}); // triangleCount, no triangle bytes follow
+        const fs::path path = dir.path / "triangles.snav";
+        WriteFile(path, buf);
+
+        LogCapture log;
+        EXPECT_FALSE(manager.LoadNavMesh("sec3_triangles", path.string()));
+        EXPECT_TRUE(log.Contains("10000000 triangles"));
+        EXPECT_TRUE(log.Contains("remain in the file"));
+        EXPECT_TRUE(manager.GetNavMesh("sec3_triangles") == nullptr);
+    }
+
+    // 10M declared vertices with no vertex bytes (~120 MB up front before the fix).
+    {
+        std::vector<char> buf = SnavHeader();
+        PutBytes(buf, uint32_t{10'000'000});
+        const fs::path path = dir.path / "vertices.snav";
+        WriteFile(path, buf);
+
+        LogCapture log;
+        EXPECT_FALSE(manager.LoadNavMesh("sec3_vertices", path.string()));
+        EXPECT_TRUE(log.Contains("10000000 vertices"));
+    }
+
+    // Per-triangle adjacency count larger than the rest of the file.
+    {
+        std::vector<char> buf = SnavHeader();
+        PutBytes(buf, uint32_t{3});
+        PutBytes(buf, XMFLOAT3{0, 0, 0});
+        PutBytes(buf, XMFLOAT3{1, 0, 0});
+        PutBytes(buf, XMFLOAT3{0, 0, 1});
+        PutBytes(buf, uint32_t{1});
+        PutBytes(buf, uint32_t{0});
+        PutBytes(buf, uint32_t{1});
+        PutBytes(buf, uint32_t{2});
+        PutBytes(buf, XMFLOAT3{0.3f, 0, 0.3f});
+        PutBytes(buf, XMFLOAT3{0, 1, 0});
+        PutBytes(buf, 0.5f);
+        PutBytes(buf, uint32_t{9'999}); // adjacency entries, none present
+        const fs::path path = dir.path / "adjacency.snav";
+        WriteFile(path, buf);
+
+        LogCapture log;
+        EXPECT_FALSE(manager.LoadNavMesh("sec3_adjacency", path.string()));
+        EXPECT_TRUE(log.Contains("9999 adjacency entries"));
+    }
+}
+
+TEST(SEC3Gameplay_NavMeshStillLoadsExactlySizedFile)
+{
+    using namespace Spark::AI;
+    ScratchDir dir("navmesh_ok");
+
+    // Two triangles; the last record ends exactly at end of file, with one adjacency entry
+    // each so both the triangle and adjacency bounds are hit at equality.
+    std::vector<char> buf = SnavHeader();
+    PutBytes(buf, uint32_t{4});
+    PutBytes(buf, XMFLOAT3{0, 0, 0});
+    PutBytes(buf, XMFLOAT3{1, 0, 0});
+    PutBytes(buf, XMFLOAT3{0, 0, 1});
+    PutBytes(buf, XMFLOAT3{1, 0, 1});
+    PutBytes(buf, uint32_t{2});
+    const uint32_t tris[2][3] = {{0, 1, 2}, {1, 3, 2}};
+    for (uint32_t t = 0; t < 2; ++t)
+    {
+        PutBytes(buf, tris[t][0]);
+        PutBytes(buf, tris[t][1]);
+        PutBytes(buf, tris[t][2]);
+        PutBytes(buf, XMFLOAT3{0.5f, 0, 0.5f});
+        PutBytes(buf, XMFLOAT3{0, 1, 0});
+        PutBytes(buf, 0.5f);
+        PutBytes(buf, uint32_t{1});
+        PutBytes(buf, uint32_t{1u - t});
+    }
+    const fs::path path = dir.path / "valid.snav";
+    WriteFile(path, buf);
+
+    auto& manager = NavMeshManager::GetInstance();
+    ASSERT_TRUE(manager.LoadNavMesh("sec3_valid", path.string()));
+    const NavMeshData* mesh = manager.GetNavMesh("sec3_valid");
+    ASSERT_TRUE(mesh != nullptr);
+    EXPECT_EQ(mesh->vertices.size(), size_t{4});
+    EXPECT_EQ(mesh->triangles.size(), size_t{2});
+    EXPECT_EQ(mesh->triangles[1].adjacency.size(), size_t{1});
+    manager.RemoveNavMesh("sec3_valid");
+}
+
+// ----------------------------------------------------------------------------
+// #12 Replay
+// ----------------------------------------------------------------------------
+
+TEST(SEC3Gameplay_ReplayRejectsCountsBeyondFileSize)
+{
+    ScratchDir dir("replay");
+    Spark::ReplaySystem replay;
+
+    {
+        std::vector<char> buf = ReplayHeader();
+        PutBytes(buf, uint32_t{1'000'000}); // frames, none present
+        const fs::path path = dir.path / "frames.replay";
+        WriteFile(path, buf);
+        LogCapture log;
+        EXPECT_FALSE(replay.LoadFromFile(path.string()));
+        EXPECT_TRUE(log.Contains("1000000 frames"));
+    }
+    {
+        std::vector<char> buf = ReplayHeader();
+        PutBytes(buf, uint32_t{1});
+        PutBytes(buf, 0.0f);              // timestamp
+        PutBytes(buf, uint32_t{0});       // frameNumber
+        PutBytes(buf, uint32_t{100'000}); // entities, none present
+        const fs::path path = dir.path / "entities.replay";
+        WriteFile(path, buf);
+        LogCapture log;
+        EXPECT_FALSE(replay.LoadFromFile(path.string()));
+        EXPECT_TRUE(log.Contains("100000 entities"));
+    }
+    {
+        std::vector<char> buf = ReplayHeader();
+        PutBytes(buf, uint32_t{0});         // frames
+        PutBytes(buf, uint32_t{1'000'000}); // events, none present
+        const fs::path path = dir.path / "events.replay";
+        WriteFile(path, buf);
+        LogCapture log;
+        EXPECT_FALSE(replay.LoadFromFile(path.string()));
+        EXPECT_TRUE(log.Contains("1000000 events"));
+    }
+}
+
+TEST(SEC3Gameplay_ReplayRoundTripStillLoads)
+{
+    ScratchDir dir("replay_ok");
+    const fs::path path = dir.path / "round_trip.replay";
+
+    Spark::ReplaySystem writer;
+    writer.SetMetadata("sec3_map", "sec3_mode");
+    writer.StartRecording();
+    Spark::ReplayEntityState a;
+    a.entityId = 7;
+    Spark::ReplayEntityState b;
+    b.entityId = 9;
+    writer.RecordFrame({a, b}, 0.0f);
+    writer.RecordFrame({}, 1.0f);
+    Spark::ReplayEvent named;
+    named.timestamp = 0.5f;
+    named.type = "kill";
+    named.data = "headshot";
+    writer.RecordEvent(named);
+    writer.RecordEvent(Spark::ReplayEvent{}); // empty strings: the minimum-size record ends the file
+    writer.StopRecording();
+    ASSERT_TRUE(writer.SaveToFile(path.string()));
+
+    Spark::ReplaySystem reader;
+    ASSERT_TRUE(reader.LoadFromFile(path.string()));
+    EXPECT_EQ(reader.GetFrameCount(), size_t{2});
+}

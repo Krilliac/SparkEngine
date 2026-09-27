@@ -339,6 +339,40 @@ namespace Spark
             return static_cast<bool>(file);
         }
 
+        // Smallest on-disk record behind each declared count (see SaveToFile). A count is
+        // accepted only if that many minimal records still fit in the file, so a
+        // few-dozen-byte file can no longer make LoadFromFile resize to ~1M frames and
+        // ~1M events (~130 MB) before the first payload read fails.
+        constexpr uint64_t kFrameRecordMinBytes = sizeof(float) + sizeof(uint32_t) + sizeof(uint32_t);
+        constexpr uint64_t kEntityRecordBytes = sizeof(uint32_t) + sizeof(XMFLOAT3) + sizeof(XMFLOAT4) +
+                                                sizeof(XMFLOAT3) + sizeof(float) + sizeof(int) + sizeof(uint32_t);
+        constexpr uint64_t kEventRecordMinBytes = sizeof(float) + sizeof(uint32_t) + sizeof(uint32_t) +
+                                                  sizeof(uint32_t) + sizeof(XMFLOAT3) + sizeof(uint32_t);
+
+        /// Bytes between the read position and fileEnd; 0 once the stream has failed.
+        uint64_t BytesRemaining(std::ifstream& file, std::streamoff fileEnd)
+        {
+            const std::streamoff position = file.tellg();
+            if (position < 0 || position > fileEnd)
+                return 0;
+            return static_cast<uint64_t>(fileEnd - position);
+        }
+
+        /// True when `count` records of at least `recordBytes` each fit in what is left of the file.
+        bool CountFitsRemaining(const std::string& filePath, const char* what, uint32_t count, uint64_t recordBytes,
+                                std::ifstream& file, std::streamoff fileEnd)
+        {
+            const uint64_t remaining = BytesRemaining(file, fileEnd);
+            if (count <= remaining / recordBytes)
+                return true;
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "ReplaySystem::LoadFromFile: '%s' declares %u %s (>= %llu bytes each) but only %llu bytes "
+                           "remain in the file",
+                           filePath.c_str(), count, what, static_cast<unsigned long long>(recordBytes),
+                           static_cast<unsigned long long>(remaining));
+            return false;
+        }
+
     } // anonymous namespace
 
     bool ReplaySystem::SaveToFile(const std::string& filePath) const
@@ -413,6 +447,15 @@ namespace Spark
             return false;
         }
 
+        file.seekg(0, std::ios::end);
+        const std::streamoff fileEnd = file.tellg();
+        file.seekg(0, std::ios::beg);
+        if (!file || fileEnd < 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "ReplaySystem::LoadFromFile: cannot size '%s'", filePath.c_str());
+            return false;
+        }
+
         // Header
         uint32_t magic = 0;
         file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
@@ -445,6 +488,8 @@ namespace Spark
         file.read(reinterpret_cast<char*>(&frameCount), sizeof(frameCount));
         if (!file || frameCount > kMaxFrameCount)
             return false;
+        if (!CountFitsRemaining(filePath, "frames", frameCount, kFrameRecordMinBytes, file, fileEnd))
+            return false;
 
         loaded.frames.resize(frameCount);
         for (uint32_t f = 0; f < frameCount; ++f)
@@ -456,6 +501,8 @@ namespace Spark
             uint32_t entityCount = 0;
             file.read(reinterpret_cast<char*>(&entityCount), sizeof(entityCount));
             if (!file || entityCount > kMaxEntityCount)
+                return false;
+            if (!CountFitsRemaining(filePath, "entities", entityCount, kEntityRecordBytes, file, fileEnd))
                 return false;
 
             frame.entities.resize(entityCount);
@@ -478,6 +525,8 @@ namespace Spark
         uint32_t eventCount = 0;
         file.read(reinterpret_cast<char*>(&eventCount), sizeof(eventCount));
         if (!file || eventCount > kMaxEventCount)
+            return false;
+        if (!CountFitsRemaining(filePath, "events", eventCount, kEventRecordMinBytes, file, fileEnd))
             return false;
 
         loaded.events.resize(eventCount);
