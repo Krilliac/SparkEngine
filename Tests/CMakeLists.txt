@@ -1438,7 +1438,7 @@ if(SPARK_ANGELSCRIPT_AVAILABLE)
         TIMEOUT 120)
     add_test(NAME ScriptHotReloadReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(ScriptHotReloadReal PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptHotReload_ENG200_;SPARK_TEST_EXPECT_COUNT=9"
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptHotReload_ENG200_;SPARK_TEST_EXPECT_COUNT=10"
         LABELS "scripting;scripting-integration;integration"
         TIMEOUT 120)
     # ENG-200: visual-script graphs -> compiled scripts -> GamePackager layout ->

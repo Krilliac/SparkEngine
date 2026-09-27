@@ -423,4 +423,64 @@ TEST(ScriptHotReload_ENG200_RecordsAbsolutePathAcrossWorkingDirectoryChange)
     EXPECT_EQ(fx.State(entity), std::string("v1:1|2.5|true|v1!|1"));
 }
 
+TEST(ScriptHotReload_ENG200_FromSourceReloadsInMemoryModule)
+{
+    // Modules built with CompileScriptFromString() (the visual-script demo binds one per entity) have no file
+    // to re-read; HotReloadModuleFromSource() applies the same rules to new in-memory source.
+    HotReloadFixture fx;
+    ASSERT_TRUE(fx.ready);
+    const EntityID entity = MakeEntity(30);
+    ASSERT_TRUE(fx.engine.CompileScriptFromString(kKeeperV1, "ENG200ReloadInMemory"));
+    ASSERT_TRUE(fx.engine.AttachScript(entity, "Keeper", "ENG200ReloadInMemory"));
+    EXPECT_TRUE(fx.engine.HasScriptClass("ENG200ReloadInMemory", "Keeper"));
+    EXPECT_FALSE(fx.engine.HasScriptClass("ENG200ReloadInMemory", "Renamed"));
+    EXPECT_FALSE(fx.engine.HasScriptClass("ENG200NeverCompiled", "Keeper"));
+    fx.engine.CallUpdate(entity, 1.0f);
+    const std::string v1State = "v1:1|2.5|true|v1!|1";
+    EXPECT_EQ(fx.State(entity), v1State);
+
+    EXPECT_FALSE(fx.engine.HotReloadModule("ENG200ReloadInMemory"));
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "No file path recorded");
+
+    // R1: a broken source is rejected with a "<module>:<line>" diagnostic and the live instance is untouched.
+    EXPECT_FALSE(fx.engine.HotReloadModuleFromSource(
+        "ENG200ReloadInMemory", "class Keeper\n"
+                                "{\n"
+                                "    int counter = 0;\n"
+                                "    void Update(float dt) { counter = undefinedInMemorySymbol; }\n"
+                                "}\n"));
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "Hot-reload aborted");
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "ENG200ReloadInMemory:4:");
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "undefinedInMemorySymbol");
+    EXPECT_EQ(fx.State(entity), v1State);
+
+    // R2: new code, carried values.
+    ASSERT_TRUE(fx.engine.HotReloadModuleFromSource(
+        "ENG200ReloadInMemory", "class Keeper\n"
+                                "{\n"
+                                "    int counter = 100;\n"
+                                "    float speed = 9.0f;\n"
+                                "    bool armed = false;\n"
+                                "    string label = \"fresh\";\n"
+                                "    Vector3 home;\n"
+                                "    void Update(float dt)\n"
+                                "    {\n"
+                                "        debugTrace(1, \"state\", \"v2:\" + counter + \"|\" + speed + "
+                                "\"|\" + armed + \"|\" + label + \"|\" + home.x);\n"
+                                "    }\n"
+                                "}\n"));
+    EXPECT_EQ(fx.State(entity), std::string("v2:1|2.5|true|v1!|1"));
+    const auto& report = fx.engine.GetLastHotReloadReport();
+    EXPECT_EQ(report.instances, static_cast<size_t>(1));
+    EXPECT_EQ(report.carried, static_cast<size_t>(5));
+    EXPECT_EQ(report.failedAttaches, static_cast<size_t>(0));
+
+    // Only compiled modules can be reloaded, and only from real source.
+    EXPECT_FALSE(fx.engine.HotReloadModuleFromSource("ENG200NeverCompiled", kKeeperV1));
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "is not compiled");
+    EXPECT_FALSE(fx.engine.HotReloadModuleFromSource("ENG200ReloadInMemory", ""));
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "is empty");
+    EXPECT_EQ(fx.State(entity), std::string("v2:1|2.5|true|v1!|1"));
+}
+
 #endif // SPARK_ANGELSCRIPT_SUPPORT

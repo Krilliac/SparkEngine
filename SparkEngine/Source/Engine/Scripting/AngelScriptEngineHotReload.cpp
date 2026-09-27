@@ -4,7 +4,8 @@
  *
  * AngelScriptEngine::HotReloadModule() recompiles a module from its source
  * file (read once, into a staging module that becomes the module on commit)
- * and re-attaches every entity script of it, applying the hot-reload
+ * and HotReloadModuleFromSource() from new in-memory source (modules built by
+ * CompileScriptFromString()); both re-attach every entity script of it, applying the hot-reload
  * state rules R1-R8 documented on the method: same-name, same-type fields of
  * carryable types keep their values, everything else keeps the new
  * constructor's value and is reported. Shared by the real and the stub (no
@@ -169,6 +170,12 @@ void AngelScriptEngine::RestoreFields(asIScriptObject* object, const std::vector
     }
 }
 
+bool AngelScriptEngine::HasScriptClass(const std::string& moduleName, const std::string& className) const
+{
+    const auto it = m_modules.find(moduleName);
+    return it != m_modules.end() && it->second && it->second->GetTypeInfoByName(className.c_str()) != nullptr;
+}
+
 bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
 {
     m_lastHotReloadReport = HotReloadReport{};
@@ -182,7 +189,38 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
     }
     // Copied: the map may rehash while this runs.
     const std::string filePath = fileIt->second;
+    return StageAndCommitReload(moduleName, "'" + filePath + "'", [&filePath](CScriptBuilder& builder)
+                                { return builder.AddSectionFromFile(filePath.c_str()); });
+}
 
+bool AngelScriptEngine::HotReloadModuleFromSource(const std::string& moduleName, const std::string& source)
+{
+    m_lastHotReloadReport = HotReloadReport{};
+
+    if (m_modules.find(moduleName) == m_modules.end())
+    {
+        SetLastError("Module '" + moduleName + "' is not compiled. Cannot hot-reload it from source.");
+        SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", m_lastError.c_str());
+        return false;
+    }
+    if (source.empty())
+    {
+        SetLastError("Hot-reload aborted: the new source of module '" + moduleName + "' is empty.");
+        SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", m_lastError.c_str());
+        return false;
+    }
+
+    // The section is named after the module, as CompileScriptFromString() names it.
+    return StageAndCommitReload(moduleName, "module '" + moduleName + "' source",
+                                [&moduleName, &source](CScriptBuilder& builder) {
+                                    return builder.AddSectionFromMemory(moduleName.c_str(), source.c_str(),
+                                                                        static_cast<unsigned int>(source.size()));
+                                });
+}
+
+bool AngelScriptEngine::StageAndCommitReload(const std::string& moduleName, const std::string& origin,
+                                             const std::function<int(CScriptBuilder&)>& addSection)
+{
     // 1. Snapshot every entity script of this module before anything changes.
     struct SavedBinding
     {
@@ -212,8 +250,8 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
     const std::string stagingModule = moduleName + "$hotreload_stage";
     m_firstCompileError.clear();
     CScriptBuilder builder;
-    const bool staged = builder.StartNewModule(m_engine, stagingModule.c_str()) >= 0 &&
-                        builder.AddSectionFromFile(filePath.c_str()) >= 0 && builder.BuildModule() >= 0;
+    const bool staged = builder.StartNewModule(m_engine, stagingModule.c_str()) >= 0 && addSection(builder) >= 0 &&
+                        builder.BuildModule() >= 0;
     asIScriptModule* stage = m_engine->GetModule(stagingModule.c_str());
     if (!staged || !stage)
     {
@@ -221,7 +259,7 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
         {
             stage->Discard();
         }
-        SetLastError("Hot-reload aborted: recompilation of '" + filePath + "' failed (" + m_firstCompileError +
+        SetLastError("Hot-reload aborted: recompilation of " + origin + " failed (" + m_firstCompileError +
                      "); live scripts left intact.");
         SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", m_lastError.c_str());
         return false;
@@ -279,6 +317,16 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
     SPARK_LOG_WARN(Spark::LogCategory::Scripting, "Cannot hot-reload module '%s': AngelScript support not compiled in.",
                    moduleName.c_str());
     SetLastError("AngelScript support not available.");
+    return false;
+}
+
+bool AngelScriptEngine::HotReloadModuleFromSource(const std::string& moduleName, const std::string& /*source*/)
+{
+    return HotReloadModule(moduleName);
+}
+
+bool AngelScriptEngine::HasScriptClass(const std::string& /*moduleName*/, const std::string& /*className*/) const
+{
     return false;
 }
 

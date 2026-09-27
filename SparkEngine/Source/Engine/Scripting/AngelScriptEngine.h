@@ -503,6 +503,15 @@ class AngelScriptEngine
      * @param location "module::Class" prefix for report notes
      */
     void RestoreFields(asIScriptObject* object, const std::vector<FieldSnapshot>& fields, const std::string& location);
+
+    /**
+     * @brief Shared body of HotReloadModule() and HotReloadModuleFromSource(): stage, commit, re-attach.
+     * @param moduleName Module to reload (its entity scripts are snapshotted and re-attached)
+     * @param origin     Source description for the abort diagnostic (file path or "module '<name>' source")
+     * @param addSection Adds the one source section to the staging builder; returns < 0 on failure
+     */
+    bool StageAndCommitReload(const std::string& moduleName, const std::string& origin,
+                              const std::function<int(CScriptBuilder&)>& addSection);
 #endif
 
     // ========================================================================
@@ -552,6 +561,29 @@ class AngelScriptEngine
      * @return true only if recompilation and every re-attach succeeded
      */
     bool HotReloadModule(const std::string& moduleName);
+
+    /**
+     * @brief Recompile a module from in-memory source and re-attach its entity scripts, keeping their state.
+     *
+     * The HotReloadModule() counterpart for modules built with
+     * CompileScriptFromString(), which have no source file to re-read. Same
+     * rules R1-R8 and the same report; the source section is named after the
+     * module, so diagnostics read "<module>:<line>" as they do for
+     * CompileScriptFromString(). Game thread only; not for per-frame use.
+     *
+     * @param moduleName Name of an already compiled module
+     * @param source     Complete new source of the module
+     * @return true only if recompilation and every re-attach succeeded
+     */
+    bool HotReloadModuleFromSource(const std::string& moduleName, const std::string& source);
+
+    /**
+     * @brief Whether a compiled module declares a script class of the given name.
+     *
+     * Lets a caller validate a new source before committing a hot reload whose
+     * re-attach would otherwise fail (rule R8).
+     */
+    bool HasScriptClass(const std::string& moduleName, const std::string& className) const;
 
     /** @brief Report of the last HotReloadModule() call (empty before the first). */
     const HotReloadReport& GetLastHotReloadReport() const { return m_lastHotReloadReport; }
