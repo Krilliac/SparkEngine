@@ -62,6 +62,11 @@ class SparkGameMMOModule : public Spark::IModule
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
     void OnUnload() override;
+    /// Transactional reload runs the replacement's OnLoad before this instance's
+    /// OnUnload. This module owns process-wide streaming areas, the shared NetworkManager server and its message handlers keyed by
+    /// ID, not by owner, so the outgoing teardown would remove what the replacement just
+    /// registered. Refuse hot reload; a full restart is required.
+    bool SupportsHotReload() const override { return false; }
     void OnUpdate(float deltaTime) override;
     void OnFixedUpdate(float fixedDeltaTime) override;
     void OnRender() override;

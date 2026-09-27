@@ -228,6 +228,12 @@ namespace
 #endif
     }
 
+    std::string ReadBinaryFile(const std::filesystem::path& path)
+    {
+        std::ifstream input(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
+
 #ifndef _WIN32
     size_t CountStagedModuleImages(const std::filesystem::path& source)
     {
@@ -1036,4 +1042,47 @@ TEST(ModuleABI_HotReloadCallbackCanReenterManagerWithoutDeadlock)
     EXPECT_EQ(CountStagedModuleImages(modulePath), size_t{0});
 #endif
     RemoveModuleCopy(modulePath);
+}
+
+TEST(ModuleABI_ModulesOwningIdKeyedStateRefuseHotReload)
+{
+    // Transactional reload runs the replacement's OnLoad before the outgoing
+    // OnUnload. Streaming areas and the shared network server are keyed by ID,
+    // not by owner, so a module that registers them would have its outgoing
+    // teardown remove what the replacement just registered. It must refuse
+    // hot reload and require a restart instead.
+    const std::filesystem::path gameModules = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "GameModules";
+    size_t owners = 0;
+    std::string missingOptOut;
+    for (const auto& moduleDirectory : std::filesystem::directory_iterator(gameModules))
+    {
+        const std::filesystem::path sourceDirectory = moduleDirectory.path() / "Source";
+        if (!moduleDirectory.is_directory() || !std::filesystem::is_directory(sourceDirectory))
+            continue;
+
+        bool ownsIdKeyedState = false;
+        bool refusesHotReload = false;
+        for (const auto& file : std::filesystem::recursive_directory_iterator(sourceDirectory))
+        {
+            const std::string extension = file.path().extension().string();
+            if (!file.is_regular_file() || (extension != ".cpp" && extension != ".h"))
+                continue;
+            const std::string source = ReadBinaryFile(file.path());
+            ownsIdKeyedState =
+                ownsIdKeyedState || source.contains("RegisterArea(") || source.contains("StartNetworkServer(");
+            refusesHotReload =
+                refusesHotReload || source.contains("SupportsHotReload() const override { return false; }");
+        }
+
+        if (!ownsIdKeyedState)
+            continue;
+        ++owners;
+        if (!refusesHotReload)
+            missingOptOut += PathToUtf8(moduleDirectory.path().filename()) + " ";
+    }
+
+    // SparkGameMMO, SparkGameOpenWorld and SparkGameRPG: a scan that finds
+    // nothing proves nothing.
+    EXPECT_GE(owners, size_t{3});
+    EXPECT_EQ(missingOptOut, std::string{});
 }
