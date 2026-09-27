@@ -27,7 +27,10 @@
 #endif // SPARK_PLATFORM_WINDOWS
 
 #include <array>
+#include <deque>
+#include <memory>
 #include <mutex>
+#include <span>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
@@ -156,6 +159,94 @@ namespace Spark
             };
 
             // ============================================================================
+            // DEFERRED RELEASE QUEUE
+            // ============================================================================
+
+            /**
+             * @brief Fence-tagged release queue shared by a D3D12Device and the resources it creates.
+             *
+             * D3D12 command lists hold no references to the resources they use, so a resource
+             * and the descriptor slots that name it must outlive every submission that touched
+             * them. D3D12Buffer and D3D12Texture destructors hand their ComPtr and descriptor
+             * allocations here instead of releasing them; Process() drops the COM reference and
+             * returns the descriptor slots to their heaps once the frame fence has passed the
+             * value recorded at destruction.
+             *
+             * - Thread affinity: async-safe; every method takes the internal mutex.
+             * - Ownership: owned by D3D12Device through std::shared_ptr. Resources hold a
+             *   std::weak_ptr, so a resource destroyed after its device has shut down releases
+             *   immediately (Shutdown waited for the GPU and drained this queue first).
+             * - Allocation: one deque node per destroyed resource; never on the per-draw path.
+             * - Scalability: entries are released in fence order, O(1) per entry.
+             */
+            class D3D12DeferredReleaseQueue
+            {
+              public:
+                /// Heap a descriptor allocation was taken from.
+                enum class Heap : uint8_t
+                {
+                    CbvSrvUav,
+                    Rtv,
+                    Dsv
+                };
+
+                /// One descriptor range to recycle together with a resource.
+                struct Descriptor
+                {
+                    Heap heap = Heap::CbvSrvUav;
+                    DescriptorAllocation allocation;
+                };
+
+                /// Most descriptor ranges a single resource can carry (SRV, RTV, DSV, UAV).
+                static constexpr size_t kMaxDescriptorsPerResource = 4;
+
+                D3D12DeferredReleaseQueue(const D3D12Fence& fence, DescriptorHeapAllocator& cbvSrvUavHeap,
+                                          DescriptorHeapAllocator& rtvHeap, DescriptorHeapAllocator& dsvHeap);
+
+                /**
+                 * @brief Queue a resource and its descriptors for release once the GPU has
+                 *        finished every submission made before this call.
+                 *
+                 * The entry is tagged with the value the next fence Signal() will produce, so
+                 * any work already submitted to the direct queue completes before release.
+                 * @param resource     COM reference to release (may be null).
+                 * @param descriptors  At most kMaxDescriptorsPerResource ranges; invalid ones are skipped.
+                 */
+                void Enqueue(ComPtr<IUnknown> resource, std::span<const Descriptor> descriptors);
+
+                /// Queue a resource for release once the fence reaches @p fenceValue.
+                void EnqueueAtFence(ComPtr<IUnknown> resource, uint64_t fenceValue);
+
+                /// Release every entry whose fence value the GPU has completed.
+                void Process();
+
+                /// Release everything unconditionally. The caller must have waited for GPU idle.
+                void ReleaseAll();
+
+                /// Number of entries still waiting on the GPU (test seam and diagnostics).
+                size_t GetPendingCount() const;
+
+              private:
+                struct Entry
+                {
+                    ComPtr<IUnknown> resource;
+                    std::array<Descriptor, kMaxDescriptorsPerResource> descriptors = {};
+                    uint32_t descriptorCount = 0;
+                    uint64_t fenceValue = 0;
+                };
+
+                void ReleaseEntry(Entry& entry);
+                DescriptorHeapAllocator& HeapFor(Heap heap);
+
+                const D3D12Fence& m_fence;
+                DescriptorHeapAllocator& m_cbvSrvUavHeap;
+                DescriptorHeapAllocator& m_rtvHeap;
+                DescriptorHeapAllocator& m_dsvHeap;
+                mutable std::mutex m_mutex;
+                std::deque<Entry> m_entries; ///< Non-decreasing fenceValue order.
+            };
+
+            // ============================================================================
             // D3D12 RESOURCE IMPLEMENTATIONS
             // ============================================================================
 
@@ -171,7 +262,19 @@ namespace Spark
               public:
                 D3D12Buffer(const RHIBufferDesc& desc, ComPtr<ID3D12Resource> resource,
                             ComPtr<ID3D12Resource> uploadResource = nullptr);
-                ~D3D12Buffer() override = default;
+
+                /// Hands the resources and descriptor to the release queue when one is attached;
+                /// otherwise releases them immediately.
+                ~D3D12Buffer() override;
+
+                D3D12Buffer(const D3D12Buffer&) = delete;
+                D3D12Buffer& operator=(const D3D12Buffer&) = delete;
+
+                /// Route destruction through @p queue (set by the creating D3D12Device).
+                void SetReleaseQueue(std::weak_ptr<D3D12DeferredReleaseQueue> queue)
+                {
+                    m_releaseQueue = std::move(queue);
+                }
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }
                 void SetDebugName(const std::string& name) override { m_desc.debugName = name; }
@@ -204,6 +307,7 @@ namespace Spark
                 ComPtr<ID3D12Resource> m_uploadResource;
                 DescriptorAllocation m_descriptor;
                 void* m_mappedPointer = nullptr;
+                std::weak_ptr<D3D12DeferredReleaseQueue> m_releaseQueue;
             };
 
             /**
@@ -222,7 +326,19 @@ namespace Spark
                              const DescriptorAllocation& rtvDescriptor = {},
                              const DescriptorAllocation& dsvDescriptor = {},
                              const DescriptorAllocation& uavDescriptor = {});
-                ~D3D12Texture() override = default;
+
+                /// Hands the resource and its SRV/RTV/DSV/UAV slots to the release queue when one
+                /// is attached; otherwise (swap-chain back buffers) releases them immediately.
+                ~D3D12Texture() override;
+
+                D3D12Texture(const D3D12Texture&) = delete;
+                D3D12Texture& operator=(const D3D12Texture&) = delete;
+
+                /// Route destruction through @p queue (set by the creating D3D12Device).
+                void SetReleaseQueue(std::weak_ptr<D3D12DeferredReleaseQueue> queue)
+                {
+                    m_releaseQueue = std::move(queue);
+                }
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }
                 void SetDebugName(const std::string& name) override { m_desc.debugName = name; }
@@ -276,6 +392,7 @@ namespace Spark
                 mutable DescriptorAllocation m_dsvDescriptor;
                 mutable DescriptorAllocation m_uavDescriptor;
                 D3D12_RESOURCE_STATES m_currentState = D3D12_RESOURCE_STATE_COMMON;
+                std::weak_ptr<D3D12DeferredReleaseQueue> m_releaseQueue;
             };
 
             /**

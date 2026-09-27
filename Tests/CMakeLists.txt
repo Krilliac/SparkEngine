@@ -1109,6 +1109,7 @@ target_sources(SparkTests PRIVATE
     TestLIFE200ModuleReloadLoopReal.cpp
     TestD3D11DeviceContractsReal.cpp
     TestRHI210D3D11GoldenReal.cpp
+    TestSEC2RenderingHardeningReal.cpp
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
     TestEditorUndoHierarchyReal.cpp
@@ -2332,6 +2333,33 @@ if(WIN32)
         LABELS "d3d11-stress;d3d11;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 60)
+endif()
+
+# SEC2 rendering lane (TestSEC2RenderingHardeningReal.cpp): daemon shader-blob length
+# bounds, the shared UpdateBuffer range check, D3D11 UpdateBuffer, D3D12 render-target
+# clamping and D3D12 fence-deferred resource/descriptor release. Exact counts per
+# family so a filter that selects nothing cannot pass.
+add_test(NAME SEC2Render_Portable COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SEC2Render_Portable PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Render_Portable_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "security;rendering;unit"
+    TIMEOUT 60)
+if(WIN32)
+    add_test(NAME SEC2Render_D3D11 COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SEC2Render_D3D11 PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Render_D3D11_;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "security;rendering;d3d11"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+    # D3D12 sources are excluded from MinGW builds (root CMakeLists.txt, SPARK_NO_D3D12).
+    if(NOT (MINGW AND NOT MSVC))
+        add_test(NAME SEC2Render_D3D12 COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(SEC2Render_D3D12 PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Render_D3D12_;SPARK_TEST_EXPECT_COUNT=2"
+            LABELS "security;rendering;d3d12"
+            RUN_SERIAL TRUE
+            TIMEOUT 120)
+    endif()
 endif()
 
 add_test(

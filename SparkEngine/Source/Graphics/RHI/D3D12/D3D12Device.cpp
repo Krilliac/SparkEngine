@@ -186,6 +186,99 @@ namespace Spark
             }
 
             // ============================================================================
+            // D3D12 DEFERRED RELEASE QUEUE
+            // ============================================================================
+
+            D3D12DeferredReleaseQueue::D3D12DeferredReleaseQueue(const D3D12Fence& fence,
+                                                                 DescriptorHeapAllocator& cbvSrvUavHeap,
+                                                                 DescriptorHeapAllocator& rtvHeap,
+                                                                 DescriptorHeapAllocator& dsvHeap)
+                : m_fence(fence), m_cbvSrvUavHeap(cbvSrvUavHeap), m_rtvHeap(rtvHeap), m_dsvHeap(dsvHeap)
+            {
+            }
+
+            DescriptorHeapAllocator& D3D12DeferredReleaseQueue::HeapFor(Heap heap)
+            {
+                switch (heap)
+                {
+                case Heap::Rtv:
+                    return m_rtvHeap;
+                case Heap::Dsv:
+                    return m_dsvHeap;
+                case Heap::CbvSrvUav:
+                    break;
+                }
+                return m_cbvSrvUavHeap;
+            }
+
+            void D3D12DeferredReleaseQueue::Enqueue(ComPtr<IUnknown> resource, std::span<const Descriptor> descriptors)
+            {
+                Entry entry;
+                entry.resource = std::move(resource);
+                for (const Descriptor& descriptor : descriptors)
+                {
+                    if (!descriptor.allocation.IsValid() || entry.descriptorCount >= kMaxDescriptorsPerResource)
+                        continue;
+                    entry.descriptors[entry.descriptorCount++] = descriptor;
+                }
+                if (!entry.resource && entry.descriptorCount == 0)
+                    return;
+
+                std::lock_guard<std::mutex> lock(m_mutex);
+                // Every submission made before this call is covered by the next Signal(),
+                // so the entry becomes releasable once the fence reaches current + 1.
+                entry.fenceValue = m_fence.GetCurrentValue() + 1;
+                m_entries.push_back(std::move(entry));
+            }
+
+            void D3D12DeferredReleaseQueue::EnqueueAtFence(ComPtr<IUnknown> resource, uint64_t fenceValue)
+            {
+                if (!resource)
+                    return;
+                Entry entry;
+                entry.resource = std::move(resource);
+                std::lock_guard<std::mutex> lock(m_mutex);
+                // Keep the queue ordered: an explicit value never releases before earlier entries.
+                entry.fenceValue = m_entries.empty() ? fenceValue : std::max(fenceValue, m_entries.back().fenceValue);
+                m_entries.push_back(std::move(entry));
+            }
+
+            void D3D12DeferredReleaseQueue::ReleaseEntry(Entry& entry)
+            {
+                // Descriptors go back to their heaps only now, after the GPU is done with them;
+                // recycling them earlier would let a new view overwrite a slot still being read.
+                for (uint32_t i = 0; i < entry.descriptorCount; ++i)
+                    HeapFor(entry.descriptors[i].heap).Free(entry.descriptors[i].allocation);
+                entry.descriptorCount = 0;
+                entry.resource.Reset();
+            }
+
+            void D3D12DeferredReleaseQueue::Process()
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                const uint64_t completed = m_fence.GetCompletedValue();
+                while (!m_entries.empty() && m_entries.front().fenceValue <= completed)
+                {
+                    ReleaseEntry(m_entries.front());
+                    m_entries.pop_front();
+                }
+            }
+
+            void D3D12DeferredReleaseQueue::ReleaseAll()
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                for (Entry& entry : m_entries)
+                    ReleaseEntry(entry);
+                m_entries.clear();
+            }
+
+            size_t D3D12DeferredReleaseQueue::GetPendingCount() const
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                return m_entries.size();
+            }
+
+            // ============================================================================
             // D3D12 RESOURCE CONSTRUCTORS
             // ============================================================================
 
@@ -193,6 +286,25 @@ namespace Spark
                                      ComPtr<ID3D12Resource> uploadResource)
                 : m_desc(desc), m_resource(std::move(resource)), m_uploadResource(std::move(uploadResource))
             {
+            }
+
+            D3D12Buffer::~D3D12Buffer()
+            {
+                auto queue = m_releaseQueue.lock();
+                if (!queue)
+                    return; // No device to defer to: members release immediately.
+                try
+                {
+                    const D3D12DeferredReleaseQueue::Descriptor descriptors[] = {
+                        {D3D12DeferredReleaseQueue::Heap::CbvSrvUav, m_descriptor}};
+                    queue->Enqueue(std::move(m_resource), descriptors);
+                    queue->Enqueue(std::move(m_uploadResource), {});
+                }
+                catch (...)
+                {
+                    // Out of memory while queueing: fall back to releasing now, which is what
+                    // the members' destructors do with whatever was not moved out.
+                }
             }
 
             D3D12Texture::D3D12Texture(const RHITextureDesc& desc, ComPtr<ID3D12Resource> resource,
@@ -203,6 +315,28 @@ namespace Spark
                 : m_desc(desc), m_resource(std::move(resource)), m_srvDescriptor(srvDescriptor),
                   m_rtvDescriptor(rtvDescriptor), m_dsvDescriptor(dsvDescriptor), m_uavDescriptor(uavDescriptor)
             {
+            }
+
+            D3D12Texture::~D3D12Texture()
+            {
+                auto queue = m_releaseQueue.lock();
+                if (!queue)
+                    return; // Swap-chain back buffers and post-shutdown textures release immediately.
+                try
+                {
+                    using Heap = D3D12DeferredReleaseQueue::Heap;
+                    const D3D12DeferredReleaseQueue::Descriptor descriptors[] = {
+                        {Heap::CbvSrvUav, m_srvDescriptor},
+                        {Heap::Rtv, m_rtvDescriptor},
+                        {Heap::Dsv, m_dsvDescriptor},
+                        {Heap::CbvSrvUav, m_uavDescriptor},
+                    };
+                    queue->Enqueue(std::move(m_resource), descriptors);
+                }
+                catch (...)
+                {
+                    // Out of memory while queueing: fall back to releasing now.
+                }
             }
 
             D3D12Shader::D3D12Shader(const RHIShaderDesc& desc, ComPtr<ID3DBlob> bytecodeBlob)
@@ -253,6 +387,9 @@ namespace Spark
                 DetectDXRSupport();
                 FinalizeDeviceCapabilities(m_capabilities);
 
+                m_releaseQueue =
+                    std::make_shared<D3D12DeferredReleaseQueue>(m_frameFence, m_cbvSrvUavHeap, m_rtvHeap, m_dsvHeap);
+
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12: Device initialized: %s",
                                m_capabilities.deviceName.c_str());
 
@@ -270,8 +407,13 @@ namespace Spark
                 // Phase Z Theme 3B: release transient allocator before WaitForIdle
                 // so its buffers enter the deferred-release queue cleanly.
                 m_transientBuffers.Shutdown(this);
-                WaitForIdle();
-                ProcessDeferredReleases();
+                if (m_directQueue)
+                    WaitForIdle();
+                // The GPU is idle: release everything still queued, then detach so resources
+                // destroyed after shutdown release directly instead of into a dead queue.
+                if (m_releaseQueue)
+                    m_releaseQueue->ReleaseAll();
+                m_releaseQueue.reset();
                 m_immediateCommandList.reset();
             }
 
@@ -623,6 +765,7 @@ namespace Spark
                 }
 
                 auto buffer = std::make_unique<D3D12Buffer>(desc, std::move(resource), std::move(uploadResource));
+                buffer->SetReleaseQueue(m_releaseQueue);
 
                 // Map persistent pointer for dynamic buffers
                 if (isDynamic)
@@ -743,8 +886,10 @@ namespace Spark
                     }
                 }
 
-                return std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc,
-                                                      uavAlloc);
+                auto texture =
+                    std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
+                texture->SetReleaseQueue(m_releaseQueue);
+                return texture;
             }
 
             std::unique_ptr<IRHITexture> D3D12Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
@@ -772,8 +917,10 @@ namespace Spark
                     }
                 }
 
-                return std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc,
-                                                      uavAlloc);
+                auto texture =
+                    std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
+                texture->SetReleaseQueue(m_releaseQueue);
+                return texture;
             }
 
             std::unique_ptr<IRHIShader> D3D12Device::CreateShader(const RHIShaderDesc& desc)
@@ -987,30 +1134,14 @@ namespace Spark
             // ============================================================================
             // D3D12 DEVICE — DEFERRED GPU RESOURCE RELEASE
             // ============================================================================
-            // D3D12 resources may still be referenced by in-flight command lists.
-            // These helpers enqueue the underlying ID3D12Resource into the deferred
-            // release queue so the COM ref is held until the GPU passes the fence.
-            // The wrapper object (D3D12Buffer/D3D12Texture) is owned by the caller's
-            // unique_ptr and destroyed immediately; only the GPU resource is deferred.
+            // D3D12 resources may still be referenced by in-flight command lists. Buffers
+            // and textures created by this device carry a weak reference to m_releaseQueue
+            // and enqueue their ID3D12Resource and descriptor slots from their destructors;
+            // ProcessDeferredReleases() frees them once the frame fence passes.
 
-            void D3D12Device::DeferredReleaseBuffer(D3D12Buffer* buffer)
+            size_t D3D12Device::GetPendingReleaseCount() const
             {
-                if (!buffer)
-                    return;
-                std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                m_deferredReleaseQueue.push({buffer->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
-            }
-
-            void D3D12Device::DeferredReleaseTexture(D3D12Texture* texture)
-            {
-                if (!texture)
-                    return;
-                m_cbvSrvUavHeap.Free(texture->GetSRVDescriptor());
-                m_rtvHeap.Free(texture->GetRTVDescriptor());
-                m_dsvHeap.Free(texture->GetDSVDescriptor());
-                m_cbvSrvUavHeap.Free(texture->GetUAVDescriptor());
-                std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                m_deferredReleaseQueue.push({texture->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
+                return m_releaseQueue ? m_releaseQueue->GetPendingCount() : 0;
             }
 
             // ============================================================================
@@ -1047,6 +1178,17 @@ namespace Spark
                 auto* b = static_cast<D3D12Buffer*>(buffer);
                 if (!b || !data)
                     return;
+                // The mapping is exactly GetSize() bytes; a range outside it would write past it.
+                if (!IsBufferRangeValid(b->GetSize(), offset, size))
+                {
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D12Device::UpdateBuffer: range [%llu, +%llu) outside '%s' (%llu bytes) "
+                                            "- update dropped",
+                                            static_cast<unsigned long long>(offset),
+                                            static_cast<unsigned long long>(size), b->GetDebugName().c_str(),
+                                            static_cast<unsigned long long>(b->GetSize()));
+                    return;
+                }
                 void* mapped = MapBuffer(buffer);
                 if (mapped)
                 {
@@ -1140,10 +1282,8 @@ namespace Spark
                 m_frameFence.WaitForValue(uploadFenceVal);
 
                 // Queue upload buffer for deferred release at this fence value
-                {
-                    std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                    m_deferredReleaseQueue.push({uploadBuffer, uploadFenceVal});
-                }
+                if (m_releaseQueue)
+                    m_releaseQueue->EnqueueAtFence(std::move(uploadBuffer), uploadFenceVal);
             }
 
             // ============================================================================
@@ -1208,15 +1348,8 @@ namespace Spark
 
             void D3D12Device::ProcessDeferredReleases()
             {
-                std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                uint64_t completed = m_frameFence.GetCompletedValue();
-                while (!m_deferredReleaseQueue.empty())
-                {
-                    auto& front = m_deferredReleaseQueue.front();
-                    if (front.fenceValue > completed)
-                        break;
-                    m_deferredReleaseQueue.pop();
-                }
+                if (m_releaseQueue)
+                    m_releaseQueue->Process();
             }
 
             std::string D3D12Device::GetDeviceInfo() const

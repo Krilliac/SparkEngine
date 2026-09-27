@@ -453,42 +453,28 @@ The deferred deletion system is critical for D3D12 correctness. Unlike D3D11, de
 
 ### How It Works
 
+Every buffer and texture that `D3D12Device` creates holds a `std::weak_ptr` to the device's
+`D3D12DeferredReleaseQueue` (`D3D12Types.h`). The resource destructors are the single release
+route, so a `unique_ptr` reset, `RHIAdapter::DestroyTexture` and asset unload all defer:
+
 ```cpp
-// When a resource is destroyed:
-struct DeferredRelease
+// ~D3D12Texture(): hand the resource and its SRV/RTV/DSV/UAV slots to the queue.
+queue->Enqueue(std::move(m_resource), descriptors);   // tagged GetCurrentValue() + 1
+
+// BeginFrame() -> ProcessDeferredReleases() -> D3D12DeferredReleaseQueue::Process():
+while (!m_entries.empty() && m_entries.front().fenceValue <= fence.GetCompletedValue())
 {
-    ComPtr<IUnknown> resource;  // Prevents ref-count from hitting 0
-    uint64_t fenceValue;        // GPU must pass this value before release
-};
-
-// D3D12Device queues the resource:
-void D3D12Device::DeferredReleaseBuffer(D3D12Buffer* buffer)
-{
-    DeferredRelease entry;
-    entry.resource = buffer->GetD3D12Resource();
-    entry.fenceValue = m_frameFence.GetCurrentValue();
-
-    std::lock_guard lock(m_deferredReleaseMutex);
-    m_deferredReleaseQueue.push(std::move(entry));
-}
-
-// At the end of each frame, ProcessDeferredReleases() checks:
-void D3D12Device::ProcessDeferredReleases()
-{
-    uint64_t completedValue = m_frameFence.GetCompletedValue();
-
-    std::lock_guard lock(m_deferredReleaseMutex);
-    while (!m_deferredReleaseQueue.empty())
-    {
-        auto& front = m_deferredReleaseQueue.front();
-        if (front.fenceValue > completedValue)
-            break;  // GPU hasn't reached this fence yet
-
-        // Safe to release -- GPU is done with this resource
-        m_deferredReleaseQueue.pop();  // ComPtr destructor releases
-    }
+    // Descriptor slots return to their heaps only now, after the GPU is done with them,
+    // then the ComPtr drops the last reference.
+    ReleaseEntry(m_entries.front());
+    m_entries.pop_front();
 }
 ```
+
+The tag is the value the *next* `Signal()` will produce, so every submission made before the
+destroy completes first. `Shutdown()` waits for idle, calls `ReleaseAll()` and resets the queue;
+a resource destroyed after that (or a swap-chain back buffer, which has no queue) releases
+immediately. `D3D12Device::GetPendingReleaseCount()` exposes the queue depth for tests.
 
 ### Frame Resource Management
 

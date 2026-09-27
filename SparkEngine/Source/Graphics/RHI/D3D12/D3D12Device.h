@@ -94,11 +94,13 @@ namespace Spark
                                                                        IRHIShader* pixelShader) override;
 
                 // -- D3D12-specific: Deferred GPU resource release ----------------------
-                // These enqueue GPU resources for deferred deletion (fence-synchronized)
-                // since D3D12 resources may still be in-flight on the GPU when destroyed.
+                // Buffers and textures created here release through a fence-tagged queue
+                // from their own destructors (see D3D12DeferredReleaseQueue), so every
+                // destruction route -- unique_ptr reset, RHIAdapter::DestroyTexture -- waits
+                // for in-flight GPU work before the resource and its descriptors are recycled.
 
-                void DeferredReleaseBuffer(D3D12Buffer* buffer);
-                void DeferredReleaseTexture(D3D12Texture* texture);
+                /// Entries still waiting on the GPU fence (0 before Initialize / after Shutdown).
+                size_t GetPendingReleaseCount() const;
 
                 // -- IRHIDevice: Resource updates -----------------------------------------
 
@@ -244,20 +246,10 @@ namespace Spark
                 // -- Deferred deletion queue ----------------------------------------------
 
                 /**
-                 * @brief Resources queued for deferred deletion.
-                 *
-                 * When a resource is destroyed it may still be referenced by an
-                 * in-flight command list. The resource is moved into this queue
-                 * along with the current fence value. Once the GPU passes that
-                 * fence value the resource is released.
+                 * @brief Fence-tagged release queue shared with every buffer and texture this
+                 *        device creates. Created in Initialize(), drained and reset in Shutdown().
                  */
-                struct DeferredRelease
-                {
-                    ComPtr<IUnknown> resource;
-                    uint64_t fenceValue = 0;
-                };
-                std::queue<DeferredRelease> m_deferredReleaseQueue;
-                std::mutex m_deferredReleaseMutex;
+                std::shared_ptr<D3D12DeferredReleaseQueue> m_releaseQueue;
 
                 /**
                  * @brief Processes the deferred-release queue, freeing resources
