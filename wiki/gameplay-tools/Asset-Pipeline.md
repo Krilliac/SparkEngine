@@ -308,7 +308,13 @@ the release workflow's extracted-package check
 (`--package-profile ${{ matrix.profile }}`) run it. For stable-v1,
 `cmake/ValidateStagedPackageExecutables.cmake` requires
 `bin/Assets/Scenes/level1.scene` in place of the TERRAFRONT
-`MMOFPS/Data/continents.json`. `PackageAssets_StableV1ExcludesNoAssertion`
+`MMOFPS/Data/continents.json`. Its runtime-layout NullRHI smoke (ASSET-220) runs
+`cmake/RunSparkFPSHeadlessArena.cmake` against the staged executable and module.
+The working directory is a fresh directory outside both the package and the source
+checkout. The module's `SPARK_FPS_HEADLESS_ARENA` node and spawn counts must match
+an independent parse of the staged scene. That scene must be a regular file
+inside the package, with no link or junction traversal. A missing staged scene, or
+one resolved from somewhere else, fails the check. `PackageAssets_StableV1ExcludesNoAssertion`
 (Tests/Tools/test_asset_package_profile.py) covers the closure, the
 derivation, the check, and the install rules.
 
