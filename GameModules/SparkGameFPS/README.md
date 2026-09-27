@@ -121,4 +121,5 @@ hashes, build configuration, source identity, and host metadata under its per-at
 This is a bounded local progression-persistence slice, not stable-v1 certification. It does not yet prove every
 `FPSLocalProfile` field, spawn/move/kill/respawn/score acceptance, a public-SDK-only module build, clean-machine
 installation, recovery/soak, hardware rendering, or hosted exact-SHA qualification. The headless host registers the
-same quicksave/quickload commands (see above), but no NullRHI save/reload process test drives them yet.
+same quicksave/quickload commands (see above). `FPSHeadlessPackage_NullRHISaveReload` drives them through the same
+writer/reader test on NullRHI, run against the staged package (`SPARK_FPS_PACKAGE_MODE=headless-save-reload`).

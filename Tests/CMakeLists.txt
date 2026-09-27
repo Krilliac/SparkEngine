@@ -3208,6 +3208,24 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             RUN_SERIAL TRUE
             TIMEOUT 600)
 
+        # HEAD-220: the same staged package's NullRHI writer/reader save/reload
+        # (the headless counterpart of the WARP phase above). Local evidence
+        # still runs on a host with a GPU and display; the clean no-GPU host is
+        # hosted-CI evidence.
+        add_test(
+            NAME FPSHeadlessPackage_NullRHISaveReload
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/h/$<CONFIG>"
+                -DSPARK_FPS_PACKAGE_MODE=headless-save-reload
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSHeadlessPackage_NullRHISaveReload PROPERTIES
+            LABELS "nullrhi-headless;stable-v1;fps;package;save;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 600)
+
         add_test(
             NAME FPSPublicSDK_InstalledConsumers
             COMMAND ${CMAKE_COMMAND}

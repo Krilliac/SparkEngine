@@ -1,12 +1,23 @@
 # Stage the configured Windows package and run the real stable-v1 runtime
 # validator against the installed SparkGameFPS payload. This is a package
 # smoke slice; it does not certify the full single-player gameplay contract.
+#
+# SPARK_FPS_PACKAGE_MODE selects the phases after staging and validation:
+#   full (default)        playtester launcher, D3D11/WARP smoke and WARP save/reload
+#   headless-save-reload  HEAD-220 NullRHI writer/reader save/reload of the staged
+#                         executable and module (cmake/RunSparkHeadlessFPSSaveReload.cmake)
 
 foreach(_required IN ITEMS SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_TEST_ROOT)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
         message(FATAL_ERROR "${_required} is required for the installed FPS package test")
     endif()
 endforeach()
+if(NOT DEFINED SPARK_FPS_PACKAGE_MODE OR SPARK_FPS_PACKAGE_MODE STREQUAL "")
+    set(SPARK_FPS_PACKAGE_MODE full)
+endif()
+if(NOT SPARK_FPS_PACKAGE_MODE STREQUAL "full" AND NOT SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
+    message(FATAL_ERROR "Unknown SPARK_FPS_PACKAGE_MODE '${SPARK_FPS_PACKAGE_MODE}'")
+endif()
 
 find_program(_git_executable NAMES git git.exe REQUIRED)
 execute_process(
@@ -92,11 +103,13 @@ _run_checked("Install configured FPS module component" 90
     "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
     --config "${SPARK_CONFIG}" --prefix "${_install_root}" --component samples)
 
-_run_checked("Exercise installed FPS playtester entry point" 120
-    "${CMAKE_COMMAND}"
-    "-DSPARK_INSTALLED_ROOT=${_install_root}"
-    "-DSPARK_PLAYTEST_TEST_ROOT=${_run_root}/launcher-smoke"
-    -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/TestPlaytestFPSLauncher.cmake")
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "full")
+    _run_checked("Exercise installed FPS playtester entry point" 120
+        "${CMAKE_COMMAND}"
+        "-DSPARK_INSTALLED_ROOT=${_install_root}"
+        "-DSPARK_PLAYTEST_TEST_ROOT=${_run_root}/launcher-smoke"
+        -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/TestPlaytestFPSLauncher.cmake")
+endif()
 
 _run_checked("Validate installed FPS asset manifest and payload" 120
     "${CMAKE_COMMAND}"
@@ -120,6 +133,23 @@ _run_checked("Validate installed FPS runtime package" 120
     "-DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST=${_expected_manifest}"
     "-DSPARK_EXECUTABLE_SUFFIX=.exe"
     -P "${SPARK_SOURCE_ROOT}/cmake/ValidateStagedPackageExecutables.cmake")
+
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
+    # The staged executable and module run on NullRHI with no D3D11 device; the
+    # runner gives both processes one isolated LOCALAPPDATA/APPDATA user root
+    # under the run root and requires the reader to leave the save unchanged.
+    _run_checked("Validate installed FPS NullRHI save/reload persistence" 300
+        "${CMAKE_COMMAND}"
+        "-DSPARK_ENGINE_EXECUTABLE=${_install_root}/bin/SparkEngine.exe"
+        "-DSPARK_GAME_MODULE=${_install_root}/bin/SparkGameFPS.dll"
+        "-DSPARK_WORKING_DIRECTORY=${_install_root}/bin"
+        "-DSPARK_TEST_ROOT=${_run_root}/headless-save-reload"
+        -P "${SPARK_SOURCE_ROOT}/cmake/RunSparkHeadlessFPSSaveReload.cmake")
+    message(STATUS
+        "Installed SparkGameFPS runtime package passed NullRHI save/reload at "
+        "${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); evidence retained under ${_run_root}")
+    return()
+endif()
 
 _run_checked("Run installed FPS D3D11/WARP executable smoke" 150
     "${CMAKE_COMMAND}"

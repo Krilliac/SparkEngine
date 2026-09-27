@@ -573,7 +573,15 @@ Linux hosts. It starts two fresh `-headless` NullRHI processes that share an iso
 Each process must pass the strict NullRHI lifecycle parser. Its `-exec-audit` trail must pass the
 writer/reader validator of `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, which the packaged
 WARP run also uses. The reader must leave `fps_quicksave.spark_save` byte-identical. The test does not
-cover a Windows sanitizer run, a soak, or a packaged headless run.
+cover a Windows sanitizer run or a soak.
+
+`FPSHeadlessPackage_NullRHISaveReload` is the packaged counterpart. It runs only in a
+`SPARK_GAME_MODULES=SparkGameFPS` Windows build. It calls `Tests/PackageSmoke/RunInstalledFPSPackage.cmake` with
+`-DSPARK_FPS_PACKAGE_MODE=headless-save-reload`, which stages the MinSizeRel runtime and applies the same asset and
+runtime-layout validation as `FPSPackage_InstalledRuntime`. It then runs the writer/reader test above against the
+staged `bin/SparkEngine.exe` and `bin/SparkGameFPS.dll`, with the working directory set to `<package>/bin`. It
+skips the playtester launcher and the D3D11/WARP phases. Local runs still happen on a host that has a GPU and a
+display. A clean no-GPU host is hosted-CI evidence.
 
 ### Shutdown-time budget (`LIFE-200`)
 
