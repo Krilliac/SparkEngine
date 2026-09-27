@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <expected>
 #include <filesystem>
 #include <string>
@@ -19,6 +20,14 @@ namespace SparkLauncher
         DedicatedServer,
         ServiceTopology
     };
+
+    /**
+     * @brief Largest spark.modules.json the Game target will read (1 MiB).
+     *
+     * A real manifest lists a handful of modules and is a few hundred bytes; the
+     * cap keeps a hostile project's manifest from being read into memory whole.
+     */
+    inline constexpr std::size_t kMaxModuleManifestBytes = std::size_t{1024} * 1024;
 
     struct LaunchRequest
     {

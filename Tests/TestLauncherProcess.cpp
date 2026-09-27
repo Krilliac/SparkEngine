@@ -183,6 +183,53 @@ TEST(LauncherProcess_GameLaunchFailsClosedForMissingInvalidAndAmbiguousModules)
     EXPECT_FALSE(error);
 }
 
+TEST(LauncherProcess_GameLaunchRefusesOversizedModuleManifest)
+{
+    using namespace SparkLauncher;
+    const auto root = MakeLauncherTestRoot();
+    const auto binaries = root / "bin";
+    const auto projectRoot = root / "project";
+    const auto project = projectRoot / "Sample.sparkproject";
+    Touch(project);
+    Touch(Executable(binaries, "SparkEngine"));
+    const auto module = NativeModule(projectRoot / "build" / "Release", "Sample");
+    Touch(module);
+    Touch(AbiSidecar(module));
+
+    // A valid manifest padded with trailing whitespace past the cap. It is well
+    // formed JSON, so only the size bound can refuse it.
+    WriteModuleManifest(projectRoot, {"Sample.dll"});
+    auto accepted = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
+    EXPECT_TRUE(accepted.has_value());
+    {
+        std::ofstream padding(projectRoot / "spark.modules.json", std::ios::binary | std::ios::app);
+        const std::string spaces(kMaxModuleManifestBytes, ' ');
+        padding << spaces;
+    }
+    std::error_code sizeError;
+    EXPECT_TRUE(std::filesystem::file_size(projectRoot / "spark.modules.json", sizeError) > kMaxModuleManifestBytes);
+
+    auto oversized = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
+    EXPECT_FALSE(oversized.has_value());
+    if (!oversized.has_value())
+    {
+        EXPECT_TRUE(oversized.error().find("exceeds the") != std::string::npos);
+    }
+
+    // Exactly at the cap is still accepted: the bound is inclusive.
+    {
+        std::ofstream exact(projectRoot / "spark.modules.json", std::ios::binary | std::ios::trunc);
+        const std::string body = "{\"modules\":[{\"path\":\"Sample.dll\"}]}";
+        exact << body << std::string(kMaxModuleManifestBytes - body.size(), ' ');
+    }
+    auto atLimit = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
+    EXPECT_TRUE(atLimit.has_value());
+
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    EXPECT_FALSE(error);
+}
+
 TEST(LauncherProcess_GameLaunchUsesSelfContainedPackageContext)
 {
     using namespace SparkLauncher;

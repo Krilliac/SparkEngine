@@ -130,8 +130,8 @@ namespace SparkLauncher
                 directories.push_back(CanonicalPath(directory));
         }
 
-        std::vector<std::filesystem::path> DevelopmentModuleDirectories(
-            const std::filesystem::path& binaryDirectory, const std::filesystem::path& projectRoot)
+        std::vector<std::filesystem::path> DevelopmentModuleDirectories(const std::filesystem::path& binaryDirectory,
+                                                                        const std::filesystem::path& projectRoot)
         {
             std::vector<std::filesystem::path> directories;
             std::unordered_set<std::string> seen;
@@ -240,10 +240,29 @@ namespace SparkLauncher
             std::ifstream input(manifest, std::ios::binary);
             if (!input)
                 return std::unexpected("Could not open project module manifest: " + PathToUtf8(manifest));
-            const std::string content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+            // The manifest comes from whatever project the user opens, so it is
+            // read with a hard cap instead of whole: one byte past the limit is
+            // enough to refuse it, and a file that grows while it is read cannot
+            // push the allocation further.
+            std::string content(kMaxModuleManifestBytes + 1, '\0');
+            input.read(content.data(), static_cast<std::streamsize>(content.size()));
+            if (input.bad())
+            {
+                return std::unexpected("Could not read project module manifest: " + PathToUtf8(manifest));
+            }
+            content.resize(static_cast<size_t>(input.gcount()));
+            if (content.size() > kMaxModuleManifestBytes)
+            {
+                return std::unexpected("Project module manifest exceeds the " +
+                                       std::to_string(kMaxModuleManifestBytes) +
+                                       "-byte limit: " + PathToUtf8(manifest));
+            }
+
+            Spark::Json::JsonLimits limits;
+            limits.maxBytes = kMaxModuleManifestBytes;
             Spark::Json::Value root;
             std::string parseError;
-            if (!Spark::Json::ParseStrict(content, &root, &parseError) || !root.IsObject())
+            if (!Spark::Json::ParseBounded(content, limits, &root, &parseError) || !root.IsObject())
                 return std::unexpected("Project module manifest is not valid JSON: " + PathToUtf8(manifest) +
                                        (parseError.empty() ? std::string{} : " (" + parseError + ")"));
 
@@ -282,8 +301,8 @@ namespace SparkLauncher
             if (!std::filesystem::is_regular_file(sourceManifest, error) || error)
                 return std::unexpected("Project module manifest not found: " + PathToUtf8(sourceManifest));
 
-            const auto packageContext = [&](const std::filesystem::path& packageRoot)
-                -> std::expected<GameLaunchContext, std::string>
+            const auto packageContext =
+                [&](const std::filesystem::path& packageRoot) -> std::expected<GameLaunchContext, std::string>
             {
                 const auto canonicalPackageRoot = CanonicalPath(packageRoot);
                 const auto packageManifest = canonicalPackageRoot / "spark.modules.json";
@@ -298,8 +317,7 @@ namespace SparkLauncher
                 if (!std::filesystem::is_regular_file(packagedProject, error) || error)
                     packagedProject = projectFile;
                 return GameLaunchContext{CanonicalPath(packageExecutable), canonicalPackageRoot,
-                                         CanonicalPath(packagedProject),
-                                         CanonicalPath(packageManifest)};
+                                         CanonicalPath(packagedProject), CanonicalPath(packageManifest)};
             };
 
             if (std::filesystem::is_regular_file(projectRoot / "manifest.json", error) && !error)
@@ -311,8 +329,8 @@ namespace SparkLauncher
                 return std::unexpected("Project build directory escapes the project through a symlink: " +
                                        PathToUtf8(buildRoot));
 
-            auto resolved = ReadAndResolveManifest(sourceManifest,
-                                                   DevelopmentModuleDirectories(binaryDirectory, projectRoot));
+            auto resolved =
+                ReadAndResolveManifest(sourceManifest, DevelopmentModuleDirectories(binaryDirectory, projectRoot));
             if (!resolved && resolved.error().starts_with("No native built module"))
             {
                 const auto packageRoot = projectRoot / "Build" / "Output";
@@ -324,9 +342,8 @@ namespace SparkLauncher
                 return std::unexpected(resolved.error());
 
             const auto generatedDirectory = buildRoot / ".spark-launcher";
-            if (IsSymlink(generatedDirectory) ||
-                (std::filesystem::exists(generatedDirectory, error) && !error &&
-                 !IsPathWithin(generatedDirectory, projectRoot)))
+            if (IsSymlink(generatedDirectory) || (std::filesystem::exists(generatedDirectory, error) && !error &&
+                                                  !IsPathWithin(generatedDirectory, projectRoot)))
                 return std::unexpected("Launcher manifest output path escapes the project through a symlink: " +
                                        PathToUtf8(generatedDirectory));
             error.clear();
@@ -335,9 +352,8 @@ namespace SparkLauncher
                 return std::unexpected("Could not create a project-contained launcher manifest directory: " +
                                        PathToUtf8(generatedDirectory));
             const auto generatedManifest = generatedDirectory / "spark.modules.json";
-            if (IsSymlink(generatedManifest) ||
-                (std::filesystem::exists(generatedManifest, error) && !error &&
-                 !IsPathWithin(generatedManifest, generatedDirectory)))
+            if (IsSymlink(generatedManifest) || (std::filesystem::exists(generatedManifest, error) && !error &&
+                                                 !IsPathWithin(generatedManifest, generatedDirectory)))
                 return std::unexpected("Resolved launcher manifest is a symlink outside its output directory: " +
                                        PathToUtf8(generatedManifest));
             std::ofstream output(generatedManifest, std::ios::binary | std::ios::trunc);
