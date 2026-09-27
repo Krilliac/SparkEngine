@@ -48,6 +48,7 @@
 #include "EngineSetup.h"
 #include "AssetIntegration.h"
 #include "GameplaySystemLifecycle.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
 // Subsystems still referenced by platform entry points
 #include "Graphics/WeatherSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
@@ -318,6 +319,9 @@ bool ShutdownEngineAfterPreflight()
     // still be released. It is reported to the caller for the exit status.
     const bool lifecycleTeardownClean = ShutdownGameplaySystems();
     ShutdownDebugSystems();
+    // Host core init starts the script engine before modules load, so -minimal-init
+    // runs (no gameplay stage) still own one; release it after every OnUnload.
+    Spark::Core::Lifecycle::ShutdownScriptingServiceImpl();
     if (!lifecycleTeardownClean)
         SPARK_LOG_ERROR(Spark::LogCategory::Core,
                         "Engine lifecycle teardown was not clean (a stage threw, or startup had failed)");

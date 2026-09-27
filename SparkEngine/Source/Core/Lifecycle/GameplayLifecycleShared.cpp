@@ -761,26 +761,46 @@ namespace Spark::Core::Lifecycle
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "RenderingAndUtility", 0.0);
     }
 
+    bool InitializeScriptingServiceImpl()
+    {
+        auto* ctx = EngineContext::Get();
+        if (!ctx)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — scripting service cannot initialize");
+            return false;
+        }
+
+        // Already published by the host core init; the gameplay stage calls this again.
+        if (ctx->GetScriptEngine() && AngelScriptEngine::GetInstance())
+            return true;
+
+        static AngelScriptEngine s_angelScript;
+        if (!s_angelScript.Initialize())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "AngelScriptEngine init failed — scripts disabled");
+            return false;
+        }
+
+        ctx->SetScriptEngine(&s_angelScript);
+        AngelScriptEngine::BindWorld(ctx->GetWorld());
+        // Physics and trigger-volume contacts reach script OnCollision/OnTriggerEnter/OnTriggerExit
+        // through the engine EventBus; Shutdown() disconnects.
+        s_angelScript.ConnectEventBus(ctx->GetEventBus());
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "AngelScriptEngine initialized");
+        return true;
+    }
+
+    void ShutdownScriptingServiceImpl()
+    {
+        // Shutdown() clears the singleton, so a second call (gameplay stage, then host teardown) is a no-op.
+        if (auto* scriptEngine = AngelScriptEngine::GetInstance())
+            scriptEngine->Shutdown();
+    }
+
     static void InitScriptingAndPlatformSystems(EngineContext* ctx)
     {
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "ScriptingAndPlatform", 0.0);
-        {
-            static AngelScriptEngine s_angelScript;
-            if (s_angelScript.Initialize())
-            {
-                ctx->SetScriptEngine(&s_angelScript);
-                AngelScriptEngine::BindWorld(ctx->GetWorld());
-                // Physics and trigger-volume contacts reach script OnCollision/OnTriggerEnter/OnTriggerExit
-                // through the engine EventBus; Shutdown() disconnects.
-                s_angelScript.ConnectEventBus(ctx->GetEventBus());
-                SPARK_LOG_INFO(Spark::LogCategory::Core, "AngelScriptEngine initialized");
-            }
-            else
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "AngelScriptEngine init failed — scripts disabled");
-            }
-        }
-
+        InitializeScriptingServiceImpl();
 
         (void)Spark::Animation::BlendSpaceManager::GetInstance();
         Profiler::GetInstance().SetEnabled(true);
@@ -1592,10 +1612,7 @@ namespace Spark::Core::Lifecycle
             }
         }
 
-        if (auto* as = AngelScriptEngine::GetInstance())
-        {
-            as->Shutdown();
-        }
+        ShutdownScriptingServiceImpl();
 
         Profiler::GetInstance().Shutdown();
 

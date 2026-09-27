@@ -30,6 +30,18 @@ namespace Spark::Core::Lifecycle
     /// and tolerated (offline play stays valid).
     bool InitializeNetworkingSystemsImpl();
 
+    /// Create the AngelScript engine and publish it on the EngineContext, bound to
+    /// the context World and EventBus. Game modules compile and attach scripts in
+    /// OnLoad, so every host calls this from its core init before loading modules;
+    /// InitializeGameplaySystemsImpl calls it again for callers without a host.
+    /// Main thread only. Idempotent: returns true at once while the engine is up.
+    /// The engine object is process-static; ShutdownScriptingServiceImpl releases it.
+    /// @return false when the EngineContext is missing or AngelScript fails to start.
+    bool InitializeScriptingServiceImpl();
+
+    /// Shut the script engine down after every module OnUnload. Idempotent.
+    void ShutdownScriptingServiceImpl();
+
     /// Initialize every gameplay subsystem and the ECS phase pipeline.
     /// @return false when the EngineContext is missing.
     bool InitializeGameplaySystemsImpl();

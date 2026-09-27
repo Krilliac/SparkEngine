@@ -123,8 +123,14 @@ Within the Scripting phase, `Start()` is called before `Update()` for any newly 
 
 ### Contact dispatch (engine-owned)
 
-Contact callbacks do not need game-module glue. At startup the lifecycle
-(`InitScriptingAndPlatformSystems`) calls `AngelScriptEngine::ConnectEventBus(ctx->GetEventBus())`,
+Contact callbacks do not need game-module glue. The script engine is a core service:
+every host's core init (`InitLinuxCoreSubsystems`, and `InitEngineContext` /
+`InitHeadlessEngineContext` on Windows) calls
+`Spark::Core::Lifecycle::InitializeScriptingServiceImpl()` before any game module's
+`OnLoad`, including under `-minimal-init`, so a module can compile and attach scripts
+from `OnLoad`. The gameplay stage (`InitScriptingAndPlatformSystems`) calls it again as
+an idempotent no-op, and `ShutdownEngineAfterPreflight` releases the engine after every
+module `OnUnload`. Initialization calls `AngelScriptEngine::ConnectEventBus(ctx->GetEventBus())`,
 which subscribes the script runtime to the events `PhysicsSystem` publishes after every step:
 
 | EventBus event | Published by | Script callback (both participants) |

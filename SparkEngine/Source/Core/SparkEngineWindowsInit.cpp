@@ -33,6 +33,7 @@
 #include "FaultIsolation.h"
 #include "GameImGuiLayer.h"
 #include "GameplaySystemLifecycle.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Graphics/GraphicsConsoleCommands.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Neural/NeuralInference.h"
@@ -114,6 +115,10 @@ static void InitEngineContext()
     {
         ctx->SetAssetPipeline(GetEngineRuntime().graphics->GetAssetPipeline());
     }
+
+    // Game modules compile and attach scripts in OnLoad, which runs before the
+    // gameplay lifecycle stage, so the script engine is a core service.
+    Spark::Core::Lifecycle::InitializeScriptingServiceImpl();
 
     // Initialize neural inference engine (GPU compute-based, no external ML deps)
     auto& neuralInference = Spark::Graphics::Neural::NeuralInferenceEngine::GetInstance();

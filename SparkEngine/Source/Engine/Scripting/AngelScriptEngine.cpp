@@ -390,16 +390,20 @@ void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force)
     body->ApplyForce(force);
 }
 
+// Scripts call these from Update() every frame (EnemyPatrol requests "walk" each tick), so they log at
+// Debug: an Info line per call flooded the log with megabytes of output per minute of play.
 void ASPlaySound(EntityID entity, const std::string& soundName)
 {
     (void)entity;
-    SPARK_LOG_INFO(Spark::LogCategory::Audio, "[Script] PlaySound: %s", soundName.c_str());
+    (void)soundName; // Debug logging compiles out under NDEBUG.
+    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "[Script] PlaySound: %s", soundName.c_str());
 }
 
 void ASPlayAnimation(EntityID entity, const std::string& animName)
 {
     (void)entity;
-    SPARK_LOG_INFO(Spark::LogCategory::Animation, "[Script] PlayAnimation: %s", animName.c_str());
+    (void)animName; // Debug logging compiles out under NDEBUG.
+    SPARK_LOG_DEBUG(Spark::LogCategory::Animation, "[Script] PlayAnimation: %s", animName.c_str());
 }
 
 EntityID ASGetEntityByName(const std::string& name)

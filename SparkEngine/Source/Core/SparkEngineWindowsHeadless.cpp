@@ -38,6 +38,7 @@
 #include "FaultIsolation.h"
 #include "FixedTimestepAccumulator.h"
 #include "GameplaySystemLifecycle.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "HeadlessTickStats.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "ModuleHotReload.h"
@@ -191,6 +192,10 @@ static bool InitHeadlessEngineContext()
     extern std::unique_ptr<::World> g_engineEcsWorld;
     g_engineEcsWorld = std::make_unique<::World>();
     ctx->SetWorld(g_engineEcsWorld.get());
+
+    // Game modules compile and attach scripts in OnLoad, which runs before the
+    // gameplay lifecycle stage, so the script engine is a core service.
+    Spark::Core::Lifecycle::InitializeScriptingServiceImpl();
 
     return true;
 }

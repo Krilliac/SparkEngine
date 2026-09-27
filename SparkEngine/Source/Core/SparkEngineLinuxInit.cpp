@@ -35,6 +35,7 @@
 #include "SceneManager/ReflectedSceneSerializer.h" // -scene: Spark::LoadWorld
 #include "AssetIntegration.h"
 #include "GameplaySystemLifecycle.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Graphics/WeatherSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/UI/UISystem.h"
@@ -310,6 +311,10 @@ void InitLinuxCoreSubsystems(bool registerGameplay)
     {
         ctx->SetAssetPipeline(GetEngineRuntime().graphics->GetAssetPipeline());
     }
+
+    // Game modules compile and attach scripts in OnLoad, which runs before the
+    // gameplay lifecycle stage, so the script engine is a core service.
+    Spark::Core::Lifecycle::InitializeScriptingServiceImpl();
 
     // Initialize neural inference engine (GPU compute-based, no external ML deps)
     auto& neuralInference = Spark::Graphics::Neural::NeuralInferenceEngine::GetInstance();
