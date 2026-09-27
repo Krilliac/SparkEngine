@@ -3616,6 +3616,18 @@ set_tests_properties(ModulePositioning_SparkGameLabelIsShowcase PROPERTIES
     LABELS "module;docs;unit;python"
     TIMEOUT 60)
 
+# INST-130: SparkInstaller/README.md flags and exit codes equal what main.cpp,
+# --help and the installer return, and a flag compiled out of the published
+# build-installer binary is marked source-build only (tools/installer/check_installer_claims.py).
+add_test(
+    NAME Installer_DocClaims
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_installer_claims.py -v)
+set_tests_properties(Installer_DocClaims PROPERTIES
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    LABELS "installer;python"
+    TIMEOUT 60)
+
 # GOV-400 LicenseInventory_*: the staged-package notice-coverage gate
 # (cmake/ValidateStagedPackageNotices.cmake) against fixture packages, and the
 # notices generator's shared rule set, parity with the CMake gate, and the real

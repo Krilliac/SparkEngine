@@ -43,7 +43,8 @@ pending marker.
 
 1. Validate the prior `.sparkengine-install.json`; a marker that exists but
    does not parse refuses the update. The TUI and GUI wizards also read it to
-   recover ref + options.
+   recover ref + options. A `--headless` update does not: it uses `--ref`
+   (default `Working`) and the default build options.
 2. Verify the existing checkout has no tracked or untracked changes; refuse the
    update when local changes could make rollback ambiguous.
 3. Record the rollback target: the current `HEAD`, or the commit in
@@ -51,7 +52,8 @@ pending marker.
    earlier update was interrupted after its checkout and before its build was
    recorded, so only the recorded commit is a verified build.
 4. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
-5. Re-run configure + build with the stored options.
+5. Re-run configure + build with the chosen options (the stored ones when a
+   wizard recovered them).
 6. Update `.sparkengine-install.json` with the new commit + timestamp, and
    remove any `.sparkengine-install.repair-required` marker.
 
@@ -112,7 +114,7 @@ tree built with the default options (tests and game modules on) takes about
 
 ```
 sparkinstaller                         # interactive TUI
-sparkinstaller --gui                   # interactive ImGui wizard
+sparkinstaller --gui                   # interactive ImGui wizard (source builds only)
 sparkinstaller --headless \
     --dest /opt/sparkengine --ref Working   # non-interactive
 ```
@@ -124,7 +126,7 @@ sparkinstaller --headless \
 | `--dest <dir>` | Install destination (default: `./SparkEngine`). |
 | `--ref <name>` | Git branch or tag to clone (default: `Working`). |
 | `--repo <url>` | Override repo URL (defaults to `Krilliac/SparkEngine` on GitHub). |
-| `--gui` | Launch the ImGui wizard instead of the terminal UI. |
+| `--gui` | Launch the ImGui wizard instead of the terminal UI. Source-build only: compiled when `SPARKINSTALLER_ENABLE_GUI=ON`. The published installer is built with it OFF and answers `--gui` with exit 2. |
 | `--headless` | Non-interactive; fails if required inputs are missing. |
 | `--skip-build` | Clone only; do not configure or build. A fresh install stays pending and the next run without it resumes the build. |
 | `--skip-submodules` | Skip submodule update step in Update mode. |
