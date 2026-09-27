@@ -207,7 +207,9 @@ namespace Terrafront
 
             ImGui::SetCursorScreenPos(ImVec2(panelX + pad, y));
             char label[96];
-            std::snprintf(label, sizeof(label), "%s##char%zu", c.name, i);
+            // Bounded read: the name array is fixed-width (validated at receipt too).
+            std::snprintf(label, sizeof(label), "%.*s##char%zu", static_cast<int>(strnlen(c.name, sizeof(c.name))),
+                          c.name, i);
             if (ImGui::Selectable(label, selected, 0, ImVec2(panelW - pad * 2.0f, rowH)))
                 m_selectedIdx = static_cast<int>(i);
 

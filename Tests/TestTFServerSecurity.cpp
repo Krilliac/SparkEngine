@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <unordered_map>
@@ -214,4 +215,51 @@ TEST(TFSec_CharacterBoundFactionIsNotClientSelectable)
     EXPECT_FALSE(CanApplyFactionSelect(true, true));  // bound, alive
     EXPECT_FALSE(CanApplyFactionSelect(false, true)); // legacy: no switch while alive
     EXPECT_TRUE(CanApplyFactionSelect(false, false)); // legacy unbound session, no pawn
+}
+
+// The client adopted a CharListReply after only a size check; a malicious
+// server could fill every TF_CharBrief name (and the trailing bytes) with
+// non-zero data, and the char-select label / tf_char_list then read the name
+// as a C string past the end of the vector's heap buffer. Malformed replies
+// are now rejected whole at receipt.
+TEST(TFSec_CharListReplyRejectsUnterminatedNames)
+{
+    TF_CharListReply good{};
+    good.count = 2;
+    good.chars[0].id = 101;
+    std::strncpy(good.chars[0].name, "Alpha", sizeof(good.chars[0].name) - 1);
+    good.chars[1].id = 102;
+    std::memset(good.chars[1].name, 'B', sizeof(good.chars[1].name) - 1); // 23 chars + NUL: the maximum
+    good.chars[1].name[sizeof(good.chars[1].name) - 1] = '\0';
+
+    TFClientSessionState state;
+    EXPECT_TRUE(state.ApplyCharListReply(good));
+    ASSERT_EQ(state.characters.size(), size_t{2});
+    EXPECT_EQ(state.characters[0].id, uint64_t{101});
+    EXPECT_EQ(std::strlen(state.characters[1].name), size_t{23});
+
+    // Every byte non-zero (names and trailing fields): the over-read payload.
+    TF_CharListReply hostile{};
+    std::memset(&hostile, 0x41, sizeof(hostile));
+    hostile.count = 5;
+    EXPECT_FALSE(state.ApplyCharListReply(hostile));
+    EXPECT_EQ(state.characters.size(), size_t{2}); // previous list kept, nothing adopted
+
+    // Only the last listed name is unterminated.
+    TF_CharListReply lastBad = good;
+    lastBad.count = 3;
+    std::memset(lastBad.chars[2].name, 'C', sizeof(lastBad.chars[2].name));
+    EXPECT_FALSE(state.ApplyCharListReply(lastBad));
+
+    // Unlisted slots are not inspected; a count past the array is malformed.
+    TF_CharListReply unlistedGarbage = good;
+    std::memset(unlistedGarbage.chars[4].name, 'D', sizeof(unlistedGarbage.chars[4].name));
+    EXPECT_TRUE(state.ApplyCharListReply(unlistedGarbage));
+    TF_CharListReply overCount = good;
+    overCount.count = 6;
+    EXPECT_FALSE(state.ApplyCharListReply(overCount));
+
+    TF_CharListReply empty{};
+    EXPECT_TRUE(state.ApplyCharListReply(empty));
+    EXPECT_TRUE(state.characters.empty());
 }

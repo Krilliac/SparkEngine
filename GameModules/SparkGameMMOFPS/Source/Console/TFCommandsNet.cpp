@@ -33,6 +33,7 @@
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace Terrafront;
@@ -180,7 +181,7 @@ namespace
         uint64_t charId = 0;
         for (const TF_CharBrief& c : ctx.clientNet->CharacterList())
         {
-            if (charName == c.name)
+            if (charName == std::string_view(c.name, strnlen(c.name, sizeof(c.name))))
             {
                 charId = c.id;
                 break;
@@ -459,8 +460,8 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
             for (size_t i = 0; i < list.size(); ++i)
             {
                 const TF_CharBrief& c = list[i];
-                os << "\n  [" << i << "] " << c.name << "  " << FactionTag(static_cast<FactionId>(c.faction))
-                   << "  rank " << c.rank << "  id " << c.id;
+                os << "\n  [" << i << "] " << std::string_view(c.name, strnlen(c.name, sizeof(c.name))) << "  "
+                   << FactionTag(static_cast<FactionId>(c.faction)) << "  rank " << c.rank << "  id " << c.id;
             }
             return os.str();
         },

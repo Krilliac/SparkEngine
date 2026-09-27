@@ -344,7 +344,15 @@ namespace Terrafront
             return;
         TF_CharListReply rep;
         std::memcpy(&rep, data, sizeof(rep));
-        m_session.characters.assign(rep.chars, rep.chars + std::min<uint8_t>(rep.count, 5));
+        // Trust boundary: a malformed reply (count > 5 or an unterminated name)
+        // is dropped whole, so neither the session list nor the login flow ever
+        // holds a name that C-string sinks could over-read.
+        if (!m_session.ApplyCharListReply(rep))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] malformed char list reply rejected (count=%u)",
+                           static_cast<unsigned>(rep.count));
+            return;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char list reply: %u character(s)",
                        static_cast<unsigned>(rep.count));
         if (m_ctx->loginFlow)

@@ -8,7 +8,9 @@
 #include "Account/TFCharacterSystem.h"
 #include "Net/TFNetProtocol.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace Terrafront
@@ -40,6 +42,30 @@ namespace Terrafront
             characters.clear();
             lastCharacterError = TFCharErr::NotLoggedIn;
             lastCharacterId = 0;
+        }
+
+        /**
+         * @brief Validate a server CharListReply at the trust boundary and adopt it.
+         *
+         * Fails closed (returns false, keeps the previous list) unless count is
+         * within the 5-slot array and every listed name is NUL-terminated inside
+         * its 24 bytes. Every downstream sink (char-select label, tf_char_list,
+         * scripted login) reads TF_CharBrief::name as a C string, so an
+         * unterminated name from a malicious server would over-read the heap.
+         */
+        bool ApplyCharListReply(const TF_CharListReply& reply)
+        {
+            constexpr size_t kSlots = sizeof(reply.chars) / sizeof(reply.chars[0]);
+            if (reply.count > kSlots)
+                return false;
+            for (size_t i = 0; i < reply.count; ++i)
+            {
+                const TF_CharBrief& brief = reply.chars[i];
+                if (std::memchr(brief.name, '\0', sizeof(brief.name)) == nullptr)
+                    return false;
+            }
+            characters.assign(reply.chars, reply.chars + reply.count);
+            return true;
         }
 
         void Reset()
