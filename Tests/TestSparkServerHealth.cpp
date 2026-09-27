@@ -10,7 +10,10 @@
 #include <array>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -292,4 +295,44 @@ TEST(Server_Health_RunPublishesDrainingBeforeStopping)
     EXPECT_EQ(JsonField(last, "ready").value_or(""), std::string("false"));
     EXPECT_EQ(JsonField(last, "draining").value_or(""), std::string("false"));
     EXPECT_EQ(JsonField(last, "stopping").value_or(""), std::string("false"));
+}
+
+TEST(Server_Health_FileRefusesPlantedStagingLink)
+{
+    // A less-trusted process that can write beside the health file plants the
+    // old predictable "<health>.tmp" name as a hard link to another file the
+    // server account can write. Publishing must never write through it.
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path dir =
+        std::filesystem::temp_directory_path() / ("spark-health-link-" + std::to_string(stamp));
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::filesystem::path health = dir / "health.json";
+    const std::filesystem::path victim = dir / "victim.txt";
+    std::ofstream(victim, std::ios::binary) << "victim-original";
+    std::filesystem::path planted = health;
+    planted += ".tmp";
+    std::filesystem::create_hard_link(victim, planted, ec);
+    ASSERT_FALSE(static_cast<bool>(ec));
+
+    WriteHealthFile(health, "{\"live\":true}");
+
+    const auto readAll = [](const std::filesystem::path& file)
+    {
+        std::ifstream in(file, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+    EXPECT_EQ(readAll(victim), std::string("victim-original"));
+    EXPECT_EQ(readAll(health), std::string("{\"live\":true}\n"));
+
+    // The publish leaves no staging file of its own behind.
+    size_t stagingFiles = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec))
+    {
+        const std::string name = entry.path().filename().string();
+        if (name.starts_with("health.json.") && name.ends_with(".tmp") && entry.path() != planted)
+            ++stagingFiles;
+    }
+    EXPECT_EQ(stagingFiles, 0u);
+    std::filesystem::remove_all(dir, ec);
 }

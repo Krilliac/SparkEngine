@@ -5,11 +5,13 @@
 
 #include "ServerHealth.h"
 
+#include "Engine/SaveSystem/SaveFileDurability.h"
+
 #include <algorithm>
 #include <cstdio>
-#include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <string>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -186,28 +188,11 @@ namespace Spark::Server
         const std::filesystem::path parent = path.parent_path();
         if (!parent.empty())
             std::filesystem::create_directories(parent, error);
-        const std::filesystem::path temporary = path.string() + ".tmp";
-        bool wrote = false;
-        {
-            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-            output << json << '\n';
-            output.flush();
-            wrote = output.good();
-        }
-        if (!wrote)
-        {
-            std::filesystem::remove(temporary, error);
-            return;
-        }
-        std::filesystem::rename(temporary, path, error);
-        if (error)
-        {
-            error.clear();
-            std::filesystem::remove(path, error);
-            error.clear();
-            std::filesystem::rename(temporary, path, error);
-            if (error)
-                std::filesystem::remove(temporary, error);
-        }
+        // Unpredictable, exclusively created staging file: a link planted beside the
+        // health file is refused, never followed. A failed publish keeps the previous
+        // snapshot; the next tick retries.
+        std::string snapshot(json);
+        snapshot += '\n';
+        (void)SaveFileDurability::PublishFileAtomically(path, snapshot, error);
     }
 } // namespace Spark::Server

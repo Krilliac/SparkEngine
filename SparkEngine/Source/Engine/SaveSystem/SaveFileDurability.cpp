@@ -6,10 +6,15 @@
 #include "SaveFileDurability.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <fstream>
 #include <limits>
+#include <random>
 #include <vector>
 
 #if defined(_WIN32)
@@ -446,6 +451,41 @@ namespace Spark::SaveFileDurability
             }
         }
 
+        return Publish(staging, destination, error);
+    }
+
+    namespace
+    {
+        /// `<destination>.<64-bit random>.<process-wide counter>.tmp`. The random part makes the
+        /// name unguessable in advance; the counter keeps concurrent publishers distinct.
+        std::filesystem::path UniqueStagingPath(const std::filesystem::path& destination)
+        {
+            static std::atomic<uint64_t> s_counter{0};
+            std::random_device device;
+            const uint64_t salt = (static_cast<uint64_t>(device()) << 32) ^ static_cast<uint64_t>(device()) ^
+                                  static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+            char suffix[64];
+            std::snprintf(suffix, sizeof(suffix), ".%016llx.%llu.tmp", static_cast<unsigned long long>(salt),
+                          static_cast<unsigned long long>(s_counter.fetch_add(1, std::memory_order_relaxed)));
+            std::filesystem::path staging = destination;
+            staging += suffix;
+            return staging;
+        }
+    } // namespace
+
+    bool PublishFileAtomically(const std::filesystem::path& destination, std::string_view bytes, std::error_code& error)
+    {
+        error.clear();
+        const std::filesystem::path staging = UniqueStagingPath(destination);
+        // WriteStagingFile creates the unpredictable name exclusively and never through a link, and removes
+        // it on failure; Publish removes it when the rename does not commit. The destination is never
+        // deleted first, so a failed publish keeps the previous complete snapshot.
+        if (!WriteStagingFile(staging, bytes, error))
+        {
+            if (!error)
+                error = std::make_error_code(std::errc::io_error);
+            return false;
+        }
         return Publish(staging, destination, error);
     }
 } // namespace Spark::SaveFileDurability

@@ -111,7 +111,9 @@ namespace Spark::Server
      *
      * A snapshot that cannot be staged never destroys the previous one: a
      * readiness watchdog reads a missing health file as a hard failure, which
-     * is strictly worse than a stale-but-valid one.
+     * is strictly worse than a stale-but-valid one. The snapshot is staged in an
+     * unpredictable, exclusively created sibling file, so a file or link planted
+     * next to @p path is never followed (SaveFileDurability::PublishFileAtomically).
      */
     void WriteHealthFile(const std::filesystem::path& path, std::string_view json);
 } // namespace Spark::Server

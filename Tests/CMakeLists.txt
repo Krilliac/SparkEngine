@@ -1944,7 +1944,7 @@ set_tests_properties(SecDaemonCacheHardening PROPERTIES
 if(TARGET SparkServerCore)
     add_test(NAME ServerHealth COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(ServerHealth PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=Server_Health_;SPARK_TEST_EXPECT_COUNT=6"
+        ENVIRONMENT "SPARK_TEST_NAME=Server_Health_;SPARK_TEST_EXPECT_COUNT=7"
         LABELS "server;observability"
         RUN_SERIAL TRUE
         TIMEOUT 60)

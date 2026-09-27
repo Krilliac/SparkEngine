@@ -13,8 +13,9 @@
  *
  * Crash model: a process killed at any instruction inside these functions leaves every
  * destination either at its previous complete contents or at its new complete contents.
- * Only a `<destination>.tmp` staging file can be left behind, and it is never read as a
- * save (SaveSystem lists and loads `.spark_save` and `.spark_save.bak` only).
+ * Only a `<destination>.tmp` staging file (or, for PublishFileAtomically, one uniquely named
+ * `<destination>.*.tmp` file) can be left behind, and it is never read as a save (SaveSystem
+ * lists and loads `.spark_save` and `.spark_save.bak` only).
  *
  * Link safety: staging files are created exclusively and never through a link, so a
  * symlink or hard link planted at the predictable `.tmp` name cannot redirect a write.
@@ -137,4 +138,28 @@ namespace Spark::SaveFileDurability
      */
     [[nodiscard]] bool WriteFileAtomically(const std::filesystem::path& destination, std::string_view bytes,
                                            bool retainBackup, std::error_code& error);
+
+    /**
+     * @brief Replace @p destination with @p bytes through an unpredictable, exclusively created
+     *        staging file, for publishers whose directory may be shared with other principals
+     *        (operator status files such as server and gateway health snapshots).
+     *
+     * The staging file is `<destination>.<random>.<counter>.tmp`, created by WriteStagingFile
+     * (exclusive, no-follow: O_CREAT|O_EXCL|O_NOFOLLOW on POSIX, CREATE_NEW|FILE_FLAG_OPEN_REPARSE_POINT
+     * on Windows). A file, symlink or hard link planted at the name is never followed or truncated, and
+     * the random name cannot be predicted in advance. The bytes are flushed and then renamed over
+     * @p destination with ReplaceFileAtomically.
+     *
+     * On any failure the staging file is removed and @p destination keeps its previous complete
+     * contents; the destination is never deleted first. A process killed mid-write can leave one
+     * uniquely named staging file behind.
+     *
+     * @param destination File to replace; its parent directory must exist.
+     * @param bytes       Complete new contents, written in binary mode.
+     * @param error       Cleared on entry; receives the failure reason. After a successful commit whose
+     *                    POSIX directory sync failed, it holds that error (as for WriteFileAtomically).
+     * @return true when @p destination now names exactly @p bytes.
+     */
+    [[nodiscard]] bool PublishFileAtomically(const std::filesystem::path& destination, std::string_view bytes,
+                                             std::error_code& error);
 } // namespace Spark::SaveFileDurability
