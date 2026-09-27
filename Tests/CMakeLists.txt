@@ -104,7 +104,6 @@ add_executable(SparkTests
     TestBitFlags.cpp
     TestThreadSafeQueue.cpp
     TestDeltaSmoother.cpp
-    TestFPSComponents.cpp
     TestWeaponSystem.cpp
     TestNetworkEncryption.cpp
     TestECSIntegration.cpp
@@ -371,7 +370,6 @@ add_executable(SparkTests
     TestWorldServerConcurrency.cpp
     TestAudioMixerBus.cpp
     TestConsoleVariables.cpp
-    TestWeaponMechanics.cpp
     TestGameObjectTransforms.cpp
     TestSceneSerializer.cpp
     TestSceneSerializerReal.cpp

@@ -28,7 +28,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CENSUS_SCRIPT = REPO_ROOT / "Tools" / "test_source_census.py"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
-MIRROR_FILE = "Tests/TestFPSComponents.cpp"
+MIRROR_FILE = "Tests/TestWeaponSystem.cpp"
+# SPARK_TEST_FILE is a substring match, so the bare file name selects the mirror.
+MIRROR_FILE_NAME = Path(MIRROR_FILE).name
 TAUTOLOGICAL_TEST = "SoftwareRender_DrawFrame"
 
 # The Windows-only D3D11 golden selector: the static view must see it on every host.
@@ -129,10 +131,10 @@ class ProfileSelectorGuard(unittest.TestCase):
     # -- mutations that must fail --------------------------------------------
 
     def test_static_selector_pointed_at_mirror_file_fails(self) -> None:
-        path = self._mutated_cmake('"SPARK_TEST_FILE=TestFPSComponents.cpp;SPARK_TEST_EXPECT_COUNT=2"')
+        path = self._mutated_cmake(f'"SPARK_TEST_FILE={MIRROR_FILE_NAME};SPARK_TEST_EXPECT_COUNT=2"')
         result = _run_census("--profile-selectors", "--cmake-lists", str(path))
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("D3D11_Golden: SPARK_TEST_EXPECT_COUNT=2, SPARK_TEST_FILE=TestFPSComponents.cpp", result.stderr)
+        self.assertIn(f"D3D11_Golden: SPARK_TEST_EXPECT_COUNT=2, SPARK_TEST_FILE={MIRROR_FILE_NAME}", result.stderr)
         self.assertIn(f"mirror file {MIRROR_FILE}", result.stderr)
 
     def test_ctest_json_selector_pointed_at_mirror_file_fails(self) -> None:
@@ -140,7 +142,7 @@ class ProfileSelectorGuard(unittest.TestCase):
         entry = _ctest_entry(
             "D3D11_Golden",
             ["d3d11", "stable-v1"],
-            ["SPARK_TEST_FILE=TestFPSComponents.cpp", "SPARK_TEST_EXPECT_COUNT=2"],
+            [f"SPARK_TEST_FILE={MIRROR_FILE_NAME}", "SPARK_TEST_EXPECT_COUNT=2"],
             ["C:\\build\\bin\\Release\\SparkTests.exe", "--warn-is-error"],
         )
         path.write_text(json.dumps({"kind": "ctestInfo", "tests": [entry]}), encoding="utf-8")
@@ -190,7 +192,7 @@ class ProfileSelectorGuard(unittest.TestCase):
         self.assertTrue(any("selects no TEST definition" in failure for failure in failures), failures)
 
     def test_command_level_env_assignment_is_resolved(self) -> None:
-        command = ["cmake", "-E", "env", "SPARK_TEST_FILE=TestFPSComponents.cpp", "/b/SparkTests"]
+        command = ["cmake", "-E", "env", f"SPARK_TEST_FILE={MIRROR_FILE_NAME}", "/b/SparkTests"]
         failures = self._check_ctest(
             _ctest_entry("Probe", ["stable-v1"], ["SPARK_TEST_EXPECT_COUNT=1"], command)
         )
@@ -212,7 +214,7 @@ class ProfileSelectorGuard(unittest.TestCase):
 
     def test_non_profile_selector_may_reach_mirrors(self) -> None:
         entries = [
-            _ctest_entry("Mirror", ["unit"], ["SPARK_TEST_FILE=TestFPSComponents.cpp"]),
+            _ctest_entry("Mirror", ["unit"], [f"SPARK_TEST_FILE={MIRROR_FILE_NAME}"]),
             _ctest_entry("Probe", ["stable-v1"], ["SPARK_TEST_NAME=ModuleDiscovery_", "SPARK_TEST_EXPECT_COUNT=7"]),
         ]
         self.assertEqual(self._check_ctest(*entries), [])

@@ -48,7 +48,7 @@ The original audit listed Priority-1 systems with **zero dedicated tests**. Most
 | Camera transforms | Addressed |
 | WorldServer / AreaServer routing | Partial → expanded |
 
-The audit's "MEDIUM" tier was already marked resolved in the source document at the time of writing: `TestAudioMixerBus`, `TestMusicManager` (24 tests), `TestAngelScriptEngine` (14), `TestScriptHotReload` (16), `TestConsoleVariables`, `TestVRSystem` (12), `TestWeaponMechanics`, `TestGameObjectTransforms`, `TestSeamlessAreaManager` (12) all exist.
+The audit's "MEDIUM" tier was already marked resolved in the source document at the time of writing: `TestAudioMixerBus`, `TestMusicManager` (24 tests), `TestAngelScriptEngine` (14), `TestScriptHotReload` (16), `TestConsoleVariables`, `TestVRSystem` (12), `TestWeaponMechanics` (a mirror since retired for `TestWeaponMechanicsReal`), `TestGameObjectTransforms`, `TestSeamlessAreaManager` (12) all exist.
 
 ---
 

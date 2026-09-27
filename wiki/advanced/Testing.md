@@ -446,7 +446,7 @@ The test files cover all major engine subsystems:
 |-----------|-------|-------------|
 | `TestECSWorld` | 11 | Entity creation, component add/remove, queries |
 | `TestECSIntegration` | 9 | System integration with World |
-| `TestFPSComponents` | 23 | Decal, Projectile, Interaction components |
+| `TestFPSComponentsReal` | 11 | Shipped Decal, Projectile, Interaction components |
 | `TestSprite2DComponents` | 35 | 2D sprite rendering and animation |
 | `TestPhysicsComponents` | 22 | RigidBody, Collider component validation |
 
@@ -488,6 +488,7 @@ The test files cover all major engine subsystems:
 | Test File | Cases | Description |
 |-----------|-------|-------------|
 | `TestWeaponSystem` | 18 | Fire modes, reload, recoil, ADS |
+| `TestWeaponMechanicsReal` | 22 | Shipped WeaponSystem fire, cooldown, reload, recoil, spread, ADS, switching |
 | `TestInventorySystem` | 11 | Item add/remove, stacking, weight |
 | `TestQuestSystem` | 10 | Quest stages, objectives, completion |
 | `TestGameMode` | 5 | Game mode switching and score tracking |
