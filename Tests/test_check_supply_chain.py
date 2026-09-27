@@ -1773,6 +1773,36 @@ class TestSchemaValidation(unittest.TestCase):
     def test_minimal_valid_schema_is_accepted(self) -> None:
         sc.validate_lockfile_schema(self._lock())
 
+    def _policy(self, **fields) -> dict:
+        record = {"declared": "zlib", "spdx": "Zlib", **fields}
+        return self._lock(license_policy={"dependencies": {"SDL2": record}})
+
+    def test_vulnerability_identity_fields_are_accepted(self) -> None:
+        sc.validate_lockfile_schema(self._policy(
+            upstream_version="2.32.0+231", upstream_tag_commit="7" * 40,
+            cpe="cpe:2.3:a:libsdl:simple_directmedia_layer:2.32.0:*:*:*:*:*:*:*"))
+        sc.validate_lockfile_schema(self._policy(
+            upstream_version="2.38.0", upstream_version_source="Version macro in the pinned public header.",
+            cpe_unavailable_reason="The NVD CPE dictionary has no product for it."))
+
+    def test_malformed_vulnerability_identity_is_rejected(self) -> None:
+        cpe = "cpe:2.3:a:libsdl:simple_directmedia_layer:2.32.0:*:*:*:*:*:*:*"
+        cases = {
+            "cpe and reason": dict(upstream_version="2.32.0", cpe=cpe, cpe_unavailable_reason="x" * 20),
+            "cpe without version": dict(cpe=cpe),
+            "cpe for another release": dict(upstream_version="2.30.0", cpe=cpe),
+            "not a cpe 2.3 name": dict(upstream_version="2.32.0", cpe="cpe:/a:libsdl:sdl:2.32.0"),
+            "floating version": dict(upstream_version="latest"),
+            "tag commit without version": dict(upstream_tag_commit="7" * 40),
+            "tag commit and source": dict(upstream_version="2.32.0", upstream_tag_commit="7" * 40,
+                                          upstream_version_source="Version macro in the header."),
+            "short reason": dict(cpe_unavailable_reason="none"),
+            "unknown field": dict(cpe_vendor="libsdl"),
+        }
+        for label, fields in cases.items():
+            with self.subTest(label):
+                self._expect_fatal(self._policy(**fields))
+
     def test_truncated_sentinel_sha256_rejected(self) -> None:
         self._expect_fatal(self._lock(sentinel_files={
             "ThirdParty/x": {"sha256": "ab", "git_blob": "0" * 40,

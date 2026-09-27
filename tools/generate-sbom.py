@@ -8,6 +8,15 @@ source location, SPDX license (resolved by the reviewed ``license_policy`` of
 tools/check-supply-chain.py, never guessed), and the lockfile's integrity pin
 (submodule gitlink or vendored tree digest).
 
+So that a vulnerability scanner can match the document (the PR-time
+``dependency-policy`` job scans it with grype), every dependency's
+``license_policy`` record must carry an NVD CPE, emitted as a ``cpe23Type``
+reference, or a reviewed ``cpe_unavailable_reason``. A submodule, whose pin is a
+commit no advisory names, must also record the upstream release it derives
+from (``upstream_version``, ``+N`` for N commits past it) with its evidence: the
+release tag's commit, checked against the gitlink, or a reviewed source. The
+upstream release is the package version and a ``pkg:generic`` purl.
+
 The document is bound to a source commit the same way REL-100 build provenance
 is: it records the commit SHA and the SHA-256 of the *committed*
 dependencies.lock blob, computed by tools/release_build_provenance.py. A
@@ -63,6 +72,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Any
+from urllib.parse import quote
 
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
@@ -119,6 +129,10 @@ class Dependency:
     kind: str  # "submodule" or "vendored"
     pin: str  # gitlink revision, or vendored tree digest
     file_count: int | None
+    # Vulnerability identity from the reviewed license_policy record.
+    upstream_version: str | None = None
+    cpe: str | None = None
+    cpe_unavailable_reason: str | None = None
 
 
 # --------------------------------------------------------------------------- lock inventory
@@ -134,6 +148,7 @@ def load_inventory(root: Path) -> list[Dependency]:
     resolved = {item["name"]: item["spdx"] for item in supply_chain.check_license_policy(lockfile, entries, licenses)}
     errors = [f"{v.path}: {v.message}" for v in licenses.violations if v.severity == "error"]
 
+    policy: dict[str, dict[str, str]] = lockfile.get("license_policy", {}).get("dependencies", {})
     gitlinks: dict[str, str] = lockfile["submodule_gitlinks"]
     vendored: list[str] = lockfile["managed_vendored_dirs"]
     digests: dict[str, dict[str, Any]] = lockfile["tree_digests"]
@@ -179,6 +194,11 @@ def load_inventory(root: Path) -> list[Dependency]:
             # even when check_license_policy skipped it without recording a violation.
             errors.append(f"{name}: no resolved SPDX license")
             continue
+        record = policy.get(name, {})
+        identity_errors = _identity_errors(name, kind, pin, record)
+        if identity_errors:
+            errors.extend(identity_errors)
+            continue
         dependencies.append(
             Dependency(
                 name=name,
@@ -190,6 +210,9 @@ def load_inventory(root: Path) -> list[Dependency]:
                 kind=kind,
                 pin=pin,
                 file_count=file_count,
+                upstream_version=record.get("upstream_version"),
+                cpe=record.get("cpe"),
+                cpe_unavailable_reason=record.get("cpe_unavailable_reason"),
             )
         )
 
@@ -199,6 +222,39 @@ def load_inventory(root: Path) -> list[Dependency]:
     if errors:
         raise SbomError("lock inventory is inconsistent:\n  " + "\n  ".join(errors))
     return sorted(dependencies, key=lambda dep: dep.name.lower())
+
+
+def _identity_errors(name: str, kind: str, pin: str, record: dict[str, str]) -> list[str]:
+    """Why a dependency cannot be matched by a vulnerability scan of this SBOM (empty when it can).
+
+    Every dependency needs a CPE or a reviewed reason there is none. A submodule
+    is pinned to a commit, which no advisory names, so it also needs the upstream
+    release it derives from. When that release is backed by a tag commit, the
+    version says whether the gitlink is that commit ("2.32.0") or past it
+    ("2.32.0+231", 231 commits later).
+    """
+    where = f"{supply_chain.LOCKFILE_REL} license_policy.dependencies[{name!r}]"
+    errors = []
+    if "cpe" not in record and "cpe_unavailable_reason" not in record:
+        errors.append(f"{name}: {where} names no cpe or cpe_unavailable_reason, so no scanner can match it")
+    if kind != "submodule":
+        return errors
+    version = record.get("upstream_version")
+    if version is None or not ({"upstream_tag_commit", "upstream_version_source"} & record.keys()):
+        errors.append(
+            f"{name}: submodule pinned to commit {pin} needs an upstream_version and its evidence "
+            f"(upstream_tag_commit or upstream_version_source) in {where}"
+        )
+        return errors
+    tag_commit = record.get("upstream_tag_commit")
+    ahead = supply_chain.UPSTREAM_VERSION_RE.fullmatch(version).group("ahead")
+    if tag_commit == pin and ahead:
+        errors.append(f"{name}: the gitlink is the release tag commit {tag_commit}; upstream_version {version!r} "
+                      "must not claim commits past it")
+    elif tag_commit is not None and tag_commit != pin and not ahead:
+        errors.append(f"{name}: upstream_version {version!r} names the release itself, but the gitlink {pin} is not "
+                      f"its tag commit {tag_commit}; record the commits past it as +N")
+    return errors
 
 
 # --------------------------------------------------------------------------- SPDX document
@@ -239,7 +295,9 @@ def _package(dep: Dependency) -> dict[str, Any]:
     package: dict[str, Any] = {
         "SPDXID": _spdx_id(dep.name),
         "name": dep.name,
-        "versionInfo": dep.version,
+        # Scanners compare this with advisory ranges, so it is the upstream
+        # release when one is recorded; the lock pin stays in sourceInfo.
+        "versionInfo": dep.upstream_version or dep.version,
         "downloadLocation": location,
         "filesAnalyzed": False,
         "licenseConcluded": dep.spdx_license,
@@ -248,17 +306,33 @@ def _package(dep: Dependency) -> dict[str, Any]:
         "supplier": "NOASSERTION",
         "primaryPackagePurpose": "LIBRARY",
         "sourceInfo": source_info,
-        "comment": f"dependencies.lock declares license {dep.declared_license!r}; source {dep.source}.",
+        "comment": f"dependencies.lock declares license {dep.declared_license!r} and version {dep.version!r}; "
+        f"source {dep.source}.",
     }
+    references = []
+    if dep.cpe:
+        references.append({"referenceCategory": "SECURITY", "referenceType": "cpe23Type", "referenceLocator": dep.cpe})
+    else:
+        package["comment"] += f" No CPE: {dep.cpe_unavailable_reason}"
     if github and purl_version:
         owner, repo = github.group(1).lower(), github.group(2).lower()
-        package["externalRefs"] = [
+        references.append(
             {
                 "referenceCategory": "PACKAGE-MANAGER",
                 "referenceType": "purl",
                 "referenceLocator": f"pkg:github/{owner}/{repo}@{purl_version}",
             }
-        ]
+        )
+    if dep.upstream_version:
+        references.append(
+            {
+                "referenceCategory": "PACKAGE-MANAGER",
+                "referenceType": "purl",
+                "referenceLocator": f"pkg:generic/{quote(dep.name, safe='')}@{quote(dep.upstream_version, safe='.')}",
+            }
+        )
+    if references:
+        package["externalRefs"] = references
     return package
 
 

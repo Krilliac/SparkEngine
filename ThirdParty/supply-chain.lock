@@ -381,67 +381,100 @@
     "dependencies": {
       "AngelScript": {
         "declared": "zlib",
-        "spdx": "Zlib"
+        "spdx": "Zlib",
+        "upstream_version": "2.38.0",
+        "upstream_version_source": "ANGELSCRIPT_VERSION_STRING in sdk/angelscript/include/angelscript.h at the pinned commit; the codecat mirror publishes no release tags.",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no AngelScript product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "Dear ImGui": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "1.92.9b+35",
+        "upstream_tag_commit": "b48d1afbe8ee8b238e2961dc363a949dd7304e23",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no Dear ImGui product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "EnTT": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "4.0.0",
+        "upstream_tag_commit": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no EnTT product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "Jolt Physics": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "5.5.1",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no Jolt Physics product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "RecastNavigation": {
         "declared": "zlib",
-        "spdx": "Zlib"
+        "spdx": "Zlib",
+        "upstream_version": "1.6.0+367",
+        "upstream_tag_commit": "6dc1667f580357e8a2154c28b7867bea7e8ad3a7",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no RecastNavigation product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "SDL2": {
         "declared": "zlib",
-        "spdx": "Zlib"
+        "spdx": "Zlib",
+        "upstream_version": "2.32.0+231",
+        "upstream_tag_commit": "7a44b1ab002cee6efa56d3b4c0e146b7fbaed80b",
+        "cpe": "cpe:2.3:a:libsdl:simple_directmedia_layer:2.32.0:*:*:*:*:*:*:*"
       },
       "VulkanMemoryAllocator": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "cpe_unavailable_reason": "ThirdParty/VulkanMemoryAllocator/vk_mem_alloc.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       },
       "cgltf": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "1.15",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no cgltf product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "glad": {
         "declared": "MIT and Apache-2.0",
-        "spdx": "MIT AND Apache-2.0"
+        "spdx": "MIT AND Apache-2.0",
+        "upstream_version": "0.1.36",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no glad product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "miniaudio": {
         "declared": "Public Domain / MIT-0",
-        "spdx": "Unlicense OR MIT-0"
+        "spdx": "Unlicense OR MIT-0",
+        "cpe_unavailable_reason": "ThirdParty/Audio/miniaudio/miniaudio.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       },
       "miniz": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "3.1.2",
+        "upstream_tag_commit": "77d0dce8627735138c51770d1799a1ef48f2117d",
+        "cpe": "cpe:2.3:a:miniz_project:miniz:3.1.2:*:*:*:*:*:*:*"
       },
       "nlohmann/json": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "cpe_unavailable_reason": "ThirdParty/Utils/json/nlohmann_json.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       },
       "stb_image": {
         "declared": "Public Domain / MIT",
-        "spdx": "MIT OR Unlicense"
+        "spdx": "MIT OR Unlicense",
+        "cpe_unavailable_reason": "ThirdParty/Utils/stb/stb_image.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       },
       "tinyexr": {
         "declared": "BSD-3-Clause",
-        "spdx": "BSD-3-Clause"
+        "spdx": "BSD-3-Clause",
+        "upstream_version": "1.0.13",
+        "cpe": "cpe:2.3:a:tinyexr_project:tinyexr:1.0.13:*:*:*:*:*:*:*"
       },
       "tinyobjloader": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "2.0.0",
+        "cpe": "cpe:2.3:a:tinyobjloader_project:tinyobjloader:2.0.0:*:*:*:*:*:*:*"
       },
       "zstd": {
         "declared": "BSD-3-Clause (library, upstream tools are dual-licensed)",
-        "spdx": "BSD-3-Clause"
+        "spdx": "BSD-3-Clause",
+        "cpe_unavailable_reason": "ThirdParty/Utils/zstd/zstd.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       }
     }
   },

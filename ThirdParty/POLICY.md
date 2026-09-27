@@ -72,6 +72,30 @@ record whose package is absent from the scanned SBOM is reported as not
 applicable to that run instead of unused; its expiry still bounds it. It validates records with the same
 `validate_exception_records` function as `tools/check-supply-chain.py`.
 
+The release SBOM is catalogued from packaged binaries, where statically linked
+vendored code is not visible. So every pull request also runs the gate in the
+required `dependency-policy` job of `build.yml`, over the SBOM that
+`tools/generate-sbom.py` derives from the dependency lock. For that SBOM to be
+matchable, each `license_policy.dependencies` record carries its vulnerability
+identity:
+
+- `cpe`: the NVD CPE 2.3 application name, whose version is the upstream
+  release; or `cpe_unavailable_reason`, the reviewed reason there is none (no
+  NVD product, or a repository-authored stub in place of the upstream code).
+  Exactly one of the two.
+- `upstream_version`: the upstream release the code derives from, written
+  `2.32.0` for the release itself or `2.32.0+231` for 231 commits past it.
+  Every submodule needs one, because its pin is a commit that no advisory
+  names. It is backed by `upstream_tag_commit`, the release tag's commit, which
+  the generator checks against the gitlink (the gitlink is that commit exactly
+  when there is no `+N`); or, when upstream publishes no tags, by
+  `upstream_version_source`, which says where the version was read.
+
+The generator emits the CPE as a `cpe23Type` reference and the upstream release
+as the package version and a `pkg:generic` purl. It refuses a lock where any of
+this is missing or inconsistent, so a dependency cannot drop out of the scan
+silently.
+
 ## Adding a New Dependency
 
 1. **Justify the addition.** A new dependency must solve a problem that cannot

@@ -41,6 +41,7 @@ def _load(name: str, rel: str):
 
 sbom = _load("spark_generate_sbom_under_test", "tools/generate-sbom.py")
 base = _load("spark_sbom_supply_chain_fixture", "Tests/test_check_supply_chain.py")
+vulnerability_gate = _load("spark_sbom_vulnerability_gate", ".github/scripts/verify_vulnerability_findings.py")
 
 RULES_TEXT = json.dumps(
     {
@@ -350,6 +351,14 @@ class TestRealRepositoryLock(unittest.TestCase):
             self.assertEqual(dep.version, lock["submodule_gitlinks"][path])
             self.assertEqual(dep.pin, dep.version)
 
+    def test_every_locked_dependency_is_matchable_by_a_vulnerability_scan(self) -> None:
+        self.assertTrue(self.inventory)
+        for dep in self.inventory:
+            self.assertTrue(bool(dep.cpe) != bool(dep.cpe_unavailable_reason), f"{dep.name}: cpe xor reason")
+            if dep.kind == "submodule":
+                self.assertTrue(dep.upstream_version, f"{dep.name}: a submodule pin needs its upstream release")
+        self.assertTrue(any(dep.cpe for dep in self.inventory), "no dependency carries a CPE; the scan is vacuous")
+
     def test_generated_document_describes_the_whole_lock(self) -> None:
         dirty = subprocess.run(
             ["git", "-C", str(PROJECT_ROOT), "diff", "--quiet", "HEAD", "--", "ThirdParty/dependencies.lock",
@@ -367,9 +376,14 @@ class TestRealRepositoryLock(unittest.TestCase):
         self.assertEqual(set(packages), {dep.name for dep in self.inventory})
         for dep in self.inventory:
             self.assertEqual(packages[dep.name]["licenseDeclared"], dep.spdx_license)
-            self.assertEqual(packages[dep.name]["versionInfo"], dep.version)
+            self.assertEqual(packages[dep.name]["versionInfo"], dep.upstream_version or dep.version)
+            cpes = [ref["referenceLocator"] for ref in packages[dep.name].get("externalRefs", [])
+                    if ref["referenceType"] == "cpe23Type"]
+            self.assertEqual(cpes, [dep.cpe] if dep.cpe else [])
         ids = [p["SPDXID"] for p in document["packages"]]
         self.assertEqual(len(ids), len(set(ids)))
+        # The dependency-policy CI job feeds this document to the vulnerability gate.
+        self.assertEqual(vulnerability_gate.validate_sbom(document), {p["name"] for p in document["packages"]})
         head = subprocess.run(["git", "-C", str(PROJECT_ROOT), "rev-parse", "HEAD"], capture_output=True,
                               text=True, check=True).stdout.strip()
         lock_digest = sbom.provenance._committed_lock_digest(PROJECT_ROOT, head)
@@ -383,7 +397,13 @@ class TestGenerateFakeRepository(base.FakeRepoCase):
         super().setUp()
         self.write("CMakeLists.txt", 'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "version")\n')
         self.write("LICENSE", "Fixture Open License 1.0\n\nCopyright (c) 2026 fixture\n")
+        self.set_policy(cpe_unavailable_reason="The fixture dependency has no NVD product.")
         self.commit("sbom inputs")
+
+    def set_policy(self, **fields: str) -> None:
+        data = self.lock()
+        data["license_policy"] = {"dependencies": {"demo": {"declared": "MIT", "spdx": "MIT", **fields}}}
+        self.set_lock(data)
 
     def run_main(self, *args: str) -> tuple[int, str, str]:
         out, err = io.StringIO(), io.StringIO()
@@ -413,7 +433,8 @@ class TestGenerateFakeRepository(base.FakeRepoCase):
         self.assertEqual(demo["name"], "demo")
         self.assertEqual(demo["licenseDeclared"], "MIT")
         self.assertEqual(demo["downloadLocation"], "https://github.com/example/demo")
-        self.assertNotIn("externalRefs", demo, "a vendored snapshot asserts no purl version")
+        self.assertNotIn("externalRefs", demo, "a vendored snapshot without an upstream version asserts no purl")
+        self.assertIn("No CPE: The fixture dependency has no NVD product.", demo["comment"])
         digest = self.lock()["tree_digests"]["ThirdParty/Utils/demo"]["digest"]
         self.assertIn(f"sha256:{digest}", demo["sourceInfo"])
         self.assertEqual(
@@ -470,10 +491,36 @@ class TestGenerateFakeRepository(base.FakeRepoCase):
     def test_unresolvable_license_is_refused(self) -> None:
         manifest = self.repo / "ThirdParty/dependencies.lock"
         manifest.write_text(manifest.read_text(encoding="utf-8").replace("|MIT|", "|Proprietary|"), encoding="utf-8")
+        self.set_policy(declared="Proprietary", spdx="LicenseRef-Proprietary", cpe_unavailable_reason="x" * 16)
         self.commit()
         code, _, err = self.run_main()
         self.assertEqual(code, 1)
         self.assertIn("allow-list", err)
+
+    def test_dependency_without_cpe_or_reason_is_refused(self) -> None:
+        self.set_policy()
+        self.commit()
+        code, _, err = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("names no cpe or cpe_unavailable_reason", err)
+
+    def test_cpe_is_emitted_as_a_security_reference_with_the_upstream_version(self) -> None:
+        cpe = "cpe:2.3:a:example:demo:1.2.3:*:*:*:*:*:*:*"
+        self.set_policy(upstream_version="1.2.3", cpe=cpe)
+        self.commit()
+        code, out, err = self.run_main()
+        self.assertEqual(code, 0, err)
+        demo = json.loads(out)["packages"][1]
+        self.assertEqual(demo["versionInfo"], "1.2.3")
+        self.assertIn("v1.2.3 (vendored snapshot)", demo["comment"])
+        self.assertEqual(
+            demo["externalRefs"],
+            [
+                {"referenceCategory": "SECURITY", "referenceType": "cpe23Type", "referenceLocator": cpe},
+                {"referenceCategory": "PACKAGE-MANAGER", "referenceType": "purl",
+                 "referenceLocator": "pkg:generic/demo@1.2.3"},
+            ],
+        )
 
     def test_empty_license_field_is_refused(self) -> None:
         manifest = self.repo / "ThirdParty/dependencies.lock"
@@ -487,18 +534,25 @@ class TestGenerateFakeRepository(base.FakeRepoCase):
 class TestInventoryConsistency(unittest.TestCase):
     """Lock disagreements that the fake repository cannot express with a real submodule."""
 
-    LOCK = {
-        "submodule_gitlinks": {"ThirdParty/Sub": "a" * 40},
-        "managed_vendored_dirs": [],
-        "tree_digests": {},
-        "license_policy": {"dependencies": {}},
-    }
+    CPE = "cpe:2.3:a:example:sub:1.0.0:*:*:*:*:*:*:*"
+    RECORD = {"declared": "MIT", "spdx": "MIT", "upstream_version": "1.0.0", "upstream_tag_commit": "a" * 40,
+              "cpe": CPE}
 
-    def inventory(self, fields: list[str]):
-        with mock.patch.object(sbom.supply_chain, "load_lockfile", return_value=self.LOCK), mock.patch.object(
+    def inventory(self, fields: list[str], record: dict | None = None):
+        lock = {
+            "submodule_gitlinks": {"ThirdParty/Sub": "a" * 40},
+            "managed_vendored_dirs": [],
+            "tree_digests": {},
+            "license_policy": {"dependencies": {"Sub": self.RECORD if record is None else record}},
+        }
+        with mock.patch.object(sbom.supply_chain, "load_lockfile", return_value=lock), mock.patch.object(
             sbom.supply_chain, "export_manifest_entries", return_value=[fields]
         ):
             return sbom.load_inventory(PROJECT_ROOT)
+
+    def record(self, **changes: str | None) -> dict:
+        record = {**self.RECORD, **changes}
+        return {key: value for key, value in record.items() if value is not None}
 
     def fields(self, version: str, path: str = "ThirdParty/Sub") -> list[str]:
         return ["Sub", "https://github.com/example/sub.git", version, "MIT", path, "x.h", "M", "F", "WARN", "L"]
@@ -507,7 +561,38 @@ class TestInventoryConsistency(unittest.TestCase):
         (dep,) = self.inventory(self.fields("a" * 40))
         package = sbom._package(dep)
         self.assertEqual(package["downloadLocation"], f"git+https://github.com/example/sub.git@{'a' * 40}")
-        self.assertEqual(package["externalRefs"][0]["referenceLocator"], f"pkg:github/example/sub@{'a' * 40}")
+        self.assertEqual(package["versionInfo"], "1.0.0")
+        self.assertEqual(
+            [ref["referenceLocator"] for ref in package["externalRefs"]],
+            [self.CPE, f"pkg:github/example/sub@{'a' * 40}", "pkg:generic/Sub@1.0.0"],
+        )
+
+    def test_submodule_without_upstream_version_is_refused(self) -> None:
+        for label, record in (
+            ("no version", self.record(upstream_version=None, upstream_tag_commit=None, cpe=None,
+                                       cpe_unavailable_reason="The fixture has no NVD product.")),
+            ("no evidence", self.record(upstream_tag_commit=None)),
+        ):
+            with self.subTest(label), self.assertRaisesRegex(sbom.SbomError, "needs an upstream_version"):
+                self.inventory(self.fields("a" * 40), record)
+
+    def test_dependency_without_cpe_or_reason_is_refused(self) -> None:
+        with self.assertRaisesRegex(sbom.SbomError, "names no cpe or cpe_unavailable_reason"):
+            self.inventory(self.fields("a" * 40), self.record(cpe=None))
+
+    def test_upstream_version_must_agree_with_the_tag_commit(self) -> None:
+        with self.assertRaisesRegex(sbom.SbomError, "must not claim commits past it"):
+            self.inventory(self.fields("a" * 40), self.record(upstream_version="1.0.0+3"))
+        with self.assertRaisesRegex(sbom.SbomError, "record the commits past it"):
+            self.inventory(self.fields("a" * 40), self.record(upstream_tag_commit="c" * 40))
+        (dep,) = self.inventory(self.fields("a" * 40), self.record(upstream_version="1.0.0+3",
+                                                                   upstream_tag_commit="c" * 40))
+        self.assertEqual(sbom._package(dep)["versionInfo"], "1.0.0+3")
+
+    def test_a_reviewed_version_source_stands_in_for_a_tag(self) -> None:
+        (dep,) = self.inventory(self.fields("a" * 40), self.record(
+            upstream_tag_commit=None, upstream_version_source="VERSION macro in the pinned header."))
+        self.assertEqual(dep.upstream_version, "1.0.0")
 
     def test_manifest_revision_disagreeing_with_locked_gitlink_is_refused(self) -> None:
         with self.assertRaisesRegex(sbom.SbomError, "pins gitlink"):

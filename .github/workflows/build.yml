@@ -581,6 +581,47 @@ jobs:
     - name: SBOM and package-reconciliation tests
       run: python3 -m unittest Tests.Tools.test_generate_sbom -v
 
+  # SEC-110: vulnerability gate on every locked dependency at PR time. The
+  # release gate scans the SBOM syft builds from packaged binaries, which does
+  # not see statically linked vendored code. This job scans the lock-derived
+  # SBOM instead, whose packages carry the reviewed CPEs and upstream versions,
+  # and applies the same policy: a Critical or High finding passes only through
+  # an owned, unexpired exception in ThirdParty/supply-chain.lock.
+  dependency-policy:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    # generate-sbom.py expands the dependency manifest through CMake.
+    - name: Install SBOM generator dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake
+        cmake --version
+
+    - name: Generate lock-derived SPDX SBOM
+      run: python3 tools/generate-sbom.py --out SparkEngine-lock.spdx.json
+
+    - name: Scan lock SBOM for known vulnerabilities
+      uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+      with:
+        sbom: SparkEngine-lock.spdx.json
+        output-format: json
+        output-file: SparkEngine-lock.grype.json
+        fail-build: false
+
+    - name: Enforce vulnerability policy on the lock SBOM
+      run: |
+        set -euo pipefail
+        python3 .github/scripts/verify_vulnerability_findings.py \
+          --report "SparkEngine-lock.grype.json" \
+          --sbom "SparkEngine-lock.spdx.json" \
+          --lockfile "ThirdParty/supply-chain.lock" \
+          --summary "$GITHUB_STEP_SUMMARY"
+
   license-compliance:
     name: "License compliance"
     runs-on: ubuntu-24.04
@@ -3770,6 +3811,7 @@ jobs:
       - secret-scan
       - check-thirdparty-manifest
       - check-supply-chain
+      - dependency-policy
       - license-compliance
       - build-linux-asan
       - build-linux-tsan
@@ -4333,6 +4375,7 @@ jobs:
       - secret-scan
       - check-thirdparty-manifest
       - check-supply-chain
+      - dependency-policy
       - license-compliance
       - build-linux-asan
       - build-linux-tsan
@@ -4358,7 +4401,7 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
 

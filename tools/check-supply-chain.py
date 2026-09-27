@@ -158,6 +158,15 @@ ALLOWED_SPDX_LICENSES = frozenset({
 })
 LICENSE_POLICY_KEYS = frozenset({"dependencies"})
 LICENSE_POLICY_RECORD_FIELDS = frozenset({"declared", "spdx"})
+# Vulnerability identity for the lock-derived SBOM (tools/generate-sbom.py
+# requires it for every dependency): the upstream release a pin derives from,
+# the evidence for it, and an NVD CPE or the reason there is none.
+LICENSE_POLICY_IDENTITY_FIELDS = frozenset({
+    "upstream_version", "upstream_tag_commit", "upstream_version_source", "cpe", "cpe_unavailable_reason",
+})
+# A release version, optionally "+N": N commits past that release.
+UPSTREAM_VERSION_RE = re.compile(r"^(?P<release>[0-9]+(?:\.[0-9]+){0,3}[a-z]?)(?:\+(?P<ahead>[1-9][0-9]*))?$")
+CPE23_APPLICATION_RE = re.compile(r"^cpe:2\.3:a(?::[A-Za-z0-9._\-~*]+){10}$")
 MAX_SPDX_EXPRESSION_CHARS = 512
 MAX_LICENSE_DECLARATION_CHARS = 512
 SPDX_ID_RE = re.compile(r"^(?:LicenseRef-)?[A-Za-z0-9][A-Za-z0-9.+-]*$")
@@ -1015,7 +1024,7 @@ def _validate_license_policy_schema(data: dict[str, Any]) -> None:
             _fatal(f"{label}: invalid dependency name")
         if not isinstance(record, dict):
             _fatal(f"{label}: entry must be an object")
-        unknown = sorted(record.keys() - LICENSE_POLICY_RECORD_FIELDS)
+        unknown = sorted(record.keys() - LICENSE_POLICY_RECORD_FIELDS - LICENSE_POLICY_IDENTITY_FIELDS)
         missing = sorted(LICENSE_POLICY_RECORD_FIELDS - record.keys())
         if unknown or missing:
             _fatal(f"{label}: invalid fields; missing={missing}, unknown={unknown}")
@@ -1024,6 +1033,39 @@ def _validate_license_policy_schema(data: dict[str, Any]) -> None:
             value = record[key]
             if not isinstance(value, str) or not value.strip() or len(value) > limit:
                 _fatal(f"{label}.{key}: expected a non-empty string of at most {limit} characters")
+        _validate_vulnerability_identity(label, record)
+
+
+def _validate_vulnerability_identity(label: str, record: dict[str, Any]) -> None:
+    """Shape of the optional upstream-version and CPE fields of one record."""
+    for key in ("upstream_version_source", "cpe_unavailable_reason"):
+        value = record.get(key)
+        if value is not None and (not isinstance(value, str) or not 16 <= len(value.strip()) <= 512):
+            _fatal(f"{label}.{key}: expected a reviewed explanation of 16 to 512 characters")
+    version = record.get("upstream_version")
+    match = UPSTREAM_VERSION_RE.fullmatch(version) if isinstance(version, str) else None
+    if version is not None and match is None:
+        _fatal(f"{label}.upstream_version: expected a release version such as 2.32.0 or 2.32.0+231, got {version!r}")
+    tag_commit = record.get("upstream_tag_commit")
+    if tag_commit is not None and (not isinstance(tag_commit, str) or not SHA40_HEX_RE.match(tag_commit)):
+        _fatal(f"{label}.upstream_tag_commit: expected a 40-character lowercase commit SHA")
+    evidence = [key for key in ("upstream_tag_commit", "upstream_version_source") if key in record]
+    if version is None and evidence:
+        _fatal(f"{label}: {evidence[0]} needs an upstream_version")
+    if len(evidence) > 1:
+        _fatal(f"{label}: give upstream_tag_commit or upstream_version_source, not both")
+
+    has_cpe, has_reason = "cpe" in record, "cpe_unavailable_reason" in record
+    if has_cpe and has_reason:
+        _fatal(f"{label}: give cpe or cpe_unavailable_reason, not both")
+    if has_cpe:
+        cpe = record["cpe"]
+        if not isinstance(cpe, str) or not CPE23_APPLICATION_RE.fullmatch(cpe):
+            _fatal(f"{label}.cpe: expected a CPE 2.3 application name (cpe:2.3:a:vendor:product:version:...)")
+        if match is None:
+            _fatal(f"{label}.cpe: a CPE needs the upstream_version it names")
+        if cpe.split(":")[5] != match.group("release"):
+            _fatal(f"{label}.cpe: version {cpe.split(':')[5]!r} is not the upstream release {match.group('release')!r}")
 
 
 def _external_string_list(label: str, value: Any) -> list[str]:

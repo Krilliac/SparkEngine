@@ -226,7 +226,11 @@ it from Git history.
   defines an SPDX SBOM step and a build-provenance attestation, but no
   versioned release has exercised them, and publisher identity and consumer
   verification evidence remain open
-- Vulnerability-scanner integration
+- Hosted exact-SHA evidence for the vulnerability scan. grype gates the release
+  SBOM in `release.yml` and, on every pull request, the lock-derived SBOM in the
+  required `dependency-policy` job, where each locked dependency carries a
+  reviewed CPE (or the reason there is none) and its upstream release (see
+  `ThirdParty/POLICY.md`). Neither has a retained hosted run yet
 - Hosted exact-SHA evidence for the required `secret-scan` job
 - CodeQL coverage for every shipped product
 - Owner review of the declared dependencies outside `ThirdParty/`.

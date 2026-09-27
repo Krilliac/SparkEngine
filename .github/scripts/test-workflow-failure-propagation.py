@@ -50,6 +50,7 @@ REQUIRED_CI_JOBS = (
     "secret-scan",
     "check-thirdparty-manifest",
     "check-supply-chain",
+    "dependency-policy",
     "license-compliance",
     "build-linux-asan",
     "build-linux-tsan",
