@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace RTS
 {
@@ -50,6 +51,10 @@ namespace RTS
 
     bool RTSFogOfWarSystem::Initialize(Spark::IEngineContext* context, int mapWidth, int mapHeight)
     {
+        // Same bound RestoreState enforces; WorldToGrid's saturation relies on it.
+        if (mapWidth <= 0 || mapHeight <= 0 || mapWidth > MAX_MAP_DIMENSION || mapHeight > MAX_MAP_DIMENSION)
+            return false;
+
         m_context = context;
         m_mapWidth = mapWidth;
         m_mapHeight = mapHeight;
@@ -114,6 +119,26 @@ namespace RTS
 
     // === Vision updates ===
 
+    RTSFogOfWarSystem::CellRect RTSFogOfWarSystem::ClipDisc(const FogGrid& grid, int centerX, int centerY, float radius)
+    {
+        if (!std::isfinite(radius) || radius < 0.0f || grid.width <= 0 || grid.height <= 0)
+            return {};
+
+        // Any radius past the grid's width + height already covers every cell. Clamping in float first keeps
+        // the int conversion defined and the loop bounded regardless of what a save file supplied.
+        const float reach = std::min(radius / CELL_SIZE, static_cast<float>(grid.width + grid.height));
+        const int cells = static_cast<int>(std::ceil(reach));
+
+        // centerX/centerY come from WorldToGrid, which saturates to +/-2 * MAX_MAP_DIMENSION, so these sums
+        // cannot overflow.
+        CellRect rect;
+        rect.minX = std::max(0, centerX - cells);
+        rect.maxX = std::min(grid.width - 1, centerX + cells);
+        rect.minY = std::max(0, centerY - cells);
+        rect.maxY = std::min(grid.height - 1, centerY + cells);
+        return rect;
+    }
+
     void RTSFogOfWarSystem::UpdateVision(RTSFaction faction, float unitX, float unitY, float visionRange)
     {
         auto it = m_grids.find(faction);
@@ -121,20 +146,20 @@ namespace RTS
             return;
 
         auto& grid = it->second;
-        int centerX = WorldToGrid(unitX);
-        int centerY = WorldToGrid(unitY);
-        int radius = static_cast<int>(std::ceil(visionRange / CELL_SIZE));
+        const int centerX = WorldToGrid(unitX);
+        const int centerY = WorldToGrid(unitY);
+        const CellRect rect = ClipDisc(grid, centerX, centerY, visionRange);
 
-        // Reveal cells within vision radius
-        for (int dy = -radius; dy <= radius; ++dy)
+        // Reveal cells within vision radius (only those on the grid are visited)
+        for (int y = rect.minY; y <= rect.maxY; ++y)
         {
-            for (int dx = -radius; dx <= radius; ++dx)
+            const int64_t dy = static_cast<int64_t>(y) - centerY;
+            for (int x = rect.minX; x <= rect.maxX; ++x)
             {
-                float dist = std::sqrt(static_cast<float>(dx * dx + dy * dy)) * CELL_SIZE;
+                const int64_t dx = static_cast<int64_t>(x) - centerX;
+                const float dist = std::sqrt(static_cast<float>(dx * dx + dy * dy)) * CELL_SIZE;
                 if (dist <= visionRange)
-                {
-                    grid.SetCell(centerX + dx, centerY + dy, RTSVisibility::Visible);
-                }
+                    grid.SetCell(x, y, RTSVisibility::Visible);
             }
         }
     }
@@ -193,25 +218,23 @@ namespace RTS
             return;
 
         auto& grid = it->second;
-        int cx = WorldToGrid(centerX);
-        int cy = WorldToGrid(centerY);
-        int r = static_cast<int>(std::ceil(radius / CELL_SIZE));
+        const int cx = WorldToGrid(centerX);
+        const int cy = WorldToGrid(centerY);
+        const CellRect rect = ClipDisc(grid, cx, cy, radius);
 
-        for (int dy = -r; dy <= r; ++dy)
+        for (int y = rect.minY; y <= rect.maxY; ++y)
         {
-            for (int dx = -r; dx <= r; ++dx)
+            const int64_t dy = static_cast<int64_t>(y) - cy;
+            for (int x = rect.minX; x <= rect.maxX; ++x)
             {
-                float dist = std::sqrt(static_cast<float>(dx * dx + dy * dy)) * CELL_SIZE;
+                const int64_t dx = static_cast<int64_t>(x) - cx;
+                const float dist = std::sqrt(static_cast<float>(dx * dx + dy * dy)) * CELL_SIZE;
                 if (dist <= radius)
                 {
-                    int gx = cx + dx;
-                    int gy = cy + dy;
-                    if (gx >= 0 && gx < grid.width && gy >= 0 && gy < grid.height)
-                    {
-                        auto& cell = grid.cells[static_cast<size_t>(gy * grid.width + gx)];
-                        if (cell == RTSVisibility::Visible)
-                            cell = RTSVisibility::Fog;
-                    }
+                    auto& cell =
+                        grid.cells[static_cast<size_t>(y) * static_cast<size_t>(grid.width) + static_cast<size_t>(x)];
+                    if (cell == RTSVisibility::Visible)
+                        cell = RTSVisibility::Fog;
                 }
             }
         }
@@ -267,7 +290,16 @@ namespace RTS
 
     int RTSFogOfWarSystem::WorldToGrid(float worldPos) const
     {
-        return static_cast<int>(std::floor(worldPos / CELL_SIZE));
+        // Saturate before the cast: converting an out-of-range float to int is undefined behaviour, and every
+        // position beyond +/-2 * MAX_MAP_DIMENSION is off the grid anyway. The negated comparison sends NaN to
+        // the low bound.
+        constexpr float limit = static_cast<float>(2 * MAX_MAP_DIMENSION);
+        const float cell = std::floor(worldPos / CELL_SIZE);
+        if (!(cell > -limit))
+            return -2 * MAX_MAP_DIMENSION;
+        if (cell > limit)
+            return 2 * MAX_MAP_DIMENSION;
+        return static_cast<int>(cell);
     }
 
     void RTSFogOfWarSystem::RenderDebugUI()

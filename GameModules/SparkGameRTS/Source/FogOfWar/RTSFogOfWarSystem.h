@@ -50,6 +50,8 @@ namespace RTS
         void RenderDebugUI();
 
         // === Vision updates ===
+        /// Reveal the disc of @p visionRange around the unit. Iteration is clipped to the grid, and a
+        /// non-finite or negative range is ignored, so a restored save cannot turn this into an unbounded loop.
         void UpdateVision(RTSFaction faction, float unitX, float unitY, float visionRange);
         void ClearCurrentVision(RTSFaction faction);
 
@@ -81,6 +83,23 @@ namespace RTS
         static constexpr int MAX_MAP_DIMENSION = 1024;
 
       private:
+        /// Inclusive grid-cell rectangle; empty when minX > maxX or minY > maxY.
+        struct CellRect
+        {
+            int minX = 0;
+            int minY = 0;
+            int maxX = -1;
+            int maxY = -1;
+        };
+
+        /**
+         * Bounding box of the disc of @p radius world units around a grid cell, clipped to @p grid. A
+         * non-finite or negative radius yields an empty rectangle, and a radius larger than the grid is
+         * clamped before any int conversion, so the reveal/hide loops cost at most width * height cells.
+         */
+        static CellRect ClipDisc(const FogGrid& grid, int centerX, int centerY, float radius);
+
+        /// Saturating world-to-grid conversion; NaN and far-off-grid positions map outside the grid.
         int WorldToGrid(float worldPos) const;
 
         Spark::IEngineContext* m_context{nullptr};

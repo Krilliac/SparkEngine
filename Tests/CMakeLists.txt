@@ -2087,6 +2087,9 @@ set_tests_properties(Lifecycle_LifecycleLoop Lifecycle_ModuleReload PROPERTIES T
 # sources (ImGui-gated) and networking paths are compiled into SparkTests, so
 # the pinned count is derived from the same conditions the test file uses.
 set(_spark_sec2gm_count 4)
+if(TARGET imgui)
+    math(EXPR _spark_sec2gm_count "${_spark_sec2gm_count} + 2")
+endif()
 add_test(NAME SEC2GameModules COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SEC2GameModules PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2GM_;SPARK_TEST_EXPECT_COUNT=${_spark_sec2gm_count}"

@@ -49,7 +49,8 @@ namespace RTS
                             unit.visionRange, unit.posX, unit.posY))
                     return Fail(error, "non-finite unit field for id " + id);
                 if (unit.maxHealth <= 0.0f || unit.health < 0.0f || unit.health > unit.maxHealth ||
-                    unit.damage < 0.0f || unit.attackSpeed < 0.0f || unit.moveSpeed < 0.0f || unit.visionRange < 0.0f)
+                    unit.damage < 0.0f || unit.attackSpeed < 0.0f || unit.moveSpeed < 0.0f || unit.visionRange < 0.0f ||
+                    unit.visionRange > RTSUnitSystem::MAX_VISION_RANGE)
                     return Fail(error, "invalid unit stat range for id " + id);
                 if (!unitsById.emplace(unit.unitId, &unit).second)
                     return Fail(error, "duplicate unit identifier " + id);

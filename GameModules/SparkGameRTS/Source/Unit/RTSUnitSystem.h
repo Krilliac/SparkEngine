@@ -102,6 +102,10 @@ namespace RTS
          */
         bool RestoreState(const std::vector<UnitData>& units, uint32_t nextUnitId = 0);
 
+        /// Largest visionRange a restored unit may carry: the widest map the fog grid accepts
+        /// (RTSFogOfWarSystem::MAX_MAP_DIMENSION cells of one world unit). Templates use 7-12.
+        static constexpr float MAX_VISION_RANGE = 1024.0f;
+
         // === Unit state ===
         void SetUnitState(uint32_t unitId, RTSUnitState state);
         void SetUnitTarget(uint32_t unitId, uint32_t targetId);

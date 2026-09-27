@@ -175,7 +175,7 @@ namespace RTS
                 !std::isfinite(unit.visionRange) || !std::isfinite(unit.posX) || !std::isfinite(unit.posY) ||
                 unit.maxHealth <= 0.0f || unit.health < 0.0f || unit.health > unit.maxHealth || unit.damage < 0.0f ||
                 unit.attackSpeed < 0.0f || unit.moveSpeed < 0.0f || unit.visionRange < 0.0f ||
-                !restored.emplace(unit.unitId, unit).second)
+                unit.visionRange > MAX_VISION_RANGE || !restored.emplace(unit.unitId, unit).second)
             {
                 return false;
             }

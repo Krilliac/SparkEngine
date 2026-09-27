@@ -134,3 +134,82 @@ TEST(SEC2GM_WaveCompositionClampsInputs)
     EXPECT_EQ(SanitizeDifficultyScale(std::numeric_limits<float>::quiet_NaN()), 1.0f);
     EXPECT_EQ(SanitizeDifficultyScale(50.0f), MAX_DIFFICULTY_SCALE);
 }
+
+// ---------------------------------------------------------------------------
+// Module sources compiled only with ImGui (RTS fog of war, MMO chat)
+// ---------------------------------------------------------------------------
+
+#ifdef SPARK_TEST_HAS_IMGUI
+
+#include "../GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Core/RTSPersistence.h"
+#include "../GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.h"
+#include "../GameModules/SparkGameRTS/Source/Unit/RTSUnitSystem.h"
+
+TEST(SEC2GM_RTSFogVisionIsClippedToTheGrid)
+{
+    RTS::RTSFogOfWarSystem fog;
+    ASSERT_TRUE(fog.Initialize(nullptr, 128, 128));
+
+    // A restored visionRange of 1e9 used to mean ~4e18 loop iterations (and UB in the int arithmetic);
+    // clipped to the grid it is at most 128 * 128 cells and reveals the whole map.
+    fog.UpdateVision(RTS::RTSFaction::Human, 64.0f, 64.0f, 1.0e9f);
+    EXPECT_EQ(fog.GetExploredPercent(RTS::RTSFaction::Human), 100.0f);
+    fog.HideArea(RTS::RTSFaction::Human, 64.0f, 64.0f, std::numeric_limits<float>::max());
+    EXPECT_FALSE(fog.IsVisible(RTS::RTSFaction::Human, 10.0f, 10.0f));
+
+    // Non-finite ranges and positions far off the grid reveal nothing and are defined behaviour.
+    fog.UpdateVision(RTS::RTSFaction::Sentinel, 64.0f, 64.0f, std::numeric_limits<float>::quiet_NaN());
+    fog.UpdateVision(RTS::RTSFaction::Sentinel, 64.0f, 64.0f, std::numeric_limits<float>::infinity());
+    fog.UpdateVision(RTS::RTSFaction::Sentinel, 64.0f, 64.0f, -3.0f);
+    fog.UpdateVision(RTS::RTSFaction::Sentinel, std::numeric_limits<float>::quiet_NaN(), 64.0f, 5.0f);
+    fog.UpdateVision(RTS::RTSFaction::Sentinel, 1.0e30f, -1.0e30f, 5.0f);
+    EXPECT_EQ(fog.GetExploredPercent(RTS::RTSFaction::Sentinel), 0.0f);
+
+    // An ordinary unit still reveals exactly its disc.
+    fog.UpdateVision(RTS::RTSFaction::Swarm, 10.0f, 10.0f, 8.0f);
+    EXPECT_TRUE(fog.IsVisible(RTS::RTSFaction::Swarm, 18.0f, 10.0f));
+    EXPECT_FALSE(fog.IsVisible(RTS::RTSFaction::Swarm, 19.0f, 10.0f));
+    EXPECT_FALSE(fog.IsVisible(RTS::RTSFaction::Swarm, 17.0f, 17.0f));
+
+    // Grids larger than the persisted bound are refused up front.
+    RTS::RTSFogOfWarSystem oversized;
+    EXPECT_FALSE(oversized.Initialize(nullptr, RTS::RTSFogOfWarSystem::MAX_MAP_DIMENSION + 1, 16));
+}
+
+TEST(SEC2GM_RTSRestoreRejectsUnboundedVisionRange)
+{
+    RTS::UnitData unit;
+    unit.unitId = 1;
+    unit.visionRange = 10000.0f;
+    RTS::RTSUnitSystem units;
+    EXPECT_FALSE(units.RestoreState({unit}, 2));
+    unit.visionRange = RTS::RTSUnitSystem::MAX_VISION_RANGE;
+    EXPECT_TRUE(units.RestoreState({unit}, 2));
+
+    // The save decoder's validator applies the same bound to a captured snapshot.
+    RTS::RTSUnitSystem liveUnits;
+    RTS::RTSBuildingSystem buildings;
+    RTS::RTSResourceSystem resources;
+    RTS::RTSCommandSystem commands;
+    RTS::RTSFogOfWarSystem fog;
+    RTS::RTSMatchSystem match;
+    RTS::RTSSkirmishSimulation simulation;
+    const RTS::RTSSkirmishSystems systems{&liveUnits, &buildings, &resources, &commands, &fog, &match};
+    simulation.Initialize(nullptr, systems);
+    simulation.StartDefaultSkirmish();
+
+    RTS::RTSPersistenceSnapshot snapshot = RTS::RTSPersistence::Capture(systems, simulation);
+    ASSERT_FALSE(snapshot.units.empty());
+    std::string error;
+    EXPECT_TRUE(RTS::RTSPersistence::Validate(snapshot, error));
+    snapshot.units.front().visionRange = 10000.0f;
+    EXPECT_FALSE(RTS::RTSPersistence::Validate(snapshot, error));
+    EXPECT_FALSE(error.empty());
+}
+
+#endif // SPARK_TEST_HAS_IMGUI
