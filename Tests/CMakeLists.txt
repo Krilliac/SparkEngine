@@ -1121,6 +1121,7 @@ target_sources(SparkTests PRIVATE
     TestSAVE230NewerFormatSlotReal.cpp
     TestSaveInterruptionReal.cpp
     TestDocumentDurableWrite.cpp
+    TestSEC2PersistenceHardening.cpp
     TestMOD360OpenWorldPersistenceReal.cpp
     TestMOD360OpenWorldTraversalReal.cpp
     # MOD-300: SparkGame showcase string tables (ShowcaseLocalization links without the module image).
@@ -1759,6 +1760,19 @@ set_tests_properties(SparkUtf8PathTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=Utf8Path_;SPARK_TEST_EXPECT_COUNT=3"
     LABELS "security;filesystem;unit"
     TIMEOUT 30)
+
+# SEC2: persistence hardening. Staging files are created exclusively and never through a
+# planted link (SaveFileDurability, SaveSystem, AsyncDatabase); a rename is never reported
+# uncommitted; the KV store rolls back unpublished writes, refuses damaged files and admits
+# one authority; SaveSystem keeps every RigidBody/Light field and reports partial deletes;
+# the FPS quick-load validates the profile before replacing the world. The two POSIX
+# directory-sync cases SKIP on Windows.
+add_test(NAME SparkSEC2PersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkSEC2PersistenceTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "persistence;save;security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 60)
 
 # SAVE-230: editor prefabs fail closed on a newer SPARKPREFAB version, name the
 # component and line of damage, recover from the retained .bak, and a failed save

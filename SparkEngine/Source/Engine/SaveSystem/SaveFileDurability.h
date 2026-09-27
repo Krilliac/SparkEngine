@@ -15,6 +15,9 @@
  * destination either at its previous complete contents or at its new complete contents.
  * Only a `<destination>.tmp` staging file can be left behind, and it is never read as a
  * save (SaveSystem lists and loads `.spark_save` and `.spark_save.bak` only).
+ *
+ * Link safety: staging files are created exclusively and never through a link, so a
+ * symlink or hard link planted at the predictable `.tmp` name cannot redirect a write.
  */
 
 #pragma once
@@ -26,39 +29,71 @@
 namespace Spark::SaveFileDurability
 {
     /**
-     * @brief Flush @p path's contents to stable storage (fsync / FlushFileBuffers).
-     * @param path  Existing regular file.
-     * @param error Receives the OS error on failure.
-     * @return true when the flush succeeded.
+     * @brief Outcome of ReplaceFileAtomically. The commit point is the rename itself.
      */
-    [[nodiscard]] bool FlushFileDurably(const std::filesystem::path& path, std::error_code& error);
+    enum class ReplaceOutcome
+    {
+        NotCommitted,        ///< @p destination still names its previous contents.
+        CommittedNotDurable, ///< @p destination names the staged contents, but the directory sync failed.
+        CommittedDurable,    ///< @p destination names the staged contents on stable storage.
+    };
+
+    /**
+     * @brief Create @p staging exclusively, write @p bytes through that handle and flush them.
+     *
+     * The staging file is created with exclusive, no-follow semantics (POSIX
+     * `O_CREAT | O_EXCL | O_NOFOLLOW`, Windows `CREATE_NEW | FILE_FLAG_OPEN_REPARSE_POINT`)
+     * and verified to be a fresh regular file with a single link before anything is
+     * written. A path-based truncating open would follow a symlink or hard link planted at
+     * the predictable staging name and overwrite its target.
+     *
+     * An entry already at @p staging (a file a killed writer left behind, or a planted
+     * link) is unlinked first. Unlinking removes the entry itself, never a link target. A
+     * directory at @p staging is never removed and fails the call with
+     * std::errc::is_a_directory.
+     *
+     * @param staging Staging path, normally a sibling of the destination.
+     * @param bytes   Complete contents, written in binary.
+     * @param error   Receives the failure reason.
+     * @return true when @p staging holds exactly @p bytes on stable storage. On failure, a
+     *         staging file this call created is removed.
+     */
+    [[nodiscard]] bool WriteStagingFile(const std::filesystem::path& staging, std::string_view bytes,
+                                        std::error_code& error);
 
     /**
      * @brief Atomically replace @p destination with @p temporary.
      *
-     * POSIX renames and then fsyncs the parent directory so the new name is durable;
-     * Windows uses MoveFileExW with MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH.
+     * POSIX opens the parent directory before the rename, renames, and then fsyncs that
+     * directory so the new name is durable. A directory that cannot be opened fails the call
+     * before anything is committed. Windows uses MoveFileExW with
+     * MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH.
      *
      * @param temporary   Complete, already flushed staging file on the same volume.
      * @param destination File to replace (created when absent).
-     * @param error       Receives the OS error on failure.
-     * @return true when @p destination now names the staged contents.
+     * @param error       Receives the OS error for NotCommitted and CommittedNotDurable.
+     * @return Whether and how durably @p destination now names the staged contents. A
+     *         directory sync failure after the rename is CommittedNotDurable, never
+     *         NotCommitted: the new contents are already visible under @p destination.
      */
-    [[nodiscard]] bool ReplaceFileAtomically(const std::filesystem::path& temporary,
-                                             const std::filesystem::path& destination, std::error_code& error);
+    [[nodiscard]] ReplaceOutcome ReplaceFileAtomically(const std::filesystem::path& temporary,
+                                                       const std::filesystem::path& destination,
+                                                       std::error_code& error);
 
     /**
      * @brief Copy @p source over @p destination without ever exposing a partial copy.
      *
-     * The bytes are staged in `<destination>.tmp`, flushed, and renamed over
-     * @p destination. An interruption at any point leaves @p destination at its previous
-     * complete contents (or absent, if it was absent). A plain in-place copy truncates the
-     * destination first, so a kill mid-copy would destroy the previous copy.
+     * The bytes are streamed into `<destination>.tmp` through an exclusive, no-follow handle
+     * (see WriteStagingFile), flushed, and renamed over @p destination. An interruption at
+     * any point leaves @p destination at its previous complete contents (or absent, if it
+     * was absent). A plain in-place copy truncates the destination first, so a kill mid-copy
+     * would destroy the previous copy.
      *
      * @param source      Complete file to copy.
      * @param destination File to replace with the copy.
-     * @param error       Receives the error on failure; the staging file is removed.
-     * @return true when @p destination now holds a complete, flushed copy of @p source.
+     * @param error       Receives the error on failure; the staging file is removed. After a
+     *                    successful commit whose directory sync failed, it holds that error.
+     * @return true when @p destination now names a complete, flushed copy of @p source.
      */
     [[nodiscard]] bool CopyFileAtomically(const std::filesystem::path& source, const std::filesystem::path& destination,
                                           std::error_code& error);
@@ -76,7 +111,7 @@ namespace Spark::SaveFileDurability
     /**
      * @brief Replace a whole document with @p bytes without ever exposing a partial file.
      *
-     * The bytes are written to `<destination>.tmp` and flushed. When @p retainBackup is true
+     * The bytes are written to `<destination>.tmp` with WriteStagingFile and flushed. When @p retainBackup is true
      * and @p destination exists, its current contents are copied to BackupPathFor(destination)
      * with CopyFileAtomically. The staging file is then renamed over @p destination.
      *
@@ -94,8 +129,11 @@ namespace Spark::SaveFileDurability
      * @param destination  Document to replace; its parent directory must exist.
      * @param bytes        Complete new contents, written in binary mode.
      * @param retainBackup Keep the previous contents in BackupPathFor(destination).
-     * @param error        Cleared on entry; receives the failure reason.
-     * @return true when @p destination now holds exactly @p bytes on stable storage.
+     * @param error        Cleared on entry; receives the failure reason. After a successful
+     *                     commit whose POSIX directory sync failed, it holds that error:
+     *                     the call returns true because @p destination already names
+     *                     @p bytes, but that name may not survive a power loss.
+     * @return true when @p destination now names exactly @p bytes (flushed to stable storage).
      */
     [[nodiscard]] bool WriteFileAtomically(const std::filesystem::path& destination, std::string_view bytes,
                                            bool retainBackup, std::error_code& error);

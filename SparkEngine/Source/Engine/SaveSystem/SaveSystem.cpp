@@ -2005,23 +2005,17 @@ namespace Spark
                 }
             }
 
-            // Write to temp file first, then rename for atomic save (prevents corruption on crash)
-            std::string tmpPath = filepath + ".tmp";
-            std::ofstream file(tmpPath, std::ios::binary);
-            if (!file.is_open())
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Save,
-                                "WriteToFile: cannot open temp file '%s' for writing (errno=%d)", tmpPath.c_str(),
-                                errno);
-                return false;
-            }
+            // Serialize the complete revision in memory, then stage it in a sibling temp file
+            // and rename it over the slot (prevents corruption on crash). The staging file is
+            // created exclusively and never through a link planted at its predictable name.
+            const std::string tmpPath = filepath + ".tmp";
+            std::string encoded;
 
             CRC32 checksum;
             auto writeChecksummed = [&](const void* bytes, size_t count)
             {
-                file.write(static_cast<const char*>(bytes), static_cast<std::streamsize>(count));
-                if (file)
-                    checksum.Update(bytes, count);
+                encoded.append(static_cast<const char*>(bytes), count);
+                checksum.Update(bytes, count);
             };
             auto writeUint16 = [&](uint16_t value)
             {
@@ -2105,25 +2099,14 @@ namespace Spark
             // including the magic and version. This detects accidental corruption;
             // it is not an authenticity or anti-tamper mechanism.
             const auto encodedChecksum = EncodeLittleEndian32(checksum.Finalize());
-            file.write(reinterpret_cast<const char*>(encodedChecksum.data()),
-                       static_cast<std::streamsize>(encodedChecksum.size()));
+            encoded.append(reinterpret_cast<const char*>(encodedChecksum.data()), encodedChecksum.size());
 
-            file.close();
-            if (file.fail())
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: write failed for %s", tmpPath.c_str());
-                std::error_code rmEc;
-                std::filesystem::remove(tmpPath, rmEc);
-                return false;
-            }
-
+            // WriteStagingFile removes the staging file it created when it fails.
             std::error_code ec;
-            if (!SaveFileDurability::FlushFileDurably(tmpPath, ec))
+            if (!SaveFileDurability::WriteStagingFile(tmpPath, encoded, ec))
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: durable flush failed for %s: %s",
-                               tmpPath.c_str(), ec.message().c_str());
-                std::error_code removeError;
-                std::filesystem::remove(tmpPath, removeError);
+                SPARK_LOG_ERROR(Spark::LogCategory::Save, "WriteToFile: cannot write temp file '%s': %s",
+                                tmpPath.c_str(), ec.message().c_str());
                 return false;
             }
 
@@ -2194,13 +2177,24 @@ namespace Spark
             // Replace the destination atomically. std::filesystem::rename does not
             // replace an existing file on Windows, which broke every second save to
             // the same slot (including QuickSave).
-            if (!SaveFileDurability::ReplaceFileAtomically(tmpPath, filepath, ec))
+            const SaveFileDurability::ReplaceOutcome replaced =
+                SaveFileDurability::ReplaceFileAtomically(tmpPath, filepath, ec);
+            if (replaced == SaveFileDurability::ReplaceOutcome::NotCommitted)
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: atomic replace failed %s -> %s: %s",
                                tmpPath.c_str(), filepath.c_str(), ec.message().c_str());
                 std::error_code removeError;
                 std::filesystem::remove(tmpPath, removeError);
                 return false;
+            }
+            if (replaced == SaveFileDurability::ReplaceOutcome::CommittedNotDurable)
+            {
+                // The slot already names the new revision, so this save succeeded; only the
+                // directory sync that makes the rename survive a power loss failed.
+                SPARK_LOG_WARN(Spark::LogCategory::Save,
+                               "WriteToFile: '%s' was replaced but the directory sync failed (%s); the new "
+                               "revision may not survive a power loss",
+                               filepath.c_str(), ec.message().c_str());
             }
 
             // Invalidate any cached copy so future reads see the new data. The retained

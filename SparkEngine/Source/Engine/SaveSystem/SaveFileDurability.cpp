@@ -1,12 +1,16 @@
 /**
  * @file SaveFileDurability.cpp
- * @brief Durable flush, atomic replace, atomic copy and whole-document writes.
+ * @brief Exclusive staging writes, atomic replace, atomic copy and whole-document writes.
  */
 
 #include "SaveFileDurability.h"
 
+#include <algorithm>
 #include <cerrno>
+#include <cstddef>
 #include <fstream>
+#include <limits>
+#include <vector>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -15,86 +19,350 @@
 #include <Windows.h>
 #else
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
 namespace Spark::SaveFileDurability
 {
-    bool FlushFileDurably(const std::filesystem::path& path, std::error_code& error)
+    namespace
     {
+        /// Unlink-and-retry rounds when something re-occupies the staging name between the
+        /// unlink and the exclusive create. Past this the write fails closed.
+        constexpr int kMaxStagingCreateAttempts = 3;
+
+        /// Chunk size for CopyFileAtomically's streamed copy.
+        constexpr std::size_t kCopyChunkBytes = 64 * 1024;
+
 #if defined(_WIN32)
-        const HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                          FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (file == INVALID_HANDLE_VALUE)
+        std::error_code LastWindowsError()
         {
-            error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
-            return false;
+            return std::error_code(static_cast<int>(::GetLastError()), std::system_category());
         }
-
-        const bool flushed = ::FlushFileBuffers(file) != FALSE;
-        const DWORD flushError = flushed ? ERROR_SUCCESS : ::GetLastError();
-        ::CloseHandle(file);
-        if (!flushed)
-        {
-            error = std::error_code(static_cast<int>(flushError), std::system_category());
-            return false;
-        }
-        return true;
 #else
-        const int file = ::open(path.c_str(), O_RDONLY);
-        if (file < 0)
+        std::error_code LastPosixError()
         {
-            error = std::error_code(errno, std::generic_category());
+            return std::error_code(errno, std::generic_category());
+        }
+#endif
+
+        /**
+         * A staging file this process created itself: exclusive create, no link following,
+         * and writes and the flush go through the one verified handle. Nothing is ever
+         * reopened by name.
+         */
+        class ExclusiveStagingFile
+        {
+          public:
+            ExclusiveStagingFile() = default;
+            ExclusiveStagingFile(const ExclusiveStagingFile&) = delete;
+            ExclusiveStagingFile& operator=(const ExclusiveStagingFile&) = delete;
+            ~ExclusiveStagingFile() { CloseQuietly(); }
+
+            /// Create @p path; fails when anything (file, link, directory) already has the name.
+            bool TryCreate(const std::filesystem::path& path, std::error_code& error)
+            {
+#if defined(_WIN32)
+                m_handle = ::CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+                if (m_handle == INVALID_HANDLE_VALUE)
+                {
+                    error = LastWindowsError();
+                    return false;
+                }
+#else
+                int flags = O_WRONLY | O_CREAT | O_EXCL;
+#if defined(O_NOFOLLOW)
+                flags |= O_NOFOLLOW;
+#endif
+#if defined(O_CLOEXEC)
+                flags |= O_CLOEXEC;
+#endif
+                // 0666 minus the umask: the same mode the previous std::ofstream staging produced.
+                m_fd = ::open(path.c_str(), flags, 0666);
+                if (m_fd < 0)
+                {
+                    error = LastPosixError();
+                    return false;
+                }
+#endif
+                return true;
+            }
+
+            /// The handle must name a fresh regular file with one link and no reparse point.
+            bool VerifyFreshRegularFile(std::error_code& error) const
+            {
+#if defined(_WIN32)
+                BY_HANDLE_FILE_INFORMATION info{};
+                if (!::GetFileInformationByHandle(m_handle, &info))
+                {
+                    error = LastWindowsError();
+                    return false;
+                }
+                const DWORD rejected = FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY;
+                if ((info.dwFileAttributes & rejected) != 0 || info.nNumberOfLinks != 1)
+                {
+                    error = std::make_error_code(std::errc::operation_not_permitted);
+                    return false;
+                }
+#else
+                struct stat info
+                {
+                };
+                if (::fstat(m_fd, &info) != 0)
+                {
+                    error = LastPosixError();
+                    return false;
+                }
+                if (!S_ISREG(info.st_mode) || info.st_nlink != 1)
+                {
+                    error = std::make_error_code(std::errc::operation_not_permitted);
+                    return false;
+                }
+#endif
+                return true;
+            }
+
+            bool Write(const char* data, std::size_t size, std::error_code& error)
+            {
+                while (size > 0)
+                {
+#if defined(_WIN32)
+                    const DWORD request = static_cast<DWORD>(std::min<std::size_t>(size, std::size_t{1} << 30));
+                    DWORD written = 0;
+                    if (!::WriteFile(m_handle, data, request, &written, nullptr))
+                    {
+                        error = LastWindowsError();
+                        return false;
+                    }
+                    if (written == 0)
+                    {
+                        error = std::make_error_code(std::errc::io_error);
+                        return false;
+                    }
+#else
+                    const std::size_t request =
+                        std::min<std::size_t>(size, static_cast<std::size_t>(std::numeric_limits<ssize_t>::max()));
+                    const ssize_t written = ::write(m_fd, data, request);
+                    if (written < 0)
+                    {
+                        if (errno == EINTR)
+                            continue;
+                        error = LastPosixError();
+                        return false;
+                    }
+                    if (written == 0)
+                    {
+                        error = std::make_error_code(std::errc::io_error);
+                        return false;
+                    }
+#endif
+                    data += written;
+                    size -= static_cast<std::size_t>(written);
+                }
+                return true;
+            }
+
+            /// Flush to stable storage through the handle, then close it and report either failure.
+            bool FlushAndClose(std::error_code& error)
+            {
+#if defined(_WIN32)
+                const bool flushed = ::FlushFileBuffers(m_handle) != FALSE;
+                const std::error_code flushError = flushed ? std::error_code{} : LastWindowsError();
+                const bool closed = ::CloseHandle(m_handle) != FALSE;
+                m_handle = INVALID_HANDLE_VALUE;
+                if (!flushed)
+                {
+                    error = flushError;
+                    return false;
+                }
+                if (!closed)
+                {
+                    error = LastWindowsError();
+                    return false;
+                }
+#else
+                const bool flushed = ::fsync(m_fd) == 0;
+                const std::error_code flushError = flushed ? std::error_code{} : LastPosixError();
+                const bool closed = ::close(m_fd) == 0;
+                const std::error_code closeError = closed ? std::error_code{} : LastPosixError();
+                m_fd = -1;
+                if (!flushed)
+                {
+                    error = flushError;
+                    return false;
+                }
+                if (!closed)
+                {
+                    error = closeError;
+                    return false;
+                }
+#endif
+                return true;
+            }
+
+            /// Close without flushing. Callers close before unlinking a failed staging file:
+            /// Windows cannot delete a file while this unshared handle is open.
+            void CloseQuietly() noexcept
+            {
+#if defined(_WIN32)
+                if (m_handle != INVALID_HANDLE_VALUE)
+                    ::CloseHandle(m_handle);
+                m_handle = INVALID_HANDLE_VALUE;
+#else
+                if (m_fd >= 0)
+                    ::close(m_fd);
+                m_fd = -1;
+#endif
+            }
+
+          private:
+#if defined(_WIN32)
+            HANDLE m_handle = INVALID_HANDLE_VALUE;
+#else
+            int m_fd = -1;
+#endif
+        };
+
+        /**
+         * Create @p staging exclusively. An existing non-directory entry at the name is
+         * unlinked (the entry itself, never a link target) and the exclusive create retried.
+         */
+        bool CreateStaging(ExclusiveStagingFile& file, const std::filesystem::path& staging, std::error_code& error)
+        {
+            for (int attempt = 0; attempt < kMaxStagingCreateAttempts; ++attempt)
+            {
+                std::error_code createError;
+                if (file.TryCreate(staging, createError))
+                {
+                    if (file.VerifyFreshRegularFile(error))
+                        return true;
+                    file.CloseQuietly();
+                    std::error_code removeError;
+                    std::filesystem::remove(staging, removeError);
+                    return false;
+                }
+
+                std::error_code statusError;
+                const std::filesystem::file_status status = std::filesystem::symlink_status(staging, statusError);
+                if (statusError || status.type() == std::filesystem::file_type::not_found)
+                {
+                    // Nothing occupies the name, so the create failed for another reason.
+                    error = createError;
+                    return false;
+                }
+                if (status.type() == std::filesystem::file_type::directory)
+                {
+                    error = std::make_error_code(std::errc::is_a_directory);
+                    return false;
+                }
+
+                // A staging file a killed writer left behind, or a planted symlink / hard link.
+                // std::filesystem::remove never follows a link: it removes the entry itself.
+                std::error_code removeError;
+                if (!std::filesystem::remove(staging, removeError) && removeError)
+                {
+                    error = removeError;
+                    return false;
+                }
+            }
+            error = std::make_error_code(std::errc::file_exists);
             return false;
         }
 
-        const bool flushed = ::fsync(file) == 0;
-        const int flushError = flushed ? 0 : errno;
-        ::close(file);
-        if (!flushed)
+        void RemoveQuietly(const std::filesystem::path& path)
         {
-            error = std::error_code(flushError, std::generic_category());
+            std::error_code removeError;
+            std::filesystem::remove(path, removeError);
+        }
+
+        /// Publish @p staging over @p destination; true once committed (durable or not).
+        bool Publish(const std::filesystem::path& staging, const std::filesystem::path& destination,
+                     std::error_code& error)
+        {
+            switch (ReplaceFileAtomically(staging, destination, error))
+            {
+            case ReplaceOutcome::CommittedDurable:
+                error.clear();
+                return true;
+            case ReplaceOutcome::CommittedNotDurable:
+                // Committed: the staging name is gone and destination holds the new bytes.
+                // error keeps the directory-sync failure for the caller to report.
+                return true;
+            case ReplaceOutcome::NotCommitted:
+                break;
+            }
+            if (!error)
+                error = std::make_error_code(std::errc::io_error);
+            RemoveQuietly(staging);
+            return false;
+        }
+    } // namespace
+
+    bool WriteStagingFile(const std::filesystem::path& staging, std::string_view bytes, std::error_code& error)
+    {
+        ExclusiveStagingFile file;
+        if (!CreateStaging(file, staging, error))
+            return false;
+        if (!file.Write(bytes.data(), bytes.size(), error))
+        {
+            file.CloseQuietly();
+            RemoveQuietly(staging);
+            return false;
+        }
+        // FlushAndClose closes the handle on failure too.
+        if (!file.FlushAndClose(error))
+        {
+            RemoveQuietly(staging);
             return false;
         }
         return true;
-#endif
     }
 
-    bool ReplaceFileAtomically(const std::filesystem::path& temporary, const std::filesystem::path& destination,
-                               std::error_code& error)
+    ReplaceOutcome ReplaceFileAtomically(const std::filesystem::path& temporary,
+                                         const std::filesystem::path& destination, std::error_code& error)
     {
 #if defined(_WIN32)
         if (::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
         {
-            return true;
+            return ReplaceOutcome::CommittedDurable;
         }
-        error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
-        return false;
+        error = LastWindowsError();
+        return ReplaceOutcome::NotCommitted;
 #else
-        std::filesystem::rename(temporary, destination, error);
-        if (error)
-            return false;
-
+        // Open the directory before the rename. If it cannot be opened the replace is refused
+        // uncommitted; opening it afterwards would let that failure land after the commit.
         const std::filesystem::path directory = destination.has_parent_path() ? destination.parent_path() : ".";
+        int directoryFlags = O_RDONLY;
 #if defined(O_DIRECTORY)
-        const int directoryFile = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY);
-#else
-        const int directoryFile = ::open(directory.c_str(), O_RDONLY);
+        directoryFlags |= O_DIRECTORY;
 #endif
+#if defined(O_CLOEXEC)
+        directoryFlags |= O_CLOEXEC;
+#endif
+        const int directoryFile = ::open(directory.c_str(), directoryFlags);
         if (directoryFile < 0)
         {
-            error = std::error_code(errno, std::generic_category());
-            return false;
+            error = LastPosixError();
+            return ReplaceOutcome::NotCommitted;
         }
+
+        std::filesystem::rename(temporary, destination, error);
+        if (error)
+        {
+            ::close(directoryFile);
+            return ReplaceOutcome::NotCommitted;
+        }
+
         const bool flushed = ::fsync(directoryFile) == 0;
-        const int flushError = flushed ? 0 : errno;
+        const std::error_code flushError = flushed ? std::error_code{} : LastPosixError();
         ::close(directoryFile);
         if (!flushed)
         {
-            error = std::error_code(flushError, std::generic_category());
-            return false;
+            error = flushError;
+            return ReplaceOutcome::CommittedNotDurable;
         }
-        return true;
+        return ReplaceOutcome::CommittedDurable;
 #endif
     }
 
@@ -104,19 +372,45 @@ namespace Spark::SaveFileDurability
         std::filesystem::path staging = destination;
         staging += ".tmp";
 
-        // overwrite_existing also replaces a staging file a killed writer left behind.
-        const bool copied =
-            std::filesystem::copy_file(source, staging, std::filesystem::copy_options::overwrite_existing, error);
-        if (!copied || error || !FlushFileDurably(staging, error) ||
-            !ReplaceFileAtomically(staging, destination, error))
+        std::ifstream input(source, std::ios::binary);
+        if (!input.is_open())
         {
-            if (!error)
-                error = std::make_error_code(std::errc::io_error);
-            std::error_code removeError;
-            std::filesystem::remove(staging, removeError);
+            error = std::make_error_code(std::errc::no_such_file_or_directory);
             return false;
         }
-        return true;
+
+        {
+            ExclusiveStagingFile file;
+            if (!CreateStaging(file, staging, error))
+                return false;
+
+            std::vector<char> chunk(kCopyChunkBytes);
+            while (input)
+            {
+                input.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+                const std::streamsize got = input.gcount();
+                if (got > 0 && !file.Write(chunk.data(), static_cast<std::size_t>(got), error))
+                {
+                    file.CloseQuietly();
+                    RemoveQuietly(staging);
+                    return false;
+                }
+            }
+            if (input.bad())
+            {
+                error = std::make_error_code(std::errc::io_error);
+                file.CloseQuietly();
+                RemoveQuietly(staging);
+                return false;
+            }
+            if (!file.FlushAndClose(error))
+            {
+                RemoveQuietly(staging);
+                return false;
+            }
+        }
+
+        return Publish(staging, destination, error);
     }
 
     std::filesystem::path BackupPathFor(const std::filesystem::path& destination)
@@ -133,47 +427,25 @@ namespace Spark::SaveFileDurability
         std::filesystem::path staging = destination;
         staging += ".tmp";
 
-        const auto fail = [&staging, &error]()
-        {
-            if (!error)
-                error = std::make_error_code(std::errc::io_error);
-            // A non-empty directory squatting on the staging name is left alone: remove() only
-            // deletes files and empty directories.
-            std::error_code removeError;
-            std::filesystem::remove(staging, removeError);
+        if (!WriteStagingFile(staging, bytes, error))
             return false;
-        };
-
-        {
-            // Truncating also replaces a staging file a killed writer left behind.
-            std::ofstream out(staging, std::ios::binary | std::ios::trunc);
-            if (!out.is_open())
-            {
-                std::error_code statusError;
-                error =
-                    std::make_error_code(std::filesystem::is_directory(staging, statusError) ? std::errc::is_a_directory
-                                                                                             : std::errc::io_error);
-                return fail();
-            }
-            out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-            out.close();
-            if (out.fail())
-                return fail();
-        }
-
-        if (!FlushFileDurably(staging, error))
-            return fail();
 
         if (retainBackup)
         {
             std::error_code existsError;
-            if (std::filesystem::is_regular_file(destination, existsError) &&
-                !CopyFileAtomically(destination, BackupPathFor(destination), error))
-                return fail();
+            if (std::filesystem::is_regular_file(destination, existsError))
+            {
+                std::error_code backupError;
+                if (!CopyFileAtomically(destination, BackupPathFor(destination), backupError))
+                {
+                    error = backupError;
+                    RemoveQuietly(staging);
+                    return false;
+                }
+                // A committed-but-not-durable backup refresh still counts as retained.
+            }
         }
 
-        if (!ReplaceFileAtomically(staging, destination, error))
-            return fail();
-        return true;
+        return Publish(staging, destination, error);
     }
 } // namespace Spark::SaveFileDurability
