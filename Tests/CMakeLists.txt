@@ -1107,6 +1107,7 @@ target_sources(SparkTests PRIVATE
     TestSaveSystemRoundTripReal.cpp
     TestSAVE230NewerFormatSlotReal.cpp
     TestSaveInterruptionReal.cpp
+    TestDocumentDurableWrite.cpp
     TestMOD360OpenWorldPersistenceReal.cpp
     TestMOD360OpenWorldTraversalReal.cpp
     # MOD-300: SparkGame showcase string tables (ShowcaseLocalization links without the module image).
@@ -1670,6 +1671,15 @@ if(NOT WIN32)
         LABELS "compatibility;save;process"
         TIMEOUT 300)
 endif()
+
+# SAVE-230: the whole-document writer behind prefab and project saves keeps the
+# destination and its retained .bak byte-identical on failure and refreshes the
+# .bak by staged rename. Not AtomicWrite_: that prefix is pinned to 3 above.
+add_test(NAME SparkDocumentWriteTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkDocumentWriteTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=DocumentWrite_;SPARK_TEST_EXPECT_COUNT=4"
+    LABELS "compatibility;save;unit"
+    TIMEOUT 30)
 
 # SAVE-230 / OD-03: SceneFile reads v2 (N) and v1 (N-1) from committed fixtures,
 # writes v2 only, and rejects older/newer versions with a versioned error. The

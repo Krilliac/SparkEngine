@@ -1,11 +1,12 @@
 /**
  * @file SaveFileDurability.cpp
- * @brief Durable flush, atomic replace and atomic copy for the SaveSystem write path.
+ * @brief Durable flush, atomic replace, atomic copy and whole-document writes.
  */
 
 #include "SaveFileDurability.h"
 
 #include <cerrno>
+#include <fstream>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -115,6 +116,64 @@ namespace Spark::SaveFileDurability
             std::filesystem::remove(staging, removeError);
             return false;
         }
+        return true;
+    }
+
+    std::filesystem::path BackupPathFor(const std::filesystem::path& destination)
+    {
+        std::filesystem::path backup = destination;
+        backup += ".bak";
+        return backup;
+    }
+
+    bool WriteFileAtomically(const std::filesystem::path& destination, std::string_view bytes, bool retainBackup,
+                             std::error_code& error)
+    {
+        error.clear();
+        std::filesystem::path staging = destination;
+        staging += ".tmp";
+
+        const auto fail = [&staging, &error]()
+        {
+            if (!error)
+                error = std::make_error_code(std::errc::io_error);
+            // A non-empty directory squatting on the staging name is left alone: remove() only
+            // deletes files and empty directories.
+            std::error_code removeError;
+            std::filesystem::remove(staging, removeError);
+            return false;
+        };
+
+        {
+            // Truncating also replaces a staging file a killed writer left behind.
+            std::ofstream out(staging, std::ios::binary | std::ios::trunc);
+            if (!out.is_open())
+            {
+                std::error_code statusError;
+                error =
+                    std::make_error_code(std::filesystem::is_directory(staging, statusError) ? std::errc::is_a_directory
+                                                                                             : std::errc::io_error);
+                return fail();
+            }
+            out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+            out.close();
+            if (out.fail())
+                return fail();
+        }
+
+        if (!FlushFileDurably(staging, error))
+            return fail();
+
+        if (retainBackup)
+        {
+            std::error_code existsError;
+            if (std::filesystem::is_regular_file(destination, existsError) &&
+                !CopyFileAtomically(destination, BackupPathFor(destination), error))
+                return fail();
+        }
+
+        if (!ReplaceFileAtomically(staging, destination, error))
+            return fail();
         return true;
     }
 } // namespace Spark::SaveFileDurability
