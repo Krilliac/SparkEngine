@@ -14,6 +14,7 @@
 #include "Game/FPSAssetPaths.h"
 #include "Game/GameMechanics.h"
 #include "Game/GameMode.h"
+#include "Game/ProgressionSystem.h"
 #include "SceneManager/SceneManager.h"
 #include "Utils/LogMacros.h"
 
@@ -97,6 +98,8 @@ void SparkGameModule::ShutdownHeadlessArena()
                  m_headlessMode->IsMatchActive() ? 1 : 0);
     std::fflush(stdout);
 
+    m_headlessProgression.reset();
+    m_headlessPlayTime = 0.0f;
     m_headlessMode.reset();
     m_headlessRespawn.reset();
     m_headlessArenaObjects = 0;

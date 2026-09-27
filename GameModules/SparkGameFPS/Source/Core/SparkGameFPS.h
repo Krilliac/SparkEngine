@@ -28,6 +28,7 @@ namespace SparkGameFPS
 namespace Spark
 {
     class GameMode;
+    class ProgressionSystem;
     class RespawnSystem;
 } // namespace Spark
 
@@ -84,6 +85,22 @@ class SparkGameModule : public Spark::IModule
      */
     void ShutdownHeadlessArena();
 
+    /**
+     * @brief Register the headless level/xp/quicksave/quickload commands.
+     *
+     * Same names and output text as the windowed commands, backed by the
+     * headless ProgressionSystem and arena scoreboard (HeadlessPersistence.cpp).
+     * Tracked in m_registeredConsoleCommands, so Shutdown() removes them before
+     * the state they capture is released.
+     */
+    void RegisterHeadlessPersistenceCommands();
+
+    /// Write the local profile to the fps_quicksave slot; returns the console result text.
+    std::string HeadlessQuickSave() const;
+
+    /// Restore progression, play time and score from fps_quicksave; returns the console result text.
+    std::string HeadlessQuickLoad();
+
     Spark::IEngineContext* m_context{nullptr};
     std::unique_ptr<SparkGameFPS::EngineWeatherAdapter> m_weatherAdapter;
     std::vector<std::string> m_registeredConsoleCommands;
@@ -96,6 +113,10 @@ class SparkGameModule : public Spark::IModule
     int m_headlessArenaSpawns{0};
     int m_headlessArenaBoundSpawns{0};
     std::uint64_t m_headlessArenaTicks{0};
+
+    // Headless local-profile state persisted by quicksave/quickload.
+    std::unique_ptr<Spark::ProgressionSystem> m_headlessProgression;
+    float m_headlessPlayTime{0.0f};
 };
 
 // Installed SDK module exports consumed by ModuleManager.

@@ -31,11 +31,12 @@ or crash is a failure, never a retry. Only a kill that landed in the wrong
 phase (a race the harness cannot prevent) is retried, and the seed plus every
 attempt's timing is printed so a failure can be replayed with ``--seed``.
 
-Scope note: the headless FPS module registers no quicksave/quickload console
-commands (SparkGameFPS OnLoad returns before gameplay setup when the context
-is headless), so this harness cannot kill a real FPS quicksave in flight. The
-torn-slot injection covers the reader side of that contract until a headless
-save path exists.
+Scope note: the headless FPS module registers quicksave/quickload
+(GameModules/SparkGameFPS/Source/Core/HeadlessPersistence.cpp), but a
+quicksave is one synchronous write inside a single console dispatch, so the
+harness cannot time a kill to land inside it. The torn-slot injection leaves
+the files a writer killed mid-save leaves, and covers the reader side of that
+contract.
 
 Platform note: the process scenarios run on Linux only. On Windows,
 SparkEngine is a GUI-subsystem executable that skips AllocConsole when its

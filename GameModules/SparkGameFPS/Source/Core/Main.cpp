@@ -124,6 +124,13 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
             return false;
         }
 
+        // Local-profile persistence: the same level/xp/quicksave/quickload
+        // commands the windowed Game registers, on CPU-only state.
+        m_headlessProgression = std::make_unique<Spark::ProgressionSystem>();
+        m_headlessProgression->Initialize();
+        m_headlessPlayTime = 0.0f;
+        RegisterHeadlessPersistenceCommands();
+
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
                        "SparkGameFPS module initialized for the no-render headless lifecycle");
@@ -166,6 +173,7 @@ void SparkGameModule::OnUpdate(float deltaTime)
         m_headlessRespawn->Update(deltaTime);
         m_headlessMode->Update(deltaTime);
         ++m_headlessArenaTicks;
+        m_headlessPlayTime += deltaTime;
         return;
     }
 

@@ -46,6 +46,12 @@ NullRHI and fails closed unless the record matches an independent parse of the s
 records pass, and the arena ticked once per reported update. It exercises no player, combat or HUD path and is
 source-tree evidence, not package certification.
 
+The headless module also registers `level`, `xp <amount>`, `quicksave` and `quickload` (`Core/HeadlessPersistence.cpp`)
+with the same output text as the windowed commands. They are backed by a CPU-only `ProgressionSystem`, the arena's
+Deathmatch scoreboard and the accumulated `OnUpdate` play time, and write and read the same `fps_quicksave` slot and
+`FPSLocalProfile` block. The headless host has no `Player`, so class, weapon, health and armor keep their profile
+defaults on save and are not applied on load.
+
 The editor's **Spark Arena** panel exposes the same survival and class actions and shows the live player, round, wave,
 enemy, weapon, progression, time-scale, and engine-service state.
 
@@ -108,5 +114,6 @@ restores 37 XP without changing the save bytes. The runner retains child output,
 hashes, build configuration, source identity, and host metadata under its per-attempt test root.
 
 This is a bounded local progression-persistence slice, not stable-v1 certification. It does not yet prove every
-`FPSLocalProfile` field, spawn/move/kill/respawn/score acceptance, a public-SDK-only module build, NullRHI save/reload,
-clean-machine installation, recovery/soak, hardware rendering, or hosted exact-SHA qualification.
+`FPSLocalProfile` field, spawn/move/kill/respawn/score acceptance, a public-SDK-only module build, clean-machine
+installation, recovery/soak, hardware rendering, or hosted exact-SHA qualification. The headless host registers the
+same quicksave/quickload commands (see above), but no NullRHI save/reload process test drives them yet.
