@@ -7,9 +7,10 @@
  * initialize -> update -> shutdown against a live EngineContext. A cycle must
  * publish the engine-lifetime services, withdraw every one of them at
  * shutdown, and leave the host console registry, the ECS phase pipeline and
- * the process thread count exactly where a warm-up boot left them. The same
- * loop runs again after a lifecycle someone booted and never shut down, whose
- * running debug systems must not skew that baseline. Another loop alternates a rolled-back startup with a clean one, so a failed boot can
+ * the process thread count exactly where a fresh warm-up boot left them. The
+ * same loop runs again after a lifecycle someone booted and never shut down,
+ * whose running debug systems must not skew that baseline. Another loop
+ * alternates a rolled-back startup with a clean one, so a failed boot can
  * neither latch the services dead nor leak what it had already started.
  *
  * A fault test injects a failing stage at every boundary between the
@@ -238,19 +239,32 @@ namespace
         return SampleFootprint(console);
     }
 
+    /// Two warm-up boots; returns the footprint of the second, the first fresh one.
+    ///
+    /// The first boot starts process-lifetime state (lazy singletons, pools) and
+    /// retires a lifecycle an earlier caller may have left running. Such a boot
+    /// finds that caller's debug systems and published script engine already up,
+    /// so it registers none of their console commands (memory.integrity.*,
+    /// sandbox.*), yet its shutdown really stops them. Only the second boot
+    /// initializes everything afresh, as every boot after it will.
+    CycleFootprint FreshBootBaseline(EngineContext& ctx, const Spark::SimpleConsole& console,
+                                     LifecycleLoop::CycleWatchdog& watchdog, std::string_view before)
+    {
+        watchdog.Arm("warm-up boot retiring any inherited lifecycle before " + std::string(before));
+        CleanCycle(ctx, console);
+        watchdog.Arm("fresh warm-up boot before " + std::string(before));
+        const CycleFootprint baseline = CleanCycle(ctx, console);
+        watchdog.Disarm();
+        return baseline;
+    }
+
     /// The body of the repeated boot/shutdown loop: kBootCycles production boots,
-    /// each of which must publish, withdraw and leave the warm-up's footprint.
+    /// each of which must publish, withdraw and leave the fresh warm-up's footprint.
     void RunRepeatedBootShutdownLoop(EngineContext& ctx, const Spark::SimpleConsole& console)
     {
         LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
 
-        // Warm-up: process-lifetime state (lazy singletons, pools) starts here,
-        // and a lifecycle an earlier caller left running is shut down. Sampling
-        // the baseline from a boot that inherited running debug systems would
-        // miss the console commands they register only on a fresh Initialize.
-        watchdog.Arm("warm-up boot before repeated boot/shutdown cycles");
-        const CycleFootprint baseline = CleanCycle(ctx, console);
-        watchdog.Disarm();
+        const CycleFootprint baseline = FreshBootBaseline(ctx, console, watchdog, "repeated boot/shutdown cycles");
         ASSERT_TRUE(baseline.threads > 0);
 
         std::size_t baselinePhaseSystems = 0;
@@ -282,7 +296,7 @@ namespace
             root.reset();
             watchdog.Disarm();
 
-            // Every cycle leaves exactly the warm-up's footprint behind.
+            // Every cycle leaves exactly the fresh warm-up's footprint behind.
             const CycleFootprint footprint = SampleFootprint(console);
             EXPECT_EQ(footprint.consoleCommands, baseline.consoleCommands);
             EXPECT_LE(footprint.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
@@ -301,10 +315,10 @@ TEST(LifecycleLoop_RepeatedBootsAfterAnUnfinishedLifecycleKeepOneFootprint)
 {
     // An earlier caller booted the debug and gameplay systems and never shut
     // them down, before the host console was up (a test fixture that only
-    // tears down gameplay does this). Its debug systems stay initialized, so
-    // their console commands are missing until they are shut down and started
-    // again; a loop that took its baseline from the first boot saw them appear
-    // on the second one.
+    // tears down gameplay does this). Its debug systems and published script
+    // engine stay up, so the next boot registers none of their console commands
+    // (memory.integrity.*, sandbox.*) but its shutdown stops them; a baseline
+    // sampled after that boot sees them appear on every boot after it.
     EngineContext* ctx = PrepareContext();
     ASSERT_TRUE(Spark::Core::Lifecycle::InitializeDebugSystemsImpl());
     ASSERT_TRUE(Spark::Core::Lifecycle::InitializeGameplaySystemsImpl());
@@ -405,10 +419,7 @@ TEST(LifecycleLoop_InjectedFailureAtEveryInitBoundaryUnwinds)
     ConsoleScope consoleScope;
     LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
 
-    // Warm-up: process-lifetime state (lazy singletons, pools) starts here.
-    watchdog.Arm("warm-up boot before fault injection");
-    const CycleFootprint baseline = CleanCycle(*ctx, consoleScope.console);
-    watchdog.Disarm();
+    const CycleFootprint baseline = FreshBootBaseline(*ctx, consoleScope.console, watchdog, "fault injection");
     ASSERT_TRUE(baseline.threads > 0);
 
     for (const InjectionPoint& point : kInitBoundaries)
@@ -458,9 +469,7 @@ TEST(LifecycleLoop_ThrowingUpdateStageDoesNotLeakAcrossCycles)
     ConsoleScope consoleScope;
     LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
 
-    watchdog.Arm("warm-up boot before throwing updates");
-    const CycleFootprint baseline = CleanCycle(*ctx, consoleScope.console);
-    watchdog.Disarm();
+    const CycleFootprint baseline = FreshBootBaseline(*ctx, consoleScope.console, watchdog, "throwing updates");
     ASSERT_TRUE(baseline.threads > 0);
 
     for (int cycle = 0; cycle < kAlternatingRounds; ++cycle)
@@ -512,11 +521,10 @@ TEST(LifecycleLoop_ForeignScriptEngineIsNeitherAdoptedNorShutDown)
     ConsoleScope consoleScope;
     LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
 
-    // Warm-up: this shutdown must withdraw the script service, or the next boot
+    // The warm-up shutdowns must withdraw the script service, or the next boot
     // takes the stale pointer for a running engine of its own.
-    watchdog.Arm("warm-up boot before a foreign script engine starts");
-    const CycleFootprint baseline = CleanCycle(*ctx, consoleScope.console);
-    watchdog.Disarm();
+    const CycleFootprint baseline =
+        FreshBootBaseline(*ctx, consoleScope.console, watchdog, "a foreign script engine starts");
 
     ForeignScriptEngine foreign;
     ASSERT_TRUE(foreign.engine.Initialize());
