@@ -40,6 +40,7 @@ are not resolvable and are skipped rather than guessed.
 from __future__ import annotations
 
 import argparse
+import functools
 import re
 import shlex
 import sys
@@ -214,6 +215,13 @@ def command_blocks(text: str) -> list[CommandBlock]:
 
 def _segments(line: str) -> list[list[str]]:
     """Split one logical command line into control-operator separated token lists."""
+    return [list(segment) for segment in _split_segments(line)]
+
+
+# The validator re-checks every documented command on each run, and the site-data contract suite runs
+# it dozens of times in one process; shlex is the dominant cost and a pure function of the line.
+@functools.lru_cache(maxsize=16384)
+def _split_segments(line: str) -> tuple[tuple[str, ...], ...]:
     lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
     lexer.whitespace_split = True
     lexer.commenters = "#"
@@ -227,7 +235,7 @@ def _segments(line: str) -> list[list[str]]:
             segments.append([])
         else:
             segments[-1].append(token)
-    return [segment for segment in segments if segment]
+    return tuple(tuple(segment) for segment in segments if segment)
 
 
 # Working directory after a ``cd`` the checker cannot follow (placeholder,

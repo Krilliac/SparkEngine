@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -165,6 +166,28 @@ def _within(path: Path, root: Path) -> str | None:
 
 
 def classify_module_includes(repo_root: Path, module_dir: Path) -> dict[str, Any]:
+    """Classify every include directive in ``module_dir/Source`` (see ``_classify_module_includes``).
+
+    Validation classifies each module several times per run, and the site-data contract suite runs
+    it many times in one process. The result is memoized on a fingerprint of every source file's
+    path, mtime and size, so an edited, added or removed file always forces a fresh scan. Callers
+    get their own copy of the mutable result.
+    """
+    source = module_dir.resolve() / "Source"
+    fingerprint = tuple(
+        (str(path), stat.st_mtime_ns, stat.st_size)
+        for path in (sorted(source.rglob("*")) if source.is_dir() else [])
+        if path.suffix in INCLUDE_SOURCE_SUFFIXES and path.is_file()
+        for stat in (path.stat(),)
+    )
+    cached = _classify_module_includes(repo_root.resolve(), module_dir.resolve(), fingerprint)
+    return {key: (list(value) if key == "unresolved" else set(value)) for key, value in cached.items()}
+
+
+@functools.lru_cache(maxsize=256)
+def _classify_module_includes(
+    repo_root: Path, module_dir: Path, fingerprint: tuple[tuple[str, int, int], ...]
+) -> dict[str, Any]:
     """Classify every include directive in ``module_dir/Source``.
 
     Returns ``{"module": set, "sdk": set, "engine": set, "unresolved": list}``.
@@ -533,6 +556,13 @@ def _require_reason(value: Any, location: str, findings: list[tuple[str, str]]) 
         findings.append((location, f"reason must be a written explanation of at least {MIN_REASON_LENGTH} characters"))
 
 
+# Every asset root checked against the shared integrity manifest (1200+ entries) would otherwise
+# resolve the whole entry list again: tens of thousands of realpath calls per validation.
+@functools.lru_cache(maxsize=64)
+def _resolved_entry_paths(base: str, paths: tuple[str, ...]) -> frozenset[Path]:
+    return frozenset((Path(base) / path).resolve() for path in paths)
+
+
 def _asset_root_coverage(repo_root: Path, directory: Path, manifest: Path, location: str) -> list[tuple[str, str]]:
     """Require the named manifest to list every file under the asset root.
 
@@ -550,10 +580,9 @@ def _asset_root_coverage(repo_root: Path, directory: Path, manifest: Path, locat
         base, listed = manifest.parent, payload["assets"]
     else:
         return [(f"{location}.manifest", "asset manifest must be an integrity manifest (root, entries) or a package manifest (assets)")]
-    covered = {
-        (base / entry["path"]).resolve() for entry in listed
-        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
-    }
+    covered = _resolved_entry_paths(
+        str(base), tuple(entry["path"] for entry in listed if isinstance(entry, dict) and isinstance(entry.get("path"), str))
+    )
     uncovered = sorted(
         path.relative_to(repo_root).as_posix() for path in directory.rglob("*")
         if path.is_file() and path != manifest and path.resolve() not in covered
@@ -832,6 +861,10 @@ CPP_WORD_PATTERN = re.compile(r"\w+")
 CPP_NUMBER_PATTERN = re.compile(r"\d(?:'?[\w.]|[eEpP][+-])*")
 
 
+# The validator lexes every module source file several times per run, and the site-data contract
+# suite runs the validator in-process dozens of times over an unchanged tree. Lexing is a pure
+# function of the text, so memoize it by content (a changed file is a new key, never a stale hit).
+@functools.lru_cache(maxsize=4096)
 def _lex_cpp(text: str) -> tuple[str, str]:
     """Remove comments and normalize literals in one pass that understands both.
 
