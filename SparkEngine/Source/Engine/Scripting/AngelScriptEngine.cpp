@@ -348,7 +348,9 @@ namespace
     bool IsValidScriptAssetName(const std::string& name)
     {
         if (name.empty() || name.size() > kMaxScriptAssetNameLength)
+        {
             return false;
+        }
         return std::none_of(name.begin(), name.end(), [](unsigned char ch) { return std::iscntrl(ch) != 0; });
     }
 } // namespace
@@ -484,7 +486,9 @@ void ASPlayAnimation(EntityID entity, const std::string& animName)
 
     // Re-requesting the clip that is already playing (the per-frame "walk") must not restart it.
     if (controller->playing && controller->currentAnimation == animName)
+    {
         return;
+    }
 
     controller->currentAnimation = animName;
     controller->currentTime = 0.0f;

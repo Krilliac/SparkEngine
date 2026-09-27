@@ -63,10 +63,14 @@ namespace Spark::RuntimePackage
         for (const std::filesystem::path* base : {&executableDirectory, &workingDirectory})
         {
             if (base->empty())
+            {
                 continue;
+            }
             std::filesystem::path candidate = (*base / normalized).lexically_normal();
             if (std::find(roots.begin(), roots.end(), candidate) == roots.end())
+            {
                 roots.push_back(std::move(candidate));
+            }
         }
         return roots;
     }

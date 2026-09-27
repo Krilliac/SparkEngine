@@ -44,7 +44,9 @@ namespace
     void AddNote(std::vector<std::string>& notes, std::string note)
     {
         if (std::find(notes.begin(), notes.end(), note) == notes.end())
+        {
             notes.push_back(std::move(note));
+        }
     }
 } // namespace
 
@@ -52,7 +54,9 @@ std::vector<AngelScriptEngine::FieldSnapshot> AngelScriptEngine::CaptureFields(a
 {
     std::vector<FieldSnapshot> fields;
     if (!object)
+    {
         return fields;
+    }
 
     const int stringTypeId = m_engine->GetTypeIdByDecl("string");
     const asUINT count = object->GetPropertyCount();
@@ -88,7 +92,9 @@ std::vector<AngelScriptEngine::FieldSnapshot> AngelScriptEngine::CaptureFields(a
         {
             const asQWORD flags = type->GetFlags();
             if ((flags & asOBJ_VALUE) != 0 && (flags & asOBJ_POD) != 0)
+            {
                 size = type->GetSize();
+            }
         }
 
         if (size > 0)
@@ -142,9 +148,13 @@ void AngelScriptEngine::RestoreFields(asIScriptObject* object, const std::vector
         }
 
         if (old->carry == FieldCarry::String)
+        {
             *static_cast<std::string*>(address) = old->text;
+        }
         else
+        {
             std::memcpy(address, old->bytes.data(), old->bytes.size());
+        }
         ++report.carried; // R2
     }
 

@@ -304,7 +304,9 @@ namespace Spark::ECS
         {
             auto& cues = view.get<ScriptAudioCues>(entity);
             if (cues.pending.empty())
+            {
                 continue;
+            }
 
             // An authored AudioSourceComponent supplies the entity's mix and rolloff; otherwise play at unity.
             const AudioSourceComponent* authored = world.GetRegistry().try_get<AudioSourceComponent>(entity);
