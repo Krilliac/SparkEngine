@@ -274,6 +274,7 @@ add_executable(SparkTests
     TestPacketValidatorReal.cpp
     TestNET100TransportReal.cpp
     TestNET100Libsodium.cpp
+    TestNET100Handshake.cpp
     TestSessionCompatibilityReal.cpp
     TestLogger.cpp
     TestProfiler.cpp
@@ -2000,7 +2001,8 @@ set(_spark_net100_transport_selectors
     "Transport_FuzzPacket_=1"
     "Transport_Capture_=1"
     "Transport_KeyGeneration_=1"
-    "Transport_Libsodium_=1")
+    "Transport_Libsodium_=1"
+    "Transport_Handshake_=9")
 foreach(_spark_net100_selector IN LISTS _spark_net100_transport_selectors)
     string(REPLACE "=" ";" _spark_net100_parts "${_spark_net100_selector}")
     list(GET _spark_net100_parts 0 _spark_net100_prefix)

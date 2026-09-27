@@ -520,6 +520,26 @@ Nonces are `[key epoch][0 0 0][sequence u64 LE]`: every epoch has its own key an
 
 Tests: `Tests/TestNET100TransportReal.cpp` (`Transport_*`) and `Tests/TestNET100Libsodium.cpp` (`Transport_Libsodium_*`). No cryptographic primitive is implemented in `Engine/Networking`; the `SparkNetworkSecurityCsprngContract` CTest fails if a ChaCha20, Poly1305 or HMAC implementation reappears there. libsodium is the pinned `ThirdParty/Security/libsodium` submodule (1.0.22), built by `cmake/SparkLibsodium.cmake`.
 
+### SecureHandshake (key agreement, not yet on the wire)
+
+`SecureHandshake.h` produces the shared secret `SecureChannel` needs, with libsodium primitives only. The server holds a long-term Ed25519 identity (`GenerateServerIdentity`) whose public key the client pins. The client is anonymous at the transport layer. One round trip:
+
+| Message | Size | Layout (little-endian) |
+|---------|------|------------------------|
+| ClientHello | 55 bytes | `[magic u32 = 0x484E5053][NETWORK_PROTOCOL_VERSION u16][suite u8 = 1][client X25519 pub 32][client nonce 16]` |
+| ServerHello | 145 bytes | `[suite u8][server Ed25519 pub 32][server X25519 pub 32][server nonce 16][Ed25519 signature 64]` |
+
+Both sides hash the transcript `th = SHA-256("SPNH-v2" || ClientHello || ServerHello without the signature)` and the server signs `th`. Version and suite sit inside the signed transcript, so rewriting either breaks the signature. The session secret is `HKDF-SHA256(salt = th, ikm = X25519(ephemeral, peer ephemeral), info = "spark-net-100 session v2")`, and it is the only input to `SecureChannel`. Fresh ephemeral keys and nonces on both sides make every session secret unique, so channel nonces never repeat across sessions. Ephemeral secrets and intermediate keys are wiped with `sodium_memzero`, and a `ClientHandshake` is single use.
+
+| Function / type | Description |
+|-----------------|-------------|
+| `ClientHandshake::Begin(version)` | Generates the ephemeral key and nonce, returns the ClientHello |
+| `RespondToClientHello(hello, identity)` | Validates the hello, returns the ServerHello and the server `SecureChannel`; allocates nothing for a rejected hello |
+| `ClientHandshake::Finish(serverHello, pinnedKey)` | Checks suite and pinned identity, verifies the signature, returns the client `SecureChannel` |
+| `HandshakeError` | `Malformed`, `UnsupportedVersion`, `UnsupportedSuite`, `BadSignature`, `ServerIdentityMismatch`, `WeakSharedSecret` (low-order X25519 point), `CsprngFailure`, `InvalidState` |
+
+Tests: `Tests/TestNET100Handshake.cpp` (`Transport_Handshake_*`, CTest `NetworkSecurity_Transport_Handshake`, exact count 9): interoperating channels, wrong pinned key, every ServerHello byte flip, every truncation and extension, version and suite downgrade, a replayed ServerHello, low-order client points, and deterministic rejection of malformed hellos. `NetworkManager`'s `Connect` path does not carry these messages yet (a later NET-100 slice).
+
 ### RateLimiter
 
 ```cpp
