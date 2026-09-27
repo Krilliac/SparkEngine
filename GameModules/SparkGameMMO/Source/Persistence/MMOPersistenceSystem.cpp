@@ -12,12 +12,14 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <chrono>
 #include <cmath>
 #include <format>
 #include <limits>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string_view>
 #include <system_error>
@@ -239,13 +241,28 @@ namespace MMO
             return true;
         }
 
-        /// Rebuild the bound parameters (after the character ID) that produced a
-        /// stored key suffix: '_'-separated integers (slot, faction, dungeon and
-        /// difficulty) or one string Execute() substituted as a quoted literal
-        /// (achievement stat names).
-        std::optional<std::vector<PreparedStatementParam>> KeySuffixParams(uint32_t charId, const std::string& suffix)
+        /// The text Execute() substitutes for a string parameter, which is also
+        /// what a key built from one holds (achievement stat names).
+        std::string QuoteLiteral(const std::string& text)
         {
-            std::vector<PreparedStatementParam> params{MakeInt(charId)};
+            std::string quoted = "'";
+            for (const char c : text)
+            {
+                quoted += c;
+                if (c == '\'')
+                {
+                    quoted += '\'';
+                }
+            }
+            return quoted + "'";
+        }
+
+        /// Rebuild the bound parameters that produced a stored key suffix:
+        /// '_'-separated integers (slot, faction, dungeon and difficulty) or one
+        /// quoted string literal (achievement stat names).
+        std::optional<std::vector<PreparedStatementParam>> SuffixParams(const std::string& suffix)
+        {
+            std::vector<PreparedStatementParam> params;
             if (suffix.size() >= 2 && suffix.front() == '\'' && suffix.back() == '\'')
             {
                 params.push_back(MakeString(UnquoteStoredString(suffix)));
@@ -260,11 +277,66 @@ namespace MMO
                 }
                 params.push_back(MakeInt(*value));
             }
-            if (params.size() == 1)
+            if (params.empty())
             {
                 return std::nullopt;
             }
             return params;
+        }
+
+        /// A family of records keyed "<prefix><owner>_<suffix>" (or "<prefix><suffix>"
+        /// when they have no owner): the statement that lists them and the one
+        /// that deletes one.
+        struct KeyFamily
+        {
+            const char* prefix;
+            MMOStmtId list;
+            MMOStmtId remove;
+        };
+
+        // Indices into kCharacterFamilies: the family of a character's StoredKey.
+        constexpr size_t kReputationFamily = 1;
+        constexpr size_t kAchievementFamily = 2;
+        constexpr size_t kAchievementStatFamily = 3;
+        constexpr size_t kCraftingSkillFamily = 4;
+        constexpr size_t kKnownRecipeFamily = 5;
+        constexpr size_t kLockoutFamily = 6;
+
+        // Family 0 holds the per-slot inventory keys of earlier builds: never
+        // written, so every save deletes the ones it finds.
+        constexpr std::array<KeyFamily, 7> kCharacterFamilies{{
+            {"inv_", MMOStmtId::ListLegacyInventorySlots, MMOStmtId::DeleteLegacyInventorySlot},
+            {"rep_", MMOStmtId::LoadReputation, MMOStmtId::DeleteReputation},
+            {"ach_", MMOStmtId::LoadAchievements, MMOStmtId::DeleteAchievement},
+            {"achstat_", MMOStmtId::LoadAchievementStats, MMOStmtId::DeleteAchievementStat},
+            {"craft_", MMOStmtId::LoadCraftingSkills, MMOStmtId::DeleteCraftingSkill},
+            {"recipe_", MMOStmtId::LoadKnownRecipes, MMOStmtId::DeleteKnownRecipe},
+            {"lockout_", MMOStmtId::LoadLockouts, MMOStmtId::DeleteLockout},
+        }};
+
+        /// Append a delete for every key in @p stored that is not in @p keep.
+        /// @p ownerParams are bound ahead of the parameters rebuilt from the suffix.
+        template <typename KeySetT>
+        void AppendKeyDeletes(Transaction& tx, std::span<const KeyFamily> families, const KeySetT& stored,
+                              const KeySetT& keep, const std::vector<PreparedStatementParam>& ownerParams)
+        {
+            for (const auto& key : stored)
+            {
+                if (keep.contains(key))
+                {
+                    continue;
+                }
+                auto params = SuffixParams(key.second);
+                if (!params)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                   "MMOPersistence: cannot address stored %s key '%s' for delete",
+                                   families[key.first].prefix, key.second.c_str());
+                    continue;
+                }
+                params->insert(params->begin(), ownerParams.begin(), ownerParams.end());
+                tx.Append(Sid(families[key.first].remove), std::move(*params));
+            }
         }
     } // namespace
 
@@ -316,6 +388,7 @@ namespace MMO
         m_autoSaveTimer = 0.0f;
         m_initialized = false;
         m_nextCharacterId = 1;
+        m_characterKeys.clear();
     }
 
     void MMOPersistenceSystem::Update(float dt)
@@ -548,7 +621,7 @@ namespace MMO
         return true;
     }
 
-    MMOPersistenceSystem::Transaction MMOPersistenceSystem::BuildCharacterSave(const CharacterSaveData& data) const
+    MMOPersistenceSystem::Transaction MMOPersistenceSystem::BuildCharacterSave(const CharacterSaveData& data)
     {
         std::ostringstream ss;
         ss << data.name << "|" << data.accountId << "|" << data.level << "|" << data.xp << "|" << data.areaId << "|"
@@ -557,12 +630,26 @@ namespace MMO
            << data.inventory.currency;
 
         Transaction tx;
+        KeySet written;
         tx.Append(Sid(MMOStmtId::UpdateCharacter), {MakeInt(data.characterId), MakeString(ss.str())});
         SaveInventory(tx, data.characterId, data.inventory);
-        SaveReputationState(tx, data.characterId, data.reputationState);
-        SaveAchievementState(tx, data.characterId, data.achievementState);
-        SaveCraftingState(tx, data.characterId, data.craftingState);
-        SaveLockouts(tx, data.characterId, data.dungeonState);
+        SaveReputationState(tx, data.characterId, data.reputationState, written);
+        SaveAchievementState(tx, data.characterId, data.achievementState, written);
+        SaveCraftingState(tx, data.characterId, data.craftingState, written);
+        SaveLockouts(tx, data.characterId, data.dungeonState, written);
+
+        // Delete every record the character may still have that this save did
+        // not write. The candidates come from memory, not a store scan, because
+        // an earlier save can still be queued: a scan would miss the records it
+        // is about to write. The set never shrinks, so a delete lost to a failed
+        // transaction is issued again by the next save.
+        auto [known, firstSave] = m_characterKeys.try_emplace(data.characterId);
+        if (firstSave)
+        {
+            known->second = ScanCharacterKeys(data.characterId);
+        }
+        AppendKeyDeletes(tx, kCharacterFamilies, known->second, written, {MakeInt(data.characterId)});
+        known->second.insert(written.begin(), written.end());
         return tx;
     }
 
@@ -602,27 +689,48 @@ namespace MMO
         return true;
     }
 
-    void MMOPersistenceSystem::AppendKeyDeletes(Transaction& tx, MMOStmtId listStmt, MMOStmtId deleteStmt,
-                                                uint32_t charId, const std::string& family)
+    std::optional<std::vector<std::string>> MMOPersistenceSystem::ListKeySuffixes(MMOStmtId listStmt, Params params,
+                                                                                  const std::string& keyPrefix)
     {
-        const std::string prefix = family + std::to_string(charId) + "_";
-        const QueryResult keys = m_db->SyncQuery(Sid(listStmt), {MakeInt(charId)});
+        const QueryResult keys = m_db->SyncQuery(Sid(listStmt), std::move(params));
+        if (!keys.success)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: listing '%s' keys failed: %s", keyPrefix.c_str(),
+                            keys.errorMessage.c_str());
+            return std::nullopt;
+        }
+        std::vector<std::string> suffixes;
         for (const auto& row : keys.rows)
         {
             const std::string* key = row.columns.empty() ? nullptr : std::get_if<std::string>(&row.columns[0]);
-            if (!key || !key->starts_with(prefix))
+            if (key && key->starts_with(keyPrefix))
             {
-                continue;
+                suffixes.push_back(key->substr(keyPrefix.size()));
             }
-            auto params = KeySuffixParams(charId, key->substr(prefix.size()));
-            if (!params)
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Game, "MMOPersistence: cannot address stored key '%s' for delete",
-                               key->c_str());
-                continue;
-            }
-            tx.Append(Sid(deleteStmt), std::move(*params));
         }
+        return suffixes;
+    }
+
+    std::optional<std::string> MMOPersistenceSystem::GetValue(MMOStmtId getStmt, Params params)
+    {
+        const QueryResult result = m_db->SyncQuery(Sid(getStmt), std::move(params));
+        const std::string* text = FirstString(result);
+        return text ? std::optional<std::string>(*text) : std::nullopt;
+    }
+
+    MMOPersistenceSystem::KeySet MMOPersistenceSystem::ScanCharacterKeys(uint32_t charId)
+    {
+        KeySet keys;
+        for (size_t family = 0; family < kCharacterFamilies.size(); ++family)
+        {
+            const std::string prefix = std::format("{}{}_", kCharacterFamilies[family].prefix, charId);
+            const auto suffixes = ListKeySuffixes(kCharacterFamilies[family].list, {MakeInt(charId)}, prefix);
+            for (const std::string& suffix : suffixes.value_or(std::vector<std::string>{}))
+            {
+                keys.emplace(family, suffix);
+            }
+        }
+        return keys;
     }
 
     bool MMOPersistenceSystem::DeleteCharacter(uint32_t characterId)
@@ -641,15 +749,8 @@ namespace MMO
         tx.Append(Sid(MMOStmtId::DeleteCharacter), {MakeInt(characterId)});
         tx.Append(Sid(MMOStmtId::DeleteInventory), {MakeInt(characterId)});
         tx.Append(Sid(MMOStmtId::DeleteCurrency), {MakeInt(characterId)});
-        AppendKeyDeletes(tx, MMOStmtId::ListLegacyInventorySlots, MMOStmtId::DeleteLegacyInventorySlot, characterId,
-                         "inv_");
-        AppendKeyDeletes(tx, MMOStmtId::LoadReputation, MMOStmtId::DeleteReputation, characterId, "rep_");
-        AppendKeyDeletes(tx, MMOStmtId::LoadAchievements, MMOStmtId::DeleteAchievement, characterId, "ach_");
-        AppendKeyDeletes(tx, MMOStmtId::LoadAchievementStats, MMOStmtId::DeleteAchievementStat, characterId,
-                         "achstat_");
-        AppendKeyDeletes(tx, MMOStmtId::LoadCraftingSkills, MMOStmtId::DeleteCraftingSkill, characterId, "craft_");
-        AppendKeyDeletes(tx, MMOStmtId::LoadKnownRecipes, MMOStmtId::DeleteKnownRecipe, characterId, "recipe_");
-        AppendKeyDeletes(tx, MMOStmtId::LoadLockouts, MMOStmtId::DeleteLockout, characterId, "lockout_");
+        AppendKeyDeletes(tx, kCharacterFamilies, ScanCharacterKeys(characterId), KeySet{}, {MakeInt(characterId)});
+        m_characterKeys.erase(characterId);
         return m_db->AsyncTransaction(std::move(tx)).get().success;
     }
 
@@ -731,273 +832,206 @@ namespace MMO
         return true;
     }
 
-    void MMOPersistenceSystem::SaveReputationState(Transaction& tx, uint32_t charId, const ReputationState& state) const
+    void MMOPersistenceSystem::SaveReputationState(Transaction& tx, uint32_t charId, const ReputationState& state,
+                                                   KeySet& written) const
     {
         for (const auto& [factionId, standing] : state.standings)
         {
             tx.Append(Sid(MMOStmtId::SaveReputation),
                       {MakeInt(charId), MakeInt(factionId), MakeInt(standing.reputation)});
+            written.emplace(kReputationFamily, std::to_string(factionId));
         }
     }
 
     void MMOPersistenceSystem::LoadReputationState(uint32_t charId, ReputationState& state)
     {
-        auto result = m_db->SyncQuery(Sid(MMOStmtId::LoadReputation), {MakeInt(charId)});
-        if (result.success)
+        // Key "rep_<charId>_<factionId>", value = reputation
+        state.standings.clear();
+        const std::string prefix = std::format("rep_{}_", charId);
+        const auto suffixes = ListKeySuffixes(MMOStmtId::LoadReputation, {MakeInt(charId)}, prefix);
+        for (const std::string& suffix : suffixes.value_or(std::vector<std::string>{}))
         {
-            for (const auto& row : result.rows)
+            const auto factionId = ParseInteger<uint32_t>(suffix);
+            const auto text = factionId
+                                  ? GetValue(MMOStmtId::LoadReputationValue, {MakeInt(charId), MakeInt(*factionId)})
+                                  : std::nullopt;
+            const auto reputation = text ? ParseInteger<int>(*text) : std::nullopt;
+            if (!reputation)
             {
-                if (!row.columns.empty() && std::holds_alternative<std::string>(row.columns[0]))
-                {
-                    const auto& key = std::get<std::string>(row.columns[0]);
-                    // Parse "rep_<charId>_<factionId>" → factionId
-                    auto prefix = "rep_" + std::to_string(charId) + "_";
-                    if (key.starts_with(prefix))
-                    {
-                        try
-                        {
-                            uint32_t factionId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
-                            auto valResult = m_db->SyncQuery(Sid(MMOStmtId::LoadReputationValue),
-                                                             {MakeInt(charId), MakeInt(factionId)});
-                            if (valResult.success && !valResult.rows.empty())
-                            {
-                                FactionStanding standing;
-                                standing.factionId = factionId;
-                                const auto& val = valResult.rows[0].columns[0];
-                                if (std::holds_alternative<int64_t>(val))
-                                {
-                                    standing.reputation = static_cast<int>(std::get<int64_t>(val));
-                                }
-                                else if (std::holds_alternative<std::string>(val))
-                                {
-                                    standing.reputation = std::stoi(std::get<std::string>(val));
-                                }
-                                standing.tier = FactionStanding::GetTierForValue(standing.reputation);
-                                state.standings[factionId] = standing;
-                            }
-                        }
-                        catch (const std::exception&)
-                        {
-                            continue;
-                        }
-                    }
-                }
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt reputation '%s%s'", prefix.c_str(),
+                                suffix.c_str());
+                continue;
             }
+            FactionStanding& standing = state.standings[*factionId];
+            standing.factionId = *factionId;
+            standing.reputation = *reputation;
+            standing.tier = FactionStanding::GetTierForValue(*reputation);
         }
     }
 
-    void MMOPersistenceSystem::SaveAchievementState(Transaction& tx, uint32_t charId,
-                                                    const AchievementState& state) const
+    void MMOPersistenceSystem::SaveAchievementState(Transaction& tx, uint32_t charId, const AchievementState& state,
+                                                    KeySet& written) const
     {
-        // Save completed achievement IDs
         for (uint32_t achId : state.completedIds)
         {
             tx.Append(Sid(MMOStmtId::SaveAchievement), {MakeInt(charId), MakeInt(achId)});
+            written.emplace(kAchievementFamily, std::to_string(achId));
         }
-
-        // Save stat counters
         for (const auto& [key, val] : state.stats)
         {
             tx.Append(Sid(MMOStmtId::SaveAchievementStat), {MakeInt(charId), MakeString(key), MakeInt(val)});
+            written.emplace(kAchievementStatFamily, QuoteLiteral(key));
         }
     }
 
     void MMOPersistenceSystem::LoadAchievementState(uint32_t charId, AchievementState& state)
     {
-        // Load completed achievements
-        auto achResult = m_db->SyncQuery(Sid(MMOStmtId::LoadAchievements), {MakeInt(charId)});
-        if (achResult.success)
+        // Keys "ach_<charId>_<achievementId>" (value 1) and "achstat_<charId>_'<stat>'"
+        // (value = counter). The stat key keeps the quotes MakeString added on save.
+        state.completedIds.clear();
+        state.stats.clear();
+        const std::string achPrefix = std::format("ach_{}_", charId);
+        const auto achievements = ListKeySuffixes(MMOStmtId::LoadAchievements, {MakeInt(charId)}, achPrefix);
+        for (const std::string& suffix : achievements.value_or(std::vector<std::string>{}))
         {
-            for (const auto& row : achResult.rows)
+            if (const auto achId = ParseInteger<uint32_t>(suffix))
             {
-                if (!row.columns.empty() && std::holds_alternative<std::string>(row.columns[0]))
-                {
-                    const auto& key = std::get<std::string>(row.columns[0]);
-                    auto prefix = "ach_" + std::to_string(charId) + "_";
-                    if (key.starts_with(prefix))
-                    {
-                        try
-                        {
-                            uint32_t achId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
-                            state.completedIds.insert(achId);
-                        }
-                        catch (const std::exception&)
-                        {
-                            continue;
-                        }
-                    }
-                }
+                state.completedIds.insert(*achId);
+            }
+            else
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt achievement key '%s%s'",
+                                achPrefix.c_str(), suffix.c_str());
             }
         }
 
-        // Load stat counters
-        auto statResult = m_db->SyncQuery(Sid(MMOStmtId::LoadAchievementStats), {MakeInt(charId)});
-        if (statResult.success)
+        const std::string statPrefix = std::format("achstat_{}_", charId);
+        const auto stats = ListKeySuffixes(MMOStmtId::LoadAchievementStats, {MakeInt(charId)}, statPrefix);
+        for (const std::string& suffix : stats.value_or(std::vector<std::string>{}))
         {
-            for (const auto& row : statResult.rows)
+            const std::string statKey = UnquoteStoredString(suffix);
+            const auto text = GetValue(MMOStmtId::LoadAchievementStatValue, {MakeInt(charId), MakeString(statKey)});
+            const auto value = text ? ParseInteger<int>(*text) : std::nullopt;
+            if (!value)
             {
-                if (!row.columns.empty() && std::holds_alternative<std::string>(row.columns[0]))
-                {
-                    const auto& key = std::get<std::string>(row.columns[0]);
-                    auto prefix = "achstat_" + std::to_string(charId) + "_";
-                    if (key.starts_with(prefix))
-                    {
-                        // The stored key carries the quotes MakeString added on save;
-                        // strip them so the map key round-trips, then re-quote via
-                        // MakeString for the lookup to match the stored key.
-                        std::string statKey = UnquoteStoredString(key.substr(prefix.size()));
-                        auto valResult = m_db->SyncQuery(Sid(MMOStmtId::LoadAchievementStatValue),
-                                                         {MakeInt(charId), MakeString(statKey)});
-                        if (valResult.success && !valResult.rows.empty())
-                        {
-                            const auto& val = valResult.rows[0].columns[0];
-                            if (std::holds_alternative<int64_t>(val))
-                            {
-                                state.stats[statKey] = static_cast<int>(std::get<int64_t>(val));
-                            }
-                            else if (std::holds_alternative<std::string>(val))
-                            {
-                                try
-                                {
-                                    state.stats[statKey] = std::stoi(std::get<std::string>(val));
-                                }
-                                catch (const std::exception&)
-                                {
-                                    state.stats[statKey] = 0;
-                                }
-                            }
-                        }
-                    }
-                }
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt achievement stat '%s%s'",
+                                statPrefix.c_str(), suffix.c_str());
+                continue;
             }
+            state.stats[statKey] = *value;
         }
     }
 
-    void MMOPersistenceSystem::SaveCraftingState(Transaction& tx, uint32_t charId, const CraftingState& state) const
+    void MMOPersistenceSystem::SaveCraftingState(Transaction& tx, uint32_t charId, const CraftingState& state,
+                                                 KeySet& written) const
     {
-        // Save skill levels
-        for (const auto& [key, skill] : state.skills)
+        for (const auto& [discipline, skill] : state.skills)
         {
             tx.Append(Sid(MMOStmtId::SaveCraftingSkill),
-                      {MakeInt(charId), MakeInt(key), MakeInt(skill.level), MakeInt(skill.currentXP)});
+                      {MakeInt(charId), MakeInt(discipline), MakeInt(skill.level), MakeInt(skill.currentXP)});
+            written.emplace(kCraftingSkillFamily, std::to_string(discipline));
         }
-
-        // Save known recipes
         for (uint32_t recipeId : state.knownRecipes)
         {
             tx.Append(Sid(MMOStmtId::SaveKnownRecipe), {MakeInt(charId), MakeInt(recipeId)});
+            written.emplace(kKnownRecipeFamily, std::to_string(recipeId));
         }
     }
 
     void MMOPersistenceSystem::LoadCraftingState(uint32_t charId, CraftingState& state)
     {
-        // Load skills: key "craft_<charId>_<discipline>", value "level|xp"
-        auto skillResult = m_db->SyncQuery(Sid(MMOStmtId::LoadCraftingSkills), {MakeInt(charId)});
-        if (skillResult.success)
+        // Skills: key "craft_<charId>_<discipline>", value "level|xp"
+        state.skills.clear();
+        state.knownRecipes.clear();
+        const int maxLevel = CraftingSkill{}.maxLevel;
+        const std::string skillPrefix = std::format("craft_{}_", charId);
+        const auto skills = ListKeySuffixes(MMOStmtId::LoadCraftingSkills, {MakeInt(charId)}, skillPrefix);
+        for (const std::string& suffix : skills.value_or(std::vector<std::string>{}))
         {
-            const std::string prefix = "craft_" + std::to_string(charId) + "_";
-            for (const auto& row : skillResult.rows)
+            const auto discipline = ParseInteger<int>(suffix);
+            const bool knownDiscipline =
+                discipline && *discipline >= 0 && *discipline < static_cast<int>(CraftingDiscipline::Count);
+            const auto text = knownDiscipline
+                                  ? GetValue(MMOStmtId::LoadCraftingSkillValue, {MakeInt(charId), MakeInt(*discipline)})
+                                  : std::nullopt;
+            const std::vector<std::string> fields = text ? Split(*text, '|') : std::vector<std::string>{};
+            const auto level = fields.size() == 2 ? ParseInteger<int>(fields[0]) : std::nullopt;
+            const auto xp = fields.size() == 2 ? ParseInteger<int>(fields[1]) : std::nullopt;
+            if (!level || *level < 1 || *level > maxLevel || !xp || *xp < 0)
             {
-                const std::string* key = row.columns.empty() ? nullptr : std::get_if<std::string>(&row.columns[0]);
-                if (!key || !key->starts_with(prefix))
-                {
-                    continue;
-                }
-                const auto discKey = ParseInteger<int>(std::string_view(*key).substr(prefix.size()));
-                if (!discKey)
-                {
-                    continue;
-                }
-                const QueryResult value =
-                    m_db->SyncQuery(Sid(MMOStmtId::LoadCraftingSkillValue), {MakeInt(charId), MakeInt(*discKey)});
-                const std::string* text = FirstString(value);
-                const std::vector<std::string> fields = text ? Split(*text, '|') : std::vector<std::string>{};
-                const auto level = fields.size() == 2 ? ParseInteger<int>(fields[0]) : std::nullopt;
-                const auto xp = fields.size() == 2 ? ParseInteger<int>(fields[1]) : std::nullopt;
-                if (!level || *level < 1 || !xp || *xp < 0)
-                {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt crafting skill '%s'",
-                                    key->c_str());
-                    continue;
-                }
-                CraftingSkill skill;
-                skill.discipline = static_cast<CraftingDiscipline>(*discKey);
-                skill.level = *level;
-                skill.currentXP = *xp;
-                state.skills[*discKey] = skill;
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt crafting skill '%s%s'",
+                                skillPrefix.c_str(), suffix.c_str());
+                continue;
             }
+            CraftingSkill skill;
+            skill.discipline = static_cast<CraftingDiscipline>(*discipline);
+            skill.level = *level;
+            skill.currentXP = *xp;
+            state.skills[*discipline] = skill;
         }
 
-        // Load known recipes
-        auto recipeResult = m_db->SyncQuery(Sid(MMOStmtId::LoadKnownRecipes), {MakeInt(charId)});
-        if (recipeResult.success)
+        // Known recipes: key "recipe_<charId>_<recipeId>", value 1
+        const std::string recipePrefix = std::format("recipe_{}_", charId);
+        const auto recipes = ListKeySuffixes(MMOStmtId::LoadKnownRecipes, {MakeInt(charId)}, recipePrefix);
+        for (const std::string& suffix : recipes.value_or(std::vector<std::string>{}))
         {
-            for (const auto& row : recipeResult.rows)
+            if (const auto recipeId = ParseInteger<uint32_t>(suffix))
             {
-                if (!row.columns.empty() && std::holds_alternative<std::string>(row.columns[0]))
-                {
-                    const auto& key = std::get<std::string>(row.columns[0]);
-                    auto prefix = "recipe_" + std::to_string(charId) + "_";
-                    if (key.starts_with(prefix))
-                    {
-                        try
-                        {
-                            uint32_t recipeId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
-                            state.knownRecipes.push_back(recipeId);
-                        }
-                        catch (const std::exception&)
-                        {
-                            continue;
-                        }
-                    }
-                }
+                state.knownRecipes.push_back(*recipeId);
+            }
+            else
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt recipe key '%s%s'",
+                                recipePrefix.c_str(), suffix.c_str());
             }
         }
+        std::sort(state.knownRecipes.begin(), state.knownRecipes.end());
     }
 
-    void MMOPersistenceSystem::SaveLockouts(Transaction& tx, uint32_t charId, const DungeonPlayerState& state) const
+    void MMOPersistenceSystem::SaveLockouts(Transaction& tx, uint32_t charId, const DungeonPlayerState& state,
+                                            KeySet& written) const
     {
         for (const auto& lo : state.lockouts)
         {
-            tx.Append(Sid(MMOStmtId::SaveLockout),
-                      {MakeInt(charId), MakeInt(lo.dungeonDefId), MakeInt(static_cast<int64_t>(lo.difficulty)),
-                       MakeDouble(static_cast<double>(lo.remaining))});
+            // An expired lockout is already over; storing it would only revive it.
+            if (!std::isfinite(lo.remaining) || lo.remaining <= 0.0f)
+            {
+                continue;
+            }
+            const auto difficulty = static_cast<int64_t>(lo.difficulty);
+            tx.Append(Sid(MMOStmtId::SaveLockout), {MakeInt(charId), MakeInt(lo.dungeonDefId), MakeInt(difficulty),
+                                                    MakeDouble(static_cast<double>(lo.remaining))});
+            written.emplace(kLockoutFamily, std::format("{}_{}", lo.dungeonDefId, difficulty));
         }
     }
 
     void MMOPersistenceSystem::LoadLockouts(uint32_t charId, DungeonPlayerState& state)
     {
         // Key "lockout_<charId>_<dungeonDefId>_<difficulty>", value = seconds remaining
-        auto result = m_db->SyncQuery(Sid(MMOStmtId::LoadLockouts), {MakeInt(charId)});
-        if (!result.success)
-        {
-            return;
-        }
-
         state.lockouts.clear();
-        const std::string prefix = "lockout_" + std::to_string(charId) + "_";
-        for (const auto& row : result.rows)
+        const std::string prefix = std::format("lockout_{}_", charId);
+        const auto suffixes = ListKeySuffixes(MMOStmtId::LoadLockouts, {MakeInt(charId)}, prefix);
+        for (const std::string& suffix : suffixes.value_or(std::vector<std::string>{}))
         {
-            const std::string* key = row.columns.empty() ? nullptr : std::get_if<std::string>(&row.columns[0]);
-            if (!key || !key->starts_with(prefix))
-            {
-                continue;
-            }
-            const std::vector<std::string> parts = Split(key->substr(prefix.size()), '_');
+            const std::vector<std::string> parts = Split(suffix, '_');
             const auto dungeonDefId = parts.size() == 2 ? ParseInteger<uint32_t>(parts[0]) : std::nullopt;
             const auto difficulty = parts.size() == 2 ? ParseInteger<int>(parts[1]) : std::nullopt;
-            if (!dungeonDefId || !difficulty)
-            {
-                continue;
-            }
-            const QueryResult value = m_db->SyncQuery(Sid(MMOStmtId::LoadLockoutValue),
-                                                      {MakeInt(charId), MakeInt(*dungeonDefId), MakeInt(*difficulty)});
-            const std::string* text = FirstString(value);
+            const bool knownDifficulty =
+                difficulty && *difficulty >= 0 && *difficulty < static_cast<int>(DungeonDifficulty::Count);
+            const auto text = dungeonDefId && knownDifficulty
+                                  ? GetValue(MMOStmtId::LoadLockoutValue,
+                                             {MakeInt(charId), MakeInt(*dungeonDefId), MakeInt(*difficulty)})
+                                  : std::nullopt;
             const auto remaining = text ? ParseFiniteFloat(*text) : std::nullopt;
             if (!remaining)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt lockout '%s'", key->c_str());
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt lockout '%s%s'", prefix.c_str(),
+                                suffix.c_str());
                 continue;
+            }
+            if (*remaining <= 0.0f)
+            {
+                continue; // expired before the record was written; the next save deletes it
             }
             LootLockout lo;
             lo.dungeonDefId = *dungeonDefId;

@@ -21,6 +21,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace
@@ -377,6 +378,147 @@ TEST(MMOPersistence_CraftingAndLockoutValuesSurviveColdRestart)
     EXPECT_TRUE(loaded.dungeonState.lockouts[0].difficulty == MMO::DungeonDifficulty::Heroic);
     EXPECT_NEAR(loaded.dungeonState.lockouts[0].remaining, 1234.5f, 0.01f);
     restarted.Shutdown();
+    fs::remove(path);
+}
+
+TEST(MMOPersistence_RemovedProgressionDoesNotReturnAfterRestart)
+{
+    const fs::path path = FreshPath("test_mod320_removed_progression.db");
+    MMO::CharacterSaveData save = MakeSave(0, 25, "Forgetful");
+    save.reputationState.standings[1].reputation = 500;
+    save.reputationState.standings[2].reputation = -4500;
+    save.reputationState.standings[3].reputation = 12000;
+    for (auto& [factionId, standing] : save.reputationState.standings)
+        standing.factionId = factionId;
+    save.achievementState.completedIds = {7, 8};
+    save.achievementState.stats["boss's_bane"] = 3;
+    save.achievementState.stats["mobs_killed"] = 44;
+    MMO::CraftingSkill cooking;
+    cooking.discipline = MMO::CraftingDiscipline::Cooking;
+    cooking.level = 3;
+    cooking.currentXP = 10;
+    save.craftingState.skills[static_cast<int>(cooking.discipline)] = cooking;
+    save.craftingState.skills[0].level = 7;
+    save.craftingState.skills[0].currentXP = 345;
+    save.craftingState.knownRecipes = {100, 101};
+    MMO::LootLockout kept;
+    kept.dungeonDefId = 3;
+    kept.difficulty = MMO::DungeonDifficulty::Heroic;
+    kept.remaining = 1234.5f;
+    MMO::LootLockout cleared = kept;
+    cleared.dungeonDefId = 4;
+    save.dungeonState.lockouts = {kept, cleared};
+    {
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        save.characterId = persistence.CreateCharacter(save.name, save.accountId);
+        ASSERT_NE(save.characterId, uint32_t{0});
+
+        // The removal is queued behind the save that still holds everything, so
+        // no store scan could see the records it has to delete.
+        persistence.SaveCharacterAsync(save);
+        save.reputationState.standings.erase(2);
+        save.achievementState.completedIds.erase(8);
+        save.achievementState.stats.erase("mobs_killed");
+        save.craftingState.skills.erase(static_cast<int>(cooking.discipline));
+        save.craftingState.knownRecipes = {100};
+        save.dungeonState.lockouts = {kept};
+        persistence.SaveCharacterAsync(save);
+        persistence.Shutdown();
+    }
+
+    MMO::CharacterSaveData loaded;
+    {
+        MMO::MMOPersistenceSystem restarted;
+        ASSERT_TRUE(restarted.Initialize(nullptr, path.string()));
+        ASSERT_TRUE(restarted.LoadCharacter(save.characterId, loaded));
+        ASSERT_EQ(loaded.reputationState.standings.size(), size_t{2});
+        for (const uint32_t factionId : {1u, 3u})
+        {
+            const MMO::FactionStanding& expected = save.reputationState.standings[factionId];
+            const MMO::FactionStanding& actual = loaded.reputationState.standings[factionId];
+            EXPECT_EQ(actual.factionId, factionId);
+            EXPECT_EQ(actual.reputation, expected.reputation);
+            EXPECT_TRUE(actual.tier == MMO::FactionStanding::GetTierForValue(expected.reputation));
+        }
+        EXPECT_TRUE(loaded.achievementState.completedIds == std::unordered_set<uint32_t>{7});
+        ASSERT_EQ(loaded.achievementState.stats.size(), size_t{1});
+        EXPECT_EQ(loaded.achievementState.stats["boss's_bane"], 3);
+        ASSERT_EQ(loaded.craftingState.skills.size(), size_t{1});
+        EXPECT_EQ(loaded.craftingState.skills[0].level, 7);
+        EXPECT_EQ(loaded.craftingState.skills[0].currentXP, 345);
+        EXPECT_TRUE(loaded.craftingState.knownRecipes == std::vector<uint32_t>{100});
+        ASSERT_EQ(loaded.dungeonState.lockouts.size(), size_t{1});
+        EXPECT_EQ(loaded.dungeonState.lockouts[0].dungeonDefId, uint32_t{3});
+        EXPECT_NEAR(loaded.dungeonState.lockouts[0].remaining, 1234.5f, 0.01f);
+
+        // A removal in a later run, whose first save must find the stored records.
+        loaded.reputationState.standings.erase(3);
+        ASSERT_TRUE(restarted.SaveCharacterSync(loaded));
+        restarted.Shutdown();
+    }
+
+    MMO::MMOPersistenceSystem third;
+    ASSERT_TRUE(third.Initialize(nullptr, path.string()));
+    MMO::CharacterSaveData latest;
+    ASSERT_TRUE(third.LoadCharacter(save.characterId, latest));
+    ASSERT_EQ(latest.reputationState.standings.size(), size_t{1});
+    EXPECT_EQ(latest.reputationState.standings[1].reputation, 500);
+    third.Shutdown();
+    fs::remove(path);
+}
+
+TEST(MMOPersistence_ExpiredAndOutOfRangeProgressionIsNotRestored)
+{
+    const fs::path path = FreshPath("test_mod320_progression_bounds.db");
+    constexpr uint32_t kCharacterId = 77;
+    {
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        ASSERT_TRUE(persistence.SaveCharacterSync(MakeSave(kCharacterId, 26, "Tamperer")));
+        persistence.Shutdown();
+    }
+
+    // Records the module never writes: an expired lockout, out-of-range skill
+    // levels, disciplines and difficulties, and unparsable values.
+    const std::vector<std::string> records = {
+        "SET lockout_77_3_1 1234.5", "SET lockout_77_4_0 -5.0", "SET lockout_77_5_0 nan", "SET lockout_77_6_9 100",
+        "SET craft_77_0 7|345",      "SET craft_77_1 250|3",    "SET craft_77_2 0|10",    "SET craft_77_9 5|5",
+        "SET rep_77_4 abc",          "SET rep_77_5 -700"};
+    {
+        Spark::Persistence::AsyncDatabasePool raw;
+        ASSERT_TRUE(raw.Open(path.string(), 1));
+        for (size_t i = 0; i < records.size(); ++i)
+        {
+            raw.PrepareStatement(static_cast<Spark::Persistence::PreparedStatementID>(i + 1), records[i]);
+            ASSERT_TRUE(raw.SyncQuery(static_cast<Spark::Persistence::PreparedStatementID>(i + 1)).success);
+        }
+        raw.Close();
+    }
+
+    MMO::MMOPersistenceSystem restarted;
+    ASSERT_TRUE(restarted.Initialize(nullptr, path.string()));
+    MMO::CharacterSaveData loaded;
+    ASSERT_TRUE(restarted.LoadCharacter(kCharacterId, loaded));
+    ASSERT_EQ(loaded.dungeonState.lockouts.size(), size_t{1});
+    EXPECT_EQ(loaded.dungeonState.lockouts[0].dungeonDefId, uint32_t{3});
+    EXPECT_NEAR(loaded.dungeonState.lockouts[0].remaining, 1234.5f, 0.01f);
+    ASSERT_EQ(loaded.craftingState.skills.size(), size_t{1});
+    EXPECT_EQ(loaded.craftingState.skills[0].level, 7);
+    ASSERT_EQ(loaded.reputationState.standings.size(), size_t{1});
+    EXPECT_EQ(loaded.reputationState.standings[5].reputation, -700);
+
+    // The next save drops every record the load refused.
+    ASSERT_TRUE(restarted.SaveCharacterSync(loaded));
+    restarted.Shutdown();
+    std::set<std::string> familyKeys;
+    for (const std::string& key : StoredKeys(path))
+    {
+        if (key.starts_with("lockout_77_") || key.starts_with("craft_77_") || key.starts_with("rep_77_"))
+            familyKeys.insert(key);
+    }
+    const std::set<std::string> expectedKeys = {"craft_77_0", "lockout_77_3_1", "rep_77_5"};
+    EXPECT_TRUE(familyKeys == expectedKeys);
     fs::remove(path);
 }
 

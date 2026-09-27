@@ -13,9 +13,11 @@
  * - Dungeon lockouts
  * - World boss kill history
  *
- * Uses the engine's AsyncDatabasePool with prepared statements for
- * non-blocking persistence. All writes are async; reads can be
- * sync (login) or async (background refresh).
+ * Uses the engine's AsyncDatabasePool with prepared statements. The key
+ * names and value formats in RegisterPreparedStatements are the persisted
+ * contract. Every character save rewrites that character's whole record set
+ * and deletes the records it no longer has, so a removed faction,
+ * achievement, stat, skill, recipe or lockout stays removed after a restart.
  */
 
 #pragma once
@@ -33,8 +35,12 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
+#include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace MMO
@@ -122,8 +128,8 @@ namespace MMO
         SaveNextCharacterId = 1106,
 
         // Inventory. The whole inventory is one "inventory_<id>" record; the
-        // per-slot "inv_<id>_<slot>" keys of earlier builds are only listed and
-        // deleted when their character is deleted.
+        // per-slot "inv_<id>_<slot>" keys of earlier builds are never loaded and
+        // are deleted by the character's next save or its deletion.
         ListLegacyInventorySlots = 1201,
         DeleteLegacyInventorySlot = 1202,
         SaveCurrency = 1203,
@@ -250,30 +256,44 @@ namespace MMO
 
       private:
         using Transaction = Spark::Persistence::Transaction;
+        using Params = std::vector<Spark::Persistence::PreparedStatementParam>;
+        /// A stored record: its key family's table index and the key text after
+        /// the family prefix and owner ID.
+        using StoredKey = std::pair<size_t, std::string>;
+        using KeySet = std::set<StoredKey>;
 
         void RegisterPreparedStatements();
         void CreateSchema();
         void SeedCharacterIdCounter();
-        Transaction BuildCharacterSave(const CharacterSaveData& data) const;
-        void AppendKeyDeletes(Transaction& tx, MMOStmtId listStmt, MMOStmtId deleteStmt, uint32_t charId,
-                              const std::string& family);
+        Transaction BuildCharacterSave(const CharacterSaveData& data);
+        /// Text after @p keyPrefix of every key @p listStmt lists; nullopt on a store error.
+        std::optional<std::vector<std::string>> ListKeySuffixes(MMOStmtId listStmt, Params params,
+                                                                const std::string& keyPrefix);
+        /// The stored value @p getStmt returns, or nullopt when the key is absent.
+        std::optional<std::string> GetValue(MMOStmtId getStmt, Params params);
+        KeySet ScanCharacterKeys(uint32_t charId);
 
-        // Subsystem save/load helpers. Saves append to the character's save transaction.
+        // Subsystem save/load helpers. Saves append to the character's save
+        // transaction and add every record they write to @p written.
         void SaveInventory(Transaction& tx, uint32_t charId, const InventoryData& inv) const;
         bool LoadInventory(uint32_t charId, InventoryData& inv);
-        void SaveReputationState(Transaction& tx, uint32_t charId, const ReputationState& state) const;
+        void SaveReputationState(Transaction& tx, uint32_t charId, const ReputationState& state, KeySet& written) const;
         void LoadReputationState(uint32_t charId, ReputationState& state);
-        void SaveAchievementState(Transaction& tx, uint32_t charId, const AchievementState& state) const;
+        void SaveAchievementState(Transaction& tx, uint32_t charId, const AchievementState& state,
+                                  KeySet& written) const;
         void LoadAchievementState(uint32_t charId, AchievementState& state);
-        void SaveCraftingState(Transaction& tx, uint32_t charId, const CraftingState& state) const;
+        void SaveCraftingState(Transaction& tx, uint32_t charId, const CraftingState& state, KeySet& written) const;
         void LoadCraftingState(uint32_t charId, CraftingState& state);
-        void SaveLockouts(Transaction& tx, uint32_t charId, const DungeonPlayerState& state) const;
+        void SaveLockouts(Transaction& tx, uint32_t charId, const DungeonPlayerState& state, KeySet& written) const;
         void LoadLockouts(uint32_t charId, DungeonPlayerState& state);
 
         Spark::IEngineContext* m_context{nullptr};
         std::unique_ptr<Spark::Persistence::AsyncDatabasePool> m_db;
         bool m_initialized{false};
         uint64_t m_nextCharacterId = 1; ///< next ID AllocateCharacterId hands out; > UINT32_MAX when exhausted
+        /// Per character saved this run: every record it may have in the store
+        /// (the keys found on its first save plus every key a save wrote since).
+        std::map<uint32_t, KeySet> m_characterKeys;
 
         float m_autoSaveInterval = 300.0f; // 5 minutes
         float m_autoSaveTimer = 0.0f;
