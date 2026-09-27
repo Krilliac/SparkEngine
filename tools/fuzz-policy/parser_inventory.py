@@ -132,6 +132,13 @@ CONTENT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"|\bm_readPos\b"
         ),
     ),
+    # A received NetworkMessage payload copied into a NetBuffer read cursor: the
+    # hand-rolled network decoder idiom (fixed-size or not). Nothing in the
+    # file's name or calls says "parse", so without this the decoder is invisible.
+    (
+        "network-payload-decode",
+        re.compile(r"\bWriteBytes\s*\(\s*(?:[A-Za-z_]\w*\s*(?:\.|->)\s*)*payload\s*\.\s*data\s*\(\s*\)"),
+    ),
     ("scanf-parse", re.compile(r"\b(?:sscanf|sscanf_s|fscanf|swscanf|swscanf_s)\s*\(")),
     ("stream-slurp", re.compile(r"std::istreambuf_iterator\s*<\s*char\s*>")),
     ("getline-loop", re.compile(r"while\s*\(\s*std::getline\s*\(")),

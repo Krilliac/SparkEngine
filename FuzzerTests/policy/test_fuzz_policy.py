@@ -844,6 +844,37 @@ class TestBoundedScanner(FixtureTestCase):
         reasons = {item["source_file"]: item["reasons"] for item in scan.candidates}
         self.assertIn("binary-stream-read", reasons["src/Blob.cpp"])
 
+    def test_network_payload_decoder_is_detected(self) -> None:
+        # A fixed-size decoder over a received NetworkMessage names no parse call
+        # and lives in no parser-like file; loading the payload into a read cursor
+        # is the only tell. Both member-access spellings must be caught.
+        (self.root / "src" / "WorldSetup.cpp").write_text(
+            "void Apply(const NetworkMessage& message) {\n"
+            "    NetBuffer buffer;\n"
+            "    buffer.WriteBytes(message.payload.data(), message.payload.size());\n"
+            "    (void)buffer.ReadUint32();\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        (self.root / "src" / "Handler.cpp").write_text(
+            "void On(const NetworkMessage* m) { buf.WriteBytes( m->payload.data(), m->payload.size()); }\n",
+            encoding="utf-8",
+        )
+        scan = parser_inventory.scan_source_tree(self.root, self.fixture.load().scope)
+        reasons = {item["source_file"]: item["reasons"] for item in scan.candidates}
+        self.assertEqual(reasons["src/WorldSetup.cpp"], ["network-payload-decode"])
+        self.assertEqual(reasons["src/Handler.cpp"], ["network-payload-decode"])
+
+    def test_network_payload_encoder_is_not_a_candidate(self) -> None:
+        # Writing locally produced bytes into an outgoing buffer is encoding, not
+        # decoding; the detector must not flood on every sender.
+        (self.root / "src" / "Sender.cpp").write_text(
+            "void Send() { buf.WriteBytes(header.data(), header.size()); msg.payload = buf.GetData(); }\n",
+            encoding="utf-8",
+        )
+        scan = parser_inventory.scan_source_tree(self.root, self.fixture.load().scope)
+        self.assertNotIn("src/Sender.cpp", {item["source_file"] for item in scan.candidates})
+
     def test_unreadable_directory_is_fatal(self) -> None:
         scope = self.fixture.load().scope
         with mock.patch.object(policy_common.os, "scandir", side_effect=OSError("denied")):
