@@ -1100,6 +1100,7 @@ target_sources(SparkTests PRIVATE
     TestEditorRecovery.cpp
     TestEngineWiringReal.cpp
     TestLifecycleCompositionRootFailure.cpp
+    TestLIFE200LifecycleLoopReal.cpp
     TestD3D11DeviceContractsReal.cpp
     TestRHI210D3D11GoldenReal.cpp
     TestEditorGizmoTransformReal.cpp
@@ -1943,7 +1944,8 @@ set(_spark_life_selectors
     "ModuleABI_=${_spark_life_module_abi_count}"
     "EngineWiring_=11"
     "ModuleHotReload_=15"
-    "LIFE200_=${_spark_life_life200_count}")
+    "LIFE200_=${_spark_life_life200_count}"
+    "LifecycleLoop_=2")
 if(NOT WIN32)
     list(APPEND _spark_life_selectors "EngineLifecycle_=22")
 endif()
@@ -1959,6 +1961,10 @@ foreach(_spark_life_selector IN LISTS _spark_life_selectors)
         RUN_SERIAL TRUE
         TIMEOUT 120)
 endforeach()
+# LifecycleLoop_ boots the production lifecycle 45 times; ASan/TSan builds need more
+# than the family default. Each cycle is separately bounded by an in-process
+# deadlock watchdog.
+set_tests_properties(Lifecycle_LifecycleLoop PROPERTIES TIMEOUT 600)
 
 # SDK-240 / OD-02: real N-1 and N+1 SDK module images are rejected with a
 # diagnostic naming both versions before any module code runs; the current-SDK

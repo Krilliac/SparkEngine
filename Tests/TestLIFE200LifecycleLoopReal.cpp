@@ -1,0 +1,242 @@
+/**
+ * @file TestLIFE200LifecycleLoopReal.cpp
+ * @brief LIFE-200: repeated boot/shutdown loops of the production lifecycle stages.
+ *
+ * Every cycle builds a fresh LifecycleCompositionRoot from the real stage
+ * factories (the same five-stage shape the engine boots with) and drives
+ * initialize -> update -> shutdown against a live EngineContext. A cycle must
+ * publish the engine-lifetime services, withdraw every one of them at
+ * shutdown, and leave the host console registry, the ECS phase pipeline and
+ * the process thread count exactly where the first cycle left them. A second
+ * loop alternates a rolled-back startup with a clean one, so a failed boot can
+ * neither latch the services dead nor leak what it had already started.
+ *
+ * A CycleWatchdog bounds every cycle: a deadlock aborts the run with the cycle
+ * named instead of hanging until the CTest timeout. The Lifecycle_LifecycleLoop
+ * CTest carries the lifecycle label, so the Linux ASan/TSan presets run these
+ * loops under the sanitizers.
+ */
+
+#include "TestFramework.h"
+
+#include "Core/EngineContext.h"
+#include "Core/EngineRuntime.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
+#include "Core/Lifecycle/LifecycleCompositionRoot.h"
+#include "Core/Lifecycle/LifecycleStages.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Systems/PhaseSystemManager.h"
+#include "Engine/Events/EventSystem.h"
+#include "Utils/SparkConsole.h"
+
+#include "LifecycleLoopGuards.h"
+
+#include <array>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace
+{
+    using Spark::Core::Lifecycle::LifecycleCompositionRoot;
+    using Spark::Core::Lifecycle::LifecycleOrder;
+    using Spark::Core::Lifecycle::LifecyclePhase;
+    using Spark::Core::Lifecycle::LifecycleRootState;
+    using Spark::Core::Lifecycle::LifecycleStage;
+    using Spark::Core::Lifecycle::LifecycleThreadAffinity;
+    using Spark::Core::Lifecycle::RequiredStage;
+
+    constexpr int kBootCycles = 25;
+    constexpr int kAlternatingRounds = 10;
+    constexpr int kUpdatesPerCycle = 3;
+    // Generous for TSan/ASan Debug builds; a real deadlock never finishes at all.
+    constexpr std::chrono::seconds kCycleDeadline{30};
+
+    constexpr std::array<RequiredStage, 5> kProductionShape = {
+        RequiredStage{"InitNetworking", LifecyclePhase::Initialize},
+        RequiredStage{"InitGameplay", LifecyclePhase::Initialize},
+        RequiredStage{"InitDebug", LifecyclePhase::Initialize},
+        RequiredStage{"Update", LifecyclePhase::Update},
+        RequiredStage{"Shutdown", LifecyclePhase::Shutdown},
+    };
+
+    /// Fails startup after every production init stage has published its services.
+    class InjectedFailureStage final : public LifecycleStage
+    {
+      public:
+        std::string_view Name() const override { return "InjectedFailure"; }
+        LifecycleOrder Order() const override { return LifecycleOrder::Render; }
+        LifecycleThreadAffinity ThreadAffinity() const override { return LifecycleThreadAffinity::MainThread; }
+        bool SupportsInitialize() const override { return true; }
+        bool Initialize() override { return false; }
+    };
+
+    /// A fresh root over the real production stages, optionally with a failing tail stage.
+    std::unique_ptr<LifecycleCompositionRoot> MakeProductionRoot(bool injectFailure)
+    {
+        std::vector<std::unique_ptr<LifecycleStage>> stages;
+        stages.push_back(Spark::Core::Lifecycle::CreateInitDebugStage());
+        stages.push_back(Spark::Core::Lifecycle::CreateInitNetworkingStage());
+        stages.push_back(Spark::Core::Lifecycle::CreateInitGameplayStage());
+        stages.push_back(Spark::Core::Lifecycle::CreateUpdateStage());
+        stages.push_back(Spark::Core::Lifecycle::CreateShutdownStage());
+        if (injectFailure)
+            stages.push_back(std::make_unique<InjectedFailureStage>());
+        return std::make_unique<LifecycleCompositionRoot>(std::move(stages), kProductionShape);
+    }
+
+    /// Platform startup provides a World and an EventBus before the lifecycle runs.
+    EngineContext* PrepareContext()
+    {
+        if (!EngineContext::Get())
+            EngineContext::SetOwned(std::make_unique<EngineContext>());
+        static World s_world;
+        static Spark::EventBus s_bus;
+        EngineContext* ctx = EngineContext::Get();
+        ctx->SetWorld(&s_world);
+        ctx->SetEventBus(&s_bus);
+        return ctx;
+    }
+
+    /// Initializes the host console so lifecycle command registrations are counted.
+    struct ConsoleScope final
+    {
+        Spark::SimpleConsole& console = Spark::SimpleConsole::GetInstance();
+        bool restoreUninitialized = !console.IsInitialized();
+        ConsoleScope()
+        {
+            if (restoreUninitialized)
+                console.Initialize();
+        }
+        ~ConsoleScope()
+        {
+            if (restoreUninitialized)
+                console.Shutdown();
+        }
+    };
+
+    /// Everything a cycle may not accumulate, sampled after its shutdown.
+    struct CycleFootprint
+    {
+        std::uint32_t consoleCommands = 0;
+        std::size_t threads = 0;
+    };
+
+    CycleFootprint SampleFootprint(const Spark::SimpleConsole& console)
+    {
+        return {console.GetStats().registeredCommands, LifecycleLoop::CountProcessThreads()};
+    }
+
+    bool ServicesPublished(EngineContext& ctx)
+    {
+        return ctx.GetConditions() != nullptr && ctx.GetAbilities() != nullptr && ctx.GetAI() != nullptr &&
+               ctx.GetWeapons() != nullptr && ctx.GetWeapons() == GetEngineRuntime().weaponSystem.get() &&
+               ctx.GetComponentSerializers() != nullptr && ctx.GetInvalidStateDetector() != nullptr;
+    }
+
+    bool ServicesWithdrawn(EngineContext& ctx)
+    {
+        return ctx.GetConditions() == nullptr && ctx.GetAbilities() == nullptr && ctx.GetAI() == nullptr &&
+               ctx.GetWeapons() == nullptr && GetEngineRuntime().weaponSystem == nullptr &&
+               ctx.GetComponentSerializers() == nullptr && ctx.GetInvalidStateDetector() == nullptr;
+    }
+
+    std::size_t PhaseSystemCount()
+    {
+        return Spark::Core::Lifecycle::GetPhaseSystemManagerImpl().GetSystemCount();
+    }
+} // namespace
+
+TEST(LifecycleLoop_ProductionStagesRepeatedBootShutdownLeavesNoStaleServices)
+{
+    EngineContext* ctx = PrepareContext();
+    ConsoleScope consoleScope;
+    LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
+
+    CycleFootprint baseline;
+    std::size_t baselinePhaseSystems = 0;
+    for (int cycle = 0; cycle < kBootCycles; ++cycle)
+    {
+        watchdog.Arm("production boot/shutdown cycle " + std::to_string(cycle));
+        auto root = MakeProductionRoot(/*injectFailure=*/false);
+        ASSERT_TRUE(root->IsConfigurationValid());
+        ASSERT_TRUE(root->RunInitialize());
+        EXPECT_TRUE(ServicesPublished(*ctx));
+
+        // The phase pipeline is rebuilt per boot, never accumulated across boots.
+        const std::size_t phaseSystems = PhaseSystemCount();
+        if (cycle == 0)
+            baselinePhaseSystems = phaseSystems;
+        EXPECT_TRUE(phaseSystems > 0);
+        EXPECT_EQ(phaseSystems, baselinePhaseSystems);
+
+        for (int frame = 0; frame < kUpdatesPerCycle; ++frame)
+            root->RunUpdate(1.0f / 60.0f);
+
+        ASSERT_TRUE(root->RunShutdown());
+        EXPECT_TRUE(root->GetState() == LifecycleRootState::ShutDown);
+        EXPECT_TRUE(ServicesWithdrawn(*ctx));
+        EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
+        root.reset();
+        watchdog.Disarm();
+
+        // The first cycle may start process-lifetime state (lazy singletons,
+        // pools); every later cycle must leave exactly that footprint behind.
+        const CycleFootprint footprint = SampleFootprint(consoleScope.console);
+        if (cycle == 0)
+        {
+            baseline = footprint;
+            ASSERT_TRUE(baseline.threads > 0);
+            continue;
+        }
+        EXPECT_EQ(footprint.consoleCommands, baseline.consoleCommands);
+        EXPECT_LE(footprint.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
+    }
+}
+
+TEST(LifecycleLoop_FailedBootThenCleanBootRepublishesServices)
+{
+    EngineContext* ctx = PrepareContext();
+    ConsoleScope consoleScope;
+    LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
+
+    CycleFootprint baseline;
+    for (int round = 0; round < kAlternatingRounds; ++round)
+    {
+        // A startup that fails after every production stage initialized rolls
+        // back through the real Shutdown stage and latches only its own root.
+        watchdog.Arm("failed boot in round " + std::to_string(round));
+        auto failed = MakeProductionRoot(/*injectFailure=*/true);
+        ASSERT_TRUE(failed->IsConfigurationValid());
+        EXPECT_FALSE(failed->RunInitialize());
+        EXPECT_TRUE(failed->GetState() == LifecycleRootState::Failed);
+        EXPECT_TRUE(ServicesWithdrawn(*ctx));
+        failed.reset();
+
+        // The next boot on the same context starts from scratch and republishes.
+        watchdog.Arm("clean boot after failure in round " + std::to_string(round));
+        auto clean = MakeProductionRoot(/*injectFailure=*/false);
+        ASSERT_TRUE(clean->RunInitialize());
+        EXPECT_TRUE(ServicesPublished(*ctx));
+        clean->RunUpdate(1.0f / 60.0f);
+        ASSERT_TRUE(clean->RunShutdown());
+        EXPECT_TRUE(ServicesWithdrawn(*ctx));
+        clean.reset();
+        watchdog.Disarm();
+
+        const CycleFootprint footprint = SampleFootprint(consoleScope.console);
+        if (round == 0)
+        {
+            baseline = footprint;
+            ASSERT_TRUE(baseline.threads > 0);
+            continue;
+        }
+        EXPECT_EQ(footprint.consoleCommands, baseline.consoleCommands);
+        EXPECT_LE(footprint.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
+    }
+}
