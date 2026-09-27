@@ -19,8 +19,10 @@
 #   4. dumps the Ninja dependency and command logs with '/' separators and
 #      fails on any resolved header, library or flag path inside the engine
 #      source or build tree (cmake/SparkPackageConsumerBoundary.cmake splits on
-#      backslashes, so raw MSVC paths would never match), and fails if those
-#      dumps were not scanned or never mention the prefix.
+#      backslashes, so raw MSVC paths would never match, and judges only
+#      absolute paths, so the build-relative dependencies ninja records are
+#      anchored at the build directory first), and fails if those dumps were
+#      not scanned or never mention the prefix.
 #
 # Required: SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_TEST_ROOT
 #           SPARK_CONSUMER_GENERATOR (must be "Ninja Multi-Config")
@@ -145,6 +147,46 @@ function(_spark_sdk_template_write_boundary_dump path text)
     file(WRITE "${path}" "${text}")
 endfunction()
 
+# `ninja -t deps` records dependencies relative to the directory ninja ran in
+# whenever it can: the msvc deps parser rewrites every /showIncludes path on
+# the build directory's drive as "../prefix/include/...". The boundary scanner
+# only judges absolute paths, so anchor every relative dependency line (the
+# indented lines under each "<target>: #deps" header) at <build_dir>.
+function(_spark_sdk_template_anchor_deps text build_dir out_var)
+    string(REPLACE "\\" "/" text "${text}")
+    string(REPLACE "\r" "" text "${text}")
+    # Keep the text list-safe; the scanner treats these as separators anyway.
+    string(REPLACE ";" " " text "${text}")
+    string(REPLACE "[" " " text "${text}")
+    string(REPLACE "]" " " text "${text}")
+    string(REPLACE "\n" ";" _lines "${text}")
+    set(_anchored "")
+    foreach(_line IN LISTS _lines)
+        if(_line MATCHES "^[ \t]+([^ \t].*)$")
+            string(REGEX REPLACE "[ \t]+$" "" _dep "${CMAKE_MATCH_1}")
+            if(NOT _dep MATCHES "^/" AND NOT _dep MATCHES "^[A-Za-z]:/")
+                cmake_path(SET _dep NORMALIZE "${build_dir}/${_dep}")
+                set(_line "    ${_dep}")
+            endif()
+        endif()
+        string(APPEND _anchored "${_line}\n")
+    endforeach()
+    set(${out_var} "${_anchored}" PARENT_SCOPE)
+endfunction()
+
+# <out> is TRUE when <text> names a path inside <prefix>.
+function(_spark_sdk_template_mentions_prefix text prefix out)
+    string(REPLACE "\\" "/" text "${text}")
+    string(TOLOWER "${text}" text)
+    string(TOLOWER "${prefix}/" prefix)
+    string(FIND "${text}" "${prefix}" _at)
+    if(_at EQUAL -1)
+        set(${out} FALSE PARENT_SCOPE)
+    else()
+        set(${out} TRUE PARENT_SCOPE)
+    endif()
+endfunction()
+
 function(_spark_sdk_template_same_path out a b)
     cmake_path(SET _a NORMALIZE "${a}")
     cmake_path(SET _b NORMALIZE "${b}")
@@ -232,8 +274,11 @@ if(SPARK_SDK_TEMPLATE_SELF_TEST)
     _spark_expect_sidecar_case(reference-field-drift "${_drifted}" "${_good}" "" "compiler_abi_version")
     _spark_expect_sidecar_case(sidecar-for-another-image "${_good}" "" "ef56" "binary_sha256")
 
-    # Boundary fixtures: an engine header recorded with MSVC backslashes and a
-    # flag-glued engine include must be rejected; prefix-only paths accepted.
+    # Boundary fixtures: an engine header recorded with MSVC backslashes, one
+    # recorded relative to the build directory (as ninja's msvc deps parser
+    # stores same-drive headers) and a flag-glued engine include must be
+    # rejected; prefix-only paths, absolute or build-relative, accepted. The
+    # fixture builds sit where the real one does, beside the prefix.
     set(_fixture "${SPARK_TEST_ROOT}/self-test")
     file(REMOVE_RECURSE "${_fixture}")
     set(_engine "${_fixture}/engine")
@@ -243,10 +288,20 @@ if(SPARK_SDK_TEMPLATE_SELF_TEST)
     string(REPLACE "/" "\\" _prefix_backslashed "${_prefix}")
 
     function(_spark_expect_boundary_case name deps_text commands_text expect_violation)
-        set(_build "${_fixture}/${name}")
+        set(_build "${_fixture}/root/${name}")
         file(MAKE_DIRECTORY "${_build}/spark-boundary")
         set(_dumps "${_build}/spark-boundary/ninja-deps.d" "${_build}/spark-boundary/ninja-commands.d")
-        _spark_sdk_template_write_boundary_dump("${_build}/spark-boundary/ninja-deps.d" "${deps_text}")
+        _spark_sdk_template_anchor_deps("${deps_text}" "${_build}" _anchored_deps)
+        if(NOT expect_violation)
+            foreach(_dump_text IN ITEMS _anchored_deps commands_text)
+                _spark_sdk_template_mentions_prefix("${${_dump_text}}" "${_prefix}" _mentions_prefix)
+                if(NOT _mentions_prefix)
+                    message(FATAL_ERROR "SDK template boundary case '${name}' does not mention the prefix in its "
+                        "${_dump_text}: ${${_dump_text}}")
+                endif()
+            endforeach()
+        endif()
+        _spark_sdk_template_write_boundary_dump("${_build}/spark-boundary/ninja-deps.d" "${_anchored_deps}")
         _spark_sdk_template_write_boundary_dump("${_build}/spark-boundary/ninja-commands.d" "${commands_text}")
         _spark_sdk_template_check_boundary("${_build}" "${_engine}" "${_fixture}/root" "${_dumps}" _scanned _error)
         if(expect_violation)
@@ -268,6 +323,13 @@ if(SPARK_SDK_TEMPLATE_SELF_TEST)
     _spark_expect_boundary_case(clean "${_clean_deps}" "${_clean_commands}" FALSE)
     _spark_expect_boundary_case(backslash-engine-header
         "GameModule.cpp.obj: #deps 1\n    ${_engine_backslashed}\\Source\\Core\\Engine.h\n" "${_clean_commands}" TRUE)
+    _spark_expect_boundary_case(build-relative-prefix-header
+        "GameModule.cpp.obj: #deps 1, deps mtime 1 (VALID)\n    ..\\prefix\\include\\Spark\\SparkSDK.h\n\n"
+        "${_clean_commands}" FALSE)
+    string(CONCAT _relative_engine_deps
+        "GameModule.cpp.obj: #deps 2, deps mtime 1 (VALID)\n    ..\\prefix\\include\\Spark\\SparkSDK.h\n"
+        "    ..\\..\\engine\\Source\\Core\\Engine.h\n\n")
+    _spark_expect_boundary_case(build-relative-engine-header "${_relative_engine_deps}" "${_clean_commands}" TRUE)
     # MSVC glues imported (external) include dirs to their flag; the scanner
     # splits on ':' so only the drive-path spacing keeps that path whole. The
     # flag only exists on Windows hosts; elsewhere the glued -I form is checked.
@@ -290,7 +352,7 @@ if(SPARK_SDK_TEMPLATE_SELF_TEST)
     endif()
 
     file(REMOVE_RECURSE "${_fixture}")
-    message(STATUS "SPARK_SDK_TEMPLATE_SELF_TEST sidecar_cases=7 boundary_cases=4 passed")
+    message(STATUS "SPARK_SDK_TEMPLATE_SELF_TEST sidecar_cases=7 boundary_cases=6 passed")
     return()
 endif()
 
@@ -428,12 +490,12 @@ foreach(_tool IN ITEMS deps commands)
     if(NOT "${_result}" STREQUAL "0")
         message(FATAL_ERROR "ninja -t ${_tool} failed (${_result}):\n${_error}")
     endif()
+    if(_tool STREQUAL "deps")
+        _spark_sdk_template_anchor_deps("${_output}" "${_build}" _output)
+    endif()
     # Fail closed on a dump that could not have seen the SDK at all.
-    string(REPLACE "\\" "/" _probe "${_output}")
-    string(TOLOWER "${_probe}" _probe)
-    string(TOLOWER "${_prefix}" _prefix_lower)
-    string(FIND "${_probe}" "${_prefix_lower}/" _prefix_at)
-    if(_prefix_at EQUAL -1)
+    _spark_sdk_template_mentions_prefix("${_output}" "${_prefix}" _mentions_prefix)
+    if(NOT _mentions_prefix)
         message(FATAL_ERROR "ninja -t ${_tool} never mentions the SDK prefix ${_prefix}; nothing to check")
     endif()
     set(_dump "${_dump_dir}/ninja-${_tool}.d")
