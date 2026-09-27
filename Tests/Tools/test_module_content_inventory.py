@@ -63,7 +63,12 @@ class ModuleContentInventoryTests(unittest.TestCase):
         (module_dir / "README.md").write_text("# SparkGameFPS\n", encoding="utf-8")
         (self.root / "Tests").mkdir()
         (self.root / "Tests" / "CMakeLists.txt").write_text("add_executable(SparkTests\n    TestFixtureFPS.cpp\n)\n", encoding="utf-8")
-        (self.root / "Tests" / "TestFixtureFPS.cpp").write_text("TEST(FPSFixture_Runs)\n{\n}\n", encoding="utf-8")
+        # RDY-010: a listed source must include a production header and assert something.
+        (module_dir / "Source" / "FPSFixture.h").write_text("#pragma once\n", encoding="utf-8")
+        (self.root / "Tests" / "TestFixtureFPS.cpp").write_text(
+            '#include "../GameModules/SparkGameFPS/Source/FPSFixture.h"\nTEST(FPSFixture_Runs)\n{\n    EXPECT_EQ(2, 1 + 1);\n}\n',
+            encoding="utf-8",
+        )
         work_items = self.root / "docs" / "readiness" / "work-items"
         work_items.mkdir(parents=True)
         (work_items / "30-game-modules.json").write_text(json.dumps({

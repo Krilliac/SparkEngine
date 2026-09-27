@@ -72,12 +72,15 @@ class ManifestMutationTests(unittest.TestCase):
     ``mklink /J`` subprocess and each Tests/ file a copy, so a per-test mirror
     cost minutes). Every file a mutation may edit, delete or recreate is a real
     copy listed in ``mutable``; setUp rewrites any of them that differ from the
-    pristine bytes, so each test starts from the clean baseline. A new mutation
-    that edits some other mirrored file must add it to ``mutable`` in setUpClass.
+    pristine bytes, and deletes any file a mutation added directly under Tests/,
+    so each test starts from the clean baseline. A new mutation that edits some
+    other mirrored file must add it to ``mutable`` in setUpClass.
     """
 
     root: Path
     mutable: dict[Path, bytes]
+    tests_dir: Path
+    tests_entries: frozenset[str]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -87,6 +90,11 @@ class ManifestMutationTests(unittest.TestCase):
         # Large read-only inputs are linked; every file a mutation edits is copied.
         copied = {"CMakeLists.txt", "TestModuleABI.cpp"}
         _link(root / "Assets", ROOT / "Assets")
+        # The mirror rule resolves listed sources' includes against the production roots.
+        for production_root in module_content._test_source_census().PRODUCTION_ROOTS:
+            top = production_root.split("/", 1)[0]
+            if top != "GameModules" and not (root / top).exists():
+                _link(root / top, ROOT / top)
         tests = root / "Tests"
         tests.mkdir()
         for entry in (ROOT / "Tests").iterdir():
@@ -94,6 +102,9 @@ class ManifestMutationTests(unittest.TestCase):
                 shutil.copy2(entry, tests / entry.name)
             else:
                 _link(tests / entry.name, entry)
+        # Mutations may add new top-level Tests/ sources (RDY-010 cases); setUp removes them.
+        cls.tests_dir = tests
+        cls.tests_entries = frozenset(entry.name for entry in tests.iterdir())
         shutil.copytree(ROOT / module_content.WORK_ITEMS_RELATIVE, root / module_content.WORK_ITEMS_RELATIVE)
         evidence = root / module_content.EVIDENCE_RELATIVE
         evidence.parent.mkdir(parents=True)
@@ -122,6 +133,13 @@ class ManifestMutationTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.root = type(self).root
+        # A source a mutation added to the real Tests/ directory must not leak into the next test.
+        for entry in self.tests_dir.iterdir():
+            if entry.name not in self.tests_entries:
+                if entry.is_file() and not entry.is_symlink():
+                    entry.unlink()
+                else:
+                    raise AssertionError(f"unexpected non-file entry in the mutation mirror: {entry}")
         # Compare bytes, not stat: a same-size rewrite within one clock tick keeps mtime.
         for path, pristine in self.mutable.items():
             if not path.is_file() or path.read_bytes() != pristine:
@@ -230,7 +248,7 @@ class ManifestMutationTests(unittest.TestCase):
         # family (the substring count) must be rejected, or renaming an RPG_ test
         # while adding an ARPG_ test would leave the declared count unchanged.
         cmake = module_content._strip_cmake_comments((ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8"))
-        names = [name for name, _ in module_content._registered_test_names(ROOT, cmake)]
+        names = [name for name, _, _ in module_content._registered_test_names(ROOT, cmake)]
         anchored = sum(1 for name in names if name.startswith("RPG_"))
         substring = sum(1 for name in names if "RPG_" in name)
         self.assertGreater(substring, anchored, "the ARPG_ family must overlap RPG_ for this mutation to mean anything")
@@ -290,6 +308,53 @@ class ManifestMutationTests(unittest.TestCase):
         self.assertIn("TestGameModuleRTS.cpp", text)
         cmake.write_text(text.replace("TestGameModuleRTS.cpp", "TestGameModuleRTSRemoved.cpp"), encoding="utf-8")
         self.assert_named_error("test source is not registered in Tests/CMakeLists.txt: Tests/TestGameModuleRTS.cpp")
+
+    def add_registered_source(self, file_name: str, body: str) -> str:
+        """Write Tests/<file_name> into the scratch tree and register it in its Tests/CMakeLists.txt."""
+        (self.root / "Tests" / file_name).write_text(body, encoding="utf-8")
+        cmake = self.root / "Tests" / "CMakeLists.txt"
+        cmake.write_text(cmake.read_text(encoding="utf-8") + f"\nset(_mutation_sources {file_name})\n", encoding="utf-8")
+        return f"Tests/{file_name}"
+
+    def list_family(self, source: str, prefix: str) -> None:
+        def mutate(manifest: dict) -> None:
+            manifest["tests"]["files"].append(source)
+            manifest["tests"]["prefixes"].append({"prefix": prefix, "count": 1})
+        self.edit("SparkGameRTS", mutate)
+
+    RTS_HEADER = '#include "TestFramework.h"\n#include "../GameModules/SparkGameRTS/Source/Unit/RTSUnitSystem.h"\n'
+
+    def test_unlisted_source_feeding_a_prefix_fails(self) -> None:
+        # RDY-010: the generated CTest filters by prefix over every compiled test,
+        # so a registered file the manifest does not list still feeds the family.
+        # The count is adjusted so only the new rule can fail.
+        path = self.add_registered_source("TestRTSSmuggled.cpp", self.RTS_HEADER + "TEST(RTS_Smuggled) { EXPECT_EQ(2, 1 + 1); }\n")
+        self.edit_selector("SparkGameRTS", "RTS_", count=self.selector("SparkGameRTS", "RTS_")["count"] + 1)
+        self.assertEqual(
+            [f"GameModules/SparkGameRTS/module.json.tests.prefixes[0]: test prefix RTS_ selects TEST(RTS_Smuggled) in {path}, "
+             "which tests.files does not list"],
+            self.messages(),
+        )
+
+    def test_listed_mirror_source_fails(self) -> None:
+        path = self.add_registered_source(
+            "TestRTSMirrorCopy.cpp", '#include "TestFramework.h"\nTEST(RTSMirrorCopy_Adds) { EXPECT_EQ(2, 1 + 1); }\n')
+        self.list_family(path, "RTSMirrorCopy_")
+        self.assert_named_error(f"test source is a mirror (no production header): {path}")
+
+    def test_listed_tautological_test_fails(self) -> None:
+        path = self.add_registered_source(
+            "TestRTSTautology.cpp", self.RTS_HEADER + "TEST(RTSTautology_Nothing) { EXPECT_TRUE(true); }\n")
+        self.list_family(path, "RTSTautology_")
+        self.assertEqual(
+            [f"GameModules/SparkGameRTS/module.json.tests.prefixes[{len(self.selectors('SparkGameRTS')) - 1}]: "
+             f"test prefix RTSTautology_ selects TEST(RTSTautology_Nothing) in {path}, "
+             "whose body is only EXPECT_TRUE(true)/EXPECT_NO_CRASH"],
+            self.messages(),
+        )
+
+    def selectors(self, name: str) -> list[dict]:
+        return json.loads(self.manifest_path(name).read_text(encoding="utf-8"))["tests"]["prefixes"]
 
     def test_missing_source_directory_fails(self) -> None:
         self.edit("SparkGameRTS", lambda manifest: manifest.update(sourceDirectory="GameModules/SparkGameRTS/Missing"))

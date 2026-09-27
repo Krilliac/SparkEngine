@@ -492,37 +492,44 @@ def is_tautological(body: str) -> bool:
     return all(_TAUTOLOGICAL_STATEMENT_RE.fullmatch(statement) for statement in statements if statement)
 
 
-def resolve_registered_tests(root: Path, rows: list[dict[str, object]]) -> list[RegisteredTest]:
-    """Resolve every TEST/TEST_F in the census rows to its registered name and body verdict.
+def test_definitions(text: str) -> list[tuple[str, int, bool]]:
+    """(registered name, line, tautological body) for every TEST/TEST_F in C++ source text.
 
-    Fail-closed: a file whose TEST( count differs from the definitions parsed
-    here holds a test whose registered name is unknown, so no selector could be
-    proven unable to reach it.
+    Raises ValueError when the source does not parse, or when its TEST( count
+    differs from the definitions parsed here: that file holds a test whose
+    registered name is unknown, so no selector could be proven unable to reach it.
     """
+    code = cpp_code_only(text)
+    matches = list(_TEST_DEFINITION_RE.finditer(code))
+    declared = len(TEST_MACRO_RE.findall(code))
+    if len(matches) != declared:
+        raise ValueError(
+            f"resolved {len(matches)} TEST definitions but found {declared} TEST( macros; "
+            "a test whose registered name is unknown defeats the profile-selector guard"
+        )
+    return [
+        (
+            match.group(1) or f"{match.group(2)}.{match.group(3)}",
+            code.count("\n", 0, match.start(match.lastindex or 0)) + 1,
+            is_tautological(_braced_body(code, match.end() - 1)),
+        )
+        for match in matches
+    ]
+
+
+def resolve_registered_tests(root: Path, rows: list[dict[str, object]]) -> list[RegisteredTest]:
+    """Resolve every TEST/TEST_F in the census rows to its registered name and body verdict (fail-closed)."""
     definitions: list[RegisteredTest] = []
     for row in rows:
         relative_path = str(row["path"])
         try:
-            code = cpp_code_only((root / relative_path).read_text(encoding="utf-8"))
+            parsed = test_definitions((root / relative_path).read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, ValueError) as exc:
-            raise SystemExit(f"error: cannot resolve TEST definitions in {relative_path}: {exc}")
-        matches = list(_TEST_DEFINITION_RE.finditer(code))
-        declared = len(TEST_MACRO_RE.findall(code))
-        if len(matches) != declared:
-            raise SystemExit(
-                f"error: {relative_path}: resolved {len(matches)} TEST definitions but found {declared} TEST( "
-                "macros; a test whose registered name is unknown defeats the profile-selector guard"
-            )
-        for match in matches:
-            definitions.append(
-                RegisteredTest(
-                    name=match.group(1) or f"{match.group(2)}.{match.group(3)}",
-                    path=relative_path,
-                    line=code.count("\n", 0, match.start(match.lastindex or 0)) + 1,
-                    kind=str(row["kind"]),
-                    tautological=is_tautological(_braced_body(code, match.end() - 1)),
-                )
-            )
+            raise SystemExit(f"error: {relative_path}: cannot resolve TEST definitions: {exc}")
+        definitions.extend(
+            RegisteredTest(name=name, path=relative_path, line=line, kind=str(row["kind"]), tautological=tautological)
+            for name, line, tautological in parsed
+        )
     return definitions
 
 

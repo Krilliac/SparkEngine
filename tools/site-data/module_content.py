@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 import functools
+import importlib.util
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -578,8 +581,8 @@ def _test_definitions_by_platform(text: str) -> list[tuple[str, frozenset[str]]]
     return definitions
 
 
-def _registered_test_names(repo_root: Path, cmake_text: str) -> list[tuple[str, frozenset[str]]]:
-    """Every TEST( defined by a Tests/ source that Tests/CMakeLists.txt registers, with its platforms."""
+def _registered_test_names(repo_root: Path, cmake_text: str) -> list[tuple[str, frozenset[str], str]]:
+    """Every TEST( defined by a Tests/ source that Tests/CMakeLists.txt registers: name, platforms, source path."""
     tests_root = repo_root / "Tests"
     # Same token rule as _is_registered_test_source, tokenised once for ~700 sources.
     registered = {
@@ -587,7 +590,7 @@ def _registered_test_names(repo_root: Path, cmake_text: str) -> list[tuple[str, 
         for token in re.split(r'[\s"()]+', cmake_text)
         if token.endswith(".cpp")
     }
-    names: list[tuple[str, frozenset[str]]] = []
+    names: list[tuple[str, frozenset[str], str]] = []
     # followlinks: the mutation tests mirror Tests/ subdirectories as symlinks.
     for directory, subdirectories, files in os.walk(tests_root, followlinks=True):
         subdirectories.sort()
@@ -595,10 +598,15 @@ def _registered_test_names(repo_root: Path, cmake_text: str) -> list[tuple[str, 
             if not file_name.endswith(".cpp"):
                 continue
             source = Path(directory) / file_name
-            if source.relative_to(tests_root).as_posix() not in registered:
+            relative = source.relative_to(tests_root).as_posix()
+            if relative not in registered:
                 continue
             status = source.stat()
-            names.extend(_source_test_definitions(str(source), (status.st_mtime_ns, status.st_size, status.st_ino)))
+            signature = (status.st_mtime_ns, status.st_size, status.st_ino)
+            names.extend(
+                (name, platforms, f"Tests/{relative}")
+                for name, platforms in _source_test_definitions(str(source), signature)
+            )
     return names
 
 
@@ -618,6 +626,53 @@ def _source_test_names(path: str, signature: tuple[int, int, int]) -> tuple[str,
     """Every TEST( name in the comment-stripped file, memoized like _source_test_definitions."""
     del signature  # part of the cache key only
     return tuple(TEST_DEFINITION_PATTERN.findall(_strip_cpp_comments(Path(path).read_text(encoding="utf-8", errors="replace"))))
+
+
+class _RegisteredTestIndex:
+    """Registered TEST( definitions sorted by name, so a prefix selects one contiguous slice.
+
+    Every selector of every manifest scans the ~8000 registered definitions; a linear
+    startswith pass per selector cost millions of calls per validation.
+    """
+
+    def __init__(self, definitions: list[tuple[str, frozenset[str], str]]) -> None:
+        self._definitions = sorted(definitions, key=lambda definition: definition[0])
+        self._names = [name for name, _, _ in self._definitions]
+
+    def starting_with(self, prefix: str) -> list[tuple[str, frozenset[str], str]]:
+        """(name, platforms, source path) of every definition whose name starts with ``prefix``."""
+        start = bisect.bisect_left(self._names, prefix)
+        end = start
+        while end < len(self._names) and self._names[end].startswith(prefix):
+            end += 1
+        return self._definitions[start:end]
+
+
+@functools.lru_cache(maxsize=1)
+def _test_source_census() -> Any:
+    """Tools/test_source_census.py, the one classifier of mirror and tautological tests.
+
+    Loaded from this checkout by path: Tools/ and tools/ are distinct directories
+    on case-sensitive hosts, so it is not importable as a package.
+    """
+    path = Path(__file__).resolve().parents[2] / "Tools" / "test_source_census.py"
+    spec = importlib.util.spec_from_file_location("spark_test_source_census", path)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"error: cannot import {path}")
+    module = sys.modules.get(spec.name)
+    if module is None:
+        module = importlib.util.module_from_spec(spec)
+        # Registered before execution: its dataclasses resolve their module by name.
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+    return module
+
+
+# Keyed by source text: the mutation tests validate ~40 scratch copies of one tree.
+@functools.lru_cache(maxsize=512)
+def _tautological_tests(text: str) -> frozenset[str]:
+    """TEST( names whose body asserts nothing (census is_tautological); ValueError when unparseable."""
+    return frozenset(name for name, _, tautological in _test_source_census().test_definitions(text) if tautological)
 
 
 def _manifest_path(repo_root: Path, value: Any, location: str, findings: list[tuple[str, str]], *, kind: str) -> Path | None:
@@ -797,9 +852,10 @@ def _validate_selector_count(
 
 
 def _validate_manifest_tests(
-    repo_root: Path, tests: Any, location: str, registered_names: list[tuple[str, frozenset[str]]], cmake_text: str
+    repo_root: Path, tests: Any, location: str, registered: _RegisteredTestIndex, cmake_text: str
 ) -> list[tuple[str, str]]:
-    """``cmake_text`` is the comment-stripped Tests/CMakeLists.txt (empty when it is missing)."""
+    """``registered`` indexes every registered TEST( (see _RegisteredTestIndex); ``cmake_text`` is the
+    comment-stripped Tests/CMakeLists.txt (empty when it is missing)."""
     if not isinstance(tests, dict) or set(tests) != {"files", "prefixes"}:
         return [(location, "tests must contain exactly files and prefixes")]
     files, prefixes = tests["files"], tests["prefixes"]
@@ -809,6 +865,9 @@ def _validate_manifest_tests(
     if not isinstance(prefixes, list) or not prefixes:
         return [(f"{location}.prefixes", "must be a non-empty list of {prefix, count} selectors")]
     names_by_file: dict[str, list[str]] = {}
+    # RDY-010: the generated ModuleManifest_ CTest is module-kit release evidence,
+    # so what a selector reaches must be production-source and must assert something.
+    tautological: set[tuple[str, str]] = set()
     for index, value in enumerate(files):
         file_location = f"{location}.files[{index}]"
         source = _manifest_path(repo_root, value, file_location, findings, kind="file")
@@ -819,6 +878,13 @@ def _validate_manifest_tests(
             continue
         if not _is_registered_test_source(cmake_text, value[len("Tests/"):]):
             findings.append((file_location, f"test source is not registered in {TESTS_CMAKE_RELATIVE.as_posix()}: {value}"))
+        raw = source.read_text(encoding="utf-8", errors="replace")
+        if _test_source_census().classify(raw, repo_root, value) == "mirror":
+            findings.append((file_location, f"test source is a mirror (no production header): {value}"))
+        try:
+            tautological.update((value, name) for name in _tautological_tests(raw))
+        except ValueError as error:
+            findings.append((file_location, f"cannot resolve the TEST( bodies of {value}: {error}"))
         status = source.stat()
         names_by_file[value] = list(_source_test_names(str(source), (status.st_mtime_ns, status.st_size, status.st_ino)))
     valid_prefixes: list[str] = []
@@ -853,9 +919,19 @@ def _validate_manifest_tests(
         # compiled test) and SPARK_TEST_EXPECT_COUNT=<count>. Checking the same
         # count here catches drift without a build; the CTest re-checks it on
         # each platform.
-        matching = [platforms for name, platforms in registered_names if name.startswith(prefix)]
-        selected = {platform: sum(1 for platforms in matching if platform in platforms) for platform in TEST_PLATFORMS}
+        matching = registered.starting_with(prefix)
+        selected = {
+            platform: sum(1 for _, platforms, _ in matching if platform in platforms) for platform in TEST_PLATFORMS
+        }
         findings.extend(_validate_selector_count(prefix, count, selected, entry_location))
+        # The prefix filter runs over every compiled test, so a registered file
+        # the manifest does not list (and so the mirror rule never classifies)
+        # would feed the family too.
+        for name, _, path in matching:
+            if path not in names_by_file:
+                findings.append((entry_location, f"test prefix {prefix} selects TEST({name}) in {path}, which tests.files does not list"))
+            elif (path, name) in tautological:
+                findings.append((entry_location, f"test prefix {prefix} selects TEST({name}) in {path}, whose body is only EXPECT_TRUE(true)/EXPECT_NO_CRASH"))
     for value, names in names_by_file.items():
         if not any(name.startswith(prefix) for name in names for prefix in valid_prefixes):
             findings.append((location, f"listed test source defines no TEST( matching a declared prefix: {value}"))
@@ -903,7 +979,7 @@ def validate_module_manifests(
     dimensions, scores, findings = _parity_rows(repo_root)
     cmake_path = repo_root / TESTS_CMAKE_RELATIVE
     cmake_text = _strip_cmake_comments(cmake_path.read_text(encoding="utf-8")) if cmake_path.is_file() else ""
-    registered_names = _registered_test_names(repo_root, cmake_text)
+    registered = _RegisteredTestIndex(_registered_test_names(repo_root, cmake_text))
     for name in sorted(actual, key=str.casefold):
         module_dir = actual[name]
         path = module_dir / MODULE_MANIFEST_NAME
@@ -933,7 +1009,7 @@ def validate_module_manifests(
                 findings.append((location, f"{key} disagrees with {EVIDENCE_RELATIVE.as_posix()}: expected {evidence.get(key)!r}"))
         _manifest_path(repo_root, manifest["sourceDirectory"], f"{location}.sourceDirectory", findings, kind="directory")
         findings.extend(_validate_manifest_assets(repo_root, module_dir, manifest["assets"], f"{location}.assets"))
-        findings.extend(_validate_manifest_tests(repo_root, manifest["tests"], f"{location}.tests", registered_names, cmake_text))
+        findings.extend(_validate_manifest_tests(repo_root, manifest["tests"], f"{location}.tests", registered, cmake_text))
         docs = manifest["docs"]
         readme = docs.get("readme") if isinstance(docs, dict) and set(docs) == {"readme"} else None
         expected_readme = f"{module_dir.relative_to(repo_root).as_posix()}/README.md"
