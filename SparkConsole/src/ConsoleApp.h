@@ -89,6 +89,7 @@ class ConsoleApp
 #else
     void ReadEngineInputPosix(); ///< POSIX (Linux/macOS) pipe reading loop.
 #endif
+    void OnEnginePipeClosed(); ///< Reader thread saw the engine pipe end: stop the console (pipe mode only).
 
     // --- Keyboard input helpers (pipe-mode line editing) ---
     void HandleBackspaceKey(std::string& input);           ///< Process Backspace/DEL keypress.
@@ -111,10 +112,11 @@ class ConsoleApp
     void RegisterCoreCommands();                     ///< Register core commands (help, clear, echo, version).
     void RegisterDiagnosticCommands();               ///< Register diagnostic commands (status, diag, pipe_test, etc).
     void RegisterAliasCommands();                    ///< Register alias/history commands and default aliases.
-    bool ShouldForwardToEngine(const std::string& command); ///< True if this command should be sent to the engine.
 
     // --- Command history ---
-    void AddToHistory(const std::string& cmd); ///< Append a command to the history ring buffer.
+    /// Append the history-safe form of @p typedLine (ConsoleHistoryPolicy) to the ring buffer.
+    /// @p resolvedLine is the alias-expanded line, which decides whether its arguments may be kept.
+    void AddToHistory(const std::string& typedLine, const std::string& resolvedLine);
 
     // --- Alias system ---
     std::string ResolveAlias(const std::string& input); ///< Expand aliases before command dispatch.

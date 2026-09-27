@@ -15,8 +15,12 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
+#include <cstddef>
 #include <cstring>
+#include <optional>
 #include <sstream>
+#include <string_view>
 
 #include <fcntl.h>
 #include <poll.h>
@@ -520,65 +524,113 @@ namespace Spark
         m_impl->exitStatus = -1;
     }
 
+    namespace
+    {
+        /**
+         * @brief Write @p data to a pipe, blocking or bounded by @p deadline.
+         *
+         * Without a deadline the write blocks until every byte is accepted. With
+         * one, the descriptor is switched to O_NONBLOCK for the call and poll()
+         * waits for room only until the deadline, so a reader that stopped
+         * draining cannot stall the writer past it.
+         * @return Bytes written.
+         */
+        size_t WritePipe(int fd, std::string_view data, std::optional<std::chrono::steady_clock::time_point> deadline)
+        {
+            int previousFlags = -1;
+            if (deadline)
+            {
+                previousFlags = fcntl(fd, F_GETFL, 0);
+                // Fail closed: a blocking descriptor could wait forever.
+                if (previousFlags == -1 || fcntl(fd, F_SETFL, previousFlags | O_NONBLOCK) == -1)
+                    return 0;
+            }
+
+            // Writing to a pipe whose reader has exited raises SIGPIPE, whose
+            // default action terminates the *launching* process (the editor, a
+            // tool, the test runner). Block it on this thread for the duration of
+            // the write so the failure surfaces as EPIPE instead, then discard the
+            // SIGPIPE we generated so it is not delivered once the mask is restored.
+            sigset_t sigpipeMask;
+            sigemptyset(&sigpipeMask);
+            sigaddset(&sigpipeMask, SIGPIPE);
+            sigset_t pendingBefore;
+            sigemptyset(&pendingBefore);
+            sigpending(&pendingBefore);
+            const bool sigpipeAlreadyPending = sigismember(&pendingBefore, SIGPIPE) == 1;
+            sigset_t previousMask;
+            const bool masked = pthread_sigmask(SIG_BLOCK, &sigpipeMask, &previousMask) == 0;
+            bool brokenPipe = false;
+
+            const char* cursor = data.data();
+            size_t remaining = data.size();
+            while (remaining > 0)
+            {
+                const ssize_t written = write(fd, cursor, remaining);
+                if (written > 0)
+                {
+                    cursor += written;
+                    remaining -= static_cast<size_t>(written);
+                    continue;
+                }
+
+                if (written < 0 && errno == EINTR)
+                    continue;
+
+                if (deadline && written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+                {
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now >= *deadline)
+                        break;
+                    const auto waitMs = std::chrono::ceil<std::chrono::milliseconds>(*deadline - now).count();
+                    pollfd room{fd, POLLOUT, 0};
+                    const int ready = poll(&room, 1, static_cast<int>(std::min<long long>(waitMs, 1000)));
+                    if (ready < 0 && errno != EINTR)
+                        break;
+                    continue; // Room, timeout (re-checked above) or EINTR.
+                }
+
+                // EPIPE (child closed stdin) and any other write failure: stop writing.
+                brokenPipe = written < 0 && errno == EPIPE;
+                break;
+            }
+
+            if (brokenPipe && !sigpipeAlreadyPending)
+            {
+#if defined(__linux__)
+                const timespec noWait{};
+                while (sigtimedwait(&sigpipeMask, nullptr, &noWait) == -1 && errno == EINTR)
+                {
+                }
+#else
+                // macOS lacks sigtimedwait(); sigwait() is safe because the signal is pending.
+                sigset_t pendingNow;
+                sigemptyset(&pendingNow);
+                int consumed = 0;
+                if (sigpending(&pendingNow) == 0 && sigismember(&pendingNow, SIGPIPE) == 1)
+                    sigwait(&sigpipeMask, &consumed);
+#endif
+            }
+            if (masked)
+                pthread_sigmask(SIG_SETMASK, &previousMask, nullptr);
+            if (deadline)
+                fcntl(fd, F_SETFL, previousFlags);
+            return data.size() - remaining;
+        }
+    } // namespace
+
     void Process::WriteStdin(std::string_view data)
     {
         if (!m_impl || m_impl->stdinWriteFd < 0)
             return;
+        WritePipe(m_impl->stdinWriteFd, data, std::nullopt);
+    }
 
-        // Writing to a pipe whose reader has exited raises SIGPIPE, whose
-        // default action terminates the *launching* process (the editor, a
-        // tool, the test runner). Block it on this thread for the duration of
-        // the write so the failure surfaces as EPIPE instead, then discard the
-        // SIGPIPE we generated so it is not delivered once the mask is restored.
-        sigset_t sigpipeMask;
-        sigemptyset(&sigpipeMask);
-        sigaddset(&sigpipeMask, SIGPIPE);
-        sigset_t pendingBefore;
-        sigemptyset(&pendingBefore);
-        sigpending(&pendingBefore);
-        const bool sigpipeAlreadyPending = sigismember(&pendingBefore, SIGPIPE) == 1;
-        sigset_t previousMask;
-        const bool masked = pthread_sigmask(SIG_BLOCK, &sigpipeMask, &previousMask) == 0;
-        bool brokenPipe = false;
-
-        const char* cursor = data.data();
-        size_t remaining = data.size();
-        while (remaining > 0)
-        {
-            const ssize_t written = write(m_impl->stdinWriteFd, cursor, remaining);
-            if (written > 0)
-            {
-                cursor += written;
-                remaining -= static_cast<size_t>(written);
-                continue;
-            }
-
-            if (written < 0 && errno == EINTR)
-                continue;
-
-            // EPIPE (child closed stdin) and any other write failure: stop writing.
-            brokenPipe = written < 0 && errno == EPIPE;
-            break;
-        }
-
-        if (brokenPipe && !sigpipeAlreadyPending)
-        {
-#if defined(__linux__)
-            const timespec noWait{};
-            while (sigtimedwait(&sigpipeMask, nullptr, &noWait) == -1 && errno == EINTR)
-            {
-            }
-#else
-            // macOS lacks sigtimedwait(); sigwait() is safe because the signal is pending.
-            sigset_t pendingNow;
-            sigemptyset(&pendingNow);
-            int consumed = 0;
-            if (sigpending(&pendingNow) == 0 && sigismember(&pendingNow, SIGPIPE) == 1)
-                sigwait(&sigpipeMask, &consumed);
-#endif
-        }
-        if (masked)
-            pthread_sigmask(SIG_SETMASK, &previousMask, nullptr);
+    std::size_t Process::WriteStdinFor(std::string_view data, std::chrono::milliseconds timeout)
+    {
+        if (!m_impl || m_impl->stdinWriteFd < 0 || data.empty())
+            return 0;
+        return WritePipe(m_impl->stdinWriteFd, data, std::chrono::steady_clock::now() + timeout);
     }
 
     void Process::CloseStdin()

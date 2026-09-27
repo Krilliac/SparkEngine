@@ -25,6 +25,8 @@
 #include "../Core/Platform.h"
 
 #include <chrono>
+#include <cstddef>
+#include <expected>
 #include <memory>
 #include <optional>
 #include <string>
@@ -134,8 +136,24 @@ namespace Spark
 
         // -- Pipe I/O ------------------------------------------------------------
 
-        /// Write data to the child's stdin (requires CaptureStdin).
+        /// Write data to the child's stdin (requires CaptureStdin). Blocks until
+        /// every byte is accepted, so a child that stops reading stalls the caller;
+        /// use WriteStdinFor() from any thread that must stay responsive.
         void WriteStdin(std::string_view data);
+
+        /**
+         * @brief Write as much of @p data as the child accepts within @p timeout.
+         *
+         * Never blocks longer than about @p timeout, whatever the child does: a
+         * child that stopped draining its stdin cannot wedge the writer (the
+         * SparkConsole mirror thread that Shutdown() joins). Requires CaptureStdin.
+         * Call from one writer thread at a time, like WriteStdin().
+         *
+         * @return Bytes written, from 0 to data.size(). Fewer than data.size()
+         *         means the timeout expired, the pipe is broken, or stdin is not
+         *         captured; the caller keeps the unwritten tail if it wants it.
+         */
+        std::size_t WriteStdinFor(std::string_view data, std::chrono::milliseconds timeout);
 
         /// Close the write end of the stdin pipe, signaling EOF to the child.
         void CloseStdin();

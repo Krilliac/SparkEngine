@@ -1144,15 +1144,25 @@ target_sources(SparkTests PRIVATE
     TestSEC2ConsoleIpcReal.cpp
 )
 
-# SEC2 console-IPC security regressions (TestSEC2ConsoleIpcReal.cpp): Win32
-# handle-inheritance tests. The pinned count fails the lane if they compile out.
+# SEC2 console-IPC security regressions (TestSEC2ConsoleIpcReal.cpp). Five tests
+# run on every platform; Windows adds two handle-inheritance tests, and POSIX
+# adds two that drive the real SparkConsole binary. The pinned count fails the
+# lane if a platform branch silently compiles its tests out.
+set(_spark_sec2_console_count 5)
 if(WIN32)
-    add_test(NAME SEC2ConsoleIpcReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
-    set_tests_properties(SEC2ConsoleIpcReal PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Console_;SPARK_TEST_EXPECT_COUNT=2"
-        LABELS "security;console;process;integration"
-        TIMEOUT 120)
+    math(EXPR _spark_sec2_console_count "${_spark_sec2_console_count} + 2")
+elseif(TARGET SparkConsole)
+    add_dependencies(SparkTests SparkConsole)
+    target_compile_definitions(SparkTests PRIVATE
+        SPARK_TEST_SPARK_CONSOLE_PATH="$<TARGET_FILE:SparkConsole>")
+    math(EXPR _spark_sec2_console_count "${_spark_sec2_console_count} + 2")
 endif()
+add_test(NAME SEC2ConsoleIpcReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SEC2ConsoleIpcReal PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Console_;SPARK_TEST_EXPECT_COUNT=${_spark_sec2_console_count}"
+    LABELS "security;console;process;integration"
+    TIMEOUT 120)
+unset(_spark_sec2_console_count)
 
 # TestBuildInfraReal.cpp asserts the generated SDK version header still carries
 # the version CMake is building, so the number has to reach the test as data.

@@ -15,6 +15,9 @@
 #include "Process.h"
 #include "ProcessWin32Internal.h"
 
+#include <algorithm>
+#include <chrono>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -101,6 +104,45 @@ namespace Spark
             return;
         DWORD written;
         WriteFile(m_impl->stdinWrite, data.data(), static_cast<DWORD>(data.size()), &written, NULL);
+    }
+
+    std::size_t Process::WriteStdinFor(std::string_view data, std::chrono::milliseconds timeout)
+    {
+        if (!m_impl || !m_impl->stdinWrite || data.empty())
+            return 0;
+
+        // An anonymous pipe is a named pipe underneath, so PIPE_NOWAIT applies:
+        // a write into a full buffer returns at once with fewer bytes (possibly
+        // none) instead of blocking until the child reads. Fail closed — without
+        // the non-blocking mode this call could block forever, which is exactly
+        // what it exists to prevent.
+        DWORD nonBlocking = PIPE_READMODE_BYTE | PIPE_NOWAIT;
+        if (!SetNamedPipeHandleState(m_impl->stdinWrite, &nonBlocking, nullptr, nullptr))
+            return 0;
+
+        // Bounded chunks keep a single request under the pipe quota, so each
+        // attempt can make partial progress instead of being all-or-nothing.
+        constexpr std::size_t kChunkBytes = 1024;
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        std::size_t total = 0;
+        while (total < data.size())
+        {
+            const DWORD request = static_cast<DWORD>((std::min)(data.size() - total, kChunkBytes));
+            DWORD written = 0;
+            if (!WriteFile(m_impl->stdinWrite, data.data() + total, request, &written, nullptr))
+                break; // ERROR_NO_DATA / ERROR_BROKEN_PIPE: the child closed its stdin.
+            total += written;
+            if (written == 0)
+            {
+                if (std::chrono::steady_clock::now() >= deadline)
+                    break;
+                Sleep(1);
+            }
+        }
+
+        DWORD blocking = PIPE_READMODE_BYTE | PIPE_WAIT;
+        SetNamedPipeHandleState(m_impl->stdinWrite, &blocking, nullptr, nullptr);
+        return total;
     }
 
     void Process::CloseStdin()

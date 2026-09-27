@@ -13,6 +13,7 @@
 #include "Process.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -69,6 +70,21 @@ namespace Spark
         void ProcessCommands();
 
         /**
+         * @brief Run one command line received from the SparkConsole window.
+         *
+         * Main thread (ProcessCommands() calls it once per queued line). The
+         * manager's own commands (quit, assert_mode, assert_test, crash_test)
+         * run here; everything else goes to SimpleConsole, the registry every
+         * engine subsystem and game module registers on, so the external
+         * console reaches the same commands as the in-process one. Falls back to
+         * the manager's registry only while SimpleConsole is not initialized.
+         *
+         * @return Text to report as a RESULT line; empty when SimpleConsole ran
+         *         the command (it logs its own result, mirrored to the window).
+         */
+        std::string DispatchConsoleCommand(const std::string& commandLine);
+
+        /**
          * @brief Whether the process-wide instance is constructed and not yet destroyed.
          *
          * Both this manager and SimpleConsole are function-local statics, so the
@@ -112,7 +128,13 @@ namespace Spark
 
         bool LaunchConsoleProcess(const std::string& path);
         bool ReadFromConsole();
-        bool WriteToConsole(const std::string& message);
+
+        /// Append one outgoing line to m_pendingWrite (console thread only).
+        void AppendForConsole(const std::string& message);
+
+        /// Write m_pendingWrite for at most kConsoleWriteSlice (console thread only).
+        /// @return true once nothing is left to write.
+        bool FlushPendingWrite();
 
         void ConsoleThreadMain();
         void ProcessQueuedMessages();
@@ -135,9 +157,18 @@ namespace Spark
         /// Cap on outgoing log lines held for the child. The only drain is the
         /// console thread's blocking pipe write, so a child that stops reading
         /// its stdin would otherwise grow this queue by one entry per engine log
-        /// line for the life of the process. Over the cap the oldest line is
+        /// line for the life of the process (the drain's writes are time-bounded,
+        /// so it stops taking lines instead of blocking). Over the cap the oldest line is
         /// dropped and counted; the count is reported once when the queue drains.
         static constexpr size_t kMaxQueuedMessages = 4096;
+
+        /// Longest the console thread spends in one pipe write. It bounds how
+        /// long Shutdown()'s join can wait on a child that stopped reading.
+        static constexpr std::chrono::milliseconds kConsoleWriteSlice{50};
+
+        /// Bytes accepted from m_messageQueue but not yet taken by the child's
+        /// stdin. Owned by the console thread; Shutdown() clears it after the join.
+        std::string m_pendingWrite;
 
         std::mutex m_messageMutex;              ///< Guards m_messageQueue, m_droppedMessages and m_process teardown.
         std::queue<std::string> m_messageQueue; ///< Outgoing log messages queued for the child process.
@@ -168,6 +199,7 @@ namespace Spark
                              const std::string& usage = "");
 
         std::string ExecuteCommand(const std::string& commandLine);
+        bool HasCommand(const std::string& name) const { return m_commands.contains(name); }
         std::vector<CommandInfo> GetAllCommands() const;
 
       private:
