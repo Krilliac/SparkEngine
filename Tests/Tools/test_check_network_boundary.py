@@ -543,6 +543,22 @@ void Added() {
         }
         self.assertEqual(observed, expected)
 
+    def test_non_shipped_top_level_trees_are_pinned(self) -> None:
+        # Each entry removes a whole top-level tree from the inventory, so adding one is a reviewed change.
+        self.assertEqual(
+            boundary.NON_SHIPPED_TOP_LEVEL,
+            {
+                ".claude", ".codex", ".git", ".github", "assets", "build", "docs", "fuzzertests", "resources",
+                "scripts", "shaders", "tests", "thirdparty", "wiki",
+            },
+        )
+        root = Path("/repository")
+        self.assertFalse(boundary._is_inventory_candidate(root, root / "FuzzerTests" / "FuzzArchive.cpp"))
+        self.assertFalse(boundary._is_inventory_candidate(root, root / "Tests" / "Fuzz" / "FuzzArchive.cpp"))
+        # Only the exact top-level name is test code; a shipped tree that merely starts with it is not.
+        self.assertTrue(boundary._is_inventory_candidate(root, root / "FuzzerTestsTool" / "src" / "main.cpp"))
+        self.assertTrue(boundary._is_inventory_candidate(root, root / "SparkEngine" / "Source" / "FuzzerTests.cpp"))
+
     def test_inventory_coverage_excludes_only_exact_reviewed_nonshipping_source(self) -> None:
         self.assertEqual(
             boundary.NON_SHIPPED_FIRST_PARTY_SOURCES,

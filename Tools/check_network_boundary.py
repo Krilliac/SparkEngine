@@ -768,8 +768,11 @@ def _source_files(source_roots: Iterable[Path]) -> Iterable[Path]:
                 yield path
 
 
+# FuzzerTests holds the libFuzzer harnesses that lived under Tests/Fuzz until
+# 8703fe9 moved them to the top level. They build only fuzz executables, never a
+# shipped payload, so they stay classified as test code exactly as before.
 NON_SHIPPED_TOP_LEVEL = {
-    ".claude", ".codex", ".git", ".github", "assets", "build", "docs", "resources", "scripts",
+    ".claude", ".codex", ".git", ".github", "assets", "build", "docs", "fuzzertests", "resources", "scripts",
     "shaders", "tests", "thirdparty", "wiki",
 }
 
