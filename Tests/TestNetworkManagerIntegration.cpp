@@ -76,6 +76,18 @@ namespace Spark::Net
                                                      [](const auto& entry) { return entry.second.sensitive; }));
         }
 
+        static size_t UnackedMessagesWithPayload(const NetworkManager& manager, ClientID peerKey,
+                                                 const std::vector<uint8_t>& payload)
+        {
+            std::lock_guard<std::recursive_mutex> apiLock(manager.m_apiMutex);
+            const auto peer = manager.m_peers.find(peerKey);
+            if (peer == manager.m_peers.end())
+                return 0;
+            return static_cast<size_t>(std::count_if(peer->second.unacknowledgedMessages.begin(),
+                                                     peer->second.unacknowledgedMessages.end(), [&](const auto& entry)
+                                                     { return entry.second.payload == payload; }));
+        }
+
         static void ReceiveAvailableIncomingForTest(NetworkManager& manager)
         {
             std::lock_guard<std::recursive_mutex> apiLock(manager.m_apiMutex);
@@ -1575,6 +1587,222 @@ TEST(NetworkManager_ConnectRejectedStopsSameBatchRejectedLifecycleDispatch)
     closesocket(reconnectServer);
     simulator.Shutdown();
     nm.Shutdown();
+}
+
+// ============================================================================
+// TF-110: impairment applies to server unicast, per destination
+// ============================================================================
+
+namespace
+{
+    /// Loopback server plus raw UDP clients. Owns the NetworkManager and
+    /// InstabilitySimulator singletons for one test and restores both on exit.
+    /// Server time only advances through Advance(), so simulated delays are
+    /// exact and independent of wall-clock speed.
+    class ImpairmentServerFixture
+    {
+      public:
+        ImpairmentServerFixture()
+        {
+            auto& nm = NetworkManager::GetInstance();
+            nm.Shutdown();
+            InstabilitySimulator::GetInstance().Shutdown();
+            m_ready = nm.Initialize() && nm.StartServer(0, 4, NetworkEndpointPolicy::Loopback());
+        }
+
+        ~ImpairmentServerFixture()
+        {
+            InstabilitySimulator::GetInstance().Shutdown();
+            for (SOCKET client : m_sockets)
+                closesocket(client);
+            auto& nm = NetworkManager::GetInstance();
+            nm.StopServer();
+            nm.Shutdown();
+        }
+
+        ImpairmentServerFixture(const ImpairmentServerFixture&) = delete;
+        ImpairmentServerFixture& operator=(const ImpairmentServerFixture&) = delete;
+
+        bool Ready() const { return m_ready; }
+
+        /// Admit one raw client with impairment still off and drain its
+        /// admission traffic. Returns INVALID_CLIENT on failure.
+        ClientID AdmitClient(SOCKET& outSocket)
+        {
+            auto& nm = NetworkManager::GetInstance();
+            outSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if (outSocket == INVALID_SOCKET)
+                return INVALID_CLIENT;
+            m_sockets.push_back(outSocket);
+            if (!BindLoopbackEphemeral(outSocket) || !SetNonBlocking(outSocket))
+                return INVALID_CLIENT;
+
+            const auto before = nm.GetClients();
+            sockaddr_in serverAddress{};
+            serverAddress.sin_family = AF_INET;
+            serverAddress.sin_port = htons(nm.GetBoundPort());
+            serverAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            const auto connect =
+                BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
+            if (sendto(outSocket, reinterpret_cast<const char*>(connect.data()), static_cast<int>(connect.size()), 0,
+                       reinterpret_cast<const sockaddr*>(&serverAddress),
+                       sizeof(serverAddress)) != static_cast<int>(connect.size()))
+                return INVALID_CLIENT;
+
+            for (int i = 0; i < 50; ++i)
+            {
+                nm.Update(0.001f);
+                for (const auto& entry : nm.GetClients())
+                {
+                    if (!before.contains(entry.first))
+                    {
+                        (void)ReceiveDatagrams(outSocket, std::chrono::milliseconds(20));
+                        return entry.first;
+                    }
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            return INVALID_CLIENT;
+        }
+
+        /// Advance server time by `seconds` in `steps` Update calls.
+        static void Advance(float seconds, int steps)
+        {
+            for (int i = 0; i < steps; ++i)
+                NetworkManager::GetInstance().Update(seconds / static_cast<float>(steps));
+        }
+
+      private:
+        bool m_ready = false;
+        std::vector<SOCKET> m_sockets;
+    };
+
+    NetworkMessage MarkerMessage(const std::vector<uint8_t>& marker, ChannelType channel)
+    {
+        NetworkMessage message;
+        message.type = MessageType::UserDefined;
+        message.channel = channel;
+        message.payload = marker;
+        return message;
+    }
+
+    size_t CountWithMarker(const std::vector<std::vector<uint8_t>>& datagrams, const std::vector<uint8_t>& marker)
+    {
+        return static_cast<size_t>(std::count_if(datagrams.begin(), datagrams.end(), [&](const auto& datagram)
+                                                 { return ContainsBytes(datagram, marker); }));
+    }
+
+    void EnableImpairment(float latencyMs, float reorderPercent = 0.0f, float duplicatePercent = 0.0f)
+    {
+        InstabilitySettings settings;
+        settings.enabled = true;
+        settings.latencyMs = latencyMs;
+        settings.reorderPercent = reorderPercent;
+        settings.duplicatePercent = duplicatePercent;
+        InstabilitySimulator::GetInstance().SetSettings(settings);
+    }
+} // namespace
+
+TEST(NetImpairment_ServerUnicastIsDelayed)
+{
+    ImpairmentServerFixture fixture;
+    ASSERT_TRUE(fixture.Ready());
+    SOCKET client = INVALID_SOCKET;
+    const ClientID id = fixture.AdmitClient(client);
+    ASSERT_TRUE(id != INVALID_CLIENT);
+
+    EnableImpairment(200.0f);
+    const std::vector<uint8_t> marker{'u', 'n', 'i', 'c', 'a', 's', 't', '-', 'd', 'e', 'l', 'a', 'y'};
+    NetworkManager::GetInstance().SendToClient(id, MarkerMessage(marker, ChannelType::Unreliable));
+
+    ImpairmentServerFixture::Advance(0.10f, 5); // 100 ms of simulated time: still held
+    EXPECT_EQ(CountWithMarker(ReceiveDatagrams(client, std::chrono::milliseconds(30)), marker), size_t{0});
+
+    ImpairmentServerFixture::Advance(0.30f, 6); // 400 ms total: released
+    EXPECT_EQ(CountWithMarker(ReceiveDatagrams(client, std::chrono::milliseconds(50)), marker), size_t{1});
+}
+
+TEST(NetImpairment_DelayedUnicastReachesOnlyItsClient)
+{
+    ImpairmentServerFixture fixture;
+    ASSERT_TRUE(fixture.Ready());
+    SOCKET clientA = INVALID_SOCKET;
+    SOCKET clientB = INVALID_SOCKET;
+    const ClientID idA = fixture.AdmitClient(clientA);
+    const ClientID idB = fixture.AdmitClient(clientB);
+    ASSERT_TRUE(idA != INVALID_CLIENT);
+    ASSERT_TRUE(idB != INVALID_CLIENT);
+    (void)ReceiveDatagrams(clientA, std::chrono::milliseconds(20)); // traffic from B's admission
+
+    EnableImpairment(50.0f);
+    const std::vector<uint8_t> marker{'o', 'n', 'l', 'y', '-', 'f', 'o', 'r', '-', 'a'};
+    NetworkManager::GetInstance().SendToClient(idA, MarkerMessage(marker, ChannelType::Unreliable));
+    EXPECT_EQ(CountWithMarker(ReceiveDatagrams(clientA, std::chrono::milliseconds(20)), marker), size_t{0});
+
+    ImpairmentServerFixture::Advance(0.10f, 5);
+    EXPECT_EQ(CountWithMarker(ReceiveDatagrams(clientA, std::chrono::milliseconds(50)), marker), size_t{1});
+    EXPECT_EQ(CountWithMarker(ReceiveDatagrams(clientB, std::chrono::milliseconds(50)), marker), size_t{0});
+}
+
+TEST(NetImpairment_DuplicatedReliableKeepsOneSequence)
+{
+    ImpairmentServerFixture fixture;
+    ASSERT_TRUE(fixture.Ready());
+    SOCKET client = INVALID_SOCKET;
+    const ClientID id = fixture.AdmitClient(client);
+    ASSERT_TRUE(id != INVALID_CLIENT);
+
+    EnableImpairment(0.0f, 0.0f, 100.0f);
+    const std::vector<uint8_t> marker{'d', 'u', 'p', '-', 'r', 'e', 'l', 'i', 'a', 'b', 'l', 'e'};
+    auto& nm = NetworkManager::GetInstance();
+    nm.SendToClient(id, MarkerMessage(marker, ChannelType::Reliable));
+    ImpairmentServerFixture::Advance(0.02f, 2); // releases the trailing copy, well before any retransmit
+
+    std::vector<uint32_t> sequences;
+    for (const auto& datagram : ReceiveDatagrams(client, std::chrono::milliseconds(50)))
+    {
+        NetworkMessage parsed;
+        if (NetworkManagerClientIdTestAccess::DeserializeMessageForTest(nm, datagram, parsed) &&
+            parsed.payload == marker)
+            sequences.push_back(parsed.sequence);
+    }
+    // Two copies on the wire with one reliable sequence, tracked once: the
+    // receiver's per-peer dedup delivers it a single time.
+    ASSERT_EQ(sequences.size(), size_t{2});
+    EXPECT_TRUE(sequences[0] != 0);
+    EXPECT_EQ(sequences[0], sequences[1]);
+    EXPECT_EQ(NetworkManagerClientIdTestAccess::UnackedMessagesWithPayload(nm, id, marker), size_t{1});
+}
+
+TEST(NetImpairment_ReorderLetsLaterUnreliableOvertake)
+{
+    ImpairmentServerFixture fixture;
+    ASSERT_TRUE(fixture.Ready());
+    SOCKET client = INVALID_SOCKET;
+    const ClientID id = fixture.AdmitClient(client);
+    ASSERT_TRUE(id != INVALID_CLIENT);
+
+    auto& nm = NetworkManager::GetInstance();
+    const std::vector<uint8_t> first{'r', 'e', 'o', 'r', 'd', 'e', 'r', '-', 'f', 'i', 'r', 's', 't'};
+    const std::vector<uint8_t> second{'r', 'e', 'o', 'r', 'd', 'e', 'r', '-', 's', 'e', 'c', 'o', 'n', 'd'};
+    EnableImpairment(0.0f, 100.0f); // held for the default 40 ms reorder window
+    nm.SendToClient(id, MarkerMessage(first, ChannelType::Unreliable));
+    EnableImpairment(0.0f, 0.0f); // still enabled: the held packet stays queued
+    nm.SendToClient(id, MarkerMessage(second, ChannelType::Unreliable));
+    ImpairmentServerFixture::Advance(0.06f, 3);
+
+    const auto datagrams = ReceiveDatagrams(client, std::chrono::milliseconds(50));
+    const auto indexOf = [&](const std::vector<uint8_t>& marker)
+    {
+        const auto it = std::find_if(datagrams.begin(), datagrams.end(),
+                                     [&](const auto& datagram) { return ContainsBytes(datagram, marker); });
+        return it == datagrams.end() ? datagrams.size() : static_cast<size_t>(it - datagrams.begin());
+    };
+    const size_t firstIndex = indexOf(first);
+    const size_t secondIndex = indexOf(second);
+    ASSERT_TRUE(firstIndex < datagrams.size());
+    ASSERT_TRUE(secondIndex < datagrams.size());
+    EXPECT_TRUE(secondIndex < firstIndex);
 }
 
 #endif // ENABLE_NETWORKING

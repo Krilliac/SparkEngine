@@ -793,7 +793,7 @@ namespace Spark::Net
                 if (sensitive)
                     Spark::SecureClear(serialized);
             });
-        SendRawTo(serialized, addrIt->second, copy.localOnly);
+        SendImpaired(serialized, client, addrIt->second, copy);
         m_stats.packetsSent++;
 #else
         // Without networking, just enqueue for local testing
@@ -1399,10 +1399,17 @@ namespace Spark::Net
                 }
                 else if (m_role == NetworkRole::Server)
                 {
-                    for (const auto& [id, addr] : m_clientAddresses)
+                    // Delayed packets are per destination (SendImpaired): a
+                    // unicast must never fan out, and a client that left while
+                    // its packet was held simply loses it.
+                    const auto addrIt = m_clientAddresses.find(static_cast<ClientID>(packet.destinationKey));
+                    if (addrIt == m_clientAddresses.end())
                     {
-                        SendRawTo(packet.data, addr, packet.localOnly);
+                        m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                        m_stats.packetsDropped++;
+                        continue;
                     }
+                    SendRawTo(packet.data, addrIt->second, packet.localOnly);
                 }
             }
         }
@@ -1439,51 +1446,35 @@ namespace Spark::Net
                 continue;
             }
 
-            // Disconnect is a terminal control packet: Disconnect() immediately
-            // closes the socket and purges this lifecycle after this flush, so
-            // delaying or dropping it here would guarantee that it is never
-            // transmitted. Other traffic continues to use the configured
-            // impairment simulation.
-            if (instability.GetSettings().enabled && msg.type != MessageType::Disconnect)
-            {
-                // Simulated packet loss
-                if (instability.ShouldDropPacket())
-                {
-                    m_stats.packetsDropped++;
-                    // Track reliable messages even if "dropped" (for retransmission)
-                    trackReliable(msg);
-                    toSend.pop();
-                    continue;
-                }
-
-                // Simulated latency + jitter: queue for delayed delivery
-                float delayMs = instability.GetDelayMs();
-                if (delayMs > 0.0f)
-                {
-                    instability.QueuePacket(std::move(serialized), currentTimeMs + delayMs, msg.localOnly, msg.sequence,
-                                            msg.ownerLifecycleEpoch);
-
-                    // Track reliable messages for retransmission
-                    trackReliable(msg);
-                    toSend.pop();
-                    continue;
-                }
-            }
-
-            // No instability or zero delay — send immediately
             if (m_role == NetworkRole::Client)
             {
-                SendRawTo(serialized, m_serverAddress, msg.localOnly);
+                SendImpaired(serialized, SERVER_PEER, m_serverAddress, msg);
             }
             else if (m_role == NetworkRole::Server)
             {
+                // Impairment decisions are per destination, so each client
+                // gets its own copy to drop, delay or duplicate independently.
+                const bool impaired = instability.GetSettings().enabled;
                 for (const auto& [id, addr] : m_clientAddresses)
                 {
-                    SendRawTo(serialized, addr, msg.localOnly);
+                    if (!impaired)
+                    {
+                        SendRawTo(serialized, addr, msg.localOnly);
+                        continue;
+                    }
+                    std::vector<uint8_t> perClient = serialized;
+                    const auto clearPerClient = Spark::MakeScopeExit(
+                        [sensitive = msg.sensitive, &perClient]
+                        {
+                            if (sensitive)
+                                Spark::SecureClear(perClient);
+                        });
+                    SendImpaired(perClient, id, addr, msg);
                 }
             }
 
-            // Track reliable messages for retransmission
+            // Track reliable messages for retransmission, including ones the
+            // simulator dropped or is still holding.
             trackReliable(msg);
 
             toSend.pop();
@@ -1496,6 +1487,51 @@ namespace Spark::Net
         }
 #endif // ENABLE_NETWORKING
     }
+
+#ifdef ENABLE_NETWORKING
+    void NetworkManager::SendImpaired(std::vector<uint8_t>& serialized, ClientID destination, const sockaddr_in& addr,
+                                      const NetworkMessage& msg)
+    {
+        auto& instability = InstabilitySimulator::GetInstance();
+        const InstabilitySettings settings = instability.GetSettings();
+
+        // Disconnect is a terminal control packet: Disconnect() immediately
+        // closes the socket and purges this lifecycle after this flush, so
+        // delaying or dropping it would guarantee it is never transmitted.
+        if (!settings.enabled || msg.type == MessageType::Disconnect)
+        {
+            SendRawTo(serialized, addr, msg.localOnly);
+            return;
+        }
+
+        if (instability.ShouldDropPacket())
+        {
+            m_stats.packetsDropped++;
+            return;
+        }
+
+        const float nowMs = m_serverTime * 1000.0f;
+        float delayMs = instability.GetDelayMs();
+        // A reordered packet is held past the normal delay so packets sent
+        // after it overtake it on the wire.
+        if (instability.ShouldReorder())
+            delayMs += settings.reorderHoldMs;
+
+        // The duplicate trails the original by 1 ms and carries the same
+        // reliable sequence, so the receiver's dedup must deliver it once.
+        if (instability.ShouldDuplicate())
+            instability.QueuePacket(std::vector<uint8_t>(serialized), nowMs + delayMs + 1.0f, msg.localOnly,
+                                    msg.sequence, msg.ownerLifecycleEpoch, destination);
+
+        if (delayMs > 0.0f)
+        {
+            instability.QueuePacket(std::move(serialized), nowMs + delayMs, msg.localOnly, msg.sequence,
+                                    msg.ownerLifecycleEpoch, destination);
+            return;
+        }
+        SendRawTo(serialized, addr, msg.localOnly);
+    }
+#endif // ENABLE_NETWORKING
 
     void NetworkManager::HandleRetransmissions()
     {

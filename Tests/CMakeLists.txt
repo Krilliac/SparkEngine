@@ -1843,13 +1843,23 @@ foreach(_spark_tf110_selector IN LISTS _spark_tf110_selectors)
 endforeach()
 
 # TF-110: network impairment reaches the wire. NetImpairmentWiring pins the
-# net_* console -> EngineSettings -> InstabilitySimulator bridge.
+# net_* console -> EngineSettings -> InstabilitySimulator bridge and seeded
+# reproducibility; NetImpairmentTransport pins per-destination delay,
+# duplication and reordering of server unicast over real loopback UDP.
 add_test(NAME NetImpairmentWiring COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(NetImpairmentWiring PROPERTIES
-    ENVIRONMENT "SPARK_TEST_FILE=TestNetImpairmentWiring.cpp;SPARK_TEST_EXPECT_COUNT=5"
+    ENVIRONMENT "SPARK_TEST_FILE=TestNetImpairmentWiring.cpp;SPARK_TEST_EXPECT_COUNT=7"
     LABELS "network;unit"
     RUN_SERIAL TRUE
     TIMEOUT 30)
+if(ENABLE_NETWORKING)
+    add_test(NAME NetImpairmentTransport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetImpairmentTransport PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestNetworkManagerIntegration.cpp;SPARK_TEST_NAME_PREFIX=NetImpairment_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "network;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
 
 # LIFE-200: the production LifecycleCompositionRoot fails closed on injected
 # stage failures (false return, std::exception, unknown throw, throwing shutdown).

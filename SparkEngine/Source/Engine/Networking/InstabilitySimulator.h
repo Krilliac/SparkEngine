@@ -4,9 +4,11 @@
  * @author Spark Engine Team
  * @date 2026
  *
- * Wraps UDP send/receive paths to inject configurable artificial latency,
- * jitter, packet loss, and reordering. Enable via console commands
- * (net.lag, net.loss, net.jitter, net.reorder) during development to
+ * NetworkManager routes every outgoing datagram (queued sends, server unicasts
+ * and broadcasts) through this simulator to inject configurable artificial
+ * latency, jitter, packet loss, duplication and reordering. Enable via console
+ * commands (net_lag, net_loss, net_jitter, net_reorder, net_dup,
+ * net_impair_seed) or the [Network] Simulated* settings during development to
  * stress-test netcode under adverse conditions.
  */
 
@@ -39,6 +41,9 @@ namespace Spark::Net
         float jitterMs = 0.0f;          ///< +/- variance on latency in milliseconds
         float packetLossPercent = 0.0f; ///< Chance of dropping a packet (0-100)
         float reorderPercent = 0.0f;    ///< Chance of reordering a packet (0-100)
+        float duplicatePercent = 0.0f;  ///< Chance of sending a packet twice (0-100)
+        float reorderHoldMs = 40.0f;    ///< Extra hold on a reordered packet so later packets overtake it
+        uint64_t seed = 0;              ///< Non-zero reseeds the decision RNG on SetSettings (reproducible runs)
         bool enabled = false;           ///< Master toggle — no effects when false
     };
 
@@ -80,6 +85,7 @@ namespace Spark::Net
             float deliveryTimeMs = 0.0f; ///< Absolute time when this packet should be sent
             uint32_t sequence = 0;       ///< Reliable sequence, or zero for unreliable packets
             uint64_t lifecycleEpoch = 0; ///< Owning connection lifecycle, or zero for generic simulator users
+            uint64_t destinationKey = 0; ///< Caller routing key (NetworkManager: destination ClientID, 0 = server)
             bool localOnly = false;      ///< Process-local policy marker; never serialized into data
         };
 
@@ -113,11 +119,16 @@ namespace Spark::Net
         /// @return true if the packet should be delayed for reordering
         bool ShouldReorder();
 
+        /// @brief Check if a packet should be sent twice based on duplicatePercent
+        /// @return true if a second copy of the packet should be queued
+        bool ShouldDuplicate();
+
         /// @brief Queue a packet for delayed delivery
-        /// @param data        Raw packet bytes
-        /// @param sendTimeMs  Absolute time (ms) when the packet should be released
+        /// @param data            Raw packet bytes
+        /// @param sendTimeMs      Absolute time (ms) when the packet should be released
+        /// @param destinationKey  Caller routing key carried back on release
         void QueuePacket(std::vector<uint8_t> data, float sendTimeMs, bool localOnly = false, uint32_t sequence = 0,
-                         uint64_t lifecycleEpoch = 0);
+                         uint64_t lifecycleEpoch = 0, uint64_t destinationKey = 0);
 
         /// @brief Retrieve all packets whose delivery time has passed
         /// @param currentTimeMs  Current time in milliseconds
@@ -164,7 +175,8 @@ namespace Spark::Net
     /// @brief Map the [Network] Simulated* engine settings onto simulator settings.
     ///
     /// SimulatedPacketLoss is a 0-1 fraction in EngineSettings and becomes a
-    /// 0-100 percent here; SimulatedReorderPercent passes through. Values are
+    /// 0-100 percent here; SimulatedReorderPercent and SimulatedDuplicatePercent
+    /// pass through and SimulatedImpairmentSeed becomes the RNG seed. Values are
     /// clamped to their valid ranges (non-finite values become zero), and the
     /// result is enabled when any impairment is non-zero.
     [[nodiscard]] InstabilitySettings ImpairmentFromEngineSettings(const ::EngineSettings& settings);

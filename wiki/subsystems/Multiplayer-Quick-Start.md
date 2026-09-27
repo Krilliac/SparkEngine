@@ -313,7 +313,9 @@ server.RegisterRconCommand("restart", "Restart match",
 
 ### InstabilitySimulator
 
-Inject artificial latency, packet loss, jitter, and reordering via code or console:
+Inject artificial latency, packet loss, jitter, duplication and reordering via code, console or settings.
+`NetworkManager` applies it to every outgoing datagram, including server unicasts (`SendToClient`),
+and each server destination gets its own drop/delay/duplicate decision:
 
 ```cpp
 auto& sim = Spark::Net::InstabilitySimulator::GetInstance();
@@ -322,10 +324,19 @@ settings.enabled = true;
 settings.latencyMs = 100.0f;       // 100ms added latency
 settings.jitterMs = 20.0f;         // +/- 20ms variance
 settings.packetLossPercent = 5.0f; // 5% packet loss
+settings.duplicatePercent = 2.0f;  // 2% of packets sent twice
+settings.reorderPercent = 10.0f;   // 10% held reorderHoldMs (40 ms) so later packets overtake
+settings.seed = 1234;              // non-zero: reproducible decisions
 sim.SetSettings(settings);
 ```
 
-Or use console commands for live tuning: `net.lag 100`, `net.loss 5`, `net.jitter 20`, `net.reorder 10`.
+Console commands (dev only) write the `[Network]` settings and apply them immediately:
+`net_lag 100`, `net_loss 0.05` (a 0-1 fraction), `net_jitter 20`, `net_reorder 10`, `net_dup 2`,
+`net_impair_seed 1234`, `net_impair_off`, and `net_impair` to print the live state. Invalid values
+are rejected and leave the state unchanged. The same keys (`SimulatedLatencyMs`, `SimulatedPacketLoss`,
+`SimulatedJitterMs`, `SimulatedReorderPercent`, `SimulatedDuplicatePercent`, `SimulatedImpairmentSeed`)
+in a settings file take effect at network start-up, and the engine logs a warning whenever impairment
+is enabled.
 
 ### Two-Instance Local Test
 

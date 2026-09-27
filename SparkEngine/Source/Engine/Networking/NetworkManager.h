@@ -766,6 +766,16 @@ namespace Spark::Net
         /// Send raw bytes to a specific address
         bool SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr, bool localOnly = false);
 
+        /// Send one serialized datagram through the InstabilitySimulator: drop,
+        /// duplicate, reorder-hold or delay it, or send it now when impairment
+        /// is off. `destination` is the peer key (a ClientID on the server,
+        /// SERVER_PEER on a client) that FlushOutgoingQueue resolves again when
+        /// a delayed copy is released, so delayed unicasts never broadcast.
+        /// Disconnect bypasses impairment (it is terminal). Reliable tracking
+        /// stays with the caller. `serialized` may be moved from.
+        void SendImpaired(std::vector<uint8_t>& serialized, ClientID destination, const sockaddr_in& addr,
+                          const NetworkMessage& msg);
+
         /// Receive raw data from socket (non-blocking)
         int ReceiveRaw(std::vector<uint8_t>& outData, sockaddr_in& outSender);
 
