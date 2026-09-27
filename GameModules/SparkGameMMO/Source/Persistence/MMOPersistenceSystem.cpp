@@ -23,7 +23,6 @@
 #include <sstream>
 #include <string_view>
 #include <system_error>
-#include <tuple>
 
 namespace MMO
 {
@@ -625,11 +624,6 @@ namespace MMO
         m_db->PrepareStatement(Sid(MMOStmtId::LoadLockouts), "KEYS lockout_?0_");
         m_db->PrepareStatement(Sid(MMOStmtId::LoadLockoutValue), "GET lockout_?0_?1_?2");
         m_db->PrepareStatement(Sid(MMOStmtId::DeleteLockout), "DELETE lockout_?0_?1_?2");
-
-        // Boss kills
-        m_db->PrepareStatement(Sid(MMOStmtId::SaveBossKill), "SET bosskill_?0_?1 ?2");
-        m_db->PrepareStatement(Sid(MMOStmtId::LoadBossKills), "KEYS bosskill_");
-        m_db->PrepareStatement(Sid(MMOStmtId::LoadBossKillValue), "GET bosskill_?0_?1");
     }
 
     void MMOPersistenceSystem::CreateSchema()
@@ -1209,12 +1203,6 @@ namespace MMO
                 written.emplace(kGuildMemberFamily, std::format("{}_{}", guild.id, member.playerId));
             }
         }
-        for (const auto& kill : data.bossKillHistory)
-        {
-            tx.Append(Sid(MMOStmtId::SaveBossKill),
-                      {MakeInt(kill.bossDefId), MakeInt(static_cast<int64_t>(kill.killTime)),
-                       MakeInt(kill.participantCount)});
-        }
 
         // Disbanded guilds and departed members are deleted from the same kind
         // of in-memory record set as BuildCharacterSave uses, for the same
@@ -1249,8 +1237,7 @@ namespace MMO
             return;
         }
         m_db->AsyncTransaction(BuildWorldSave(data));
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Async save world: %zu guilds, %zu new boss kills",
-                        data.guilds.size(), data.bossKillHistory.size());
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Async save world: %zu guilds", data.guilds.size());
     }
 
     bool MMOPersistenceSystem::SaveWorldSync(const WorldSaveData& data)
@@ -1289,15 +1276,14 @@ namespace MMO
             }
             loaded.nextGuildId = *next;
         }
-        if (!LoadGuilds(loaded) || !LoadBossKills(loaded))
+        if (!LoadGuilds(loaded))
         {
             return false;
         }
 
         outData = std::move(loaded);
         Spark::SimpleConsole::GetInstance().LogInfo(
-            std::format("[MMO] Loaded {} guilds and {} boss kills from database", outData.guilds.size(),
-                        outData.bossKillHistory.size()));
+            std::format("[MMO] Loaded {} guilds from database", outData.guilds.size()));
         return true;
     }
 
@@ -1357,39 +1343,6 @@ namespace MMO
                       [](const GuildMember& a, const GuildMember& b) { return a.playerId < b.playerId; });
             outData.guilds.push_back(std::move(guild));
         }
-        return true;
-    }
-
-    bool MMOPersistenceSystem::LoadBossKills(WorldSaveData& outData)
-    {
-        // Key "bosskill_<bossDefId>_<killTime>", value = participant count
-        const auto kills = ListKeySuffixes(MMOStmtId::LoadBossKills, {}, "bosskill_");
-        if (!kills)
-        {
-            return false;
-        }
-        for (const std::string& suffix : *kills)
-        {
-            const auto ids = ParseIdPair<uint32_t, uint64_t>(suffix);
-            const auto text = ids ? GetValue(MMOStmtId::LoadBossKillValue,
-                                             {MakeInt(ids->first), MakeInt(static_cast<int64_t>(ids->second))})
-                                  : std::nullopt;
-            const auto participants = text ? ParseInteger<int>(*text) : std::nullopt;
-            if (!participants || *participants < 0)
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt boss kill record 'bosskill_%s'",
-                                suffix.c_str());
-                return false;
-            }
-            WorldSaveData::BossKillRecord record;
-            record.bossDefId = ids->first;
-            record.killTime = ids->second;
-            record.participantCount = *participants;
-            outData.bossKillHistory.push_back(record);
-        }
-        std::sort(outData.bossKillHistory.begin(), outData.bossKillHistory.end(),
-                  [](const WorldSaveData::BossKillRecord& a, const WorldSaveData::BossKillRecord& b)
-                  { return std::tie(a.killTime, a.bossDefId) < std::tie(b.killTime, b.bossDefId); });
         return true;
     }
 

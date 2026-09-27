@@ -28,9 +28,8 @@ Guilds are world state. On load the module reads every `guild_<id>` and `gm_<gui
 reset to their defaults, which nothing changes at runtime. Each auto-save and the unload path save the whole guild
 set in one transaction, deleting disbanded guilds and departed members. A malformed world record, or a guild set
 that fails validation, disables persistence for that run and leaves the store untouched for repair. Guild
-activity logs and per-member level, note and contribution are not persisted. Boss kills (`bosskill_<boss>_<time>`)
-are an append-only log that `MMOPersistenceSystem` saves and loads, but nothing records kills yet:
-`MMOWorldBossSystem` keeps no kill history.
+activity logs and per-member level, note and contribution are not persisted. Boss kills are not persisted:
+`MMOWorldBossSystem` keeps no kill history, so a load neither reads nor validates `bosskill_*` records.
 The `mmo_*` console commands (`mmo_help` lists them) drive the systems.
 
 Account passwords are stored only as `Spark::PasswordHash` hashes, never as plaintext.

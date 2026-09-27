@@ -93,16 +93,6 @@ namespace MMO
         /// are not persisted.
         std::vector<Guild> guilds;
         uint32_t nextGuildId = 1;
-
-        /// Boss kill history, an append-only log: a save adds these records and
-        /// never deletes stored ones; a load returns every stored record.
-        struct BossKillRecord
-        {
-            uint32_t bossDefId = 0;
-            uint64_t killTime = 0;
-            int participantCount = 0;
-        };
-        std::vector<BossKillRecord> bossKillHistory;
     };
 
     /// @brief Callback for async load completion
@@ -185,11 +175,6 @@ namespace MMO
         LoadLockouts = 1701,
         LoadLockoutValue = 1703,
         DeleteLockout = 1704,
-
-        // Boss kills
-        SaveBossKill = 1800,
-        LoadBossKills = 1801,
-        LoadBossKillValue = 1802,
     };
 
     /**
@@ -294,7 +279,6 @@ namespace MMO
         Transaction BuildWorldSave(const WorldSaveData& data);
         KeySet ScanGuildKeys();
         bool LoadGuilds(WorldSaveData& outData);
-        bool LoadBossKills(WorldSaveData& outData);
 
         // Subsystem save/load helpers. Saves append to the character's save
         // transaction and add every record they write to @p written.

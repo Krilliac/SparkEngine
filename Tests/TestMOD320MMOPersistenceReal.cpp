@@ -592,44 +592,13 @@ TEST(MMOPersistence_LoadWorldIsNotANoOp)
     fs::remove(path);
 }
 
-TEST(MMOPersistence_BossKillHistoryRoundTrips)
-{
-    const fs::path path = FreshPath("test_mod320_boss_kills.db");
-    MMO::WorldSaveData::BossKillRecord dragon{7, 1790000000u, 25};
-    MMO::WorldSaveData::BossKillRecord giant{3, 1790000500u, 12};
-    {
-        MMO::MMOPersistenceSystem persistence;
-        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
-        MMO::WorldSaveData world;
-        world.bossKillHistory = {dragon};
-        ASSERT_TRUE(persistence.SaveWorldSync(world));
-        // The history is a log: a save without the earlier kill keeps it.
-        world.bossKillHistory = {giant};
-        ASSERT_TRUE(persistence.SaveWorldSync(world));
-        persistence.Shutdown();
-    }
-
-    MMO::MMOPersistenceSystem restarted;
-    ASSERT_TRUE(restarted.Initialize(nullptr, path.string()));
-    MMO::WorldSaveData loaded;
-    ASSERT_TRUE(restarted.LoadWorld(loaded));
-    ASSERT_EQ(loaded.bossKillHistory.size(), size_t{2});
-    EXPECT_EQ(loaded.bossKillHistory[0].bossDefId, uint32_t{7});
-    EXPECT_EQ(loaded.bossKillHistory[0].killTime, uint64_t{1790000000u});
-    EXPECT_EQ(loaded.bossKillHistory[0].participantCount, 25);
-    EXPECT_EQ(loaded.bossKillHistory[1].bossDefId, uint32_t{3});
-    EXPECT_EQ(loaded.bossKillHistory[1].participantCount, 12);
-    restarted.Shutdown();
-    fs::remove(path);
-}
-
 TEST(MMOPersistence_MalformedWorldRecordFailsLoad)
 {
     // Each store holds one record no build writes; LoadWorld must refuse the
     // whole world rather than hand back a partial one a save would then persist.
-    const std::vector<std::string> damaged = {
-        "SET guild_4 1|Name",    "SET guild_5 1||tag|1|0|50|", "SET guild_6 1|Bad%zz|t|1|0|50|m",
-        "SET gm_4_21 1|9|Ghost", "SET bosskill_7_x 3",         "SET meta_next_guild_id zero"};
+    const std::vector<std::string> damaged = {"SET guild_4 1|Name", "SET guild_5 1||tag|1|0|50|",
+                                              "SET guild_6 1|Bad%zz|t|1|0|50|m", "SET gm_4_21 1|9|Ghost",
+                                              "SET meta_next_guild_id zero"};
     for (const std::string& record : damaged)
     {
         const fs::path path = FreshPath("test_mod320_world_malformed.db");
@@ -647,6 +616,20 @@ TEST(MMOPersistence_MalformedWorldRecordFailsLoad)
         persistence.Shutdown();
         fs::remove(path);
     }
+
+    // Boss kills are not world state this build restores, so a stray or
+    // unparsable bosskill_* record must not refuse the guilds (which would
+    // disable persistence for the run).
+    const fs::path path = FreshPath("test_mod320_world_stray_bosskill.db");
+    WriteRawRecords(path, {"SET guild_4 1|Keep|K|21|0|50|hello", "SET gm_4_21 1|4|Lead", "SET bosskill_7_x 3"});
+    MMO::MMOPersistenceSystem persistence;
+    ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+    MMO::WorldSaveData loaded;
+    EXPECT_TRUE(persistence.LoadWorld(loaded));
+    ASSERT_EQ(loaded.guilds.size(), size_t{1});
+    EXPECT_EQ(loaded.guilds[0].name, std::string("Keep"));
+    persistence.Shutdown();
+    fs::remove(path);
 }
 
 #ifdef SPARK_TEST_HAS_IMGUI
