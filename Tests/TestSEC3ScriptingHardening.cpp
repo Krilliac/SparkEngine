@@ -6,6 +6,9 @@
  * - A crafted graph of deeply nested Branch nodes, or a long chain of pure data
  *   nodes, used to recurse through VisualScriptEmitter until the stack
  *   overflowed. The emitter now fails such graphs with a compile error.
+ * - The generated-source byte limit was checked per method body, so fanning a
+ *   large pure data graph into many event nodes or graph functions multiplied
+ *   the output without bound. One budget now covers the whole Compile().
  * - Editor script names become file names; VisualScriptGraphIO::ScriptFilePath
  *   refuses anything that is not a plain identifier or is a device name.
  *
@@ -30,6 +33,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -74,7 +78,100 @@ namespace
         }
         return false;
     }
+
+    /// Heap-ordered binary tree of pure Add nodes (ids @p firstId + k - 1 for k = 1..@p count); node k
+    /// reads nodes 2k and 2k+1. Returns the root id; the tree is 1 + log2(count) levels deep.
+    uint32_t AddTree(std::vector<ScriptNode>& nodes, std::vector<ScriptConnection>& connections, uint32_t firstId,
+                     uint32_t count)
+    {
+        for (uint32_t k = 1; k <= count; ++k)
+        {
+            ScriptNode add;
+            add.id = firstId + k - 1;
+            add.type = ScriptNodeType::Add;
+            add.inputs = {Pin(PinKind::Float), Pin(PinKind::Float)};
+            add.outputs = {Pin(PinKind::Float)};
+            nodes.push_back(add);
+            if (k > 1)
+                connections.push_back({add.id, 0, firstId + k / 2 - 1, k % 2});
+        }
+        return firstId;
+    }
+
+    /// A SetVariable node whose value input (pin 1) is fed by @p valueNode.
+    ScriptNode SetTotal(uint32_t id, std::vector<ScriptConnection>& connections, uint32_t valueNode)
+    {
+        ScriptNode setVar;
+        setVar.id = id;
+        setVar.type = ScriptNodeType::SetVariable;
+        setVar.properties["name"] = "total";
+        setVar.inputs = {Pin(PinKind::Execution), Pin(PinKind::Float)};
+        connections.push_back({valueNode, 0, id, 1});
+        return setVar;
+    }
+
+    /// Tree size for the fan-in tests: every statement re-emits all 2,047 Add lines (over 100 KB).
+    constexpr uint32_t kFanInTreeNodes = 2047;
+    /// Fan-in count: each body stays far below the 16 MiB limit, the sum is about twice it.
+    constexpr uint32_t kFanInCopies = 320;
 } // namespace
+
+TEST(SEC3VisualScript_EventFanInCannotMultiplySource)
+{
+    // Many event nodes whose exec wires all reach one SetVariable fed by a large pure
+    // tree. Every event body re-emits the whole tree. The byte limit used to be checked
+    // per body, and each body is only about 100 KB, so the output grew with the event
+    // count without bound (the parser's 16,384 nodes reach gigabytes).
+    VisualScriptGraph graph;
+    graph.className = "FanIn";
+    const uint32_t root = AddTree(graph.nodes, graph.connections, 100000, kFanInTreeNodes);
+    graph.nodes.push_back(SetTotal(50000, graph.connections, root));
+    for (uint32_t i = 1; i <= kFanInCopies; ++i)
+    {
+        ScriptNode start;
+        start.id = i;
+        start.type = ScriptNodeType::OnStart;
+        graph.nodes.push_back(start);
+        graph.connections.push_back({i, 0, 50000, 0});
+    }
+
+    const auto result = VisualScriptCompiler::Compile(graph);
+    EXPECT_FALSE(result.success);
+    EXPECT_TRUE(result.angelScriptSource.empty());
+    EXPECT_TRUE(HasErrorContaining(result, "bytes of source"));
+
+    // A handful of copies of the same graph is well inside the limit and still compiles.
+    graph.nodes.resize(kFanInTreeNodes + 1 + 4);
+    graph.connections.resize(kFanInTreeNodes + 4);
+    const auto small = VisualScriptCompiler::Compile(graph);
+    EXPECT_TRUE(small.success);
+    EXPECT_TRUE(small.angelScriptSource.size() > static_cast<size_t>(4 * kFanInTreeNodes * 20));
+}
+
+TEST(SEC3VisualScript_FunctionFanOutCannotMultiplySource)
+{
+    // The same growth through graph functions: each function got its own emitter and
+    // therefore fresh step and byte budgets.
+    VisualScriptGraph graph;
+    graph.className = "FuncFanOut";
+    ScriptNode start;
+    start.id = 1;
+    start.type = ScriptNodeType::OnStart;
+    graph.nodes.push_back(start);
+    for (uint32_t i = 0; i < kFanInCopies; ++i)
+    {
+        FunctionGraph func;
+        func.name = "Heavy" + std::to_string(i);
+        const uint32_t root = AddTree(func.nodes, func.connections, 100000, kFanInTreeNodes);
+        func.nodes.push_back(SetTotal(50000, func.connections, root));
+        graph.functions.push_back(std::move(func));
+    }
+
+    const auto result = VisualScriptCompiler::Compile(graph);
+    EXPECT_FALSE(result.success);
+    EXPECT_TRUE(result.angelScriptSource.empty());
+    EXPECT_TRUE(HasErrorContaining(result, "bytes of source"));
+}
 
 TEST(SEC3VisualScript_NestedBranchChainFailsCleanly)
 {

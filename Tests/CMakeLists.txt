@@ -1444,11 +1444,12 @@ if(SPARK_ANGELSCRIPT_AVAILABLE)
         TIMEOUT 180)
 endif()
 # SEC3: the visual-script emitter fails deeply nested control flow and long pure
-# data chains with a compile error instead of overflowing the stack, and editor
-# script names cannot become paths (TestSEC3ScriptingHardening.cpp; no VM needed).
+# data chains with a compile error instead of overflowing the stack, bounds the
+# generated source across all event bodies and function sub-graphs of one compile,
+# and editor script names cannot become paths (TestSEC3ScriptingHardening.cpp; no VM needed).
 add_test(NAME SEC3VisualScriptHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SEC3VisualScriptHardening PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3VisualScript_;SPARK_TEST_EXPECT_COUNT=4"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3VisualScript_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "scripting;visual-script;security;unit"
     TIMEOUT 120)
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)

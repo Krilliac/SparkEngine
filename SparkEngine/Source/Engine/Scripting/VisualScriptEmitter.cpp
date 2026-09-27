@@ -11,7 +11,8 @@ namespace Spark::Scripting::Detail
 {
     namespace
     {
-        /// Upper bound on emitted statements. Diamond-shaped execution graphs
+        /// Upper bound on emitted statements across one Compile() (the count
+        /// lives in the shared EmitBudget). Diamond-shaped execution graphs
         /// re-emit shared chains; once the bound is hit, EmitStep, EmitChain and
         /// EmitPinChains all stop, so a hostile graph fails in bounded time and
         /// output instead of walking an exponential number of paths.
@@ -28,14 +29,11 @@ namespace Spark::Scripting::Detail
         /// Upper bound on the length of a chain of pure data nodes feeding one
         /// statement; CollectPure recurses once per producer.
         constexpr size_t kMaxDataDepth = 256;
-
-        /// Upper bound on the generated source of one method body.
-        constexpr size_t kMaxBodyBytes = size_t{16} << 20;
     } // namespace
 
     VisualScriptEmitter::VisualScriptEmitter(const VisualScriptGraph& graph, bool debugMode,
-                                             std::vector<std::string>& errors)
-        : m_debugMode(debugMode), m_errors(errors)
+                                             std::vector<std::string>& errors, EmitBudget& budget)
+        : m_debugMode(debugMode), m_errors(errors), m_budget(budget)
     {
         for (const auto& node : graph.nodes)
             m_nodes.emplace(node.id, &node); // first definition wins
@@ -122,29 +120,32 @@ namespace Spark::Scripting::Detail
 
     bool VisualScriptEmitter::StepLimitReached() const
     {
-        return m_halted || m_emittedSteps > kMaxEmittedSteps;
+        return m_budget.halted || m_budget.steps > kMaxEmittedSteps;
     }
 
     void VisualScriptEmitter::Halt(const std::string& reason)
     {
-        if (!m_halted)
+        if (!m_budget.halted)
             m_errors.push_back(reason);
-        m_halted = true;
+        m_budget.halted = true;
     }
 
     /// Emit one statement node with the pure data nodes it consumes.
     void VisualScriptEmitter::EmitStep(const ScriptNode& node, const std::string& indent, std::string& code)
     {
-        if (m_halted)
+        if (m_budget.halted)
             return;
-        if (code.size() > kMaxBodyBytes)
+        // The limit covers the whole Compile(): source already committed by earlier
+        // bodies (other events, other function emitters) plus this body so far.
+        // Both terms are sizes of strings held in memory, so the sum cannot wrap.
+        if (m_budget.committedBytes + code.size() > kMaxSourceBytes)
         {
-            Halt("Graph generates more than " + std::to_string(kMaxBodyBytes) + " bytes of source");
+            Halt("Graph generates more than " + std::to_string(kMaxSourceBytes) + " bytes of source");
             return;
         }
-        if (++m_emittedSteps > kMaxEmittedSteps)
+        if (++m_budget.steps > kMaxEmittedSteps)
         {
-            if (m_emittedSteps == kMaxEmittedSteps + 1)
+            if (m_budget.steps == kMaxEmittedSteps + 1)
                 m_errors.push_back("Graph expands to more than " + std::to_string(kMaxEmittedSteps) + " statements");
             return;
         }
@@ -321,7 +322,7 @@ namespace Spark::Scripting::Detail
 
         for (const auto* conn : inputs)
         {
-            if (m_halted)
+            if (m_budget.halted)
                 return;
             const auto* producer = FindNode(conn->fromNode);
             if (!producer || !IsPureNode(*producer) || done.count(producer->id) != 0)

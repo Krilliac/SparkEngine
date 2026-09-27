@@ -8,9 +8,12 @@
  * functions are the literal, identifier and node-classification rules shared by
  * the emitter and VisualScriptCompiler::Compile.
  *
- * Contract: an emitter borrows the graph and the error list for one Compile()
- * call and is used on that call's thread only; it allocates lookup tables
- * proportional to the graph and the generated text. Editor/tooling tier.
+ * Contract: an emitter borrows the graph, the error list and the compile-wide
+ * EmitBudget for one Compile() call and is used on that call's thread only; it
+ * allocates lookup tables proportional to the graph and the generated text.
+ * Every emitter of one Compile() shares one EmitBudget, so the statement and
+ * byte limits bound the whole generated source, not each method body.
+ * Editor/tooling tier.
  *
  * @see VisualScriptCompiler.h for the public entry point
  */
@@ -29,6 +32,23 @@
 
 namespace Spark::Scripting::Detail
 {
+    /// Upper bound on the generated source of one whole Compile() call (every method body together).
+    inline constexpr size_t kMaxSourceBytes = size_t{16} << 20;
+
+    /**
+     * @brief Emission limits shared by every VisualScriptEmitter of one Compile() call
+     *
+     * Compile() owns one budget and passes it to the event-graph emitter and to
+     * each function sub-graph emitter, so a graph cannot multiply its output by
+     * spreading it over many event nodes or functions.
+     */
+    struct EmitBudget
+    {
+        size_t committedBytes = 0; ///< Source already written outside the body being emitted
+        size_t steps = 0;          ///< Statements emitted so far, across all emitters
+        bool halted = false;       ///< A depth or size budget was exceeded; all emission stops
+    };
+
     /// One indentation level of generated source.
     inline constexpr std::string_view kIndent = "    ";
 
@@ -71,8 +91,9 @@ namespace Spark::Scripting::Detail
     class VisualScriptEmitter
     {
       public:
-        /// Borrow @p graph and @p errors for the emitter's lifetime; both must outlive it.
-        VisualScriptEmitter(const VisualScriptGraph& graph, bool debugMode, std::vector<std::string>& errors);
+        /// Borrow @p graph, @p errors and @p budget for the emitter's lifetime; all must outlive it.
+        VisualScriptEmitter(const VisualScriptGraph& graph, bool debugMode, std::vector<std::string>& errors,
+                            EmitBudget& budget);
 
         const ScriptNode* FindNode(uint32_t id) const;
 
@@ -128,10 +149,9 @@ namespace Spark::Scripting::Detail
         std::unordered_map<uint32_t, const ScriptNode*> m_nodes;
         std::unordered_map<uint32_t, std::vector<const ScriptConnection*>> m_outgoing;
         std::unordered_map<uint32_t, std::vector<const ScriptConnection*>> m_incoming;
+        EmitBudget& m_budget;
         std::unordered_set<uint32_t> m_onPath; ///< Nodes on the chain being emitted (cycle guard)
-        size_t m_emittedSteps = 0;
-        size_t m_chainDepth = 0; ///< Execution chains currently being emitted (nesting depth)
-        bool m_halted = false;   ///< A depth or size budget was exceeded; emission stops
+        size_t m_chainDepth = 0;               ///< Execution chains currently being emitted (nesting depth)
     };
 
 } // namespace Spark::Scripting::Detail

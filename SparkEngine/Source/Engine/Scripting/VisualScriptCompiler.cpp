@@ -10,7 +10,10 @@
 #include "../../Utils/LogMacros.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <ios>
 #include <sstream>
+#include <string>
 #include <utility>
 
 namespace Spark::Scripting
@@ -184,12 +187,25 @@ namespace Spark::Scripting
         for (const auto& evt : graph.customEvents)
             methodFor(CustomEventMethodName(evt), ParameterList(evt.parameters));
 
-        VisualScriptEmitter emitter(graph, debugMode, result.errors);
+        // One budget for the whole compile: every event body and every function emitter
+        // draws on the same statement and byte limits, so fanning a large data graph into
+        // many event nodes or functions cannot multiply the generated source.
+        EmitBudget budget;
+        const auto sourceBytes = [&source]() -> size_t
+        {
+            const std::streamoff position = source.tellp();
+            return position < 0 ? kMaxSourceBytes + 1 : static_cast<size_t>(position);
+        };
+
+        VisualScriptEmitter emitter(graph, debugMode, result.errors, budget);
         for (const auto& method : eventMethods)
         {
             source << "\n    void " << method.name << "(" << method.params << ")\n    {\n";
             for (const ScriptNode* eventNode : method.events)
             {
+                if (budget.halted)
+                    break;
+                budget.committedBytes = sourceBytes();
                 std::string indent = "        ";
                 std::string body;
                 if (eventNode->type == ScriptNodeType::OnKeyPress)
@@ -219,13 +235,27 @@ namespace Spark::Scripting
             VisualScriptGraph funcGraph;
             funcGraph.nodes = func.nodes;
             funcGraph.connections = func.connections;
-            VisualScriptEmitter funcEmitter(funcGraph, debugMode, result.errors);
-            std::string body;
-            funcEmitter.EmitEntryChains(funcGraph.nodes, "        ", body);
-            source << body << "    }\n";
+            if (!budget.halted)
+            {
+                budget.committedBytes = sourceBytes();
+                VisualScriptEmitter funcEmitter(funcGraph, debugMode, result.errors, budget);
+                std::string body;
+                funcEmitter.EmitEntryChains(funcGraph.nodes, "        ", body);
+                source << body;
+            }
+            source << "    }\n";
         }
 
         source << "}\n";
+
+        // EmitStep checks the budget before each statement, so the last statement can
+        // carry the total just past the limit; the finished source is checked as well.
+        if (!budget.halted && sourceBytes() > kMaxSourceBytes)
+        {
+            budget.halted = true;
+            result.errors.push_back("Graph generates more than " + std::to_string(kMaxSourceBytes) +
+                                    " bytes of source");
+        }
 
         if (!result.errors.empty())
         {
