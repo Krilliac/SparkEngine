@@ -1,4 +1,5 @@
 #include "ProcessRunner.h"
+#include "PathSecurity.h"
 #include <cctype>
 #include <chrono>
 #include <cstring>
@@ -64,7 +65,47 @@ namespace SparkBuild
             return args;
         }
 
+        // A bare program name is resolved through PathSecurity so neither the
+        // application directory nor the current directory can supply the tool
+        // (CreateProcess, and execvp given an empty PATH entry, search them).
+        // Returns false when a bare name has no trusted match.
+        bool ResolveProgram(std::vector<std::string>& args, std::string& resolved)
+        {
+            resolved.clear();
+            if (!PathSecurity::IsBareProgramName(args[0]))
+            {
+                return true;
+            }
+            resolved = PathSecurity::ResolveExecutable(args[0]);
+            if (resolved.empty())
+            {
+                return false;
+            }
+            args[0] = resolved;
+            return true;
+        }
+
 #ifdef SPARK_PLATFORM_WINDOWS
+        // cmd.exe resolves a command's first word in its current directory
+        // before PATH unless this variable exists; children inherit it.
+        void DisableCurrentDirectoryCommandSearch()
+        {
+            static std::once_flag once;
+            std::call_once(once, [] { (void)::SetEnvironmentVariableW(L"NoDefaultCurrentDirectoryInExePath", L"1"); });
+        }
+
+        // The absolute System32 cmd.exe, so the shell itself is never looked up.
+        std::string SystemCommandInterpreter()
+        {
+            char systemDirectory[MAX_PATH] = {};
+            const UINT length = ::GetSystemDirectoryA(systemDirectory, MAX_PATH);
+            if (length == 0 || length >= MAX_PATH)
+            {
+                return {};
+            }
+            return std::string(systemDirectory, length) + "\\cmd.exe";
+        }
+
         std::string QuoteWindowsArgument(const std::string& argument)
         {
             if (argument.empty())
@@ -238,7 +279,8 @@ namespace SparkBuild
     int ProcessRunner::RunSync(const std::string& command, const std::string& workingDir, std::string& output)
     {
         std::vector<std::string> args = SplitCommandLine(command);
-        if (args.empty())
+        std::string resolvedProgram;
+        if (args.empty() || !ResolveProgram(args, resolvedProgram))
             return -1;
 
         SECURITY_ATTRIBUTES sa = {};
@@ -267,8 +309,10 @@ namespace SparkBuild
         }
         const char* dir = workingDir.empty() ? nullptr : workingDir.c_str();
 
-        BOOL ok =
-            CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, dir, &si, &pi);
+        // A resolved absolute application name disables the implicit search entirely.
+        const char* application = resolvedProgram.empty() ? nullptr : resolvedProgram.c_str();
+        BOOL ok = CreateProcessA(application, cmdLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, dir,
+                                 &si, &pi);
         CloseHandle(hWritePipe);
 
         if (!ok)
@@ -322,6 +366,15 @@ namespace SparkBuild
         PROCESS_INFORMATION pi = {};
         const char* dir = workingDir.empty() ? nullptr : workingDir.c_str();
         std::string cmdLine = "cmd /c " + command;
+        const std::string interpreter = SystemCommandInterpreter();
+        if (interpreter.empty())
+        {
+            ::CloseHandle(hWritePipe);
+            ::CloseHandle(hReadPipe);
+            CompleteAsync(-1, false, onComplete);
+            return;
+        }
+        DisableCurrentDirectoryCommandSearch();
 
         HANDLE job = ::CreateJobObjectW(nullptr, nullptr);
         if (!job)
@@ -343,7 +396,7 @@ namespace SparkBuild
             return;
         }
 
-        const BOOL ok = ::CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, TRUE,
+        const BOOL ok = ::CreateProcessA(interpreter.c_str(), cmdLine.data(), nullptr, nullptr, TRUE,
                                          CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, dir, &si, &pi);
         ::CloseHandle(hWritePipe);
 
@@ -447,7 +500,8 @@ namespace SparkBuild
     int ProcessRunner::RunSync(const std::string& command, const std::string& workingDir, std::string& output)
     {
         std::vector<std::string> args = SplitCommandLine(command);
-        if (args.empty())
+        std::string resolvedProgram;
+        if (args.empty() || !ResolveProgram(args, resolvedProgram))
             return -1;
 
         int pipefd[2];

@@ -1,8 +1,10 @@
+#include "PathSecurity.h"
 #include "ProcessRunner.h"
 
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -455,6 +457,168 @@ namespace
         }
         return 0;
     }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    constexpr char kPathListSeparator = ';';
+#else
+    constexpr char kPathListSeparator = ':';
+#endif
+
+    // Replaces PATH for one scope and restores the previous value.
+    class ScopedPathVariable
+    {
+      public:
+        explicit ScopedPathVariable(const std::string& value)
+        {
+            const char* current = std::getenv("PATH");
+            m_hadValue = current != nullptr;
+            if (m_hadValue)
+                m_previous = current;
+            m_ok = Set(value);
+        }
+        ~ScopedPathVariable()
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            (void)Set(m_hadValue ? m_previous : std::string());
+#else
+            if (m_hadValue)
+                (void)Set(m_previous);
+            else
+                (void)::unsetenv("PATH");
+#endif
+        }
+        ScopedPathVariable(const ScopedPathVariable&) = delete;
+        ScopedPathVariable& operator=(const ScopedPathVariable&) = delete;
+
+        bool IsSet() const { return m_ok; }
+        const std::string& Previous() const { return m_previous; }
+
+      private:
+        static bool Set(const std::string& value)
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            return _putenv_s("PATH", value.c_str()) == 0;
+#else
+            return ::setenv("PATH", value.c_str(), 1) == 0;
+#endif
+        }
+
+        std::string m_previous;
+        bool m_hadValue = false;
+        bool m_ok = false;
+    };
+
+    // SEC finding 19: a bare tool name ("git", "cmake") must never resolve to
+    // a binary planted in the current directory (Windows' implicit
+    // CreateProcess search, cmd.exe's command search, and execvp with an
+    // empty PATH entry all look there). A copy of this test binary stands in
+    // for the planted tool; run with --exit-success it exits 0, so a zero exit
+    // proves the planted file ran.
+    int RunPlantedToolSearchTest(const std::filesystem::path& executable)
+    {
+        namespace fs = std::filesystem;
+        int failures = 0;
+        auto check = [&failures](bool condition, const std::string& message)
+        {
+            if (!condition)
+            {
+                ++failures;
+                std::cerr << "FAIL: " << message << '\n';
+            }
+        };
+
+        const std::string toolName = "sparkbuild-planted-probe";
+        const fs::path plantDirectory =
+            fs::temp_directory_path() / ("sparkbuild-planted-" + std::to_string(CurrentProcessIdValue()) + "-" +
+                                         std::to_string(CurrentSteadyTick()));
+        const fs::path planted = plantDirectory / (toolName + SPARK_EXE_EXT);
+        std::error_code error;
+        fs::create_directories(plantDirectory, error);
+        if (!error)
+            fs::copy_file(executable, planted, fs::copy_options::overwrite_existing, error);
+#ifndef SPARK_PLATFORM_WINDOWS
+        if (!error)
+            fs::permissions(planted, fs::perms::owner_exec, fs::perm_options::add, error);
+#endif
+        if (error)
+        {
+            std::cerr << "FAIL: could not plant the probe tool: " << error.message() << '\n';
+            fs::remove_all(plantDirectory, error);
+            return 1;
+        }
+        const std::string command = toolName + " --exit-success";
+
+        // The resolver itself never accepts relative or empty PATH entries.
+        const std::string relativeEntries =
+            std::string(".") + kPathListSeparator + kPathListSeparator + plantDirectory.filename().string();
+        const fs::path previousDirectory = fs::current_path(error);
+        fs::current_path(plantDirectory, error);
+        check(!error, "could not enter the plant directory");
+        check(SparkBuild::PathSecurity::ResolveExecutableIn(toolName, relativeEntries).empty(),
+              "an empty, '.' or relative PATH entry resolved a tool from the current directory");
+        check(SparkBuild::PathSecurity::ResolveExecutableIn(toolName, plantDirectory.string()) ==
+                  planted.lexically_normal().string(),
+              "an absolute PATH entry did not resolve the tool");
+        check(!SparkBuild::PathSecurity::IsBareProgramName("tools/" + toolName) &&
+                  SparkBuild::PathSecurity::IsBareProgramName(toolName),
+              "bare-name classification is wrong");
+
+        {
+            // Leading empty entry: execvp treats it as the current directory.
+            ScopedPathVariable path(std::string(1, kPathListSeparator) + "." + kPathListSeparator +
+                                    std::string(std::getenv("PATH") ? std::getenv("PATH") : ""));
+            check(path.IsSet(), "could not set PATH for the planted-tool test");
+            SparkBuild::ProcessRunner runner;
+            std::string output;
+            check(runner.RunSync(command, {}, output) != 0, "RunSync executed a tool planted in the current directory");
+        }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        {
+            // RunAsync goes through cmd.exe, which searches its working directory first by default.
+            std::mutex completionMutex;
+            std::condition_variable completionCondition;
+            bool completed = false;
+            bool succeeded = true;
+            SparkBuild::ProcessRunner runner;
+            const bool launched = runner.RunAsync(
+                command, plantDirectory.string(), [](const std::string&) {},
+                [&](int exitCode, bool success)
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(completionMutex);
+                        completed = true;
+                        succeeded = success && exitCode == 0;
+                    }
+                    completionCondition.notify_all();
+                });
+            check(launched, "RunAsync rejected the planted-tool launch");
+            std::unique_lock<std::mutex> lock(completionMutex);
+            check(completionCondition.wait_for(lock, 8s, [&] { return completed; }),
+                  "planted-tool RunAsync did not complete");
+            check(!succeeded, "RunAsync (cmd.exe) executed a tool planted in its working directory");
+        }
+#endif
+
+        fs::current_path(previousDirectory, error);
+        check(!error, "could not restore the working directory");
+
+        {
+            // Positive control: the same tool on an absolute PATH entry still runs.
+            const char* current = std::getenv("PATH");
+            ScopedPathVariable path(plantDirectory.string() + kPathListSeparator + (current ? current : ""));
+            check(path.IsSet(), "could not prepend the plant directory to PATH");
+            SparkBuild::ProcessRunner runner;
+            std::string output;
+            check(runner.RunSync(command, {}, output) == 0,
+                  "RunSync did not run a tool found on an absolute PATH entry");
+            check(SparkBuild::PathSecurity::ResolveExecutable(toolName) == planted.lexically_normal().string(),
+                  "ResolveExecutable did not return the absolute PATH match");
+        }
+
+        fs::remove_all(plantDirectory, error);
+        return failures == 0 ? 0 : 1;
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -471,5 +635,6 @@ int main(int argc, char** argv)
     const int cancellationResult = RunCancellationTreeTest(executable);
     const int reentryResult = RunCompletionReentryTest(executable);
     const int destructionResult = RunCompletionOwnedDestructionTest(executable);
-    return cancellationResult == 0 && reentryResult == 0 && destructionResult == 0 ? 0 : 1;
+    const int plantedToolResult = RunPlantedToolSearchTest(executable);
+    return cancellationResult == 0 && reentryResult == 0 && destructionResult == 0 && plantedToolResult == 0 ? 0 : 1;
 }

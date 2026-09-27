@@ -1,6 +1,7 @@
 #include "Downloader.h"
 #include "ArchiveExtraction.h"
 #include "DownloadSecurity.h"
+#include "PathSecurity.h"
 #include <fstream>
 #include <filesystem>
 #include <array>
@@ -263,6 +264,15 @@ namespace SparkBuild
         bool RunProcess(const std::string& executable, const std::vector<std::string>& args,
                         std::string* capturedOutput = nullptr)
         {
+            // Resolve through absolute PATH entries only: execvp would treat an
+            // empty PATH entry as the current directory.
+            const std::string program =
+                PathSecurity::IsBareProgramName(executable) ? PathSecurity::ResolveExecutable(executable) : executable;
+            if (program.empty())
+            {
+                return false;
+            }
+
             std::vector<char*> argv;
             argv.reserve(args.size() + 2);
             argv.push_back(const_cast<char*>(executable.c_str()));
@@ -299,7 +309,7 @@ namespace SparkBuild
                     close(outputPipe[0]);
                     close(outputPipe[1]);
                 }
-                execvp(executable.c_str(), argv.data());
+                execv(program.c_str(), argv.data());
                 _exit(127);
             }
 
