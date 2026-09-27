@@ -9,6 +9,7 @@
 
 #include "Account/TFAccountSystem.h"   // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 4)
+#include "Net/TFClientMsgRouting.h"    // the routed client TFMsg id lists
 #include "Net/TFClientNet.h"           // W5 onboarding (Task 7): local-player reply loopback
 #include "Net/TFNetworkLifecycle.h"
 #include "Net/TFNetProtocol.h"
@@ -45,73 +46,31 @@ namespace Terrafront
         auto route = [&nm](TFMsg id, auto&& fn)
         { nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)), std::forward<decltype(fn)>(fn)); };
 
-        // W5 T6 (T4-review #1 security fix): gameplay ids are now routed through
-        // RouteClientMessage — the SAME single choke point the onboarding ids use
-        // below and the listen-host/standalone loopback path uses
-        // (TFClientNet::RouteLoopback) — so the enter-world gate added there
-        // applies uniformly to every client-originated gameplay message,
-        // regardless of transport.
-        // final-review #3 (gate defense-in-depth): VehicleEnter/VehicleExit/
-        // AegisDeploy/SquadMsg used to be direct routes straight into their
-        // handlers below, bypassing the RouteClientMessage enter-world gate
-        // entirely -- an unauthenticated/pre-enter-world client could seat a
-        // vehicle, toggle Aegis, or spam squad ops. They now go through the same
-        // choke point as the other gameplay ids.
-        for (TFMsg id :
-             {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent, TFMsg::FactionSelect, TFMsg::VehicleEnter,
-              TFMsg::VehicleExit, TFMsg::AegisDeploy, TFMsg::SquadMsg, TFMsg::RedeployRequest})
+        // W5 T6 (T4-review #1 security fix): every client-originated id is routed
+        // through RouteClientMessage -- the SAME single choke point the listen-host/
+        // standalone loopback path uses (TFClientNet::RouteLoopback) -- so the
+        // enter-world gate there applies uniformly regardless of transport.
+        // The id lists live in Net/TFClientMsgRouting.h, which RouteClientMessage's
+        // gate also reads: an id cannot be gated/handled yet left unregistered
+        // (TFMsg::LoadoutExtChange used to be dropped as an unknown type on the
+        // socket path because it was missing from a hand-written list here).
+        const auto routeToChokePoint = [&route, this](TFMsg id)
         {
             route(id, [this, id](const NetworkMessage& m)
                   { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
-        }
+        };
+        for (const TFMsg id : kTFEnteredWorldGatedMsgs)
+            routeToChokePoint(id);
+        for (const TFMsg id : kTFOnboardingMsgs)
+            routeToChokePoint(id);
 
-        // W6 progression: loadout persistence + unlock-tree purchases now route
-        // through the same enter-world-gated choke point as the gameplay ids.
-        for (TFMsg id : {TFMsg::LoadoutChange, TFMsg::UnlockRequest})
-        {
-            route(id, [this, id](const NetworkMessage& m)
-                  { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
-        }
-
-        // Outfits lane: enter-world-gated like the other gameplay ids.
-        route(TFMsg::OutfitRequest, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::OutfitRequest, m.payload.data(), m.payload.size()); });
-
-        // class-abilities lane (W9): enter-world-gated like the other gameplay ids.
-        route(TFMsg::AbilityRequest, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::AbilityRequest, m.payload.data(), m.payload.size()); });
-
-        // grenades lane (W10): enter-world-gated like the other gameplay ids.
-        route(TFMsg::GrenadeThrow, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::GrenadeThrow, m.payload.data(), m.payload.size()); });
-
-        // ping-system lane (W11): enter-world-gated like the other gameplay ids.
-        route(TFMsg::PingPlace, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::PingPlace, m.payload.data(), m.payload.size()); });
-
-        route(TFMsg::ChatMsg, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::ChatMsg, m.payload.data(), m.payload.size()); });
-
-        // W5 onboarding (Task 4): login -> char-select/create/delete -> enter-world.
-        // Routed through RouteClientMessage so the socket path and the listen-host/
-        // standalone loopback path (TFClientNet::RouteLoopback) share one dispatch.
-        for (TFMsg id : {TFMsg::LoginRequest, TFMsg::RegisterRequest})
+        // W5 onboarding (Task 4): credential-bearing ids use the sensitive path.
+        for (const TFMsg id : kTFCredentialMsgs)
         {
             nm.RegisterSensitiveHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                                         [this, id](const NetworkMessage& m)
                                         { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
         }
-        for (TFMsg id : {TFMsg::CharListRequest, TFMsg::CharCreateReq, TFMsg::CharDeleteReq, TFMsg::EnterWorldReq})
-        {
-            route(id, [this, id](const NetworkMessage& m)
-                  { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
-        }
-
-        // W13 multimap server-authoritative continent-hop (docs/TERRAFRONT_
-        // MULTIMAP.md §2.2): enter-world-gated like the other post-onboarding
-        // gameplay ids (only sent from the sanctuary terminal).
-        route(TFMsg::ContinentHopRequest, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::ContinentHopRequest, m.payload.data(), m.payload.size()); });
 
         m_handlersRegistered = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] server TFMsg handlers registered");
@@ -123,17 +82,16 @@ namespace Terrafront
         // so no dangling `this` survives module shutdown.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (TFMsg id :
-             {TFMsg::ClientInput,     TFMsg::SpawnRequest,    TFMsg::FireEvent,          TFMsg::FactionSelect,
-              TFMsg::LoadoutChange,   TFMsg::UnlockRequest,   TFMsg::SquadMsg,           TFMsg::ChatMsg,
-              TFMsg::VehicleEnter,    TFMsg::VehicleExit,     TFMsg::AegisDeploy,        TFMsg::LoginRequest,
-              TFMsg::RegisterRequest, TFMsg::CharListRequest, TFMsg::CharCreateReq,      TFMsg::CharDeleteReq,
-              TFMsg::EnterWorldReq,   TFMsg::RedeployRequest, TFMsg::OutfitRequest,      TFMsg::AbilityRequest,
-              TFMsg::GrenadeThrow,    TFMsg::PingPlace,       TFMsg::ContinentHopRequest})
-        {
+        const auto silence = [&nm](TFMsg id) {
             nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                                [](const Spark::Net::NetworkMessage&) {});
-        }
+        };
+        for (const TFMsg id : kTFEnteredWorldGatedMsgs)
+            silence(id);
+        for (const TFMsg id : kTFOnboardingMsgs)
+            silence(id);
+        for (const TFMsg id : kTFCredentialMsgs)
+            silence(id);
         m_handlersRegistered = false;
     }
 

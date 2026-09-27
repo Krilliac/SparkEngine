@@ -7,6 +7,7 @@
  */
 #include "Net/TFServerSim.h"
 #include "Net/TFOnboardingSessionRules.h"
+#include "Net/TFClientMsgRouting.h"
 
 #include "Account/TFAccountSystem.h"   // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 4)
@@ -77,36 +78,14 @@ namespace Terrafront
         // Onboarding ids (login/char CRUD/enter-world itself) are never gated
         // here: they are how a session GETS into m_enteredWorld in the first
         // place.
-        switch (id)
+        // The gated id list is shared with RegisterNetHandlers
+        // (Net/TFClientMsgRouting.h) so every gated id is also socket-routed.
+        if (IsEnteredWorldGatedMsg(id) && !m_enteredWorld.contains(sender))
         {
-        case TFMsg::ClientInput:
-        case TFMsg::SpawnRequest:
-        case TFMsg::FireEvent:
-        case TFMsg::FactionSelect:
-        case TFMsg::VehicleEnter:
-        case TFMsg::VehicleExit:
-        case TFMsg::AegisDeploy:
-        case TFMsg::SquadMsg:
-        case TFMsg::ChatMsg:
-        case TFMsg::LoadoutChange:
-        case TFMsg::LoadoutExtChange: // loadout-depth wave: gated like the other gameplay ids
-        case TFMsg::UnlockRequest:
-        case TFMsg::RedeployRequest:     // W7 ui-map-keys: MUST be gated
-        case TFMsg::OutfitRequest:       // Outfits lane: gated like the other gameplay ids
-        case TFMsg::AbilityRequest:      // class-abilities lane (W9): gated
-        case TFMsg::GrenadeThrow:        // grenades lane (W10): gated
-        case TFMsg::PingPlace:           // ping-system lane (W11): gated
-        case TFMsg::ContinentHopRequest: // multimap server-authoritative hop (W13): gated
-            if (!m_enteredWorld.contains(sender))
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Game,
-                               "[TF] gameplay message 0x%04X from non-entered-world client %u rejected",
-                               static_cast<unsigned>(id), sender);
-                return;
-            }
-            break;
-        default:
-            break;
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] gameplay message 0x%04X from non-entered-world client %u rejected",
+                           static_cast<unsigned>(id), sender);
+            return;
         }
 
         switch (id)

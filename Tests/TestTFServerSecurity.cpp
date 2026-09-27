@@ -9,11 +9,14 @@
  * header-only rule or the standalone module .cpp that the server path calls.
  */
 #include "TestFramework.h"
+#include "Net/TFClientMsgRouting.h"
 #include "Net/TFRepProtocol.h"
 
+#include <algorithm>
 #include <cfloat>
 #include <cmath>
 #include <limits>
+#include <vector>
 
 using namespace Terrafront;
 
@@ -66,4 +69,33 @@ TEST(TFSec_WrapPiKeepsInRangeAnglesAndWrapsSmallMultiples)
     EXPECT_NEAR(QuantAim::WrapPi(0.5f + 3.0f * twoPi), 0.5f, 1e-4f);
     EXPECT_NEAR(QuantAim::WrapPi(4.0f), 4.0f - twoPi, 1e-5f);
     EXPECT_NEAR(QuantAim::WrapPi(-4.0f), -4.0f + twoPi, 1e-5f);
+}
+
+// TFMsg::LoadoutExtChange was enter-world gated and dispatched inside
+// RouteClientMessage, but RegisterNetHandlers never registered it, so every
+// socket client's grenade/suit save was dropped as an unknown message type.
+// Registration, teardown and the gate now read one list; every gated id is
+// therefore socket-routed.
+TEST(TFSec_EveryGatedClientMsgIsSocketRouted)
+{
+    static_assert(IsEnteredWorldGatedMsg(TFMsg::LoadoutExtChange));
+    static_assert(IsEnteredWorldGatedMsg(TFMsg::LoadoutChange));
+    static_assert(IsEnteredWorldGatedMsg(TFMsg::ClientInput));
+    static_assert(IsEnteredWorldGatedMsg(TFMsg::FactionSelect));
+    EXPECT_TRUE(std::find(kTFEnteredWorldGatedMsgs.begin(), kTFEnteredWorldGatedMsgs.end(), TFMsg::LoadoutExtChange) !=
+                kTFEnteredWorldGatedMsgs.end());
+
+    // Onboarding and credential ids are how a session enters the world: never gated.
+    for (const TFMsg id : kTFOnboardingMsgs)
+        EXPECT_FALSE(IsEnteredWorldGatedMsg(id));
+    for (const TFMsg id : kTFCredentialMsgs)
+        EXPECT_FALSE(IsEnteredWorldGatedMsg(id));
+
+    // No id is listed twice (a duplicate would silently hide a missing one).
+    std::vector<TFMsg> all(kTFEnteredWorldGatedMsgs.begin(), kTFEnteredWorldGatedMsgs.end());
+    all.insert(all.end(), kTFOnboardingMsgs.begin(), kTFOnboardingMsgs.end());
+    all.insert(all.end(), kTFCredentialMsgs.begin(), kTFCredentialMsgs.end());
+    std::sort(all.begin(), all.end());
+    EXPECT_TRUE(std::adjacent_find(all.begin(), all.end()) == all.end());
+    EXPECT_EQ(all.size(), size_t{24});
 }
