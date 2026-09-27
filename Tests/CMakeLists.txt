@@ -1094,6 +1094,7 @@ target_sources(SparkTests PRIVATE
     TestAudioEngineReal.cpp
     TestBuildInfraReal.cpp
     TestConsoleProcessPipeReal.cpp
+    TestCrashArtifactRetention.cpp
     TestCrashHandlerGatingReal.cpp
     TestCrashSymbolication.cpp
     TestEditorCrashHandlerFilterReal.cpp
@@ -1810,6 +1811,14 @@ set_tests_properties(CrashSettingsCredentials PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=CrashSettings_;SPARK_TEST_EXPECT_COUNT=1"
     LABELS "crash-security;security;unit"
     RUN_SERIAL TRUE
+    TIMEOUT 30)
+
+# SEC2 finding 15: stale spark_crash_* artifact directories are pruned by an
+# owner-verified age/count/byte retention policy before a new one is created.
+add_test(NAME CrashArtifactRetention COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(CrashArtifactRetention PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=CrashRetention_;SPARK_TEST_EXPECT_COUNT=4"
+    LABELS "crash-security;security;unit"
     TIMEOUT 30)
 
 # OPS-100: signal-path build-id records (bounded ELF note parsing, fixed-buffer

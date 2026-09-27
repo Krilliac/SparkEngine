@@ -1,6 +1,7 @@
 #include "Utils/CrashHandler.h"
 #include "../Core/Platform.h"
 #include "../Core/RuntimePackage.h"
+#include "Utils/CrashArtifactRetention.h"
 #include "Utils/CrashHandlerSupport.h"
 #include "Utils/CrashSymbolication.h"
 #include "Utils/Assert.h"
@@ -525,6 +526,14 @@ static bool InitializeCrashArtifactDirectory()
     const std::filesystem::path tempDirectory = std::filesystem::temp_directory_path(error);
     if (error)
         return false;
+
+    // Each process leaves one directory behind. Before adding this one, drop
+    // the ones earlier, exited processes left empty or past the retention
+    // limits, so launches and crashes cannot accumulate artifacts unbounded.
+    const std::size_t pruned = Spark::CrashHandlerDetail::PruneStaleCrashArtifactDirectories(tempDirectory);
+    if (pruned != 0)
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: removed %zu stale crash-artifact director%s", pruned,
+                       pruned == 1 ? "y" : "ies");
 
     const std::filesystem::path artifactDirectory =
         Spark::CrashHandlerDetail::CreatePrivateCrashArtifactDirectory(tempDirectory, GetEnginePID());
