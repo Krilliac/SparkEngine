@@ -363,3 +363,40 @@ TEST(SEC3Gameplay_ReplayRoundTripStillLoads)
     ASSERT_TRUE(reader.LoadFromFile(path.string()));
     EXPECT_EQ(reader.GetFrameCount(), size_t{2});
 }
+
+// ----------------------------------------------------------------------------
+// #13 Localization
+// ----------------------------------------------------------------------------
+
+TEST(SEC3Gameplay_LocalizationParsesLongValueWithoutRecursion)
+{
+    ScratchDir dir("loc_long");
+    // One 1 MiB value: std::regex recursed per character here (stack overflow on
+    // libstdc++, uncaught regex_error on MSVC).
+    const std::string longValue(size_t{1} << 20, 'a');
+    const fs::path path = dir.path / "long.json";
+    WriteText(path, "{\n  \"greeting\": \"He said \\\"hi\\\"\",\n  \"long\": \"" + longValue +
+                        "\",\n  \"section\": { \"nested\": \"ok\" },\n  \"count\": 5\n}\n");
+
+    Spark::StringTable table;
+    ASSERT_TRUE(table.LoadFromFile(path.string()));
+    EXPECT_EQ(table.GetEntry("long").size(), longValue.size());
+    EXPECT_EQ(table.GetEntry("greeting"), std::string("He said \"hi\""));
+    EXPECT_EQ(table.GetEntry("nested"), std::string("ok"));
+    EXPECT_FALSE(table.HasEntry("count"));
+    EXPECT_EQ(table.GetEntryCount(), size_t{3});
+}
+
+TEST(SEC3Gameplay_LocalizationRejectsOversizedFile)
+{
+    ScratchDir dir("loc_big");
+    const fs::path path = dir.path / "big.json";
+    std::string text = "{ \"key\": \"value\",";
+    text.append(Spark::StringTable::kMaxFileBytes, ' ');
+    text += "}";
+    WriteText(path, text);
+
+    Spark::StringTable table;
+    EXPECT_FALSE(table.LoadFromFile(path.string()));
+    EXPECT_EQ(table.GetEntryCount(), size_t{0});
+}

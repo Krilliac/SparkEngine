@@ -33,6 +33,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -49,10 +50,15 @@ namespace Spark
     class StringTable
     {
       public:
+        /// @brief Largest localization file LoadFromFile accepts; bigger files are rejected unread.
+        static constexpr size_t kMaxFileBytes = size_t{8} * 1024 * 1024;
+
         /**
-     * @brief Load string entries from a JSON file.
-     * @param filePath Path to the JSON localization file.
-     * @return true if loading succeeded.
+     * @brief Load string entries from a flat JSON object of "key": "value" pairs.
+     * @param filePath Path to the JSON localization file (at most kMaxFileBytes).
+     * @return true if at least one entry was parsed.
+     * @details Parsing is a single linear pass with no recursion, so a very long key
+     *          or value cannot exhaust the stack.
      */
         bool LoadFromFile(const std::string& filePath);
 

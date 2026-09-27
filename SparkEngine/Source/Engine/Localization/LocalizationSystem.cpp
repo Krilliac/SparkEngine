@@ -12,7 +12,8 @@
 #include <sstream>
 #include <algorithm>
 #include <charconv>
-#include <regex>
+#include <filesystem>
+#include <system_error>
 
 namespace Spark
 {
@@ -21,8 +22,59 @@ namespace Spark
     // StringTable
     // =============================================================================
 
+    namespace
+    {
+        /// Finds the unescaped closing quote of the JSON string whose opening quote is at
+        /// `open`. Escaped characters (\" \\ \n ...) stay part of the string.
+        bool FindClosingQuote(const std::string& text, size_t open, size_t& closeOut)
+        {
+            for (size_t i = open + 1; i < text.size(); ++i)
+            {
+                if (text[i] == '\\')
+                {
+                    ++i; // skip the escaped character
+                    continue;
+                }
+                if (text[i] == '"')
+                {
+                    closeOut = i;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        size_t SkipJsonSpace(const std::string& text, size_t pos)
+        {
+            while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\t' || text[pos] == '\n' ||
+                                         text[pos] == '\r' || text[pos] == '\f' || text[pos] == '\v'))
+            {
+                ++pos;
+            }
+            return pos;
+        }
+    } // namespace
+
     bool StringTable::LoadFromFile(const std::string& filePath)
     {
+        // Refuse an oversized file before reading it, and bound the read itself so a
+        // file that grows after the size check still cannot be pulled in whole.
+        std::error_code sizeError;
+        const auto fileSize = std::filesystem::file_size(filePath, sizeError);
+        if (sizeError)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "StringTable: cannot stat localization file '%s' (%s)",
+                            filePath.c_str(), sizeError.message().c_str());
+            return false;
+        }
+        if (fileSize > kMaxFileBytes)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "StringTable: localization file '%s' is %llu bytes, above the %zu byte limit",
+                            filePath.c_str(), static_cast<unsigned long long>(fileSize), kMaxFileBytes);
+            return false;
+        }
+
         std::ifstream file(filePath);
         if (!file.is_open())
         {
@@ -31,17 +83,22 @@ namespace Spark
             return false;
         }
 
-        // Simple JSON parser for flat key-value string maps.
-        // Handles: { "key": "value", "key2": "value2" }
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        std::string content(static_cast<size_t>(fileSize) + 1, '\0');
+        file.read(content.data(), static_cast<std::streamsize>(content.size()));
+        content.resize(static_cast<size_t>(file.gcount()));
+        if (content.size() > fileSize)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "StringTable: localization file '%s' grew while being read",
+                            filePath.c_str());
+            return false;
+        }
 
-        // Match quoted key/value pairs. The (?:[^"\\]|\\.)* body allows escaped
-        // characters inside the strings (e.g. \" \\ \n), so a value such as
-        // "He said \"hi\"" is captured whole instead of being truncated at the
-        // first inner quote.
-        std::regex kvRegex(R"~~("((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)")~~");
-        auto begin = std::sregex_iterator(content.begin(), content.end(), kvRegex);
-        auto end = std::sregex_iterator();
+        // Flat JSON object of string pairs: { "key": "value", "key2": "value2" }.
+        // A single linear scan replaces the former std::regex, whose backtracking
+        // matcher recursed once per character: one long value overflowed the stack
+        // (libstdc++) or threw an uncaught regex_error (MSVC) during module init.
+        // Escaped characters (\" \\ \n) stay inside a string, so "He said \"hi\""
+        // is captured whole.
 
         // Translate JSON backslash escapes in a captured string to their literal
         // characters. Unknown escapes keep the escaped character verbatim.
@@ -78,11 +135,36 @@ namespace Spark
         };
 
         size_t parsed = 0;
-        for (auto it = begin; it != end; ++it)
+        size_t pos = 0;
+        while (true)
         {
-            const std::smatch& match = *it;
-            m_entries[unescape(match[1].str())] = unescape(match[2].str());
-            ++parsed;
+            const size_t keyOpen = content.find('"', pos);
+            if (keyOpen == std::string::npos)
+                break;
+            size_t keyClose = 0;
+            if (!FindClosingQuote(content, keyOpen, keyClose))
+                break; // unterminated string: nothing after it can pair up
+
+            // A string followed by ':' and another string is one entry. Any other string
+            // (a nested object's name, a non-string value's key) is skipped, and scanning
+            // resumes after it, so every byte is visited a bounded number of times.
+            size_t next = SkipJsonSpace(content, keyClose + 1);
+            if (next < content.size() && content[next] == ':')
+            {
+                next = SkipJsonSpace(content, next + 1);
+                size_t valueClose = 0;
+                if (next < content.size() && content[next] == '"')
+                {
+                    if (!FindClosingQuote(content, next, valueClose))
+                        break;
+                    m_entries[unescape(content.substr(keyOpen + 1, keyClose - keyOpen - 1))] =
+                        unescape(content.substr(next + 1, valueClose - next - 1));
+                    ++parsed;
+                    pos = valueClose + 1;
+                    continue;
+                }
+            }
+            pos = keyClose + 1;
         }
 
         if (parsed == 0)
@@ -144,12 +226,14 @@ namespace Spark
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading language '%s' from '%s'", languageCode.c_str(),
                        filePath.c_str());
-        std::lock_guard<std::mutex> lock(m_mutex);
+        // Read and parse without holding m_mutex; lookups from other threads only wait
+        // for the final insert.
         StringTable table;
         if (!table.LoadFromFile(filePath))
         {
             return false;
         }
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_languages[languageCode] = std::move(table);
         return true;
     }
