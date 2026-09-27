@@ -190,6 +190,34 @@ if(SPARKINSTALLER_BUILD_TESTS)
     # the fresh-install, resume and rollback cases spawn about 150 processes.
     set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 60 LABELS installer)
 
+    # INST-130/131/132 readiness selectors. These run local fake-tool and mocked
+    # msiexec fixtures on every host; they are contract tests, not native signed
+    # Windows install evidence.
+    add_test(NAME Installer_AtomicUpdate COMMAND SparkInstallerTransactionTests --spark-case=atomic-update)
+    add_test(NAME Installer_Interrupted COMMAND SparkInstallerTransactionTests --spark-case=interrupted)
+    # Tampered, interrupted or wrong-archive MinGit cache populations (PortableGitCacheTests.cpp).
+    add_test(NAME Installer_Tamper COMMAND SparkInstallerGitTests)
+    set_tests_properties(Installer_AtomicUpdate Installer_Interrupted Installer_Tamper PROPERTIES
+        TIMEOUT 60 LABELS installer)
+    # Hostile archives: format mismatch, escaping member names and links, no-replace commit.
+    if(TARGET SparkBuildDownloaderTests)
+        add_test(NAME Installer_Tamper_Downloader COMMAND SparkBuildDownloaderTests)
+        set_tests_properties(Installer_Tamper_Downloader PROPERTIES TIMEOUT 10 LABELS installer)
+    endif()
+    # MSI lifecycle drills from the Windows qualification script, run against mocked
+    # msiexec. A filter that matches no test is a failure, not a pass.
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_FOUND)
+        set(_sparkinstaller_msi_tests "${CMAKE_CURRENT_SOURCE_DIR}/../.github/scripts/test_qualify_windows_msi.py")
+        add_test(NAME Installer_Uninstall COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k uninstall)
+        add_test(NAME Installer_Upgrade COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k upgrade)
+        add_test(NAME Installer_Rollback COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k roll)
+        set_tests_properties(Installer_Uninstall Installer_Upgrade Installer_Rollback PROPERTIES
+            FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+            TIMEOUT 120 LABELS "installer;python")
+        unset(_sparkinstaller_msi_tests)
+    endif()
+
     if(WIN32)
         set(_sparkinstaller_platform "Windows")
     elseif(APPLE)

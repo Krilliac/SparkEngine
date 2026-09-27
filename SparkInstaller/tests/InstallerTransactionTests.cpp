@@ -894,22 +894,54 @@ namespace
 
 int main(int argc, char* argv[])
 {
-    if (argc > 1)
+    // --spark-case=<group> selects one case group for the Installer_* CTest
+    // selectors. It is checked before the fake-tool dispatch because every
+    // other argument vector is a git/cmake command line aimed at the fake.
+    constexpr std::string_view kCaseFlag = "--spark-case=";
+    std::string_view group = "all";
+    if (argc == 2 && std::string_view(argv[1]).substr(0, kCaseFlag.size()) == kCaseFlag)
+        group = std::string_view(argv[1]).substr(kCaseFlag.size());
+    else if (argc > 1)
         return RunFakeTool(argc, argv);
+
+    const bool all = group == "all";
+    // Installer_AtomicUpdate: a failed fetch, clone, build or verification never
+    // replaces a working install; rollback restores and rebuilds it.
+    const bool atomicUpdate = all || group == "atomic-update";
+    // Installer_Interrupted: a run cut off mid-update or mid-install resumes or
+    // rolls back to the last verified build.
+    const bool interrupted = all || group == "interrupted";
+    const bool preflight = all || group == "preflight";
+    if (!atomicUpdate && !interrupted && !preflight)
+    {
+        std::cerr << "unknown --spark-case group '" << group
+                  << "'; expected atomic-update, interrupted, preflight or all\n";
+        return 2;
+    }
 
     const fs::path executable = fs::absolute(argv[0]);
     int failures = 0;
-    failures += RunInstallStatePersistenceFailureTest(executable);
-    failures += RunUpdateRollbackRebuildFailureTest(executable);
-    failures += RunUpdateRollbackRebuildTest(executable);
-    failures += RunInterruptedUpdateRollbackTargetTest(executable);
-    failures += RunUpdateFetchFailureRollbackTest(executable);
-    failures += RunUpdateClearsRepairMarkerTest(executable);
-    failures += RunPostBuildHeadCommitFailureTest(executable);
-    failures += RunPreflightTests(executable);
-    failures += RunFreshInstallCloneFailureTest(executable);
-    failures += RunFreshInstallBuildFailureResumeTest(executable);
-    failures += RunFreshInstallTrailingSeparatorTest(executable);
-    failures += RunActivateStagedTreeTest();
+    if (atomicUpdate)
+    {
+        failures += RunInstallStatePersistenceFailureTest(executable);
+        failures += RunUpdateRollbackRebuildFailureTest(executable);
+        failures += RunUpdateRollbackRebuildTest(executable);
+        failures += RunUpdateFetchFailureRollbackTest(executable);
+        failures += RunUpdateClearsRepairMarkerTest(executable);
+        failures += RunPostBuildHeadCommitFailureTest(executable);
+        failures += RunFreshInstallCloneFailureTest(executable);
+        failures += RunFreshInstallTrailingSeparatorTest(executable);
+        failures += RunActivateStagedTreeTest();
+    }
+    if (interrupted)
+    {
+        failures += RunInterruptedUpdateRollbackTargetTest(executable);
+        failures += RunFreshInstallBuildFailureResumeTest(executable);
+    }
+    if (preflight)
+    {
+        failures += RunPreflightTests(executable);
+    }
+    std::cout << "SparkInstaller transaction tests (" << group << "): " << failures << " failed checks\n";
     return failures == 0 ? 0 : 1;
 }

@@ -2648,6 +2648,20 @@ class SelectorResolutionTests(ContractTestCase):
         for name in ("CrashManifest_PathEscape", "CrashManifest_SecretRedaction", "CrashReporter_Consent"):
             self.assertTrue(contract_selectors.resolve_test_selector(name), name)
 
+    def test_installer_selectors_registered_only_in_sparkinstaller_resolve(self) -> None:
+        # INST-130/131/132 selectors are registered in SparkInstaller/CMakeLists.txt
+        # so they also run in the standalone build-installer combo.
+        installer_cmake = (REPO_ROOT / "SparkInstaller" / "CMakeLists.txt").read_text(encoding="utf-8")
+        tests_cmake = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        names = ("Installer_Tamper", "Installer_AtomicUpdate", "Installer_Interrupted",
+                 "Installer_Uninstall", "Installer_Upgrade", "Installer_Rollback")
+        for name in names:
+            self.assertIn(f"NAME {name} ", installer_cmake, name)
+            self.assertNotIn(f"NAME {name} ", tests_cmake, name)
+            self.assertTrue(contract_selectors.resolve_test_selector(name), name)
+        self.assertFalse(contract_selectors.resolve_test_selector("Installer_AtomicUpdates"))
+        self.assertFalse(contract_selectors.resolve_test_selector("Installer_Tampered"))
+
     def test_registration_scan_skips_vendored_build_and_hidden_trees(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
