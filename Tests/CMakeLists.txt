@@ -4047,6 +4047,32 @@ if(Python3_Interpreter_FOUND)
                 TIMEOUT 300)
         endif()
     endif()
+    # OPS-110 recovery drill (tools/ops/server_recovery_drill.py): detect a
+    # killed or wedged server from its health file alone, drain it through the
+    # stop file, and restart it until the same build reports ready and ticks.
+    # ServerRecoveryDrill_Harness proves every failure mode against a stand-in
+    # server; like ServerSoak_Harness it is not labelled recovery-drill, which
+    # only a real-server drill (and DATA-120's persistence drills) may carry.
+    add_test(
+        NAME ServerRecoveryDrill_Harness
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_recovery_drill.py
+            ConfigTests SummaryTests HarnessTests)
+    set_tests_properties(ServerRecoveryDrill_Harness PROPERTIES
+        LABELS "ops;server;unit;python"
+        TIMEOUT 120)
+    if(TARGET SparkServer AND TARGET SparkGame AND (WIN32 OR (UNIX AND NOT APPLE)))
+        add_dependencies(SparkTests SparkServer SparkGame)
+        add_test(
+            NAME Server_RecoveryDrill
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_recovery_drill.py ServerRecoveryDrillProcess)
+        set_tests_properties(Server_RecoveryDrill PROPERTIES
+            ENVIRONMENT "SPARK_SERVER=$<TARGET_FILE:SparkServer>;SPARK_SERVER_MODULE=$<TARGET_FILE:SparkGame>;SPARK_SERVER_DRILL_REQUIRED=1;SPARK_SERVER_DRILL_SUMMARY=${CMAKE_BINARY_DIR}/server-recovery-drill-summary.json"
+            LABELS "recovery-drill;server;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 180)
+    endif()
     add_test(
         NAME SparkTemplateRuntimeSheets
         COMMAND ${Python3_EXECUTABLE}
