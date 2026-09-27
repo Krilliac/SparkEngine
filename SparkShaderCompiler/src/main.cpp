@@ -38,6 +38,11 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <map>
+#include <system_error>
+#include <utility>
+
+namespace fs = std::filesystem;
 
 // Include the RHI shader compilation API
 #include "../../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
@@ -247,6 +252,73 @@ static bool HasIntegratedCompiler(Spark::RHI::GraphicsBackend backend)
     (void)backend;
     return false;
 #endif
+}
+
+/// One planned batch compile: a discovered source and the artifact it writes.
+struct BatchOutput
+{
+    std::string input;
+    std::string output;
+};
+
+/// Map every batch input to its output path. Without -o the artifact sits beside its
+/// source; with -o it keeps the source's path relative to the batch root, so files
+/// that share a name in different subdirectories no longer flatten onto one artifact.
+static std::vector<BatchOutput> PlanBatchOutputs(const std::vector<std::string>& shaderFiles,
+                                                 const std::string& batchDir, const std::string& outputDir,
+                                                 Spark::RHI::GraphicsBackend requestedBackend)
+{
+    std::vector<BatchOutput> plan;
+    plan.reserve(shaderFiles.size());
+    for (const std::string& shaderPath : shaderFiles)
+    {
+        const Spark::RHI::GraphicsBackend fileBackend = ResolveBackend(requestedBackend, shaderPath);
+        BatchOutput item;
+        item.input = shaderPath;
+        if (outputDir.empty())
+        {
+            item.output = InferOutputPath(shaderPath, fileBackend);
+        }
+        else
+        {
+            std::error_code ec;
+            fs::path relative = fs::relative(fs::path(shaderPath), fs::path(batchDir), ec);
+            if (ec || relative.empty())
+                relative = fs::path(shaderPath).filename();
+            const fs::path outName = InferOutputPath(relative.filename().string(), fileBackend);
+            item.output = (fs::path(outputDir) / relative.parent_path() / outName).string();
+        }
+        plan.push_back(std::move(item));
+    }
+    return plan;
+}
+
+/// Print every pair of inputs that would write the same artifact. Returns true when
+/// the plan is collision-free. Paths compare case-insensitively on Windows, where
+/// Foo.cso and foo.cso are one file.
+static bool ReportBatchCollisions(const std::vector<BatchOutput>& plan)
+{
+    std::map<std::string, const BatchOutput*> seen;
+    bool clean = true;
+    for (const BatchOutput& item : plan)
+    {
+        std::string key = fs::path(item.output).lexically_normal().generic_string();
+#ifdef _WIN32
+        std::transform(key.begin(), key.end(), key.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+#endif
+        const auto [it, inserted] = seen.emplace(key, &item);
+        if (!inserted)
+        {
+            std::cerr << "Error: '" << it->second->input << "' and '" << item.input << "' both compile to '"
+                      << item.output << "'\n";
+            clean = false;
+        }
+    }
+    if (!clean)
+        std::cerr << "Error: batch output collision - rename a source or compile it separately; nothing was "
+                     "compiled\n";
+    return clean;
 }
 
 static Spark::RHI::RHIShaderStage InferStageFromFilename(const std::string& filename)
@@ -587,8 +659,6 @@ int main(int argc, char* argv[])
     // Batch compilation
     if (!config.batchDir.empty())
     {
-        namespace fs = std::filesystem;
-
         if (!fs::exists(config.batchDir) || !fs::is_directory(config.batchDir))
         {
             std::cerr << "Error: Batch directory not found: " << config.batchDir << "\n";
@@ -622,6 +692,8 @@ int main(int argc, char* argv[])
             std::cerr << "No shader files found in: " << config.batchDir << "\n";
             return 1;
         }
+        // Directory iteration order is unspecified; compile (and report) in a stable order.
+        std::sort(shaderFiles.begin(), shaderFiles.end());
 
         std::cout << "Batch compiling " << shaderFiles.size() << " shader(s) from " << config.batchDir << "\n";
 
@@ -639,29 +711,40 @@ int main(int argc, char* argv[])
             }
         }
 
+        // Plan every destination before compiling anything. The output name drops the
+        // source extension, so a/common.hlsl + b/common.hlsl (flattened under -o) or
+        // X.vs + X.ps (same directory) used to land on one file: the later compile
+        // silently replaced the earlier artifact and both still counted as successes.
+        const std::vector<BatchOutput> plan =
+            PlanBatchOutputs(shaderFiles, config.batchDir, config.outputFile, config.targetBackend);
+        // -validate writes nothing, so shared destinations cannot overwrite anything there.
+        if (!config.validateOnly && !ReportBatchCollisions(plan))
+            return 1;
+
         auto batchStart = std::chrono::high_resolution_clock::now();
         int successCount = 0;
         int failCount = 0;
 
-        for (const auto& shaderPath : shaderFiles)
+        for (const BatchOutput& item : plan)
         {
+            const std::string& shaderPath = item.input;
             CompilerConfig fileConfig = config;
             fileConfig.inputFile = shaderPath;
             fileConfig.batchDir.clear(); // prevent recursion
             fileConfig.stage = InferStageFromFilename(shaderPath);
+            fileConfig.outputFile = item.output;
 
-            const Spark::RHI::GraphicsBackend fileBackend = ResolveBackend(fileConfig.targetBackend, shaderPath);
-            if (fileConfig.outputFile.empty())
+            // -o preserves the source tree's layout, so nested output directories may be new.
+            std::error_code dirError;
+            const fs::path outputParent = fs::path(item.output).parent_path();
+            if (!config.validateOnly && !outputParent.empty())
+                fs::create_directories(outputParent, dirError);
+            if (dirError)
             {
-                fileConfig.outputFile = InferOutputPath(shaderPath, fileBackend);
-            }
-            else
-            {
-                // In batch mode with -o, put output files in that directory
-                fs::path outDir(config.outputFile);
-                fs::path inputName = fs::path(shaderPath).filename();
-                std::string outName = InferOutputPath(inputName.string(), fileBackend);
-                fileConfig.outputFile = (outDir / outName).string();
+                std::cerr << "Error: Could not create output directory '" << outputParent.string()
+                          << "': " << dirError.message() << "\n";
+                failCount++;
+                continue;
             }
 
             int ret = CompileSingleShader(fileConfig);

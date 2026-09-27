@@ -4045,6 +4045,20 @@ if(Python3_Interpreter_FOUND)
         set_tests_properties(SparkShaderCompilerExecutableSmoke PROPERTIES
             LABELS "release;shader;process"
             TIMEOUT 30)
+
+        # SEC2: -batch keeps the source layout under -o and refuses a plan in which
+        # two sources would write the same artifact (previously the later compile
+        # silently overwrote the earlier one and the run exited 0).
+        add_test(
+            NAME SparkShaderCompilerBatchOutputs
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_SHADER_COMPILER=$<TARGET_FILE:SparkShaderCompiler>"
+                "-DSPARK_SHADER_FIXTURE=${CMAKE_SOURCE_DIR}/Tests/Fixtures/ShaderCompiler/BasicVS.hlsl"
+                "-DSPARK_SHADER_OUTPUT_DIR=${CMAKE_BINARY_DIR}/shader-compiler-batch"
+                -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkShaderCompilerBatchOutputs.cmake)
+        set_tests_properties(SparkShaderCompilerBatchOutputs PROPERTIES
+            LABELS "release;shader;process;security"
+            TIMEOUT 60)
     endif()
 
     # CI-110: prove the shipped automation host can launch the production

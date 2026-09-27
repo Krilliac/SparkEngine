@@ -811,6 +811,8 @@ SparkShaderCompiler -batch Shaders/HLSL -backend d3d11 -o Shaders/Compiled/
 
 Recognized shader file extensions for batch mode: `.hlsl`, `.glsl`, `.vert`, `.frag`, `.comp`, `.geom`, `.tesc`, `.tese`, `.vs`, `.ps`, `.gs`, `.cs`.
 
+With `-o`, each artifact keeps its source's path relative to the batch root (`Shaders/HLSL/a/Blur.hlsl` writes `Shaders/Compiled/a/Blur.cso`); without `-o` it is written beside its source. Before compiling anything, the tool checks that no two sources map to one artifact (for example `Blur.vs` and `Blur.ps` in one directory both become `Blur.cso`), comparing paths case-insensitively on Windows. A collision names both sources and exits 1 without compiling. `-validate` writes nothing, so it skips that check.
+
 The batch summary reports total, success, failure counts, and total compilation time.
 
 ### Pre-Built Batch Scripts
