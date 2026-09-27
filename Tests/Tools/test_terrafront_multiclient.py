@@ -31,6 +31,10 @@ SERVER_SELF = 4294967295
 # The player id each client's pawn has on the server, in client order.
 CLIENT_PLAYERS = (2, 1)
 DEFAULT_PROGRESS = ("default", 0, 1, 0)  # loadout, flux, rank, kills
+# What a pure client's self line really carries. TFProgressionSystem fills its
+# per-player records only on the authority, so a client's FluxOf / RankOf /
+# GetLoadout fall back to 0 / 1 / none whatever the server holds.
+PURE_CLIENT_SELF = ("default", 0, 1)
 DEFAULT_REGIONS = {0: 1, 1: 2, 3: 1}
 
 # Server-side truth per checkpoint: player -> (faction, class, health, pos).
@@ -50,12 +54,13 @@ def observation(role: str, self_id: int, pawns: dict, regions: dict | None = Non
     """tf_observe output split into lines, as it lands in the audit (first line prefixed).
 
     vehicles: net -> (kind, driver, hp, pos); players: id -> (loadout, flux, rank, kills).
-    The server prints one player line per pawn; a client prints its own values on its self line.
+    The server prints one player line per pawn. A pure client holds no progression, so its
+    self line is PURE_CLIENT_SELF whatever @p players (the server's truth) says.
     """
     regions = DEFAULT_REGIONS if regions is None else regions
     vehicles = vehicles or {}
     players = players or {}
-    loadout, flux, rank, _ = players.get(self_id, DEFAULT_PROGRESS) if role == "client" else DEFAULT_PROGRESS
+    loadout, flux, rank = PURE_CLIENT_SELF if role == "client" else DEFAULT_PROGRESS[:3]
     lines = [f"    > [TF-OBSERVE] role={role} clock=1.000 self={self_id} continent=cindral_wastes "
              f"pawns={len(pawns)} regions={len(regions)} vehicles={len(vehicles)}",
              f"[TF-OBSERVE] self id={self_id} loadout={loadout} flux={flux} rank={rank}"]
@@ -443,14 +448,14 @@ class ComparatorTests(unittest.TestCase):
         drifted = parsed("client", 2, TRUTH[0], vehicles={5: (1, multiclient.NO_PLAYER, 1800, (14.0, 0.0, 10.0))})
         self.assertIn("position", " ".join(multiclient.compare_vehicles(server, drifted, "c")))
 
-    def test_own_rank_or_wallet_mismatch_fails(self) -> None:
-        server = parsed("server", SERVER_SELF, TRUTH[0], players={2: ("default", 100, 2, 0)})
-        agrees = parsed("client", 2, TRUTH[0], players={2: ("default", 100 + multiclient.FLUX_INCOME_SLACK, 2, 0)})
-        self.assertEqual(multiclient.compare_views(server, agrees, "c"), [])
-        poorer = parsed("client", 2, TRUTH[0], players={2: ("default", 40, 2, 0)})
-        self.assertIn("own flux", " ".join(multiclient.compare_views(server, poorer, "c")))
-        lower = parsed("client", 2, TRUTH[0], players={2: ("default", 100, 1, 0)})
-        self.assertIn("own rank", " ".join(multiclient.compare_views(server, lower, "c")))
+    def test_pure_client_self_line_is_not_compared_with_the_server_wallet(self) -> None:
+        # A pure client prints flux=0 rank=1 on its self line whatever it owns; a
+        # tf_flux_floor wallet and a higher rank on the server are not divergence.
+        truth = {2: ("default", 200, 3, 0)}
+        server = parsed("server", SERVER_SELF, TRUTH[0], players=truth)
+        client = parsed("client", 2, TRUTH[0], players=truth)
+        self.assertEqual((client.self_progress.flux, client.self_progress.rank), (0, 1))
+        self.assertEqual(multiclient.compare_views(server, client, "c"), [])
 
 
 class ScheduleTests(unittest.TestCase):

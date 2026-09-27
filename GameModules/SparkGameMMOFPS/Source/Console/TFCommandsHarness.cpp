@@ -20,8 +20,9 @@
  * tf_observe prints this process's view of the world (Game/TFObservation.h)
  * on every role so the harness can diff the server against each client; on the
  * authority it appends one "[TF-OBSERVE] player" line per live pawn with the
- * server-held saved loadout, flux, rank and kill tally the clients' own self
- * lines and the scenario verdicts are checked against.
+ * server-held saved loadout, flux, rank and kill tally the scenario verdicts
+ * are checked against. A pure client holds no progression (TFProgressionSystem
+ * is filled on the authority only), so its self line reads flux=0 rank=1.
  */
 
 #include "Console/TFCommandsInternal.h"
@@ -167,8 +168,8 @@ namespace Terrafront::CommandDetail
         }
 
         /// Authority only: "[TF-OBSERVE] player" lines, sorted by id, for every
-        /// live pawn. A pure client holds no other player's progression, so it
-        /// prints none; its own values are on its self line.
+        /// live pawn. A pure client holds no progression at all, so it prints
+        /// none, and its self line carries the defaults (flux 0, rank 1).
         std::string FormatPlayerProgress(const TFGameContext& ctx)
         {
             std::string out;

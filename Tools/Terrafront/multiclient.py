@@ -7,10 +7,12 @@ the real onboarding path (register, login, character create, enter world,
 faction, spawn) and a scripted scenario, and has every process print its world
 view with tf_observe. The comparator then proves that at each checkpoint both
 clients agree with the server on the in-world players (faction, class, health,
-position), the territory map, every vehicle (kind, driver, hp, position) and
-their own rank and flux; a per-scenario verdict then checks the authoritative
-outcome itself (a kill and its attribution, a rejected and audited forgery, a
-restored character, a flipped region, a vehicle's life cycle).
+position), the territory map and every vehicle (kind, driver, hp, position); a
+per-scenario verdict then checks the authoritative outcome itself (a kill and
+its attribution, a rejected and audited forgery, a restored character, a
+flipped region, a vehicle's life cycle and its price). Rank, wallet and saved
+loadout come from the server's per-player lines: a pure client holds no
+progression, so its own self line always reads flux=0 rank=1.
 
 Scenarios (SCENARIOS): onboard_spawn_move, combat_kill_respawn, forged_state,
 reconnect, territory, vehicle_lifecycle.
@@ -588,16 +590,11 @@ def compare_views(server: Observation, client: Observation, label: str) -> list[
             problems.append(f"{label}: player {player} position {seen.pos} is {gap:.2f} m from server {truth.pos}")
     problems += compare_regions(server, client, label)
     problems += compare_vehicles(server, client, label)
-    # The client's own rank and wallet. Its saved loadout is server-only state
-    # (a pure client holds none), so the scenario verdicts read that from the
-    # server's player lines instead.
-    truth = server.players.get(client.self_id)
-    mine = client.self_progress
-    if truth is not None and mine is not None:
-        if mine.rank != truth.rank:
-            problems.append(f"{label}: own rank {mine.rank} != server {truth.rank}")
-        if abs(mine.flux - truth.flux) > FLUX_INCOME_SLACK:
-            problems.append(f"{label}: own flux {mine.flux} != server {truth.flux}")
+    # No own-progression compare: a pure client's self line always reads flux=0
+    # rank=1 loadout=default, because TFProgressionSystem fills its records only on
+    # the authority and TFClientNet keeps no replicated wallet. Rank, wallet and
+    # saved loadout are checked by the scenario verdicts from the server's player
+    # lines instead.
     return problems
 
 
