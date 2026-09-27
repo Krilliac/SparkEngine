@@ -385,4 +385,41 @@ TEST(ScriptHotReload_ENG200_MissingClassFailsReattachAndReports)
     EXPECT_FALSE(fx.engine.IsScriptFaulted(entity));
 }
 
+TEST(ScriptHotReload_ENG200_RecordsAbsolutePathAcrossWorkingDirectoryChange)
+{
+    HotReloadFixture fx;
+    ASSERT_TRUE(fx.ready);
+    fx.Write("ENG200ReloadRelative", kKeeperV1);
+
+    // Compile through a path relative to the working directory, then leave that directory.
+    std::error_code error;
+    const fs::path original = fs::current_path(error);
+    ASSERT_TRUE(!error);
+    struct RestoreWorkingDirectory
+    {
+        fs::path directory;
+        ~RestoreWorkingDirectory()
+        {
+            std::error_code ignored;
+            fs::current_path(directory, ignored);
+        }
+    } restore{original};
+
+    fs::current_path(fx.directory, error);
+    ASSERT_TRUE(!error);
+    const EntityID entity = MakeEntity(29);
+    ASSERT_TRUE(fx.engine.CompileScriptFile("ENG200ReloadRelative.as"));
+    ASSERT_TRUE(fx.engine.AttachScript(entity, "Keeper", "ENG200ReloadRelative"));
+    fx.engine.CallUpdate(entity, 1.0f);
+
+    const fs::path recorded = fx.engine.GetModuleFilePath("ENG200ReloadRelative");
+    EXPECT_TRUE(recorded.is_absolute());
+    EXPECT_TRUE(fs::equivalent(recorded, fx.directory / "ENG200ReloadRelative.as", error));
+
+    fs::current_path(original, error);
+    ASSERT_TRUE(!error);
+    ASSERT_TRUE(fx.engine.HotReloadModule("ENG200ReloadRelative"));
+    EXPECT_EQ(fx.State(entity), std::string("v1:1|2.5|true|v1!|1"));
+}
+
 #endif // SPARK_ANGELSCRIPT_SUPPORT

@@ -73,16 +73,22 @@ namespace Spark::VisualScriptDemo
                                                    });
         if (!root)
         {
-            // Name every manifest file the first candidate lacks so the operator knows what to restore.
+            // Name, for every searched root, the manifest files it lacks so the operator can see
+            // where the engine looked and what to restore.
             std::string missing;
-            if (!searchPaths.empty())
+            for (const auto& candidate : searchPaths)
             {
+                std::error_code error;
+                if (!std::filesystem::is_directory(candidate, error))
+                {
+                    missing += (missing.empty() ? "" : "; ") + candidate.generic_string() + " (no such directory)";
+                    continue;
+                }
                 for (const auto& asset : ScriptManifest)
                 {
-                    const auto path = searchPaths.front() / std::filesystem::path(asset.fileName);
-                    std::error_code error;
+                    const auto path = candidate / std::filesystem::path(asset.fileName);
                     if (!std::filesystem::is_regular_file(path, error))
-                        missing += (missing.empty() ? "" : ", ") + path.generic_string();
+                        missing += (missing.empty() ? "" : "; ") + path.generic_string();
                 }
             }
             Fail("Could not find a complete five-script asset set; missing: " + (missing.empty() ? "?" : missing));

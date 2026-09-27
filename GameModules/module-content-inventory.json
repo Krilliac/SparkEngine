@@ -431,6 +431,7 @@
       },
       "sharedRootDependencies": [],
       "privateEngineHeaders": [
+        "Core/RuntimePackage.h",
         "Engine/ECS/Components.h",
         "Engine/ECS/Components/CoreComponents.h",
         "Engine/ECS/Components/GameplayComponents.h",
@@ -439,7 +440,7 @@
         "Utils/LogMacros.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 7,
+      "privateEngineHeaderCount": 8,
       "copiedInfrastructureFiles": []
     }
   ],

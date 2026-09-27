@@ -13,6 +13,7 @@
 #include "SparkGameVisualScript.h"
 #include "VisualScriptDemoRuntime.h"
 #include "VisualScriptDemoWorld.h"
+#include "Core/RuntimePackage.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
 #include "Utils/SparkConsole.h"
@@ -22,10 +23,12 @@
 #include "Engine/ECS/Components/GameplayComponents.h"
 
 #include <algorithm>
-#include <array>
 #include <filesystem>
 #include <memory>
 #include <sstream>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 #include <Spark/ModuleDllMain.h>
 
@@ -73,12 +76,21 @@ bool SparkGameVisualScriptModule::OnLoad(Spark::IEngineContext* context)
     }
 
     // Step 1: resolve and validate the complete script manifest exactly once.
+    // The build stages the scripts beside the engine executable, so that root is
+    // searched first and a launch from another directory still finds them; the
+    // working directory and the module's source tree are development fallbacks.
     // Step 2: spawn entities, bind each generated script to its real entity ID,
     // and call Start(). A partial demo is rolled back and treated as a load failure.
-    const std::array<std::filesystem::path, 2> searchPaths = {
-        std::filesystem::path{"Assets/Scripts/Generated"},
-        std::filesystem::path{"GameModules/SparkGameVisualScript/Assets/Scripts/Generated"},
-    };
+    std::error_code cwdError;
+    const std::filesystem::path executableDirectory = Spark::RuntimePackage::GetExecutableDirectory();
+    const std::filesystem::path workingDirectory = std::filesystem::current_path(cwdError);
+    std::vector<std::filesystem::path> searchPaths =
+        Spark::RuntimePackage::ResolveContentRoots("Assets/Scripts/Generated", executableDirectory, workingDirectory);
+    for (auto& devRoot : Spark::RuntimePackage::ResolveContentRoots(
+             "GameModules/SparkGameVisualScript/Assets/Scripts/Generated", executableDirectory, workingDirectory))
+    {
+        searchPaths.push_back(std::move(devRoot));
+    }
     auto demo =
         std::make_unique<Spark::VisualScriptDemo::DemoWorld>(*m_context->GetWorld(), *m_context->GetScriptEngine());
     if (!demo->LoadScripts(searchPaths) || !demo->Spawn())

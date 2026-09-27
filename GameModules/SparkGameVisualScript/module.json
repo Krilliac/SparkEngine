@@ -33,7 +33,7 @@
       },
       {
         "prefix": "VisualScriptDiagnostics_",
-        "count": 5,
+        "count": 7,
         "requires": [
           "angelscript"
         ]

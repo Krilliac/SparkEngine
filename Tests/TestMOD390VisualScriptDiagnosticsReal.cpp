@@ -18,6 +18,7 @@
 
 #include "../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h"
 #include "../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.h"
+#include "Core/RuntimePackage.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
 
@@ -32,6 +33,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -57,15 +59,7 @@ namespace
                 fs::temp_directory_path() /
                 ("spark_mod390_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "_" +
                  std::to_string(sequence++));
-            std::error_code error;
-            fs::create_directories(scriptRoot, error);
-            bool copied = !error;
-            for (const auto& asset : Spark::VisualScriptDemo::ScriptManifest)
-            {
-                copied = copied && fs::copy_file(kShippedScripts / asset.fileName, scriptRoot / asset.fileName,
-                                                 fs::copy_options::overwrite_existing, error);
-            }
-            ready = copied && engine.Initialize();
+            ready = CopyShippedScriptsTo(scriptRoot) && engine.Initialize();
             demo.emplace(world, engine);
         }
 
@@ -83,6 +77,20 @@ namespace
         {
             const std::array<fs::path, 1> searchPaths = {scriptRoot};
             return demo->LoadScripts(searchPaths);
+        }
+
+        /// Copy the shipped scripts into @p directory (created); false on any failure.
+        static bool CopyShippedScriptsTo(const fs::path& directory)
+        {
+            std::error_code error;
+            fs::create_directories(directory, error);
+            bool copied = !error;
+            for (const auto& asset : Spark::VisualScriptDemo::ScriptManifest)
+            {
+                copied = copied && fs::copy_file(kShippedScripts / asset.fileName, directory / asset.fileName,
+                                                 fs::copy_options::overwrite_existing, error);
+            }
+            return copied;
         }
 
         /// Replace the single occurrence of `from` in a copied script; false if it is not there exactly once.
@@ -293,6 +301,50 @@ TEST(VisualScriptDiagnostics_SelfEntityPlaceholderRejectedWithFileLine)
         EXPECT_STR_CONTAINS(error, "first at line " + line);
         fx.ExpectNothingLeftBehind();
     }
+}
+
+TEST(VisualScriptDiagnostics_MissingScriptsNamesEveryCandidateRoot)
+{
+    DiagnosticsFixture fx;
+    ASSERT_TRUE(fx.ready);
+
+    // Two searched roots: one lacks GameManager.as, the other does not exist at all.
+    std::error_code removeError;
+    ASSERT_TRUE(fs::remove(fx.scriptRoot / "GameManager.as", removeError));
+    const fs::path absentRoot = fx.scriptRoot / "not-staged";
+    const std::array<fs::path, 2> searchPaths = {fx.scriptRoot, absentRoot};
+
+    EXPECT_FALSE(fx.demo->LoadScripts(searchPaths));
+    const std::string error = fx.demo->GetLastError();
+    EXPECT_STR_CONTAINS(error, (fx.scriptRoot / "GameManager.as").generic_string());
+    EXPECT_STR_CONTAINS(error, absentRoot.generic_string() + " (no such directory)");
+    EXPECT_TRUE(error.find("Collectible.as") == std::string::npos);
+    fx.ExpectNothingLeftBehind();
+}
+
+TEST(VisualScriptDiagnostics_ExeRootWinsOverStaleCwdRoot)
+{
+    DiagnosticsFixture fx;
+    ASSERT_TRUE(fx.ready);
+
+    // The module's OnLoad search order: the copy staged beside the executable, then the working directory.
+    const fs::path executableDirectory = fx.scriptRoot / "exe";
+    const fs::path workingDirectory = fx.scriptRoot / "cwd";
+    const std::vector<fs::path> searchPaths =
+        Spark::RuntimePackage::ResolveContentRoots("Assets/Scripts/Generated", executableDirectory, workingDirectory);
+    ASSERT_EQ(searchPaths.size(), static_cast<size_t>(2));
+    ASSERT_TRUE(DiagnosticsFixture::CopyShippedScriptsTo(searchPaths[0]));
+    ASSERT_TRUE(DiagnosticsFixture::CopyShippedScriptsTo(searchPaths[1]));
+
+    // The stale working-directory copy is complete but does not compile; loading it would fail.
+    {
+        std::ofstream stale(searchPaths[1] / "Collectible.as", std::ios::binary | std::ios::app);
+        stale << "\nthis does not compile\n";
+    }
+
+    ASSERT_TRUE(fx.demo->LoadScripts(searchPaths));
+    EXPECT_TRUE(fx.demo->GetScriptRoot() == searchPaths[0]);
+    EXPECT_TRUE(fx.demo->GetLastError().empty());
 }
 
 #endif // SPARK_ANGELSCRIPT_SUPPORT

@@ -818,7 +818,10 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
         m_modules[moduleName] = mod;
     }
 
-    m_moduleFilePaths[moduleName] = scriptPath;
+    // Recorded absolute so HotReloadModule() finds the file after the working directory changes.
+    std::error_code absoluteError;
+    const fs::path absolutePath = fs::absolute(path, absoluteError);
+    m_moduleFilePaths[moduleName] = absoluteError ? scriptPath : absolutePath.lexically_normal().string();
     RecordModuleContexts(builder, moduleName);
 
     LogInfo("Compiled script file: " + scriptPath + " -> module '" + moduleName + "'.");

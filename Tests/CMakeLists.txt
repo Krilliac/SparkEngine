@@ -674,6 +674,7 @@ add_executable(SparkTests
     TestTemplatesCompile.cpp
     # Packaged runtimes must resolve content when launched from a foreign CWD.
     TestRuntimePackage.cpp
+    TestRuntimePackageContentRoots.cpp
     # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke is
     # Windows-only and is added below.
     # FPS game module source needed by TestGameModeReal
@@ -1358,10 +1359,10 @@ if(SPARK_ANGELSCRIPT_AVAILABLE)
         LABELS "scripting;scripting-integration;audio;animation;integration"
         TIMEOUT 120)
     # ENG-200: AngelScriptEngine::HotReloadModule() state rules R1-R8 against real
-    # .as files (TestENG200ScriptHotReloadReal.cpp).
+    # .as files, and reload after a working-directory change (TestENG200ScriptHotReloadReal.cpp).
     add_test(NAME ScriptHotReloadReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(ScriptHotReloadReal PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptHotReload_ENG200_;SPARK_TEST_EXPECT_COUNT=8"
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptHotReload_ENG200_;SPARK_TEST_EXPECT_COUNT=9"
         LABELS "scripting;scripting-integration;integration"
         TIMEOUT 120)
 endif()

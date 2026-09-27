@@ -556,7 +556,7 @@ class AngelScriptEngine
     /**
      * @brief Get the source file of a module compiled with CompileScriptFile()
      * @param moduleName Module name
-     * @return File path, or empty string if not found
+     * @return Absolute file path (resolved at compile time), or empty string if not found
      */
     std::string GetModuleFilePath(const std::string& moduleName) const;
 
