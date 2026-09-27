@@ -2237,6 +2237,26 @@ if(UNIX AND NOT APPLE AND TARGET SparkEngine AND (SPARK_HEADLESS_SUPPORT OR SPAR
         TIMEOUT 600)
 endif()
 
+# EDT-210: the Windows host runs an editor-authored scene via -scene on the
+# headless NullRHI loop, reports its Assets/... references, and fails a scene
+# that cannot load with exit 4 instead of running an empty engine.
+if(WIN32 AND TARGET SparkEngine AND SPARK_HEADLESS_SUPPORT)
+    add_dependencies(SparkTests SparkEngine)
+    add_test(
+        NAME WindowsScenePreview
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_SCENE_FIXTURE=${CMAKE_SOURCE_DIR}/Tests/Fixtures/EditorScene/Scenes/EditorSeeded.sparkscene"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_SCENE_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/windows-scene-preview"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkWindowsScenePreview.cmake
+    )
+    set_tests_properties(WindowsScenePreview PROPERTIES
+        LABELS "editor;scene;windows;integration;process;editor-integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
+endif()
+
 # EDT-210: the ImGui-free asset drag/drop contract shared by the Asset Browser
 # producer and the inspector mesh/material drop targets.
 add_test(NAME EditorAssetDrag COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)

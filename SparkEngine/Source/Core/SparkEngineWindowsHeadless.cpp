@@ -40,6 +40,7 @@
 #include "GameplaySystemLifecycle.h"
 #include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "HeadlessTickStats.h"
+#include "HostScenePreview.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
@@ -211,7 +212,17 @@ static size_t LoadHeadlessModules(LPWSTR lpCmdLine)
     GetEngineRuntime().moduleManager = std::make_unique<ModuleManager>();
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
+    // -scene without -game/-manifest is an explicit engine-only scene run:
+    // implicit discovery would let a module beside the executable own the loop
+    // and leave the requested scene unused (Linux parity).
+    const bool engineOnlySceneRun = !g_scenePath.empty() &&
+                                    !Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-game") &&
+                                    !Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-manifest");
+    if (engineOnlySceneRun)
+    {
+        console.LogInfo("[-scene] Engine-only scene run: implicit module discovery skipped");
+    }
+    else if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
     {
         const bool moduleInitializationSucceeded =
             GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
@@ -339,6 +350,34 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
             "Required game module was not initialized; terminating with a failure status.");
         g_shutdownRequested.store(true, std::memory_order_relaxed);
         exitCode = 2;
+    }
+
+    // -scene: load into the engine-owned ECS world that EngineContext already
+    // publishes. A scene that cannot run fails the launch instead of leaving an
+    // empty server loop to exit 0; the ordinary preflight + teardown still runs.
+    if (exitCode == 0 && !g_scenePath.empty())
+    {
+        extern std::unique_ptr<::World> g_engineEcsWorld;
+        auto& sceneConsole = Spark::SimpleConsole::GetInstance();
+        Spark::HostSceneLoadReport sceneReport;
+        if (initializedModuleCount > 0)
+            sceneReport.error = "a game module is active; the requested scene cannot run";
+        else if (!g_engineEcsWorld)
+            sceneReport.error = "the engine ECS world is unavailable";
+        if (sceneReport.error.empty() && Spark::LoadHostScene(*g_engineEcsWorld, g_scenePath, sceneReport))
+        {
+            sceneConsole.LogSuccess(
+                std::format("[-scene] Loaded '{}' ({} entities)", g_scenePath, sceneReport.entities));
+            Spark::PrintHostSceneRecords(sceneReport);
+        }
+        else
+        {
+            sceneConsole.LogError(std::format("[-scene] Failed to load '{}': {}", g_scenePath, sceneReport.error));
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "[-scene] Failed to load '%s': %s", g_scenePath.c_str(),
+                            sceneReport.error.c_str());
+            g_shutdownRequested.store(true, std::memory_order_relaxed);
+            exitCode = Spark::kHostSceneLoadFailedExitCode;
+        }
     }
 
     // Fixed 60 Hz server loop
