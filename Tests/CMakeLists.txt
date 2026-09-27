@@ -3398,6 +3398,18 @@ set_tests_properties(SecretScan_RepositoryGate PROPERTIES
     LABELS "governance;security;unit;python"
     TIMEOUT 300)
 
+# The MinGW toolchain's DirectXMath fetch re-verifies the pinned SHA-256 on every
+# configure: a mismatched download or a tampered cached archive never reaches the
+# include path, even on the configure after the failing one.
+add_test(
+    NAME SupplyChain_MinGWDirectXMathFetch
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_mingw_dxmath_fetch -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(SupplyChain_MinGWDirectXMathFetch PROPERTIES
+    ENVIRONMENT "SPARK_CMAKE=${CMAKE_COMMAND}"
+    LABELS "supply-chain;security;unit;python"
+    TIMEOUT 300)
+
 # BLD-100 / OD-04: the stable-v1 x86-64 CPU floor is SSE4.2 + POPCNT.
 # CpuFloor_IsaBaselineChecker proves tools/check_isa_baseline.py rejects
 # AVX/AVX2/AVX-512/FMA/F16C/BMI/LZCNT/MOVBE and the legacy-encoded AES-NI,
