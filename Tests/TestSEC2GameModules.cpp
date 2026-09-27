@@ -18,6 +18,7 @@
 #include "TestFramework.h"
 
 #include "../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h"
+#include "../GameModules/SparkGameFPS/Source/Game/WaveComposition.h"
 
 #include <climits>
 #include <cmath>
@@ -72,4 +73,64 @@ TEST(SEC2GM_ProgressionIgnoresNonPositiveAwards)
     progression.AwardXP(INT_MIN, "console");
     EXPECT_EQ(progression.GetCurrentXP(), Spark::ProgressionSystem::XP_PER_KILL);
     EXPECT_EQ(progression.GetLevel(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// FPS wave composition (wave_skip / wave_difficulty console commands)
+// ---------------------------------------------------------------------------
+
+TEST(SEC2GM_WaveCompositionNeverExceedsCap)
+{
+    using namespace Spark::WaveComposition;
+    const float scales[] = {
+        1.0f, 3.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -5.0f, 1000.0f};
+    std::vector<int> waves = {600000, INT_MAX, INT_MAX - 1, INT_MIN, -1, 0};
+    for (int wave = 1; wave <= MAX_WAVE_NUMBER; ++wave)
+        waves.push_back(wave);
+
+    for (const int wave : waves)
+    {
+        for (const float scale : scales)
+        {
+            const Spark::WaveDefinition definition = Compose(wave, scale);
+            const int total = definition.TotalEnemies();
+            EXPECT_GT(total, 0);
+            EXPECT_LE(total, MAX_ENEMIES_PER_WAVE);
+            EXPECT_GE(definition.waveNumber, 1);
+            EXPECT_LE(definition.waveNumber, MAX_WAVE_NUMBER);
+            if (definition.isBossWave)
+                EXPECT_GE(definition.heavyCount, 1);
+            EXPECT_TRUE(std::isfinite(definition.healthMultiplier));
+            EXPECT_TRUE(std::isfinite(definition.damageMultiplier));
+            EXPECT_TRUE(std::isfinite(definition.speedMultiplier));
+        }
+    }
+}
+
+TEST(SEC2GM_WaveCompositionClampsInputs)
+{
+    using namespace Spark::WaveComposition;
+
+    // wave_skip 600000 used to produce a boss wave of 120,001 unscaled heavies.
+    const Spark::WaveDefinition huge = Compose(600000, 1.0f);
+    EXPECT_EQ(huge.waveNumber, MAX_WAVE_NUMBER);
+    EXPECT_LE(huge.heavyCount, MAX_ENEMIES_PER_WAVE);
+
+    // Ordinary early waves are unchanged by the cap.
+    const Spark::WaveDefinition first = Compose(1, 1.0f);
+    EXPECT_EQ(first.gruntCount, 3);
+    EXPECT_EQ(first.TotalEnemies(), 3);
+    const Spark::WaveDefinition boss = Compose(5, 1.0f);
+    EXPECT_TRUE(boss.isBossWave);
+    EXPECT_EQ(boss.heavyCount, 2);
+
+    EXPECT_EQ(ClampWaveNumber(INT_MIN), 1);
+    EXPECT_EQ(ClampWaveNumber(INT_MAX), MAX_WAVE_NUMBER);
+    EXPECT_TRUE(IsValidDifficultyScale(1.0f));
+    EXPECT_TRUE(IsValidDifficultyScale(3.0f));
+    EXPECT_FALSE(IsValidDifficultyScale(0.5f));
+    EXPECT_FALSE(IsValidDifficultyScale(std::numeric_limits<float>::quiet_NaN()));
+    EXPECT_FALSE(IsValidDifficultyScale(std::numeric_limits<float>::infinity()));
+    EXPECT_EQ(SanitizeDifficultyScale(std::numeric_limits<float>::quiet_NaN()), 1.0f);
+    EXPECT_EQ(SanitizeDifficultyScale(50.0f), MAX_DIFFICULTY_SCALE);
 }

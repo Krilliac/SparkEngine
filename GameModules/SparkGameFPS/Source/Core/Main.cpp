@@ -1070,7 +1070,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                     return "Invalid wave number: " + args[0];
                 }
             }
-            ws->SkipToWave(wave);
+            if (wave < 1 || wave > ws->GetTotalWaves())
+                return "Wave number must be between 1 and " + std::to_string(ws->GetTotalWaves());
+            wave = ws->SkipToWave(wave);
             return "Skipping to wave " + std::to_string(wave);
         },
         "Skip to a specific wave (wave_skip [number])");
@@ -1089,6 +1091,8 @@ void SparkGameModule::RegisterGameConsoleCommands()
             const std::optional<float> scale = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
             if (!scale)
                 return "Invalid scale value: " + args[0];
+            if (!Spark::WaveComposition::IsValidDifficultyScale(*scale))
+                return "Difficulty scale must be between 1.0 and 3.0";
             ws->SetDifficultyScale(*scale);
             return "Difficulty scale set to " + std::to_string(*scale);
         },

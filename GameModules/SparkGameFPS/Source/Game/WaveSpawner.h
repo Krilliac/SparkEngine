@@ -10,6 +10,7 @@
 #include "Core/Platform.h"
 #include "Enemy.h"
 #include "Utils/ScheduledCallback.h"
+#include "WaveComposition.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
@@ -23,25 +24,6 @@ class Game;
 
 namespace Spark
 {
-
-    /**
-     * @brief Defines the composition of a single enemy wave
-     */
-    struct WaveDefinition
-    {
-        int waveNumber = 1;
-        int gruntCount = 0;
-        int scoutCount = 0;
-        int guardCount = 0;
-        int heavyCount = 0;
-        int sniperCount = 0;
-        int medicCount = 0;
-        float healthMultiplier = 1.0f; ///< Scales enemy health
-        float damageMultiplier = 1.0f; ///< Scales enemy damage
-        float speedMultiplier = 1.0f;  ///< Scales enemy movement speed
-        bool isBossWave = false;       ///< Boss waves have special announcements
-        std::string announcement;      ///< Text shown at wave start
-    };
 
     /**
      * @brief Current state of the wave spawner
@@ -111,8 +93,10 @@ namespace Spark
 
         /**
          * @brief Skip to a specific wave number
+         * @param waveNum Requested wave; clamped to [1, GetTotalWaves()] before use.
+         * @return The wave that will start when the countdown expires.
          */
-        void SkipToWave(int waveNum);
+        int SkipToWave(int waveNum);
 
         /**
          * @brief Reset all state back to idle
@@ -131,9 +115,11 @@ namespace Spark
 
         // === Configuration ===
 
-        void SetTotalWaves(int waves) { m_totalWaves = waves; }
+        /// Clamped to [1, WaveComposition::MAX_WAVE_NUMBER].
+        void SetTotalWaves(int waves) { m_totalWaves = WaveComposition::ClampWaveNumber(waves); }
         void SetRestDuration(float seconds) { m_restDuration = seconds; }
-        void SetDifficultyScale(float scale) { m_difficultyScale = scale; }
+        /// Non-finite values fall back to 1.0; finite ones are clamped to the documented 1.0-3.0 range.
+        void SetDifficultyScale(float scale) { m_difficultyScale = WaveComposition::SanitizeDifficultyScale(scale); }
         WaveCallbacks& GetCallbacks() { return m_callbacks; }
 
         // Console integration

@@ -138,14 +138,18 @@ namespace Spark
         }
     }
 
-    void WaveSpawner::SkipToWave(int waveNum)
+    int WaveSpawner::SkipToWave(int waveNum)
     {
-        m_currentWave = std::max(0, waveNum - 1);
+        // Clamp before subtracting: waveNum - 1 overflows for INT_MIN, and a wave past the configured total
+        // would bypass the end-of-match check in Update.
+        const int target = std::clamp(waveNum, 1, std::max(1, m_totalWaves));
+        m_currentWave = target - 1;
         m_state = WaveState::Countdown;
         m_countdownTimer = 3.0f;
         m_waveTransitionReady = false;
         m_waveScheduler.ClearAll();
         (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
+        return target;
     }
 
     void WaveSpawner::Reset()
@@ -166,54 +170,9 @@ namespace Spark
 
     WaveDefinition WaveSpawner::GenerateWave(int waveNumber) const
     {
-        WaveDefinition wave;
-        wave.waveNumber = waveNumber;
-
-        float difficulty = 1.0f + (waveNumber - 1) * 0.15f * m_difficultyScale;
-        wave.healthMultiplier = 1.0f + (waveNumber - 1) * 0.1f * m_difficultyScale;
-        wave.damageMultiplier = 1.0f + (waveNumber - 1) * 0.08f * m_difficultyScale;
-        wave.speedMultiplier = 1.0f + (waveNumber - 1) * 0.03f * m_difficultyScale;
-
-        bool isBoss = (waveNumber % 5 == 0);
-        wave.isBossWave = isBoss;
-
-        if (isBoss)
-        {
-            // Boss waves: fewer but tougher enemies + a heavy
-            wave.gruntCount = waveNumber / 2;
-            wave.guardCount = waveNumber / 3;
-            wave.heavyCount = 1 + waveNumber / 5;
-            wave.healthMultiplier *= 1.5f;
-            wave.announcement = "BOSS WAVE " + std::to_string(waveNumber) + "!";
-        }
-        else
-        {
-            // Normal waves: scaling composition
-            wave.gruntCount = 2 + waveNumber;
-            wave.scoutCount = (waveNumber >= 3) ? (waveNumber / 2) : 0;
-            wave.guardCount = (waveNumber >= 5) ? (waveNumber / 3) : 0;
-            wave.sniperCount = (waveNumber >= 7) ? (waveNumber / 4) : 0;
-            wave.medicCount = (waveNumber >= 8) ? (waveNumber / 5) : 0;
-            wave.heavyCount = (waveNumber >= 10) ? (waveNumber / 6) : 0;
-            wave.announcement = "Wave " + std::to_string(waveNumber);
-        }
-
-        // Cap total enemies per wave to prevent overwhelming spawns
-        int total =
-            wave.gruntCount + wave.scoutCount + wave.guardCount + wave.heavyCount + wave.sniperCount + wave.medicCount;
-        constexpr int MAX_PER_WAVE = 30;
-        if (total > MAX_PER_WAVE)
-        {
-            float scale = static_cast<float>(MAX_PER_WAVE) / total;
-            wave.gruntCount = static_cast<int>(wave.gruntCount * scale);
-            wave.scoutCount = static_cast<int>(wave.scoutCount * scale);
-            wave.guardCount = static_cast<int>(wave.guardCount * scale);
-            wave.heavyCount = std::max(wave.heavyCount, 1); // Always keep at least 1 heavy on boss
-            wave.sniperCount = static_cast<int>(wave.sniperCount * scale);
-            wave.medicCount = static_cast<int>(wave.medicCount * scale);
-        }
-
-        return wave;
+        // Composition, difficulty scaling and the per-wave enemy cap live in WaveComposition so they are
+        // bounded for every input and testable without a Game.
+        return WaveComposition::Compose(waveNumber, m_difficultyScale);
     }
 
     void WaveSpawner::SpawnWave(const WaveDefinition& wave, Game* game)
