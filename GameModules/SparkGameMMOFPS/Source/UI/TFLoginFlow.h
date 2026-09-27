@@ -115,6 +115,11 @@ namespace Terrafront
         /// the previous session.
         void ResetToLogin();
 
+        /// Character-select "Logout": ends the AUTHORITATIVE session (the server
+        /// clears the account binding via the disconnect cleanup) before the UI
+        /// returns to Login. See LogoutStopsTransport (Net/TFClientSessionEnd.h).
+        void Logout();
+
         // --- reply sinks: Task 6 wires TFClientNet's onboarding handlers to call
         // these directly once `m_ctx->loginFlow` exists. Until then, Update()'s
         // getter poll calls the same methods internally so the flow still works

@@ -258,15 +258,7 @@ namespace Terrafront
 
         ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 100.0f, footY));
         if (ImGui::Button("Logout##tf_logout", ImVec2(80.0f, 40.0f)))
-        {
-            m_accountId = 0;
-            m_chars.clear();
-            m_selectedIdx = -1;
-            Spark::SecureErase(m_password, sizeof(m_password));
-            m_error.clear();
-            m_pending = PendingOp::None;
-            m_state = TFFlowState::Login;
-        }
+            Logout();
     }
 
     void TFLoginFlow::RenderCharacterCreateScreen(float panelX, float panelY, float panelW, float panelH)

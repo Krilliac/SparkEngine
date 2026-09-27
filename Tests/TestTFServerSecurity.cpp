@@ -11,6 +11,7 @@
 #include "TestFramework.h"
 #include "Account/TFAccountSystem.h"
 #include "Net/TFClientMsgRouting.h"
+#include "Net/TFClientSessionEnd.h"
 #include "Net/TFClientSessionState.h"
 #include "Net/TFOnboardingSessionRules.h"
 #include "Net/TFRepProtocol.h"
@@ -262,4 +263,38 @@ TEST(TFSec_CharListReplyRejectsUnterminatedNames)
     TF_CharListReply empty{};
     EXPECT_TRUE(state.ApplyCharListReply(empty));
     EXPECT_TRUE(state.characters.empty());
+}
+
+// The character-select Logout button only reset UI fields, so the authority
+// kept the connection bound to the account (character ops still authorized as
+// it; a new login refused with SessionActive). Logout now ends the server
+// session: a remote client closes its transport (socket leave -> cleanup ->
+// ClearSession); the in-process host player runs that cleanup directly
+// (TFClientNet::Disconnect) and keeps hosting.
+TEST(TFSec_LogoutEndsTheAuthoritativeSession)
+{
+    EXPECT_TRUE(LogoutStopsTransport(NetRole::Client));
+    EXPECT_FALSE(LogoutStopsTransport(NetRole::ListenHost));
+    EXPECT_FALSE(LogoutStopsTransport(NetRole::Standalone));
+
+    // The server-side half of logout is ClearSession: it must release the
+    // account so the same (or another) connection can sign in again.
+    TFAccountSystem accounts;
+    EXPECT_TRUE(accounts.BindSession(5, 42));
+    accounts.ClearSession(5);
+    EXPECT_EQ(accounts.AccountForClient(5), uint64_t{0});
+    EXPECT_TRUE(accounts.BindSession(5, 42));
+
+    // The client's reply-driven view is reset with the session.
+    TFClientSessionState state;
+    state.ApplyLoginReply(true, 42, TFAuthErr::Ok);
+    EXPECT_TRUE(state.loggedIn);
+    state.Reset();
+    EXPECT_FALSE(state.loggedIn);
+    EXPECT_EQ(state.accountId, uint64_t{0});
+
+    // A remote client's session end drops it to Standalone and resets the flow.
+    const TFClientSessionEndDecision end = PlanClientSessionEnd(NetRole::Client, false);
+    EXPECT_TRUE(end.role == NetRole::Standalone);
+    EXPECT_TRUE(end.resetLoginFlow);
 }

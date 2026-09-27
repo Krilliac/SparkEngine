@@ -12,7 +12,8 @@
 #include "Account/TFAccountSystem.h"   // TFAuthErr (error text only; no TFDatabase coupling used)
 #include "Account/TFCharacterSystem.h" // TFCharErr
 #include "Net/TFClientNet.h"
-#include "World/TFWorldSetup.h" // W11 server-browser: Connect() = the tf_connect path
+#include "Net/TFClientSessionEnd.h" // LogoutStopsTransport
+#include "World/TFWorldSetup.h"     // W11 server-browser: Connect() = the tf_connect path
 
 #include "Utils/LogMacros.h"
 #include "Utils/ScopeGuard.h"
@@ -140,6 +141,24 @@ namespace Terrafront
         // common case — re-typing it every hop is pure friction). m_lan is
         // untouched: it self-arms off ctx.role and the login screen render
         // condition, not this flow's m_state.
+    }
+
+    void TFLoginFlow::Logout()
+    {
+        // Clearing only this flow's fields left the connection bound to the
+        // account on the authority: later character list/create/delete/enter
+        // requests on the same connection still ran as that account, and a new
+        // login was refused with SessionActive. End the session for real.
+        const bool wasRemoteClient = m_ctx && LogoutStopsTransport(m_ctx->role);
+        if (m_ctx && m_ctx->clientNet)
+            m_ctx->clientNet->Disconnect(); // loopback: runs the authority's session cleanup directly
+#ifdef ENABLE_NETWORKING
+        if (wasRemoteClient && m_ctx->world)
+            m_ctx->world->StopNetworking(); // remote: the socket leave ends the server session
+#endif
+        ResetToLogin();
+        if (wasRemoteClient)
+            m_error = "Logged out - reconnect to sign in again.";
     }
 
     void TFLoginFlow::Update(float deltaTime)
