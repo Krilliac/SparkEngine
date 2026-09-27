@@ -1109,6 +1109,7 @@ target_sources(SparkTests PRIVATE
     TestHEAD220NullRHILifetimeReal.cpp
     TestHeadlessTickStats.cpp
     TestInputFrameEdgesReal.cpp
+    TestQuaternionStubsReal.cpp
     TestSceneManagerUnicodeReal.cpp
     TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
@@ -2247,14 +2248,23 @@ set_tests_properties(GLTFSkinnedMeshImport PROPERTIES
 # count: a dropped test fails. The three portable MeshAsset tests are compiled out on
 # Windows (the D3D11 MeshAsset needs a device).
 if(WIN32)
-    set(_gltf_animation_test_count 20)
+    set(_gltf_animation_test_count 24)
 else()
-    set(_gltf_animation_test_count 23)
+    set(_gltf_animation_test_count 27)
 endif()
 add_test(NAME GLTFAnimationImport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(GLTFAnimationImport PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=GLTF_Animation_;SPARK_TEST_EXPECT_COUNT=${_gltf_animation_test_count}"
     LABELS "assets;gltf;unit"
+    TIMEOUT 30)
+
+# ENG-220: DirectXMath quaternion slerp/multiply, rotation-axis and XMMatrixDecompose semantics
+# against closed-form values, plus the animation slerp and BlendTransforms paths built on them.
+# Real DirectXMath on Windows, PlatformDirectXMathStubs.h elsewhere. Exact count: a dropped test fails.
+add_test(NAME DirectXMathStubParity COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(DirectXMathStubParity PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=DXMathStub_;SPARK_TEST_EXPECT_COUNT=14"
+    LABELS "animation;math;unit"
     TIMEOUT 30)
 
 # PERF-100: the bounded tick work-time histogram both headless hosts feed, then

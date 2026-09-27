@@ -111,6 +111,16 @@ namespace Spark::Graphics::Detail
                 error = "sampler output: " + error;
                 return false;
             }
+            // Checked before STEP expansion inserts hold keys, so the index is the file's key index.
+            for (size_t k = 0; rotation && k < keyCount; ++k)
+            {
+                const float* q = &values[k * 4];
+                if (!(std::sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]) >= kMinQuaternionLength))
+                {
+                    error = "rotation key " + std::to_string(k) + " is a zero-length quaternion";
+                    return false;
+                }
+            }
             return true;
         }
 
@@ -147,8 +157,9 @@ namespace Spark::Graphics::Detail
             values = std::move(expandedValues);
         }
 
-        bool AppendTrack(const std::vector<float>& times, const std::vector<float>& values,
-                         cgltf_animation_path_type path, BoneAnimation& channel, std::string& error)
+        /// Rotation keys are normalized; ReadKeyValues has already rejected zero-length ones.
+        void AppendTrack(const std::vector<float>& times, const std::vector<float>& values,
+                         cgltf_animation_path_type path, BoneAnimation& channel)
         {
             if (path == cgltf_animation_path_type_rotation)
             {
@@ -157,14 +168,9 @@ namespace Spark::Graphics::Detail
                 {
                     const float* q = &values[k * 4];
                     const float length = std::sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
-                    if (!(length >= kMinQuaternionLength))
-                    {
-                        error = "rotation key " + std::to_string(k) + " is a zero-length quaternion";
-                        return false;
-                    }
                     channel.rotationKeys[k] = {times[k], {q[0] / length, q[1] / length, q[2] / length, q[3] / length}};
                 }
-                return true;
+                return;
             }
 
             std::vector<VectorKey>& keys =
@@ -174,7 +180,6 @@ namespace Spark::Graphics::Detail
             {
                 keys[k] = {times[k], {values[k * 3], values[k * 3 + 1], values[k * 3 + 2]}};
             }
-            return true;
         }
 
         /// Give every track the file leaves unanimated the joint's rest value (see BoneAnimation).
@@ -286,10 +291,7 @@ namespace Spark::Graphics::Detail
                 error = "duplicates another channel's target path on " + NodeLabel(data, node);
                 return false;
             }
-            if (!AppendTrack(times, values, source.target_path, channel, error))
-            {
-                return false;
-            }
+            AppendTrack(times, values, source.target_path, channel);
             clip.duration = std::max(clip.duration, times.back());
             return true;
         }

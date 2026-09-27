@@ -233,10 +233,23 @@ namespace
         return builder.Finish(tail);
     }
 
+    /// Engine asset paths are UTF-8 std::strings; these convert without the Windows ANSI code page.
+    std::filesystem::path PathFromUtf8(const std::string& utf8)
+    {
+        return std::filesystem::path(std::u8string(utf8.begin(), utf8.end()));
+    }
+
+    std::string PathToUtf8(const std::filesystem::path& path)
+    {
+        const std::u8string utf8 = path.u8string();
+        return std::string(utf8.begin(), utf8.end());
+    }
+
     struct TemporaryGLB
     {
+        /// `name` is UTF-8.
         TemporaryGLB(const std::string& name, const Fixture& fixture)
-            : directory(std::filesystem::temp_directory_path() / ("spark_gltf_anim_" + name)),
+            : directory(std::filesystem::temp_directory_path() / PathFromUtf8("spark_gltf_anim_" + name)),
               path(directory / "rig.glb")
         {
             std::error_code ec;
@@ -297,6 +310,21 @@ TEST(GLTF_Animation_ManagerLoadsAndCachesGLTFSkeleton)
     // Cached by path: a second load and the registry lookup return the same object.
     EXPECT_TRUE(manager.LoadSkeleton(path) == skeleton);
     EXPECT_TRUE(manager.GetSkeleton(path) == skeleton);
+}
+
+TEST(GLTF_Animation_ManagerLoadsNonASCIIUtf8Path)
+{
+    // "L<a-umlaut>ufer" as UTF-8. Decoding the manager's UTF-8 path with the Windows ANSI code page
+    // would turn it into mojibake, and neither the skeleton nor the clips would be found.
+    TemporaryGLB glb("L\xC3\xA4ufer", WaveFixture());
+    ASSERT_TRUE(std::filesystem::is_regular_file(glb.path));
+    const std::string path = PathToUtf8(glb.path);
+    auto& manager = AnimationManager::GetInstance();
+
+    auto skeleton = manager.LoadSkeleton(path);
+    ASSERT_TRUE(skeleton != nullptr);
+    EXPECT_EQ(skeleton->bones.size(), 2u);
+    EXPECT_EQ(manager.LoadAnimations(path).size(), 1u);
 }
 
 TEST(GLTF_Animation_ManagerDoesNotCacheRejectedGLTFSkeleton)
@@ -497,6 +525,19 @@ TEST(GLTF_Animation_RejectsZeroLengthRotation)
     EXPECT_STR_CONTAINS(error, "zero-length quaternion");
 }
 
+TEST(GLTF_Animation_StepZeroLengthRotationReportsFileKeyIndex)
+{
+    // STEP import inserts a hold key before every key after the first; the diagnostic must still
+    // name the key as the file numbers it (key 1), not its expanded position (key 2).
+    Fixture fixture = WaveFixture();
+    fixture.animations[0].samplers[1].interpolation = "STEP";
+    fixture.animations[0].samplers[1].values = {0, 0, 0, 1, 0, 0, 0, 0};
+    bool cleared = false;
+    const std::string error = RejectedClips("step_zero_quaternion", fixture, cleared);
+    EXPECT_TRUE(cleared);
+    EXPECT_STR_CONTAINS(error, "rotation key 1 is a zero-length quaternion");
+}
+
 TEST(GLTF_Animation_RejectsWrongOutputType)
 {
     Fixture fixture = WaveFixture();
@@ -677,7 +718,9 @@ namespace
         return posed;
     }
 
-    /// Largest per-component distance between two posed triangles (infinity when sizes differ).
+    /// Largest per-component distance between two posed triangles. Infinity when the sizes differ or
+    /// any coordinate is not finite: NaN compares false with everything, so a running maximum would
+    /// otherwise skip it and a NaN pose would pass every `< tolerance` check.
     float MaxDeviation(const std::vector<Vec3>& a, const std::vector<Vec3>& b)
     {
         if (a.size() != b.size())
@@ -687,8 +730,15 @@ namespace
         float deviation = 0.0f;
         for (size_t i = 0; i < a.size(); ++i)
         {
-            deviation =
-                std::max({deviation, std::abs(a[i].x - b[i].x), std::abs(a[i].y - b[i].y), std::abs(a[i].z - b[i].z)});
+            for (const float difference :
+                 {std::abs(a[i].x - b[i].x), std::abs(a[i].y - b[i].y), std::abs(a[i].z - b[i].z)})
+            {
+                if (!std::isfinite(difference))
+                {
+                    return std::numeric_limits<float>::infinity();
+                }
+                deviation = std::max(deviation, difference);
+            }
         }
         return deviation;
     }
@@ -789,6 +839,35 @@ TEST(GLTF_Animation_StepSamplerHoldsPreviousKeyUntilNextKey)
     // The LINEAR rotation track on the same joint still blends between its keys.
     EXPECT_NEAR(tip->InterpolateRotation(1.0f).x, 0.5f, 1e-5f);
     EXPECT_TRUE(MaxDeviation(rig.Pose(*rig.clip, beforeKey), ReferencePose(beforeKey)) < kPoseTolerance);
+}
+
+TEST(GLTF_Animation_MaxDeviationFailsOnNonFiniteVertices)
+{
+    const std::vector<Vec3> reference = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    std::vector<Vec3> posed = reference;
+    posed[1].y = std::numeric_limits<float>::quiet_NaN();
+    EXPECT_FALSE(MaxDeviation(posed, reference) < kPoseTolerance);
+    EXPECT_FALSE(MaxDeviation(reference, posed) < kPoseTolerance);
+    posed[1].y = std::numeric_limits<float>::infinity();
+    EXPECT_FALSE(MaxDeviation(posed, reference) < kPoseTolerance);
+    EXPECT_TRUE(MaxDeviation(reference, reference) < kPoseTolerance);
+}
+
+TEST(GLTF_Animation_OppositeHemisphereRotationKeysTakeShortestArc)
+{
+    // Root's 90 degree key authored as -q: the same rotation, but its dot product with the identity
+    // key is negative. Sampling must take the short way (45 degrees at t = 1), not the long way
+    // round (-135 degrees), so the pose still matches the reference built from +q.
+    Fixture fixture = PoseFixture();
+    fixture.animations[0].samplers[1].values = {0, 0, 0, 1, 0, 0, -kHalfSqrt2, -kHalfSqrt2};
+    TemporaryGLB glb("opposite_hemisphere", fixture);
+    ImportedRig rig;
+    ASSERT_TRUE(ImportRig(glb, rig));
+
+    for (const float time : {0.5f, 1.0f, 1.5f})
+    {
+        EXPECT_TRUE(MaxDeviation(rig.Pose(*rig.clip, time), ReferencePose(time)) < kPoseTolerance);
+    }
 }
 
 TEST(GLTF_Animation_MutatedKeyframeFailsPosedVertexComparison)

@@ -48,10 +48,18 @@ namespace Spark::Animation
             return true;
         }
 
-        /// .gltf and .glb go through the fail-closed glTF importers instead of the engine binary readers.
-        bool IsGLTFPath(const std::string& filepath)
+        /// Asset paths are UTF-8. Constructing a path from a narrow std::string would decode it with
+        /// the Windows ANSI code page, so non-ASCII file names would not be found there.
+        std::filesystem::path PathFromUtf8(const std::string& utf8)
         {
-            std::string extension = std::filesystem::path(filepath).extension().string();
+            return std::filesystem::path(std::u8string(utf8.begin(), utf8.end()));
+        }
+
+        /// .gltf and .glb go through the fail-closed glTF importers instead of the engine binary readers.
+        bool IsGLTFPath(const std::filesystem::path& path)
+        {
+            const std::u8string utf8Extension = path.extension().u8string();
+            std::string extension(utf8Extension.begin(), utf8Extension.end());
             std::transform(extension.begin(), extension.end(), extension.begin(),
                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             return extension == ".gltf" || extension == ".glb";
@@ -77,13 +85,14 @@ namespace Spark::Animation
         auto skeleton = std::make_shared<Skeleton>();
         skeleton->name = filepath;
 
-        if (IsGLTFPath(filepath))
+        const std::filesystem::path path = PathFromUtf8(filepath);
+        if (IsGLTFPath(path))
         {
             // The skin is read through the same validation as the skinned mesh, so a skeleton is
             // only accepted from a file whose geometry and weights would also import.
             Spark::Graphics::Detail::GLTFSkinnedMeshData imported;
             std::string error;
-            if (!Spark::Graphics::Detail::LoadGLTFSkinnedMesh(filepath, imported, error))
+            if (!Spark::Graphics::Detail::LoadGLTFSkinnedMesh(path, imported, error))
             {
                 SPARK_LOG_ERROR(LogCategory::Animation, "Failed to load glTF skeleton '%s': %s; result is not cached",
                                 filepath.c_str(), error.c_str());
@@ -105,7 +114,7 @@ namespace Spark::Animation
         // Parse skeleton from Spark Engine binary skeleton format (.skel)
         // Format: [magic:4][version:4][boneCount:4] then per bone:
         //   [nameLen:4][name:nameLen][parentIndex:4][offsetMatrix:64][localBindPose:64]
-        std::ifstream file(filepath, std::ios::binary);
+        std::ifstream file(path, std::ios::binary);
         if (file.is_open())
         {
             char magic[4] = {};
@@ -244,11 +253,12 @@ namespace Spark::Animation
     {
         std::vector<std::shared_ptr<AnimationClip>> clips;
 
-        if (IsGLTFPath(filepath))
+        const std::filesystem::path path = PathFromUtf8(filepath);
+        if (IsGLTFPath(path))
         {
             std::vector<AnimationClip> imported;
             std::string error;
-            if (!Spark::Graphics::Detail::LoadGLTFAnimationClips(filepath, imported, error))
+            if (!Spark::Graphics::Detail::LoadGLTFAnimationClips(path, imported, error))
             {
                 SPARK_LOG_ERROR(LogCategory::Animation,
                                 "Failed to load glTF animations from '%s': %s; no clips returned", filepath.c_str(),
@@ -273,7 +283,7 @@ namespace Spark::Animation
         //     [posKeyCount:4] then per key: [time:4][x:4][y:4][z:4]
         //     [rotKeyCount:4] then per key: [time:4][x:4][y:4][z:4][w:4]
         //     [sclKeyCount:4] then per key: [time:4][x:4][y:4][z:4]
-        std::ifstream file(filepath, std::ios::binary);
+        std::ifstream file(path, std::ios::binary);
         if (!file.is_open())
         {
             SPARK_LOG_WARN(LogCategory::Animation, "LoadAnimations: cannot open '%s' (errno=%d)", filepath.c_str(),
