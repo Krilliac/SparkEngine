@@ -234,6 +234,12 @@ function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok o
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+# cmake/RunSparkHeadlessFPSSaveReload.cmake reuses the exact writer/reader audit
+# validator above for the source-tree NullRHI save/reload run.
+if(SPARK_FPS_SAVE_RELOAD_PARSER_ONLY)
+    return()
+endif()
+
 if(SPARK_FPS_SAVE_RELOAD_PARSER_SELF_TEST)
     function(_spark_expect_fps_audit_case name phase result fresh audit expected_ok)
         _spark_validate_fps_audit("${phase}" "${result}" "${fresh}" "${audit}" _actual_ok _reason)

@@ -2369,6 +2369,22 @@ if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
         LABELS "nullrhi-headless;linux;integration"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+
+    # HEAD-220: writer/reader quicksave persistence across two fresh headless
+    # NullRHI processes (the WIN32 block registers the same test).
+    add_test(
+        NAME HeadlessSaveReload_FPSNullRHI
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/headless-save-reload/$<CONFIG>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessFPSSaveReload.cmake
+    )
+    set_tests_properties(HeadlessSaveReload_FPSNullRHI PROPERTIES
+        LABELS "nullrhi-headless;save;integration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
 endif()
 
 # HEAD-220: graceful (SIGTERM), forced-kill-then-restart and kill-during-boot
@@ -2715,6 +2731,23 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         LABELS "nullrhi-headless;stable-v1;integration;source-tree"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+
+    # HEAD-220: writer/reader quicksave persistence across two fresh headless
+    # NullRHI processes with an isolated LOCALAPPDATA. Source-tree evidence;
+    # FPSPackage_InstalledRuntime runs the packaged WARP save/reload.
+    add_test(
+        NAME HeadlessSaveReload_FPSNullRHI
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/headless-save-reload/$<CONFIG>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessFPSSaveReload.cmake
+    )
+    set_tests_properties(HeadlessSaveReload_FPSNullRHI PROPERTIES
+        LABELS "nullrhi-headless;save;integration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
 
     # Copy the built FPS runtime to a fresh package-like directory, edit only
     # its copied scene, and inspect post-update game/wave state plus rendered

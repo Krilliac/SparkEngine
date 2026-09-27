@@ -558,9 +558,22 @@ directories and a working directory outside the source tree. Each run must pass 
 Every wait has a wall-clock bound, and each run prints its seed (replay it with `--seed`). The
 tests run on Linux only. Windows is not covered: `SparkEngine` is a GUI-subsystem executable
 that skips `AllocConsole` when its output is redirected, so it has no console and a
-`CTRL_BREAK_EVENT` graceful stop cannot reach it. The headless FPS
-module has no `quicksave`/`quickload` console commands, so no run kills a real FPS save
+`CTRL_BREAK_EVENT` graceful stop cannot reach it. No run kills a real FPS save
 mid-write. This is source-tree evidence only, not packaged Windows certification.
+
+### Save/reload test (`HEAD-220`)
+
+`HeadlessSaveReload_FPSNullRHI` (`cmake/RunSparkHeadlessFPSSaveReload.cmake`) runs on the Windows and
+Linux hosts. It starts two fresh `-headless` NullRHI processes that share an isolated user root
+(`LOCALAPPDATA` on Windows, `HOME`/`XDG_*` on Linux):
+
+1. The writer runs `level`, `xp 37`, `level` and `quicksave`.
+2. The reader runs `level`, `quickload` and `level`. It must start at 0 XP and restore 37 XP.
+
+Each process must pass the strict NullRHI lifecycle parser. Its `-exec-audit` trail must pass the
+writer/reader validator of `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, which the packaged
+WARP run also uses. The reader must leave `fps_quicksave.spark_save` byte-identical. The test does not
+cover a Windows sanitizer run, a soak, or a packaged headless run.
 
 ### Shutdown-time budget (`LIFE-200`)
 
