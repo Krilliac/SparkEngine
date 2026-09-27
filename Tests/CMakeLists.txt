@@ -2347,6 +2347,41 @@ if(Python3_Interpreter_FOUND)
     endif()
 endif()
 
+# LIFE-200: ten consecutive production headless FPS boots on NullRHI, each with a
+# fresh cwd and private user dirs, a 60 s deadlock bound, the strict lifecycle
+# parser, the arena record, released NullRHI resources and no sanitizer report,
+# plus an identical arena state across boots. The host exits on -test-frames, so
+# no signal channel is needed and the loop runs on the Windows and Linux hosts.
+# The lifecycle label puts it in the Linux ASan/TSan presets' ctest runs.
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME HeadlessBootLoop_HarnessContract
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/run_headless_boot_loop.py --self-test
+            --source-root ${CMAKE_SOURCE_DIR}
+            --cmake ${CMAKE_COMMAND})
+    set_tests_properties(HeadlessBootLoop_HarnessContract PROPERTIES
+        LABELS "lifecycle;nullrhi-headless;unit;python"
+        TIMEOUT 60)
+    if(NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES AND TARGET SparkEngine AND TARGET SparkGameFPS AND
+       (WIN32 OR (UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT)))
+        add_dependencies(SparkTests SparkEngine SparkGameFPS)
+        add_test(
+            NAME HeadlessBootLoop_FPSNullRHI
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/run_headless_boot_loop.py
+                --engine $<TARGET_FILE:SparkEngine>
+                --module $<TARGET_FILE:SparkGameFPS>
+                --source-root ${CMAKE_SOURCE_DIR}
+                --cmake ${CMAKE_COMMAND}
+                --iterations 10)
+        set_tests_properties(HeadlessBootLoop_FPSNullRHI PROPERTIES
+            LABELS "lifecycle;nullrhi-headless;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 900)
+    endif()
+endif()
+
 # RDY-015: real-source lifecycle evidence for every experimental game module.
 # The parser contract is deterministic and runs in every lane; the per-module
 # runs launch the production Linux SDL host with -require-game and carry the
