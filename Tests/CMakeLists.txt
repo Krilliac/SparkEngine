@@ -2163,9 +2163,11 @@ set_tests_properties(Lifecycle_LifecycleLoop Lifecycle_ModuleReload PROPERTIES T
 # SEC2 game-module security fixes. The family size depends on which module
 # sources (ImGui-gated) and networking paths are compiled into SparkTests, so
 # the pinned count is derived from the same conditions the test file uses.
-set(_spark_sec2gm_count 4)
+# Unconditional: 2 FPS progression, 2 wave composition, 2 module network-teardown
+# source contracts. Networking: 3 NetworkManager handler-ownership seams.
+set(_spark_sec2gm_count 6)
 if(ENABLE_NETWORKING)
-    math(EXPR _spark_sec2gm_count "${_spark_sec2gm_count} + 2")
+    math(EXPR _spark_sec2gm_count "${_spark_sec2gm_count} + 3")
 endif()
 if(TARGET imgui)
     math(EXPR _spark_sec2gm_count "${_spark_sec2gm_count} + 3")

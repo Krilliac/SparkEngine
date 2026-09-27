@@ -8,6 +8,9 @@
  * - WaveComposition bounds every wave to MAX_ENEMIES_PER_WAVE, heavies included.
  * - NetworkManager handler ownership: a hot-reload replacement keeps its handlers when the outgoing
  *   image tears down, and everything an image owns is removed before it is unmapped.
+ * - Game modules remove their network handlers with UnregisterHandler instead of installing image-resident
+ *   empty lambdas, and every SparkGameMMOFPS registration function has a release that removes each id it
+ *   registered (source contract over GameModules/, plus the unowned lazy-handler seam MMOFPS relies on).
  * - MMO chat relays only routable channels, never forwards a client-chosen sender name, and attributes
  *   every relayed line to `<sanitized connection name>#<client id>`, which no connection name can forge.
  * - RTS fog of war clips vision to the grid and restored saves reject absurd vision ranges.
@@ -21,11 +24,21 @@
 #include "../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h"
 #include "../GameModules/SparkGameFPS/Source/Game/WaveComposition.h"
 
+#include <algorithm>
+#include <cctype>
 #include <climits>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
+#include <set>
+#include <sstream>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -247,7 +260,444 @@ TEST(SEC2GM_NetworkUnloadRemovesEveryOwnedCallback)
     EXPECT_TRUE(hostAlive.expired());
 }
 
+TEST(SEC2GM_NetworkTeardownRemovesUnownedLazyHandler)
+{
+    auto& network = SEC2NetworkManager::GetInstance();
+    const Spark::Net::MessageType type = SEC2TestMessageType(5);
+    const std::string moduleOwner = "SEC2GM_LazyModule#6";
+
+    // SparkGameMMOFPS registers its observers lazily from Update once the link is up, outside any
+    // ModuleRegistrationScope. They carry no owner, so ModuleManager's UnregisterHandlersByOwner safety net
+    // cannot reclaim them before the image is unmapped: the module must remove them itself.
+    auto liveToken = std::make_shared<int>(1);
+    const std::weak_ptr<int> liveAlive = liveToken;
+    network.RegisterHandler(type, SEC2TokenHandler(std::move(liveToken)));
+    EXPECT_EQ(network.UnregisterHandlersByOwner(moduleOwner), static_cast<size_t>(0));
+    EXPECT_FALSE(liveAlive.expired());
+
+    // The old release on link loss (also outside any scope) swapped in a placeholder compiled into the module
+    // image: it destroyed the live callback but left an unowned, image-resident one behind that nothing reclaims
+    // at unload, and the engine-shutdown ClearHandlers later destroys it through unmapped code.
+    auto placeholderToken = std::make_shared<int>(2);
+    const std::weak_ptr<int> placeholderAlive = placeholderToken;
+    network.RegisterHandler(type, SEC2TokenHandler(std::move(placeholderToken)));
+    EXPECT_TRUE(liveAlive.expired());
+    EXPECT_EQ(network.UnregisterHandlersByOwner(moduleOwner), static_cast<size_t>(0));
+    EXPECT_FALSE(placeholderAlive.expired());
+
+    // UnregisterHandler removes the slot and destroys its callback at once, outside any scope (link loss)...
+    network.UnregisterHandler(type);
+    EXPECT_TRUE(placeholderAlive.expired());
+
+    // ...and inside the module's teardown scope (OnUnload -> Shutdown), where an unowned slot may be removed...
+    auto lazyToken = std::make_shared<int>(3);
+    const std::weak_ptr<int> lazyAlive = lazyToken;
+    network.RegisterHandler(type, SEC2TokenHandler(std::move(lazyToken)));
+    {
+        SEC2NetworkManager::ScopedRegistrationOwner scope(network, moduleOwner, true);
+        network.UnregisterHandler(type);
+    }
+    EXPECT_TRUE(lazyAlive.expired());
+
+    // ...while a slot a hot-reload replacement installed during its OnLoad stays with the replacement.
+    const std::string replacementOwner = "SEC2GM_LazyReplacement#7";
+    auto replacementToken = std::make_shared<int>(4);
+    const std::weak_ptr<int> replacementAlive = replacementToken;
+    {
+        SEC2NetworkManager::ScopedRegistrationOwner scope(network, replacementOwner);
+        network.RegisterHandler(type, SEC2TokenHandler(std::move(replacementToken)));
+    }
+    {
+        SEC2NetworkManager::ScopedRegistrationOwner scope(network, moduleOwner, true);
+        network.UnregisterHandler(type);
+    }
+    EXPECT_FALSE(replacementAlive.expired());
+    EXPECT_EQ(network.UnregisterHandlersByOwner(replacementOwner), static_cast<size_t>(1));
+    EXPECT_TRUE(replacementAlive.expired());
+}
+
 #endif // ENABLE_NETWORKING
+
+// ---------------------------------------------------------------------------
+// Game-module network handler teardown (source contract)
+// ---------------------------------------------------------------------------
+//
+// SparkGameMMOFPS registers its NetworkManager observers lazily (outside any module registration scope), so
+// ModuleManager cannot reclaim them and every one must be removed by the module itself. These tests read the
+// module sources: no module may "clear" a handler by installing an empty lambda compiled into its own image,
+// and every MMOFPS *Handlers registration function has a release counterpart that UnregisterHandler()s every
+// message id it registered.
+
+namespace
+{
+    bool SEC2IsIdentChar(char c)
+    {
+        return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+    }
+
+    /// True when the quote at @p at is a C++14 digit separator (1'000'000) rather than a character literal.
+    bool SEC2IsDigitSeparator(const std::string& code, size_t at)
+    {
+        size_t tokenStart = at;
+        while (tokenStart > 0 && (SEC2IsIdentChar(code[tokenStart - 1]) || code[tokenStart - 1] == '\''))
+            --tokenStart;
+        return tokenStart < at && std::isdigit(static_cast<unsigned char>(code[tokenStart])) != 0 &&
+               at + 1 < code.size() && SEC2IsIdentChar(code[at + 1]);
+    }
+
+    /// @p text with comments removed and string/character literal contents blanked, offsets preserved, so brace
+    /// matching and identifier scans see only code.
+    std::string SEC2CodeOnly(std::string code)
+    {
+        size_t i = 0;
+        while (i < code.size())
+        {
+            const char c = code[i];
+            const char next = i + 1 < code.size() ? code[i + 1] : '\0';
+            if (c == '/' && next == '/')
+            {
+                while (i < code.size() && code[i] != '\n')
+                    code[i++] = ' ';
+            }
+            else if (c == '/' && next == '*')
+            {
+                while (i < code.size() && !(code[i] == '*' && i + 1 < code.size() && code[i + 1] == '/'))
+                {
+                    if (code[i] != '\n')
+                        code[i] = ' ';
+                    ++i;
+                }
+                for (int k = 0; k < 2 && i < code.size(); ++k)
+                    code[i++] = ' ';
+            }
+            else if (c == '"' || (c == '\'' && !SEC2IsDigitSeparator(code, i)))
+            {
+                ++i;
+                while (i < code.size() && code[i] != c && code[i] != '\n')
+                {
+                    if (code[i] == '\\' && i + 1 < code.size())
+                        code[i++] = ' ';
+                    code[i++] = ' ';
+                }
+                ++i;
+            }
+            else
+            {
+                ++i;
+            }
+        }
+        return code;
+    }
+
+    size_t SEC2SkipSpace(const std::string& code, size_t at)
+    {
+        while (at < code.size() && std::isspace(static_cast<unsigned char>(code[at])) != 0)
+            ++at;
+        return at;
+    }
+
+    /// Index one past the bracket matching the opener at @p open, or npos when unbalanced.
+    size_t SEC2MatchBracket(const std::string& code, size_t open, char opener, char closer)
+    {
+        int depth = 0;
+        for (size_t i = open; i < code.size(); ++i)
+        {
+            if (code[i] == opener)
+                ++depth;
+            else if (code[i] == closer && --depth == 0)
+                return i + 1;
+        }
+        return std::string::npos;
+    }
+
+    struct SEC2MemberFunction
+    {
+        std::string owner;
+        std::string name;
+        size_t bodyBegin = 0;
+        size_t bodyEnd = 0;
+    };
+
+    /// Every out-of-line `void Owner::Name(...) [const] { ... }` definition in comment-free @p code.
+    std::vector<SEC2MemberFunction> SEC2FindMemberFunctions(const std::string& code)
+    {
+        std::vector<SEC2MemberFunction> functions;
+        const auto readIdent = [&code](size_t& at)
+        {
+            const size_t start = at;
+            while (at < code.size() && SEC2IsIdentChar(code[at]))
+                ++at;
+            return code.substr(start, at - start);
+        };
+        for (size_t pos = code.find("void"); pos != std::string::npos; pos = code.find("void", pos + 4))
+        {
+            if ((pos > 0 && SEC2IsIdentChar(code[pos - 1])) || pos + 4 >= code.size() || SEC2IsIdentChar(code[pos + 4]))
+                continue;
+            size_t at = SEC2SkipSpace(code, pos + 4);
+            SEC2MemberFunction function;
+            function.owner = readIdent(at);
+            if (function.owner.empty() || code.compare(at, 2, "::") != 0)
+                continue;
+            at += 2;
+            function.name = readIdent(at);
+            at = SEC2SkipSpace(code, at);
+            if (function.name.empty() || at >= code.size() || code[at] != '(')
+                continue;
+            at = SEC2MatchBracket(code, at, '(', ')');
+            if (at == std::string::npos)
+                continue;
+            at = SEC2SkipSpace(code, at);
+            if (code.compare(at, 5, "const") == 0)
+                at = SEC2SkipSpace(code, at + 5);
+            if (at >= code.size() || code[at] != '{')
+                continue;
+            function.bodyBegin = at;
+            function.bodyEnd = SEC2MatchBracket(code, at, '{', '}');
+            if (function.bodyEnd == std::string::npos)
+                continue;
+            functions.push_back(function);
+        }
+        return functions;
+    }
+
+    /// Offsets of every capture-less, empty-bodied NetworkMessage lambda: `[](const ...NetworkMessage& ...) {}`.
+    std::vector<size_t> SEC2FindPlaceholderHandlers(const std::string& code)
+    {
+        std::vector<size_t> found;
+        for (size_t pos = code.find('['); pos != std::string::npos; pos = code.find('[', pos + 1))
+        {
+            size_t at = SEC2SkipSpace(code, pos + 1);
+            if (at >= code.size() || code[at] != ']')
+                continue;
+            at = SEC2SkipSpace(code, at + 1);
+            if (at >= code.size() || code[at] != '(')
+                continue;
+            const size_t paramsEnd = SEC2MatchBracket(code, at, '(', ')');
+            if (paramsEnd == std::string::npos)
+                continue;
+            const std::string params = code.substr(at, paramsEnd - at);
+            if (params.find("NetworkMessage") == std::string::npos || params.find('&') == std::string::npos)
+                continue;
+            at = SEC2SkipSpace(code, paramsEnd);
+            if (at >= code.size() || code[at] != '{')
+                continue;
+            at = SEC2SkipSpace(code, at + 1);
+            if (at < code.size() && code[at] == '}')
+                found.push_back(pos);
+        }
+        return found;
+    }
+
+    /// Whether @p code calls @p function (whole identifier: "RegisterHandler" does not match "UnregisterHandler").
+    bool SEC2CallsFunction(const std::string& code, const std::string& function)
+    {
+        for (size_t pos = code.find(function); pos != std::string::npos; pos = code.find(function, pos + 1))
+        {
+            if (pos > 0 && SEC2IsIdentChar(code[pos - 1]))
+                continue;
+            const size_t at = SEC2SkipSpace(code, pos + function.size());
+            if (at < code.size() && code[at] == '(')
+                return true;
+        }
+        return false;
+    }
+
+    bool SEC2RegistersHandler(const std::string& code)
+    {
+        return SEC2CallsFunction(code, "RegisterHandler") || SEC2CallsFunction(code, "RegisterSensitiveHandler") ||
+               SEC2CallsFunction(code, "SetTimeoutHandler");
+    }
+
+    /// TERRAFRONT message-id names in @p code: kTF...Msg... constants and lists, and TFMsg::X enumerators.
+    std::set<std::string> SEC2MessageIds(const std::string& code)
+    {
+        std::set<std::string> ids;
+        size_t at = 0;
+        while (at < code.size())
+        {
+            if (!SEC2IsIdentChar(code[at]) || (at > 0 && SEC2IsIdentChar(code[at - 1])))
+            {
+                ++at;
+                continue;
+            }
+            const size_t start = at;
+            while (at < code.size() && SEC2IsIdentChar(code[at]))
+                ++at;
+            std::string ident = code.substr(start, at - start);
+            if (ident == "TFMsg" && code.compare(at, 2, "::") == 0)
+            {
+                size_t member = at + 2;
+                while (member < code.size() && SEC2IsIdentChar(code[member]))
+                    ++member;
+                ids.insert(code.substr(start, member - start));
+                at = member;
+            }
+            else if (ident.rfind("kTF", 0) == 0 && ident.find("Msg") != std::string::npos)
+            {
+                ids.insert(ident);
+            }
+        }
+        return ids;
+    }
+
+    /// Pairs "EnsureClientHandlers" with "ReleaseClientHandlers", "RegisterNetHandlers" with
+    /// "UnregisterNetHandlers", "ClientEnsureHandlers" with "ClientReleaseHandlers", and so on.
+    std::string SEC2HandlerLifecycleKey(const SEC2MemberFunction& function)
+    {
+        std::string key = function.name;
+        for (const char* verb : {"Unregister", "Register", "Ensure", "Release"})
+        {
+            const size_t found = key.find(verb);
+            if (found != std::string::npos)
+                key.erase(found, std::char_traits<char>::length(verb));
+        }
+        return function.owner + "::" + key;
+    }
+
+    bool SEC2IsReleaseFunction(const std::string& name)
+    {
+        return name.find("Release") != std::string::npos || name.find("Unregister") != std::string::npos;
+    }
+
+    std::string SEC2ReadSource(const std::filesystem::path& path)
+    {
+        std::ifstream file(path, std::ios::binary);
+        std::ostringstream contents;
+        contents << file.rdbuf();
+        return contents.str();
+    }
+
+    std::vector<std::filesystem::path> SEC2SourceFiles(const std::filesystem::path& root)
+    {
+        std::vector<std::filesystem::path> files;
+        std::error_code ec;
+        for (std::filesystem::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
+        {
+            const std::filesystem::path& path = it->path();
+            const std::string extension = path.extension().string();
+            if (it->is_regular_file(ec) && (extension == ".cpp" || extension == ".h"))
+                files.push_back(path);
+        }
+        std::sort(files.begin(), files.end());
+        return files;
+    }
+} // namespace
+
+TEST(SEC2GM_ModuleNetworkTeardownNeverInstallsPlaceholderHandlers)
+{
+    // The scanner must recognize the pattern it bans, or an empty result would prove nothing.
+    const std::string oldTeardown = SEC2CodeOnly("void TFPingSystem::ReleaseClientHandlers()\n{\n"
+                                                 "    nm.RegisterHandler(static_cast<MessageType>(kTFMsgPingState),\n"
+                                                 "                       [](const Spark::Net::NetworkMessage&) {});\n"
+                                                 "    // [](const NetworkMessage&) {} in a comment is not code\n}\n");
+    ASSERT_EQ(SEC2FindPlaceholderHandlers(oldTeardown).size(), static_cast<size_t>(1));
+    const std::vector<SEC2MemberFunction> oldFunctions = SEC2FindMemberFunctions(oldTeardown);
+    ASSERT_EQ(oldFunctions.size(), static_cast<size_t>(1));
+    EXPECT_EQ(oldFunctions.front().name, std::string("ReleaseClientHandlers"));
+
+    const std::filesystem::path modules = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "GameModules";
+    const std::vector<std::filesystem::path> files = SEC2SourceFiles(modules);
+    ASSERT_TRUE(files.size() > 100u);
+
+    // An empty handler is legitimate only as a live accept-and-ignore route installed by a registration
+    // function (and removed again by its release counterpart). Anywhere else it is a teardown placeholder.
+    size_t violations = 0;
+    for (const std::filesystem::path& path : files)
+    {
+        const std::string code = SEC2CodeOnly(SEC2ReadSource(path));
+        const std::vector<SEC2MemberFunction> functions = SEC2FindMemberFunctions(code);
+        for (const size_t placeholder : SEC2FindPlaceholderHandlers(code))
+        {
+            const SEC2MemberFunction* enclosing = nullptr;
+            for (const SEC2MemberFunction& function : functions)
+            {
+                if (placeholder > function.bodyBegin && placeholder < function.bodyEnd)
+                    enclosing = &function;
+            }
+            const bool registration = enclosing && !SEC2IsReleaseFunction(enclosing->name) &&
+                                      (enclosing->name.find("Register") != std::string::npos ||
+                                       enclosing->name.find("Ensure") != std::string::npos);
+            if (!registration)
+            {
+                ++violations;
+                std::cerr << "  placeholder network handler in " << path.generic_string() << " ("
+                          << (enclosing ? enclosing->owner + "::" + enclosing->name : std::string("<unknown>"))
+                          << "): remove the handler with NetworkManager::UnregisterHandler instead\n";
+            }
+        }
+    }
+    EXPECT_EQ(violations, static_cast<size_t>(0));
+}
+
+TEST(SEC2GM_MMOFPSReleasesEveryNetworkHandlerItRegisters)
+{
+    const std::filesystem::path source =
+        std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "GameModules" / "SparkGameMMOFPS" / "Source";
+    const std::vector<std::filesystem::path> files = SEC2SourceFiles(source);
+    ASSERT_TRUE(files.size() > 100u);
+
+    size_t pairs = 0;
+    for (const std::filesystem::path& path : files)
+    {
+        const std::string code = SEC2CodeOnly(SEC2ReadSource(path));
+        std::map<std::string, SEC2MemberFunction> registrations;
+        std::map<std::string, SEC2MemberFunction> releases;
+        for (const SEC2MemberFunction& function : SEC2FindMemberFunctions(code))
+        {
+            const std::string_view name = function.name;
+            if (!name.ends_with("Handlers"))
+                continue;
+            const std::string body = code.substr(function.bodyBegin, function.bodyEnd - function.bodyBegin);
+            if (SEC2IsReleaseFunction(function.name))
+                releases[SEC2HandlerLifecycleKey(function)] = function;
+            else if (SEC2RegistersHandler(body))
+                registrations[SEC2HandlerLifecycleKey(function)] = function;
+        }
+
+        for (const auto& [key, registration] : registrations)
+        {
+            const auto release = releases.find(key);
+            if (release == releases.end())
+            {
+                std::cerr << "  " << path.generic_string() << ": " << registration.owner << "::" << registration.name
+                          << " has no release counterpart in the same file\n";
+                EXPECT_TRUE(release != releases.end());
+                continue;
+            }
+            ++pairs;
+            const std::string registerBody =
+                code.substr(registration.bodyBegin, registration.bodyEnd - registration.bodyBegin);
+            const std::string releaseBody =
+                code.substr(release->second.bodyBegin, release->second.bodyEnd - release->second.bodyBegin);
+
+            // Release removes; it never installs a replacement callback of its own.
+            const bool removes = SEC2CallsFunction(releaseBody, "UnregisterHandler");
+            const bool reinstalls = SEC2RegistersHandler(releaseBody);
+            if (!removes || reinstalls)
+            {
+                std::cerr << "  " << path.generic_string() << ": " << release->second.owner
+                          << "::" << release->second.name << " must UnregisterHandler, not register a replacement\n";
+            }
+            EXPECT_TRUE(removes);
+            EXPECT_FALSE(reinstalls);
+
+            // Every message id the registration names is released again.
+            const std::set<std::string> releasedIds = SEC2MessageIds(releaseBody);
+            for (const std::string& id : SEC2MessageIds(registerBody))
+            {
+                if (!releasedIds.contains(id))
+                {
+                    std::cerr << "  " << path.generic_string() << ": " << registration.name << " registers " << id
+                              << " but " << release->second.name << " never removes it\n";
+                    EXPECT_TRUE(releasedIds.contains(id));
+                }
+            }
+        }
+    }
+
+    // 24 registration/release pairs exist today; a scanner that stopped finding them must not pass silently.
+    EXPECT_GE(pairs, static_cast<size_t>(24));
+}
 
 // ---------------------------------------------------------------------------
 // Module sources compiled only with ImGui (RTS fog of war, MMO chat)
