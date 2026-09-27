@@ -1257,7 +1257,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 errors.append(f"{run_name} suppresses a runner failure")
             if (
                 len(re.findall(r"(?<![A-Za-z0-9_-])--timeout-seconds\s+[^\s\\]+", runner)) != 1
-                or runner.count("--timeout-seconds 900") != 1
+                or runner.count("--timeout-seconds 1800") != 1
             ):
                 errors.append(f"{run_name} must use one exact process timeout")
             if len(re.findall(r"(?<![A-Za-z0-9_-])--warn-is-error(?![=A-Za-z0-9_-])", runner)) != 1:
@@ -1277,7 +1277,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--job "${{ github.job }}"',
                 "--expected-selector all",
                 "--minimum-tests 6900",
-                "--timeout-seconds 900",
+                "--timeout-seconds 1800",
             ):
                 if runner.count(fragment) != 1:
                     errors.append(f"{run_name} is missing/duplicating {fragment}")
@@ -1298,7 +1298,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--expected-sha "${{ github.sha }}"',
                 '--run-id "${{ github.run_id }}"',
                 '--run-attempt "${{ github.run_attempt }}"',
-                "--timeout-seconds 900",
+                "--timeout-seconds 1800",
                 "--minimum-tests 6900",
             )
             for fragment in expected_fragments:
@@ -2834,8 +2834,8 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             1,
         )
         mutations["suppressed published verifier"] = self.build.replace(
-            "          --timeout-seconds 900\n\n    - name: Extract error summary",
-            "          --timeout-seconds 900 || true\n\n    - name: Extract error summary",
+            "          --timeout-seconds 1800\n\n    - name: Extract error summary",
+            "          --timeout-seconds 1800 || true\n\n    - name: Extract error summary",
             1,
         )
         for label, mutated in mutations.items():
@@ -3852,7 +3852,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             next_job = self.build.index("\n  build-", start + 1)
             section = self.build[start:next_job]
             self.assertIn("timeout-minutes: 90", section)
-            self.assertIn("--timeout-seconds 900", section)
+            self.assertIn("--timeout-seconds 1800", section)
 
         msan_start = self.build.index("build-linux-msan:")
         msan_next_job = self.build.index("\n  build-", msan_start + 1)

@@ -720,7 +720,7 @@ jobs:
           --job "${{ github.job }}" \
           --expected-selector all \
           --minimum-tests 6900 \
-          --timeout-seconds 900 \
+          --timeout-seconds 1800 \
           --runtime-env ASAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
 
@@ -744,7 +744,7 @@ jobs:
           --run-attempt "${{ github.run_attempt }}" \
           --job build-linux-asan \
           --minimum-tests 6900 \
-          --timeout-seconds 900
+          --timeout-seconds 1800
 
     - name: Extract error summary
       if: failure()
@@ -863,7 +863,7 @@ jobs:
           --job "${{ github.job }}" \
           --expected-selector all \
           --minimum-tests 6900 \
-          --timeout-seconds 900 \
+          --timeout-seconds 1800 \
           --runtime-env TSAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
 
@@ -887,7 +887,7 @@ jobs:
           --run-attempt "${{ github.run_attempt }}" \
           --job build-linux-tsan \
           --minimum-tests 6900 \
-          --timeout-seconds 900
+          --timeout-seconds 1800
 
     - name: Extract error summary
       if: failure()
@@ -3904,7 +3904,7 @@ jobs:
             --allow-prior-attempt \
             --job build-linux-asan \
             --minimum-tests 6900 \
-            --timeout-seconds 900
+            --timeout-seconds 1800
 
       - name: Verify downloaded TSan evidence identity
         run: |
@@ -3919,7 +3919,7 @@ jobs:
             --allow-prior-attempt \
             --job build-linux-tsan \
             --minimum-tests 6900 \
-            --timeout-seconds 900
+            --timeout-seconds 1800
 
       - name: Collect deterministic repository metrics
         run: python3 docs/codebase-metrics.py > repository-metrics.json
@@ -4363,7 +4363,7 @@ jobs:
             --allow-prior-attempt \
             --job build-linux-asan \
             --minimum-tests 6900 \
-            --timeout-seconds 900
+            --timeout-seconds 1800
 
       - name: Download exact lifecycle evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

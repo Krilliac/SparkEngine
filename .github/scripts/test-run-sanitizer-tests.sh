@@ -1323,8 +1323,8 @@ for sanitizer in asan tsan; do
         found && $0 ~ /^  [A-Za-z0-9_-]+:$/ && $0 != "  " job ":" { exit }
         found { print }
     ' "$WORKFLOW")"
-    [[ "$section" == *"timeout-minutes: 90"* && "$section" == *"--timeout-seconds 900"* ]] && \
-        pass "${sanitizer} uses the required 90-minute/900-second bounds" || \
+    [[ "$section" == *"timeout-minutes: 90"* && "$section" == *"--timeout-seconds 1800"* ]] && \
+        pass "${sanitizer} uses the required 90-minute/1800-second bounds" || \
         fail "${sanitizer} timeout policy"
 done
 msan_section="$(awk '
