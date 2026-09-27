@@ -593,6 +593,7 @@ add_executable(SparkTests
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp
     TestEditorAssetReference.cpp
+    TestEditorAssetDrag.cpp
     TestDedicatedServerProcessController.cpp
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/DedicatedServerProcessController.cpp"
     TestServiceTopologyController.cpp
@@ -709,6 +710,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLayoutManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorWindowManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/EditorAssetDrag.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/BuildPipeline.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/BuildPipelineProcess.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Utils/EditorProcessLaunch.cpp"
@@ -2234,6 +2236,14 @@ if(UNIX AND NOT APPLE AND TARGET SparkEngine AND (SPARK_HEADLESS_SUPPORT OR SPAR
         RUN_SERIAL TRUE
         TIMEOUT 600)
 endif()
+
+# EDT-210: the ImGui-free asset drag/drop contract shared by the Asset Browser
+# producer and the inspector mesh/material drop targets.
+add_test(NAME EditorAssetDrag COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(EditorAssetDrag PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorAssetDrag_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "editor;editor-integration;unit"
+    TIMEOUT 60)
 
 add_test(
     NAME NullRHIWindowsLifecycleParserContract
