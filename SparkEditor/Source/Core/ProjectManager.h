@@ -111,6 +111,10 @@ namespace SparkEditor
     class ProjectManager
     {
       public:
+        /// Newest .sparkproject "projectFileVersion" this build reads, and the one it writes.
+        /// A document without the field is the legacy dialect and reads as this version.
+        static constexpr uint64_t kProjectFileVersion = 1;
+
         ProjectManager();
         /// [editor thread] Use a caller-selected recent-project history directory.
         /// The manager owns the path value, not the directory's lifetime.
@@ -126,7 +130,13 @@ namespace SparkEditor
                            const std::string& description = "");
         bool CreateProjectFromTemplate(const std::string& projectName, const std::string& projectPath,
                                        const std::string& templateName = "EmptyProject");
-        bool OpenProject(const std::string& sparkprojectPath);
+        /// @brief Open a .sparkproject (or a directory containing one) as the current project.
+        /// @param error When non-null: on failure, an actionable reason (a projectFileVersion
+        ///        newer than kProjectFileVersion, a damaged document and its unusable .bak, a
+        ///        missing file). On success after recovering from the retained
+        ///        `<file>.sparkproject.bak`, why the primary was rejected; otherwise cleared.
+        /// @return true when the project is open; false leaves the previous project open.
+        bool OpenProject(const std::string& sparkprojectPath, std::string* error = nullptr);
         bool SaveProject();
         /// @brief Resolve an existing scene only when it remains inside the open project root.
         bool ResolveProjectScenePath(const std::string& scenePath, std::string& resolvedPath) const;
@@ -193,8 +203,13 @@ namespace SparkEditor
         static std::string GetEditorDataDirectory(); ///< %APPDATA%/SparkEngine/Editor
 
       private:
-        bool LoadProjectFile(const std::string& sparkprojectPath);
-        bool SaveProjectFile();
+        /// Parses into m_currentProject only after the version and structure checks pass, so a
+        /// rejected document never replaces the loaded project. A damaged primary falls back to
+        /// its retained .bak; a newer projectFileVersion fails closed without it.
+        bool LoadProjectFile(const std::string& sparkprojectPath, std::string* error = nullptr);
+        /// Writes through SaveFileDurability::WriteFileAtomically; @p retainBackup keeps the
+        /// previous document as `<file>.bak`.
+        bool SaveProjectFile(bool retainBackup = true);
 
         /// @brief Template package root for this session, resolved once and cached.
         /// Empty when no template root could be located.

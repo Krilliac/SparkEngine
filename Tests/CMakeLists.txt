@@ -413,6 +413,7 @@ add_executable(SparkTests
     TestShaderHotReload.cpp
     TestRuntimePrefab.cpp
     TestPrefabPersistence.cpp
+    TestEditorStateCompatibility.cpp
     TestTutorialSystem.cpp
     TestGoldenImageTest.cpp
     TestAnimNotify.cpp
@@ -1691,6 +1692,15 @@ set_tests_properties(SparkPrefabPersistenceTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "compatibility;prefab;unit"
     TIMEOUT 30)
+
+# SAVE-230: the .sparkproject document reads and writes projectFileVersion 1, fails
+# closed on a newer version, keeps the previous document as .bak on save and
+# recovers a damaged document from it (Tests/Fixtures/Compatibility/EditorState).
+add_test(NAME SparkEditorStateCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkEditorStateCompatibilityTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorStateMigration_;SPARK_TEST_EXPECT_COUNT=4"
+    LABELS "compatibility;editor;unit"
+    TIMEOUT 60)
 
 # SAVE-230 / OD-03: SceneFile reads v2 (N) and v1 (N-1) from committed fixtures,
 # writes v2 only, and rejects older/newer versions with a versioned error. The

@@ -231,8 +231,12 @@ namespace SparkEditor
             // for executable smoke tests.
             if (m_projectManager && !config.projectPath.empty() && config.projectPath != ".")
             {
-                if (!m_projectManager->OpenProject(config.projectPath))
-                    console.LogWarning("Could not open startup project: " + config.projectPath);
+                std::string openError;
+                if (!m_projectManager->OpenProject(config.projectPath, &openError))
+                    console.LogWarning("Could not open startup project: " +
+                                       (openError.empty() ? config.projectPath : openError));
+                else if (!openError.empty())
+                    console.LogWarning(openError);
             }
 
             // Show project browser on startup if no project is loaded (skip in test mode)
@@ -2086,11 +2090,16 @@ namespace SparkEditor
         {
             const std::string projectPath = m_pendingProjectPath;
             ClearPendingProjectTransition();
-            if (!m_projectManager || !m_projectManager->OpenProject(projectPath))
+            std::string openError;
+            if (!m_projectManager || !m_projectManager->OpenProject(projectPath, &openError))
             {
-                ShowNotification("Failed to open project: " + projectPath, "error");
+                ShowNotification("Failed to open project: " + (openError.empty() ? projectPath : openError), "error",
+                                 8.0f);
                 return false;
             }
+            // Opened from the retained .bak: say why, so the user knows the primary was damaged.
+            if (!openError.empty())
+                ShowNotification(openError, "warning", 8.0f);
             return true;
         }
         case DocumentTransitionAction::CreateProject:

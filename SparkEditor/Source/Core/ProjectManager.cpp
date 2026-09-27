@@ -10,7 +10,11 @@
 #include "Utils/LocalFileCache.h"
 #include "Utils/Validate.h"
 #include "Engine/ECS/Components.h"
+#include "Engine/SaveSystem/SaveFileDurability.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
+#include <charconv>
+#include <string_view>
+#include <system_error>
 #include <iostream>
 #include <filesystem>
 #include <fstream>
@@ -1350,7 +1354,9 @@ namespace SparkEditor
                 m_currentProject.description = description.empty() ? "Spark Engine Project" : description;
             }
 
-            if (!SaveProjectFile())
+            // The staged document is the template package's copy, not user state; retaining it
+            // as a .bak would ship the template's metadata inside the new project.
+            if (!SaveProjectFile(false))
                 return fail("Could not write the canonical project document.");
             if (!LoadProjectFile(PathToUtf8(canonicalProjectFile)))
                 return fail("Could not validate the canonical project document.");
@@ -1580,9 +1586,11 @@ namespace SparkEditor
         }
     }
 
-    bool ProjectManager::OpenProject(const std::string& sparkprojectPath)
+    bool ProjectManager::OpenProject(const std::string& sparkprojectPath, std::string* error)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        if (error)
+            error->clear();
         SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !sparkprojectPath.empty(), false);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading project from '%s'", sparkprojectPath.c_str());
         std::cout << "Opening project: " << sparkprojectPath << "\n";
@@ -1628,10 +1636,12 @@ namespace SparkEditor
             if (!fs::is_regular_file(PathFromUtf8(resolvedPath)))
             {
                 std::cerr << "Project file not found: " << resolvedPath << "\n";
+                if (error)
+                    *error = "Project file not found: " + resolvedPath;
                 return false;
             }
 
-            if (!LoadProjectFile(resolvedPath))
+            if (!LoadProjectFile(resolvedPath, error))
             {
                 restorePreviousProject();
                 return false;
@@ -1642,6 +1652,8 @@ namespace SparkEditor
             // scripts or module sources.
             if (!EnsureBuildScaffold(m_currentProject.path, m_currentProject.name))
             {
+                if (error)
+                    *error = "Could not add the missing build scaffold to project '" + m_currentProject.path + "'";
                 restorePreviousProject();
                 return false;
             }
@@ -1664,6 +1676,8 @@ namespace SparkEditor
         {
             restorePreviousProject();
             std::cerr << "Error opening project: " << e.what() << "\n";
+            if (error)
+                *error = std::string("Error opening project: ") + e.what();
             return false;
         }
 
@@ -1966,29 +1980,143 @@ namespace SparkEditor
     // ------------------------------------------------------------------
     // Project file I/O (.sparkproject)
     // ------------------------------------------------------------------
-    bool ProjectManager::LoadProjectFile(const std::string& sparkprojectPath)
+    enum class ProjectDocumentStatus
     {
-        std::string content;
+        Ok,
+        Rejected,
+        NewerVersion
+    };
 
-        if (m_fileCache)
+    /// Structural and version gate for a .sparkproject document. Every writer emits one complete
+    /// JSON object, so a missing brace at either end means a truncated or damaged file. A document
+    /// without projectFileVersion is the legacy dialect (hand-written and spark.project.json
+    /// documents) and reads as version 1.
+    static ProjectDocumentStatus CheckProjectDocument(const std::string& content, std::string& reason)
+    {
+        constexpr std::string_view kWhitespace = " \t\r\n";
+        const size_t first = content.find_first_not_of(kWhitespace);
+        if (first == std::string::npos)
         {
-            auto result = m_fileCache->ReadText(sparkprojectPath);
-            if (result.IsOk())
-            {
-                content = result.Value();
-            }
+            reason = "the file is empty";
+            return ProjectDocumentStatus::Rejected;
+        }
+        const size_t last = content.find_last_not_of(kWhitespace);
+        if (content[first] != '{' || content[last] != '}')
+        {
+            reason = "the file is not a complete JSON object (it is truncated or damaged)";
+            return ProjectDocumentStatus::Rejected;
         }
 
-        if (content.empty())
+        const std::string supported = std::to_string(ProjectManager::kProjectFileVersion);
+        constexpr std::string_view kVersionKey = "\"projectFileVersion\"";
+        const size_t keyPos = content.find(kVersionKey);
+        if (keyPos == std::string::npos)
+            return ProjectDocumentStatus::Ok;
+
+        size_t valuePos = content.find_first_not_of(kWhitespace, keyPos + kVersionKey.size());
+        if (valuePos != std::string::npos && content[valuePos] == ':')
+            valuePos = content.find_first_not_of(kWhitespace, valuePos + 1);
+        else
+            valuePos = std::string::npos;
+        const char* const end = content.data() + content.size();
+        const char* const begin = valuePos == std::string::npos ? end : content.data() + valuePos;
+        uint64_t version = 0;
+        const auto [next, parseError] = std::from_chars(begin, end, version);
+        if (parseError != std::errc{} ||
+            (next != end && kWhitespace.find(*next) == std::string_view::npos && *next != ',' && *next != '}'))
         {
-            std::ifstream file(PathFromUtf8(sparkprojectPath));
-            if (!file.is_open())
+            reason = "\"projectFileVersion\" is not an unsigned integer";
+            return ProjectDocumentStatus::Rejected;
+        }
+        if (version > ProjectManager::kProjectFileVersion)
+        {
+            reason = "the file declares projectFileVersion " + std::to_string(version) + "; this build reads " +
+                     supported + " and writes " + supported + ". Open it with a newer SparkEditor";
+            return ProjectDocumentStatus::NewerVersion;
+        }
+        if (version == 0)
+        {
+            reason = "the file declares projectFileVersion 0, which no SparkEditor has written; this build reads " +
+                     supported + " and writes " + supported;
+            return ProjectDocumentStatus::Rejected;
+        }
+        return ProjectDocumentStatus::Ok;
+    }
+
+    bool ProjectManager::LoadProjectFile(const std::string& sparkprojectPath, std::string* error)
+    {
+        if (error)
+            error->clear();
+        const auto report = [error](const std::string& message)
+        {
+            std::cerr << message << "\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "%s", message.c_str());
+            if (error)
+                *error = message;
+        };
+
+        const auto readDocument =
+            [this](const std::string& path, bool useCache, std::string& content, std::string& reason)
+        {
+            content.clear();
+            if (useCache && m_fileCache)
             {
-                std::cerr << "Could not open project file: " << sparkprojectPath << "\n";
+                auto result = m_fileCache->ReadText(path);
+                if (result.IsOk())
+                    content = result.Value();
+            }
+            if (content.empty())
+            {
+                const fs::path nativePath = PathFromUtf8(path);
+                std::error_code existsError;
+                if (!fs::is_regular_file(nativePath, existsError))
+                {
+                    reason = "the file does not exist";
+                    return ProjectDocumentStatus::Rejected;
+                }
+                std::ifstream file(nativePath, std::ios::binary);
+                if (!file.is_open())
+                {
+                    reason = "the file could not be opened";
+                    return ProjectDocumentStatus::Rejected;
+                }
+                content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                if (file.bad())
+                {
+                    reason = "the file could not be read";
+                    return ProjectDocumentStatus::Rejected;
+                }
+            }
+            return CheckProjectDocument(content, reason);
+        };
+
+        std::string content;
+        std::string primaryReason;
+        const ProjectDocumentStatus primaryStatus = readDocument(sparkprojectPath, true, content, primaryReason);
+        if (primaryStatus == ProjectDocumentStatus::NewerVersion)
+        {
+            // Fail closed without the retained copy: loading the older .bak and saving would
+            // overwrite the newer editor's document.
+            report("Project file '" + sparkprojectPath + "': " + primaryReason + ".");
+            return false;
+        }
+        if (primaryStatus != ProjectDocumentStatus::Ok)
+        {
+            const std::string backupPath =
+                PathToUtf8(Spark::SaveFileDurability::BackupPathFor(PathFromUtf8(sparkprojectPath)));
+            std::string backupReason;
+            if (readDocument(backupPath, false, content, backupReason) != ProjectDocumentStatus::Ok)
+            {
+                report("Project file '" + sparkprojectPath + "' was rejected: " + primaryReason +
+                       ". Previous-good backup '" + backupPath + "' was not usable: " + backupReason + ".");
                 return false;
             }
-            content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            file.close();
+            const std::string recovered = "Project file '" + sparkprojectPath + "' was rejected: " + primaryReason +
+                                          ". Loaded the previous-good backup '" + backupPath + "' instead.";
+            std::cerr << recovered << "\n";
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "%s", recovered.c_str());
+            if (error)
+                *error = recovered;
         }
 
         std::string name = ExtractJsonString(content, "name");
@@ -2044,7 +2172,7 @@ namespace SparkEditor
         return m_resolvedTemplateRoot;
     }
 
-    bool ProjectManager::SaveProjectFile()
+    bool ProjectManager::SaveProjectFile(bool retainBackup)
     {
         std::string filePath = GetProjectFilePath();
 
@@ -2082,15 +2210,9 @@ namespace SparkEditor
             const fs::path nativeFilePath = PathFromUtf8(filePath);
             fs::create_directories(nativeFilePath.parent_path());
 
-            std::ofstream file(nativeFilePath);
-            if (!file.is_open())
-            {
-                std::cerr << "Failed to open project file for writing: " << filePath << "\n";
-                return false;
-            }
-
+            std::ostringstream file;
             file << "{\n";
-            file << "  \"projectFileVersion\": 1,\n";
+            file << "  \"projectFileVersion\": " << kProjectFileVersion << ",\n";
             file << "  \"name\": \"" << EscapeJsonString(m_currentProject.name) << "\",\n";
             file << "  \"version\": \"" << EscapeJsonString(m_currentProject.version) << "\",\n";
             file << "  \"description\": \"" << EscapeJsonString(m_currentProject.description) << "\",\n";
@@ -2126,16 +2248,16 @@ namespace SparkEditor
             file << "  ]\n";
             file << "}\n";
 
-            file.flush();
-            if (!file.good())
+            // Staged, flushed and renamed over the previous document, which is kept as
+            // <file>.bak; a failed write leaves both byte-identical.
+            std::error_code writeError;
+            if (!Spark::SaveFileDurability::WriteFileAtomically(nativeFilePath, file.str(), retainBackup, writeError))
             {
-                std::cerr << "Failed while writing project file: " << filePath << "\n";
-                return false;
-            }
-            file.close();
-            if (file.fail())
-            {
-                std::cerr << "Failed while closing project file: " << filePath << "\n";
+                std::cerr << "Failed to write project file " << filePath << ": " << writeError.message()
+                          << ". The previous project file is unchanged.\n";
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                                "Failed to write project file '%s': %s. The previous project file is unchanged",
+                                filePath.c_str(), writeError.message().c_str());
                 return false;
             }
 
