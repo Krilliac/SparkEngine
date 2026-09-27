@@ -232,12 +232,16 @@ CURRENT_LICENSE_DECLARATION = {
 }
 # These are project-facing surfaces whose license terminology can be mistaken
 # for the repository's own legal classification.  Generated guidance files are
-# included so regeneration cannot silently restore a stale public claim.
-LEGAL_PUBLIC_WORDING_SURFACES = {
+# included so regeneration cannot silently restore a stale public claim.  Every
+# governed public claim surface is covered, so a surface added to the global
+# claim contract is wording-checked without a second registration.
+LEGAL_PUBLIC_WORDING_SURFACES = REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES | {
     ".github/copilot-instructions.md",
     ".github/prompts/copilot-instructions.md",
+    "CONTRIBUTING.md",
     "README.md",
     "wiki/Home.md",
+    "wiki/advanced/Contributing.md",
     "wiki/getting-started/FAQ.md",
 }
 PROJECT_OPEN_SOURCE_WORDING = re.compile(r"\bopen(?:-| )source\b", re.IGNORECASE)

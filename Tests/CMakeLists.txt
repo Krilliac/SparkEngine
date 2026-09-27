@@ -3067,6 +3067,15 @@ add_test(
 set_tests_properties(LicenseInventory_ThirdPartyNotices PROPERTIES
     LABELS "governance;unit;python"
     TIMEOUT 300)
+# GOV-400: every governed public claim surface stays inside the declared
+# non-OSI license classification. Runs on all hosts (no git/POSIX needed).
+add_test(
+    NAME PublicWording_LegalSurfaces
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_public_wording.py -v)
+set_tests_properties(PublicWording_LegalSurfaces PROPERTIES
+    LABELS "governance;unit;python"
+    TIMEOUT 60)
 
 # SEC-110: lock-derived SPDX 2.3 SBOM generation (commit and dependency-lock
 # binding, --check reproducibility) and package-inventory reconciliation
