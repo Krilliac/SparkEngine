@@ -12,8 +12,9 @@
  *   exists yet (see IsNetworkRoutableChannel).
  *
  * Uses a module-owned message type (UserDefined + 1) on the ReliableOrdered
- * channel. The server rebuilds every relayed payload with the sender name it
- * bound to the connection; a client-supplied name is never forwarded.
+ * channel. The server rebuilds every relayed payload with a sender name it
+ * derives from the connection (`<sanitized display name>#<client id>`, see
+ * ServerAttributedSenderName); a client-supplied name is never forwarded.
  *
  * Thread affinity: game thread. Ownership: the network observer captures
  * `this`; Shutdown removes it.
@@ -26,6 +27,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Windows.h defines SendMessage as SendMessageA/SendMessageW — undo that
@@ -111,17 +113,33 @@ namespace MMO
         static std::vector<uint8_t> EncodeWirePayload(ChatChannel channel, const std::string& senderName,
                                                       const std::string& text);
 
+        /// Longest display-name prefix kept in a server-attributed sender name.
+        static constexpr size_t MAX_SENDER_DISPLAY_NAME = 32;
+
+        /**
+         * @brief The sender name the server attributes to a connection: `<display>#<clientId>`.
+         *
+         * The connection name is whatever the client asked for in its connect request; the engine does
+         * not authenticate it or keep it unique, so it cannot be an identity on its own. The attributed
+         * name keeps only printable ASCII other than '#' (at most MAX_SENDER_DISPLAY_NAME bytes, "Player"
+         * when nothing is left) and always appends '#' and the server-assigned client id. The result
+         * therefore always contains exactly one '#', followed by the connection's id: it can never equal
+         * a reserved name such as "System" nor another connection's attributed name.
+         */
+        static std::string ServerAttributedSenderName(std::string_view connectionName, uint32_t clientId);
+
         /**
          * @brief Server relay policy for one client chat packet.
          *
          * The sender name is never taken from the client: the relayed payload is rebuilt with
-         * @p authoritativeSenderName, the name the server bound to the sending connection.
+         * ServerAttributedSenderName(@p connectionName, @p senderClientId).
          *
          * @return The payload to fan out to the other clients, or nullopt to drop the packet (malformed,
-         *         or a channel that IsNetworkRoutableChannel rejects).
+         *         a channel that IsNetworkRoutableChannel rejects, or an invalid sender id).
          */
         static std::optional<std::vector<uint8_t>> BuildServerRelayPayload(const std::vector<uint8_t>& clientPayload,
-                                                                           const std::string& authoritativeSenderName);
+                                                                           std::string_view connectionName,
+                                                                           uint32_t senderClientId);
 #endif
 
       private:

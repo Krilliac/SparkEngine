@@ -92,7 +92,9 @@ namespace MMO
     std::optional<MMOChatSystem::WirePayload> MMOChatSystem::DecodeWirePayload(const std::vector<uint8_t>& payload)
     {
         if (payload.size() < 2)
+        {
             return std::nullopt;
+        }
 
         Spark::Net::NetBuffer buf;
         buf.WriteBytes(payload.data(), payload.size());
@@ -102,7 +104,9 @@ namespace MMO
         decoded.text = buf.ReadString();
         if (buf.HasError() || channelValue > static_cast<uint8_t>(ChatChannel::Whisper) || decoded.senderName.empty() ||
             decoded.text.empty())
+        {
             return std::nullopt;
+        }
         decoded.channel = static_cast<ChatChannel>(channelValue);
         return decoded;
     }
@@ -117,35 +121,71 @@ namespace MMO
         return std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
     }
 
-    std::optional<std::vector<uint8_t>> MMOChatSystem::BuildServerRelayPayload(
-        const std::vector<uint8_t>& clientPayload, const std::string& authoritativeSenderName)
+    std::string MMOChatSystem::ServerAttributedSenderName(std::string_view connectionName, uint32_t clientId)
     {
-        const std::optional<WirePayload> decoded = DecodeWirePayload(clientPayload);
-        if (!decoded || authoritativeSenderName.empty() || !IsNetworkRoutableChannel(decoded->channel))
+        // Printable ASCII only: no control characters (log/UI injection), no bytes >= 0x80 (bidi overrides
+        // and look-alike glyphs), and no '#', which is reserved for the id suffix appended below.
+        std::string display;
+        display.reserve(MAX_SENDER_DISPLAY_NAME);
+        for (const char c : connectionName)
+        {
+            if (display.size() >= MAX_SENDER_DISPLAY_NAME)
+            {
+                break;
+            }
+            const auto byte = static_cast<unsigned char>(c);
+            if (byte >= 0x20 && byte < 0x7F && c != '#')
+            {
+                display.push_back(c);
+            }
+        }
+        if (display.find_first_not_of(' ') == std::string::npos)
+        {
+            display = "Player";
+        }
+        return display + "#" + std::to_string(clientId);
+    }
+
+    std::optional<std::vector<uint8_t>> MMOChatSystem::BuildServerRelayPayload(
+        const std::vector<uint8_t>& clientPayload, std::string_view connectionName, uint32_t senderClientId)
+    {
+        if (senderClientId == Spark::Net::INVALID_CLIENT)
+        {
             return std::nullopt;
-        return EncodeWirePayload(decoded->channel, authoritativeSenderName, decoded->text);
+        }
+        const std::optional<WirePayload> decoded = DecodeWirePayload(clientPayload);
+        if (!decoded || !IsNetworkRoutableChannel(decoded->channel))
+        {
+            return std::nullopt;
+        }
+        return EncodeWirePayload(decoded->channel, ServerAttributedSenderName(connectionName, senderClientId),
+                                 decoded->text);
     }
 
     void MMOChatSystem::HandleNetworkChat(Spark::Net::NetworkManager& netMgr, const Spark::Net::NetworkMessage& netMsg)
     {
         std::optional<WirePayload> decoded = DecodeWirePayload(netMsg.payload);
         if (!decoded)
+        {
             return;
+        }
 
         if (netMgr.GetRole() == Spark::Net::NetworkRole::Server)
         {
-            // Identity comes from the connection, never from the payload: rebuild the message with the
-            // name the server bound to this client, and relay only channels it can route correctly.
-            std::string senderName;
+            // Identity comes from the connection, never from the payload. The connection name itself is
+            // client-chosen and unauthenticated, so the relayed name always carries the server-assigned id.
+            std::string connectionName;
             {
                 const auto clients = netMgr.GetClients();
                 const auto client = clients.find(netMsg.senderID);
                 if (client == clients.end())
+                {
                     return;
-                senderName =
-                    client->second.name.empty() ? "Player" + std::to_string(netMsg.senderID) : client->second.name;
+                }
+                connectionName = client->second.name;
             }
-            std::optional<std::vector<uint8_t>> relayPayload = BuildServerRelayPayload(netMsg.payload, senderName);
+            std::optional<std::vector<uint8_t>> relayPayload =
+                BuildServerRelayPayload(netMsg.payload, connectionName, netMsg.senderID);
             if (!relayPayload)
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Network,
@@ -156,7 +196,7 @@ namespace MMO
             Spark::Net::NetworkMessage relay = netMsg;
             relay.payload = std::move(*relayPayload);
             netMgr.SendToAllExcept(netMsg.senderID, relay);
-            decoded->senderName = std::move(senderName);
+            decoded->senderName = ServerAttributedSenderName(connectionName, netMsg.senderID);
         }
 
         ChatMessage msg{};

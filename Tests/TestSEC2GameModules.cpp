@@ -8,7 +8,8 @@
  * - WaveComposition bounds every wave to MAX_ENEMIES_PER_WAVE, heavies included.
  * - NetworkManager handler ownership: a hot-reload replacement keeps its handlers when the outgoing
  *   image tears down, and everything an image owns is removed before it is unmapped.
- * - MMO chat relays only routable channels and never forwards a client-chosen sender name.
+ * - MMO chat relays only routable channels, never forwards a client-chosen sender name, and attributes
+ *   every relayed line to `<sanitized connection name>#<client id>`, which no connection name can forge.
  * - RTS fog of war clips vision to the grid and restored saves reject absurd vision ranges.
  *
  * The CTest registration SEC2GameModules pins the family size, which depends on the
@@ -359,31 +360,74 @@ TEST(SEC2GM_MMOChatRelayUsesServerIdentityAndDropsPrivateChannels)
     using MMO::ChatChannel;
     using MMO::MMOChatSystem;
 
-    // A client claims to be "System" on Global chat; the relay carries the connection's name instead.
+    // The payload's own sender field is ignored: the relay carries the connection's attributed name.
     const std::vector<uint8_t> spoofed = MMOChatSystem::EncodeWirePayload(ChatChannel::Global, "System", "hi all");
-    const auto relayed = MMOChatSystem::BuildServerRelayPayload(spoofed, "alice");
+    const auto relayed = MMOChatSystem::BuildServerRelayPayload(spoofed, "alice", 3);
     ASSERT_TRUE(relayed.has_value());
     const auto decoded = MMOChatSystem::DecodeWirePayload(*relayed);
     ASSERT_TRUE(decoded.has_value());
     EXPECT_TRUE(decoded->channel == ChatChannel::Global);
-    EXPECT_EQ(decoded->senderName, std::string("alice"));
+    EXPECT_EQ(decoded->senderName, std::string("alice#3"));
     EXPECT_EQ(decoded->text, std::string("hi all"));
 
     const auto area = MMOChatSystem::EncodeWirePayload(ChatChannel::Area, "alice", "nearby");
-    EXPECT_TRUE(MMOChatSystem::BuildServerRelayPayload(area, "alice").has_value());
+    EXPECT_TRUE(MMOChatSystem::BuildServerRelayPayload(area, "alice", 3).has_value());
 
     // Party and Whisper have no recipient on the wire; relaying them meant broadcasting them to everyone.
     const auto party = MMOChatSystem::EncodeWirePayload(ChatChannel::Party, "alice", "party secret");
     const auto whisper = MMOChatSystem::EncodeWirePayload(ChatChannel::Whisper, "alice", "for bob only");
-    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(party, "alice").has_value());
-    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(whisper, "alice").has_value());
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(party, "alice", 3).has_value());
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(whisper, "alice", 3).has_value());
 
-    // Malformed packets and connections without an identity are dropped.
+    // Malformed packets and the invalid client id are dropped.
     std::vector<uint8_t> badChannel = spoofed;
     badChannel[0] = 9;
-    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(badChannel, "alice").has_value());
-    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload({1}, "alice").has_value());
-    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(spoofed, "").has_value());
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(badChannel, "alice", 3).has_value());
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload({1}, "alice", 3).has_value());
+    EXPECT_FALSE(MMOChatSystem::BuildServerRelayPayload(spoofed, "alice", Spark::Net::INVALID_CLIENT).has_value());
+}
+
+TEST(SEC2GM_MMOChatConnectionNameCannotForgeIdentity)
+{
+    using MMO::ChatChannel;
+    using MMO::MMOChatSystem;
+
+    // The connect-request playerName is client-chosen and unauthenticated (NetworkConnection keeps it as
+    // ClientInfo::name). A connection that names itself "System" still cannot produce a "System" sender.
+    const std::vector<uint8_t> line = MMOChatSystem::EncodeWirePayload(ChatChannel::Global, "x", "server restart");
+    const auto relayed = MMOChatSystem::BuildServerRelayPayload(line, "System", 7);
+    ASSERT_TRUE(relayed.has_value());
+    const auto decoded = MMOChatSystem::DecodeWirePayload(*relayed);
+    ASSERT_TRUE(decoded.has_value());
+    EXPECT_TRUE(decoded->senderName != std::string("System"));
+    EXPECT_EQ(decoded->senderName, std::string("System#7"));
+
+    // Two connections claiming the same name stay distinguishable, and a name that embeds another
+    // player's suffix cannot reproduce that player's attributed name.
+    EXPECT_EQ(MMOChatSystem::ServerAttributedSenderName("alice", 3), std::string("alice#3"));
+    EXPECT_EQ(MMOChatSystem::ServerAttributedSenderName("alice", 9), std::string("alice#9"));
+    EXPECT_EQ(MMOChatSystem::ServerAttributedSenderName("alice#3", 9), std::string("alice3#9"));
+
+    // Control characters (log/UI line injection), non-ASCII bytes (bidi overrides) and oversized names are
+    // stripped or truncated; a name with nothing printable left falls back to "Player".
+    EXPECT_EQ(MMOChatSystem::ServerAttributedSenderName("Sys\r\ntem\x1b", 4), std::string("System#4"));
+    EXPECT_EQ(MMOChatSystem::ServerAttributedSenderName("\xE2\x80\xAE"
+                                                        "metsyS",
+                                                        5),
+              std::string("metsyS#5"));
+    EXPECT_EQ(MMOChatSystem::ServerAttributedSenderName("", 6), std::string("Player#6"));
+    EXPECT_EQ(MMOChatSystem::ServerAttributedSenderName("   ", 6), std::string("Player#6"));
+    EXPECT_EQ(MMOChatSystem::ServerAttributedSenderName("\x01\x02", 6), std::string("Player#6"));
+    const std::string attributedLong = MMOChatSystem::ServerAttributedSenderName(std::string(500, 'a'), 8);
+    EXPECT_EQ(attributedLong, std::string(MMOChatSystem::MAX_SENDER_DISPLAY_NAME, 'a') + "#8");
+
+    // Whatever the connection name, the attributed name ends in exactly one "#<id>" of that connection.
+    for (const char* name : {"System", "System#1", "#", "##7", "Player#2", "\x7f"})
+    {
+        const std::string attributed = MMOChatSystem::ServerAttributedSenderName(name, 42);
+        EXPECT_EQ(attributed.find('#'), attributed.rfind('#'));
+        EXPECT_EQ(attributed.substr(attributed.find('#')), std::string("#42"));
+    }
 }
 
 TEST(SEC2GM_MMOChatHotReloadTeardownKeepsReplacementHandler)
