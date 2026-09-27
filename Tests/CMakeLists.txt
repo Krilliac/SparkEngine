@@ -2518,6 +2518,26 @@ if(WIN32 AND TARGET SparkEngine AND SPARK_HEADLESS_SUPPORT)
         TIMEOUT 600)
 endif()
 
+# SEC3: an -exec script that cannot be loaded (missing, or a directory) fails the
+# headless launch with exit 1 on both hosts instead of running an empty timeline
+# to its -test-frames limit and exiting 0; a readable script is the passing control.
+if((WIN32 OR (UNIX AND NOT APPLE)) AND TARGET SparkEngine AND SPARK_HEADLESS_SUPPORT)
+    add_dependencies(SparkTests SparkEngine)
+    add_test(
+        NAME ExecScriptLoadFailureFailsLaunch
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_SCENE_FIXTURE=${CMAKE_SOURCE_DIR}/Tests/Fixtures/EditorScene/Scenes/EditorSeeded.sparkscene"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_EXEC_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/exec-script-load-failure"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkExecScriptLoadFailure.cmake
+    )
+    set_tests_properties(ExecScriptLoadFailureFailsLaunch PROPERTIES
+        LABELS "headless;automation;integration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+endif()
+
 # EDT-210: the ImGui-free asset drag/drop contract shared by the Asset Browser
 # producer and the inspector mesh/material drop targets, including the
 # World-backed Inspector's drop (one undo step, save/reload round trip).

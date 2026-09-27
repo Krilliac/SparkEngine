@@ -255,16 +255,38 @@ bool ShouldShowWindowsFatalDialog()
     return g_testFrameLimit <= 0 && g_execScript.GetTestSecondsLimit() <= 0.0;
 }
 
-/// -exec <file> and -exec-audit <path>; Core/ExecScript.h documents the script format.
-static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
+/**
+ * @brief -exec <file> and -exec-audit <path>; Core/ExecScript.h documents the script format.
+ *
+ * As on Linux (SparkEngineLinux.cpp ConfigureExecScriptArgs), an -exec script
+ * that cannot be loaded (missing, unreadable, a directory or over the size
+ * limit) fails the launch: an automated run that silently dropped its timeline
+ * would otherwise reach its -test-frames/-test-seconds limit and exit 0.
+ *
+ * @return false, after reporting the path on stderr (or a dialog for an
+ *         interactive launch), when an -exec script was named but not loaded.
+ */
+static bool LoadExecScriptFromCmdLine(LPWSTR cmdLine)
 {
     const auto auditPath = Spark::Platform::FindWindowsCommandLineUtf8Argument(cmdLine, L"-exec-audit");
     if (auditPath && !auditPath->empty())
         g_execScript.SetAuditPath(*auditPath);
 
     const auto scriptPath = Spark::Platform::FindWindowsCommandLineUtf8Argument(cmdLine, L"-exec");
-    if (scriptPath && !scriptPath->empty())
-        g_execScript.LoadFile(*scriptPath, Spark::SimpleConsole::GetInstance());
+    if (!scriptPath || scriptPath->empty())
+        return true;
+    if (g_execScript.LoadFile(*scriptPath, Spark::SimpleConsole::GetInstance()))
+        return true;
+
+    const std::string line = "SparkEngine: cannot load -exec script '" + *scriptPath + "'\n";
+    SPARK_LOG_ERROR(Spark::LogCategory::Core, "cannot load -exec script '%s'", scriptPath->c_str());
+    const HANDLE errorOutput = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD written = 0;
+    const bool wroteStderr = errorOutput != nullptr && errorOutput != INVALID_HANDLE_VALUE &&
+                             WriteFile(errorOutput, line.data(), static_cast<DWORD>(line.size()), &written, nullptr);
+    if (!wroteStderr && ShouldShowWindowsFatalDialog())
+        MessageBoxA(nullptr, line.c_str(), "SparkEngine", MB_OK | MB_ICONERROR);
+    return false;
 }
 
 // ===================================================================================
@@ -389,7 +411,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         g_execScript.SetTestSecondsLimit(*seconds);
     g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
     g_noSubprocess = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-no-subprocess");
-    LoadExecScriptFromCmdLine(lpCmdLine);
+    if (!LoadExecScriptFromCmdLine(lpCmdLine))
+        return EXIT_FAILURE;
     g_minimalInit = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-minimal-init");
     g_noJobSystem = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-no-jobsystem");
     ParseWindowSizeOverride(lpCmdLine);

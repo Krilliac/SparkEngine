@@ -131,9 +131,10 @@ static const char* FindLinuxCommandLineValue(int argc, char* argv[], const char*
 /**
  * @brief Configure g_execScript from -exec <file>, -exec-audit <path> and -test-seconds N.
  *
- * Unlike the Windows GUI build, a malformed -test-seconds value or an
- * unreadable -exec script fails the launch: an automated run that silently
- * dropped its timeline would otherwise report success without doing anything.
+ * A malformed -test-seconds value or an unreadable -exec script fails the
+ * launch (the Windows build fails an unreadable -exec script too): an automated
+ * run that silently dropped its timeline would otherwise report success
+ * without doing anything.
  *
  * @return false (after printing the reason to stderr) when the options are invalid.
  */
