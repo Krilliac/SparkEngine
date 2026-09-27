@@ -407,9 +407,10 @@ string(REPLACE "\r\n" "\n" _spark_validator_source_normalized
     "${_spark_validator_source}")
 foreach(_spark_required_runtime_smoke_token IN ITEMS
         "SPARK_PACKAGE_LAYOUT STREQUAL \"runtime\""
-        "RunSparkHeadlessNullRHILifecycle.cmake"
-        "-DSPARK_RHI_BACKEND=null"
-        "-DSPARK_WORKING_DIRECTORY=\${SPARK_PACKAGE_ROOT}/bin")
+        "RunSparkFPSHeadlessArena.cmake"
+        "\${SPARK_PACKAGE_ROOT}/bin/Assets/Scenes/level1.scene"
+        "-DSPARK_ARENA_SCENE=\${_spark_arena_scene}"
+        "-DSPARK_WORKING_DIRECTORY=\${_spark_scratch_cwd}")
     string(FIND "${_spark_validator_source_normalized}" "${_spark_required_runtime_smoke_token}"
         _spark_runtime_smoke_token_position)
     if(_spark_runtime_smoke_token_position EQUAL -1)
@@ -439,7 +440,7 @@ file(WRITE "${_spark_runtime_reference}"
 
 foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sidecar unlisted_sample_source hash_mismatch sdk_mismatch
         missing_sidecar unknown_layout untrusted_inventory missing_reference wrong_profile
-        missing_executable missing_runtime full_valid full_smoke_failure)
+        missing_executable missing_runtime full_valid full_smoke_failure full_arena_mismatch)
     # Module-only fixtures intentionally contain no staged executable. The
     # runtime validator now executes the staged smoke before its module-only
     # return, so these text-only sidecar cases cannot run on any host. The
@@ -529,6 +530,7 @@ foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sideca
                         "if [ \"$1\" = --version ]; then echo 'SparkEngine 1.0.0'; exit 0; fi\n"
                         "if [ \"$1\" = -headless ]; then\n"
                         "  echo 'SPARK_MODULE_READY count=1'\n"
+                        "  echo 'SPARK_FPS_HEADLESS_ARENA objects=2 spawns=1 bound=1 mode_spawns=1 ticks=8 match=1'\n"
                         "  echo 'SPARK_HEADLESS_RHI backend=null initialized=1 frames=8 shutdown=1'\n"
                         "  echo 'SPARK_HEADLESS_LIFECYCLE initialized=1 updated=8 fixed=7 rendered=0 unloaded=1 faults=0'\n"
                         "fi\n"
@@ -559,6 +561,16 @@ foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sideca
                     bin/Resources/Config/settings.ini bin/Resources/Config/controls.cfg)
                 file(WRITE "${_spark_root}/${_spark_file}" "fixture runtime content\n")
             endforeach()
+            # The staged NullRHI smoke checks the arena record against an
+            # independent parse of the STAGED scene: two nodes, one default spawn.
+            file(WRITE "${_spark_root}/bin/Assets/Scenes/level1.scene"
+                "[Object]\nname=Floor\n[SpawnPoint]\nname=A\ntag=default\n")
+            if(_spark_case STREQUAL "full_arena_mismatch")
+                file(APPEND "${_spark_root}/bin/Assets/Scenes/level1.scene"
+                    "[SpawnPoint]\nname=B\ntag=default\n")
+                # CMake re-wraps the nested runner's message, so match across wraps.
+                set(_spark_expected "authored[ \t\r\n]+scene[ \t\r\n]+has[ \t\r\n]+3")
+            endif()
             if(_spark_case STREQUAL "full_smoke_failure")
                 file(WRITE "${_spark_root}/bin/SparkCooker.exe" "#!/bin/sh\nexit 9\n")
                 set(_spark_expected "SparkCooker --help smoke failed")
