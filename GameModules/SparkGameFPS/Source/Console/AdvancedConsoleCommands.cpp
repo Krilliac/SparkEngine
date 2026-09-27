@@ -10,6 +10,7 @@
 
 #include "AdvancedConsoleCommands.h"
 #include "Core/Platform.h"
+#include "FPSConsolePolicy.h"
 
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
@@ -22,6 +23,7 @@
 #include "Graphics/PostProcessingPipeline.h"
 #include "Graphics/AssetPipeline.h"
 #include "Physics/PhysicsSystem.h"
+#include <optional>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -125,16 +127,13 @@ namespace SparkConsole
                     return "Usage: tex_memory <mb>";
                 if (auto textureSystem = graphics->GetTextureSystem())
                 {
-                    try
-                    {
-                        size_t mb = static_cast<size_t>(std::stof(args[1]));
-                        textureSystem->Console_SetMemoryBudget(mb);
-                        return "Texture memory budget set to: " + args[1] + " MB";
-                    }
-                    catch (const std::exception&)
-                    {
+                    // Casting a NaN, negative or out-of-range float to size_t is undefined.
+                    const std::optional<float> mb = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+                    constexpr float kMaxBudgetMb = 1024.0f * 1024.0f; // 1 TiB: far above any real budget.
+                    if (!mb || *mb < 0.0f || *mb > kMaxBudgetMb)
                         return "Invalid number: " + args[1];
-                    }
+                    textureSystem->Console_SetMemoryBudget(static_cast<size_t>(*mb));
+                    return "Texture memory budget set to: " + args[1] + " MB";
                 }
                 return "Texture system not available";
             },
@@ -226,15 +225,11 @@ namespace SparkConsole
                     return "Usage: exposure <value>";
                 if (auto postProcessing = graphics->GetPostProcessingPipeline())
                 {
-                    try
-                    {
-                        postProcessing->Console_SetExposure(std::stof(args[1]));
-                        return "Exposure set to: " + args[1];
-                    }
-                    catch (const std::exception&)
-                    {
+                    const std::optional<float> exposure = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+                    if (!exposure)
                         return "Invalid number: " + args[1];
-                    }
+                    postProcessing->Console_SetExposure(*exposure);
+                    return "Exposure set to: " + args[1];
                 }
                 return "Post-processing system not available";
             },
@@ -309,15 +304,13 @@ namespace SparkConsole
                 auto* context = game ? game->GetEngineContext() : nullptr;
                 if (auto* physicsSystem = context ? context->GetPhysics() : nullptr)
                 {
-                    try
-                    {
-                        physicsSystem->Console_SetGravity(std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
-                        return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";
-                    }
-                    catch (const std::exception&)
-                    {
+                    const auto x = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+                    const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
+                    const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[3]);
+                    if (!x || !y || !z)
                         return "Invalid number in arguments";
-                    }
+                    physicsSystem->Console_SetGravity(*x, *y, *z);
+                    return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";
                 }
                 return "Physics system not available";
             },

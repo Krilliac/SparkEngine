@@ -72,10 +72,14 @@ enemy, weapon, progression, time-scale, and engine-service state.
   yet read the authoritative state back (open under `MOD-315`): the rendered local `Player` keeps its own movement,
   collision and health, remote players are not rendered, and server-side hits do not change the local `Player`. The
   convergence evidence below is of `FPSMultiplayerSystem` state, not of the rendered game.
-- The dev cheat commands (`god`, `noclip`) are excluded only when `SPARK_BUILD_SHIPPING` is defined, which today
-  means the MinSizeRel configuration / the `windows-shipping` preset alone. A package built from the MSVC
-  `Release` configuration still registers them — state which artifact a release actually ships before claiming
-  the cheats are absent.
+- The developer commands listed in `Source/Console/FPSConsolePolicy.h` (`god`, `noclip`, `player_tp`, `spawn`,
+  `game_timescale`, `scene_load`, `scene_save`, `gamemode`, `give`, `quest_start`, `quest_all`, `destroy`,
+  `weather`, `dialogue_start`, `seq_play`, `seq_stop`, `seq_time`, `wave_skip`, `wave_difficulty`, `xp`,
+  `powerup`) are not registered when `SPARK_BUILD_SHIPPING` is defined and `ENABLE_DEVCOMMANDS_IN_SHIPPING` is
+  OFF, which today means the MinSizeRel configuration / the `windows-shipping` preset alone. A package built from
+  the MSVC `Release` configuration still registers them — state which artifact a release actually ships before
+  claiming the cheats are absent. The headless host's own `xp` command (`HeadlessPersistence.cpp`) is a
+  server-operator command and is not covered by this list.
 
 Build the `SparkGameFPS` target. CPU-only regression coverage is part of `SparkTests`; filter for `FPSInteg_`,
 `FPSRespawn_`, `FPSLocalProfile_`, `FPSProgression_`, `FPSAssets_`, `FPSStateRules_`, `FPSComponentsReal_`, and

@@ -1144,11 +1144,11 @@ target_sources(SparkTests PRIVATE
     TestSEC2ConsoleIpcReal.cpp
 )
 
-# SEC2 console-IPC security regressions (TestSEC2ConsoleIpcReal.cpp). Five tests
+# SEC2 console-IPC security regressions (TestSEC2ConsoleIpcReal.cpp). Seven tests
 # run on every platform; Windows adds two handle-inheritance tests, and POSIX
 # adds two that drive the real SparkConsole binary. The pinned count fails the
 # lane if a platform branch silently compiles its tests out.
-set(_spark_sec2_console_count 5)
+set(_spark_sec2_console_count 7)
 if(WIN32)
     math(EXPR _spark_sec2_console_count "${_spark_sec2_console_count} + 2")
 elseif(TARGET SparkConsole)

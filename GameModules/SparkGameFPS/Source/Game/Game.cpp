@@ -564,6 +564,10 @@ void Game::Update(float dt)
     }
 
     dt *= m_timeScale;
+    // Re-check after scaling: the frame dt was validated above, but the scale
+    // is not, and one non-finite product would poison every system below.
+    if (!std::isfinite(dt))
+        dt = 0.0f;
 
     SPARK_CATCH_ALL("Game", {
         HandleInput(dt);

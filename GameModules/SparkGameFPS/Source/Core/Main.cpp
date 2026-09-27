@@ -11,6 +11,7 @@
  */
 
 #include "SparkGameFPS.h"
+#include "Console/FPSConsolePolicy.h"
 #include "Core/EngineWeatherAdapter.h"
 #include "Game/Game.h"
 #include "Game/GameMode.h"
@@ -36,6 +37,7 @@
 #include <Spark/ModuleRegistry.h>
 #include "Engine/ECS/Components.h"
 
+#include <optional>
 #include <utility>
 
 namespace
@@ -48,8 +50,12 @@ namespace
         {
         }
 
+        /// Registers @p name unless it is a developer command this build excludes
+        /// (see SparkFPS::ConsolePolicy::kDeveloperCommands).
         template <typename... Args> void RegisterCommand(const std::string& name, Args&&... args)
         {
+            if (!SparkFPS::ConsolePolicy::ShouldRegister(name, SparkFPS::ConsolePolicy::kDeveloperCommandsEnabled))
+                return;
             m_console.RegisterCommand(name, std::forward<Args>(args)...);
             m_registeredNames.push_back(name);
         }
@@ -399,16 +405,11 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: game_timescale <scale>";
             if (!game)
                 return "Game not available";
-            try
-            {
-                float scale = std::stof(args[0]);
-                game->SetTimeScale(scale);
-                return "Time scale set to " + std::to_string(scale);
-            }
-            catch (const std::exception& e)
-            {
-                return std::string("Error: ") + e.what();
-            }
+            const std::optional<float> scale = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            if (!scale)
+                return "Error: time scale must be a finite number, got '" + args[0] + "'";
+            game->SetTimeScale(*scale);
+            return "Time scale set to " + std::to_string(*scale);
         },
         "Set game time scale");
 
@@ -420,18 +421,13 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: player_tp <x> <y> <z>";
             if (!game)
                 return "Game not available";
-            try
-            {
-                float x = std::stof(args[0]);
-                float y = std::stof(args[1]);
-                float z = std::stof(args[2]);
-                game->TeleportPlayer(x, y, z);
-                return "Teleported to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
-            }
-            catch (const std::exception& e)
-            {
-                return std::string("Error: ") + e.what();
-            }
+            const auto x = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+            const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
+            if (!x || !y || !z)
+                return "Error: player_tp coordinates must be finite numbers";
+            game->TeleportPlayer(*x, *y, *z);
+            return "Teleported to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
         },
         "Teleport player to coordinates");
 
@@ -443,27 +439,21 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: spawn <type> <x> <y> <z>";
             if (!game)
                 return "Game not available";
-            try
-            {
-                float x = std::stof(args[1]);
-                float y = std::stof(args[2]);
-                float z = std::stof(args[3]);
-                bool ok = game->SpawnObject(args[0], x, y, z);
-                return ok ? "Spawned " + args[0] : "Failed to spawn '" + args[0] + "'";
-            }
-            catch (const std::exception& e)
-            {
-                return std::string("Error: ") + e.what();
-            }
+            const auto x = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+            const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
+            const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[3]);
+            if (!x || !y || !z)
+                return "Error: spawn coordinates must be finite numbers";
+            const bool ok = game->SpawnObject(args[0], *x, *y, *z);
+            return ok ? "Spawned " + args[0] : "Failed to spawn '" + args[0] + "'";
         },
         "Spawn an object at coordinates");
 
     // Cheat commands. The windows-shipping preset sets ENABLE_DEVCOMMANDS_IN_SHIPPING=OFF
     // (so SPARK_DEVCOMMANDS_IN_SHIPPING is not defined) and MinSizeRel defines
-    // SPARK_BUILD_SHIPPING; until something consumed those macros, god/noclip shipped in
-    // the Shipping product. Registration is where the switch has to live: a command that
-    // is never registered cannot be typed.
-#if defined(SPARK_DEVCOMMANDS_IN_SHIPPING) || !defined(SPARK_BUILD_SHIPPING)
+    // SPARK_BUILD_SHIPPING. The registrar drops every name in
+    // SparkFPS::ConsolePolicy::kDeveloperCommands in that configuration — these two and
+    // the teleport/spawn/time-scale/item/progression/match/scene commands around them.
     console.RegisterCommand(
         "god",
         [game](const std::vector<std::string>& args) -> std::string
@@ -487,7 +477,6 @@ void SparkGameModule::RegisterGameConsoleCommands()
             return enable ? "Noclip enabled" : "Noclip disabled";
         },
         "Toggle noclip mode");
-#endif // dev commands
 
     console.RegisterCommand(
         "game_stats",
@@ -758,15 +747,10 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.size() < 2)
                 return "Usage: audio_volume <master|sfx|music> <0.0-1.0>";
-            float vol;
-            try
-            {
-                vol = std::stof(args[1]);
-            }
-            catch (const std::exception&)
-            {
+            const std::optional<float> parsedVolume = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+            if (!parsedVolume)
                 return "Invalid volume value: " + args[1];
-            }
+            const float vol = *parsedVolume;
             auto& mixer = Spark::Audio::AudioBusMixer::GetInstance();
             if (args[0] == "master")
                 mixer.SetBusVolume(Spark::Audio::AudioBus::Master, vol);
@@ -938,14 +922,10 @@ void SparkGameModule::RegisterGameConsoleCommands()
             auto* seq = Spark::Cinematic::SequencerManager::GetInstance().GetSequence(args[0]);
             if (!seq)
                 return "Sequence not found: " + args[0];
-            try
-            {
-                seq->SetTime(std::stof(args[1]));
-            }
-            catch (const std::exception&)
-            {
+            const std::optional<float> seconds = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+            if (!seconds)
                 return "Invalid time value: " + args[1];
-            }
+            seq->SetTime(*seconds);
             return "Seeked " + args[0] + " to " + args[1] + "s";
         },
         "Seek a sequence to a specific time");
@@ -1022,16 +1002,10 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.empty())
                 return "Usage: replay_seek <seconds>";
-            float t;
-            try
-            {
-                t = std::stof(args[0]);
-            }
-            catch (const std::exception&)
-            {
+            const std::optional<float> t = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            if (!t)
                 return "Invalid time value: " + args[0];
-            }
-            Spark::ReplaySystem::GetInstance().SeekTo(t);
+            Spark::ReplaySystem::GetInstance().SeekTo(*t);
             return "Seeked to " + args[0] + "s";
         },
         "Seek replay to time");
@@ -1042,17 +1016,11 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.empty())
                 return "Usage: replay_speed <multiplier>";
-            float speed;
-            try
-            {
-                speed = std::stof(args[0]);
-            }
-            catch (const std::exception&)
-            {
+            const std::optional<float> speed = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            if (!speed)
                 return "Invalid speed value: " + args[0];
-            }
-            Spark::ReplaySystem::GetInstance().SetPlaybackSpeed(speed);
-            return "Playback speed set to " + std::to_string(speed) + "x";
+            Spark::ReplaySystem::GetInstance().SetPlaybackSpeed(*speed);
+            return "Playback speed set to " + std::to_string(*speed) + "x";
         },
         "Set replay playback speed");
 
@@ -1118,17 +1086,11 @@ void SparkGameModule::RegisterGameConsoleCommands()
             auto* ws = game->GetWaveSpawner();
             if (!ws)
                 return "Wave spawner not initialized";
-            float scale;
-            try
-            {
-                scale = std::stof(args[0]);
-            }
-            catch (const std::exception&)
-            {
+            const std::optional<float> scale = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            if (!scale)
                 return "Invalid scale value: " + args[0];
-            }
-            ws->SetDifficultyScale(scale);
-            return "Difficulty scale set to " + std::to_string(scale);
+            ws->SetDifficultyScale(*scale);
+            return "Difficulty scale set to " + std::to_string(*scale);
         },
         "Set wave difficulty scale (wave_difficulty <1.0-3.0>)");
 

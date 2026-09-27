@@ -183,6 +183,12 @@ void Game::TeleportPlayer(float x, float y, float z)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Teleporting player via console integration", L"INFO");
 
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Teleport refused - coordinates must be finite", L"ERROR");
+        return;
+    }
+
     if (m_camera)
     {
         m_camera->SetPosition({x, y, z});
@@ -200,6 +206,12 @@ void Game::TeleportPlayer(float x, float y, float z)
 bool Game::SpawnObject(const std::string& type, float x, float y, float z)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Spawning object via console integration", L"INFO");
+
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Spawn refused - coordinates must be finite", L"ERROR");
+        return false;
+    }
 
     std::unique_ptr<GameObject> newObject;
 
@@ -286,6 +298,13 @@ void Game::ClearScene(bool keepPlayer)
 
 void Game::SetTimeScale(float scale)
 {
+    // NaN fails both range comparisons below and would be stored as-is, making
+    // every later Update() run with dt = NaN. Reject it instead of clamping.
+    if (!std::isfinite(scale))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Time scale must be a finite number; unchanged", L"WARNING");
+        return;
+    }
     if (scale < 0.1f || scale > 10.0f)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Time scale out of range (0.1-10.0), clamping", L"WARNING");

@@ -19,6 +19,7 @@
 
 #include "TestFramework.h"
 
+#include "Console/FPSConsolePolicy.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "Utils/Process.h"
 #include "Utils/SparkConsole.h"
@@ -319,3 +320,54 @@ TEST(SEC2Console_StandaloneHistoryNeverShowsCredentials)
 }
 
 #endif // SPARK_TEST_SPARK_CONSOLE_PATH && !_WIN32
+// =============================================================================
+// Finding 7 - Shipping drops every developer command, not just god/noclip
+// =============================================================================
+
+TEST(SEC2Console_ShippingPolicyDropsEveryDeveloperCommand)
+{
+    using SparkFPS::ConsolePolicy::ShouldRegister;
+
+    // The commands the SEC2 review found registered in the Shipping build.
+    for (const char* cheat :
+         {"god", "noclip", "player_tp", "spawn", "game_timescale", "gamemode", "give", "quest_start", "quest_all",
+          "destroy", "scene_save", "wave_skip", "wave_difficulty", "xp", "powerup"})
+    {
+        EXPECT_FALSE(ShouldRegister(cheat, /*developerCommandsEnabled*/ false));
+        EXPECT_TRUE(ShouldRegister(cheat, /*developerCommandsEnabled*/ true));
+    }
+
+    // Player-facing and read-only commands stay available in Shipping.
+    for (const char* kept : {"game_status", "quicksave", "quickload", "hud", "audio_volume", "level", "net_host",
+                             "net_connect", "wave_status", "replay_play"})
+    {
+        EXPECT_TRUE(ShouldRegister(kept, /*developerCommandsEnabled*/ false));
+    }
+
+    // Non-Shipping test builds keep them; the flag follows the same macros as the module.
+#if defined(SPARK_DEVCOMMANDS_IN_SHIPPING) || !defined(SPARK_BUILD_SHIPPING)
+    EXPECT_TRUE(SparkFPS::ConsolePolicy::kDeveloperCommandsEnabled);
+#else
+    EXPECT_FALSE(SparkFPS::ConsolePolicy::kDeveloperCommandsEnabled);
+#endif
+}
+
+// =============================================================================
+// Finding 8 - console numbers must be finite and fully consumed
+// =============================================================================
+
+TEST(SEC2Console_FiniteFloatParserRejectsNanInfinityAndGarbage)
+{
+    using SparkFPS::ConsolePolicy::ParseFiniteFloat;
+
+    for (const char* rejected : {"nan", "NaN", "-nan", "inf", "-inf", "infinity", "1e39", "-1e39", "", " 1", "1 ",
+                                 "1.5abc", "0x10", "++1", "abc"})
+    {
+        EXPECT_FALSE(ParseFiniteFloat(rejected).has_value());
+    }
+
+    EXPECT_NEAR(ParseFiniteFloat("2.5").value_or(0.0f), 2.5f, 1e-6f);
+    EXPECT_NEAR(ParseFiniteFloat("-3").value_or(0.0f), -3.0f, 1e-6f);
+    EXPECT_NEAR(ParseFiniteFloat("+0.25").value_or(0.0f), 0.25f, 1e-6f);
+    EXPECT_NEAR(ParseFiniteFloat("1e3").value_or(0.0f), 1000.0f, 1e-3f);
+}
