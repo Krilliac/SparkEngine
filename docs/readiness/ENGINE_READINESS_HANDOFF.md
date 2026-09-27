@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **53 in progress**, **5 blocked**, **6 open**
-- Acceptance criteria: **259 total**, **81 implemented** (31%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **83 implemented** (32%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -292,7 +292,7 @@ Close transport, true multi-client, persistence, migration, load, and operations
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`NET-100`](#net-100--replace-placeholder-transport-security-with-audited-authenticated-encryption) Replace placeholder transport security with audited authenticated encryption | P0 | **in-progress** | 0/4 · 0/4 | `SEC-100`, `SEC-110`, `SEC-120`, `CI-110` | `NET-110`, `DATA-120` |
+| [`NET-100`](#net-100--replace-placeholder-transport-security-with-audited-authenticated-encryption) Replace placeholder transport security with audited authenticated encryption | P0 | **in-progress** | 2/4 · 0/4 | `SEC-100`, `SEC-110`, `SEC-120`, `CI-110` | `NET-110`, `DATA-120` |
 | [`NET-110`](#net-110--define-and-implement-the-production-online-service-boundary) Define and implement the production online-service boundary | P1 | **in-progress** | 4/4 · 0/4 | `NET-100`, `SEC-100` | `DATA-120`, `TF-110`, `OPS-110` |
 | [`DATA-120`](#data-120--make-multiplayer-persistence-transactional-migratable-backed-up-and-recoverable) Make multiplayer persistence transactional, migratable, backed up, and recoverable | P1 | **in-progress** | 0/4 · 0/4 | `SAVE-230`, `NET-100` | `NET-110`, `TF-110`, `OPS-110` |
 | [`TF-110`](#tf-110--prove-mmofps-with-a-true-independent-multi-client-release-gate) Prove MMOFPS with a true independent multi-client release gate | P0 | **in-progress** | 2/4 · 0/4 | `NET-100`, `RDY-020`, `HEAD-220`, `RDY-010` | `TF-120`, `OPS-110` |
@@ -2807,16 +2807,18 @@ MMOFPS authentication fields can carry plaintext credentials, while engine netwo
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Packet capture contains no reusable credential or plaintext authentication data
    - GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocolOnboarding.h still sends a plaintext password field (char pass[64]) at login.
-2. **[unmet]** Tamper, replay, nonce reuse, wrong key, truncation, reorder, downgrade, and malformed handshake fail closed
-   - SecureChannel (RFC 8439 ChaCha20-Poly1305) has Transport_Tamper/Replay/Downgrade/KeyRotation/FuzzPacket tests, but it is not wired into NetworkManager or any game transport and there is no handshake, so no production authenticated transport fails closed on malformed handshakes.
+2. **[implemented]** Tamper, replay, nonce reuse, wrong key, truncation, reorder, downgrade, and malformed handshake fail closed
+   - Evidence: `SparkEngine/Source/Engine/Networking/SecureHandshake.cpp`, `Tests/TestNET100Handshake.cpp`, `Tests/TestNET100TransportReal.cpp`
+   - The handshake and channel fail closed in socket-free tests. NetworkManager Connect does not carry the handshake yet, so this is not yet true of the live UDP path.
 3. **[unmet]** Authentication and gameplay share the production encrypted path
    - Authentication and gameplay do not share an audited encrypted path.
-4. **[unmet]** No custom cryptographic primitive remains in the advertised transport
-   - The XOR/FNV prototype was deleted and replaced by an in-tree ChaCha20-Poly1305 SecureChannel with known-answer tests; TFCrypto keeps self-implemented SHA-256/HMAC/PBKDF2. No independent review is recorded and the advertised transport does not use SecureChannel yet.
+4. **[implemented]** No custom cryptographic primitive remains in the advertised transport
+   - Evidence: `ThirdParty/Security/libsodium`, `cmake/SparkLibsodium.cmake`, `SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp`, `Tests/TestNET100Libsodium.cpp`, `Tests/Tools/test_network_security_csprng.py`
+   - Local windows-release evidence only; no ci: reference yet. Separately, NET-100.plannedCiJobs lists 'network-security', which now exists, and site-data validate.py fails until it is promoted to requiredCiJobs. That ledger edit is left to the owner.
 
 **Required commands**
 

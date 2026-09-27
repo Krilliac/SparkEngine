@@ -511,9 +511,13 @@
         },
         {
           "criterionDigest": "sha256:1294cd87e10f",
-          "state": "unmet",
-          "evidence": [],
-          "note": "SecureChannel (RFC 8439 ChaCha20-Poly1305) has Transport_Tamper/Replay/Downgrade/KeyRotation/FuzzPacket tests, but it is not wired into NetworkManager or any game transport and there is no handshake, so no production authenticated transport fails closed on malformed handshakes."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Engine/Networking/SecureHandshake.cpp",
+            "Tests/TestNET100Handshake.cpp",
+            "Tests/TestNET100TransportReal.cpp"
+          ],
+          "note": "The handshake and channel fail closed in socket-free tests. NetworkManager Connect does not carry the handshake yet, so this is not yet true of the live UDP path."
         },
         {
           "criterionDigest": "sha256:c7a82159fc73",
@@ -523,9 +527,15 @@
         },
         {
           "criterionDigest": "sha256:04b666ab668b",
-          "state": "unmet",
-          "evidence": [],
-          "note": "The XOR/FNV prototype was deleted and replaced by an in-tree ChaCha20-Poly1305 SecureChannel with known-answer tests; TFCrypto keeps self-implemented SHA-256/HMAC/PBKDF2. No independent review is recorded and the advertised transport does not use SecureChannel yet."
+          "state": "implemented",
+          "evidence": [
+            "ThirdParty/Security/libsodium",
+            "cmake/SparkLibsodium.cmake",
+            "SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp",
+            "Tests/TestNET100Libsodium.cpp",
+            "Tests/Tools/test_network_security_csprng.py"
+          ],
+          "note": "Local windows-release evidence only; no ci: reference yet. Separately, NET-100.plannedCiJobs lists 'network-security', which now exists, and site-data validate.py fails until it is promoted to requiredCiJobs. That ledger edit is left to the owner."
         }
       ],
       "commands": [
@@ -578,7 +588,6 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "network-security",
         "fuzz-smoke",
         "security-review"
       ],
