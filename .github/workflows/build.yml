@@ -1063,6 +1063,64 @@ jobs:
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
+  # NET-110 / OD-08: the online-service boundary contract. The public-claim
+  # guard and the services.production capability run first; then every
+  # online-services CTest (IOnlinePlatform conformance across all adapters and
+  # the degraded-dependency circuit breaker) runs in the Linux Shipping
+  # configuration under --no-tests=error, so an empty label cannot pass.
+  service-contract:
+    name: "Online Service Contract"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Check online-service boundary claims
+      run: |
+        set -o pipefail
+        python3 -m unittest Tests.Tools.test_site_data_contract -k OnlineServiceBoundary -v 2>&1 | tee service-boundary.log
+        python3 tools/site-data/validate.py --capability services.production 2>&1 | tee -a service-boundary.log
+
+    - name: Configure Linux Shipping service contract tests
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee service-configure.log
+
+    - name: Build service contract target
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee service-build.log
+
+    - name: Run online-services label
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -L '^online-services$' 2>&1 | tee service-tests.log
+
+    - name: Extract service contract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "service-contract" \
+          error-summary.json \
+          service-boundary.log service-configure.log service-build.log service-tests.log
+
+    - name: Upload service contract error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-service-contract
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
   # ===========================================================================
   # Linux Build — Clang with MemorySanitizer
   # MSan requires ALL code, including the C++ runtime, to be instrumented.
@@ -3728,6 +3786,7 @@ jobs:
       - todo-count
       - build-installer
       - aggregate-test-stats
+      - service-contract
       - security-runtime
       - network-integration
     runs-on: ubuntu-24.04
