@@ -149,6 +149,8 @@ The full CTest run before the final fixes passed 247 of 257. The ten failures an
 
 ## Troubleshooting
 
+- **A link to a heading that contains backticks fails `validate_docs_links`.** `heading_ids` blanks code spans before slugging, so it never matches GitHub's anchor. Keep linked headings free of code spans (see `b16b711`), or fix `heading_ids` to keep code-span text like GitHub does. After `b16b711`, `docs/update-all-docs.sh check` passes, so the DOC-410 note that the link validator fails at HEAD is out of date.
+
 - **The OpenGL lanes fail locally.** CTest does not inherit a display; run `xvfb-run -a ctest -R OpenGL`.
 - **The `Saves/test_*.db` files appear after a SparkTests run from the repo root.** They are ignored now. The TF120 tests should move to a temporary directory.
 - **Stray `crash-*` files in the repo root** are libFuzzer reproducers and are ignored now. Minimize them into `FuzzerTests/corpora/` if they are new.
