@@ -19,6 +19,7 @@
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/Modding/VirtualFileSystem.h"
+#include "Engine/OnlineServices/OnlineServices.h"
 #include "Physics/PhysicsSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/MemoryMonitor.h"
@@ -997,6 +998,20 @@ namespace Spark
     }
 
     // ============================================================================
+    // Online services commands
+    // ============================================================================
+
+    static void RegisterOnlineServicesCommands(SimpleConsole& console)
+    {
+        // The runtime view of the GuardedOnlinePlatform health: without it an open circuit or a
+        // budget overrun is only visible as a log line (docs/specs/online-services.md 5.1).
+        console.RegisterCommand(
+            "online_status", [](const std::vector<std::string>&) -> std::string
+            { return OnlineServices::OnlineServiceManager::GetInstance().Console_GetStatus(); },
+            "Show the online adapter, per-capability health, circuit state and call budget", "Network");
+    }
+
+    // ============================================================================
     // Public API — delegates to per-subsystem registrations
     // ============================================================================
 
@@ -1015,6 +1030,7 @@ namespace Spark
         RegisterTimeOfDayCommands(console);
         RegisterMemoryMonitorCommands(console);
         RegisterPakCommands(console);
+        RegisterOnlineServicesCommands(console);
         RegisterLogCommands(console);
         RegisterDiagnosticCommands(console);
         RegisterSubsystemConsoleCommands();

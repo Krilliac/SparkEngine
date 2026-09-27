@@ -1824,7 +1824,7 @@ set_tests_properties(OnlineServicesContract PROPERTIES
 # by Console_GetStatus. Exact count: a dropped test fails.
 add_test(NAME OnlineServicesDegraded COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(OnlineServicesDegraded PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Degraded_;SPARK_TEST_EXPECT_COUNT=10"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Degraded_;SPARK_TEST_EXPECT_COUNT=11"
     LABELS "online-services;unit"
     TIMEOUT 30)
 

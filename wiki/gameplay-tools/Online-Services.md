@@ -96,7 +96,7 @@ public:
 | `ResetToNullPlatform()` | Revert to the offline platform |
 | `GetCapabilityHealth(capability)` | Consecutive, total and rejected-call counters, circuit state, budget overruns and slowest call for one capability |
 | `SetCircuitPolicy(policy)` | Replace the budgets (default: 5 consecutive failures, 30 s cooldown, 5 ms per call, overruns not tripping the circuit) |
-| `Console_GetStatus()` | Adapter, capabilities, last error, per-capability health and budget, and player |
+| `Console_GetStatus()` | Adapter, capabilities, last error, per-capability health and budget, and player. The `online_status` console command prints it in a running engine |
 
 ### IOnlinePlatform
 

@@ -2,8 +2,10 @@
 #include "TestFramework.h"
 #include "Engine/OnlineServices/OnlineServices.h"
 
+#include "Core/EngineConsoleCommands.h"
 #include "ScopedLoggerBaseline.h"
 #include "Utils/Logger.h"
+#include "Utils/SparkConsole.h"
 
 #include <algorithm>
 #include <chrono>
@@ -806,6 +808,34 @@ TEST(OnlineServices_Degraded_CircuitOpensAfterConsecutiveFailures)
     EXPECT_STR_CONTAINS(status, std::string("FaultInjecting (Test)"));
     EXPECT_STR_CONTAINS(status,
                         std::string("Health: leaderboards 5 consecutive failures (circuit open, retry in 30.0s)"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_ConsoleCommandReportsOpenCircuit)
+{
+    // The circuit and budget health must be readable in a running engine, not only through the
+    // API: the engine console registration publishes it as online_status.
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    OpenLeaderboardCircuit(*manager.GetPlatform(), *adapter);
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    EXPECT_TRUE(console.Initialize());
+    Spark::RegisterEngineConsoleCommands(nullptr, nullptr);
+    ASSERT_TRUE(console.HasCommand("online_status"));
+    console.Clear();
+    EXPECT_TRUE(console.ExecuteCommand("online_status"));
+
+    bool reportedHealth = false;
+    bool reportedBudget = false;
+    for (const auto& entry : console.GetLogHistory())
+    {
+        reportedHealth |=
+            entry.message.find("Health: leaderboards 5 consecutive failures (circuit open") != std::string::npos;
+        reportedBudget |= entry.message.find("Budget: ") != std::string::npos;
+    }
+    EXPECT_TRUE(reportedHealth);
+    EXPECT_TRUE(reportedBudget);
     manager.Shutdown();
 }
 
