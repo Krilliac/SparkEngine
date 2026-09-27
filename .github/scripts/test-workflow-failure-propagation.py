@@ -67,6 +67,7 @@ REQUIRED_CI_JOBS = (
     "build-installer",
     "aggregate-test-stats",
     "module-evidence",
+    "network-security",
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
 MINGW_WINE_JOB = "build-linux-mingw-wine"
@@ -1406,6 +1407,30 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 ),
             ),
         ),
+        # NET-100: the whole network-security label, one invocation, empty fails.
+        (
+            "network-security",
+            (
+                (
+                    "Configure Linux Shipping network security tests",
+                    ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
+                ),
+                (
+                    "Build network security target",
+                    ("set -o pipefail", "cmake --build --preset linux-shipping --target SparkTests"),
+                ),
+                (
+                    "Run network-security label",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-L '^network-security$'",
+                    ),
+                ),
+            ),
+        ),
     )
     for lane, lane_steps in security_lanes:
         try:
@@ -1495,7 +1520,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
     if report:
         if len(re.findall(r"(?m)^      - telemetry-integration$", report)) != 1:
             errors.append("report-ci-errors must need telemetry-integration exactly once")
-        for lane in ("security-runtime", "network-integration"):
+        for lane in ("security-runtime", "network-integration", "network-security"):
             if len(re.findall(rf"(?m)^      - {lane}$", report)) != 1:
                 errors.append(f"report-ci-errors must need {lane} exactly once")
 
@@ -2536,6 +2561,28 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         mutations["telemetry gate dependency removed"] = self.build.replace(
             "      - build-linux-tsan\n      - telemetry-integration\n      - build-windows-vs2022",
             "      - build-linux-tsan\n      - build-windows-vs2022",
+            1,
+        )
+        mutations["network security empty label allowed"] = self.build.replace(
+            "ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \\\n"
+            "          -L '^network-security$'",
+            "ctest --test-dir build/linux-shipping --output-on-failure \\\n"
+            "          -L '^network-security$'",
+            1,
+        )
+        mutations["network security label drift"] = self.build.replace(
+            "-L '^network-security$'",
+            "-L 'network'",
+            1,
+        )
+        mutations["network security gate dependency removed"] = self.build.replace(
+            "      - module-evidence\n      - network-security\n",
+            "      - module-evidence\n",
+            1,
+        )
+        mutations["optional network security job"] = self.build.replace(
+            "  network-security:\n    name: \"Network Security\"",
+            "  network-security:\n    name: \"Network Security\"\n    continue-on-error: true",
             1,
         )
         mutations["security runtime empty selection allowed"] = self.build.replace(

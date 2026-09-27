@@ -1043,6 +1043,58 @@ jobs:
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
+  # NET-100: every CTest labelled network-security (the SecureChannel and
+  # libsodium transport families, the handshake core, session-version
+  # negotiation, and the static network-boundary contracts) in the Linux
+  # Shipping configuration. One label, one invocation, --no-tests=error, so a
+  # label that loses its tests fails instead of passing empty.
+  network-security:
+    name: "Network Security"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping network security tests
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee network-security-configure.log
+
+    - name: Build network security target
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee network-security-build.log
+
+    - name: Run network-security label
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -L '^network-security$' 2>&1 | tee network-security-tests.log
+
+    - name: Extract network security error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "network-security" \
+          error-summary.json \
+          network-security-configure.log network-security-build.log network-security-tests.log
+
+    - name: Upload network security error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-network-security
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
   # SEC-100: real multi-process network integration in the Linux Shipping
   # configuration. SparkServer, SparkGateway and the SparkGame module run as
   # separate processes over the area-control channel, and the orchestration
@@ -3829,6 +3881,7 @@ jobs:
       - build-installer
       - aggregate-test-stats
       - service-contract
+      - network-security
       - security-runtime
       - network-integration
     runs-on: ubuntu-24.04
@@ -4392,6 +4445,7 @@ jobs:
       - build-installer
       - aggregate-test-stats
       - module-evidence
+      - network-security
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -4401,7 +4455,7 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
 
