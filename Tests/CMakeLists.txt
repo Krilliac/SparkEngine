@@ -1199,6 +1199,15 @@ set_tests_properties(SEC2ConsoleIpcReal PROPERTIES
     TIMEOUT 120)
 unset(_spark_sec2_console_count)
 
+# SEC4 reflection binary codec hardening (TestReflectionReal.cpp): the decoder
+# checks type tags, never raw-copies String/Custom fields, normalizes Bool and
+# reports truncation. The pinned count keeps all five regressions selected.
+add_test(NAME SEC4ReflectionBinaryCodec COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SEC4ReflectionBinaryCodec PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4Reflection_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "security;reflection;serialization"
+    TIMEOUT 120)
+
 # TestBuildInfraReal.cpp asserts the generated SDK version header still carries
 # the version CMake is building, so the number has to reach the test as data.
 target_compile_definitions(SparkTests PRIVATE
