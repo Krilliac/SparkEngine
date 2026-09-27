@@ -303,6 +303,14 @@ TEST(OpenWorldTraversal_WorldEdgeRejectsMove)
     session.player.SetFacing(0.0f);
     session.FixedStep();
     EXPECT_GT(session.player.GetWorldState().posZ, -1999.95f);
+
+    // Stepping east over x = 2000 into Ironwood Forest updates the region and moves onto its ground plane.
+    session.Place(1999.95f, 0.0f, 90.0f);
+    session.controller.SetMoveInput(1.0f, 0.0f, false);
+    session.FixedStep();
+    EXPECT_GT(session.player.GetWorldState().posX, 2000.0f);
+    EXPECT_EQ(session.player.GetWorldState().currentRegionId, static_cast<uint32_t>(2));
+    EXPECT_NEAR(session.player.GetWorldState().posY, 10.0f, 1e-4f);
 }
 
 TEST(OpenWorldTraversal_InteractHarvestsNearestNodeOnly)
