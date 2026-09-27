@@ -115,9 +115,10 @@ TEST(SessionCompatibility_SameVersionAccepted)
     EXPECT_EQ(echoed, NETWORK_PROTOCOL_VERSION);
 
     // The slot exists but is not admitted until the sealed ClientFinished arrives.
-    auto clients = server.GetClients();
+    auto clients = server.GetClientSlots();
     ASSERT_EQ(clients.size(), static_cast<size_t>(1));
     EXPECT_EQ(static_cast<int>(clients.begin()->second.state), static_cast<int>(ConnectionState::Securing));
+    EXPECT_TRUE(server.GetClients().empty()); // not a player until admitted
 
     ASSERT_TRUE(peer.FinishFromAccepted(*accepted, SparkTestFixtures::TestServerIdentity().publicKey));
     ASSERT_TRUE(peer.SendSealed(

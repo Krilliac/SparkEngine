@@ -423,7 +423,12 @@ namespace MMO
             return;
 
         nm->Update(deltaTime);
-        const auto clients = nm->GetClients();
+        // Only admitted players exist for the WorldServer. A slot still Securing (NET-100:
+        // handshake answered, no ClientFinished yet) has no name and may be a spoofed
+        // Connect; it is "not present" for both the join and the leave diff below.
+        auto clients = nm->GetClients();
+        std::erase_if(clients,
+                      [](const auto& entry) { return entry.second.state != Spark::Net::ConnectionState::Connected; });
 
         // NetworkManager already removed a departed client's owned entities; forget
         // the mapping so the table stays bounded by the admitted clients.

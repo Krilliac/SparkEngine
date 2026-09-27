@@ -282,6 +282,7 @@ namespace Spark::Net
         m_peers.clear();
         m_secureChannels.clear();
         m_pendingAccepts.clear();
+        m_connectLimiter.Clear();
         m_clientHandshake.reset();
         m_lagCompensator.Clear();
         m_serverTime = 0.0f;
@@ -427,6 +428,7 @@ namespace Spark::Net
         }
         m_maxClients = maxClients;
         m_serverTime = 0.0f;
+        m_connectLimiter.Configure(m_securityConfig.connectRate);
         m_heartbeatTimer = 0.0f;
         m_replicationTimer = 0.0f;
         m_allowLanAdvertisement = allowLanAdvertisement;
@@ -821,6 +823,24 @@ namespace Spark::Net
         auto addrIt = m_clientAddresses.find(client);
         if (addrIt == m_clientAddresses.end())
             return;
+        // Admission fence (NET-100): until ClientFinished promotes a slot to Connected, it may
+        // receive only the handshake's own answer. This holds for every caller -- replication,
+        // game systems, heartbeats -- so a spoofed Connect never draws game traffic.
+        if (!IsHandshakeMessage(copy.type))
+        {
+            bool admitted = false;
+            {
+                std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
+                const auto slot = m_clients.find(client);
+                admitted = slot != m_clients.end() && slot->second.state == ConnectionState::Connected;
+            }
+            if (!admitted)
+            {
+                m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                m_stats.unadmittedSendsRefused++;
+                return;
+            }
+        }
         if (!IsEndpointAllowed(addrIt->second))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Rejecting network message for a disallowed client endpoint");
@@ -1329,6 +1349,15 @@ namespace Spark::Net
             m_stats.handshakeFailures++;
             return INVALID_CLIENT;
         }
+        // A small-order ephemeral key can never yield a session. Refuse it by comparison alone,
+        // before the capacity check and before any curve operation or signature.
+        if (IsLowOrderX25519PublicKey(
+                std::span(msg.payload).subspan(CLIENT_HELLO_EPHEMERAL_OFFSET, HANDSHAKE_PUBLIC_KEY_SIZE)))
+        {
+            RejectPendingConnect(pendingID, ConnectRejectReason::MalformedHandshake, "Malformed connect request");
+            m_stats.handshakeFailures++;
+            return INVALID_CLIENT;
+        }
 
         if (static_cast<int>(m_clients.size()) >= m_maxClients)
         {
@@ -1343,7 +1372,18 @@ namespace Spark::Net
             return INVALID_CLIENT;
         }
 
-        auto response = RespondToClientHello(msg.payload, *m_securityConfig.identity);
+        // ConnectAccepted: [client id u32][server time f32][echoed version u16][ServerHello].
+        // The prefix is signed with the ServerHello (SPNH-v3 transcript), so the client can
+        // trust the id it is assigned: rewriting it breaks the handshake.
+        const ClientID newID = pendingID;
+        NetBuffer prefixBuf;
+        prefixBuf.WriteUint32(newID);
+        prefixBuf.WriteFloat(m_serverTime);
+        prefixBuf.WriteUint16(NETWORK_PROTOCOL_VERSION);
+        std::vector<uint8_t> acceptPayload = prefixBuf.GetData();
+
+        m_stats.handshakeResponsesComputed++;
+        auto response = RespondToClientHello(msg.payload, acceptPayload, *m_securityConfig.identity);
         if (!response)
         {
             const ConnectRejectReason reason = response.error() == HandshakeError::UnsupportedSuite
@@ -1354,7 +1394,6 @@ namespace Spark::Net
             return INVALID_CLIENT;
         }
 
-        const ClientID newID = m_nextClientID;
         m_nextClientID = AdvanceGeneratedClientID(newID);
         ClientInfo info;
         info.id = newID;
@@ -1366,18 +1405,14 @@ namespace Spark::Net
         }
         m_secureChannels[newID] = PeerChannel{std::move(response->channel), 0, m_serverTime};
 
-        // ConnectAccepted: [client id u32][server time f32][echoed version u16][ServerHello].
-        // It is unreliable: a lost one is answered again when the client retransmits its
-        // Connect, so the server never sends more than one datagram per datagram received.
+        // ConnectAccepted is unreliable: a lost one is answered again when the client
+        // retransmits its Connect, so the server never sends more than one datagram per
+        // datagram received.
         NetworkMessage accept;
         accept.type = MessageType::ConnectAccepted;
         accept.channel = ChannelType::Unreliable;
-        NetBuffer respBuf;
-        respBuf.WriteUint32(newID);
-        respBuf.WriteFloat(m_serverTime);
-        respBuf.WriteUint16(NETWORK_PROTOCOL_VERSION);
-        respBuf.WriteBytes(response->serverHello.data(), response->serverHello.size());
-        accept.payload = respBuf.GetData();
+        acceptPayload.insert(acceptPayload.end(), response->serverHello.begin(), response->serverHello.end());
+        accept.payload = std::move(acceptPayload);
         m_pendingAccepts[newID] = PendingAccept{msg.payload, accept};
         SendToClient(newID, accept);
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u securing, %d/%d slots used", newID,
@@ -1437,7 +1472,7 @@ namespace Spark::Net
         NetBuffer buf;
         buf.WriteBytes(accepted.payload.data(), accepted.payload.size());
         const ClientID assignedID = buf.ReadUint32();
-        buf.ReadFloat(); // server time; informational only
+        buf.ReadFloat(); // server time; informational (signed with the rest of the prefix)
         const uint16_t serverVersion = buf.ReadUint16();
         if (buf.HasError() || assignedID == INVALID_CLIENT)
         {
@@ -1456,7 +1491,7 @@ namespace Spark::Net
                                                serverVersion, NETWORK_PROTOCOL_VERSION));
             return;
         }
-        constexpr size_t kAcceptPrefix = 4 + 4 + 2;
+        constexpr size_t kAcceptPrefix = CONNECT_ACCEPT_PREFIX_SIZE;
         if (accepted.payload.size() != kAcceptPrefix + SERVER_HELLO_SIZE)
         {
             // Not a v2 ConnectAccepted (e.g. a legacy 10-byte echo): it can never authenticate
@@ -1481,7 +1516,9 @@ namespace Spark::Net
             return;
         }
 
-        auto channel = m_clientHandshake->Finish(serverHello, expected->key);
+        // The assigned id is adopted only because Finish verified it inside the signed transcript.
+        auto channel =
+            m_clientHandshake->Finish(std::span(accepted.payload).first(kAcceptPrefix), serverHello, expected->key);
         m_clientHandshake.reset();
         if (!channel)
         {
@@ -1814,7 +1851,14 @@ namespace Spark::Net
                 if (role == NetworkRole::Server && trustedSender == INVALID_CLIENT && legacyShaped &&
                     DeserializeMessage(rawData.data(), rawData.size(), msg) && msg.type == MessageType::Connect)
                 {
-                    SendLegacyRejection(senderAddr, msg);
+                    if (m_connectLimiter.Allow(ntohl(senderAddr.sin_addr.s_addr), m_serverTime))
+                    {
+                        SendLegacyRejection(senderAddr, msg);
+                    }
+                    else
+                    {
+                        m_stats.connectsRateLimited++;
+                    }
                 }
                 continue;
             }
@@ -1866,6 +1910,14 @@ namespace Spark::Net
                 if (msg.type == MessageType::Connect)
                 {
                     msg.senderID = INVALID_CLIENT;
+
+                    // Every unadmitted Connect costs work and a reply to an address that may be
+                    // spoofed; a source over its budget is dropped with no answer at all.
+                    if (!m_connectLimiter.Allow(ntohl(senderAddr.sin_addr.s_addr), m_serverTime))
+                    {
+                        m_stats.connectsRateLimited++;
+                        continue;
+                    }
 
                     // Duplicate-address detection: if this address already has
                     // an active connection, ignore the redundant Connect to

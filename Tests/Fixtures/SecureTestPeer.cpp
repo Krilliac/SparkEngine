@@ -199,7 +199,7 @@ namespace SparkTestFixtures
                 return accepted.has_value();
             },
             window);
-        constexpr size_t kPrefix = 4 + 4 + 2;
+        constexpr size_t kPrefix = CONNECT_ACCEPT_PREFIX_SIZE;
         if (!accepted || accepted->payload.size() != kPrefix + SERVER_HELLO_SIZE)
         {
             return std::nullopt;
@@ -209,7 +209,9 @@ namespace SparkTestFixtures
         NetBuffer buf;
         buf.WriteBytes(accepted->payload.data(), accepted->payload.size());
         result.id = buf.ReadUint32();
-        auto channel = handshake.Finish(std::span(accepted->payload).subspan(kPrefix), TestServerIdentity().publicKey);
+        const std::span<const uint8_t> acceptPayload(accepted->payload);
+        auto channel = handshake.Finish(acceptPayload.first(kPrefix), acceptPayload.subspan(kPrefix),
+                                        TestServerIdentity().publicKey);
         if (!channel)
         {
             return std::nullopt;
@@ -400,7 +402,7 @@ namespace SparkTestFixtures
 
     bool SecureRawClient::FinishFromAccepted(const WireMessage& accepted, const ServerPublicKey& pinned)
     {
-        constexpr size_t kPrefix = 4 + 4 + 2;
+        constexpr size_t kPrefix = CONNECT_ACCEPT_PREFIX_SIZE;
         if (accepted.type != MessageType::ConnectAccepted || accepted.payload.size() != kPrefix + SERVER_HELLO_SIZE)
         {
             return false;
@@ -408,7 +410,8 @@ namespace SparkTestFixtures
         NetBuffer buf;
         buf.WriteBytes(accepted.payload.data(), accepted.payload.size());
         const ClientID id = buf.ReadUint32();
-        auto channel = m_handshake.Finish(std::span(accepted.payload).subspan(kPrefix), pinned);
+        const std::span<const uint8_t> acceptPayload(accepted.payload);
+        auto channel = m_handshake.Finish(acceptPayload.first(kPrefix), acceptPayload.subspan(kPrefix), pinned);
         if (!channel)
         {
             return false;
@@ -505,20 +508,27 @@ namespace SparkTestFixtures
         return std::nullopt;
     }
 
-    std::vector<uint8_t> SecureRawServer::AcceptPayload(ClientID id, uint16_t echoedVersion,
-                                                        std::span<const uint8_t> serverHello)
+    std::vector<uint8_t> SecureRawServer::AcceptPrefix(ClientID id, uint16_t echoedVersion)
     {
         NetBuffer buf;
         buf.WriteUint32(id);
         buf.WriteFloat(0.0f);
         buf.WriteUint16(echoedVersion);
-        buf.WriteBytes(serverHello.data(), serverHello.size());
         return buf.GetData();
+    }
+
+    std::vector<uint8_t> SecureRawServer::AcceptPayload(ClientID id, uint16_t echoedVersion,
+                                                        std::span<const uint8_t> serverHello)
+    {
+        std::vector<uint8_t> payload = AcceptPrefix(id, echoedVersion);
+        payload.insert(payload.end(), serverHello.begin(), serverHello.end());
+        return payload;
     }
 
     std::vector<uint8_t> SecureRawServer::Accept(ClientID id, const ServerIdentity* identity, uint16_t echoedVersion)
     {
-        auto response = RespondToClientHello(m_clientHello, identity ? *identity : TestServerIdentity());
+        auto response = RespondToClientHello(m_clientHello, AcceptPrefix(id, echoedVersion),
+                                             identity ? *identity : TestServerIdentity());
         if (!response)
         {
             return {};

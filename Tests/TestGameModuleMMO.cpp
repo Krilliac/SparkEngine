@@ -24,9 +24,18 @@
 
 #include "../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h"
 
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/WorldServer.h"
+#include "Fixtures/NetworkTestSecurity.h"
+#include "Fixtures/SecureTestPeer.h"
+#endif
+
 #include <nlohmann_json.h>
 
+#include <chrono>
 #include <cmath>
+#include <optional>
+#include <thread>
 #include <filesystem>
 #include <exception>
 #include <fstream>
@@ -588,6 +597,77 @@ TEST(MMO_StateRequest_RejectsMalformedAndImplausibleState)
                   network, MMOStateRequest(3, 0, {4.0f, 1.0f, 1.0f}, still, 0, false, {-360.0f, 90.0f, 360.0f})),
               owned);
     EXPECT_NEAR(network.GetReplicatedEntitySnapshot(owned)->rotation.x, -360.0f, 1e-6f);
+}
+
+namespace
+{
+    /// Headless host context whose network is the NetworkManager singleton, so
+    /// MMOWorldSetup starts its WorldServer and bridges NetworkManager clients into it.
+    class MMOHeadlessNetContext final : public Spark::IEngineContext
+    {
+      public:
+        GraphicsEngine* GetGraphics() override { return nullptr; }
+        const GraphicsEngine* GetGraphics() const override { return nullptr; }
+        InputManager* GetInput() override { return nullptr; }
+        const InputManager* GetInput() const override { return nullptr; }
+        Timer* GetTimer() override { return nullptr; }
+        const Timer* GetTimer() const override { return nullptr; }
+        Spark::EventBus* GetEventBus() override { return nullptr; }
+        const Spark::EventBus* GetEventBus() const override { return nullptr; }
+        ::AudioEngine* GetAudio() override { return nullptr; }
+        const ::AudioEngine* GetAudio() const override { return nullptr; }
+        PhysicsSystem* GetPhysics() override { return nullptr; }
+        const PhysicsSystem* GetPhysics() const override { return nullptr; }
+        Spark::NetworkManager* GetNetwork() override { return &Spark::Net::NetworkManager::GetInstance(); }
+        const Spark::NetworkManager* GetNetwork() const override { return &Spark::Net::NetworkManager::GetInstance(); }
+        bool IsHeadless() const override { return true; }
+        uint32_t GetEngineVersion() const override { return 0; }
+        uint32_t GetSDKVersion() const override { return 0; }
+    };
+} // namespace
+
+// NET-100: a slot still Securing (ConnectAccepted sent, no ClientFinished yet) is not a player.
+// The MMO server bridge must not register it with the WorldServer (it has no name and may be a
+// spoofed Connect); once ClientFinished admits it, it joins under the name it sent.
+TEST(MMO_ServerBridge_RegistersOnlyAdmittedClients)
+{
+    auto& network = Spark::Net::NetworkManager::GetInstance();
+    network.Shutdown();
+    MMOHeadlessNetContext context;
+    MMOWorldSetup world;
+    ASSERT_TRUE(world.Initialize(&context));
+    ASSERT_TRUE(world.GetWorldServer() != nullptr);
+    ASSERT_TRUE(world.StartNetworkServer(0));
+
+    SparkTestFixtures::SecureRawClient peer;
+    ASSERT_TRUE(peer.Socket().SendTo(network.GetBoundPort(), peer.BeginConnect()));
+    const auto accepted = peer.AwaitType(network, Spark::Net::MessageType::ConnectAccepted);
+    ASSERT_TRUE(accepted.has_value());
+    ASSERT_TRUE(peer.FinishFromAccepted(*accepted, SparkTestFixtures::TestServerIdentity().publicKey));
+    const Spark::Net::ClientID id = peer.Id();
+
+    for (int tick = 0; tick < 5; ++tick)
+        world.ServerTick(0.016f);
+    ASSERT_EQ(network.GetClientSlots().size(), static_cast<size_t>(1));             // the Securing slot exists...
+    EXPECT_FALSE(world.GetWorldServer()->GetPlayerSessionSnapshot(id).has_value()); // ...but is no player
+
+    ASSERT_TRUE(peer.SendSealed(SparkTestFixtures::BuildWire(Spark::Net::MessageType::ClientFinished,
+                                                             SparkTestFixtures::EncodeName("Aurelia"),
+                                                             Spark::Net::ChannelType::Reliable, 0, id),
+                                network.GetBoundPort()));
+    std::optional<Spark::Net::PlayerSession> session;
+    for (int tick = 0; tick < 100 && !session; ++tick)
+    {
+        world.ServerTick(0.016f);
+        session = world.GetWorldServer()->GetPlayerSessionSnapshot(id);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    ASSERT_TRUE(session.has_value());
+    EXPECT_EQ(session->playerName, std::string("Aurelia"));
+
+    world.StopNetworkServer();
+    world.Shutdown();
+    network.Shutdown();
 }
 #endif // ENABLE_NETWORKING
 

@@ -434,7 +434,9 @@ namespace
             m_remote = clientAddress;
 
             // Answer the ClientHello as the pinned test identity and keep the server channel.
-            auto response = Spark::Net::RespondToClientHello(connect.payload, SparkTestFixtures::TestServerIdentity());
+            auto response = Spark::Net::RespondToClientHello(
+                connect.payload, SparkTestFixtures::SecureRawServer::AcceptPrefix(assignedId),
+                SparkTestFixtures::TestServerIdentity());
             if (!response)
                 return false;
             m_channel = std::move(response->channel);

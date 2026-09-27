@@ -798,7 +798,8 @@ TEST(NetworkManager_ClientAcceptsOnlyConfiguredServerEndpoint)
     const auto connect = SparkTestFixtures::ParseWire(
         std::span<const uint8_t>(receiveBuffer.data(), static_cast<size_t>(received)).subspan(1));
     ASSERT_TRUE(connect.has_value());
-    auto response = RespondToClientHello(connect->payload, SparkTestFixtures::TestServerIdentity());
+    auto response = RespondToClientHello(connect->payload, SparkTestFixtures::SecureRawServer::AcceptPrefix(42),
+                                         SparkTestFixtures::TestServerIdentity());
     ASSERT_TRUE(response.has_value());
     const auto accepted = SparkTestFixtures::HandshakeFrame(SparkTestFixtures::BuildWire(
         MessageType::ConnectAccepted,
@@ -1049,8 +1050,9 @@ TEST(NetworkManager_PolicyKickDropsGameplayQueuedBehindConnectInSameReceivePump)
         }
     }
     ASSERT_TRUE(accepted.has_value());
-    auto channel =
-        handshake.Finish(std::span(accepted->payload).subspan(10), SparkTestFixtures::TestServerIdentity().publicKey);
+    auto channel = handshake.Finish(std::span(accepted->payload).first(CONNECT_ACCEPT_PREFIX_SIZE),
+                                    std::span(accepted->payload).subspan(CONNECT_ACCEPT_PREFIX_SIZE),
+                                    SparkTestFixtures::TestServerIdentity().publicKey);
     ASSERT_TRUE(channel.has_value());
     const auto finished = SparkTestFixtures::FrameForSend(
         channel->get(),

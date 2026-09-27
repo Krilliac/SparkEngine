@@ -201,8 +201,11 @@ namespace Spark::Net
         // into O(connects * replicated-entities) CPU amplification.
         {
             std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
-            if (!m_clients.contains(targetClient))
-                return;
+            const auto target = m_clients.find(targetClient);
+            if (target == m_clients.end() || target->second.state != ConnectionState::Connected)
+            {
+                return; // unknown, or still Securing (NET-100): no entity walk before admission
+            }
         }
 
         ++m_stats.fullEntitySyncs;
@@ -510,13 +513,9 @@ namespace Spark::Net
 
                 // Snapshot client IDs once — both code paths need them so we can
                 // apply the per-connection interest filter instead of broadcasting.
-                std::vector<ClientID> connectedClients;
-                {
-                    std::lock_guard<std::mutex> clientLock(m_clientsMutex);
-                    connectedClients.reserve(m_clients.size());
-                    for (const auto& [cid, cinfo] : m_clients)
-                        connectedClients.push_back(cid);
-                }
+                // Only admitted (Connected) clients: a Securing slot has not proven
+                // its channel (NET-100) and must receive nothing but its ConnectAccepted.
+                const std::vector<ClientID> connectedClients = GetConnectedClientIDs();
 
                 NetBuffer serializedState;
                 apiLock.unlock();

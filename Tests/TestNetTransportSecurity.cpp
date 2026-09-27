@@ -174,10 +174,11 @@ namespace
                 auto message = inner ? SparkTestFixtures::ParseWire(*inner) : std::nullopt;
                 if (!message || message->type != MessageType::ConnectAccepted)
                     continue;
-                constexpr size_t kPrefix = 4 + 4 + 2;
+                constexpr size_t kPrefix = CONNECT_ACCEPT_PREFIX_SIZE;
                 if (message->payload.size() != kPrefix + SERVER_HELLO_SIZE)
                     return false;
-                auto channel = m_handshake->Finish(std::span(message->payload).subspan(kPrefix),
+                const std::span<const uint8_t> acceptPayload(message->payload);
+                auto channel = m_handshake->Finish(acceptPayload.first(kPrefix), acceptPayload.subspan(kPrefix),
                                                    SparkTestFixtures::TestServerIdentity().publicKey);
                 if (!channel)
                     return false;
@@ -191,7 +192,9 @@ namespace
         /// Server role: answer @p clientHello as the pinned test identity; returns the framed accept.
         std::vector<uint8_t> AcceptClientHello(std::span<const uint8_t> clientHello, ClientID assigned) const
         {
-            auto response = RespondToClientHello(clientHello, SparkTestFixtures::TestServerIdentity());
+            auto response =
+                RespondToClientHello(clientHello, SparkTestFixtures::SecureRawServer::AcceptPrefix(assigned),
+                                     SparkTestFixtures::TestServerIdentity());
             if (!response)
                 return {};
             m_channel = std::move(response->channel);

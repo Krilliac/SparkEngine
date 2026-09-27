@@ -201,6 +201,11 @@ namespace SparkTestFixtures
         std::vector<uint8_t> Accept(Spark::Net::ClientID id, const Spark::Net::ServerIdentity* identity = nullptr,
                                     uint16_t echoedVersion = Spark::Net::NETWORK_PROTOCOL_VERSION);
 
+        /// The CONNECT_ACCEPT_PREFIX_SIZE bytes before the ServerHello (server time 0); they are
+        /// signed with it, so tests pass the same prefix to RespondToClientHello and AcceptPayload.
+        static std::vector<uint8_t> AcceptPrefix(Spark::Net::ClientID id,
+                                                 uint16_t echoedVersion = Spark::Net::NETWORK_PROTOCOL_VERSION);
+
         /// Plaintext ConnectAccepted payload for @p id carrying @p serverHello (for tamper tests).
         static std::vector<uint8_t> AcceptPayload(Spark::Net::ClientID id, uint16_t echoedVersion,
                                                   std::span<const uint8_t> serverHello);

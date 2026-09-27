@@ -115,9 +115,10 @@ TEST(Transport_TrustStore_IdentityRoundTrip)
     ClientHandshake client;
     auto hello = client.Begin(NETWORK_PROTOCOL_VERSION);
     ASSERT_TRUE(hello.has_value());
-    auto response = RespondToClientHello(*hello, *reloaded);
+    const std::array<uint8_t, CONNECT_ACCEPT_PREFIX_SIZE> prefix{1};
+    auto response = RespondToClientHello(*hello, prefix, *reloaded);
     ASSERT_TRUE(response.has_value());
-    EXPECT_TRUE(client.Finish(response->serverHello, created->publicKey).has_value());
+    EXPECT_TRUE(client.Finish(prefix, response->serverHello, created->publicKey).has_value());
 }
 
 TEST(Transport_TrustStore_CorruptIdentityRejected)

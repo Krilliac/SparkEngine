@@ -2114,7 +2114,8 @@ set(_spark_net100_transport_selectors
     "Transport_FuzzPacket_=1"
     "Transport_KeyGeneration_=1"
     "Transport_Libsodium_=1"
-    "Transport_Handshake_=9"
+    "Transport_Handshake_=11"
+    "Transport_RateLimit_=1"
     "Transport_TrustStore_=6")
 foreach(_spark_net100_selector IN LISTS _spark_net100_transport_selectors)
     string(REPLACE "=" ";" _spark_net100_parts "${_spark_net100_selector}")
@@ -2141,10 +2142,13 @@ if(ENABLE_NETWORKING)
     # loopback UDP: wrong/tampered/downgraded server identity, truncated or suite-downgraded
     # ClientHello, missing ClientFinished, tamper/replay/reorder/wrong-key/truncation of sealed
     # frames, sensitive-without-channel refusal, send-key rotation, and packet captures that must
-    # contain no player name, chat text or credential bytes.
+    # contain no player name, chat text or credential bytes. Also: a rewritten ConnectAccepted
+    # client id is refused (signed prefix), a small-order-key hello flood does no crypto work, the
+    # per-source Connect budget drops excess hellos unanswered, and a Securing slot receives nothing
+    # but its ConnectAccepted.
     add_test(NAME NetworkSecureTransportWired COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(NetworkSecureTransportWired PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestSecureTransportWired.cpp;SPARK_TEST_EXPECT_COUNT=16"
+        ENVIRONMENT "SPARK_TEST_FILE=TestSecureTransportWired.cpp;SPARK_TEST_EXPECT_COUNT=20"
         LABELS "network-security;network;security"
         TIMEOUT 120)
 endif()
@@ -2226,6 +2230,14 @@ if(TARGET imgui AND ENABLE_NETWORKING)
     set_tests_properties(MMOClientStateRequest PROPERTIES
         ENVIRONMENT "SPARK_TEST_FILE=TestGameModuleMMO.cpp;SPARK_TEST_NAME_PREFIX=MMO_StateRequest_;SPARK_TEST_EXPECT_COUNT=2"
         LABELS "network;security;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+    # NET-100: the MMO server bridge registers only admitted (Connected) clients with the
+    # WorldServer, never a Securing slot, and under the name its ClientFinished carried.
+    add_test(NAME MMOServerBridgeAdmission COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(MMOServerBridgeAdmission PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestGameModuleMMO.cpp;SPARK_TEST_NAME_PREFIX=MMO_ServerBridge_;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "network-security;network;security;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)
 endif()

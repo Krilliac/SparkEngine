@@ -25,8 +25,10 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace Spark::Net;
@@ -126,7 +128,8 @@ TEST(SecureTransport_Handshake_TamperedServerHelloAbandons)
     SecureRawServer fake;
     ASSERT_TRUE(StartClient(client, fake, "Tamper"));
 
-    auto response = RespondToClientHello(fake.LastClientHello(), TestServerIdentity());
+    auto response =
+        RespondToClientHello(fake.LastClientHello(), SecureRawServer::AcceptPrefix(5), TestServerIdentity());
     ASSERT_TRUE(response.has_value());
     auto hello = response->serverHello;
     hello[1 + 32 + 32 + 3] ^= 0x01; // one bit of the server nonce, inside the signed transcript
@@ -189,7 +192,8 @@ TEST(SecureTransport_Handshake_DowngradedSuiteRejected)
     auto& client = NetworkManager::GetInstance();
     SecureRawServer fake;
     ASSERT_TRUE(StartClient(client, fake, "Downgrade"));
-    auto response = RespondToClientHello(fake.LastClientHello(), TestServerIdentity());
+    auto response =
+        RespondToClientHello(fake.LastClientHello(), SecureRawServer::AcceptPrefix(5), TestServerIdentity());
     ASSERT_TRUE(response.has_value());
     auto hello = response->serverHello;
     hello[0] = 0;
@@ -218,14 +222,16 @@ TEST(SecureTransport_Handshake_ClientFinishedMissingTimesOut)
     ASSERT_TRUE(peer.FinishFromAccepted(*accepted, TestServerIdentity().publicKey));
     // No ClientFinished: the slot stays Securing, unannounced, and receives no broadcast.
     Pump(server);
-    ASSERT_EQ(server.GetClients().size(), static_cast<size_t>(1));
-    EXPECT_EQ(static_cast<int>(server.GetClients().begin()->second.state), static_cast<int>(ConnectionState::Securing));
+    ASSERT_EQ(server.GetClientSlots().size(), static_cast<size_t>(1));
+    EXPECT_TRUE(server.GetClients().empty()); // a Securing slot is not a player
+    EXPECT_EQ(static_cast<int>(server.GetClientSlots().begin()->second.state),
+              static_cast<int>(ConnectionState::Securing));
     EXPECT_EQ(admissions, 0);
     for (const auto& datagram : peer.Socket().Captured())
         EXPECT_EQ(datagram[0], kFrameHandshake);
 
     server.Update(11.0f); // past the 10 s connection timeout
-    EXPECT_TRUE(server.GetClients().empty());
+    EXPECT_TRUE(server.GetClientSlots().empty());
     EXPECT_EQ(admissions, 0);
     server.UnregisterHandler(MessageType::Connect);
     server.Shutdown();
@@ -246,6 +252,168 @@ TEST(SecureTransport_Handshake_PlayerNameNeverInPlaintextCapture)
     for (const auto& datagram : fake.Socket().Captured())
         EXPECT_FALSE(ContainsBytes(datagram, Bytes(name)));
     client.Shutdown();
+}
+
+TEST(SecureTransport_Handshake_RewrittenClientIdAbandons)
+{
+    auto& client = NetworkManager::GetInstance();
+    SecureRawServer fake;
+    ASSERT_TRUE(StartClient(client, fake, "Swapped"));
+
+    // The pinned server signs id 5; an on-path attacker rewrites it to 6 (another player's
+    // id) and leaves every ServerHello byte intact. The prefix is in the signed transcript.
+    auto response =
+        RespondToClientHello(fake.LastClientHello(), SecureRawServer::AcceptPrefix(5), TestServerIdentity());
+    ASSERT_TRUE(response.has_value());
+    fake.Socket().SendTo(
+        fake.Socket().LastSender(),
+        HandshakeFrame(BuildWire(MessageType::ConnectAccepted,
+                                 SecureRawServer::AcceptPayload(6, NETWORK_PROTOCOL_VERSION, response->serverHello),
+                                 ChannelType::Unreliable)));
+    AwaitDisconnected(client);
+
+    EXPECT_EQ(static_cast<int>(client.GetConnectionState()), static_cast<int>(ConnectionState::Disconnected));
+    EXPECT_EQ(static_cast<int>(client.GetLastConnectRejectReason()),
+              static_cast<int>(ConnectRejectReason::HandshakeAuthFailed));
+    EXPECT_EQ(client.GetLocalClientID(), INVALID_CLIENT); // 6 was never adopted
+    for (const auto& datagram : fake.Socket().Captured())
+        EXPECT_EQ(datagram[0], kFrameHandshake); // no ClientFinished under a swapped identity
+    client.Shutdown();
+}
+
+TEST(SecureTransport_Handshake_LowOrderHelloFloodDoesNoCryptoWork)
+{
+    auto& server = NetworkManager::GetInstance();
+    ASSERT_TRUE(StartLoopbackServer(server));
+
+    // 50 ClientHellos with an all-zero ephemeral key, all handled inside one server tick.
+    constexpr int kFlood = 50;
+    SecureRawClient attacker;
+    auto frame = attacker.BeginConnect();
+    ASSERT_FALSE(frame.empty());
+    std::fill_n(frame.begin() + 1 + kWireHeaderSize + CLIENT_HELLO_EPHEMERAL_OFFSET, HANDSHAKE_PUBLIC_KEY_SIZE,
+                uint8_t{0});
+    for (int i = 0; i < kFlood; ++i)
+        ASSERT_TRUE(attacker.Socket().SendTo(server.GetBoundPort(), frame));
+    std::this_thread::sleep_for(std::chrono::milliseconds(20)); // let loopback deliver the burst
+    server.Update(0.016f);
+
+    const auto stats = server.GetStats();
+    EXPECT_EQ(stats.handshakeResponsesComputed, 0u); // no keygen, scalar multiplication or signature
+    EXPECT_EQ(stats.handshakeFailures, static_cast<uint32_t>(kFlood));
+    EXPECT_TRUE(server.GetClientSlots().empty()); // no slot held, not even transiently
+    int rejects = 0;
+    while (auto datagram = attacker.Socket().Receive())
+    {
+        auto message = attacker.Open(*datagram);
+        if (message && message->type == MessageType::ConnectRejected)
+            ++rejects;
+    }
+    EXPECT_EQ(rejects, kFlood);
+
+    // Positive control: a real hello right after the flood does reach the handshake.
+    SecureRawClient honest;
+    ASSERT_TRUE(honest.Connect(server, "Honest"));
+    EXPECT_EQ(server.GetStats().handshakeResponsesComputed, 1u);
+    server.Shutdown();
+}
+
+TEST(SecureTransport_Handshake_ConnectFloodRateLimitedPerSource)
+{
+    NetworkSecurityConfig limited = TestNetworkSecurityConfig();
+    limited.connectRate = ConnectRateLimit{3.0f, 1.0f};
+    ScopedNetworkSecurity scope(std::move(limited));
+    auto& server = NetworkManager::GetInstance();
+    ASSERT_TRUE(StartLoopbackServer(server, 16));
+
+    // Six sockets on 127.0.0.1 (distinct ports, one source address) each send a valid hello.
+    std::vector<std::unique_ptr<SecureRawClient>> peers;
+    for (int i = 0; i < 6; ++i)
+    {
+        peers.push_back(std::make_unique<SecureRawClient>());
+        ASSERT_TRUE(peers.back()->Socket().SendTo(server.GetBoundPort(), peers.back()->BeginConnect()));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    server.Update(0.016f);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    const auto stats = server.GetStats();
+    EXPECT_EQ(stats.connectsRateLimited, 3u);
+    EXPECT_EQ(stats.handshakeResponsesComputed, 3u);
+    EXPECT_EQ(server.GetClientSlots().size(), static_cast<size_t>(3));
+    int answered = 0;
+    for (auto& peer : peers)
+    {
+        while (peer->Socket().Receive())
+        {
+        }
+        answered += peer->Socket().Captured().empty() ? 0 : 1;
+    }
+    EXPECT_EQ(answered, 3); // dropped sources got no reply: nothing to reflect
+
+    // The bucket refills with time: one more Connect a second.
+    SecureRawClient later;
+    server.Update(1.0f);
+    ASSERT_TRUE(later.Socket().SendTo(server.GetBoundPort(), later.BeginConnect()));
+    EXPECT_TRUE(later.AwaitType(server, MessageType::ConnectAccepted).has_value());
+    EXPECT_EQ(server.GetStats().connectsRateLimited, 3u);
+    server.Shutdown();
+}
+
+TEST(SecureTransport_Wired_SecuringSlotReceivesNoGameTraffic)
+{
+    auto& server = NetworkManager::GetInstance();
+    ASSERT_TRUE(StartLoopbackServer(server));
+
+    // Mallory completes her half of the handshake but never sends ClientFinished.
+    SecureRawClient mallory;
+    ASSERT_TRUE(mallory.Socket().SendTo(server.GetBoundPort(), mallory.BeginConnect()));
+    const auto accepted = mallory.AwaitType(server, MessageType::ConnectAccepted);
+    ASSERT_TRUE(accepted.has_value());
+    ASSERT_TRUE(mallory.FinishFromAccepted(*accepted, TestServerIdentity().publicKey));
+    const ClientID securing = mallory.Id();
+
+    ReplicatedEntity entity;
+    entity.ownerID = INVALID_CLIENT;
+    entity.entityType = "Crate";
+    entity.position = {1.0f, 2.0f, 3.0f};
+    const uint32_t netId = server.RegisterReplicatedEntity(entity);
+    ASSERT_TRUE(netId != 0);
+
+    // Positive control: an admitted client receives the replicated world...
+    SecureRawClient alice;
+    ASSERT_TRUE(alice.Connect(server, "Alice"));
+    ASSERT_TRUE(alice.AwaitType(server, MessageType::EntityStateUpdate).has_value());
+    ReplicatedEntityUpdate moved;
+    moved.position = DirectX::XMFLOAT3{4.0f, 5.0f, 6.0f};
+    moved.needsFullSync = true; // the per-tick fan-out, not only the admission sync
+    ASSERT_TRUE(server.UpdateReplicatedEntity(netId, moved));
+    ASSERT_TRUE(alice.AwaitType(server, MessageType::EntityStateUpdate).has_value());
+
+    // ...and a direct send to the Securing slot is refused by the admission fence.
+    const uint32_t refusedBefore = server.GetStats().unadmittedSendsRefused;
+    NetworkMessage chat;
+    chat.type = MessageType::ChatMessage;
+    chat.channel = ChannelType::Reliable;
+    chat.payload = EncodeName("not yet");
+    server.SendToClient(securing, chat);
+    EXPECT_TRUE(server.GetStats().unadmittedSendsRefused > refusedBefore);
+    Pump(server);
+
+    // Mallory's socket saw the ConnectAccepted and nothing else: no replication, no chat.
+    ASSERT_EQ(static_cast<int>(server.GetClientSlots().at(securing).state),
+              static_cast<int>(ConnectionState::Securing));
+    while (mallory.Socket().Receive())
+    {
+    }
+    for (const auto& datagram : mallory.Socket().Captured())
+    {
+        EXPECT_EQ(datagram[0], kFrameHandshake);
+        const auto message = mallory.Open(datagram);
+        ASSERT_TRUE(message.has_value());
+        EXPECT_EQ(static_cast<int>(message->type), static_cast<int>(MessageType::ConnectAccepted));
+    }
+    server.Shutdown();
 }
 
 // ============================================================================

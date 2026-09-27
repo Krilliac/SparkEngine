@@ -26,8 +26,10 @@ namespace Spark::Net
 
     namespace
     {
-        constexpr std::string_view kTranscriptLabel = "SPNH-v2";
-        constexpr std::string_view kSessionInfo = "spark-net-100 session v2";
+        // v3: the ConnectAccepted prefix (assigned client id, server time, echoed version) joined
+        // the transcript. The v2 transcript never shipped in a release.
+        constexpr std::string_view kTranscriptLabel = "SPNH-v3";
+        constexpr std::string_view kSessionInfo = "spark-net-100 session v3";
 
         // ClientHello field offsets.
         constexpr size_t kClientMagic = 0;
@@ -35,6 +37,7 @@ namespace Spark::Net
         constexpr size_t kClientSuite = 6;
         constexpr size_t kClientEphemeral = 7;
         constexpr size_t kClientNonce = kClientEphemeral + HANDSHAKE_PUBLIC_KEY_SIZE;
+        static_assert(kClientEphemeral == CLIENT_HELLO_EPHEMERAL_OFFSET);
 
         // ServerHello field offsets; the signature covers everything before it.
         constexpr size_t kServerSuite = 0;
@@ -46,14 +49,17 @@ namespace Spark::Net
 
         using TranscriptHash = std::array<uint8_t, crypto_hash_sha256_BYTES>;
 
-        /// th = SHA-256(label || ClientHello || ServerHello[0 .. signature)).
-        TranscriptHash HashTranscript(std::span<const uint8_t> clientHello, std::span<const uint8_t> signedServerPart)
+        /// th = SHA-256(label || ClientHello || accept prefix || ServerHello[0 .. signature)).
+        /// Every part has a fixed length, so the concatenation is unambiguous.
+        TranscriptHash HashTranscript(std::span<const uint8_t> clientHello, std::span<const uint8_t> acceptPrefix,
+                                      std::span<const uint8_t> signedServerPart)
         {
             crypto_hash_sha256_state state;
             crypto_hash_sha256_init(&state);
             crypto_hash_sha256_update(&state, reinterpret_cast<const unsigned char*>(kTranscriptLabel.data()),
                                       kTranscriptLabel.size());
             crypto_hash_sha256_update(&state, clientHello.data(), clientHello.size());
+            crypto_hash_sha256_update(&state, acceptPrefix.data(), acceptPrefix.size());
             crypto_hash_sha256_update(&state, signedServerPart.data(), signedServerPart.size());
             TranscriptHash th{};
             crypto_hash_sha256_final(&state, th.data());
@@ -99,7 +105,56 @@ namespace Spark::Net
                 p[i] = static_cast<uint8_t>(v >> (i * 8));
             }
         }
+
+        /// Every Curve25519 u-coordinate of small order, in canonical and p+ form. This is
+        /// libsodium's own blocklist (crypto_scalarmult/curve25519/ref10/x25519_ref10.c,
+        /// has_small_order); bit 255 is ignored on comparison, as X25519 ignores it.
+        constexpr std::array<std::array<uint8_t, 32>, 7> kSmallOrderPoints = {{
+            // 0 (order 4)
+            {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+            // 1 (order 1)
+            {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+            // order 8
+            {0xe0, 0xeb, 0x7a, 0x7c, 0x3b, 0x41, 0xb8, 0xae, 0x16, 0x56, 0xe3, 0xfa, 0xf1, 0x9f, 0xc4, 0x6a,
+             0xda, 0x09, 0x8d, 0xeb, 0x9c, 0x32, 0xb1, 0xfd, 0x86, 0x62, 0x05, 0x16, 0x5f, 0x49, 0xb8, 0x00},
+            // order 8
+            {0x5f, 0x9c, 0x95, 0xbc, 0xa3, 0x50, 0x8c, 0x24, 0xb1, 0xd0, 0xb1, 0x55, 0x9c, 0x83, 0xef, 0x5b,
+             0x04, 0x44, 0x5c, 0xc4, 0x58, 0x1c, 0x8e, 0x86, 0xd8, 0x22, 0x4e, 0xdd, 0xd0, 0x9f, 0x11, 0x57},
+            // p - 1 (order 2)
+            {0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+            // p (= 0, order 4)
+            {0xed, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+            // p + 1 (= 1, order 1)
+            {0xee, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+        }};
     } // namespace
+
+    bool IsLowOrderX25519PublicKey(std::span<const uint8_t> key) noexcept
+    {
+        if (key.size() != HANDSHAKE_PUBLIC_KEY_SIZE)
+        {
+            return true; // not a key at all: never worth a curve operation
+        }
+        // Public values only, so an early-exit comparison leaks nothing secret.
+        for (const auto& point : kSmallOrderPoints)
+        {
+            bool same = (key[31] & 0x7f) == point[31];
+            for (size_t i = 0; same && i < 31; ++i)
+            {
+                same = key[i] == point[i];
+            }
+            if (same)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // ============================================================================
     // Server
@@ -122,8 +177,13 @@ namespace Spark::Net
     }
 
     std::expected<ServerHandshakeResult, HandshakeError> RespondToClientHello(std::span<const uint8_t> clientHello,
+                                                                              std::span<const uint8_t> acceptPrefix,
                                                                               const ServerIdentity& identity)
     {
+        if (acceptPrefix.size() != CONNECT_ACCEPT_PREFIX_SIZE)
+        {
+            return std::unexpected(HandshakeError::Malformed);
+        }
         if (clientHello.size() != CLIENT_HELLO_SIZE || LoadLE32(&clientHello[kClientMagic]) != NETWORK_HANDSHAKE_MAGIC)
         {
             return std::unexpected(HandshakeError::Malformed);
@@ -138,6 +198,12 @@ namespace Spark::Net
         {
             return std::unexpected(HandshakeError::UnsupportedSuite);
         }
+        // A small-order client key is refused before any curve operation, so a flood of them
+        // costs the server comparisons only (NetworkManager::HandleConnect checks it earlier still).
+        if (IsLowOrderX25519PublicKey(clientHello.subspan(kClientEphemeral, HANDSHAKE_PUBLIC_KEY_SIZE)))
+        {
+            return std::unexpected(HandshakeError::WeakSharedSecret);
+        }
         if (!EnsureSodium())
         {
             return std::unexpected(HandshakeError::CsprngFailure);
@@ -151,15 +217,16 @@ namespace Spark::Net
         crypto_box_keypair(&hello[kServerEphemeral], ephemeralSecret.data());
         randombytes_buf(&hello[kServerNonce], HANDSHAKE_NONCE_SIZE);
 
-        const TranscriptHash th = HashTranscript(clientHello, std::span(hello).first(kServerSignature));
-        crypto_sign_detached(&hello[kServerSignature], nullptr, th.data(), th.size(), identity.secretKey.data());
-
+        // Key agreement runs before the signature: any hello that fails costs at most one
+        // scalar multiplication and never an Ed25519 signature.
+        const TranscriptHash th = HashTranscript(clientHello, acceptPrefix, std::span(hello).first(kServerSignature));
         auto channel = DeriveChannel(ephemeralSecret, &clientHello[kClientEphemeral], th, ChannelRole::Server);
         sodium_memzero(ephemeralSecret.data(), ephemeralSecret.size());
         if (!channel)
         {
             return std::unexpected(channel.error());
         }
+        crypto_sign_detached(&hello[kServerSignature], nullptr, th.data(), th.size(), identity.secretKey.data());
         result.channel = std::move(*channel);
         return result;
     }
@@ -200,7 +267,7 @@ namespace Spark::Net
     }
 
     std::expected<std::unique_ptr<SecureChannel>, HandshakeError> ClientHandshake::Finish(
-        std::span<const uint8_t> serverHello, const ServerPublicKey& pinnedKey)
+        std::span<const uint8_t> acceptPrefix, std::span<const uint8_t> serverHello, const ServerPublicKey& pinnedKey)
     {
         if (m_state != State::AwaitingServerHello)
         {
@@ -211,7 +278,7 @@ namespace Spark::Net
 
         std::expected<std::unique_ptr<SecureChannel>, HandshakeError> outcome =
             std::unexpected(HandshakeError::Malformed);
-        if (serverHello.size() != SERVER_HELLO_SIZE)
+        if (serverHello.size() != SERVER_HELLO_SIZE || acceptPrefix.size() != CONNECT_ACCEPT_PREFIX_SIZE)
         {
             outcome = std::unexpected(HandshakeError::Malformed);
         }
@@ -225,7 +292,7 @@ namespace Spark::Net
         }
         else
         {
-            const TranscriptHash th = HashTranscript(m_clientHello, serverHello.first(kServerSignature));
+            const TranscriptHash th = HashTranscript(m_clientHello, acceptPrefix, serverHello.first(kServerSignature));
             if (crypto_sign_verify_detached(&serverHello[kServerSignature], th.data(), th.size(), pinnedKey.data()) !=
                 0)
             {

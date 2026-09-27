@@ -472,10 +472,13 @@ namespace Spark::Net
         /// NET-100: sealed frames dropped by SecureChannel::Open, indexed by OpenResult
         /// (Malformed, UnsupportedVersion, UnknownKeyEpoch, AuthenticationFailed, Replayed; [0] unused).
         std::array<uint32_t, 6> securityDrops{};
-        uint32_t plaintextFramesDropped = 0; ///< Unframed, unknown-kind or out-of-state plaintext frames refused
-        uint32_t unsealedSendsRefused = 0;   ///< Outgoing non-handshake messages with no SecureChannel to seal them
-        uint32_t keyRotations = 0;           ///< Send-key rotations performed
-        uint32_t handshakeFailures = 0;      ///< Handshakes refused or abandoned (either role)
+        uint32_t plaintextFramesDropped = 0;     ///< Unframed, unknown-kind or out-of-state plaintext frames refused
+        uint32_t unsealedSendsRefused = 0;       ///< Outgoing non-handshake messages with no SecureChannel to seal them
+        uint32_t keyRotations = 0;               ///< Send-key rotations performed
+        uint32_t handshakeFailures = 0;          ///< Handshakes refused or abandoned (either role)
+        uint32_t handshakeResponsesComputed = 0; ///< Server: ClientHellos that reached RespondToClientHello
+        uint32_t connectsRateLimited = 0;        ///< Server: unadmitted Connects dropped by ConnectRateLimiter
+        uint32_t unadmittedSendsRefused = 0;     ///< Server: non-handshake sends refused to a non-Connected slot
     };
 
     // ============================================================================
@@ -709,7 +712,28 @@ namespace Spark::Net
         bool IsInitialized() const override { return m_initialized; }
 
         // Client management (server only)
+        /**
+         * @brief [any thread] Admitted clients only (state Connected)
+         *
+         * A slot still Securing (handshake answered, no ClientFinished yet) is not a player:
+         * it has no name and has not proven its channel, so game code never sees it here.
+         */
         std::unordered_map<ClientID, ClientInfo> GetClients() const
+        {
+            std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+            std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
+            std::unordered_map<ClientID, ClientInfo> admitted;
+            for (const auto& [id, info] : m_clients)
+            {
+                if (info.state == ConnectionState::Connected)
+                {
+                    admitted.emplace(id, info);
+                }
+            }
+            return admitted;
+        }
+        /** @brief [any thread] Every occupied slot, including Securing ones (diagnostics and tests). */
+        std::unordered_map<ClientID, ClientInfo> GetClientSlots() const
         {
             std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
             std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
@@ -977,6 +1001,9 @@ namespace Spark::Net
             NetworkMessage accept;
         };
         std::unordered_map<ClientID, PendingAccept> m_pendingAccepts;
+        /// Server-side: per-source budget for unadmitted Connects (configured from
+        /// m_securityConfig.connectRate at StartServer). Game thread only.
+        ConnectRateLimiter m_connectLimiter;
         NetworkEndpointPolicy m_endpointPolicy{}; ///< Captured once and unchanged for the active socket lifecycle.
         bool m_allowLanAdvertisement = false;     ///< Authoritative server option for discovery publishers.
 

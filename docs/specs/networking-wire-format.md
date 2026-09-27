@@ -221,12 +221,18 @@ the transcript the server signs, so rewriting either breaks the handshake.
 | `ConnectRejected` | `uint16 textLength`, text bytes, `uint8 reason`, `uint16 serverProtocolVersion` | max 256 |
 | `ClientFinished` (sealed) | `uint16 nameLength`, name bytes | 2 + at most 64 |
 
-The signature covers `SHA-256("SPNH-v2" || ClientHello || ServerHello without its signature)`;
-the session secret is `HKDF-SHA256(salt = transcript hash, X25519 shared secret)`. Details and
-the primitive list: `SparkEngine/Source/Engine/Networking/SecureHandshake.h`.
+The signature covers
+`SHA-256("SPNH-v3" || ClientHello || accept prefix || ServerHello without its signature)`, where
+the accept prefix is the first 10 bytes of `ConnectAccepted` (`clientID`, `serverTime`, echoed
+`protocolVersion`). The client adopts the assigned `clientID` only after that signature verifies,
+so an on-path rewrite of the id (handing the client another player's identity) fails the
+handshake. The session secret is `HKDF-SHA256(salt = transcript hash, X25519 shared secret)`.
+Details and the primitive list: `SparkEngine/Source/Engine/Networking/SecureHandshake.h`.
 
 Server (`NetworkManager::HandleConnect`) checks the handshake **before** it considers a client slot
-or does any signature work:
+or does any curve or signature work. A small-order client ephemeral key is found by comparison
+against libsodium's blocklist, not by a scalar multiplication; and `RespondToClientHello` derives
+the shared secret before it signs, so no refused hello ever costs an Ed25519 signature:
 
 | Condition | `ConnectRejectReason` |
 |-----------|-----------------------|
@@ -240,13 +246,25 @@ or does any signature work:
 
 Each rejection is sent only to the pending endpoint, whose pre-registered address is then
 forgotten, so a rejected peer never occupies server state. An accepted hello creates a slot in
-state `Securing` with its channel; the client is surfaced to observers (the `Connect` admission
-event) and receives broadcast traffic only after its sealed `ClientFinished` opens under that
-channel. A `Securing` slot that never finishes is removed by the connection timeout.
+state `Securing` with its channel. A `Securing` slot is not a player: `NetworkManager::GetClients()`
+lists only `Connected` clients (`GetClientSlots()` lists every slot), and `SendToClient` refuses
+every message except `ConnectAccepted`/`ConnectRejected` to a slot that is not `Connected`
+(`NetworkStats::unadmittedSendsRefused`), so replication, full syncs, chat and game broadcasts
+cannot reach it. The client is surfaced to observers (the `Connect` admission event) only after
+its sealed `ClientFinished` opens under that channel. A `Securing` slot that never finishes is
+removed by the connection timeout.
 `ConnectAccepted` is unreliable: a client that lost it retransmits the identical `Connect`, and the
 server answers that once more, so the server never sends more than one datagram per datagram it
 receives (the reply is about 2.3 times the request; anti-amplification cookies are later NET-100
 work).
+
+**Per-source Connect budget.** Every `Connect` from an endpoint without an admitted session
+(including legacy unframed ones and retransmits) is charged to a token bucket keyed by the source
+IPv4 address (`ConnectRateLimiter`, `NetworkSecurityConfig::connectRate`, default burst 16 and
+4 per second). A source over budget is dropped with **no reply**, so it can neither make the
+server do handshake work nor use it to reflect datagrams (`NetworkStats::connectsRateLimited`).
+At most 4096 sources are tracked; when the table is full, sources whose buckets have refilled are
+forgotten first, and a new source is refused while none has.
 
 Client: `ConnectAccepted` is verified before anything else happens.
 
@@ -255,7 +273,7 @@ Client: `ConnectAccepted` is verified before anything else happens.
 | Echoed version differs | `ProtocolMismatch` (6) |
 | Not exactly 155 bytes (for example a legacy echo with no ServerHello) | ignored; the handshake is not consumed |
 | ServerHello names a key other than the pinned or recorded one | `ServerIdentityMismatch` (8) |
-| Bad signature, rewritten suite, low-order ephemeral key, or an unusable known_hosts | `HandshakeAuthFailed` (9) |
+| Bad signature, rewritten suite or accept prefix (client id, server time), low-order ephemeral key, or an unusable known_hosts | `HandshakeAuthFailed` (9) |
 
 Any of these returns the client to `Disconnected`, closes its socket, and discards queued
 lifecycle traffic, just as `ConnectRejected` does. A `ConnectRejected` without a readable typed

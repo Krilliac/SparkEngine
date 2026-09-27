@@ -531,16 +531,18 @@ Tests: `Tests/TestNET100TransportReal.cpp` (`Transport_*`) and `Tests/TestNET100
 | ClientHello | 55 bytes | `[magic u32 = 0x484E5053][NETWORK_PROTOCOL_VERSION u16][suite u8 = 1][client X25519 pub 32][client nonce 16]` |
 | ServerHello | 145 bytes | `[suite u8][server Ed25519 pub 32][server X25519 pub 32][server nonce 16][Ed25519 signature 64]` |
 
-Both sides hash the transcript `th = SHA-256("SPNH-v2" || ClientHello || ServerHello without the signature)` and the server signs `th`. Version and suite sit inside the signed transcript, so rewriting either breaks the signature. The session secret is `HKDF-SHA256(salt = th, ikm = X25519(ephemeral, peer ephemeral), info = "spark-net-100 session v2")`, and it is the only input to `SecureChannel`. Fresh ephemeral keys and nonces on both sides make every session secret unique, so channel nonces never repeat across sessions. Ephemeral secrets and intermediate keys are wiped with `sodium_memzero`, and a `ClientHandshake` is single use.
+Both sides hash the transcript `th = SHA-256("SPNH-v3" || ClientHello || accept prefix || ServerHello without the signature)` and the server signs `th`; the accept prefix is the 10 bytes of `ConnectAccepted` before the ServerHello (`[client id u32][server time f32][echoed version u16]`, `CONNECT_ACCEPT_PREFIX_SIZE`). Version, suite and the assigned client id sit inside the signed transcript, so rewriting any of them breaks the signature; the client adopts its id only from a verified prefix. A small-order client ephemeral key is refused by comparison against libsodium's blocklist (`IsLowOrderX25519PublicKey`) before any curve operation, and the server derives the shared secret before it signs, so a refused hello never costs an Ed25519 signature. The session secret is `HKDF-SHA256(salt = th, ikm = X25519(ephemeral, peer ephemeral), info = "spark-net-100 session v3")`, and it is the only input to `SecureChannel`. Fresh ephemeral keys and nonces on both sides make every session secret unique, so channel nonces never repeat across sessions. Ephemeral secrets and intermediate keys are wiped with `sodium_memzero`, and a `ClientHandshake` is single use.
 
 | Function / type | Description |
 |-----------------|-------------|
 | `ClientHandshake::Begin(version)` | Generates the ephemeral key and nonce, returns the ClientHello |
-| `RespondToClientHello(hello, identity)` | Validates the hello, returns the ServerHello and the server `SecureChannel`; allocates nothing for a rejected hello |
-| `ClientHandshake::Finish(serverHello, pinnedKey)` | Checks suite and pinned identity, verifies the signature, returns the client `SecureChannel` |
+| `RespondToClientHello(hello, acceptPrefix, identity)` | Validates the hello, returns the ServerHello (signed over the accept prefix too) and the server `SecureChannel`; allocates nothing for a rejected hello |
+| `ClientHandshake::Finish(acceptPrefix, serverHello, pinnedKey)` | Checks suite and pinned identity, verifies the signature over the transcript including the accept prefix, returns the client `SecureChannel` |
+| `IsLowOrderX25519PublicKey(key)` | Comparison-only small-order check; `HandleConnect` and `RespondToClientHello` call it before any curve work |
+| `ConnectRateLimiter` (`ConnectRateLimiter.h`) | Per-source-IPv4 token bucket for unadmitted `Connect`s (`NetworkSecurityConfig::connectRate`, default burst 16, 4/s); excess is dropped unanswered |
 | `HandshakeError` | `Malformed`, `UnsupportedVersion`, `UnsupportedSuite`, `BadSignature`, `ServerIdentityMismatch`, `WeakSharedSecret` (low-order X25519 point), `CsprngFailure`, `InvalidState` |
 
-Tests: `Tests/TestNET100Handshake.cpp` (`Transport_Handshake_*`, CTest `NetworkSecurity_Transport_Handshake`, exact count 9): interoperating channels, wrong pinned key, every ServerHello byte flip, every truncation and extension, version and suite downgrade, a replayed ServerHello, low-order client points, and deterministic rejection of malformed hellos. `NetworkManager` carries them in production: the ClientHello is the `Connect` payload and the ServerHello follows the echoed version in `ConnectAccepted`; the server holds the new slot in state `Securing` until the client's sealed `ClientFinished` arrives. The server's identity and the client's trust come from `NetworkSecurityConfig` (`NetworkTrustStore.h`): `StartServer` refuses without an identity, `Connect` refuses without a usable pin or known_hosts path, and `UseDefaultSecurityConfig` fills them from `<user data>/net`. Wired tests: `Tests/TestSecureTransportWired.cpp` (CTest `NetworkSecureTransportWired`) and `Tests/TestNET100TrustStore.cpp` (`Transport_TrustStore_*`).
+Tests: `Tests/TestNET100Handshake.cpp` (`Transport_Handshake_*`, CTest `NetworkSecurity_Transport_Handshake`, exact count 11): interoperating channels, wrong pinned key, every ServerHello byte flip, every accept-prefix byte flip, every truncation and extension, version and suite downgrade, a replayed ServerHello, every small-order client point (checked against libsodium as an oracle), and deterministic rejection of malformed hellos; `Transport_RateLimit_*` (CTest `NetworkSecurity_Transport_RateLimit`) covers the Connect budget. The server lists a `Securing` slot only in `GetClientSlots()`: `GetClients()` returns admitted (`Connected`) clients, and `SendToClient` refuses a non-`Connected` slot everything but `ConnectAccepted`/`ConnectRejected`. `NetworkManager` carries them in production: the ClientHello is the `Connect` payload and the ServerHello follows the echoed version in `ConnectAccepted`; the server holds the new slot in state `Securing` until the client's sealed `ClientFinished` arrives. The server's identity and the client's trust come from `NetworkSecurityConfig` (`NetworkTrustStore.h`): `StartServer` refuses without an identity, `Connect` refuses without a usable pin or known_hosts path, and `UseDefaultSecurityConfig` fills them from `<user data>/net`. Wired tests: `Tests/TestSecureTransportWired.cpp` (CTest `NetworkSecureTransportWired`) and `Tests/TestNET100TrustStore.cpp` (`Transport_TrustStore_*`).
 
 ### RateLimiter
 
@@ -780,7 +782,8 @@ void RegisterHandler(MessageType type, MessageHandler handler);
 | `GetServerTime()` | `float` | Server clock time |
 | `GetStats()` | `const NetworkStats&` | Bandwidth/latency stats |
 | `IsInitialized()` | `bool` | Whether Initialize() succeeded |
-| `GetClients()` | `const map<ClientID, ClientInfo>&` | Connected clients (server) |
+| `GetClients()` | `unordered_map<ClientID, ClientInfo>` | Admitted (`Connected`) clients only (server) |
+| `GetClientSlots()` | `unordered_map<ClientID, ClientInfo>` | Every slot, including `Securing` ones (diagnostics) |
 
 ### Network Statistics
 
@@ -818,10 +821,10 @@ struct ClientInfo
 
 ### Connection Handshake
 
-1. Client sends `MessageType::Connect` with player name
-2. Server validates (max clients, bans), assigns `ClientID`
-3. Server sends `ConnectAccepted` with assigned ID, or `ConnectRejected` with reason
-4. Server calls `SendFullEntitySync` to replicate existing entities to new client
+1. Client sends `MessageType::Connect` carrying its ClientHello (no player name)
+2. Server charges the source's Connect budget, validates version, suite, key and capacity, assigns a `ClientID` and holds the slot `Securing`
+3. Server sends `ConnectAccepted` (assigned ID + signed ServerHello), or `ConnectRejected` with reason
+4. Client verifies the signature and sends its name in a sealed `ClientFinished`; the server marks the slot `Connected` and only then surfaces it and syncs entities (`SendFullEntitySync`)
 
 ### Heartbeat System
 

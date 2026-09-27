@@ -31,6 +31,10 @@ namespace SparkTestFixtures
         Spark::Net::NetworkSecurityConfig config;
         config.identity = TestServerIdentity();
         config.trust = Spark::Net::ServerTrust::Pin(TestServerIdentity().publicKey);
+        // Every loopback test peer shares 127.0.0.1, and suites connect dozens of them within a
+        // few simulated seconds. The production budget is exercised by the SecureTransport_
+        // rate-limit tests, which install it explicitly.
+        config.connectRate = Spark::Net::ConnectRateLimit{4096.0f, 4096.0f};
         return config;
     }
 

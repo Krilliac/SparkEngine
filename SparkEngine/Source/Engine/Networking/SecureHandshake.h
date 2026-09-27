@@ -14,12 +14,19 @@
  *   ServerHello (145 bytes)
  *     [suite u8][server Ed25519 pub 32][server X25519 pub 32][server nonce 16][signature 64]
  *
- * Both sides compute the transcript hash
- *   th = SHA-256("SPNH-v2" || ClientHello || ServerHello without its signature)
- * and the server signs th. Version and suite sit inside the signed transcript,
- * so rewriting either breaks the signature (no downgrade). The session secret is
+ * The server sends the ServerHello after a 10-byte ConnectAccepted prefix
+ *   [assigned client id u32][server time f32][echoed version u16]
+ * and both sides compute the transcript hash
+ *   th = SHA-256("SPNH-v3" || ClientHello || accept prefix || ServerHello without its signature)
+ * and the server signs th. Version, suite and the assigned client id sit inside the
+ * signed transcript, so rewriting any of them breaks the signature (no downgrade,
+ * no session-identity swap). The session secret is
  * HKDF-SHA256(salt = th, ikm = X25519(ephemeral, peer ephemeral),
- * info = "spark-net-100 session v2"), and it is the only input to SecureChannel.
+ * info = "spark-net-100 session v3"), and it is the only input to SecureChannel.
+ *
+ * Cost bound: a small-order client ephemeral key is refused by comparison against
+ * libsodium's blocklist before any curve operation, and the server derives the shared
+ * secret before it signs, so a rejected hello never costs an Ed25519 signature.
  * Fresh ephemerals and nonces on both sides make every session secret unique,
  * so SecureChannel's per-key nonce counter never repeats across sessions.
  *
@@ -63,6 +70,10 @@ namespace Spark::Net
     constexpr size_t CLIENT_HELLO_SIZE = 4 + 2 + 1 + HANDSHAKE_PUBLIC_KEY_SIZE + HANDSHAKE_NONCE_SIZE;
     constexpr size_t SERVER_HELLO_SIZE =
         1 + HANDSHAKE_PUBLIC_KEY_SIZE + HANDSHAKE_PUBLIC_KEY_SIZE + HANDSHAKE_NONCE_SIZE + HANDSHAKE_SIGNATURE_SIZE;
+    /// ConnectAccepted bytes before the ServerHello: [client id u32][server time f32][version u16].
+    constexpr size_t CONNECT_ACCEPT_PREFIX_SIZE = 4 + 4 + 2;
+    /// Offset of the client's X25519 ephemeral key inside a ClientHello.
+    constexpr size_t CLIENT_HELLO_EPHEMERAL_OFFSET = 4 + 2 + 1;
 
     using ServerPublicKey = std::array<uint8_t, HANDSHAKE_PUBLIC_KEY_SIZE>;
     using ClientHello = std::array<uint8_t, CLIENT_HELLO_SIZE>;
@@ -100,6 +111,17 @@ namespace Spark::Net
      */
     [[nodiscard]] std::expected<ServerIdentity, HandshakeError> GenerateServerIdentity();
 
+    /**
+     * @brief True when @p key is a small-order X25519 u-coordinate (or not 32 bytes)
+     *
+     * Pure comparison against libsodium's small-order blocklist, ignoring bit 255;
+     * no curve operation. Such a key can only produce an all-zero shared secret.
+     *
+     * @param key Candidate X25519 public key
+     * @return true when the key must be refused
+     */
+    [[nodiscard]] bool IsLowOrderX25519PublicKey(std::span<const uint8_t> key) noexcept;
+
     /** @brief What the server sends back and keeps after a valid ClientHello. */
     struct ServerHandshakeResult
     {
@@ -110,14 +132,18 @@ namespace Spark::Net
     /**
      * @brief Validate a ClientHello and complete the server side of the handshake
      *
-     * Stateless: nothing is allocated for a rejected hello.
+     * Stateless: nothing is allocated for a rejected hello. A small-order client key is
+     * refused (WeakSharedSecret) before any curve operation, and the signature is computed
+     * only after key agreement succeeded.
      *
-     * @param clientHello Bytes received from the client
-     * @param identity    This server's signing identity
+     * @param clientHello  Bytes received from the client
+     * @param acceptPrefix The exact CONNECT_ACCEPT_PREFIX_SIZE bytes that will precede the
+     *                     ServerHello in ConnectAccepted; they are signed with it
+     * @param identity     This server's signing identity
      * @return The ServerHello to send and the server's channel, or why the hello was refused
      */
     [[nodiscard]] std::expected<ServerHandshakeResult, HandshakeError> RespondToClientHello(
-        std::span<const uint8_t> clientHello, const ServerIdentity& identity);
+        std::span<const uint8_t> clientHello, std::span<const uint8_t> acceptPrefix, const ServerIdentity& identity);
 
     /**
      * @brief Client side of the handshake: Begin once, then Finish once
@@ -145,12 +171,18 @@ namespace Spark::Net
 
         /**
          * @brief Verify the ServerHello against the pinned key and derive the client channel
-         * @param serverHello Bytes received from the server
-         * @param pinnedKey   The server public key this client trusts
+         *
+         * The accept prefix is inside the signed transcript: once this succeeds, the client
+         * id it carries was assigned by the pinned server for this exact ClientHello.
+         *
+         * @param acceptPrefix The CONNECT_ACCEPT_PREFIX_SIZE bytes before the ServerHello
+         * @param serverHello  Bytes received from the server
+         * @param pinnedKey    The server public key this client trusts
          * @return The client's channel (ChannelRole::Client), or why the handshake failed
          */
         [[nodiscard]] std::expected<std::unique_ptr<SecureChannel>, HandshakeError> Finish(
-            std::span<const uint8_t> serverHello, const ServerPublicKey& pinnedKey);
+            std::span<const uint8_t> acceptPrefix, std::span<const uint8_t> serverHello,
+            const ServerPublicKey& pinnedKey);
 
       private:
         enum class State : uint8_t

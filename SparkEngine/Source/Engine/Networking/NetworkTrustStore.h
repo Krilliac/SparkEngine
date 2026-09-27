@@ -39,6 +39,7 @@
 
 #pragma once
 
+#include "ConnectRateLimiter.h"
 #include "SecureHandshake.h"
 
 #include <cstdint>
@@ -181,6 +182,7 @@ namespace Spark::Net
     {
         std::optional<ServerIdentity> identity; ///< Server role: this server's signing identity
         ServerTrust trust;                      ///< Client role: which server keys to accept
+        ConnectRateLimit connectRate;           ///< Server role: unadmitted Connects per source IPv4
     };
 
     /**
