@@ -31,11 +31,11 @@
       },
       {
         "path": "SparkEngine/Source/Engine/Scripting",
-        "reason": "AngelScript campaigns are owned by ENG-200 behind readiness gate G11. This subtree does ingest untrusted .as files from disk (AngelScriptEngine::CompileScriptFile -> AddSectionFromFile); that file surface is explicitly ENG-200's, not unowned. Re-reviewed 2026-09-27 for MOD-390: VisualScriptGraphIO::Parse/LoadFile (VisualScriptGraphIO.cpp/.h) decodes untrusted .vscript graph JSON from disk; it compiles to AngelScript and is the same ENG-200-owned script-ingest surface.",
+        "reason": "AngelScript campaigns are owned by ENG-200 behind readiness gate G11. This subtree does ingest untrusted .as files from disk (AngelScriptEngine::CompileScriptFile -> AddSectionFromFile); that file surface is explicitly ENG-200's, not unowned. The .vscript graph decoder in this subtree is not waived: it is the inventoried visual-script-graph parser.",
         "ticket": "ENG-200",
         "owner": "eng-200-scripting-campaign",
         "expires": "2027-08-23",
-        "hidden_candidate_count": 5
+        "hidden_candidate_count": 3
       }
     ],
     "excluded_files": [],
@@ -2253,6 +2253,23 @@
       "status": "blocked",
       "blocker": {
         "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "visual-script-graph",
+      "description": "Engine .vscript visual-script graph decoder (VisualScriptGraphIO::Parse/LoadFile): fail-closed JSON graph reader whose result the visual script compiler turns into AngelScript.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Engine/Scripting/VisualScriptGraphIO.cpp",
+        "SparkEngine/Source/Engine/Scripting/VisualScriptGraphIO.h"
+      ],
+      "formats": [
+        ".vscript"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness (Parse then Compile) and bounded seed corpus from the checked-in GameModules/SparkGameVisualScript/Assets/Graphs are committed.",
         "ticket": "SEC-120"
       }
     },

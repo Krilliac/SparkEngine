@@ -19,7 +19,7 @@ namespace Spark::Scripting
     {
         using namespace Detail;
 
-        /// Method name and parameter list generated for an event node.
+        /// Method name and parameter list generated for a built-in event node.
         std::pair<std::string, std::string> EventSignature(ScriptNodeType type)
         {
             switch (type)
@@ -38,8 +38,18 @@ namespace Spark::Scripting
             case ScriptNodeType::OnDamaged:
                 return {"OnDamaged", "float amount"};
             default:
-                return {"CustomHandler", ""};
+                return {};
             }
+        }
+
+        bool IsCustomEventNode(ScriptNodeType type)
+        {
+            return type == ScriptNodeType::OnCustomEvent || type == ScriptNodeType::DefineCustomEvent;
+        }
+
+        std::string CustomEventMethodName(const CustomEventDef& evt)
+        {
+            return "On" + SanitizeIdentifier(evt.name, "CustomEvent");
         }
 
         std::string ParameterList(const std::vector<VariableDecl>& parameters)
@@ -125,7 +135,9 @@ namespace Spark::Scripting
 
         // Group event nodes by generated method signature — OnKeyPress compiles into
         // Update(float dt), so OnUpdate plus OnKeyPress (or several OnKeyPress nodes)
-        // share one method instead of producing duplicate definitions.
+        // share one method instead of producing duplicate definitions. A custom event
+        // node's "event" property names a declared custom event, and its chain runs in
+        // that event's On<Name>(parameters) method (raised in-graph with CallFunction).
         struct EventMethod
         {
             std::string name;
@@ -133,16 +145,44 @@ namespace Spark::Scripting
             std::vector<const ScriptNode*> events;
         };
         std::vector<EventMethod> eventMethods;
-        for (const auto* eventNode : eventNodes)
+        const auto methodFor = [&](std::string name, std::string params) -> EventMethod&
         {
-            auto [name, params] = EventSignature(eventNode->type);
             auto existing = std::find_if(eventMethods.begin(), eventMethods.end(),
                                          [&](const EventMethod& m) { return m.name == name && m.params == params; });
             if (existing != eventMethods.end())
-                existing->events.push_back(eventNode);
-            else
-                eventMethods.push_back({std::move(name), std::move(params), {eventNode}});
+                return *existing;
+            return eventMethods.emplace_back(EventMethod{std::move(name), std::move(params), {}});
+        };
+        for (auto evt = graph.customEvents.begin(); evt != graph.customEvents.end(); ++evt)
+        {
+            const std::string name = CustomEventMethodName(*evt);
+            if (std::any_of(graph.customEvents.begin(), evt,
+                            [&](const CustomEventDef& earlier) { return CustomEventMethodName(earlier) == name; }))
+                result.errors.push_back("Custom event '" + evt->name + "' generates method " + name + " twice");
         }
+        for (const auto* eventNode : eventNodes)
+        {
+            if (!IsCustomEventNode(eventNode->type))
+            {
+                auto [name, params] = EventSignature(eventNode->type);
+                methodFor(std::move(name), std::move(params)).events.push_back(eventNode);
+                continue;
+            }
+            const std::string eventName = PropertyOr(*eventNode, "event", "");
+            const auto declared = std::find_if(graph.customEvents.begin(), graph.customEvents.end(),
+                                               [&](const CustomEventDef& evt) { return evt.name == eventName; });
+            if (declared == graph.customEvents.end())
+            {
+                result.errors.push_back("Custom event node " + std::to_string(eventNode->id) +
+                                        " names no declared custom event (event '" + eventName + "')");
+                continue;
+            }
+            methodFor(CustomEventMethodName(*declared), ParameterList(declared->parameters))
+                .events.push_back(eventNode);
+        }
+        // A declared event without a handler node still gets its empty method, so raising it compiles.
+        for (const auto& evt : graph.customEvents)
+            methodFor(CustomEventMethodName(evt), ParameterList(evt.parameters));
 
         VisualScriptEmitter emitter(graph, debugMode, result.errors);
         for (const auto& method : eventMethods)
@@ -183,14 +223,6 @@ namespace Spark::Scripting
             std::string body;
             funcEmitter.EmitEntryChains(funcGraph.nodes, "        ", body);
             source << body << "    }\n";
-        }
-
-        for (const auto& evt : graph.customEvents)
-        {
-            source << "\n    void On" << SanitizeIdentifier(evt.name, "CustomEvent") << "("
-                   << ParameterList(evt.parameters) << ")\n    {\n";
-            source << "        // Custom event handler — connected nodes execute here\n";
-            source << "    }\n";
         }
 
         source << "}\n";

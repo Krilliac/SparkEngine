@@ -9,6 +9,25 @@
 
 namespace Spark::Scripting::Detail
 {
+    namespace
+    {
+        /// Node property @p key; failing that, the value of the node's smallest property key
+        /// (graphs that named the property differently), else @p fallback. Choosing by key
+        /// rather than by unordered_map order keeps the generated source identical on every
+        /// standard library.
+        std::string PropertyOrSmallestKey(const ScriptNode& node, const char* key, const char* fallback)
+        {
+            std::string value = PropertyOr(node, key, "");
+            if (!value.empty())
+                return value;
+            if (node.properties.empty())
+                return fallback;
+            return std::min_element(node.properties.begin(), node.properties.end(),
+                                    [](const auto& a, const auto& b) { return a.first < b.first; })
+                ->second;
+        }
+    } // namespace
+
     /// Emit a node's own statement(s). Branch/ForLoop/Sequence go through EmitStep.
     void VisualScriptEmitter::EmitNode(const ScriptNode& node, const std::string& indent, std::string& code,
                                        bool assignHoistedResult)
@@ -90,7 +109,6 @@ namespace Spark::Scripting::Detail
             break;
         }
         case ScriptNodeType::MakeVector3:
-            // Member-wise: the script API registers Vector3 without a constructor.
             line("Vector3 " + out(0) + ";");
             line(out(0) + ".x = " + input(0) + ";");
             line(out(0) + ".y = " + input(1) + ";");
@@ -140,9 +158,7 @@ namespace Spark::Scripting::Detail
         case ScriptNodeType::GetKeyDown:
         case ScriptNodeType::GetKey:
         {
-            std::string key = PropertyOr(node, "key", "");
-            if (key.empty())
-                key = !node.properties.empty() ? node.properties.begin()->second : "Space";
+            const std::string key = PropertyOrSmallestKey(node, "key", "Space");
             const char* call = node.type == ScriptNodeType::GetKeyDown ? "getKeyDown" : "getKey";
             line("bool " + out(0) + " = " + call + "(\"" + EscapeAngelScriptString(key) + "\");");
             break;
@@ -193,10 +209,7 @@ namespace Spark::Scripting::Detail
             const char* key = node.type == ScriptNodeType::PlaySound       ? "sound"
                               : node.type == ScriptNodeType::PlayAnimation ? "animation"
                                                                            : "event";
-            std::string value = PropertyOr(node, key, "");
-            if (value.empty() && !node.properties.empty())
-                value = node.properties.begin()->second;
-            const std::string literal = "\"" + EscapeAngelScriptString(value) + "\"";
+            const std::string literal = "\"" + EscapeAngelScriptString(PropertyOrSmallestKey(node, key, "")) + "\"";
             if (node.type == ScriptNodeType::PlaySound)
                 line("playSound(selfEntity, " + literal + ");");
             else if (node.type == ScriptNodeType::PlayAnimation)
@@ -207,9 +220,7 @@ namespace Spark::Scripting::Detail
         }
         case ScriptNodeType::SpawnEntity:
         {
-            std::string name = PropertyOr(node, "name", "");
-            if (name.empty())
-                name = !node.properties.empty() ? node.properties.begin()->second : "Entity";
+            const std::string name = PropertyOrSmallestKey(node, "name", "Entity");
             line("uint " + out(FirstDataOutput(node)) + " = createEntity(\"" + EscapeAngelScriptString(name) + "\");");
             break;
         }

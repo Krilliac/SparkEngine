@@ -16,6 +16,9 @@
  * - Compiled graphs run in the production AngelScriptEngine: data nodes are
  *   evaluated where they are used (a read after a write sees the write), and
  *   Branch/Sequence/ForLoop nest, in event methods and function sub-graphs alike.
+ *   Vector3 literals compile, and a custom event's chain runs when the graph raises it.
+ * - A custom event node must name a declared custom event, and a node whose canonical
+ *   property is missing reads the same fallback property on every standard library.
  * - A hostile diamond-shaped execution graph fails the compile in bounded time.
  */
 
@@ -117,6 +120,22 @@ namespace
     bool SameGraph(const VisualScriptGraph& a, const VisualScriptGraph& b)
     {
         return VisualScriptGraphIO::Serialize(a) == VisualScriptGraphIO::Serialize(b);
+    }
+
+    ScriptPin Vector3Pin(float x, float y, float z)
+    {
+        ScriptPin pin = Pin(PinKind::Vector3, x);
+        pin.defaultValue[1] = y;
+        pin.defaultValue[2] = z;
+        return pin;
+    }
+
+    size_t CountOccurrences(std::string_view text, std::string_view needle)
+    {
+        size_t hits = 0;
+        for (size_t at = text.find(needle); at != std::string_view::npos; at = text.find(needle, at + 1))
+            ++hits;
+        return hits;
     }
 } // namespace
 
@@ -467,6 +486,67 @@ TEST(VisualScriptGraphs_HostileDiamondFailsInBoundedTime)
     EXPECT_TRUE(elapsed < std::chrono::seconds(60));
 }
 
+TEST(VisualScriptGraphs_CustomEventNodesMustNameADeclaredEvent)
+{
+    // Custom event chains used to be merged into one CustomHandler() nothing called, whatever
+    // event they named. Each chain now compiles into its declared event's method, so a node
+    // naming no declared event (or none at all) is a compile error rather than dead code.
+    const auto exec = [] { return Pin(PinKind::Execution); };
+    VisualScriptGraph graph;
+    graph.className = "CustomEvents";
+    graph.customEvents = {{"Scored", {{"points", PinKind::Int, {}}}}};
+    graph.nodes = {Node(1, ScriptNodeType::OnCustomEvent, {}, {exec()}, {{"event", "Scored"}}),
+                   Node(2, ScriptNodeType::PrintMessage, {exec(), Pin(PinKind::String, 0, "scored")}, {exec()})};
+    graph.connections = {{1, 0, 2, 0}};
+    auto result = VisualScriptCompiler::Compile(graph);
+    ASSERT_TRUE(result.success);
+    EXPECT_STR_CONTAINS(result.angelScriptSource, "void OnScored(int points)\n    {\n        print(\"scored\");");
+    EXPECT_TRUE(result.angelScriptSource.find("CustomHandler") == std::string::npos);
+    EXPECT_EQ(CountOccurrences(result.angelScriptSource, "void OnScored("), static_cast<size_t>(1));
+
+    using Properties = std::unordered_map<std::string, std::string>;
+    for (const Properties& properties : {Properties{{"event", "Missed"}}, Properties{}})
+    {
+        graph.nodes[0].properties = properties;
+        result = VisualScriptCompiler::Compile(graph);
+        EXPECT_FALSE(result.success);
+        ASSERT_FALSE(result.errors.empty());
+        EXPECT_STR_CONTAINS(result.errors.front(), "Custom event node 1 names no declared custom event");
+    }
+
+    // Two declarations that sanitize to one method name would otherwise define it twice.
+    graph.nodes[0].properties = {{"event", "Scored"}};
+    graph.customEvents.push_back({"Scored", {}});
+    result = VisualScriptCompiler::Compile(graph);
+    EXPECT_FALSE(result.success);
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_STR_CONTAINS(result.errors.front(), "generates method OnScored twice");
+}
+
+TEST(VisualScriptGraphs_PropertyFallbackIgnoresHashOrder)
+{
+    // A node without its canonical property key falls back to another property. Taking
+    // unordered_map::begin() made that pick depend on insertion order and the standard
+    // library; the smallest key is taken instead, whatever the map's iteration order.
+    const auto exec = [] { return Pin(PinKind::Execution); };
+    const auto sound = [&](uint32_t id, const std::vector<std::pair<std::string, std::string>>& properties)
+    {
+        ScriptNode node = Node(id, ScriptNodeType::PlaySound, {exec()}, {exec()});
+        for (const auto& [key, value] : properties)
+            node.properties.emplace(key, value);
+        return node;
+    };
+    VisualScriptGraph graph;
+    graph.className = "Fallback";
+    graph.nodes = {Node(1, ScriptNodeType::OnStart, {}, {exec()}),
+                   sound(2, {{"mix", "m"}, {"clip", "c"}, {"volume", "v"}}),
+                   sound(3, {{"volume", "v"}, {"clip", "c"}, {"mix", "m"}})};
+    graph.connections = {{1, 0, 2, 0}, {2, 0, 3, 0}};
+    const auto result = VisualScriptCompiler::Compile(graph);
+    ASSERT_TRUE(result.success);
+    EXPECT_EQ(CountOccurrences(result.angelScriptSource, "playSound(selfEntity, \"c\");"), static_cast<size_t>(2));
+}
+
 #ifdef SPARK_ANGELSCRIPT_SUPPORT
 namespace
 {
@@ -656,6 +736,86 @@ TEST(VisualScriptGraphs_FunctionGraphsRunInAngelScript)
     EXPECT_EQ(run.printed.size(), expected.size());
     for (size_t i = 0; i < expected.size() && i < run.printed.size(); ++i)
         EXPECT_EQ(run.printed[i], expected[i]);
+    if (!run.ran || run.printed != expected)
+        std::printf("%s\n", run.source.c_str());
+}
+
+TEST(VisualScriptGraphs_Vector3LiteralsCompileInAngelScript)
+{
+    // A ConstVector3 node and every unwired Vector3 input compile to Vector3(x, y, z), which
+    // the script API did not register, so any such graph compiled here but not in AngelScript.
+    const auto exec = [] { return Pin(PinKind::Execution); };
+    const auto print = [&](uint32_t id)
+    { return Node(id, ScriptNodeType::PrintMessage, {exec(), Pin(PinKind::String)}, {exec()}); };
+    const auto append = [](uint32_t id, const char* prefix)
+    {
+        return Node(id, ScriptNodeType::AppendString, {Pin(PinKind::String, 0, prefix), Pin(PinKind::Any)},
+                    {Pin(PinKind::String)});
+    };
+    const auto breakVector = [](uint32_t id, ScriptPin input)
+    {
+        return Node(id, ScriptNodeType::BreakVector3, {std::move(input)},
+                    {Pin(PinKind::Float), Pin(PinKind::Float), Pin(PinKind::Float)});
+    };
+
+    VisualScriptGraph graph;
+    graph.className = "VectorLiterals";
+    graph.nodes = {
+        Node(1, ScriptNodeType::OnStart, {}, {exec()}),
+        Node(2, ScriptNodeType::ConstVector3, {}, {Vector3Pin(1.5f, -2.0f, 0.25f)}),
+        breakVector(3, Pin(PinKind::Vector3)),
+        append(4, "y="),
+        print(5),
+        // Unwired Vector3 inputs: the position of SetPosition and the vector of a BreakVector3.
+        Node(6, ScriptNodeType::SetPosition, {exec(), Pin(PinKind::Entity), Vector3Pin(4.0f, 5.0f, 6.0f)}, {exec()}),
+        breakVector(7, Vector3Pin(4.0f, 5.0f, 6.0f)),
+        append(8, "z="),
+        print(9),
+    };
+    graph.connections = {{1, 0, 5, 0}, {2, 0, 3, 0}, {3, 1, 4, 1}, {4, 0, 5, 1},
+                         {5, 0, 6, 0}, {6, 0, 9, 0}, {7, 2, 8, 1}, {8, 0, 9, 1}};
+
+    CompiledGraphRun run(graph);
+    EXPECT_STR_CONTAINS(run.source, "Vector3(1.500000f, -2.000000f, 0.250000f)");
+    EXPECT_TRUE(run.ran);
+    const std::vector<std::string> expected = {"y=-2", "z=6"};
+    EXPECT_TRUE(run.printed == expected);
+    if (!run.ran || run.printed != expected)
+        std::printf("%s\n", run.source.c_str());
+}
+
+TEST(VisualScriptGraphs_CustomEventChainsRunInAngelScript)
+{
+    // Start raises Scored(3) with CallFunction; both OnCustomEvent("Scored") chains run in
+    // OnScored(int points) and read the parameter. The declared, unhandled Idle event still
+    // gets its method, so raising it compiles and does nothing.
+    const auto exec = [] { return Pin(PinKind::Execution); };
+    const auto onScored = [&](uint32_t id)
+    { return Node(id, ScriptNodeType::OnCustomEvent, {}, {exec()}, {{"event", "Scored"}}); };
+    const auto raise = [&](uint32_t id, const char* method, std::vector<ScriptPin> inputs)
+    { return Node(id, ScriptNodeType::CallFunction, std::move(inputs), {exec()}, {{"function", method}}); };
+
+    VisualScriptGraph graph;
+    graph.className = "CustomEventFlow";
+    graph.customEvents = {{"Scored", {{"points", PinKind::Int, {}}}}, {"Idle", {}}};
+    graph.nodes = {
+        Node(1, ScriptNodeType::OnStart, {}, {exec()}),
+        raise(2, "OnScored", {exec(), Pin(PinKind::Int, 3.0f)}),
+        raise(3, "OnIdle", {exec()}),
+        onScored(4),
+        Node(5, ScriptNodeType::GetVariable, {}, {Pin(PinKind::Int)}, {{"name", "points"}}),
+        Node(6, ScriptNodeType::AppendString, {Pin(PinKind::String, 0, "points="), Pin(PinKind::Any)},
+             {Pin(PinKind::String)}),
+        Node(7, ScriptNodeType::PrintMessage, {exec(), Pin(PinKind::String)}, {exec()}),
+        onScored(8),
+        Node(9, ScriptNodeType::PrintMessage, {exec(), Pin(PinKind::String, 0, "second handler")}, {exec()}),
+    };
+    graph.connections = {{1, 0, 2, 0}, {2, 0, 3, 0}, {4, 0, 7, 0}, {5, 0, 6, 1}, {6, 0, 7, 1}, {8, 0, 9, 0}};
+
+    CompiledGraphRun run(graph);
+    EXPECT_TRUE(run.ran);
+    const std::vector<std::string> expected = {"points=3", "second handler"};
+    EXPECT_TRUE(run.printed == expected);
     if (!run.ran || run.printed != expected)
         std::printf("%s\n", run.source.c_str());
 }

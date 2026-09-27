@@ -38,7 +38,7 @@
     "Production entry-point behaviour has not been proven safe for malformed input across the remaining parser inventory."
   ],
   "closure_blockers": [
-    "130 inventoried parsers have no fuzz target"
+    "131 inventoried parsers have no fuzz target"
   ],
   "scope_boundaries": {
     "network": "NET-100 behind G12",
@@ -49,7 +49,7 @@
     "GameModules/SparkGameVisualScript (ENG-200) hid zero parser candidates on 2026-08-28 and was removed as stale breadth."
   ],
   "not_completed": [
-    "130 inventoried parsers still have no libFuzzer/AFL harness, including the 28 boundaries recorded by the OD-21 triage.",
+    "131 inventoried parsers still have no libFuzzer/AFL harness, including the 28 boundaries recorded by the OD-21 triage.",
     "The json-utils, neural-weights-nnw, and crash-manifest-parser corpora are structurally bound, but their exact-SHA hosted sanitizer smoke has not yet run.",
     "Exact-SHA ASan/UBSan smoke evidence and scheduled campaigns have not been recorded.",
     "Production entry-point behaviour has not been proven safe for malformed input across the remaining parser inventory."

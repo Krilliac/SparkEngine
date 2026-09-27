@@ -47,7 +47,7 @@
       },
       {
         "prefix": "VisualScriptGraphs_",
-        "count": 10,
+        "count": 14,
         "requires": [
           "angelscript"
         ]

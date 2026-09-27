@@ -637,12 +637,19 @@ def _covering_subtree(relative: str, exclusions: tuple[SubtreeExclusion, ...]) -
     return None
 
 
-def scan_source_tree(root: Path, scope: Scope, *, deadline: Deadline | None = None) -> ScanResult:
+def scan_source_tree(
+    root: Path,
+    scope: Scope,
+    *,
+    deadline: Deadline | None = None,
+    inventoried: frozenset[str] = frozenset(),
+) -> ScanResult:
     """Walk every declared root without following aliases or skipping read errors.
 
     Excluded subtrees are still walked: an exclusion waives *classification*, it
     does not blind the scanner, so the number of candidates each waiver hides is
-    measured rather than assumed.
+    measured rather than assumed. A file in ``inventoried`` (a parser record's
+    source) is classified by that record, so a subtree waiver never hides it.
     """
     root = canonical_root(root)
     deadline = deadline or Deadline(scope.limits.timeout_seconds, "source scan")
@@ -706,7 +713,7 @@ def scan_source_tree(root: Path, scope: Scope, *, deadline: Deadline | None = No
                 reasons = _candidate_reasons(relative, text)
                 if not reasons:
                     continue
-                covering = _covering_subtree(relative, scope.excluded_subtrees)
+                covering = None if relative in inventoried else _covering_subtree(relative, scope.excluded_subtrees)
                 if covering is not None:
                     hidden_by_subtree[covering] += 1
                     if hidden_by_subtree[covering] > MAX_EXCLUSION_HIDDEN_CANDIDATES:
@@ -740,9 +747,9 @@ def build_inventory_report(
     deadline: Deadline | None = None,
 ) -> dict[str, Any]:
     inventory = load_inventory(root, manifest_path, as_of=as_of)
-    scan = scan_source_tree(root, inventory.scope, deadline=deadline)
-    candidate_files = {item["source_file"] for item in scan.candidates}
     owned_files = {source for parser in inventory.parsers for source in parser.source_files}
+    scan = scan_source_tree(root, inventory.scope, deadline=deadline, inventoried=frozenset(owned_files))
+    candidate_files = {item["source_file"] for item in scan.candidates}
     deferred_files = {deferral.source_file for deferral in inventory.deferred_candidates}
     exempt_files = {exemption.source_file for exemption in inventory.exempt_candidates}
 

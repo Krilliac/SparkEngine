@@ -563,6 +563,26 @@ class TestExclusionPolicy(FixtureTestCase):
         with self.assertPolicyError(r"hides 2 candidates but declares 1"):
             parser_inventory.build_inventory_report(self.root)
 
+    def test_inventoried_parser_inside_an_exclusion_is_not_hidden(self) -> None:
+        # A parser record is more specific than a subtree waiver: its sources are
+        # classified candidates, not part of the waiver's hidden count and not
+        # reported as detector blind spots.
+        (self.root / "src" / "net" / "Graph.cpp").write_text(
+            'auto g = nlohmann::json::parse(data);\n', encoding="utf-8"
+        )
+        self.fixture.inventory["parsers"][0]["source_files"].append("src/net/Graph.cpp")
+        self.fixture.inventory["scope"]["excluded_subtrees"] = [_exclusion("src/net", hidden=1)]
+        self.fixture.write_inventory()
+        report = parser_inventory.build_inventory_report(self.root)
+        self.assertIn("src/net/Graph.cpp", [item["source_file"] for item in report["candidates"]])
+        self.assertNotIn("src/net/PacketParser.cpp", [item["source_file"] for item in report["candidates"]])
+        self.assertEqual(report["detector_blind_spot_count"], 0)
+
+        self.fixture.inventory["scope"]["excluded_subtrees"] = [_exclusion("src/net", hidden=2)]
+        self.fixture.write_inventory()
+        with self.assertPolicyError(r"hides 1 candidates but declares 2"):
+            parser_inventory.build_inventory_report(self.root)
+
     def test_file_exclusion_requires_a_matching_digest(self) -> None:
         self.fixture.inventory["scope"]["excluded_files"] = [
             {

@@ -216,7 +216,7 @@ namespace Spark::Scripting::Detail
             return true;
         }
         default:
-            // Vector3 has no script constructor, and Any/Execution have no literal form.
+            // Vector3 defaults are not accepted as text, and Any/Execution have no literal form.
             return false;
         }
     }

@@ -23,6 +23,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <new>
 #include <algorithm>
 #include <cctype>
 
@@ -1284,6 +1285,15 @@ void AngelScriptEngine::RegisterEngineAPI()
     AutoRegisterReflectedTypes();
 }
 
+namespace
+{
+    /// Script constructor Vector3(float x, float y, float z) (asCALL_CDECL_OBJLAST).
+    void ConstructVector3(float x, float y, float z, DirectX::XMFLOAT3* self)
+    {
+        new (self) DirectX::XMFLOAT3(x, y, z);
+    }
+} // namespace
+
 void AngelScriptEngine::RegisterMathTypes()
 {
     // Register a lightweight Vector3 value type for script use. ALLFLOATS is
@@ -1298,6 +1308,10 @@ void AngelScriptEngine::RegisterMathTypes()
     m_engine->RegisterObjectProperty("Vector3", "float x", asOFFSET(DirectX::XMFLOAT3, x));
     m_engine->RegisterObjectProperty("Vector3", "float y", asOFFSET(DirectX::XMFLOAT3, y));
     m_engine->RegisterObjectProperty("Vector3", "float z", asOFFSET(DirectX::XMFLOAT3, z));
+    // POD without a default constructor: `Vector3 v;` stays legal, and the visual script
+    // compiler emits `Vector3(x, y, z)` for Vector3 literals.
+    m_engine->RegisterObjectBehaviour("Vector3", asBEHAVE_CONSTRUCT, "void f(float, float, float)",
+                                      asFUNCTION(ConstructVector3), asCALL_CDECL_OBJLAST);
 }
 
 void AngelScriptEngine::RegisterComponentTypes()

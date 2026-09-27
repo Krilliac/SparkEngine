@@ -73,10 +73,12 @@ Two gates, deliberately separate:
 | Structural | `check_fuzz_policy.py --ci` | merges (Required CI Gate) | passes |
 | Closure | `check_fuzz_policy.py --ci --require-closure` | releases (`release.yml`) | **fails — by design** |
 
-Network packet/protocol fuzzing belongs to NET-100 behind G12. AngelScript and
-visual-script fuzzing belongs to ENG-200 behind G11, including `.as` script-file
-ingestion under `SparkEngine/Source/Engine/Scripting`. Their subtrees are named as
-ticketed, owned, expiring exclusions rather than silently omitted.
+Network packet/protocol fuzzing belongs to NET-100 behind G12. AngelScript fuzzing
+belongs to ENG-200 behind G11, including `.as` script-file ingestion under
+`SparkEngine/Source/Engine/Scripting`. Their subtrees are named as ticketed, owned,
+expiring exclusions rather than silently omitted. A file an inventoried parser owns is
+never hidden by a subtree exclusion: the `.vscript` graph decoder in the scripting
+subtree is the blocked `visual-script-graph` parser.
 
 ## What the Gate Proves
 

@@ -264,7 +264,7 @@ Event nodes are the starting points of execution chains. Each generates a method
 | OnDamaged | 4 | `void OnDamaged(float amount)` | damage amount |
 | OnKeyPress | 5 | `void OnKeyPress(string key)` | key name |
 | OnCollision | 6 | `void OnCollision(uint entity)` | colliding entity |
-| OnCustomEvent | 7 | `void OnCustomEvent(...)` | user-defined |
+| OnCustomEvent | 7 | `void On<Name>(...)` of the declared custom event its `event` property names (raised in-graph with CallFunction; an undeclared name fails the compile) | the event's declared parameters |
 
 ### Flow Control Nodes
 

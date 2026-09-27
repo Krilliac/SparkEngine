@@ -1,6 +1,6 @@
 {
   "closure_blockers": [
-    "130 inventoried parsers have no fuzz target"
+    "131 inventoried parsers have no fuzz target"
   ],
   "corpus": {
     "bound_target_count": 6,
@@ -12,11 +12,11 @@
   "coverage_claim": false,
   "inputs": {
     "corpus_manifest": "898a5bd02e552f1cccda4b6a0f2db3e87ca84e7d7a38758d96e705c1205a4067",
-    "inventory": "ab734c9db83d2681ca6d7b21cd4ffc5c5958a8782e705565ec0740f998546180"
+    "inventory": "bc74b8090eca33b121e2d264e772cad5b1b1f270295e8c63af1887d879a7fe15"
   },
   "inventory": {
-    "blocked_count": 130,
-    "candidate_count": 290,
+    "blocked_count": 131,
+    "candidate_count": 292,
     "deferred_candidate_count": 0,
     "excluded_files": [],
     "excluded_subtrees": [
@@ -29,7 +29,7 @@
       },
       {
         "expires": "2027-08-23",
-        "hidden_candidate_count": 5,
+        "hidden_candidate_count": 3,
         "owner": "eng-200-scripting-campaign",
         "path": "SparkEngine/Source/Engine/Scripting",
         "ticket": "ENG-200"
@@ -44,7 +44,7 @@
     },
     "exempt_candidate_count": 119,
     "fuzzed_count": 6,
-    "parser_count": 136,
+    "parser_count": 137,
     "scan_roots": [
       "SparkEngine/Source",
       "SparkEditor/Source",
