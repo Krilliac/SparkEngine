@@ -1,7 +1,9 @@
 #include "GitRunner.h"
 
+#include "InstallState.h"
 #include "ProcessRunner.h"
 
+#include <array>
 #include <cstdio>
 
 namespace SparkInstaller
@@ -58,6 +60,30 @@ namespace SparkInstaller
             if ((networkUrl || scpUrl) && url.find(' ') != std::string::npos)
                 return false;
             return networkUrl || scpUrl || posixPath || uncPath || drivePath;
+        }
+
+        // Untracked files the installer itself writes into the engine checkout.
+        // They are not in the engine's .gitignore (and an older ref being
+        // updated from would not carry a new ignore rule), so the update
+        // cleanliness check must recognize them explicitly.
+        // The ".tmp" sibling is InstallState::Save's atomic-replace staging file.
+        std::array<std::string, 2> InstallerOwnedPaths()
+        {
+            return {InstallState::FileName(), InstallState::FileName() + ".tmp"};
+        }
+
+        bool IsInstallerOwnedUntrackedLine(std::string_view line)
+        {
+            constexpr std::string_view kUntrackedPrefix = "?? ";
+            if (!StartsWith(line, kUntrackedPrefix))
+                return false;
+            const std::string_view path = line.substr(kUntrackedPrefix.size());
+            for (const std::string& owned : InstallerOwnedPaths())
+            {
+                if (path == owned)
+                    return true;
+            }
+            return false;
         }
 
         bool IsSafeCloneDestination(const std::string& destination)
@@ -151,7 +177,30 @@ namespace SparkInstaller
                 log("error: could not inspect the existing install working tree");
             return false;
         }
-        if (!output.empty())
+
+        // Only an exact untracked entry for an installer-owned file is
+        // tolerated. A modified or staged entry for the same name, or any
+        // other line (including merged stderr warnings), keeps the tree dirty.
+        bool clean = true;
+        std::string_view remaining = output;
+        while (!remaining.empty())
+        {
+            const size_t newline = remaining.find('\n');
+            std::string_view line = remaining.substr(0, newline);
+            remaining = newline == std::string_view::npos ? std::string_view{} : remaining.substr(newline + 1);
+            if (!line.empty() && line.back() == '\r')
+                line.remove_suffix(1);
+            if (line.empty())
+                continue;
+            if (IsInstallerOwnedUntrackedLine(line))
+            {
+                if (log)
+                    log("ignoring installer-owned untracked file: " + std::string(line.substr(3)));
+                continue;
+            }
+            clean = false;
+        }
+        if (!clean)
         {
             if (log)
                 log("error: existing install has local changes");
