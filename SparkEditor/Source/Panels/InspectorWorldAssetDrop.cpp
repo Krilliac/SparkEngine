@@ -13,13 +13,17 @@ namespace SparkEditor
 {
     namespace
     {
+        // Alias the global ECS type: `std::string ::MeshRenderer::*` would be
+        // parsed as the nested-name `std::string::MeshRenderer`.
+        using EcsMeshRenderer = ::MeshRenderer;
+
         /// One reflected field that accepts an asset drop.
         struct WorldAssetField
         {
             std::string_view component;
             std::string_view field;
             EditorAssetKind kind;
-            std::string ::MeshRenderer::*member;
+            std::string EcsMeshRenderer::*member;
             const char* undoLabel;
         };
 
