@@ -3076,6 +3076,15 @@ add_test(
 set_tests_properties(PublicWording_LegalSurfaces PROPERTIES
     LABELS "governance;unit;python"
     TIMEOUT 60)
+# PLT-220: SPARK_MACOS_MIN_VERSION, every workflow deployment target, the
+# documented macOS floor/runner, and the Mach-O minimum-version parser.
+add_test(
+    NAME MacOSBaseline_MinimumVersionParity
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_macos_min_version.py -v)
+set_tests_properties(MacOSBaseline_MinimumVersionParity PROPERTIES
+    LABELS "platform;unit;python"
+    TIMEOUT 60)
 
 # SEC-110: lock-derived SPDX 2.3 SBOM generation (commit and dependency-lock
 # binding, --check reproducibility) and package-inventory reconciliation

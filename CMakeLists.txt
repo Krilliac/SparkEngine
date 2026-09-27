@@ -70,12 +70,16 @@ if(WIN32 AND NOT SPARK_MSVC_TOOLSET STREQUAL "")
 endif()
 
 # macOS deployment target — must be set before project() so the compiler is
-# invoked with the correct -mmacosx-version-min. 11.0 (Big Sur) is the floor:
-# first Apple Silicon release, first to ship with Metal 3 on M-series GPUs,
-# and the minimum SDL2 version shipped via Homebrew still supports it.
+# invoked with the correct -mmacosx-version-min. 13.3 is the floor: C++23
+# std::format of floating-point values needs libc++ floating-point to_chars,
+# which Apple's libc++ ships from macOS 13.3, and every CI and release macOS
+# binary is built with it. SPARK_MACOS_MIN_VERSION is the single canonical
+# value; tools/check_macos_min_version.py keeps workflows, docs and built
+# Mach-O images in parity with it (CTest MacOSBaseline_MinimumVersionParity).
 # Override with -DCMAKE_OSX_DEPLOYMENT_TARGET=X.Y at configure time.
+set(SPARK_MACOS_MIN_VERSION "13.3")
 if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${SPARK_MACOS_MIN_VERSION}" CACHE STRING "Minimum macOS version" FORCE)
 endif()
 
 set(SPARK_ENGINE_VERSION "0.9.0" CACHE STRING "SparkEngine semantic version used for package metadata")

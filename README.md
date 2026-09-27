@@ -298,7 +298,7 @@ below. Everything else in this table is experimental or uncertified.
 
 | | Minimum | Recommended |
 |---|---|---|
-| OS (build floor, not `stable-v1`) | Windows 10 / Ubuntu 24.04 / macOS 12+ | Windows 11 / Ubuntu 24.04 |
+| OS (build floor, not `stable-v1`) | Windows 10 / Ubuntu 24.04 / macOS 13.3+ | Windows 11 / Ubuntu 24.04 |
 | Compiler | MSVC 19.36, GCC 13, Clang 17 | MSVC 19.36+, GCC 13+, Clang 17+ |
 | C++ | C++23 | C++23 |
 | GPU | Any DirectX 11 capable | RTX 2080+ for ray tracing |

@@ -68,7 +68,7 @@ execution is outside `stable-v1` and uncertified. Vulkan falls back to 1.3 from
 
 | Aspect | Minimum | Recommended |
 |---|---|---|
-| **OS Version** | macOS 11 Big Sur (`CMAKE_OSX_DEPLOYMENT_TARGET=11.0`) | macOS 12+ Monterey |
+| **OS Version** | macOS 13.3 Ventura (`CMAKE_OSX_DEPLOYMENT_TARGET=13.3`) | macOS 15 Sequoia (the `macos-15` CI image) |
 | **CPU Architecture** | x86-64 or ARM64 | Apple Silicon (M1+) |
 | **CPU Baseline** | ARM NEON *or* x64 SSE4.2 | Apple Silicon M-series |
 | **GPU path** | Runtime device capability checks; no certified Metal release profile | Runtime device capability checks; no certified Metal release profile |
@@ -81,8 +81,15 @@ execution is outside `stable-v1` and uncertified. Vulkan falls back to 1.3 from
 | **CMake** | 3.25+ | 3.25+ |
 
 Hardware RT is gated with `[device supportsRaytracing]` *and*
-`@available(macOS 12.0, *)` in `MetalRayTracing.mm` — older targets fall
-back to the SDFGI software path automatically.
+`@available(macOS 12.0, *)` in `MetalRayTracing.mm`. The 13.3 deployment
+floor always satisfies the OS check, so `supportsRaytracing` is the effective
+gate; devices without it fall back to the SDFGI software path automatically.
+
+The 13.3 floor comes from C++23 `std::format` of floating-point values, which
+needs libc++ floating-point `to_chars` (shipped from macOS 13.3). The single
+canonical value is `SPARK_MACOS_MIN_VERSION` in the root `CMakeLists.txt`;
+`tools/check_macos_min_version.py` (CTest `MacOSBaseline_MinimumVersionParity`)
+fails when a workflow, this page, or a built Mach-O image disagrees with it.
 
 ## Apple Silicon vs Metal
 
@@ -250,7 +257,7 @@ For CI / build machines:
 |---|---|
 | Linux CI runner | `ubuntu-24.04` (GitHub-hosted) |
 | Windows CI runner | GitHub-hosted `windows-2022` with VS 2022; not Windows 11 host certification |
-| macOS CI runner | GitHub-hosted `macos-latest`; architecture is not pinned by this repository label |
+| macOS CI runner | GitHub-hosted `macos-15` (Apple Silicon arm64 image) |
 
 CI lanes use configured compiler caches for incremental build speed. Historical
 wall-clock figures are planning data, not `stable-v1` release evidence.

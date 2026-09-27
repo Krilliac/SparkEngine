@@ -134,8 +134,8 @@ Capabilities:
   `macos-metal` adds Metal explicitly; `macos-moltenvk` opts into Vulkan via Homebrew
   MoltenVK. (Current preset set verified 2026-06-08: `macos-debug`, `macos-release`,
   `macos-metal`, `macos-moltenvk`.)
-- **`CMAKE_OSX_DEPLOYMENT_TARGET=11.0`** (Big Sur) pinned when unset — first Apple
-  Silicon release and the Metal 3 floor for M-series.
+- **`CMAKE_OSX_DEPLOYMENT_TARGET=13.3`** (Ventura) pinned when unset via `SPARK_MACOS_MIN_VERSION` — C++23
+  `std::format` of floating-point values needs libc++ floating-point `to_chars` (macOS 13.3+).
 - **OBJCXX** — `enable_language(OBJCXX)` runs only behind `SPARK_METAL_AVAILABLE`; `.mm`
   globbing is gated the same way so an OpenGL-only macOS build configures cleanly.
 - **Frameworks** — Cocoa, IOKit, CoreVideo, AudioToolbox, CoreAudio, CoreFoundation,
@@ -209,9 +209,9 @@ drain-without-render stub):
 |----------|---------|-------------|
 | **Windows** | Win10 x64, MSVC 19.36+, D3D11 FL 10.0 | Win11, MSVC v143/v145, D3D11 FL 11.1, D3D12+DXR |
 | **Linux** | glibc 2.35+ x64, GCC 13+/Clang 17+, OpenGL 4.6 *or* Vulkan 1.3 | Ubuntu 24.04, GCC 14, Vulkan 1.3 |
-| **macOS** | macOS 11 Big Sur, x64/ARM64, Metal 2.3 *or* OpenGL 4.1 | macOS 12+, Apple Silicon M2+, Metal 3 with `supportsRaytracing` |
+| **macOS** | macOS 13.3 Ventura, x64/ARM64, Metal 2.3 *or* OpenGL 4.1 | macOS 15 Sequoia, Apple Silicon M2+, Metal 3 with `supportsRaytracing` |
 
-Pinned by: `CMAKE_OSX_DEPLOYMENT_TARGET=11.0`, `cmake_minimum_required(3.25)`, the
+Pinned by: `CMAKE_OSX_DEPLOYMENT_TARGET=13.3` (`SPARK_MACOS_MIN_VERSION`, parity-checked by `tools/check_macos_min_version.py`), `cmake_minimum_required(3.25)`, the
 `MetalRayTracing.mm` `@available(macOS 12.0, *)` gate for hardware RT. A public-facing
 version of this matrix also lives at `wiki/platform/System-Requirements.md`.
 

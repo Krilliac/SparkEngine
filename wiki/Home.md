@@ -20,7 +20,7 @@
 | Windows 11 x64 | `stable-v1` target — blocked/uncertified | MSVC v143 (VS 2022) |
 | Windows 10 x64 | Documented development path — outside `stable-v1` | MSVC development toolchains |
 | Linux x64 | Experimental | GCC 13+, Clang 17+ |
-| macOS 11+ | Experimental | Apple Clang with C++23 |
+| macOS 13.3+ | Experimental | Apple Clang with C++23 |
 
 See [System Requirements](platform/System-Requirements.md) for minimum and
 recommended hardware per platform (CPU, RAM, GPU, VRAM), runtime resource

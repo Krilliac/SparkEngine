@@ -2953,6 +2953,13 @@ jobs:
         find build -name 'lib*.a' -delete 2>/dev/null || true
         cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
+    # PLT-220: the built Mach-O images must record SPARK_MACOS_MIN_VERSION as
+    # their minimum OS, matching the documented floor.
+    - name: Check macOS minimum version parity
+      run: |
+        python3 tools/check_macos_min_version.py \
+          --binary build/bin/SparkEngine build/bin/SparkTests
+
     - name: Print ccache stats
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
