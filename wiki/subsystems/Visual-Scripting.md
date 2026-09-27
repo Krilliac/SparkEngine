@@ -470,6 +470,18 @@ cp /tmp/vscript/*.vscript GameModules/SparkGameVisualScript/Assets/Graphs/   # c
 
 Then update the SHA-256 values in `GameModules/SparkGameVisualScript/Assets/manifest.json`.
 
+`VisualScriptRuntime_*` (`Tests/TestENG200VisualScriptRuntimeReal.cpp`, CTest `VisualScriptRuntimePackagedLoop`)
+covers the path from graph to packaged game in-process. It compiles the five graphs, has `GamePackager` lay the scripts
+out as a package next to the `manifest.json` and `spark.modules.json` markers, and launches from an unrelated working
+directory. `RuntimePackage::AnchorWorkingDirectory` anchors to the package and `VisualScriptDemo::ScriptSearchPaths`
+(the module's `OnLoad` search order) resolves the package's scripts, which are then played to the win. A truncated
+graph stops the build with a diagnostic that names the graph. The package's executable is a placeholder file, so a
+launch of the real packaged engine binary is not covered here.
+
+The demo's graphs request sounds and animation clips by name (`PlaySound`/`PlayAnimation` nodes). Its cue audio ships
+in `Assets/Audio/VisualScript`, and `DemoWorld` spawns the animated entities with their `AnimationController` clip
+lists. The module README covers both.
+
 ## Performance Considerations
 
 1. **No runtime overhead** -- Visual scripts compile to the same AngelScript as hand-written code. There is no visual script interpreter or VM.
