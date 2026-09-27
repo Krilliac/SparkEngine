@@ -131,7 +131,7 @@ TEST(DXMathStub_SlerpTakesShortestArcAcrossHemispheres)
 
 TEST(DXMathStub_SlerpEndpointsAndNearlyParallelInputsStayUnit)
 {
-    const XMVECTOR a = XMVectorSet(0.0f, std::sin(0.35f), 0.0f, std::cos(0.35f)); // 0.7 rad about Y
+    const XMVECTOR a = XMVectorSet(0.0f, std::sin(0.35f), 0.0f, std::cos(0.35f));   // 0.7 rad about Y
     const XMVECTOR b = XMVectorSet(std::sin(-0.65f), 0.0f, 0.0f, std::cos(-0.65f)); // -1.3 rad about X
 
     ExpectQuaternionNear(XMQuaternionSlerp(a, b, 0.0f), 0.0f, std::sin(0.35f), 0.0f, std::cos(0.35f));
@@ -232,8 +232,8 @@ TEST(DXMathStub_RotationMatrixRoundTripsEveryBranch)
 TEST(DXMathStub_DecomposeMirroredMatrixRecomposes)
 {
     const float halfAngle = 0.45f;
-    const XMVECTOR rotation = XMVectorSet(0.0f, kHalfSqrt2 * std::sin(halfAngle), kHalfSqrt2 * std::sin(halfAngle),
-                                          std::cos(halfAngle));
+    const XMVECTOR rotation =
+        XMVectorSet(0.0f, kHalfSqrt2 * std::sin(halfAngle), kHalfSqrt2 * std::sin(halfAngle), std::cos(halfAngle));
     const XMMATRIX mirrored = ComposeSRT(-2.0f, 3.0f, 4.0f, rotation, 1.0f, 2.0f, 3.0f);
 
     XMVECTOR scale, outRotation, translation;

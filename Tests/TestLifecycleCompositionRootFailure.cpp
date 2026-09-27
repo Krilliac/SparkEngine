@@ -293,8 +293,8 @@ TEST(PartialInit_CompositionRootRollbackPreludeRunsBeforeStageTeardown)
     clean.SetInitializeRollbackPrelude([&cleanEvents] { cleanEvents.push_back("prelude"); });
     ASSERT_TRUE(clean.RunInitialize());
     EXPECT_TRUE(clean.RunShutdown());
-    ExpectEvents(cleanEvents, {"init A", "init B", "init C", "init D", "shutdown Teardown", "shutdown D",
-                               "shutdown C", "shutdown B", "shutdown A"});
+    ExpectEvents(cleanEvents, {"init A", "init B", "init C", "init D", "shutdown Teardown", "shutdown D", "shutdown C",
+                               "shutdown B", "shutdown A"});
 }
 
 TEST(PartialInit_CompositionRootRollbackPreludeThrowStillRollsBack)

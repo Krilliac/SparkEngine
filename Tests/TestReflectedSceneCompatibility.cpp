@@ -112,9 +112,8 @@ namespace
     nlohmann::json WithComponentsByType(const nlohmann::json& entity)
     {
         std::vector<nlohmann::json> components(entity["components"].begin(), entity["components"].end());
-        std::stable_sort(components.begin(), components.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
-            return a["type"].get<std::string>() < b["type"].get<std::string>();
-        });
+        std::stable_sort(components.begin(), components.end(), [](const nlohmann::json& a, const nlohmann::json& b)
+                         { return a["type"].get<std::string>() < b["type"].get<std::string>(); });
         nlohmann::json ordered = nlohmann::json::array();
         for (const nlohmann::json& component : components)
             ordered.push_back(component);
