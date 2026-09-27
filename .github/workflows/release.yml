@@ -89,58 +89,23 @@ jobs:
         INPUT_RELEASE_TAG: ${{ github.event.client_payload.release_tag || '' }}
       run: |
         set -euo pipefail
-        DEFAULT_VERSION=$(sed -nE 's/^set\(SPARK_ENGINE_VERSION "([0-9]+\.[0-9]+\.[0-9]+)" CACHE.*/\1/p' CMakeLists.txt | head -n 1)
-        if [[ ! "$DEFAULT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "Could not determine the default semantic version from CMakeLists.txt" >&2
-          exit 1
-        fi
+        # One authoritative version source: the single CMake SPARK_ENGINE_VERSION default.
+        DEFAULT_VERSION="$(python3 .github/scripts/stable_release_tag.py default-version)"
 
         if [[ "$EVENT_NAME" == "repository_dispatch" && -n "$INPUT_RELEASE_TAG" ]]; then
-          TAG="$INPUT_RELEASE_TAG"
-        else
-          TAG=""
-        fi
-
-        if [[ -n "$TAG" ]]; then
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Release tag must have the form vMAJOR.MINOR.PATCH; got: $TAG" >&2
-            exit 1
-          fi
-          # An override must not manufacture a stable version absent from the source.
-          # Nightly deliberately has no versioned-changelog requirement.
-          python3 - "${TAG#v}" "$DEFAULT_VERSION" <<'PYVERSION'
-        import re
-        import sys
-        from pathlib import Path
-
-        version, default = sys.argv[1:]
-        declarations = re.findall(
-            r"(?im)^[ \t]*set\s*\(\s*SPARK_ENGINE_VERSION(?=\s|\))",
-            Path("CMakeLists.txt").read_text(encoding="utf-8"),
-        )
-        if len(declarations) != 1 or version != default:
-            sys.exit("Stable tag must equal the single CMake SPARK_ENGINE_VERSION default")
-        changelog = Path("CHANGELOG.md")
-        if not changelog.is_file():
-            sys.exit("Stable publication requires CHANGELOG.md")
-        heading = re.compile(r"## \[" + re.escape(version) + r"\](?: - \d{4}-\d{2}-\d{2})?[ \t]*")
-        count = sum(heading.fullmatch(line) is not None
-                    for line in changelog.read_text(encoding="utf-8").splitlines())
-        if count != 1:
-            sys.exit(f"Stable publication requires exactly one CHANGELOG.md heading for [{version}]; found {count}")
-        PYVERSION
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-          echo "cmake_version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          # A stable vX.Y.Z tag must equal that default and have exactly one
+          # versioned CHANGELOG.md heading, so an override cannot manufacture a
+          # stable version absent from the source.
+          VERSION="$(python3 .github/scripts/stable_release_tag.py verify "$INPUT_RELEASE_TAG")"
+          echo "tag=$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "cmake_version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "is_versioned=true" >> "$GITHUB_OUTPUT"
         else
-          if [[ ! "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]*$ ||
-                ! "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]*$ ||
-                ! "${GITHUB_SHA:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "Immutable nightly identity requires the authenticated run ID, attempt, and 40-hex source SHA." >&2
-            exit 1
-          fi
-          NIGHTLY_TAG="nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:12}"
+          # Nightly deliberately has no versioned-changelog requirement. Its tag is
+          # unique per authenticated run, attempt, and source SHA, and is never moved.
+          NIGHTLY_TAG="$(python3 .github/scripts/nightly_release_tag.py \
+            "${GITHUB_RUN_ID:-}" "${GITHUB_RUN_ATTEMPT:-}" "${GITHUB_SHA:-}")"
           echo "tag=$NIGHTLY_TAG" >> "$GITHUB_OUTPUT"
           echo "version=nightly" >> "$GITHUB_OUTPUT"
           echo "cmake_version=$DEFAULT_VERSION" >> "$GITHUB_OUTPUT"

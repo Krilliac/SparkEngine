@@ -192,16 +192,27 @@ def bash_executable() -> str:
     raise FileNotFoundError("bash is required for release-workflow fixture execution")
 
 
-def local_release_fixture_script(script: str) -> str:
-    """Bind the Ubuntu-only ``python3`` metadata probe to the test interpreter on Windows."""
+RELEASE_TAG_HELPERS = ("stable_release_tag.py", "nightly_release_tag.py")
 
-    if os.name != "nt":
-        return script
-    command = "python3 - "
-    if script.count(command) != 1:
-        raise AssertionError("release metadata fixture must contain one python3 probe")
+
+def local_release_fixture_script(script: str, root: Path) -> str:
+    """Run the metadata step against ``root`` with the real release tag helpers.
+
+    The helpers are copied into the fixture tree at the path release.yml invokes,
+    and the Ubuntu-only ``python3`` command is bound to the test interpreter.
+    """
+
+    helper_dir = root / ".github" / "scripts"
+    helper_dir.mkdir(parents=True, exist_ok=True)
+    for helper in RELEASE_TAG_HELPERS:
+        shutil.copyfile(REPO_ROOT / ".github" / "scripts" / helper, helper_dir / helper)
+    invocations = re.findall(r"\bpython3 \.github/scripts/(\S+)", script)
+    if sorted(set(invocations)) != sorted(RELEASE_TAG_HELPERS):
+        raise AssertionError(f"release metadata must invoke exactly the tag helpers; found {invocations}")
+    if "python3 -" in script or "<<" in script:
+        raise AssertionError("release metadata must not embed an inline tag contract")
     interpreter = shlex.quote(Path(sys.executable).as_posix())
-    return script.replace(command, f"{interpreter} - ", 1)
+    return script.replace("python3 .github/scripts/", f"{interpreter} .github/scripts/")
 
 
 def step_blocks(workflow: str) -> list[tuple[str, str]]:
@@ -3592,9 +3603,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_release_metadata_requires_one_source_version_and_changelog_entry(self) -> None:
         block = named_step(self.release, "Compute release metadata")
-        script = local_release_fixture_script(
-            textwrap.dedent(block.split("run: |\n", 1)[1])
-        )
+        step_script = textwrap.dedent(block.split("run: |\n", 1)[1])
         declaration = 'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n'
         heading = "## [1.2.3] - 2026-09-07\n\n### Fixed\n- Fixture release note.\n"
         cases = (
@@ -3617,6 +3626,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         for label, tag, cmake, changelog, status in cases:
             with self.subTest(label=label), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
+                script = local_release_fixture_script(step_script, root)
                 (root / "CMakeLists.txt").write_text(cmake, encoding="utf-8")
                 if changelog is not None:
                     (root / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
@@ -3636,10 +3646,11 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_nightly_metadata_does_not_require_versioned_changelog(self) -> None:
         block = named_step(self.release, "Compute release metadata")
-        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        step_script = textwrap.dedent(block.split("run: |\n", 1)[1])
         for event, tag in (("schedule", ""), ("schedule", "v9.8.7"), ("repository_dispatch", "")):
             with self.subTest(event=event, tag=tag), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
+                script = local_release_fixture_script(step_script, root)
                 (root / "CMakeLists.txt").write_text(
                     'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n', encoding="utf-8")
                 output = root / "outputs"
@@ -3653,6 +3664,27 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertEqual(dict(line.split("=", 1) for line in output.read_text().splitlines()),
                                  {"tag": "nightly-123-1-aaaaaaaaaaaa", "version": "nightly", "cmake_version": "1.2.3",
                                   "is_versioned": "false"})
+
+    def test_nightly_metadata_rejects_untrusted_run_identity(self) -> None:
+        block = named_step(self.release, "Compute release metadata")
+        step_script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        for run_id, attempt, sha in (("", "1", "a" * 40), ("0", "1", "a" * 40), ("123", "", "a" * 40),
+                                     ("123", "1", "a" * 39), ("123", "1", "not-a-sha")):
+            with self.subTest(run_id=run_id, attempt=attempt, sha=sha), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                script = local_release_fixture_script(step_script, root)
+                (root / "CMakeLists.txt").write_text(
+                    'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n', encoding="utf-8")
+                output = root / "outputs"
+                completed = subprocess.run(
+                    [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
+                    env={**os.environ, "EVENT_NAME": "schedule", "INPUT_RELEASE_TAG": "",
+                         "GITHUB_OUTPUT": str(output), "GITHUB_RUN_ID": run_id,
+                         "GITHUB_RUN_ATTEMPT": attempt, "GITHUB_SHA": sha},
+                )
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn("nightly tag generation failed", completed.stderr)
+                self.assertFalse(output.exists() and output.read_text(), "Rejected nightly must not emit outputs")
 
     def test_release_concurrency_uses_only_supported_github_schema(self) -> None:
         release_job = self.release[self.release.index("  release:\n") :]

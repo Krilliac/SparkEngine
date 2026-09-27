@@ -1257,8 +1257,8 @@ CMake, SDK generated headers, installer, and launcher consume the requested engi
 Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** A vX.Y.Z tag embeds exactly X.Y.Z in every stable-v1 product and artifact
-   - Evidence: `Tests/Tools/test_rel100_product_versions.py`
-   - No hosted package run qualifies the tag version inside packaged artifacts such as installers or the SDK ZIP.
+   - Evidence: `Tests/Tools/test_rel100_product_versions.py`, `.github/scripts/stable_release_tag.py`, `.github/scripts/test_stable_release_tag.py`
+   - release.yml derives the stable tag through stable_release_tag.py (tag equals the single CMake default, exactly one versioned CHANGELOG.md heading) and the nightly tag through nightly_release_tag.py; both run as TagReleaseContract_* CTest selectors. No hosted package run qualifies the tag version inside packaged artifacts such as installers or the SDK ZIP.
 2. **[unmet]** Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration
    - Complete per-artifact toolchain and dependency-lock manifests remain open.
 3. **[implemented]** Stable publication requires every qualification gate and dependency; only explicitly typed publication-finalization work may remain pending in candidate state

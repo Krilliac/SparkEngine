@@ -168,6 +168,27 @@ asset only after the durable download-counter preflight; the control asset is
 not a distributable or badge-ledger entry. All existing signature, checksum,
 SBOM, scan, exact-CI, source/tag, and package qualification gates still apply.
 
+## Release tag contract
+
+The `prepare` job's `Compute release metadata` step derives every channel tag
+from two tested helpers; it holds no inline tag logic.
+
+- `.github/scripts/stable_release_tag.py default-version` prints the single
+  `set(SPARK_ENGINE_VERSION "X.Y.Z" CACHE ...)` default and fails when
+  `CMakeLists.txt` declares `SPARK_ENGINE_VERSION` zero or several times.
+- `.github/scripts/stable_release_tag.py verify vX.Y.Z` accepts a dispatched
+  stable tag only when it equals that default and `CHANGELOG.md` has exactly
+  one `## [X.Y.Z]` (optionally `## [X.Y.Z] - YYYY-MM-DD`) heading.
+- `.github/scripts/nightly_release_tag.py RUN_ID ATTEMPT SHA` returns the
+  immutable `nightly-<run>-<attempt>-<sha12>` tag and rejects a missing or
+  malformed run identity. Nightly has no versioned-changelog requirement.
+
+Every rejection exits non-zero before any metadata output is written. The
+contract suites run as the CTest selectors `TagReleaseContract_StableTag` and
+`TagReleaseContract_NightlyTag` and in the `validate-ci-tools` job.
+`test-workflow-failure-propagation.py` executes the workflow step itself against
+fixture trees.
+
 ## Stable release notes
 
 The stable release body is generated, not hand-written. After the signature
@@ -368,3 +389,6 @@ Contract reference rules and the public numeric-claim ledger added 2026-09-24 fr
 [`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).
 Generated stable release notes (REL-190) added 2026-09-24 from
 [`tools/release_notes.py`](../../tools/release_notes.py).
+Release tag contract helpers (REL-100) added 2026-09-26 from
+[`stable_release_tag.py`](../../.github/scripts/stable_release_tag.py) and
+[`nightly_release_tag.py`](../../.github/scripts/nightly_release_tag.py).

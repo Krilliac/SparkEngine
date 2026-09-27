@@ -3417,6 +3417,22 @@ if(Python3_Interpreter_FOUND)
         LABELS "release;security;unit;python"
         TIMEOUT 60)
 
+    # REL-100: the release.yml tag contract. Stable vX.Y.Z tags must equal the
+    # single CMake SPARK_ENGINE_VERSION default and have exactly one versioned
+    # CHANGELOG.md heading; nightly tags are unique per run, attempt and SHA.
+    add_test(
+        NAME TagReleaseContract_StableTag
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_stable_release_tag.py)
+    set_tests_properties(TagReleaseContract_StableTag PROPERTIES
+        LABELS "release;version;unit;python"
+        TIMEOUT 60)
+    add_test(
+        NAME TagReleaseContract_NightlyTag
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_nightly_release_tag.py)
+    set_tests_properties(TagReleaseContract_NightlyTag PROPERTIES
+        LABELS "release;version;unit;python"
+        TIMEOUT 60)
+
     # CI-120: the root option guard rejects undeclared -D ENABLE_*/SPARK_*/BUILD_*
     # names (fixture configures of cmake/SparkOptionGuard.cmake + preset audit).
     add_test(

@@ -1089,9 +1089,11 @@
           "criterionDigest": "sha256:be5103107a9b",
           "state": "unmet",
           "evidence": [
-            "Tests/Tools/test_rel100_product_versions.py"
+            "Tests/Tools/test_rel100_product_versions.py",
+            ".github/scripts/stable_release_tag.py",
+            ".github/scripts/test_stable_release_tag.py"
           ],
-          "note": "No hosted package run qualifies the tag version inside packaged artifacts such as installers or the SDK ZIP."
+          "note": "release.yml derives the stable tag through stable_release_tag.py (tag equals the single CMake default, exactly one versioned CHANGELOG.md heading) and the nightly tag through nightly_release_tag.py; both run as TagReleaseContract_* CTest selectors. No hosted package run qualifies the tag version inside packaged artifacts such as installers or the SDK ZIP."
         },
         {
           "criterionDigest": "sha256:a060209998d6",
@@ -1169,9 +1171,7 @@
       "plannedCiJobs": [
         "release-metadata"
       ],
-      "plannedTestSelectors": [
-        "TagReleaseContract_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "REL-110",

@@ -175,6 +175,8 @@ jobs:
         python3 .github/scripts/test_verify_published_stable_release.py
         python3 .github/scripts/test_record_release_approval.py
         python3 .github/scripts/test_release_stages_workflow.py
+        python3 .github/scripts/test_stable_release_tag.py
+        python3 .github/scripts/test_nightly_release_tag.py
 
     - name: Test the build-matrix exact-source status gate
       run: node .github/scripts/test-build-matrix-commit-status.js
