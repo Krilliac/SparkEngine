@@ -1934,7 +1934,17 @@ endif()
 if(ENABLE_NETWORKING)
     add_test(NAME NetTransportSecurity COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(NetTransportSecurity PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestNetTransportSecurity.cpp;SPARK_TEST_NAME_PREFIX=NetTransportSec_;SPARK_TEST_EXPECT_COUNT=9"
+        ENVIRONMENT "SPARK_TEST_FILE=TestNetTransportSecurity.cpp;SPARK_TEST_NAME_PREFIX=NetTransportSec_;SPARK_TEST_EXPECT_COUNT=10"
+        LABELS "network;security;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
+# SEC-net-transport finding 35: the MMO server binds client-authored player state
+# to the sender's own server entity instead of relaying it (MMO sources need ImGui).
+if(TARGET imgui AND ENABLE_NETWORKING)
+    add_test(NAME MMOClientStateRequest COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(MMOClientStateRequest PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestGameModuleMMO.cpp;SPARK_TEST_NAME_PREFIX=MMO_StateRequest_;SPARK_TEST_EXPECT_COUNT=2"
         LABELS "network;security;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)

@@ -94,6 +94,12 @@ namespace Spark::Net
                                                     .allowedFromClient = false,
                                                     .allowedFromServer = true});
 
+        // EntityStateUpdate is server -> client replication. The client -> server
+        // direction stays open only as a *state request* for modules whose players
+        // author their own movement (SparkGameMMO): the engine ignores it in the
+        // server role, and a server-side consumer must parse and range-check it,
+        // bind it to an entity the sender owns and republish through replication.
+        // It must never be relayed verbatim to other clients.
         RegisterSchema(MessageType::EntityStateUpdate, {.minPayloadSize = 8,
                                                         .maxPayloadSize = 2048,
                                                         .requiresAuth = true,

@@ -468,6 +468,115 @@ TEST(MMO_PlayerMovement_RejectsNonFiniteInput)
     EXPECT_NEAR(player.posZ, 0.6f, 0.0001f);
 }
 
+#ifdef ENABLE_NETWORKING
+// ============================================================================
+// Client-authored player state (finding 35): the server used to relay every
+// client EntityStateUpdate verbatim to all other clients, so any peer could
+// forge state for entities it did not own under a network ID it chose.
+// ============================================================================
+
+namespace
+{
+    Spark::Net::NetworkMessage MMOStateRequest(Spark::Net::ClientID sender, uint32_t claimedNetworkId,
+                                               const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity,
+                                               uint16_t propertyCount = 0, bool trailingByte = false)
+    {
+        Spark::Net::NetBuffer buffer;
+        buffer.WriteUint32(claimedNetworkId);
+        buffer.WriteVector3(position);
+        buffer.WriteVector3(DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f});
+        buffer.WriteVector3(velocity);
+        buffer.WriteUint16(propertyCount);
+        if (trailingByte)
+            buffer.WriteUint8(0x7F);
+
+        Spark::Net::NetworkMessage message;
+        message.type = Spark::Net::MessageType::EntityStateUpdate;
+        message.channel = Spark::Net::ChannelType::Unreliable;
+        message.senderID = sender;
+        message.payload = buffer.GetData();
+        return message;
+    }
+
+    struct MMOServerFixture
+    {
+        MMOServerFixture()
+        {
+            auto& network = Spark::Net::NetworkManager::GetInstance();
+            network.Shutdown();
+            started = network.Initialize() && network.StartServer(0, 4, Spark::Net::NetworkEndpointPolicy::Loopback());
+        }
+        ~MMOServerFixture()
+        {
+            auto& network = Spark::Net::NetworkManager::GetInstance();
+            network.StopServer();
+            network.Shutdown();
+        }
+        bool started = false;
+    };
+} // namespace
+
+TEST(MMO_StateRequest_ServerOwnsEntityAndIgnoresClientChosenId)
+{
+    MMOServerFixture fixture;
+    ASSERT_TRUE(fixture.started);
+    auto& network = Spark::Net::NetworkManager::GetInstance();
+    MMOWorldSetup world;
+
+    constexpr uint32_t kForgedId = 0xDEADu;
+    const uint32_t alice =
+        world.ApplyClientStateRequest(network, MMOStateRequest(7, kForgedId, {10.0f, 1.0f, 20.0f}, {1.0f, 0.0f, 0.0f}));
+    ASSERT_TRUE(alice != 0);
+    EXPECT_TRUE(alice != kForgedId);
+    EXPECT_FALSE(network.GetReplicatedEntitySnapshot(kForgedId).has_value());
+    const auto aliceEntity = network.GetReplicatedEntitySnapshot(alice);
+    ASSERT_TRUE(aliceEntity.has_value());
+    EXPECT_EQ(aliceEntity->ownerID, static_cast<Spark::Net::ClientID>(7));
+    EXPECT_TRUE(aliceEntity->entityType == "MMOPlayer");
+    EXPECT_NEAR(aliceEntity->position.x, 10.0f, 1e-6f);
+
+    const uint32_t bob =
+        world.ApplyClientStateRequest(network, MMOStateRequest(8, 1, {-5.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    ASSERT_TRUE(bob != 0);
+    EXPECT_TRUE(bob != alice);
+
+    // Alice names Bob's entity; the request still lands on Alice's own entity only.
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(7, bob, {99.0f, 1.0f, 99.0f}, {0.0f, 0.0f, 0.0f})),
+              alice);
+    EXPECT_NEAR(network.GetReplicatedEntitySnapshot(alice)->position.x, 99.0f, 1e-6f);
+    EXPECT_NEAR(network.GetReplicatedEntitySnapshot(bob)->position.x, -5.0f, 1e-6f);
+}
+
+TEST(MMO_StateRequest_RejectsMalformedAndImplausibleState)
+{
+    MMOServerFixture fixture;
+    ASSERT_TRUE(fixture.started);
+    auto& network = Spark::Net::NetworkManager::GetInstance();
+    MMOWorldSetup world;
+
+    const uint32_t owned =
+        world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}));
+    ASSERT_TRUE(owned != 0);
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const DirectX::XMFLOAT3 still{0.0f, 0.0f, 0.0f};
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {nan, 1.0f, 1.0f}, still)), 0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {1.0e9f, 1.0f, 1.0f}, still)), 0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, {1.0e4f, 0.0f, 0.0f})),
+              0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, still, 1)), 0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, still, 0, true)), 0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network,
+                                            MMOStateRequest(Spark::Net::INVALID_CLIENT, 0, {2.0f, 1.0f, 1.0f}, still)),
+              0u);
+
+    // None of the rejected requests moved the sender's entity.
+    const auto entity = network.GetReplicatedEntitySnapshot(owned);
+    ASSERT_TRUE(entity.has_value());
+    EXPECT_NEAR(entity->position.x, 1.0f, 1e-6f);
+}
+#endif // ENABLE_NETWORKING
+
 TEST(MMOWorld_AreaScenePathsExistExactCase)
 {
     const std::filesystem::path sourceRoot(SPARK_TEST_SOURCE_DIR);

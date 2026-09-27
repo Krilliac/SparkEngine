@@ -92,6 +92,23 @@ namespace MMO
 
         /// Get the WorldServer instance (for tests)
         Spark::Net::WorldServer* GetWorldServer() const { return m_worldServer.get(); }
+
+        /**
+         * @brief Apply one client-authored player state request (server role only).
+         *
+         * The payload is the EntityStateUpdate layout MMOPlayerSystem sends: networkId,
+         * position, rotation, velocity, and a zero property count, with nothing trailing.
+         * The client-chosen networkId is ignored. The state lands on the one replicated
+         * entity this server owns for message.senderID (created on first request), and
+         * normal server replication republishes it; nothing is relayed verbatim.
+         *
+         * Thread affinity: game thread (NetworkManager handler dispatch).
+         *
+         * @return The sender's authoritative network ID, or 0 when the request is rejected
+         *         (not a server, unattributed sender, malformed, non-finite or implausible).
+         */
+        uint32_t ApplyClientStateRequest(Spark::Net::NetworkManager& network,
+                                         const Spark::Net::NetworkMessage& message);
 #endif
 
         size_t GetAreaCount() const { return m_areas.size(); }
@@ -113,6 +130,8 @@ namespace MMO
 #ifdef ENABLE_NETWORKING
         std::unique_ptr<Spark::Net::WorldServer> m_worldServer;
         std::unordered_map<Spark::Net::ClientID, bool> m_knownClients; ///< Clients we've seen (for delta detection)
+        /// Server-owned player entity per admitted client (entries for departed clients are pruned in ServerTick).
+        std::unordered_map<Spark::Net::ClientID, uint32_t> m_serverPlayerEntities;
         bool m_networkServerRunning{false};
 #endif
         float m_worldTime{0.0f};

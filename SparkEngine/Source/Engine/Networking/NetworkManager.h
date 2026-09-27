@@ -540,8 +540,15 @@ namespace Spark::Net
         /// Serialize a single entity's replicated properties into a NetBuffer
         void SerializeEntityState(uint32_t networkID, NetBuffer& outBuffer) const;
 
-        /// Deserialize an entity state update from a NetBuffer and apply it
+        /// Deserialize an entity state update from a NetBuffer and apply it. Truncated or
+        /// non-finite transforms are rejected without touching the entity, and unknown
+        /// IDs create placeholders only while fewer than kMaxReplicatedEntities exist.
         void DeserializeEntityState(NetBuffer& inBuffer);
+
+        /// Upper bound on entities a client tracks. A server EntityStateUpdate for an
+        /// unknown network ID creates a placeholder; past this cap it is dropped, so a
+        /// stream of unique IDs cannot grow client memory without limit.
+        static constexpr size_t kMaxReplicatedEntities = 16384;
 
         /// Client -> server input send. The transport does not retain received
         /// ClientInput: a server consumes it through an application observer

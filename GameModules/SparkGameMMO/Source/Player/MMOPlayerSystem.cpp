@@ -355,16 +355,22 @@ namespace MMO
         if (!local || !netMgr)
             return;
 
-        Spark::Net::ReplicatedEntityUpdate update;
-        update.position = DirectX::XMFLOAT3{local->posX, local->posY, local->posZ};
-        update.velocity = DirectX::XMFLOAT3{local->velocityX, local->velocityY, local->velocityZ};
-        update.areaId = local->currentAreaId;
-        update.needsFullSync = true;
-        (void)netMgr->UpdateReplicatedEntity(local->networkId, update);
-
-        if (netMgr->GetRole() == Spark::Net::NetworkRole::Client &&
-            netMgr->GetConnectionState() == Spark::Net::ConnectionState::Connected)
+        if (netMgr->GetRole() != Spark::Net::NetworkRole::Client)
         {
+            // Host/standalone: this process owns the replicated entity directly.
+            Spark::Net::ReplicatedEntityUpdate update;
+            update.position = DirectX::XMFLOAT3{local->posX, local->posY, local->posZ};
+            update.velocity = DirectX::XMFLOAT3{local->velocityX, local->velocityY, local->velocityZ};
+            update.areaId = local->currentAreaId;
+            update.needsFullSync = true;
+            (void)netMgr->UpdateReplicatedEntity(local->networkId, update);
+        }
+        else if (netMgr->GetConnectionState() == Spark::Net::ConnectionState::Connected)
+        {
+            // A client's replicated-entity map holds server-assigned IDs, so the
+            // local player is never written there; its state goes to the server as a
+            // request that MMOWorldSetup::ApplyClientStateRequest binds to the
+            // sender's own server entity (the networkId below is informational).
             Spark::Net::NetBuffer payload;
             payload.WriteUint32(local->networkId);
             payload.WriteVector3({local->posX, local->posY, local->posZ});

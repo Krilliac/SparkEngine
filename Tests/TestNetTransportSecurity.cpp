@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <string>
 #include <thread>
@@ -606,6 +607,68 @@ TEST(NetTransportSec_OrderedDeliveryContinuesAcrossSequenceWrap)
     }
     nm.StopServer();
     nm.Shutdown();
+}
+
+// ============================================================================
+// Finding 35 (engine side): a server EntityStateUpdate for an unknown network
+// ID created a client placeholder with no cap, and non-finite or truncated
+// transforms were written straight into the entity.
+// ============================================================================
+
+namespace
+{
+    NetBuffer EntityStateBuffer(uint32_t networkID, float positionX)
+    {
+        NetBuffer out;
+        out.WriteUint32(networkID);
+        out.WriteVector3(DirectX::XMFLOAT3{positionX, 0.0f, 0.0f});
+        out.WriteVector3(DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f});
+        out.WriteVector3(DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f});
+        out.WriteUint16(0);
+        NetBuffer in;
+        in.WriteBytes(out.GetData().data(), out.GetData().size());
+        return in;
+    }
+} // namespace
+
+TEST(NetTransportSec_ClientPlaceholderEntitiesAreCappedAndFinite)
+{
+    auto& nm = FreshManager();
+    constexpr uint32_t kBase = 0x100000u;
+    constexpr uint32_t kCap = static_cast<uint32_t>(NetworkManager::kMaxReplicatedEntities);
+    constexpr uint32_t kSent = kCap + 64;
+    for (uint32_t i = 0; i < kSent; ++i)
+    {
+        NetBuffer state = EntityStateBuffer(kBase + i, 1.0f);
+        nm.DeserializeEntityState(state);
+    }
+    EXPECT_TRUE(nm.GetReplicatedEntitySnapshot(kBase).has_value());
+    EXPECT_TRUE(nm.GetReplicatedEntitySnapshot(kBase + kCap - 1).has_value());
+    EXPECT_FALSE(nm.GetReplicatedEntitySnapshot(kBase + kCap).has_value());
+    EXPECT_FALSE(nm.GetReplicatedEntitySnapshot(kBase + kSent - 1).has_value());
+
+    // Known entities still update at the cap.
+    NetBuffer moved = EntityStateBuffer(kBase, 5.0f);
+    nm.DeserializeEntityState(moved);
+    const auto afterMove = nm.GetReplicatedEntitySnapshot(kBase);
+    ASSERT_TRUE(afterMove.has_value());
+    EXPECT_NEAR(afterMove->position.x, 5.0f, 1e-6f);
+
+    // A non-finite transform never reaches an existing entity.
+    NetBuffer poisoned = EntityStateBuffer(kBase, std::numeric_limits<float>::quiet_NaN());
+    nm.DeserializeEntityState(poisoned);
+    const auto afterPoison = nm.GetReplicatedEntitySnapshot(kBase);
+    ASSERT_TRUE(afterPoison.has_value());
+    EXPECT_NEAR(afterPoison->position.x, 5.0f, 1e-6f);
+
+    nm.Shutdown();
+
+    // Below the cap, a non-finite transform for an unknown ID creates nothing.
+    auto& fresh = FreshManager();
+    NetBuffer infinite = EntityStateBuffer(kBase, std::numeric_limits<float>::infinity());
+    fresh.DeserializeEntityState(infinite);
+    EXPECT_FALSE(fresh.GetReplicatedEntitySnapshot(kBase).has_value());
+    fresh.Shutdown();
 }
 
 #endif // ENABLE_NETWORKING
