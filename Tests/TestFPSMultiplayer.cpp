@@ -1065,12 +1065,14 @@ TEST(FPSMultiplayerProduction_NetworkPathServerAdmitsInputAndBroadcastsSnapshots
     zeroSequence.sequenceNumber = 0;
     std::vector<uint8_t> truncated = forward.Serialize();
     truncated.pop_back();
+    auto packetsReceived = [] { return Spark::Net::NetworkManager::GetInstance().GetStats().packetsReceived; };
+    const auto packetsBeforeHostile = packetsReceived();
     ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, replay.Serialize()));
     ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, nonFinite.Serialize()));
     ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, zeroSequence.Serialize()));
     ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, truncated));
-    for (int frame = 0; frame < 10; ++frame)
-        server.Update(kFrame);
+    // All four reach the handler before this check: NetworkManager counts each dispatched datagram.
+    ASSERT_TRUE(PumpUntil(server, [&] { return packetsReceived() >= packetsBeforeHostile + 4; }));
     EXPECT_NEAR(state->posX, settledX, 1e-6f);
 
     // An out-of-range axis is clamped to one full-speed step.
@@ -1081,22 +1083,30 @@ TEST(FPSMultiplayerProduction_NetworkPathServerAdmitsInputAndBroadcastsSnapshots
     ASSERT_TRUE(PumpUntil(server, [&] { return state->posX > settledX; }));
     EXPECT_NEAR(state->posX, settledX + 8.0f * kFrame, 1e-5f);
 
-    // A flood of inputs cannot outrun the server clock: the 0.25 s budget admits at most
-    // 15 steps of the 100 sent in one burst.
+    // A flood of inputs cannot outrun the server clock: the full 0.25 s budget admits 15 steps
+    // of the 100 sent in one burst, plus one per server frame that passes while the burst is
+    // still being dispatched.
     for (int frame = 0; frame < 30; ++frame)
         server.Update(kFrame); // refill the budget to its cap
     const float beforeFlood = state->posX;
-    for (uint32_t sequence = 10; sequence < 110; ++sequence)
+    constexpr uint32_t kFloodInputs = 100;
+    const auto packetsBeforeFlood = packetsReceived();
+    for (uint32_t sequence = 10; sequence < 10 + kFloodInputs; ++sequence)
     {
         PlayerInput flood = forward;
         flood.sequenceNumber = sequence;
         ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, flood.Serialize()));
     }
-    for (int frame = 0; frame < 5; ++frame)
-        server.Update(kFrame);
+    int floodFrames = 0;
+    ASSERT_TRUE(PumpUntil(server,
+                          [&]
+                          {
+                              ++floodFrames;
+                              return packetsReceived() >= packetsBeforeFlood + kFloodInputs;
+                          }));
     const float floodSteps = (state->posX - beforeFlood) / (8.0f * kFrame);
     EXPECT_GE(floodSteps, 1.0f - 1e-3f);
-    EXPECT_LE(floodSteps, 15.0f + 1e-3f);
+    EXPECT_LE(floodSteps, 15.0f + static_cast<float>(floodFrames - 1) + 1e-3f);
 
     // Held fire at 60 Hz for one second spawns at most the server's 600 RPM: one projectile
     // every 6 applied inputs, 10 in all, however many fire inputs arrive.

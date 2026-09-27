@@ -22,6 +22,12 @@
  * - Ownership: process-lifetime singleton; the registered handlers capture it.
  * - Allocation: per-player maps grow on join; each 20Hz snapshot builds one payload.
  * - Scalability: at most kMaxPlayers players per session (the batch size limit).
+ *
+ * ## Game integration (open, MOD-315)
+ * The FPS Game only feeds this system: it ticks it and sends the local player's input.
+ * Nothing in the game reads the authoritative state back yet: the rendered local Player
+ * keeps its own movement and health, remote players are not rendered, and server-side
+ * hits do not change the local Player. Convergence evidence covers this system's state.
  */
 
 #pragma once
@@ -367,6 +373,15 @@ namespace SparkFPS
 
       private:
         FPSMultiplayerSystem() = default;
+
+        // Constants shared by the implementation files (MultiplayerSystem, MultiplayerClient,
+        // MultiplayerCombat and MultiplayerNetFlow .cpp).
+        /// Every input is one fixed simulation step on the client's prediction and on the server.
+        static constexpr float kInputStep = 1.0f / 60.0f;
+        /// Slack when comparing the input budget and fire cooldown against whole steps.
+        static constexpr float kInputBudgetEpsilon = 1e-4f;
+        /// Authoritative snapshots kept per player for interpolation.
+        static constexpr size_t kMaxSnapshotHistory = 4;
 
         // Narrow test seam (Tests/TestFPSMultiplayer.cpp) that invokes the private
         // message handlers the way NetworkManager dispatch will; it adds no behavior.

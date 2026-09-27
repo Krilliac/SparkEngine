@@ -12,7 +12,6 @@ GameModules/SparkGameFPS/Source/Game/HUDSystem.h
 GameModules/SparkGameFPS/Source/Game/InteractiveObject.cpp
 GameModules/SparkGameFPS/Source/Game/InteractiveObject.h
 GameModules/SparkGameFPS/Source/Game/InventorySystem.h
-GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp
 GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h
 GameModules/SparkGameFPS/Source/Game/Player.cpp
 GameModules/SparkGameFPS/Source/Game/Player.h
