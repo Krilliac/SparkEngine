@@ -3632,12 +3632,14 @@ set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
     TIMEOUT 60)
 
 # TF-110: TERRAFRONT multi-client harness (Tools/Terrafront/multiclient.py). The
-# unit test covers the audit parser and the convergence comparator on every
-# host; OnboardSpawnMove runs a real dedicated server plus two headless clients
-# (register, log in, enter, spawn, walk) and fails unless both clients agree
-# with the server at every checkpoint.
-# OnboardSpawnMove is timing-sensitive (three processes on one host) and has not
-# yet run on hosted Linux or 2-core runners, so it is opt-in and stays out of the
+# unit test covers the audit parser, the convergence comparator and every
+# scenario verdict on every host; each TerrafrontMultiClient_<Scenario> runs a
+# real dedicated server plus two headless clients (onboard + spawn + walk,
+# combat kill/respawn, forged loadouts, reconnect, territory flips, vehicle life
+# cycle) and fails unless both clients agree with the server at every checkpoint
+# and the scenario's authoritative outcome holds.
+# The process runs are timing-sensitive (three processes on one host) and have
+# not yet run on hosted Linux or 2-core runners, so they are opt-in and stay out of the
 # required full-ctest lanes until a dedicated job enables it:
 #   cmake -B build -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON
 #   ctest --test-dir build -L terrafront-multiclient --no-tests=error
@@ -3654,18 +3656,30 @@ option(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS
 if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEADLESS_SUPPORT AND
    TARGET SparkEngine AND TARGET SparkGameMMOFPS)
     add_dependencies(SparkTests SparkEngine SparkGameMMOFPS)
-    add_test(
-        NAME TerrafrontMultiClient_OnboardSpawnMove
-        COMMAND ${Python3_EXECUTABLE} -B
-            ${CMAKE_SOURCE_DIR}/Tools/Terrafront/multiclient.py
-            --engine $<TARGET_FILE:SparkEngine>
-            --module $<TARGET_FILE:SparkGameMMOFPS>
-            --scenario onboard_spawn_move
-            --workdir ${CMAKE_BINARY_DIR}/Testing/terrafront-multiclient/onboard_spawn_move)
-    set_tests_properties(TerrafrontMultiClient_OnboardSpawnMove PROPERTIES
-        LABELS "terrafront-multiclient;network;process"
-        RUN_SERIAL TRUE
-        TIMEOUT 240)
+    # <CTest name suffix>:<multiclient.py scenario>
+    foreach(_tf_run IN ITEMS
+            OnboardSpawnMove:onboard_spawn_move
+            CombatKillRespawn:combat_kill_respawn
+            ForgedStateRejectedAndAudited:forged_state
+            ReconnectRestoresAllowedState:reconnect
+            TerritoryReplicates:territory
+            VehicleLifecycle:vehicle_lifecycle)
+        string(REPLACE ":" ";" _tf_run "${_tf_run}")
+        list(GET _tf_run 0 _tf_name)
+        list(GET _tf_run 1 _tf_scenario)
+        add_test(
+            NAME TerrafrontMultiClient_${_tf_name}
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tools/Terrafront/multiclient.py
+                --engine $<TARGET_FILE:SparkEngine>
+                --module $<TARGET_FILE:SparkGameMMOFPS>
+                --scenario ${_tf_scenario}
+                --workdir ${CMAKE_BINARY_DIR}/Testing/terrafront-multiclient/${_tf_scenario})
+        set_tests_properties(TerrafrontMultiClient_${_tf_name} PROPERTIES
+            LABELS "terrafront-multiclient;network;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 240)
+    endforeach()
 endif()
 
 # SEC-110: lock-derived SPDX 2.3 SBOM generation (commit and dependency-lock

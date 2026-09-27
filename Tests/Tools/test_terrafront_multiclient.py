@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """TF-110: unit tests for the TERRAFRONT multi-client harness (Tools/Terrafront/multiclient.py).
 
-Exercises the audit parser and the convergence comparator against synthetic
-exec_audit.log text in the exact format ExecScriptPlayer writes and
-FormatObservation prints, so no engine build is needed. The real three-process
-run is TerrafrontMultiClient_OnboardSpawnMove.
+Exercises the audit parser, the convergence comparator and every scenario
+verdict against synthetic exec_audit.log text in the exact format
+ExecScriptPlayer writes and tf_observe prints (FormatObservation plus the
+authority's per-player progression lines), so no engine build is needed. The
+real three-process runs are the TerrafrontMultiClient_<Scenario> CTest entries.
 """
 
 from __future__ import annotations
@@ -26,8 +27,11 @@ import multiclient  # noqa: E402
 SCENARIO = multiclient.SCENARIOS["onboard_spawn_move"]
 SERVER_ANCHOR = 100.0
 CLIENT_ANCHOR = 104.0
+SERVER_SELF = 4294967295
 # The player id each client's pawn has on the server, in client order.
 CLIENT_PLAYERS = (2, 1)
+DEFAULT_PROGRESS = ("default", 0, 1, 0)  # loadout, flux, rank, kills
+DEFAULT_REGIONS = {0: 1, 1: 2, 3: 1}
 
 # Server-side truth per checkpoint: player -> (faction, class, health, pos).
 TRUTH = [
@@ -37,16 +41,35 @@ TRUTH = [
 ]
 
 
-def observation(role: str, self_id: int, pawns: dict, regions: int = 2) -> list[str]:
-    """FormatObservation output split into lines, as it lands in the audit (first line prefixed)."""
+def fmt(pos: tuple[float, float, float]) -> str:
+    return ",".join(f"{v:.2f}" for v in pos)
+
+
+def observation(role: str, self_id: int, pawns: dict, regions: dict | None = None, vehicles: dict | None = None,
+                players: dict | None = None) -> list[str]:
+    """tf_observe output split into lines, as it lands in the audit (first line prefixed).
+
+    vehicles: net -> (kind, driver, hp, pos); players: id -> (loadout, flux, rank, kills).
+    The server prints one player line per pawn; a client prints its own values on its self line.
+    """
+    regions = DEFAULT_REGIONS if regions is None else regions
+    vehicles = vehicles or {}
+    players = players or {}
+    loadout, flux, rank, _ = players.get(self_id, DEFAULT_PROGRESS) if role == "client" else DEFAULT_PROGRESS
     lines = [f"    > [TF-OBSERVE] role={role} clock=1.000 self={self_id} continent=cindral_wastes "
-             f"pawns={len(pawns)} regions={regions} vehicles=0",
-             f"[TF-OBSERVE] self id={self_id} loadout=default flux=0 rank=1"]
+             f"pawns={len(pawns)} regions={len(regions)} vehicles={len(vehicles)}",
+             f"[TF-OBSERVE] self id={self_id} loadout={loadout} flux={flux} rank={rank}"]
     for player in sorted(pawns):
-        faction, cls, health, (x, y, z) = pawns[player]
-        lines.append(f"[TF-OBSERVE] pawn id={player} faction={faction} class={cls} health={health} "
-                     f"pos={x:.2f},{y:.2f},{z:.2f}")
-    lines += [f"[TF-OBSERVE] region id={r} owner=1" for r in range(regions)]
+        faction, cls, health, pos = pawns[player]
+        lines.append(f"[TF-OBSERVE] pawn id={player} faction={faction} class={cls} health={health} pos={fmt(pos)}")
+    lines += [f"[TF-OBSERVE] region id={r} owner={owner}" for r, owner in sorted(regions.items())]
+    for net in sorted(vehicles):
+        kind, driver, hp, pos = vehicles[net]
+        lines.append(f"[TF-OBSERVE] vehicle net={net} def={kind} driver={driver} hp={hp} pos={fmt(pos)}")
+    if role == "server":
+        for player in sorted(pawns):
+            loadout, flux, rank, kills = players.get(player, DEFAULT_PROGRESS)
+            lines.append(f"[TF-OBSERVE] player id={player} loadout={loadout} flux={flux} rank={rank} kills={kills}")
     return lines
 
 
@@ -73,20 +96,22 @@ def server_audit(until: float = 70.0, anchors: tuple[float, ...] = (CLIENT_ANCHO
     at, frame = 1.0, 30
     while at < until:
         world = world_at(SERVER_ANCHOR + at, anchors, scenario)
-        lines += entry(frame, at, "tf_observe", observation("server", 4294967041, world))
+        lines += entry(frame, at, "tf_observe", observation("server", SERVER_SELF, world))
         at += multiclient.SERVER_OBSERVE_INTERVAL_S
         frame += 15
     return "\n".join(lines) + "\n"
 
 
-def client_audit(self_id: int, views: list[dict | None], ok: bool = True,
-                 scenario: multiclient.Scenario = SCENARIO) -> str:
+def client_audit(self_id: int, views: list, ok: bool = True, scenario: multiclient.Scenario = SCENARIO) -> str:
+    """views: per checkpoint, a pawns dict, a full observation line list, or None (printed nothing)."""
     lines = entry(0, 0.0, "tf_status", ["    > [TF] TERRAFRONT role=standalone"])
     lines += entry(30, 1.0, "tf_connect 127.0.0.1:23000", ["    > [TF] connecting"], ok=ok)
     lines += entry(90, 3.0, "tf_register <arguments-redacted>", ["    > [TF] registration request sent"])
     for index, (cp, view) in enumerate(zip(scenario.checkpoints, views)):
         frame = 500 + 100 * index
-        lines += entry(frame, cp, "tf_observe", observation("client", self_id, view) if view is not None else [])
+        if isinstance(view, dict):
+            view = observation("client", self_id, view)
+        lines += entry(frame, cp, "tf_observe", view if view is not None else [])
     return "\n".join(lines) + "\n"
 
 
@@ -127,20 +152,165 @@ def moved(view: dict, player: int, dx: float) -> dict:
     return changed
 
 
+def parsed(role: str, self_id: int, pawns: dict, **kwargs) -> multiclient.Observation:
+    observations = multiclient.parse_observations(observation(role, self_id, pawns, **kwargs))
+    assert len(observations) == 1, "fixture observation must be complete"
+    return observations[0]
+
+
+# --------------------------------------------------------------------------- scripted runs for the scenarios
+
+
+def scripted_run(scenario: multiclient.Scenario, states: list[dict], client_ids: list[tuple[int | None, ...]],
+                 server_extra: list[str] | None = None) -> tuple[multiclient.RoleLog, list[multiclient.RoleLog]]:
+    """Audits for @p scenario where the server shows states[i] around checkpoint i.
+
+    states[i]: keyword arguments for observation() (pawns, regions, vehicles,
+    players). client_ids[i][c] is client c's own id at checkpoint i, or None for
+    a client that printed nothing. Every client sees exactly the server's world
+    minus its own progression-free fields, so the comparator converges and only
+    the scenario verdict decides.
+    """
+    lag = CLIENT_ANCHOR - SERVER_ANCHOR
+
+    def state_at(server_seconds: float) -> dict:
+        client_time = server_seconds - lag
+        return states[min(range(len(states)), key=lambda i: abs(scenario.checkpoints[i] - client_time))]
+
+    lines = entry(0, 0.0, "tf_status", ["    > [TF] TERRAFRONT role=standalone"])
+    at, frame = 1.0, 30
+    while at < scenario.client_seconds + lag + 5.0:
+        lines += entry(frame, at, "tf_observe", observation("server", SERVER_SELF, **state_at(at)))
+        at += multiclient.SERVER_OBSERVE_INTERVAL_S
+        frame += 15
+    lines += server_extra or []
+    server = multiclient.RoleLog("server", 0, SERVER_ANCHOR, multiclient.parse_audit("\n".join(lines) + "\n"))
+
+    clients = []
+    for number, faction in enumerate(scenario.client_factions):
+        views = []
+        for index, state in enumerate(states):
+            self_id = client_ids[index][number]
+            views.append(None if self_id is None else observation("client", self_id, **state))
+        text = client_audit(0, views, scenario=scenario)
+        clients.append(multiclient.RoleLog(f"client{number + 1}", 0, CLIENT_ANCHOR, multiclient.parse_audit(text),
+                                           faction))
+    return server, clients
+
+
+def pawn(faction: int, health: int, pos: tuple[float, float, float]) -> tuple:
+    return (faction, 2, health, pos)
+
+
+ARENA_A = (1700.0, 30.0, 2700.0)
+ARENA_B = (1708.0, 30.0, 2700.0)
+SANCTUARY_PAD = (296.0, 24.0, 3744.0)
+
+
+def combat_states(kills_after: int = 1, respawn_health: int = 450) -> list[dict]:
+    a, b = 2, 1
+    return [
+        {"pawns": {a: pawn(1, 450, ARENA_A), b: pawn(2, 450, ARENA_B)}},
+        {"pawns": {a: pawn(1, 450, ARENA_A), b: pawn(2, 270, ARENA_B)}},
+        {"pawns": {a: pawn(1, 450, ARENA_A)}, "players": {a: ("default", 0, 1, kills_after)}},
+        {"pawns": {a: pawn(1, 450, ARENA_A), b: pawn(2, respawn_health, ARENA_B)},
+         "players": {a: ("default", 0, 1, kills_after)}},
+    ]
+
+
+COMBAT_IDS = [(2, 1), (2, 1), (2, 1), (2, 1)]
+
+
+def forged_lines(kinds: tuple[str, ...], forged: int, player: int = 2) -> list[str]:
+    lines = entry(2000, 40.0, "tf_cheat_stats",
+                  ["    > [TF] anti-cheat violations (1 player):", f"  p{player}  moveClamps=0 (spikes=0)  "
+                   f"fireRateRejects=0  fireOriginRejects=0  inputRateRejects=0  forged={forged}"])
+    for index, kind in enumerate(kinds):
+        lines += entry(1000 + index, 30.0 + index, "tf_observe",
+                       [f"    > [Game] [TF-AUDIT] forged-state kind={kind} player={player} total={index + 1}"])
+    return lines
+
+
+def forged_states(saved: str = multiclient.FORGED_LEGAL_PRIMARY) -> list[dict]:
+    world = {2: pawn(1, 450, SANCTUARY_PAD), 1: pawn(2, 450, (344.0, 24.0, 3744.0))}
+    return [{"pawns": world, "players": {2: (multiclient.FORGED_LEGAL_PRIMARY, 0, 1, 0)}},
+            {"pawns": world, "players": {2: (saved, 0, 1, 0)}}]
+
+
+def reconnect_states(before: tuple = (multiclient.RECONNECT_LEGAL_PRIMARY, 12, 1, 0),
+                     after: tuple = (multiclient.RECONNECT_LEGAL_PRIMARY, 12, 1, 0)) -> list[dict]:
+    a_pawn = pawn(1, 450, SANCTUARY_PAD)
+    b_pawn = pawn(2, 450, (344.0, 24.0, 3744.0))
+    return [{"pawns": {2: a_pawn, 1: b_pawn}, "players": {1: before}},
+            {"pawns": {2: a_pawn}},
+            {"pawns": {2: a_pawn, 3: b_pawn}, "players": {3: after}}]
+
+
+RECONNECT_IDS = [(2, 1), (2, None), (2, 3)]
+
+
+def vehicle_states(appears: bool = True, driver_in_seat: bool = True, drives: bool = True) -> list[dict]:
+    a, b = 2, 1
+    world = {a: pawn(1, 450, (2052.0, 30.0, 3520.0)), b: pawn(2, 450, (2056.0, 30.0, 3530.0))}
+    pad = (2048.0, 30.0, 3520.0)
+    driven = (2048.0, 30.0, 3500.0) if drives else pad
+    seated = a if driver_in_seat else multiclient.NO_PLAYER
+    drifter = multiclient.DRIFTER_KIND
+
+    def vehicles(driver: int, pos: tuple) -> dict:
+        return {77: (drifter, driver, 1800, pos)} if appears else {}
+
+    return [
+        {"pawns": world, "players": {a: ("default", 200, 1, 0)}},
+        {"pawns": world, "vehicles": vehicles(multiclient.NO_PLAYER, pad), "players": {a: ("default", 150, 1, 0)}},
+        {"pawns": world, "vehicles": vehicles(seated, pad), "players": {a: ("default", 150, 1, 0)}},
+        {"pawns": world, "vehicles": vehicles(seated, driven), "players": {a: ("default", 150, 1, 0)}},
+        {"pawns": world, "vehicles": vehicles(multiclient.NO_PLAYER, driven), "players": {a: ("default", 150, 1, 0)}},
+        {"pawns": world, "players": {a: ("default", 150, 1, 0)}},
+    ]
+
+
+VEHICLE_IDS = [(2, 1)] * 6
+
+
+def territory_states(owners: tuple[int, ...] = multiclient.TERRITORY_OWNERS) -> list[dict]:
+    world = {2: pawn(1, 450, SANCTUARY_PAD), 1: pawn(2, 450, (344.0, 24.0, 3744.0))}
+    return [{"pawns": world, "regions": {**DEFAULT_REGIONS, multiclient.TERRITORY_REGION: owner}} for owner in owners]
+
+
+def run_scenario(name: str, states: list[dict], ids: list[tuple], server_extra: list[str] | None = None) -> dict:
+    scenario = multiclient.SCENARIOS[name]
+    server, clients = scripted_run(scenario, states, ids, server_extra)
+    return multiclient.evaluate(scenario, server, clients)
+
+
 class ParserTests(unittest.TestCase):
     def test_interleaved_lines_do_not_break_an_observation(self) -> None:
         lines = observation("client", 2, TRUTH[0])
         lines.insert(3, "    > [TF] player 1 entered world as character 7 (Aurum Combine)")
         lines.insert(1, "[Net] unrelated log line")
-        parsed = multiclient.parse_observations(lines)
-        self.assertEqual(len(parsed), 1)
-        self.assertEqual(sorted(parsed[0].pawns), [1, 2])
-        self.assertEqual(parsed[0].pawns[1].pos, (344.0, 24.0, 3808.0))
+        observations = multiclient.parse_observations(lines)
+        self.assertEqual(len(observations), 1)
+        self.assertEqual(sorted(observations[0].pawns), [1, 2])
+        self.assertEqual(observations[0].pawns[1].pos, (344.0, 24.0, 3808.0))
 
     def test_truncated_observation_is_not_complete(self) -> None:
         lines = observation("client", 2, TRUTH[0])
         del lines[3]  # one pawn line lost
         self.assertEqual(multiclient.parse_observations(lines), [])
+
+    def test_server_view_without_progression_lines_is_not_complete(self) -> None:
+        # RED proof: a server that stopped printing player lines could not back any progression claim.
+        lines = [line for line in observation("server", SERVER_SELF, TRUTH[0]) if "] player " not in line]
+        self.assertEqual(multiclient.parse_observations(lines), [])
+        self.assertEqual(len(multiclient.parse_observations(observation("server", SERVER_SELF, TRUTH[0]))), 1)
+
+    def test_progression_vehicle_and_region_lines_parse(self) -> None:
+        view = parsed("server", SERVER_SELF, TRUTH[0], vehicles={9: (1, 2, 1800, (1.0, 2.0, 3.0))},
+                      players={2: ("mra_rifle", 40, 3, 1)})
+        self.assertEqual(view.players[2], multiclient.Progress(2, "mra_rifle", 40, 3, 1))
+        self.assertEqual(view.vehicles[9], multiclient.Vehicle(9, 1, 2, 1800, (1.0, 2.0, 3.0)))
+        self.assertEqual(view.regions, DEFAULT_REGIONS)
 
     def test_malformed_body_line_invalidates_only_its_observation(self) -> None:
         good = observation("client", 2, TRUTH[0])
@@ -168,6 +338,11 @@ class ParserTests(unittest.TestCase):
         samples = multiclient.observe_samples(multiclient.parse_audit(text))
         self.assertIsNotNone(samples[0].observation)
         self.assertIsNone(samples[1].observation)
+
+    def test_cheat_stats_and_audit_lines_parse(self) -> None:
+        entries = multiclient.parse_audit("\n".join(forged_lines(("loadout-ineligible",), 1)) + "\n")
+        self.assertEqual(multiclient.cheat_stats_snapshots(entries), [{2: 1}])
+        self.assertEqual(multiclient.forged_audit_records(entries), {("loadout-ineligible", 2)})
 
 
 class ComparatorTests(unittest.TestCase):
@@ -250,6 +425,33 @@ class ComparatorTests(unittest.TestCase):
         self.assertFalse(summary["passed"])
         self.assertTrue(any("reported ERR" in p for p in summary["problems"]))
 
+    def test_region_digest_mismatch_fails(self) -> None:
+        server = parsed("server", SERVER_SELF, TRUTH[0])
+        client = parsed("client", 2, TRUTH[0], regions={**DEFAULT_REGIONS, 3: 2})
+        self.assertEqual(multiclient.compare_regions(server, server, "client1"), [])
+        self.assertIn("regions [3]", " ".join(multiclient.compare_regions(server, client, "client1")))
+        self.assertTrue(multiclient.compare_views(server, client, "client1"))
+
+    def test_vehicle_divergence_fails(self) -> None:
+        vehicle = {5: (1, multiclient.NO_PLAYER, 1800, (10.0, 0.0, 10.0))}
+        server = parsed("server", SERVER_SELF, TRUTH[0], vehicles=vehicle)
+        self.assertEqual(multiclient.compare_vehicles(server, server, "client1"), [])
+        missing = parsed("client", 2, TRUTH[0])
+        self.assertIn("vehicles [] != server [5]", " ".join(multiclient.compare_vehicles(server, missing, "c")))
+        seated = parsed("client", 2, TRUTH[0], vehicles={5: (1, 2, 1800, (10.0, 0.0, 10.0))})
+        self.assertIn("driver", " ".join(multiclient.compare_vehicles(server, seated, "c")))
+        drifted = parsed("client", 2, TRUTH[0], vehicles={5: (1, multiclient.NO_PLAYER, 1800, (14.0, 0.0, 10.0))})
+        self.assertIn("position", " ".join(multiclient.compare_vehicles(server, drifted, "c")))
+
+    def test_own_rank_or_wallet_mismatch_fails(self) -> None:
+        server = parsed("server", SERVER_SELF, TRUTH[0], players={2: ("default", 100, 2, 0)})
+        agrees = parsed("client", 2, TRUTH[0], players={2: ("default", 100 + multiclient.FLUX_INCOME_SLACK, 2, 0)})
+        self.assertEqual(multiclient.compare_views(server, agrees, "c"), [])
+        poorer = parsed("client", 2, TRUTH[0], players={2: ("default", 40, 2, 0)})
+        self.assertIn("own flux", " ".join(multiclient.compare_views(server, poorer, "c")))
+        lower = parsed("client", 2, TRUTH[0], players={2: ("default", 100, 1, 0)})
+        self.assertIn("own rank", " ".join(multiclient.compare_views(server, lower, "c")))
+
 
 class ScheduleTests(unittest.TestCase):
     # The schedule this harness first shipped: checkpoint 0 one second before a walk.
@@ -259,7 +461,7 @@ class ScheduleTests(unittest.TestCase):
 
     def test_every_scenario_keeps_its_checkpoints_quiet(self) -> None:
         for scenario in multiclient.SCENARIOS.values():
-            self.assertEqual(multiclient.quiet_window_violations(scenario), [])
+            self.assertEqual(multiclient.schedule_violations(scenario), [])
 
     def test_largest_accepted_skew_still_converges(self) -> None:
         summary = skewed_run(SCENARIO, multiclient.MAX_CLIENT_SKEW_S - 0.05)
@@ -269,7 +471,7 @@ class ScheduleTests(unittest.TestCase):
         # RED proof: an accepted skew catches one pawn mid-walk and a correct run
         # reads as divergence, so a schedule like this must never reach the processes.
         self.assertIn("position", " ".join(skewed_run(self.TIGHT, 1.5)["checkpoints"][0]["problems"]))
-        violations = multiclient.quiet_window_violations(self.TIGHT)
+        violations = multiclient.schedule_violations(self.TIGHT)
         self.assertTrue(any("checkpoint 0" in v for v in violations), violations)
         with mock.patch.dict(multiclient.SCENARIOS, {"onboard_spawn_move": self.TIGHT}):
             out = io.StringIO()
@@ -279,6 +481,143 @@ class ScheduleTests(unittest.TestCase):
                 self.assertEqual(list(Path(workdir).iterdir()), [])  # refused before launching anything
         self.assertEqual(code, 1)
         self.assertIn("must be quiet for more than", out.getvalue())
+
+    def test_checkpoint_inside_a_server_step_window_is_rejected(self) -> None:
+        territory = multiclient.SCENARIOS["territory"]
+        early = replace(territory, checkpoints=(16.0, 28.0, 54.0))
+        self.assertTrue(any("checkpoint 1" in v for v in multiclient.schedule_violations(early)))
+        narrow = replace(territory, server_steps=(multiclient.ServerStep(20.0, 25.0, "tf_capture 3 auc"),))
+        self.assertTrue(any("narrower" in v for v in multiclient.schedule_violations(narrow)))
+
+    def test_server_steps_land_in_their_window_for_every_allowed_lag(self) -> None:
+        for scenario in multiclient.SCENARIOS.values():
+            for step in scenario.server_steps:
+                times = multiclient.server_step_times(step)
+                self.assertTrue(times, step)
+                for lag in (multiclient.CLIENT_LAG_MIN_S, multiclient.CLIENT_LAG_MAX_S):
+                    for at in times:
+                        self.assertTrue(step.start - 1e-9 <= at - lag <= step.end + 1e-9, (step, lag, at))
+
+    def test_client_lag_outside_the_schedule_fails(self) -> None:
+        server, clients = scripted_run(multiclient.SCENARIOS["territory"], territory_states(), [(2, 1)] * 3)
+        self.assertEqual(multiclient.check_client_lag(multiclient.SCENARIOS["territory"], server, clients), [])
+        clients[1].anchor = SERVER_ANCHOR + multiclient.CLIENT_LAG_MAX_S + 2.0
+        problems = multiclient.check_client_lag(multiclient.SCENARIOS["territory"], server, clients)
+        self.assertIn("client2: its clock started", " ".join(problems))
+        summary = multiclient.evaluate(multiclient.SCENARIOS["territory"], server, clients)
+        self.assertIn("client2: its clock started", " ".join(summary["problems"]))
+
+
+class ScenarioVerdictTests(unittest.TestCase):
+    def assert_passes(self, summary: dict) -> None:
+        self.assertTrue(summary["passed"], summary["problems"])
+
+    def assert_fails_with(self, summary: dict, text: str) -> None:
+        self.assertFalse(summary["passed"])
+        self.assertIn(text, " ".join(summary["problems"]))
+
+    def test_combat_kill_attributed_and_respawned_passes(self) -> None:
+        self.assert_passes(run_scenario("combat_kill_respawn", combat_states(), COMBAT_IDS))
+
+    def test_combat_kill_not_credited_fails(self) -> None:
+        self.assert_fails_with(run_scenario("combat_kill_respawn", combat_states(kills_after=0), COMBAT_IDS),
+                               "not credited")
+
+    def test_combat_respawn_without_full_health_fails(self) -> None:
+        self.assert_fails_with(run_scenario("combat_kill_respawn", combat_states(respawn_health=300), COMBAT_IDS),
+                               "full health")
+
+    def test_combat_victim_that_never_died_fails(self) -> None:
+        states = combat_states()
+        states[2]["pawns"][1] = pawn(2, 270, ARENA_B)
+        summary = run_scenario("combat_kill_respawn", states, COMBAT_IDS)
+        self.assertFalse(summary["passed"])
+        self.assertIn("should be out of the world", " ".join(summary["checkpoints"][2]["problems"]))
+
+    def test_combat_inside_the_sanctuary_fails(self) -> None:
+        states = combat_states()
+        states[0]["pawns"][2] = pawn(1, 450, SANCTUARY_PAD)
+        self.assert_fails_with(run_scenario("combat_kill_respawn", states, COMBAT_IDS), "sanctuary")
+
+    def test_forged_state_rejected_and_audited_passes(self) -> None:
+        extra = forged_lines(("loadout-ineligible", "loadout-unknown-weapon"), 2)
+        self.assert_passes(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra))
+
+    def test_forged_state_rejected_but_not_audited_fails(self) -> None:
+        # RED proof: an unchanged loadout alone is "rejected", not "rejected and audited".
+        extra = forged_lines(("loadout-ineligible",), 2)
+        self.assert_fails_with(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra),
+                               "kind=loadout-unknown-weapon")
+
+    def test_forged_state_audited_but_applied_fails(self) -> None:
+        extra = forged_lines(("loadout-ineligible", "loadout-unknown-weapon"), 2)
+        self.assert_fails_with(run_scenario("forged_state", forged_states(saved="auc_rifle"), [(2, 1)] * 2, extra),
+                               "expected mra_rifle")
+
+    def test_forged_state_without_counters_fails(self) -> None:
+        extra = forged_lines(("loadout-ineligible", "loadout-unknown-weapon"), 1)
+        self.assert_fails_with(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra),
+                               "forged-state counters")
+
+    def test_reconnect_restoring_saved_state_passes(self) -> None:
+        self.assert_passes(run_scenario("reconnect", reconnect_states(), RECONNECT_IDS))
+
+    def test_reconnect_to_default_kit_fails(self) -> None:
+        # RED proof: nothing persisted, so both snapshots are default kit; equal is not proof.
+        default = ("default", 0, 1, 0)
+        summary = run_scenario("reconnect", reconnect_states(before=default, after=default), RECONNECT_IDS)
+        self.assert_fails_with(summary, "default kit")
+
+    def test_reconnect_restoring_the_forged_loadout_fails(self) -> None:
+        forged = (multiclient.RECONNECT_FORGED_PRIMARY, 12, 1, 0)
+        self.assert_fails_with(run_scenario("reconnect", reconnect_states(after=forged), RECONNECT_IDS),
+                               "was restored")
+
+    def test_reconnect_losing_the_wallet_fails(self) -> None:
+        poorer = (multiclient.RECONNECT_LEGAL_PRIMARY, 0, 1, 0)
+        self.assert_fails_with(run_scenario("reconnect", reconnect_states(after=poorer), RECONNECT_IDS), "flux 0")
+
+    def test_reconnect_still_in_world_while_offline_fails(self) -> None:
+        states = reconnect_states()
+        states[1]["pawns"][1] = pawn(2, 450, (344.0, 24.0, 3744.0))
+        summary = run_scenario("reconnect", states, RECONNECT_IDS)
+        self.assertFalse(summary["passed"])
+        self.assertIn("should be out of the world", " ".join(summary["checkpoints"][1]["problems"]))
+
+    def test_territory_flip_and_flip_back_passes(self) -> None:
+        self.assert_passes(run_scenario("territory", territory_states(), [(2, 1)] * 3))
+
+    def test_territory_that_never_flipped_fails(self) -> None:
+        mra = multiclient.FACTION_IDS["mra"]
+        self.assert_fails_with(run_scenario("territory", territory_states((mra, mra, mra)), [(2, 1)] * 3),
+                               "expected 2")
+
+    def test_vehicle_lifecycle_passes(self) -> None:
+        self.assert_passes(run_scenario("vehicle_lifecycle", vehicle_states(), VEHICLE_IDS))
+
+    def test_vehicle_that_never_appears_fails(self) -> None:
+        # RED proof: a purchase that silently did nothing must fail, not skip.
+        summary = run_scenario("vehicle_lifecycle", vehicle_states(appears=False), VEHICLE_IDS)
+        self.assert_fails_with(summary, "purchased: expected exactly one vehicle, found 0")
+
+    def test_vehicle_never_boarded_fails(self) -> None:
+        self.assert_fails_with(run_scenario("vehicle_lifecycle", vehicle_states(driver_in_seat=False), VEHICLE_IDS),
+                               "entered: driver")
+
+    def test_vehicle_that_did_not_move_fails(self) -> None:
+        self.assert_fails_with(run_scenario("vehicle_lifecycle", vehicle_states(drives=False), VEHICLE_IDS),
+                               "did not move")
+
+    def test_vehicle_purchase_without_payment_fails(self) -> None:
+        states = vehicle_states()
+        for state in states[1:]:
+            state["players"] = {2: ("default", 200, 1, 0)}
+        self.assert_fails_with(run_scenario("vehicle_lifecycle", states, VEHICLE_IDS), "took 0 flux")
+
+    def test_verdict_without_views_fails(self) -> None:
+        views = multiclient.RunViews([None, None], [[None, None], [None, None]], [])
+        self.assertTrue(multiclient.forged_verdict(views))
+        self.assertTrue(multiclient.territory_verdict(views))
 
 
 class ScriptTests(unittest.TestCase):
@@ -290,10 +629,29 @@ class ScriptTests(unittest.TestCase):
         self.assertIn("tf_connect 127.0.0.1:23000", first)
         self.assertTrue(first.startswith("0 tf_status\n"))
 
+    def test_solo_steps_reach_only_their_client_and_reuse_its_credentials(self) -> None:
+        scenario = multiclient.SCENARIOS["reconnect"]
+        stayer = multiclient.client_script(scenario, 23000, "mra", 0)
+        returner = multiclient.client_script(scenario, 23000, "auc", 1)
+        self.assertNotIn("tf_disconnect", stayer)
+        self.assertIn("tf_disconnect", returner)
+        logins = [line.split(" ", 1)[1] for line in returner.splitlines() if " tf_login " in line]
+        self.assertEqual(len(logins), 2)
+        self.assertEqual(logins[0], logins[1])
+
     def test_server_script_observes_through_the_run(self) -> None:
         script = multiclient.server_script(23000, 20.0).splitlines()
         self.assertEqual(script[:2], ["0 tf_status", "t0.5 tf_dedicated 23000"])
         self.assertEqual(script[-1], "t19.0 tf_observe")
+
+    def test_server_script_repeats_each_step_across_its_window(self) -> None:
+        scenario = multiclient.SCENARIOS["territory"]
+        script = multiclient.server_script(23000, scenario.client_seconds + multiclient.SERVER_TAIL_S, scenario)
+        for step in scenario.server_steps:
+            expected = [f"t{multiclient.format_seconds(at)} {step.command}"
+                        for at in multiclient.server_step_times(step)]
+            for line in expected:
+                self.assertIn(line, script.splitlines())
 
 
 class ProcessTests(unittest.TestCase):

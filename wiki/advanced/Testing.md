@@ -314,9 +314,15 @@ ctest --test-dir build -L '^soak$' --no-tests=error --output-on-failure
 # TERRAFRONT dedicated server + two headless clients (TF-110; local evidence until a
 # dedicated CI job exists). Needs SparkEngine and SparkGameMMOFPS; timing-sensitive,
 # so it is kept out of the required full-ctest lanes. TerrafrontMultiClient_Harness
-# (parser/comparator unit tests) is always registered.
+# (parser/comparator/verdict unit tests) is always registered. One process run per
+# scenario: OnboardSpawnMove, CombatKillRespawn, ForgedStateRejectedAndAudited,
+# ReconnectRestoresAllowedState, TerritoryReplicates, VehicleLifecycle. The server's
+# script repeats its faction-addressed harness verbs (tf_place_faction, tf_flux_floor,
+# tf_damage_vehicles, tf_capture) across windows sized for a client clock that starts
+# 0.5-10.5 s after the server's; a run outside that lag fails and says so.
 cmake -B build -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON
 ctest --test-dir build -L terrafront-multiclient --no-tests=error --output-on-failure
+ctest --test-dir build -R '^TerrafrontMultiClient_VehicleLifecycle$' --no-tests=error --output-on-failure
 
 # Verbose output
 ctest --test-dir build -C Release -V --no-tests=error
