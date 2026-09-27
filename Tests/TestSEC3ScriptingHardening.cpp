@@ -471,4 +471,47 @@ TEST(SEC3Script_HotReloadSurvivesSourceRewrittenDuringCommit)
     fs::remove_all(directory, error);
 }
 
+TEST(SEC3Script_SandboxFunctionPolicyIsFixedAfterInitialize)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    (void)console.Initialize();
+
+    Sec3ScriptFixture fx;
+    EXPECT_TRUE(fx.ready);
+    Spark::ScriptSandbox* sandbox = fx.engine.GetSandbox();
+    ASSERT_TRUE(sandbox != nullptr);
+    EXPECT_TRUE(sandbox->IsFunctionPolicyLocked());
+    EXPECT_TRUE(sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Standard);
+
+    // The API was bound under Standard, so getPosition stays callable. Reporting
+    // Strict now would be false assurance: every path to a new level is refused.
+    EXPECT_FALSE(sandbox->SetSecurityLevel(Spark::ScriptSecurityLevel::Strict));
+    EXPECT_FALSE(sandbox->AddAllowedFunction("print"));
+    EXPECT_FALSE(sandbox->AddBlockedFunction("getPosition"));
+    EXPECT_TRUE(console.ExecuteCommand("sandbox.level strict"));
+    fx.engine.ConfigureSandboxSecurity(Spark::ScriptSecurityLevel::Strict, {"print"}, {});
+    EXPECT_TRUE(sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Standard);
+    EXPECT_TRUE(sandbox->IsFunctionAllowed("getPosition"));
+    EXPECT_STR_CONTAINS(sandbox->GetStatusString(), "Standard (API registered at startup, fixed)");
+    // Re-asserting the level in force is allowed (it resets the resource limits).
+    EXPECT_TRUE(sandbox->SetSecurityLevel(Spark::ScriptSecurityLevel::Standard));
+
+    const char* const usesPosition = "class UsesPosition\n"
+                                     "{\n"
+                                     "    void Start() { Vector3 p = getPosition(getEntityByName(\"x\")); }\n"
+                                     "}\n";
+    EXPECT_TRUE(fx.Compile(usesPosition, "SEC3PolicyStandard"));
+
+    // A Strict policy staged before Initialize() is what gets registered and locked.
+    AngelScriptEngine strictEngine;
+    strictEngine.ConfigureSandboxSecurity(Spark::ScriptSecurityLevel::Strict, {"print", "debugTrace"}, {});
+    EXPECT_TRUE(strictEngine.Initialize());
+    ASSERT_TRUE(strictEngine.GetSandbox() != nullptr);
+    EXPECT_TRUE(strictEngine.GetSandbox()->GetSecurityLevel() == Spark::ScriptSecurityLevel::Strict);
+    EXPECT_FALSE(strictEngine.CompileScriptFromString(usesPosition, "SEC3PolicyStrict"));
+    EXPECT_FALSE(strictEngine.GetSandbox()->SetSecurityLevel(Spark::ScriptSecurityLevel::Unrestricted));
+    EXPECT_TRUE(strictEngine.GetSandbox()->GetSecurityLevel() == Spark::ScriptSecurityLevel::Strict);
+    strictEngine.Shutdown();
+}
+
 #endif // SPARK_ANGELSCRIPT_SUPPORT

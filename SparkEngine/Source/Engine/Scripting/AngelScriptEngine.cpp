@@ -574,20 +574,15 @@ void AngelScriptEngine::ConfigureSandboxSecurity(Spark::ScriptSecurityLevel leve
 
     if (m_sandbox)
     {
-        // Initialize() already ran and already registered the engine API
-        // through RegisterGuardedFunction under the PREVIOUS settings —
-        // AngelScript has no API to unregister a single global function, so
-        // this cannot retroactively tighten (or loosen) which functions a
-        // script can call. Only the sandbox's runtime checks (instruction
-        // limits, timeouts, memory) are actually affected at this point.
-        LogWarning("ConfigureSandboxSecurity called after Initialize(): the engine API was already "
-                   "registered under the previous security settings, so the whitelist/blacklist change "
-                   "has no effect on already-registered functions. Call this before Initialize() instead.");
-        m_sandbox->SetSecurityLevel(level);
-        for (const auto& name : allowedFunctions)
-            m_sandbox->AddAllowedFunction(name);
-        for (const auto& name : blockedFunctions)
-            m_sandbox->AddBlockedFunction(name);
+        // Initialize() already registered the engine API through
+        // RegisterGuardedFunction under the settings in force then, and
+        // AngelScript cannot unregister a global function. Applying the new
+        // level to the live sandbox would make it report a policy that is not
+        // enforced, so the live sandbox is left alone (its function policy is
+        // locked) and the configuration only takes effect at the next Initialize().
+        LogError("ConfigureSandboxSecurity called after Initialize(): the engine API is already registered "
+                 "under the previous security settings and cannot change at runtime. The new settings are "
+                 "staged for the next Initialize(); call this before Initialize() instead.");
     }
 }
 
@@ -674,6 +669,10 @@ bool AngelScriptEngine::Initialize()
     m_sandbox->RegisterConsoleCommands();
 
     RegisterEngineAPI();
+    // The API is now bound under the sandbox's level and lists; freeze them so
+    // `sandbox.level` or a late ConfigureSandboxSecurity() cannot report a
+    // policy the registered functions do not follow.
+    m_sandbox->LockFunctionPolicy();
 
     // AngelScript only reports a rejected native registration as "Invalid
     // configuration" when the first module builds, so every script would fail

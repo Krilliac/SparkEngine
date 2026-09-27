@@ -1426,7 +1426,7 @@ if(SPARK_ANGELSCRIPT_AVAILABLE)
     # the sandbox function policy is fixed once the API is registered.
     add_test(NAME SEC3ScriptHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(SEC3ScriptHardening PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Script_;SPARK_TEST_EXPECT_COUNT=4"
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Script_;SPARK_TEST_EXPECT_COUNT=5"
         LABELS "scripting;scripting-integration;security;integration"
         TIMEOUT 120)
     add_test(NAME ScriptHotReloadReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
