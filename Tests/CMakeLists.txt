@@ -1130,6 +1130,8 @@ target_sources(SparkTests PRIVATE
     TestShaderCompilerReal.cpp
     TestShadowPassReal.cpp
     TestSparkGameFPSLoopReal.cpp
+    # SEC2 game-module security fixes (SEC2GM_ family, pinned below)
+    TestSEC2GameModules.cpp
     TestSparkGameFPSMirrorCompanionsReal.cpp
     TestMOD310FPSSceneReloadRespawnReal.cpp
     TestAssetManifestReal.cpp
@@ -2080,6 +2082,16 @@ endforeach()
 # module image 90 times; ASan/TSan builds need more than the family default. Each
 # cycle is separately bounded by an in-process deadlock watchdog.
 set_tests_properties(Lifecycle_LifecycleLoop Lifecycle_ModuleReload PROPERTIES TIMEOUT 600)
+
+# SEC2 game-module security fixes. The family size depends on which module
+# sources (ImGui-gated) and networking paths are compiled into SparkTests, so
+# the pinned count is derived from the same conditions the test file uses.
+set(_spark_sec2gm_count 2)
+add_test(NAME SEC2GameModules COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SEC2GameModules PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2GM_;SPARK_TEST_EXPECT_COUNT=${_spark_sec2gm_count}"
+    LABELS "security;module;unit"
+    TIMEOUT 120)
 
 # SDK-240 / OD-02: real N-1 and N+1 SDK module images are rejected with a
 # diagnostic naming both versions before any module code runs; the current-SDK

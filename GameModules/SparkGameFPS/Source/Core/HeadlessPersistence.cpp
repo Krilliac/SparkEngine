@@ -67,6 +67,8 @@ void SparkGameModule::RegisterHeadlessPersistenceCommands()
             {
                 return "Invalid XP amount: " + args[0];
             }
+            if (amount < 1 || amount > Spark::ProgressionSystem::MAX_SINGLE_AWARD)
+                return "XP amount must be between 1 and " + std::to_string(Spark::ProgressionSystem::MAX_SINGLE_AWARD);
             m_headlessProgression->AwardXP(amount, "console");
             return "Awarded " + std::to_string(amount) + " XP (level " +
                    std::to_string(m_headlessProgression->GetLevel()) + ")";
