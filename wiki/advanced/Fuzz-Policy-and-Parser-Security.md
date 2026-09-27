@@ -216,6 +216,24 @@ Fuzzing lives in the top-level `FuzzerTests/` directory, separate from the unit 
 | `FuzzerTests/corpora/<parser>/` | Reviewed seeds and `regression-*` reproducers | `corpus-manifest.json` budget and `content_digest`; the blocking smoke replays exactly these |
 | `FuzzerTests/generated/<parser>/` | Coverage-minimized units kept from earlier fuzzing | Read-only second corpus for the scheduled campaign; byte-exact (`-text`); never replayed by the merge gate |
 | `FuzzerTests/policy/` | Adversarial policy and campaign tests (`FuzzPolicyAdversarial`) | Run by the blocking `fuzz-policy` job |
+| `FuzzerTests/Replay/` | Corpus replay driver for the normal test build (`FuzzReplay_<corpus>`) | Not fuzz targets; labelled `fuzz-replay`, never counted by the policy |
+
+The libFuzzer targets build only on Linux Clang, so `FuzzerTests/Replay/` (added from the
+root `CMakeLists.txt` whenever `BUILD_TESTS` is on) links each harness and its production
+adapter against `SparkEngineLib` with `FuzzReplayMain.cpp` in place of the libFuzzer
+driver. `FuzzReplay_<corpus>` feeds every committed seed, including each `regression-*`
+fixture, through the production entry point once, and fails on an abort, a crash, a
+per-input timeout (5 s) or an empty corpus. On Windows the SparkPak adapter stages input
+in a temporary file instead of a memfd. `json-utils`, `scene-manifest`,
+`sparkpak-reader` and `crash-manifest` replay on every platform; `neural-weights-nnw` and
+`texture-stex` stage input through `mkstemp` and replay on POSIX builds only. Replay
+carries no sanitizer of its own: it runs under whatever the build uses (the Linux ASan
+and UBSan presets), so on MSVC it catches aborts, crashes and hangs, not silent memory
+errors.
+
+```bash
+ctest --test-dir build/windows-release -C Release -L '^fuzz-replay$' --no-tests=error
+```
 
 A `generated/` directory is not a seed set, so it is outside the per-corpus seed budget.
 Refresh it only with a coverage merge, never by copying raw campaign output:

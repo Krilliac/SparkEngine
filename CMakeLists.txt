@@ -2701,6 +2701,8 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
         TIMEOUT 60)
     message(STATUS "Adding test suite...")
     add_subdirectory(Tests)
+    # SEC-120: replay the committed fuzz corpora on every compiler, not only Linux Clang.
+    add_subdirectory(FuzzerTests/Replay)
 endif()
 
 # libFuzzer targets and their smoke replays live in FuzzerTests/, separate from the unit suite.

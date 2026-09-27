@@ -2,9 +2,11 @@
  * @file FuzzArchiveProduction.cpp
  * @brief libc++-compiled production adapter for the SparkPak libFuzzer harness.
  *
- * SparkPakReader::Open takes a path, so the fuzz input is placed in an anonymous
- * memfd and the shipped reader opens it through /proc/self/fd, exactly as it
- * opens a .spk found under ./Data. When the archive mounts, every entry is
+ * SparkPakReader::Open takes a path, so on Linux the fuzz input is placed in an
+ * anonymous memfd and the shipped reader opens it through /proc/self/fd, exactly
+ * as it opens a .spk found under ./Data. Other hosts (the MSVC and GCC corpus
+ * replay in FuzzerTests/Replay) write it to a private temporary file instead.
+ * When the archive mounts, every entry is
  * listed and read back through ReadFile (the path ArchiveResourceProvider uses),
  * so the TOC parser, the per-entry decompression budget, miniz inflate and the
  * vendored zstd decoder all see attacker-controlled bytes. The reader is then
@@ -43,8 +45,14 @@
 #include <string_view>
 #include <vector>
 
+#ifdef __linux__
 #include <sys/mman.h>
 #include <unistd.h>
+#else
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#endif
 
 namespace
 {
@@ -69,12 +77,13 @@ namespace
         std::abort();
     }
 
+#ifdef __linux__
     /// Anonymous in-memory file: no disk writes, no name another process can
     /// race, and the descriptor is released when the input is done.
-    class MemoryInput
+    class ArchiveInput
     {
       public:
-        MemoryInput(const std::uint8_t* data, std::size_t size)
+        ArchiveInput(const std::uint8_t* data, std::size_t size)
         {
             m_descriptor = ::memfd_create("spark-pak-fuzz", MFD_CLOEXEC);
             if (m_descriptor < 0)
@@ -93,10 +102,10 @@ namespace
             m_path = "/proc/self/fd/" + std::to_string(m_descriptor);
         }
 
-        MemoryInput(const MemoryInput&) = delete;
-        MemoryInput& operator=(const MemoryInput&) = delete;
+        ArchiveInput(const ArchiveInput&) = delete;
+        ArchiveInput& operator=(const ArchiveInput&) = delete;
 
-        ~MemoryInput() { ::close(m_descriptor); }
+        ~ArchiveInput() { ::close(m_descriptor); }
 
         const std::string& Path() const { return m_path; }
 
@@ -104,6 +113,44 @@ namespace
         int m_descriptor = -1;
         std::string m_path;
     };
+#else
+    /// A uniquely named file in the temporary directory, removed when the input
+    /// is done. The reader holding it open is destroyed first (it is declared
+    /// after the input), so the removal also succeeds on Windows.
+    class ArchiveInput
+    {
+      public:
+        ArchiveInput(const std::uint8_t* data, std::size_t size)
+        {
+            static std::uint64_t sequence = 0;
+            const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+            m_file = std::filesystem::temp_directory_path() /
+                     ("spark-pak-fuzz-" + std::to_string(nonce) + "-" + std::to_string(++sequence) + ".spk");
+            std::ofstream output(m_file, std::ios::binary | std::ios::trunc);
+            if (size != 0)
+                output.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+            output.close();
+            if (!output)
+                InfrastructureFailure("temporary archive write");
+            m_path = m_file.string();
+        }
+
+        ArchiveInput(const ArchiveInput&) = delete;
+        ArchiveInput& operator=(const ArchiveInput&) = delete;
+
+        ~ArchiveInput()
+        {
+            std::error_code ignored;
+            std::filesystem::remove(m_file, ignored);
+        }
+
+        const std::string& Path() const { return m_path; }
+
+      private:
+        std::filesystem::path m_file;
+        std::string m_path;
+    };
+#endif
 
     /// Containment decided without std::filesystem, so it holds identically on
     /// every host: components are split on both separators and '..' may never
@@ -193,7 +240,7 @@ extern "C" int SparkFuzzOpenSparkPak(const std::uint8_t* data, std::size_t size)
     if (data == nullptr && size != 0)
         return 0;
 
-    MemoryInput input(data, size);
+    ArchiveInput input(data, size);
 
     Spark::SparkPakReader reader;
     if (reader.Open(input.Path()))
