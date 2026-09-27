@@ -3,10 +3,10 @@
 ## Scope
 
 This policy governs all code and data under `ThirdParty/`. New third-party code
-belongs there and nowhere else — but note that this is a review rule, not a
-tooling guarantee: no check currently scans the rest of the repository for
-vendored code, so a library dropped into `SparkEngine/Source/` would be outside
-every check described below.
+belongs there. Anything the build, CI, or a tool page takes from outside that
+directory must be declared as described in
+[Dependencies outside ThirdParty/](#dependencies-outside-thirdparty). The
+checker scans the rest of the repository for undeclared ones.
 
 ## Authoritative Lockfiles
 
@@ -208,6 +208,50 @@ those forms can carry an unpinned reference past the check.
 
 A missing `.github/workflows` directory is an error, not a warning — a check
 that did not run is not a check that passed.
+
+## Dependencies outside ThirdParty/
+
+The `external_dependencies` list in `supply-chain.lock` declares every
+dependency that does not live in a `ThirdParty/` container. Each record has a
+`name`, a `class`, a `license_spdx` expression, a named `owner`, and a
+`justification` of at least 16 characters. The class adds fields:
+
+| Class | Extra fields | What the checker scans |
+|---|---|---|
+| `system_libraries` | `identifiers`: `cmake:<Package>` or `pkg-config:<module>` | `find_package`, `find_dependency`, `pkg_check_modules`, and `pkg_search_module` calls in every tracked `CMakeLists.txt`, `*.cmake`, and `*.cmake.in`, with comments removed |
+| `ci_packages` | `identifiers`: `apt:<package>` or `brew:<formula>` | `apt-get install`, `apt install`, and `brew install` commands in every workflow and composite-action `run:` script, parsed as YAML. Backslash continuations are joined, and a comment or shell operator ends the package list. |
+| `web_runtime` | `url` with an exact version (`name@1.2.3/`), and `sri` (`sha384-` or `sha512-`) | `<script src>`, import maps, and module `import` statements in tracked `.html`, `.js`, and `.mjs` files. Import-map specifiers are resolved first. |
+| `vendored_outside_thirdparty` | `paths`: tracked files, or directories ending in `/` | Tracked files outside `ThirdParty/` that contain an MIT, Apache-2.0, or BSD license grant phrase. The scan reads the index with `git grep --cached`, so binary files are included. |
+
+The rules:
+
+- Every scanned use must match a declared identifier, URL, or path. The only
+  CMake packages that need no record are first-party or build tooling:
+  `SparkEngine`, `Python3`, `Git`, and `PkgConfig`.
+- A remote script must name an exact version. The page must also carry the
+  declared SRI hash, either as the `<script integrity=...>` attribute or in the
+  import map's `integrity` section. A plain JavaScript module cannot carry SRI
+  for its own imports, so a remote import in a `.js` or `.mjs` file always
+  fails.
+- `license_spdx` must be an SPDX expression. Only `ci_packages` records may use
+  `NOASSERTION`, because those packages are build tools and are never
+  redistributed. The `license_policy` allow-list covers `dependencies.lock`
+  entries only. Each external record's license is reviewed by its owner. The
+  editor fonts' `OFL-1.1` is not on that allow-list; approving it is a pending
+  owner decision (GOV-400).
+- Record names, identifiers, URLs, and paths are unique without regard to case.
+  A duplicate or a case collision is a schema error (exit 2).
+- A declared identifier or URL that nothing uses is a warning. A declared
+  vendored path with no tracked file is an error.
+- Some files may contain license phrases because they quote license text
+  rather than vendor code. The checker exempts them, and each exemption has a
+  recorded reason in `FOREIGN_LICENSE_EXEMPTIONS`: `Tests/**`,
+  `.github/scripts/test_*`, `cmake/Test*.cmake`, `THIRD_PARTY_NOTICES`,
+  `LICENSE`, and the checker itself. The list is in reviewed code, not in the
+  lockfile, so a change cannot exempt itself.
+
+`--update` copies `external_dependencies` unchanged. The declarations are human
+decisions and are never derived.
 
 ## SBOM and Package Reconciliation
 

@@ -1445,6 +1445,220 @@ class TestLicenseContent(unittest.TestCase):
 # --update must produce a complete, verified lockfile
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+# Dependencies outside ThirdParty/ — system, CI, web, vendored
+# ═══════════════════════════════════════════════════════════════════════
+
+MIT_HEADER = """// Copyright (c) 2019 Someone Else
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software").
+int vendored_helper() { return 0; }
+"""
+CDN_URL = "https://cdn.jsdelivr.net/npm/widget@1.2.3/dist/widget.module.js"
+CDN_SRI = "sha384-" + "A" * 64
+
+
+def _importmap_page(url: str, integrity: str | None) -> str:
+    import_map: dict = {"imports": {"widget": url}}
+    if integrity is not None:
+        import_map["integrity"] = {url: integrity}
+    return (
+        "<!doctype html><html><head>\n"
+        f'<script type="importmap">{json.dumps(import_map)}</script>\n'
+        '</head><body><script type="module">\nimport { Widget } from "widget";\nnew Widget();\n</script>\n'
+        "</body></html>\n"
+    )
+
+
+class TestExternalDependencies(FakeRepoCase):
+
+    @staticmethod
+    def _record(name: str, kind: str, **fields) -> dict:
+        record = {
+            "name": name,
+            "class": kind,
+            "license_spdx": "MIT",
+            "owner": "supply-chain-maintainer",
+            "justification": "Fixture dependency declared for this adversarial case.",
+        }
+        record.update(fields)
+        return record
+
+    def declare(self, *records: dict) -> None:
+        data = self.lock()
+        data["external_dependencies"] = list(records)
+        self.set_lock(data)
+
+    def assert_passes(self) -> None:
+        done = self.check("--json")
+        self.assertEqual(done.returncode, 0, f"{done.stdout}\n{done.stderr}")
+
+    # ── CMake system packages ────────────────────────────────────────
+
+    def test_undeclared_find_package_fails(self) -> None:
+        self.write("CMakeLists.txt", "cmake_minimum_required(VERSION 3.20)\nfind_package(ZLIB REQUIRED)\n")
+        self.commit()
+        self.assert_violation("cmake:ZLIB", "system_libraries")
+
+    def test_declared_find_package_passes(self) -> None:
+        self.write("CMakeLists.txt", "find_package(\n  ZLIB REQUIRED)\n")
+        self.commit()
+        self.declare(self._record("zlib", "system_libraries", license_spdx="Zlib", identifiers=["cmake:ZLIB"]))
+        self.assert_passes()
+
+    def test_undeclared_pkg_config_module_fails(self) -> None:
+        self.write("cmake/Probe.cmake", "pkg_check_modules(FOO QUIET IMPORTED_TARGET libfoo>=1.2)\n")
+        self.commit()
+        self.assert_violation("pkg-config:libfoo")
+
+    def test_first_party_and_commented_packages_are_not_dependencies(self) -> None:
+        self.write(
+            "CMakeLists.txt",
+            "find_package(SparkEngine CONFIG REQUIRED)\n# find_package(Retired REQUIRED)\n"
+            "#[[ find_package(AlsoRetired) ]]\nmessage(STATUS \"#not a comment\")\n",
+        )
+        self.commit()
+        self.assert_passes()
+
+    # ── CI system packages ───────────────────────────────────────────
+
+    def test_undeclared_apt_package_in_a_multiline_install_fails(self) -> None:
+        self.write(
+            ".github/workflows/deps.yml",
+            "name: deps\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n"
+            "      - run: |\n          sudo apt-get update\n          sudo apt-get install -y \\\n"
+            "            cmake \\\n            libevil-dev\n",
+        )
+        self.commit()
+        self.declare(self._record("tools", "ci_packages", license_spdx="NOASSERTION", identifiers=["apt:cmake"]))
+        self.assert_violation("apt:libevil-dev", "ci_packages")
+
+    def test_declared_ci_packages_pass_and_shell_operators_end_the_list(self) -> None:
+        self.write(
+            ".github/workflows/deps.yml",
+            "name: deps\non: [push]\njobs:\n  build:\n    runs-on: macos-15\n    steps:\n"
+            "      - run: |\n          # apt-get install of nothing: a comment\n"
+            "          brew install molten-vk || echo warn-only\n"
+            "          sudo apt-get update && sudo apt-get install -y gcc-14=14.2.0-1 # trailing note\n",
+        )
+        self.commit()
+        self.declare(self._record(
+            "tools", "ci_packages", license_spdx="NOASSERTION", identifiers=["brew:molten-vk", "apt:gcc-14"],
+        ))
+        self.assert_passes()
+
+    # ── Remote web runtime ───────────────────────────────────────────
+
+    def test_cdn_import_without_sri_fails(self) -> None:
+        self.write("tools/viz/page.html", _importmap_page(CDN_URL, None))
+        self.commit()
+        self.declare(self._record("widget", "web_runtime", url=CDN_URL, sri=CDN_SRI))
+        self.assert_violation("without its declared subresource-integrity")
+
+    def test_cdn_url_with_a_floating_version_fails(self) -> None:
+        floating = "https://cdn.jsdelivr.net/npm/widget@latest/dist/widget.module.js"
+        self.write("tools/viz/page.html", f'<script src="{floating}" integrity="{CDN_SRI}"></script>\n')
+        self.commit()
+        self.assert_violation("does not name an exact version")
+
+    def test_undeclared_remote_import_in_a_module_fails(self) -> None:
+        self.write("tools/viz/app.mjs", f'import {{ Widget }} from "{CDN_URL}";\nexport default Widget;\n')
+        self.commit()
+        self.assert_violation("is not declared", "web_runtime")
+
+    def test_declared_cdn_import_with_sri_passes(self) -> None:
+        self.write("tools/viz/page.html", _importmap_page(CDN_URL, CDN_SRI))
+        self.commit()
+        self.declare(self._record("widget", "web_runtime", url=CDN_URL, sri=CDN_SRI))
+        self.assert_passes()
+
+    def test_record_for_a_floating_url_is_a_schema_failure(self) -> None:
+        self.declare(self._record(
+            "widget", "web_runtime", url="https://cdn.jsdelivr.net/npm/widget@1/dist/w.js", sri=CDN_SRI,
+        ))
+        self.assert_fatal("exact version")
+
+    # ── Vendored code outside ThirdParty/ ────────────────────────────
+
+    def test_foreign_mit_header_in_engine_source_fails(self) -> None:
+        self.write("SparkEngine/Source/Util/Vendored.cpp", MIT_HEADER)
+        self.commit()
+        self.assert_violation("SparkEngine/Source/Util/Vendored.cpp", "vendored_outside_thirdparty")
+
+    def test_declared_vendored_directory_passes(self) -> None:
+        self.write("SparkEngine/Source/Util/Vendored.cpp", MIT_HEADER)
+        self.commit()
+        self.declare(self._record("helper", "vendored_outside_thirdparty", paths=["SparkEngine/Source/Util/"]))
+        self.assert_passes()
+
+    def test_license_text_in_test_fixtures_is_exempt(self) -> None:
+        self.write("Tests/Fixtures/quoted_license.py", f'TEXT = """{MIT_HEADER}"""\n')
+        self.commit()
+        self.assert_passes()
+
+    def test_declared_vendored_path_must_be_tracked(self) -> None:
+        self.declare(self._record("gone", "vendored_outside_thirdparty", paths=["SparkEngine/Source/Gone.cpp"]))
+        self.assert_violation("is not tracked")
+
+    # ── Record schema ────────────────────────────────────────────────
+
+    def test_duplicate_or_case_colliding_records_are_a_schema_failure(self) -> None:
+        cases = {
+            "name": (
+                self._record("Zlib", "system_libraries", identifiers=["cmake:ZLIB"]),
+                self._record("zlib", "system_libraries", identifiers=["cmake:Other"]),
+            ),
+            "identifier": (
+                self._record("one", "system_libraries", identifiers=["cmake:ZLIB"]),
+                self._record("two", "system_libraries", identifiers=["cmake:zlib"]),
+            ),
+        }
+        for kind, records in cases.items():
+            with self.subTest(kind):
+                self.declare(*records)
+                self.assert_fatal("collides")
+
+    def test_noassertion_license_is_only_for_ci_packages(self) -> None:
+        self.declare(self._record("zlib", "system_libraries", license_spdx="NOASSERTION", identifiers=["cmake:ZLIB"]))
+        self.assert_fatal("license_spdx")
+
+    def test_identifier_namespace_must_match_the_class(self) -> None:
+        self.declare(self._record("zlib", "system_libraries", identifiers=["apt:zlib1g-dev"]))
+        self.assert_fatal("namespace")
+
+    def test_unowned_record_is_a_schema_failure(self) -> None:
+        self.declare(self._record("zlib", "system_libraries", owner="unassigned", identifiers=["cmake:ZLIB"]))
+        self.assert_fatal("owned")
+
+    def test_unused_declaration_warns_without_failing(self) -> None:
+        self.declare(self._record("zlib", "system_libraries", identifiers=["cmake:ZLIB"]))
+        done = self.check("--json")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("which nothing uses", done.stdout)
+
+    def test_update_carries_the_declarations_through(self) -> None:
+        record = self._record("zlib", "system_libraries", identifiers=["cmake:ZLIB"])
+        self.declare(record)
+        done = self.check("--update")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.lock()["external_dependencies"], [record])
+
+
+class TestExternalScanners(unittest.TestCase):
+
+    def test_cmake_package_uses(self) -> None:
+        text = (
+            'find_package(Vulkan QUIET COMPONENTS glslc)\nfind_dependency(SDL2 REQUIRED CONFIG)\n'
+            'pkg_search_module(EGL REQUIRED egl)\n# find_package(Hidden)\n'
+        )
+        self.assertEqual(sc.cmake_package_uses(text), ["cmake:Vulkan", "cmake:SDL2", "pkg-config:egl"])
+
+    def test_shell_package_installs(self) -> None:
+        script = "sudo apt-get -q install -y a b=1.0; apt install c\nbrew install d | tee log\nnot apt-get update x\n"
+        self.assertEqual(sc.shell_package_installs(script), ["apt:a", "apt:b", "apt:c", "brew:d"])
+
+
 class TestUpdateMode(FakeRepoCase):
 
     def test_update_verifies_what_it_wrote(self) -> None:

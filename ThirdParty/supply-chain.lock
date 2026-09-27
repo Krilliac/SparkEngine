@@ -444,5 +444,210 @@
         "spdx": "BSD-3-Clause"
       }
     }
-  }
+  },
+  "external_dependencies": [
+    {
+      "name": "SDL2 (host)",
+      "class": "system_libraries",
+      "license_spdx": "Zlib",
+      "owner": "Krilliac",
+      "justification": "Host SDL2 found by CMake or pkg-config where a build links the system library instead of the ThirdParty/SDL2 submodule (editor, ImGui backend, installed SparkEngineConfig).",
+      "identifiers": [
+        "cmake:SDL2",
+        "pkg-config:sdl2"
+      ]
+    },
+    {
+      "name": "OpenGL",
+      "class": "system_libraries",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Platform OpenGL library (Mesa/libglvnd on Linux, the OS driver elsewhere) for the OpenGL RHI backend and the editor.",
+      "identifiers": [
+        "cmake:OpenGL"
+      ]
+    },
+    {
+      "name": "EGL",
+      "class": "system_libraries",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Platform EGL library for headless OpenGL contexts on Linux.",
+      "identifiers": [
+        "pkg-config:egl"
+      ]
+    },
+    {
+      "name": "X11",
+      "class": "system_libraries",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Xlib for native windowing on Linux (engine and shader compiler).",
+      "identifiers": [
+        "cmake:X11"
+      ]
+    },
+    {
+      "name": "Vulkan loader",
+      "class": "system_libraries",
+      "license_spdx": "Apache-2.0",
+      "owner": "Krilliac",
+      "justification": "Khronos Vulkan loader and glslc for the Vulkan RHI backend and shader compilation, including the vendored Jolt build's optional Vulkan renderer.",
+      "identifiers": [
+        "cmake:Vulkan"
+      ]
+    },
+    {
+      "name": "FreeType",
+      "class": "system_libraries",
+      "license_spdx": "FTL OR GPL-2.0-only",
+      "owner": "Krilliac",
+      "justification": "Host FreeType for smooth ImGui font rasterisation in the editor when available.",
+      "identifiers": [
+        "cmake:Freetype"
+      ]
+    },
+    {
+      "name": "OpenAL",
+      "class": "system_libraries",
+      "license_spdx": "LGPL-2.0-or-later",
+      "owner": "Krilliac",
+      "justification": "Host OpenAL (OpenAL Soft on Linux, the OpenAL framework on macOS) for the OpenAL audio backend.",
+      "identifiers": [
+        "cmake:OpenAL"
+      ]
+    },
+    {
+      "name": "libcurl",
+      "class": "system_libraries",
+      "license_spdx": "curl",
+      "owner": "Krilliac",
+      "justification": "Host libcurl for HTTP transfers; the installed SparkEngineConfig requires it when the engine was built with it.",
+      "identifiers": [
+        "cmake:CURL"
+      ]
+    },
+    {
+      "name": "Platform thread library",
+      "class": "system_libraries",
+      "license_spdx": "LGPL-2.1-or-later",
+      "owner": "Krilliac",
+      "justification": "The platform's thread library (glibc pthreads on Linux) that every native target links through CMake's Threads package.",
+      "identifiers": [
+        "cmake:Threads"
+      ]
+    },
+    {
+      "name": "CI Linux toolchains",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Ubuntu runner compilers, standard libraries, and build tools for the GCC, Clang, sanitizer, fuzzing, and MinGW cross-compile jobs; build time only, nothing is redistributed.",
+      "identifiers": [
+        "apt:build-essential",
+        "apt:gcc-14",
+        "apt:g++-14",
+        "apt:clang",
+        "apt:clang-18",
+        "apt:libclang-rt-18-dev",
+        "apt:libc++-dev",
+        "apt:libc++abi-dev",
+        "apt:cmake",
+        "apt:ninja-build",
+        "apt:ccache",
+        "apt:mingw-w64"
+      ]
+    },
+    {
+      "name": "CI Linux code-quality tools",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Formatting, static-analysis, coverage, and workflow-parsing tools used by CI jobs; build time only, nothing is redistributed.",
+      "identifiers": [
+        "apt:clang-format",
+        "apt:clang-tidy",
+        "apt:lcov",
+        "apt:python3-yaml"
+      ]
+    },
+    {
+      "name": "CI Linux graphics development packages",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Headers, shader tools, Lavapipe, and the Khronos validation layer that the Linux build and GPU test jobs compile and run against; build and test time only.",
+      "identifiers": [
+        "apt:libgl-dev",
+        "apt:libvulkan-dev",
+        "apt:glslang-tools",
+        "apt:libsdl2-dev",
+        "apt:libfreetype-dev",
+        "apt:mesa-vulkan-drivers",
+        "apt:vulkan-validationlayers"
+      ]
+    },
+    {
+      "name": "CI Wine test runtime",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Wine runs the MinGW-built Windows test binaries on the Linux cross-compile job; test time only.",
+      "identifiers": [
+        "apt:wine",
+        "apt:wine64"
+      ]
+    },
+    {
+      "name": "CI macOS Homebrew packages",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Build tools and host libraries for the macOS build and release jobs; the macOS release links SDL2 and OpenAL from these packages.",
+      "identifiers": [
+        "brew:cmake",
+        "brew:ccache",
+        "brew:sdl2",
+        "brew:openal-soft",
+        "brew:molten-vk"
+      ]
+    },
+    {
+      "name": "three.js core module",
+      "class": "web_runtime",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "3D renderer for the architecture code-city page (tools/architecture-viz), loaded by the viewer's browser; not part of the engine.",
+      "url": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "sri": "sha384-qOubuRxWZ0I7rXTjcuhcKNHKvPM7q0ztN8/82sJnxnyKS0OXTeB5FsIcysc2T9EY"
+    },
+    {
+      "name": "three.js OrbitControls",
+      "class": "web_runtime",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Camera controls for the architecture code-city page; not part of the engine.",
+      "url": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/controls/OrbitControls.js",
+      "sri": "sha384-aJoe4qqS/DgF2jh9njAuvA6QIveJYoCuYOfYjdFY8P3eawzmc9bEQ40jq2TvOyuP"
+    },
+    {
+      "name": "three.js CSS2DRenderer",
+      "class": "web_runtime",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Label renderer for the architecture code-city page; not part of the engine.",
+      "url": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/renderers/CSS2DRenderer.js",
+      "sri": "sha384-vp2ywxkL+goEwgyQLfo/AYopp2aaZOSEN+z0uvTTdu1g/jT/XvzI9kegupXyObT0"
+    },
+    {
+      "name": "SparkEditor fonts",
+      "class": "vendored_outside_thirdparty",
+      "license_spdx": "OFL-1.1 AND Apache-2.0",
+      "owner": "Krilliac",
+      "justification": "Editor UI fonts shipped in bin/EditorAssets/Fonts. SparkEditor/Fonts/LICENSES/fonts.json maps each font to its upstream license text, and tools/governance/generate_third_party_notices.py checks it against the font's name table.",
+      "paths": [
+        "SparkEditor/Fonts/"
+      ]
+    }
+  ]
 }

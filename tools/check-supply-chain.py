@@ -42,6 +42,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
@@ -161,6 +162,74 @@ MAX_SPDX_EXPRESSION_CHARS = 512
 MAX_LICENSE_DECLARATION_CHARS = 512
 SPDX_ID_RE = re.compile(r"^(?:LicenseRef-)?[A-Za-z0-9][A-Za-z0-9.+-]*$")
 SPDX_OPERATORS = frozenset({"AND", "OR"})
+
+# ── Dependencies outside ThirdParty/ (SEC-110) ────────────────────────
+# ``external_dependencies`` in the lockfile declares every system library,
+# CI system package, remote web runtime, and vendored file that lives outside
+# ThirdParty/.  Each class names the fields its records carry beyond the
+# common ones; identifier namespaces say where the checker observed the use.
+EXTERNAL_COMMON_FIELDS = frozenset({"name", "class", "license_spdx", "owner", "justification"})
+EXTERNAL_CLASS_FIELDS = {
+    "system_libraries": frozenset({"identifiers"}),
+    "ci_packages": frozenset({"identifiers"}),
+    "web_runtime": frozenset({"url", "sri"}),
+    "vendored_outside_thirdparty": frozenset({"paths"}),
+}
+EXTERNAL_IDENTIFIER_NAMESPACES = {
+    "system_libraries": frozenset({"cmake", "pkg-config"}),
+    "ci_packages": frozenset({"apt", "brew"}),
+}
+EXTERNAL_IDENTIFIER_RE = re.compile(r"^(?P<ns>[a-z-]+):(?P<name>[A-Za-z0-9][A-Za-z0-9._+-]*)$")
+# Build-only CI packages are not distributed, so their records may state
+# NOASSERTION; every other class ships or loads code and needs a real SPDX
+# expression.
+NOASSERTION_CLASSES = frozenset({"ci_packages"})
+MAX_EXTERNAL_RECORDS = 512
+MAX_SCANNED_SOURCE_BYTES = 8 * 1024 * 1024
+# CMake packages that are this project or the build's own tooling, not a
+# dependency of the product.
+FIRST_PARTY_CMAKE_PACKAGES = {
+    "SparkEngine": "the engine's own installed package, consumed by templates and package smoke tests",
+    "Python3": "build and test tooling interpreter; nothing is linked or shipped",
+    "Git": "build tooling that stamps revisions; nothing is linked or shipped",
+    "PkgConfig": "CMake's pkg-config front end; the modules it finds are declared on their own",
+}
+CMAKE_PACKAGE_FILE_RE = re.compile(r"(?:^|/)(?:CMakeLists\.txt|[^/]+\.cmake(?:\.in)?)$")
+CMAKE_FIND_RE = re.compile(
+    r"\b(find_package|find_dependency|pkg_check_modules|pkg_search_module)\s*\(([^)]*)\)",
+    re.IGNORECASE,
+)
+PKG_CONFIG_KEYWORDS = frozenset({
+    "REQUIRED", "QUIET", "NO_CMAKE_PATH", "NO_CMAKE_ENVIRONMENT_PATH", "IMPORTED_TARGET", "GLOBAL",
+})
+PACKAGE_MANAGERS = {"apt-get": "apt", "apt": "apt", "brew": "brew"}
+SHELL_COMMAND_BREAKS = ("&&", "||", ";", "|", ">", "<", "&")
+WEB_SOURCE_RE = re.compile(r"\.(?:html?|m?js)$")
+REMOTE_URL_RE = re.compile(r"^(?:https?:)?//", re.IGNORECASE)
+# An exact package version in a CDN path: name@1.2.3/ (no ranges, tags, or latest).
+PINNED_WEB_VERSION_RE = re.compile(r"@[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?/")
+SRI_RE = re.compile(r"^sha(?:384|512)-[A-Za-z0-9+/]+={0,2}$")
+JS_STATIC_IMPORT_RE = re.compile(
+    r"""\b(?:import|export)\b[^'";]*?\bfrom\s*(['"])([^'"]+)\1"""
+    r"""|\bimport\s*\(?\s*(['"])([^'"]+)\3""",
+)
+# Header phrases that mark text copied from an MIT, Apache, or BSD project.
+FOREIGN_LICENSE_PHRASES = (
+    "Permission is hereby granted, free of charge",
+    "Licensed under the Apache License",
+    "Redistribution and use in source and binary forms",
+)
+# Tracked files outside ThirdParty/ allowed to quote those phrases, each with
+# the reason it is not vendored code.  This list is reviewed code, not lockfile
+# data, so a change cannot exempt itself.
+FOREIGN_LICENSE_EXEMPTIONS = (
+    (re.compile(r"^Tests/"), "test sources and fixtures quote license text to exercise license detection"),
+    (re.compile(r"^\.github/scripts/test_[^/]+$"), "CI script tests quote license text as fixtures"),
+    (re.compile(r"^cmake/Test[^/]+\.cmake$"), "CMake script tests quote license text as fixtures"),
+    (re.compile(r"^THIRD_PARTY_NOTICES$"), "the generated notice file reproduces third-party license texts"),
+    (re.compile(r"^LICENSE$"), "SparkEngine's own license"),
+    (re.compile(r"^tools/check-supply-chain\.py$"), "this checker defines the phrases it searches for"),
+)
 
 
 def _fatal(msg: str) -> None:
@@ -827,6 +896,7 @@ def validate_lockfile_schema(data: dict[str, Any]) -> None:
         _fatal(exception_errors[0])
 
     _validate_license_policy_schema(data)
+    _validate_external_dependencies_schema(data)
 
 
 def _is_valid_exception_scope(scope: Any) -> bool:
@@ -954,6 +1024,95 @@ def _validate_license_policy_schema(data: dict[str, Any]) -> None:
             value = record[key]
             if not isinstance(value, str) or not value.strip() or len(value) > limit:
                 _fatal(f"{label}.{key}: expected a non-empty string of at most {limit} characters")
+
+
+def _external_string_list(label: str, value: Any) -> list[str]:
+    if (not isinstance(value, list) or not value
+            or not all(isinstance(item, str) and item for item in value)):
+        _fatal(f"{label}: expected a non-empty list of strings")
+    return value
+
+
+def _validate_external_dependencies_schema(data: dict[str, Any]) -> None:
+    """Shape of the declared dependencies outside ThirdParty/.  Absent means empty.
+
+    Names, identifiers, URLs, and paths are each unique without regard to
+    case, so two records can never split or shadow one dependency.
+    """
+    if "external_dependencies" not in data:
+        return
+    records = data["external_dependencies"]
+    if not isinstance(records, list):
+        _fatal("external_dependencies must be a list")
+    if len(records) > MAX_EXTERNAL_RECORDS:
+        _fatal(f"external_dependencies exceeds MAX_EXTERNAL_RECORDS ({MAX_EXTERNAL_RECORDS})")
+    seen: dict[str, str] = {}
+
+    def claim(kind: str, value: str, label: str) -> None:
+        key = f"{kind}\0{value.casefold()}"
+        if key in seen:
+            _fatal(f"{label}: {kind} {value!r} collides with {seen[key]} (compared without case)")
+        seen[key] = label
+
+    for index, record in enumerate(records):
+        label = f"external_dependencies[{index}]"
+        if not isinstance(record, dict):
+            _fatal(f"{label}: entry must be an object")
+        kind = record.get("class")
+        if kind not in EXTERNAL_CLASS_FIELDS:
+            _fatal(f"{label}.class: expected one of {sorted(EXTERNAL_CLASS_FIELDS)}, got {kind!r}")
+        expected = EXTERNAL_COMMON_FIELDS | EXTERNAL_CLASS_FIELDS[kind]
+        missing, unknown = sorted(expected - record.keys()), sorted(record.keys() - expected)
+        if missing or unknown:
+            _fatal(f"{label}: invalid fields for class {kind!r}; missing={missing}, unknown={unknown}")
+
+        name = record["name"]
+        if not isinstance(name, str) or not name.strip() or len(name) > 256:
+            _fatal(f"{label}.name: expected a non-empty name of at most 256 characters")
+        claim("name", name, label)
+        owner = record["owner"]
+        if (not isinstance(owner, str) or not owner.strip()
+                or owner.strip().casefold() in EXCEPTION_PLACEHOLDER_OWNERS or len(owner) > 128):
+            _fatal(f"{label}.owner: a declared dependency must be owned by a named maintainer")
+        justification = record["justification"]
+        if not isinstance(justification, str) or not 16 <= len(justification.strip()) <= 2048:
+            _fatal(f"{label}.justification: expected 16 to 2048 characters")
+        license_spdx = record["license_spdx"]
+        if not (license_spdx == "NOASSERTION" and kind in NOASSERTION_CLASSES):
+            try:
+                identifiers = parse_spdx_expression(license_spdx)
+            except ValueError as exc:
+                _fatal(f"{label}.license_spdx: {license_spdx!r} is not an SPDX expression ({exc})")
+            if {"NOASSERTION", "NONE"} & set(identifiers):
+                _fatal(f"{label}.license_spdx: class {kind!r} ships or loads code and needs an identified license")
+
+        if kind in EXTERNAL_IDENTIFIER_NAMESPACES:
+            for identifier in _external_string_list(f"{label}.identifiers", record["identifiers"]):
+                match = EXTERNAL_IDENTIFIER_RE.fullmatch(identifier)
+                if not match or match.group("ns") not in EXTERNAL_IDENTIFIER_NAMESPACES[kind]:
+                    _fatal(
+                        f"{label}.identifiers: {identifier!r} is not <namespace>:<name> with a "
+                        f"namespace in {sorted(EXTERNAL_IDENTIFIER_NAMESPACES[kind])}"
+                    )
+                claim("identifier", identifier, label)
+        elif kind == "web_runtime":
+            url, sri = record["url"], record["sri"]
+            if (not isinstance(url, str) or not url.startswith("https://")
+                    or not PINNED_WEB_VERSION_RE.search(url) or any(c.isspace() for c in url)):
+                _fatal(f"{label}.url: expected an https URL naming an exact version (name@1.2.3/), got {url!r}")
+            if not isinstance(sri, str) or not SRI_RE.fullmatch(sri):
+                _fatal(f"{label}.sri: expected a sha384-/sha512- subresource-integrity value")
+            claim("url", url, label)
+        else:
+            for path in _external_string_list(f"{label}.paths", record["paths"]):
+                err = validate_repo_relative_path(path.removesuffix("/"))
+                if err or _under_root(path, AUTHORITATIVE_ROOT):
+                    _fatal(f"{label}.paths: {path!r}: {err or 'ThirdParty/ is governed by its own containers'}")
+                claim("path", path, label)
+
+
+def _under_root(path: str, root: str) -> bool:
+    return path == root or path.startswith(root + "/")
 
 
 def parse_spdx_expression(expression: str) -> list[str]:
@@ -1563,6 +1722,20 @@ def _load_yaml_module() -> Any:
     return yaml
 
 
+def _iter_key(node: Any, wanted: str, trail: str = "") -> Iterable[tuple[str, Any]]:
+    """Yield every value of mapping key ``wanted`` anywhere in a parsed document."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            child = f"{trail}.{key}" if trail else str(key)
+            if key == wanted:
+                yield child, value
+            else:
+                yield from _iter_key(value, wanted, child)
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _iter_key(value, wanted, f"{trail}[{index}]")
+
+
 def _iter_uses(node: Any, trail: str = "") -> Iterable[tuple[str, Any]]:
     """Yield every `uses` value anywhere in a parsed workflow document.
 
@@ -1572,16 +1745,7 @@ def _iter_uses(node: Any, trail: str = "") -> Iterable[tuple[str, Any]]:
     that merely looks like `uses:` inside a `run:` script is a string value,
     never a mapping key, so it is correctly ignored.
     """
-    if isinstance(node, dict):
-        for key, value in node.items():
-            child = f"{trail}.{key}" if trail else str(key)
-            if key == "uses":
-                yield child, value
-            else:
-                yield from _iter_uses(value, child)
-    elif isinstance(node, list):
-        for index, value in enumerate(node):
-            yield from _iter_uses(value, f"{trail}[{index}]")
+    return _iter_key(node, "uses", trail)
 
 
 def _workflow_and_action_files(root: Path) -> list[str]:
@@ -2136,6 +2300,343 @@ def _check_manifest_fields(
             )
 
 
+# ── Check: dependencies outside ThirdParty/ ───────────────────────────
+# Every scan reads the Git index, like the ThirdParty inventory: the tracked
+# set is what a checkout builds, identical on every machine.
+
+def git_tracked_paths(root: Path) -> list[str]:
+    try:
+        raw = _git_raw(["-c", "core.quotePath=false", "ls-files", "-z"], root)
+    except RuntimeError as e:
+        _fatal(f"cannot enumerate tracked paths: {e}")
+    paths = _split_nul(raw)
+    if len(paths) > MAX_TRACKED_PATHS:
+        _fatal(f"tracked path count {len(paths)} exceeds MAX_TRACKED_PATHS ({MAX_TRACKED_PATHS})")
+    return sorted(paths)
+
+
+def _git_index_texts(root: Path, paths: list[str]) -> dict[str, str]:
+    """Index content of ``paths`` as UTF-8 text, read in one ``git cat-file`` call."""
+    if not paths:
+        return {}
+    request = "".join(f":{path}\n" for path in paths).encode("utf-8")
+    try:
+        done = subprocess.run(
+            ["git", "cat-file", "--batch"], input=request,
+            capture_output=True, cwd=str(root), timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        _fatal(f"git cat-file --batch: {e}")
+    if done.returncode != 0:
+        _fatal(f"git cat-file --batch exited {done.returncode}: {done.stderr.decode(errors='replace')}")
+    out, position, texts = done.stdout, 0, {}
+    for path in paths:
+        header_end = out.index(b"\n", position)
+        header = out[position:header_end].decode("utf-8", errors="replace").split()
+        if len(header) != 3 or header[1] != "blob":
+            _fatal(f"cannot read index blob for {path}: {' '.join(header)}")
+        size = int(header[2])
+        if size > MAX_SCANNED_SOURCE_BYTES:
+            _fatal(f"{path} is {size} bytes, exceeding the {MAX_SCANNED_SOURCE_BYTES}-byte scan limit")
+        body = out[header_end + 1:header_end + 1 + size]
+        position = header_end + 1 + size + 1
+        try:
+            texts[path] = body.decode("utf-8")
+        except UnicodeDecodeError as e:
+            _fatal(f"{path} is not valid UTF-8: {e}")
+    return texts
+
+
+def _external_records(lockfile: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+    return [r for r in lockfile.get("external_dependencies", []) if r["class"] == kind]
+
+
+def _declared_identifiers(lockfile: dict[str, Any], kind: str) -> dict[str, str]:
+    return {i: r["name"] for r in _external_records(lockfile, kind) for i in r["identifiers"]}
+
+
+def _strip_cmake_comments(text: str) -> str:
+    """Drop CMake bracket and line comments; quoted text is kept intact."""
+    text = re.sub(r"#\[(=*)\[.*?\]\1\]", " ", text, flags=re.DOTALL)
+    lines = []
+    for line in text.split("\n"):
+        in_quote = False
+        for index, char in enumerate(line):
+            if char == '"' and (index == 0 or line[index - 1] != "\\"):
+                in_quote = not in_quote
+            elif char == "#" and not in_quote:
+                line = line[:index]
+                break
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def cmake_package_uses(text: str) -> list[str]:
+    """Namespaced package identifiers a CMake file asks the host system for."""
+    uses: list[str] = []
+    for command, arguments in CMAKE_FIND_RE.findall(_strip_cmake_comments(text)):
+        tokens = [t.strip('"') for t in arguments.split()]
+        if not tokens:
+            continue
+        if command.lower() in ("find_package", "find_dependency"):
+            uses.append(f"cmake:{tokens[0]}")
+            continue
+        for token in tokens[1:]:  # tokens[0] is the result-variable prefix
+            if token not in PKG_CONFIG_KEYWORDS:
+                uses.append(f"pkg-config:{re.split(r'[<>=]', token, maxsplit=1)[0]}")
+    return uses
+
+
+def check_cmake_external_packages(
+    root: Path, lockfile: dict[str, Any], tracked: list[str], result: CheckResult
+) -> set[str]:
+    declared = _declared_identifiers(lockfile, "system_libraries")
+    files = [p for p in tracked if CMAKE_PACKAGE_FILE_RE.search(p)]
+    if not files:
+        result.error("external", ".", "no tracked CMake files found to scan for system packages")
+    observed: set[str] = set()
+    for rel, text in _git_index_texts(root, files).items():
+        for identifier in cmake_package_uses(text):
+            name = identifier.split(":", 1)[1]
+            if identifier.startswith("cmake:") and name in FIRST_PARTY_CMAKE_PACKAGES:
+                continue
+            observed.add(identifier)
+            if identifier not in declared:
+                result.error(
+                    "external", rel,
+                    f"system package {identifier!r} is not declared in {LOCKFILE_REL} "
+                    "external_dependencies (class system_libraries)",
+                )
+    return observed
+
+
+def shell_package_installs(script: str) -> list[str]:
+    """Namespaced packages that ``apt-get``/``apt``/``brew install`` lines in a script install.
+
+    Backslash continuations are joined first, so a multi-line install is one
+    command.  Collection stops at a comment or a shell operator.
+    """
+    installs: list[str] = []
+    for line in re.sub(r"\\\r?\n", " ", script).split("\n"):
+        tokens = line.split()
+        comment = next((i for i, token in enumerate(tokens) if token.startswith("#")), len(tokens))
+        tokens = tokens[:comment]
+        for index, token in enumerate(tokens):
+            manager = PACKAGE_MANAGERS.get(token)
+            if manager is None:
+                continue
+            position = index + 1
+            while position < len(tokens) and tokens[position].startswith("-"):
+                position += 1
+            if position >= len(tokens) or tokens[position] != "install":
+                continue
+            for package in tokens[position + 1:]:
+                if package in SHELL_COMMAND_BREAKS:
+                    break
+                ends_command = package.endswith(";")
+                package = package.rstrip(";")
+                if package and not package.startswith("-"):
+                    installs.append(f"{manager}:{package.split('=', 1)[0]}")
+                if ends_command:
+                    break
+    return installs
+
+
+def check_ci_system_packages(
+    root: Path, root_resolved: Path, lockfile: dict[str, Any], result: CheckResult
+) -> set[str]:
+    yaml = _load_yaml_module()
+    declared = _declared_identifiers(lockfile, "ci_packages")
+    observed: set[str] = set()
+    for rel in _workflow_and_action_files(root):
+        filepath = root / rel
+        if assert_regular_file_no_escape(filepath, root_resolved):
+            continue  # reported by the action-pin check
+        _bounded_size(filepath, MAX_WORKFLOW_BYTES, f"workflow {rel}")
+        try:
+            documents = list(yaml.safe_load_all(filepath.read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
+            continue  # reported by the action-pin check
+        for document in documents:
+            for trail, script in _iter_key(document, "run"):
+                if not isinstance(script, str):
+                    continue
+                for identifier in shell_package_installs(script):
+                    observed.add(identifier)
+                    if identifier not in declared:
+                        result.error(
+                            "external", f"{rel}:{trail}",
+                            f"CI system package {identifier!r} is not declared in {LOCKFILE_REL} "
+                            "external_dependencies (class ci_packages)",
+                        )
+    return observed
+
+
+class _ScriptCollector(HTMLParser):
+    """Collects <script> elements: their attributes and inline text."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.scripts: list[tuple[dict[str, str], str]] = []
+        self._current: dict[str, str] | None = None
+        self._text: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script":
+            self._current = {k: v or "" for k, v in attrs}
+            self._text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._current is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script" and self._current is not None:
+            self.scripts.append((self._current, "".join(self._text)))
+            self._current = None
+
+
+def _js_import_specifiers(text: str) -> list[str]:
+    return [m.group(2) or m.group(4) for m in JS_STATIC_IMPORT_RE.finditer(text)]
+
+
+def _resolve_import(specifier: str, imports: dict[str, str]) -> str | None:
+    if specifier in imports:
+        return imports[specifier]
+    prefixes = [k for k in imports if k.endswith("/") and specifier.startswith(k)]
+    if prefixes:
+        best = max(prefixes, key=len)
+        return imports[best] + specifier[len(best):]
+    return specifier if REMOTE_URL_RE.match(specifier) else None
+
+
+def web_remote_loads(rel: str, text: str) -> tuple[list[tuple[str, str | None]], list[str]]:
+    """Remote script URLs a page or module loads, each with the SRI it carries.
+
+    Returns ``(loads, problems)``.  An HTML page's module imports are resolved
+    through its import map, whose ``integrity`` section supplies their SRI.
+    A plain JavaScript module cannot carry SRI for what it imports.
+    """
+    if not rel.lower().endswith((".html", ".htm")):
+        return [(s, None) for s in _js_import_specifiers(text) if REMOTE_URL_RE.match(s)], []
+    parser = _ScriptCollector()
+    parser.feed(text)
+    parser.close()
+    imports: dict[str, str] = {}
+    integrity: dict[str, str] = {}
+    loads: list[tuple[str, str | None]] = []
+    problems: list[str] = []
+    for attrs, body in parser.scripts:
+        if attrs.get("type", "").lower() != "importmap":
+            continue
+        try:
+            import_map = json.loads(body)
+        except json.JSONDecodeError as e:
+            problems.append(f"import map is not valid JSON: {e}")
+            continue
+        imports.update(import_map.get("imports") or {})
+        integrity.update(import_map.get("integrity") or {})
+    for key, target in imports.items():
+        if key.endswith("/") and REMOTE_URL_RE.match(target) and not PINNED_WEB_VERSION_RE.search(target):
+            problems.append(f"import map prefix {key!r} -> {target!r} does not name an exact version")
+    for attrs, body in parser.scripts:
+        src = attrs.get("src", "")
+        if REMOTE_URL_RE.match(src):
+            loads.append((src, attrs.get("integrity") or None))
+        if attrs.get("type", "").lower() == "module":
+            for specifier in _js_import_specifiers(body):
+                url = _resolve_import(specifier, imports)
+                if url is not None and REMOTE_URL_RE.match(url):
+                    loads.append((url, integrity.get(url)))
+    return loads, problems
+
+
+def check_web_runtime_urls(
+    root: Path, lockfile: dict[str, Any], tracked: list[str], result: CheckResult
+) -> set[str]:
+    records = {r["url"]: r for r in _external_records(lockfile, "web_runtime")}
+    observed: set[str] = set()
+    files = [p for p in tracked if WEB_SOURCE_RE.search(p.lower())]
+    for rel, text in _git_index_texts(root, files).items():
+        loads, problems = web_remote_loads(rel, text)
+        for problem in problems:
+            result.error("external", rel, problem)
+        for url, sri in loads:
+            observed.add(url)
+            record = records.get(url)
+            if not PINNED_WEB_VERSION_RE.search(url):
+                result.error("external", rel, f"remote script {url!r} does not name an exact version")
+            elif record is None:
+                result.error(
+                    "external", rel,
+                    f"remote script {url!r} is not declared in {LOCKFILE_REL} "
+                    "external_dependencies (class web_runtime)",
+                )
+            elif sri != record["sri"]:
+                result.error(
+                    "external", rel,
+                    f"remote script {url!r} is loaded without its declared subresource-integrity "
+                    f"hash (page carries {sri!r})",
+                )
+    return observed
+
+
+def check_vendored_outside_thirdparty(
+    root: Path, lockfile: dict[str, Any], tracked: list[str], result: CheckResult
+) -> None:
+    """Tracked files outside ThirdParty/ that carry a foreign license header."""
+    args = ["grep", "--cached", "-l", "-z", "-F"]
+    for phrase in FOREIGN_LICENSE_PHRASES:
+        args += ["-e", phrase]
+    try:
+        done = subprocess.run(
+            ["git", *args, "--", ".", f":(exclude){AUTHORITATIVE_ROOT}/"],
+            capture_output=True, text=True, cwd=str(root), timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        _fatal(f"git grep for foreign license headers: {e}")
+    if done.returncode not in (0, 1):  # 1 means no match
+        _fatal(f"git grep for foreign license headers exited {done.returncode}: {done.stderr.strip()}")
+
+    declared = [p for r in _external_records(lockfile, "vendored_outside_thirdparty") for p in r["paths"]]
+    for rel in _split_nul(done.stdout):
+        if any(pattern.search(rel) for pattern, _reason in FOREIGN_LICENSE_EXEMPTIONS):
+            continue
+        if not any(rel == p or (p.endswith("/") and rel.startswith(p)) for p in declared):
+            result.error(
+                "external", rel,
+                f"file outside {AUTHORITATIVE_ROOT}/ carries a third-party license header but is not "
+                f"declared in {LOCKFILE_REL} external_dependencies (class vendored_outside_thirdparty)",
+            )
+    tracked_set = set(tracked)
+    for path in declared:
+        if path.endswith("/") and not any(p.startswith(path) for p in tracked):
+            result.error("external", LOCKFILE_REL, f"declared vendored path {path!r} has no tracked files")
+        elif not path.endswith("/") and path not in tracked_set:
+            result.error("external", LOCKFILE_REL, f"declared vendored file {path!r} is not tracked")
+
+
+def check_external_dependencies(
+    root: Path, root_resolved: Path, lockfile: dict[str, Any], result: CheckResult
+) -> None:
+    tracked = git_tracked_paths(root)
+    observed = (
+        check_cmake_external_packages(root, lockfile, tracked, result)
+        | check_ci_system_packages(root, root_resolved, lockfile, result)
+        | check_web_runtime_urls(root, lockfile, tracked, result)
+    )
+    check_vendored_outside_thirdparty(root, lockfile, tracked, result)
+    for record in lockfile.get("external_dependencies", []):
+        unused = [i for i in record.get("identifiers", []) if i not in observed]
+        if record["class"] == "web_runtime" and record["url"] not in observed:
+            unused.append(record["url"])
+        for item in unused:
+            result.warn(
+                "external", LOCKFILE_REL,
+                f"external dependency {record['name']!r} declares {item!r}, which nothing uses; remove it",
+            )
+
+
 # ── Lockfile regeneration ─────────────────────────────────────────────
 
 def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> dict[str, Any]:
@@ -2233,6 +2734,9 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
                 existing["license_policy"]["dependencies"].items()
             )),
         }
+    # Declared dependencies outside ThirdParty/ are human decisions as well.
+    if "external_dependencies" in existing:
+        lockfile_data["external_dependencies"] = existing["external_dependencies"]
 
     _write_atomic(lockpath, json.dumps(lockfile_data, indent=2) + "\n")
     return lockfile_data
@@ -2388,6 +2892,7 @@ def run_all_checks(
     entries = export_manifest_entries(root, root_resolved)
     check_manifest_reconciliation(root, lockfile, entries, modules, result)
     licenses = check_license_policy(lockfile, entries, result)
+    check_external_dependencies(root, root_resolved, lockfile, result)
     return result, lockfile, licenses
 
 
@@ -2404,6 +2909,7 @@ def _emit_json(
         "submodule_count": len(lockfile.get("submodule_gitlinks", {})),
         "tree_digest_count": len(lockfile.get("tree_digests", {})),
         "action_pin_count": len(lockfile.get("action_pins", {})),
+        "external_dependency_count": len(lockfile.get("external_dependencies", [])),
         "allowed_spdx_licenses": sorted(ALLOWED_SPDX_LICENSES),
         "dependency_licenses": licenses,
         "violations": [
@@ -2448,6 +2954,7 @@ def _emit_text(
             f"{len(lockfile['submodule_gitlinks'])} submodules, "
             f"{len(lockfile['tree_digests'])} tree digests, "
             f"{len(lockfile['action_pins'])} pinned actions, "
+            f"{len(lockfile.get('external_dependencies', []))} declared external dependencies, "
             f"{len(licenses)} allow-listed dependency licenses)"
         )
     else:

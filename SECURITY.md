@@ -174,6 +174,11 @@ and enforced by `tools/check-supply-chain.py` in the required
 - **Manifest reconciliation:** CMake expands `ThirdParty/dependencies.lock`,
   which is then reconciled bidirectionally with the supply-chain lock across
   identity, license, feature, fallback, and notice metadata.
+- **Dependencies outside `ThirdParty/`:** system packages found by CMake, CI
+  `apt-get`/`brew` packages, remote web scripts, and files that carry a foreign
+  license header must each match an owned `external_dependencies` record in the
+  lock. Remote scripts must name an exact version and carry the recorded SRI
+  hash.
 - **Resource bounds and fail-closed behavior:** policy inputs and traversals are
   bounded; malformed, unsafe, or unverifiable data fails rather than falling
   back to a weaker check.
@@ -224,9 +229,12 @@ it from Git history.
 - Vulnerability-scanner integration
 - Hosted exact-SHA evidence for the required `secret-scan` job
 - CodeQL coverage for every shipped product
-- SPDX allowlist enforcement and policy for third-party code outside
-  `ThirdParty/` (for example, the editor fonts under `SparkEditor/Fonts/` have
-  no license file on disk; see `THIRD_PARTY_NOTICES`)
+- Owner review of the declared dependencies outside `ThirdParty/`.
+  `tools/check-supply-chain.py` now fails on any undeclared system library, CI
+  system package, remote web script without a pinned version and SRI hash, or
+  file with a foreign license header (see "Dependencies outside ThirdParty/" in
+  `ThirdParty/POLICY.md`). The declared licenses are not checked against the
+  SPDX allow-list, and the editor fonts' OFL-1.1 still needs an owner decision.
 
 **Stable release approval (REL-110):** stable publication runs in the protected
 `stable-release` environment, whose only reviewer is the repository owner.
