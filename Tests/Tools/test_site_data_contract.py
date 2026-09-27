@@ -769,8 +769,17 @@ class OnlineServiceBoundaryTests(unittest.TestCase):
         )
 
     def mutated_spec(self, old: str, new: str) -> str:
-        self.assertIn(old, self.SPEC_TEXT)
-        return self.SPEC_TEXT.replace(old, new, 1)
+        start = self.SPEC_TEXT.find(old)
+        self.assertGreaterEqual(start, 0, old)
+        return self.SPEC_TEXT[:start] + new + self.SPEC_TEXT[start + len(old):]
+
+    @staticmethod
+    def create_temporary_file(root: Path, relative: str, content: str) -> None:
+        """Create a new file under a temporary root; mode "x" can never overwrite an existing file."""
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(content)
 
     def test_spec_contract_passes_on_the_live_repository(self) -> None:
         self.assertEqual(
@@ -834,11 +843,11 @@ class OnlineServiceBoundaryTests(unittest.TestCase):
     def test_spec_unregistered_adapter_class_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / "Engine").mkdir()
-            (root / "Engine" / "LanMatchmaker.h").write_text(
+            self.create_temporary_file(
+                root,
+                "Engine/LanMatchmaker.h",
                 "// class Mentioned : public ITransport in a comment is not a declaration\n"
                 "namespace Spark\n{\n    class LanMatchmaker final\n        : public IOnlinePlatform\n    {\n    };\n}\n",
-                encoding="utf-8",
             )
             errors = site_data_validate.online_service_spec_contract_errors(
                 self.SPEC_TEXT, root, ["Engine/LanMatchmaker.h"]
@@ -900,9 +909,7 @@ class OnlineServiceBoundaryTests(unittest.TestCase):
                 "SparkEngine/Source/Notes.md": "TFDatabase is production-grade.\n",
             }
             for relative, content in files.items():
-                path = root / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(content, encoding="utf-8")
+                self.create_temporary_file(root, relative, content)
             surfaces = site_data_validate.local_store_claim_surfaces(root, files)
         self.assertEqual(
             {"GameModules/Demo/module.json#description", "GameModules/Demo/README.md", "docs/site/readiness.json"},
@@ -916,12 +923,12 @@ class OnlineServiceBoundaryTests(unittest.TestCase):
     def test_adapter_reporting_itself_as_production_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / "Engine").mkdir()
-            (root / "Engine" / "Adapter.h").write_text(
+            self.create_temporary_file(
+                root,
+                "Engine/Adapter.h",
                 "class ProductionSteam final : public IOnlinePlatform\n{\n"
                 "    std::string GetPlatformName() const override { return \"Steam (Production)\"; }\n"
                 "    std::string GetLastError() const override { return \"stub\"; }\n};\n",
-                encoding="utf-8",
             )
             errors = site_data_validate.adapter_name_production_errors(root, ["Engine/Adapter.h"])
         self.assertEqual(1, len(errors), errors)
