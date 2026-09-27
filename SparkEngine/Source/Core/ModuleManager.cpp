@@ -1706,13 +1706,17 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
             // instance NOW, while every engine service it may reference
             // (physics, ECS world, event bus) is still alive. OnUnload() runs
             // first so the module can deregister anything its partial OnLoad
-            // installed. The DLL itself stays mapped until the normal
-            // UnloadAll so any registrations that survive (console commands,
-            // event channels) never point at unmapped code.
+            // installed. The host removes only owner-scoped registrations
+            // (console, invalid-state rules, serializers); an EventBus,
+            // network or timer callback the partial OnLoad left behind can
+            // still point into the image, so it is never unmapped (see
+            // LoadedModule::retainImage), including a failed hot-reload
+            // replacement whose staging manager unloads it immediately.
             SPARK_LOG_WARN(Spark::LogCategory::Core,
                            "Module '%s' failed OnLoad — destroying its instance immediately "
-                           "(DLL stays mapped until engine shutdown)",
+                           "(its image stays mapped for the rest of the process)",
                            entry.name.c_str());
+            entry.retainImage = true;
             bool unloadCompleted = false;
             try
             {
@@ -1735,11 +1739,21 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
                 if (!entry.isLegacyAdapter)
                     ++FindOrCreateLifecycleRecord(entry.name).onUnload;
             }
-            if (entry.destroyFn)
+            if (unloadCompleted && entry.destroyFn)
             {
                 entry.destroyFn(entry.instance);
                 if (!entry.isLegacyAdapter)
                     ++FindOrCreateLifecycleRecord(entry.name).destroyModule;
+            }
+            else if (!unloadCompleted)
+            {
+                // The partial OnUnload did not finish, so callbacks it should
+                // have removed may still capture this instance. Leak it rather
+                // than turn their next dispatch into a use-after-free.
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "Module '%s' instance quarantined, not destroyed: its partial OnUnload did not "
+                                "complete",
+                                entry.name.c_str());
             }
             entry.instance = nullptr;
             entry.destroyFn = nullptr;
@@ -1966,6 +1980,30 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         const std::filesystem::path shadowPath = sourcePath.parent_path() / shadowName;
         const std::filesystem::path sourceSidecar = SidecarPath(sourcePath);
         const std::filesystem::path shadowSidecar = SidecarPath(shadowPath);
+
+        // A replacement whose OnLoad failed keeps its shadow mapped until its
+        // process exits (LoadedModule::retainImage), so the file outlives it.
+        // Remove this module's earlier shadows; one still mapped by a live
+        // process cannot be deleted and is skipped.
+        {
+            const std::string shadowPrefix = PathToUtf8(sourcePath.stem()) + ".spark-reload-";
+            std::vector<std::filesystem::path> staleShadows;
+            std::error_code sweepError;
+            for (std::filesystem::directory_iterator it(sourcePath.parent_path(), sweepError), end;
+                 !sweepError && it != end; it.increment(sweepError))
+            {
+                if (PathToUtf8(it->path().filename()).starts_with(shadowPrefix) &&
+                    it->path().extension() == sourcePath.extension())
+                {
+                    staleShadows.push_back(it->path());
+                }
+            }
+            for (const auto& staleShadow : staleShadows)
+            {
+                std::error_code removeError;
+                std::filesystem::remove(staleShadow, removeError);
+            }
+        }
 
         auto removeShadowFiles = [&]()
         {
@@ -2348,7 +2386,14 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
     entry.createFn = nullptr;
     entry.destroyFn = nullptr;
 
-    if (entry.libraryHandle)
+    if (entry.libraryHandle && entry.retainImage)
+    {
+        // Deliberately leak the mapping: see LoadedModule::retainImage.
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "Module '%s' failed OnLoad; its image stays mapped until process exit",
+                       entry.name.c_str());
+        entry.libraryHandle = nullptr;
+    }
+    else if (entry.libraryHandle)
     {
 #ifdef _WIN32
         FreeLibrary(static_cast<HMODULE>(entry.libraryHandle));

@@ -28,6 +28,7 @@
 #endif
 #include <windows.h>
 #else
+#include <dlfcn.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -120,9 +121,10 @@ namespace
         Spark::ModSystem* m_mods = nullptr;
     };
 
-    std::filesystem::path CopyCompatibleFixtureToTemp(const std::filesystem::path& stem)
+    std::filesystem::path CopyCompatibleFixtureToTemp(const std::filesystem::path& stem,
+                                                      std::string_view fixture = SPARK_TEST_COMPATIBLE_MODULE_PATH)
     {
-        const std::filesystem::path sourcePath = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+        const std::filesystem::path sourcePath = PathFromUtf8(fixture);
         std::filesystem::path destination = std::filesystem::temp_directory_path() / stem;
         destination += sourcePath.extension();
         std::error_code ec;
@@ -274,6 +276,49 @@ namespace
     {
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
         output << content;
+    }
+
+    /// Initializes the host console for fixtures that register commands and removes their entries on exit.
+    struct RegistryFixtureHostGuard final
+    {
+        Spark::SimpleConsole& console = Spark::SimpleConsole::GetInstance();
+        Spark::InvalidStateDetector& detector = Spark::InvalidStateDetector::GetInstance();
+        bool restoreUninitialized = !console.IsInitialized();
+
+        RegistryFixtureHostGuard()
+        {
+            if (restoreUninitialized)
+                console.Initialize();
+            Clear();
+        }
+        ~RegistryFixtureHostGuard()
+        {
+            Clear();
+            if (restoreUninitialized)
+                console.Shutdown();
+        }
+        RegistryFixtureHostGuard(const RegistryFixtureHostGuard&) = delete;
+        RegistryFixtureHostGuard& operator=(const RegistryFixtureHostGuard&) = delete;
+
+        void Clear()
+        {
+            detector.RemoveRulesByCategory("RegistryFixture");
+            console.UnregisterCommand("registry_fixture_status");
+        }
+    };
+
+    /// True when @p address lies inside a module image that is still mapped. Executes nothing there.
+    bool IsAddressInMappedImage(std::uintptr_t address)
+    {
+#ifdef _WIN32
+        HMODULE module = nullptr;
+        return GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                  reinterpret_cast<LPCWSTR>(address), &module) != FALSE &&
+               module != nullptr;
+#else
+        Dl_info info{};
+        return dladdr(reinterpret_cast<const void*>(address), &info) != 0 && info.dli_fname != nullptr;
+#endif
     }
 
 #ifndef _WIN32
@@ -1229,6 +1274,82 @@ TEST(ModuleABI_DependencyCycleBlocksInitialization)
     EXPECT_TRUE(manager.InitializeAll(&context));
     EXPECT_TRUE(manager.ShutdownAll());
     manager.UnloadAll();
+}
+
+TEST(ModuleABI_FailedReplacementImageStaysMapped)
+{
+    RegistryFixtureHostGuard host;
+    const std::filesystem::path modulePath =
+        CopyCompatibleFixtureToTemp("SparkRetainedReplacementModule", SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH);
+    const std::filesystem::path addressFile =
+        std::filesystem::temp_directory_path() / "SparkRetainedReplacementCodeAddress.txt";
+    std::error_code ec;
+    std::filesystem::remove(addressFile, ec);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+
+    {
+        // Only the staged replacement sees these switches: it publishes an
+        // address inside its own image, then fails OnLoad.
+        ScopedTestEnvironment address("SPARK_REGISTRY_FIXTURE_CODE_ADDRESS_FILE", addressFile.string());
+        ScopedTestEnvironment throwOnLoad("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", "1");
+        EXPECT_FALSE(manager.ReloadModule("Spark Registry Lifecycle Fixture", &context));
+    }
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "initialization failed");
+
+    unsigned long long replacementCode = 0;
+    {
+        std::ifstream input(addressFile);
+        input >> replacementCode;
+    }
+    ASSERT_TRUE(replacementCode != 0);
+    // Callbacks the failed OnLoad left outside the owner-scoped registries can
+    // still point into the replacement image, so it must not be unmapped.
+    EXPECT_TRUE(IsAddressInMappedImage(static_cast<std::uintptr_t>(replacementCode)));
+
+    EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    RemoveModuleCopy(modulePath);
+    std::filesystem::remove(addressFile, ec);
+}
+
+TEST(ModuleABI_ThrowingPartialUnloadQuarantinesInstance)
+{
+    RegistryFixtureHostGuard host;
+    const std::string moduleName = "Spark Registry Lifecycle Fixture";
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+
+    bool initialized = true;
+    {
+        ScopedTestEnvironment throwOnLoad("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", "1");
+        ScopedTestEnvironment throwOnUnload("SPARK_REGISTRY_FIXTURE_THROW_ON_UNLOAD", "1");
+        EXPECT_NO_THROW(initialized = manager.InitializeAll(&context));
+    }
+    EXPECT_FALSE(initialized);
+    EXPECT_TRUE(manager.GetModule(moduleName) == nullptr);
+
+    // The partial OnUnload threw before removing its callbacks, so the host
+    // must not destroy the instance they may capture. The owner-scoped
+    // registrations are still removed by the host itself.
+    const auto evidence = manager.GetLifecycleEvidence();
+    const auto* record = evidence.FindModule(moduleName);
+    ASSERT_TRUE(record != nullptr);
+    EXPECT_EQ(record->onUnload, uint64_t{0});
+    EXPECT_EQ(record->destroyModule, uint64_t{0});
+    EXPECT_FALSE(host.console.HasCommand("registry_fixture_status"));
+    EXPECT_FALSE(host.detector.HasRule("RegistryFixture.Rule"));
+
+    manager.UnloadAll();
+    EXPECT_EQ(manager.GetModuleCount(), size_t{0});
+    const auto evidenceAfterUnload = manager.GetLifecycleEvidence();
+    const auto* afterUnload = evidenceAfterUnload.FindModule(moduleName);
+    ASSERT_TRUE(afterUnload != nullptr);
+    EXPECT_EQ(afterUnload->destroyModule, uint64_t{0});
 }
 
 TEST(ModuleABI_ModulesOwningIdKeyedStateRefuseHotReload)

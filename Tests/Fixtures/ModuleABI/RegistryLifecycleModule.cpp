@@ -4,6 +4,7 @@
 #include <Spark/ModuleDllMain.h>
 #include <Spark/ModuleRegistry.h>
 
+#include <cstdint>
 #include <cstdlib>
 #include <cstdio>
 #include <stdexcept>
@@ -16,6 +17,16 @@ namespace
     constexpr const char* kRuleName = "RegistryFixture.Rule";
     constexpr const char* kRuleCategory = "RegistryFixture";
     constexpr const char* kLifecycleSentinel = "SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL";
+    constexpr const char* kCodeAddressFile = "SPARK_REGISTRY_FIXTURE_CODE_ADDRESS_FILE";
+
+    /// Internal linkage on purpose: a unique (inline) symbol would stop dlclose unmapping the image.
+    /// Volatile so the store that keeps a quarantined instance reachable is not optimized away.
+    const void* volatile g_quarantinedInstance = nullptr;
+
+    int RegistryFixtureCodeMarker()
+    {
+        return 0x5A11;
+    }
 } // namespace
 
 class RegistryLifecycleModule final : public Spark::IModule
@@ -43,6 +54,18 @@ class RegistryLifecycleModule final : public Spark::IModule
                                                             Spark::StateViolationSeverity::Warning, true,
                                                             [](World&, std::vector<Spark::StateViolation>&) {}});
 
+        // Publish the address of code in this image, so a test can check the
+        // host kept the image mapped after this OnLoad failed.
+        if (const char* addressPath = std::getenv(kCodeAddressFile); addressPath && addressPath[0] != '\0')
+        {
+            if (FILE* addressFile = std::fopen(addressPath, "wb"))
+            {
+                const auto address = reinterpret_cast<std::uintptr_t>(&RegistryFixtureCodeMarker);
+                std::fprintf(addressFile, "%llu\n", static_cast<unsigned long long>(address));
+                std::fclose(addressFile);
+            }
+        }
+
         const char* throwOnLoad = std::getenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD");
         if (throwOnLoad && throwOnLoad[0] != '\0')
             throw std::runtime_error("intentional registry fixture OnLoad failure");
@@ -52,6 +75,16 @@ class RegistryLifecycleModule final : public Spark::IModule
 
     void OnUnload() override
     {
+        const char* throwOnUnload = std::getenv("SPARK_REGISTRY_FIXTURE_THROW_ON_UNLOAD");
+        if (throwOnUnload && throwOnUnload[0] != '\0')
+        {
+            // The host must quarantine, not destroy, an instance whose partial
+            // OnUnload did not finish. Keep it reachable from this (retained)
+            // image so leak checkers see the intended quarantine as reachable.
+            g_quarantinedInstance = this;
+            throw std::runtime_error("intentional registry fixture OnUnload failure");
+        }
+
         if (const char* sentinelPath = std::getenv(kLifecycleSentinel); sentinelPath && sentinelPath[0] != '\0')
         {
             if (FILE* sentinel = std::fopen(sentinelPath, "wb"))

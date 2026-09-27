@@ -397,6 +397,9 @@ class ModuleManager
         Spark::ModuleKind kind = Spark::ModuleKind::Game; ///< Load-policy class (one Game per process)
         std::string registrationOwner;                    ///< Unique registry owner for this module image
         std::string transientImagePath;                   ///< Shadow image removed after the module library is closed
+        /// OnLoad ran and failed. Callbacks its partial OnLoad registered outside the owner-scoped
+        /// registries may still point into the image, so UnloadEntry never unmaps it.
+        bool retainImage = false;
     };
 
     /** @brief Sort modules by loadOrder */
