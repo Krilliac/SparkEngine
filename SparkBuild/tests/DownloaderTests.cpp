@@ -1,6 +1,7 @@
 #include "ArchiveExtraction.h"
 #include "Downloader.h"
 #include "DownloadSecurity.h"
+#include "PathSecurity.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -256,6 +257,315 @@ namespace
         return failures == 0 ? 0 : 1;
     }
 
+    std::string ReadWholeFile(const std::filesystem::path& path)
+    {
+        std::ifstream file(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    }
+
+    std::set<std::string> DirectoryNames(const std::filesystem::path& directory)
+    {
+        std::set<std::string> names;
+        std::error_code error;
+        for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end; it.increment(error))
+            names.insert(it->path().filename().string());
+        return names;
+    }
+
+    // Stored (uncompressed) ZIP fixtures written in-process, so ZIP extraction
+    // is exercised on every platform. Windows has no python3 fixture step, and
+    // its production extractor (System32 tar.exe) otherwise had no coverage.
+    struct ZipFixtureEntry
+    {
+        std::string centralName;
+        std::string localName;
+        std::string content;
+    };
+
+    uint32_t Crc32(const std::string& data)
+    {
+        uint32_t crc = 0xFFFFFFFFu;
+        for (const char character : data)
+        {
+            crc ^= static_cast<unsigned char>(character);
+            for (int bit = 0; bit < 8; ++bit)
+            {
+                const uint32_t mask = 0u - (crc & 1u);
+                crc = (crc >> 1) ^ (0xEDB88320u & mask);
+            }
+        }
+        return ~crc;
+    }
+
+    void AppendLittleEndian(std::string& out, uint64_t value, int byteCount)
+    {
+        for (int index = 0; index < byteCount; ++index)
+        {
+            out.push_back(static_cast<char>((value >> (8 * index)) & 0xFFu));
+        }
+    }
+
+    bool WriteStoredZip(const std::filesystem::path& path, const std::vector<ZipFixtureEntry>& entries)
+    {
+        constexpr uint64_t kDosDate = 0x21; // 1980-01-01
+        std::string data;
+        std::string central;
+        for (const ZipFixtureEntry& entry : entries)
+        {
+            const uint64_t offset = data.size();
+            const uint64_t crc = Crc32(entry.content);
+            const uint64_t size = entry.content.size();
+            AppendLittleEndian(data, 0x04034b50u, 4); // local file header
+            AppendLittleEndian(data, 20, 2);          // version needed
+            AppendLittleEndian(data, 0, 2);           // flags
+            AppendLittleEndian(data, 0, 2);           // method: stored
+            AppendLittleEndian(data, 0, 2);           // time
+            AppendLittleEndian(data, kDosDate, 2);
+            AppendLittleEndian(data, crc, 4);
+            AppendLittleEndian(data, size, 4);
+            AppendLittleEndian(data, size, 4);
+            AppendLittleEndian(data, entry.localName.size(), 2);
+            AppendLittleEndian(data, 0, 2); // extra length
+            data += entry.localName;
+            data += entry.content;
+
+            AppendLittleEndian(central, 0x02014b50u, 4); // central directory header
+            AppendLittleEndian(central, 20, 2);          // version made by
+            AppendLittleEndian(central, 20, 2);          // version needed
+            AppendLittleEndian(central, 0, 2);           // flags
+            AppendLittleEndian(central, 0, 2);           // method: stored
+            AppendLittleEndian(central, 0, 2);           // time
+            AppendLittleEndian(central, kDosDate, 2);
+            AppendLittleEndian(central, crc, 4);
+            AppendLittleEndian(central, size, 4);
+            AppendLittleEndian(central, size, 4);
+            AppendLittleEndian(central, entry.centralName.size(), 2);
+            AppendLittleEndian(central, 0, 2); // extra length
+            AppendLittleEndian(central, 0, 2); // comment length
+            AppendLittleEndian(central, 0, 2); // disk number
+            AppendLittleEndian(central, 0, 2); // internal attributes
+            AppendLittleEndian(central, 0, 4); // external attributes
+            AppendLittleEndian(central, offset, 4);
+            central += entry.centralName;
+        }
+        std::string eocd;
+        AppendLittleEndian(eocd, 0x06054b50u, 4);
+        AppendLittleEndian(eocd, 0, 2);
+        AppendLittleEndian(eocd, 0, 2);
+        AppendLittleEndian(eocd, entries.size(), 2);
+        AppendLittleEndian(eocd, entries.size(), 2);
+        AppendLittleEndian(eocd, central.size(), 4);
+        AppendLittleEndian(eocd, data.size(), 4);
+        AppendLittleEndian(eocd, 0, 2); // comment length
+
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << data << central << eocd;
+        return output.good();
+    }
+
+    // The identity pin that binds a verified archive and the staging directory
+    // to the objects that are later read and written (SEC findings 21 and 22).
+    int RunPathPinTest()
+    {
+        namespace fs = std::filesystem;
+        using SparkBuild::PathSecurity::PathPin;
+
+        int failures = 0;
+        auto check = [&failures](bool condition, const std::string& message)
+        {
+            if (!condition)
+            {
+                ++failures;
+                std::cerr << "FAIL: " << message << '\n';
+            }
+        };
+
+        const fs::path root =
+            fs::path(SparkBuild::Downloader::GetTempDir()) / ("sparkbuild_pin_" + std::to_string(CurrentProcessId()));
+        std::error_code ignored;
+        fs::remove_all(root, ignored);
+        fs::create_directories(root);
+        const fs::path archive = root / "archive.zip";
+        const fs::path substitute = root / "substitute.zip";
+        std::ofstream(archive, std::ios::binary) << "verified";
+        std::ofstream(substitute, std::ios::binary) << "attacker";
+
+        {
+            PathPin pin;
+            std::string error;
+            check(pin.Open(archive, PathPin::Kind::File, error), "could not pin a regular file: " + error);
+            check(pin.StillNames(archive), "a freshly pinned file did not match its own path");
+            check(ReadWholeFile(pin.BoundPath()) == "verified", "the pin's bound path did not read the pinned bytes");
+
+            std::error_code swapError;
+            fs::rename(substitute, archive, swapError);
+#ifdef SPARK_PLATFORM_WINDOWS
+            // No FILE_SHARE_DELETE / FILE_SHARE_WRITE: the name cannot be replaced or rewritten.
+            check(static_cast<bool>(swapError), "a pinned archive was replaced by rename");
+            {
+                std::ofstream writer(archive, std::ios::binary | std::ios::trunc);
+                check(!writer.is_open(), "a pinned archive was opened for writing");
+            }
+            check(pin.StillNames(archive), "the pinned archive's name stopped matching without a swap");
+#else
+            // POSIX cannot lock a name; the swap succeeds but the pin keeps the original object.
+            check(!swapError, "fixture rename failed: " + swapError.message());
+            check(!pin.StillNames(archive), "StillNames did not notice the archive was replaced");
+#endif
+            check(ReadWholeFile(pin.BoundPath()) == "verified", "a swapped path changed the pinned archive's bytes");
+            check(ReadWholeFile(pin.BoundPath()) == "verified", "a second read of the pinned archive was not rewound");
+        }
+
+        const fs::path staging = root / "staging";
+        const fs::path moved = root / "moved";
+        fs::create_directories(staging);
+        {
+            PathPin pin;
+            std::string error;
+            check(pin.Open(staging, PathPin::Kind::Directory, error), "could not pin a directory: " + error);
+            std::ofstream(staging / "inside.txt", std::ios::binary) << "x";
+            check(ReadWholeFile(staging / "inside.txt") == "x", "a pinned directory refused new entries");
+            check(!PathPin().Open(staging, PathPin::Kind::File, error), "a directory was pinned as a regular file");
+
+            std::error_code renameError;
+            fs::rename(staging, moved, renameError);
+#ifdef SPARK_PLATFORM_WINDOWS
+            check(static_cast<bool>(renameError), "a pinned staging directory was renamed away");
+            check(pin.StillNames(staging), "the pinned staging directory stopped matching without a swap");
+#else
+            check(!renameError, "fixture directory rename failed: " + renameError.message());
+            std::error_code linkError;
+            fs::create_directory_symlink(moved, staging, linkError);
+            check(!linkError, "fixture directory symlink failed: " + linkError.message());
+            check(!pin.StillNames(staging), "StillNames accepted a symlink substituted for the staging directory");
+            check(!PathPin().Open(staging, PathPin::Kind::Directory, error), "a directory symlink was pinned");
+#endif
+        }
+
+        fs::remove_all(root, ignored);
+        return failures == 0 ? 0 : 1;
+    }
+
+    // ZIP extraction through the production extractor on every platform
+    // (System32 tar.exe on Windows, unzip elsewhere). SEC finding 26: Windows
+    // previously compiled every extraction test out and reported success.
+    int RunPortableZipExtractionTest()
+    {
+        namespace fs = std::filesystem;
+        using SparkBuild::ArchiveFormat;
+        using SparkBuild::Downloader;
+
+        int failures = 0;
+        auto check = [&failures](bool condition, const std::string& message)
+        {
+            if (!condition)
+            {
+                ++failures;
+                std::cerr << "FAIL: " << message << '\n';
+            }
+        };
+
+        const fs::path root =
+            fs::path(Downloader::GetTempDir()) / ("sparkbuild_portable_zip_" + std::to_string(CurrentProcessId()));
+        std::error_code ignored;
+        fs::remove_all(root, ignored);
+        const fs::path fixtures = root / "fixtures";
+        fs::create_directories(fixtures);
+
+        const bool written =
+            WriteStoredZip(fixtures / "good.zip", {{"tool/bin/run.cmd", "tool/bin/run.cmd", "echo ok\n"},
+                                                   {"tool/README.txt", "tool/README.txt", "hello\n"}}) &&
+            WriteStoredZip(fixtures / "dotdot.zip",
+                           {{"ok.txt", "ok.txt", "ok"}, {"../escaped.txt", "../escaped.txt", "pwned"}}) &&
+            WriteStoredZip(fixtures / "conflict.zip", {{"keep/file.txt", "keep/file.txt", "replacement"},
+                                                       {"fresh/new.txt", "fresh/new.txt", "new"}}) &&
+            WriteStoredZip(fixtures / "name_mismatch.zip", {{"safe/name.txt", "../evil.txt!", "pwned"}}) &&
+            WriteStoredZip(fixtures / "backslash.zip", {{"dir\\file.txt", "dir\\file.txt", "ambiguous"}});
+        if (!written)
+        {
+            std::cerr << "FAIL: could not write the stored ZIP fixtures\n";
+            fs::remove_all(root, ignored);
+            return 1;
+        }
+
+        auto extract = [](const fs::path& archive, const fs::path& destination, ArchiveFormat format)
+        {
+            std::string digest;
+            std::string error;
+            if (!SparkBuild::DownloadSecurity::ComputeSha256(archive, digest, error))
+            {
+                return false;
+            }
+            return Downloader::ExtractVerifiedArchive(archive.string(), destination.string(), digest, format);
+        };
+
+        const fs::path working = root / "working";
+        fs::create_directories(working / "keep");
+        std::ofstream(working / "keep" / "file.txt", std::ios::binary) << "original";
+        auto workingIntact = [&working]
+        {
+            return DirectoryNames(working) == std::set<std::string>{"keep"} &&
+                   DirectoryNames(working / "keep") == std::set<std::string>{"file.txt"} &&
+                   ReadWholeFile(working / "keep" / "file.txt") == "original";
+        };
+
+        check(!extract(fixtures / "dotdot.zip", working, ArchiveFormat::Zip), "ZIP with a '../' member was accepted");
+        check(!fs::exists(root / "escaped.txt"), "ZIP '../' member escaped the staging directory");
+        check(!extract(fixtures / "name_mismatch.zip", working, ArchiveFormat::Zip),
+              "ZIP whose local and central names differ was accepted");
+        check(!fs::exists(root / "evil.txt!"), "ZIP local-header name escaped the staging directory");
+        check(!extract(fixtures / "backslash.zip", working, ArchiveFormat::Zip),
+              "ZIP with a backslash member was accepted");
+        check(!extract(fixtures / "conflict.zip", working, ArchiveFormat::Zip), "archive overwrote an existing entry");
+        check(workingIntact(), "a refused ZIP changed the existing destination");
+        const fs::path mismatch = root / "mismatch";
+        check(!extract(fixtures / "good.zip", mismatch, ArchiveFormat::GzipTar) && !fs::exists(mismatch),
+              "ZIP content passed as a gzip tar, or its refusal created the destination");
+
+        // An archive path that is itself a link is refused: the reserved download
+        // is always a regular file, so a link means it was substituted.
+        const fs::path linkedArchive = root / "linked.zip";
+        const fs::path linkedDestination = root / "linked";
+        std::error_code linkError;
+        fs::create_symlink(fixtures / "good.zip", linkedArchive, linkError);
+        if (linkError)
+        {
+            std::cout << "note: symlinked-archive case skipped (cannot create symlinks here: " << linkError.message()
+                      << ")\n";
+        }
+        else
+        {
+            check(!extract(linkedArchive, linkedDestination, ArchiveFormat::Zip),
+                  "an archive path that is a symlink was followed and extracted");
+            check(!fs::exists(linkedDestination), "a refused symlinked archive created its destination");
+        }
+
+        check(extract(fixtures / "good.zip", working, ArchiveFormat::Zip), "valid stored ZIP was rejected");
+        check(ReadWholeFile(working / "tool" / "bin" / "run.cmd") == "echo ok\n", "valid ZIP content was altered");
+        check(ReadWholeFile(working / "tool" / "README.txt") == "hello\n", "valid ZIP lost a member");
+        check(ReadWholeFile(working / "keep" / "file.txt") == "original", "valid ZIP disturbed existing content");
+
+        // The archive pin is released on return: the caller can still delete the download.
+        std::error_code removeError;
+        check(fs::remove(fixtures / "good.zip", removeError) && !removeError,
+              "the verified archive was still locked after extraction returned");
+
+        std::error_code walkError;
+        bool stagingLeft = false;
+        for (fs::recursive_directory_iterator it(root, walkError), end; !walkError && it != end;
+             it.increment(walkError))
+        {
+            if (it->path().filename().string().find(".sparkbuild-staging-") != std::string::npos)
+            {
+                stagingLeft = true;
+            }
+        }
+        check(!walkError && !stagingLeft, "a staging directory was left behind");
+
+        fs::remove_all(root, ignored);
+        return failures == 0 ? 0 : 1;
+    }
+
 #ifndef SPARK_PLATFORM_WINDOWS
     // Fixtures are generated at test time with python3's zipfile/tarfile so the
     // hostile archives never exist in the source tree.
@@ -353,21 +663,6 @@ raw_zip("zip64_missing_extra.zip", [("z64/a.txt", "z64/a.txt", b"alpha")], zip64
 raw_zip("bad_comment_length.zip", [("c/a.txt", "c/a.txt", b"alpha")], comment_length=5)
 raw_zip("overrun_entry.zip", [("o/a.txt", "o/a.txt", b"alpha")], central_name_length=200)
 )PY";
-
-    std::string ReadWholeFile(const std::filesystem::path& path)
-    {
-        std::ifstream file(path, std::ios::binary);
-        return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-    }
-
-    std::set<std::string> DirectoryNames(const std::filesystem::path& directory)
-    {
-        std::set<std::string> names;
-        std::error_code error;
-        for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end; it.increment(error))
-            names.insert(it->path().filename().string());
-        return names;
-    }
 
     int RunZipListingTest(const std::filesystem::path& fixtures);
 
@@ -664,12 +959,17 @@ int main()
     const int cleanupResult = RunFailedDownloadCleanupTest();
     const int sha256Result = RunSha256VerificationTest();
     const int policyResult = RunArchivePolicyTest();
+    const int pinResult = RunPathPinTest();
+    int extractionResult = RunPortableZipExtractionTest();
 #ifndef SPARK_PLATFORM_WINDOWS
-    const int extractionResult = RunStagedExtractionTest() | RunStagedTreeValidationTest();
+    extractionResult |= RunStagedExtractionTest() | RunStagedTreeValidationTest();
 #else
-    const int extractionResult = 0; // tar.exe ZIP extraction needs native Windows evidence.
+    // The python3-generated hostile fixtures (gzip tar, tar symlinks, ZIP64,
+    // parser edge cases) run on Linux/macOS only; say so instead of passing silently.
+    std::cout << "note: python3 and tar-symlink fixture tests are not run on Windows; "
+                 "stored-ZIP extraction through tar.exe is\n";
 #endif
-    return reservationResult == 0 && cleanupResult == 0 && sha256Result == 0 && policyResult == 0 &&
+    return reservationResult == 0 && cleanupResult == 0 && sha256Result == 0 && policyResult == 0 && pinResult == 0 &&
                    extractionResult == 0
                ? 0
                : 1;

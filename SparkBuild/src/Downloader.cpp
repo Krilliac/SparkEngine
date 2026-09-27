@@ -259,10 +259,19 @@ namespace SparkBuild
         // Upper bound for captured tool output (a tar member listing).
         constexpr size_t kMaxCapturedOutputBytes = 64u * 1024 * 1024;
 
+        // Descriptors a child must use: the pinned archive stays readable as
+        // /dev/fd/N (it is otherwise close-on-exec), and the child enters the
+        // pinned staging directory by descriptor, never by a re-resolved path.
+        struct ChildDescriptors
+        {
+            int inherit = -1;
+            int workingDirectory = -1;
+        };
+
         // Run a tool without a shell. stdin is /dev/null so an extractor can
         // never block on an interactive prompt; stdout is captured on request.
         bool RunProcess(const std::string& executable, const std::vector<std::string>& args,
-                        std::string* capturedOutput = nullptr)
+                        std::string* capturedOutput = nullptr, ChildDescriptors descriptors = {})
         {
             // Resolve through absolute PATH entries only: execvp would treat an
             // empty PATH entry as the current directory.
@@ -309,6 +318,14 @@ namespace SparkBuild
                     close(outputPipe[0]);
                     close(outputPipe[1]);
                 }
+                if (descriptors.inherit >= 0 && fcntl(descriptors.inherit, F_SETFD, 0) != 0)
+                {
+                    _exit(127);
+                }
+                if (descriptors.workingDirectory >= 0 && fchdir(descriptors.workingDirectory) != 0)
+                {
+                    _exit(127);
+                }
                 execv(program.c_str(), argv.data());
                 _exit(127);
             }
@@ -349,15 +366,16 @@ namespace SparkBuild
 
         // unzip -n never overwrites; staging is fresh, so this only matters for
         // duplicate member names, which must not replace an earlier member.
-        bool ExtractZipIntoStaging(const std::string& zipPath, const std::string& stagingDir)
+        bool ExtractZipIntoStaging(const std::string& zipPath, ChildDescriptors descriptors)
         {
-            return RunProcess("unzip", {"-q", "-n", zipPath, "-d", stagingDir});
+            return RunProcess("unzip", {"-q", "-n", zipPath, "-d", "."}, nullptr, descriptors);
         }
 
-        bool ListTarMembers(const std::string& archivePath, std::vector<std::string>& names, std::string& error)
+        bool ListTarMembers(const std::string& archivePath, int archiveDescriptor, std::vector<std::string>& names,
+                            std::string& error)
         {
             std::string listing;
-            if (!RunProcess("tar", {"-tzf", archivePath}, &listing))
+            if (!RunProcess("tar", {"-tzf", archivePath}, &listing, ChildDescriptors{archiveDescriptor, -1}))
             {
                 error = "tar could not list the archive";
                 return false;
@@ -375,9 +393,9 @@ namespace SparkBuild
             return true;
         }
 
-        bool ExtractTarIntoStaging(const std::string& archivePath, const std::string& stagingDir)
+        bool ExtractTarIntoStaging(const std::string& archivePath, ChildDescriptors descriptors)
         {
-            return RunProcess("tar", {"--no-same-owner", "-xzf", archivePath, "-C", stagingDir});
+            return RunProcess("tar", {"--no-same-owner", "-xzf", archivePath, "-C", "."}, nullptr, descriptors);
         }
     } // namespace
 
@@ -487,13 +505,23 @@ namespace SparkBuild
                                             const std::string& expectedSha256, ArchiveFormat expectedFormat)
     {
         std::string error;
-        if (!DownloadSecurity::VerifySha256(archivePath, expectedSha256, error))
+        // Every later step reads the archive through this pin, so the bytes
+        // that are hashed are the bytes that are listed and extracted. On
+        // Windows the pin denies write/delete sharing, so the path cannot be
+        // rewritten or swapped; on POSIX every reader (in-process and the
+        // extractor child) opens the pinned descriptor via /dev/fd/N.
+        PathSecurity::PathPin archivePin;
+        if (!archivePin.Open(archivePath, PathSecurity::PathPin::Kind::File, error))
+        {
+            return RejectArchive(archivePath, error);
+        }
+        if (!DownloadSecurity::VerifySha256(archivePin.BoundPath(), expectedSha256, error))
             return RejectArchive(archivePath, error);
         if (expectedFormat == ArchiveFormat::Unknown)
             return RejectArchive(archivePath, "no expected archive format was given");
 
         // The container is chosen by content; a name or URL only states the expectation.
-        const ArchiveFormat detected = DetectArchiveFormat(archivePath);
+        const ArchiveFormat detected = DetectArchiveFormat(archivePin.BoundPath().string());
         if (detected != expectedFormat)
         {
             return RejectArchive(archivePath, std::string("content is ") + ArchiveFormatName(detected) + ", expected " +
@@ -503,7 +531,7 @@ namespace SparkBuild
         std::vector<std::string> members;
         if (detected == ArchiveFormat::Zip)
         {
-            if (!ArchiveExtraction::ListZipMembers(archivePath, members, error) ||
+            if (!ArchiveExtraction::ListZipMembers(archivePin.BoundPath(), members, error) ||
                 !ArchiveExtraction::ValidateMemberNames(members, ArchiveExtraction::MemberSyntax::Zip, error))
                 return RejectArchive(archivePath, error);
         }
@@ -512,7 +540,7 @@ namespace SparkBuild
 #ifdef SPARK_PLATFORM_WINDOWS
             return RejectArchive(archivePath, "gzip-compressed tar extraction is not supported on Windows");
 #else
-            if (!ListTarMembers(archivePath, members, error) ||
+            if (!ListTarMembers(archivePin.BoundPath().string(), archivePin.Descriptor(), members, error) ||
                 !ArchiveExtraction::ValidateMemberNames(members, ArchiveExtraction::MemberSyntax::Tar, error))
                 return RejectArchive(archivePath, error);
 #endif
@@ -528,21 +556,46 @@ namespace SparkBuild
         if (ArchiveExtraction::CreateStagingDirectory(destDir, staging, error))
         {
             const ScopedTemporaryPath stagingCleanup(staging);
+            // Declared after the cleanup so it is released before staging is removed.
+            // The extractor writes into this exact directory: on Windows it cannot
+            // be renamed or replaced by a junction while pinned; on POSIX the
+            // child enters it with fchdir and extracts into ".".
+            PathSecurity::PathPin stagingPin;
+            if (!stagingPin.Open(staging, PathSecurity::PathPin::Kind::Directory, error))
+            {
+                error = "could not pin the staging directory: " + error;
+            }
+            else
+            {
 #ifdef SPARK_PLATFORM_WINDOWS
-            const bool extracted = ExtractZipIntoStaging(std::filesystem::path(archivePath), staging);
+                const bool extracted = ExtractZipIntoStaging(std::filesystem::path(archivePath), staging);
 #else
-            const bool extracted = detected == ArchiveFormat::Zip
-                                       ? ExtractZipIntoStaging(archivePath, staging.string())
-                                       : ExtractTarIntoStaging(archivePath, staging.string());
+                const ChildDescriptors descriptors{archivePin.Descriptor(), stagingPin.Descriptor()};
+                const bool extracted = detected == ArchiveFormat::Zip
+                                           ? ExtractZipIntoStaging(archivePin.BoundPath().string(), descriptors)
+                                           : ExtractTarIntoStaging(archivePin.BoundPath().string(), descriptors);
 #endif
-            // tar's own exit status covers completeness; the ZIP listing is
-            // parsed in-process, so the staged set can be compared against it.
-            if (!extracted)
-                error = "the extractor reported a failure";
-            else if ((detected != ArchiveFormat::Zip ||
-                      ArchiveExtraction::VerifyStagedMembers(staging, members, error)) &&
-                     ArchiveExtraction::ValidateStagedTree(staging, error))
-                committed = ArchiveExtraction::CommitStagedTree(staging, destDir, error);
+                // Validation and commit address staging by path, so it must still
+                // name the directory the extractor wrote into.
+                const auto stagingUnchanged = [&]
+                {
+                    if (stagingPin.StillNames(staging))
+                    {
+                        return true;
+                    }
+                    error = "the staging directory was replaced during extraction";
+                    return false;
+                };
+                // tar's own exit status covers completeness; the ZIP listing is
+                // parsed in-process, so the staged set can be compared against it.
+                if (!extracted)
+                    error = "the extractor reported a failure";
+                else if (stagingUnchanged() &&
+                         (detected != ArchiveFormat::Zip ||
+                          ArchiveExtraction::VerifyStagedMembers(staging, members, error)) &&
+                         ArchiveExtraction::ValidateStagedTree(staging, error))
+                    committed = ArchiveExtraction::CommitStagedTree(staging, destDir, error);
+            }
         }
         if (committed)
             return true;
