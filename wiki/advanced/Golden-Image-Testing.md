@@ -5,7 +5,7 @@ The Golden Image Testing framework captures framebuffer screenshots, compares th
 **Source:** `SparkEngine/Source/Utils/GoldenImageTest.h`, `SparkEngine/Source/Utils/GoldenImageManifest.h`, `SparkEngine/Source/Utils/GoldenImagePng.h`
 **Layout and review workflow:** `Tests/GoldenImages/README.md`
 
-> **Status (2026-09-26):** only the `vulkan-lavapipe` row has entries: `PostProcess_ACES`, `BloomExtract` and `GaussianBlur_Vertical`, the shipped SPIR-V post-process programs rendered on Mesa Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp` (RHI-230). That is software-row shader evidence, not an engine-pass golden or hardware certification. Other rows have no entries yet; D3D11 baselines land with the RHI-210 golden slices and OpenGL baselines with the RHI-240 golden work.
+> **Status (2026-09-26):** two software rows have entries. `vulkan-lavapipe` has `PostProcess_ACES`, `BloomExtract` and `GaussianBlur_Vertical`, the shipped SPIR-V post-process programs rendered on Mesa Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp` (RHI-230). `opengl-llvmpipe` has eight scenes of the shipped GLSL (BasicVS+BasicPS lit sphere, the ACES/Reinhard/Uncharted2/FXAA `PostProcess` variants, horizontal and vertical `GaussianBlur`, and `BloomExtract`) rendered through `GLDevice` on Mesa llvmpipe by `Tests/TestRHI240OpenGLGoldenReal.cpp` (RHI-240). Both are software-row shader evidence, not engine-pass goldens or hardware certification. The D3D11 rows have no entries yet; their baselines land with the RHI-210 golden slices.
 
 ## Overview
 

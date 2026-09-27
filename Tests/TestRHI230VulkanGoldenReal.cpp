@@ -6,7 +6,7 @@
  * VK_LAYER_KHRONOS_validation on) using the SPIR-V the build compiles from
  * Shaders/GLSL (root CMakeLists.txt section 9.4), reads the render target back,
  * and compares it with the committed baseline under
- * Tests/GoldenImages/vulkan-lavapipe/ using the reviewed thresholds and baseline
+ * Tests/GoldenImages/vulkan-lavapipe/ using the manifest thresholds and baseline
  * SHA-256 in Tests/GoldenImages/manifest.json (GoldenImageTestRunner,
  * fail-closed).
  *
@@ -67,8 +67,8 @@ namespace
 {
     constexpr const char* kRow = "vulkan-lavapipe";
 
-    /// Mesa build the committed baselines were rendered and reviewed on. A different
-    /// build is still compared (the reviewed thresholds decide); the note helps triage.
+    /// Mesa build the committed baselines were rendered on. A different
+    /// build is still compared (the manifest thresholds decide); the note helps triage.
     constexpr const char* kBaselineMesa = "Mesa 25.2.8";
 
     /// Every scene this file certifies; must equal the manifest's entries for kRow.
@@ -105,7 +105,7 @@ namespace
                                  std::to_string(VK_VERSION_MINOR(driver)) + "." +
                                  std::to_string(VK_VERSION_PATCH(driver));
         if (mesa != kBaselineMesa)
-            std::printf("[RHI-230 GOLDEN] note: baselines were reviewed on %s; this run uses %s\n", kBaselineMesa,
+            std::printf("[RHI-230 GOLDEN] note: baselines were rendered on %s; this run uses %s\n", kBaselineMesa,
                         mesa.c_str());
     }
 
@@ -132,7 +132,7 @@ namespace
         uint32_t m_height;
     };
 
-    /// Compares a frame with the reviewed baseline; keeps the actual frame for review on failure.
+    /// Compares a frame with the committed baseline; keeps the actual frame for review on failure.
     bool MatchesGolden(const char* scene, const std::vector<uint8_t>& pixels, uint32_t width, uint32_t height)
     {
         auto& runner = Spark::GoldenImageTestRunner::GetInstance();

@@ -22,10 +22,20 @@ Committed baselines:
   rendered on Mesa 25.2.8 Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp`
   (RHI-230, CTest `VulkanGoldenTests`). They are software-row shader
   evidence, not engine-pass goldens or hardware certification.
+- `opengl-llvmpipe/`: `LitSphere_BasicVS_BasicPS`, `PostProcess_ACES`,
+  `PostProcess_Reinhard`, `PostProcess_Uncharted2`, `PostProcess_FXAA`,
+  `GaussianBlur_Horizontal`, `GaussianBlur_Vertical` and `BloomExtract`,
+  the shipped `Shaders/GLSL` programs rendered through `GLDevice` on
+  Ubuntu 24.04's `noble-updates` Mesa `25.2.8-0ubuntu0.24.04.2` llvmpipe by
+  `Tests/TestRHI240OpenGLGoldenReal.cpp` (RHI-240). Only CTest
+  `SparkOpenGLGoldenTests` compares them (the main `SparkEngineTests` entry
+  excludes `OpenGLGolden_`), and a hosted-runner match is not yet recorded.
+  They are software-row shader evidence, not engine-pass goldens or
+  hardware driver certification.
 
-Every other row has no entries, so its comparisons fail closed. D3D11
-baselines land with the RHI-210 golden slices and OpenGL baselines with
-the RHI-240 golden work, each rendered on its real row and reviewed.
+The `d3d11-warp` and `d3d11-hw` rows have no entries, so their comparisons
+fail closed. D3D11 baselines land with the RHI-210 golden slices, each
+rendered on its real row and reviewed.
 
 ## Fail-closed rules
 

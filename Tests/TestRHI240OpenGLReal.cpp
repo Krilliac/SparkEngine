@@ -21,6 +21,7 @@
 
 #include "Graphics/RHI/OpenGL/OpenGLDevice.h"
 #include "Graphics/RHI/RHIFactory.h"
+#include "OpenGLTestSupport.h"
 
 #include <array>
 #include <cctype>
@@ -29,120 +30,17 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <memory>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 using namespace Spark::RHI;
 using Spark::RHI::OpenGL::GLDevice;
+using namespace SparkGLTest;
 
 namespace
 {
-    // Counts driver-reported defects; reset per test by GLTestDevice.
-    int g_glErrorCount = 0;
-
-    void APIENTRY CountGLErrors(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei /*length*/,
-                                const GLchar* message, const void* /*userParam*/)
-    {
-        if (type != GL_DEBUG_TYPE_ERROR && severity != GL_DEBUG_SEVERITY_HIGH)
-            return;
-        ++g_glErrorCount;
-        std::printf("[RHI-240 GL ERROR] test=%s src=0x%x type=0x%x id=%u: %s\n", g_currentTest.c_str(), source, type,
-                    id, message);
-    }
-
-    // Drains glGetError so errors are counted even if debug output were dropped. A context
-    // holds at most one flag per error code, so a sane driver drains in a handful of calls;
-    // the bound turns a missing/lost context (glGetError never clearing) into failures
-    // instead of a hang.
-    int DrainGLErrors()
-    {
-        int count = 0;
-        while (count < 32 && glGetError() != GL_NO_ERROR)
-            ++count;
-        return count;
-    }
-
-    struct GLTestDevice
-    {
-        GLDevice device;
-
-        bool Start()
-        {
-            RHIDeviceDesc desc;
-            desc.enableDebugLayer = true;
-            desc.applicationName = "RHI240";
-            if (!device.Initialize(desc))
-                return false;
-            // Every GL call below needs the device's context to still be current after
-            // Initialize (it once was torn down on Windows, making each call a silent no-op).
-            if (glGetString(GL_VERSION) == nullptr)
-                throw std::runtime_error("GLDevice::Initialize returned true but left no current GL context");
-
-            glEnable(GL_DEBUG_OUTPUT);
-            glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-            glDebugMessageCallback(CountGLErrors, nullptr);
-            glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
-            g_glErrorCount = DrainGLErrors();
-            return true;
-        }
-
-        int Errors() { return g_glErrorCount + DrainGLErrors(); }
-
-        ~GLTestDevice()
-        {
-            if (glDebugMessageCallback)
-                glDebugMessageCallback(nullptr, nullptr);
-        }
-    };
-
-    // Skips (or fails under SPARK_REQUIRE_OPENGL=1) when no GL context exists.
-    void RequireGL(GLTestDevice& gl)
-    {
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
-        // The system libEGL/Mesa cannot be MSan-instrumented, so its writes look uninitialized and
-        // MSan aborts inside eglGetDisplay. Real-GL coverage runs in the gcc/clang/ASan lanes.
-        // Checked before SPARK_REQUIRE_OPENGL so that setting cannot force the path under MSan.
-        SKIP_TEST("MemorySanitizer: system libEGL/Mesa is uninstrumented");
-#endif
-#endif
-        if (gl.Start())
-            return;
-        const char* required = std::getenv("SPARK_REQUIRE_OPENGL");
-        if (required && std::string(required) == "1")
-            throw std::runtime_error("SPARK_REQUIRE_OPENGL=1 but GLDevice::Initialize failed");
-        SKIP_TEST("no OpenGL context available (EGL/llvmpipe missing)");
-    }
-
-    std::unique_ptr<IRHIShader> MakeShader(GLDevice& device, RHIShaderStage stage, const std::string& source,
-                                           std::vector<std::string> defines = {})
-    {
-        RHIShaderDesc desc;
-        desc.stage = stage;
-        desc.language = ShaderLanguage::GLSL;
-        desc.sourceCode = source;
-        desc.defines = std::move(defines);
-        return device.CreateShader(desc);
-    }
-
-    std::unique_ptr<IRHITexture> MakeTexture(GLDevice& device, uint32_t w, uint32_t h, PixelFormat format,
-                                             RHITextureUsage usage, RHITextureType type = RHITextureType::Texture2D,
-                                             uint32_t arraySize = 1)
-    {
-        RHITextureDesc desc;
-        desc.width = w;
-        desc.height = h;
-        desc.format = format;
-        desc.usage = usage;
-        desc.type = type;
-        desc.arraySize = arraySize;
-        return device.CreateTexture(desc);
-    }
-
     std::array<uint8_t, 4> ReadPixelRGBA8(IRHITexture* texture, uint32_t x, uint32_t y)
     {
         const GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(texture->GetNativeHandle()));
@@ -151,21 +49,6 @@ namespace
         glGetTextureSubImage(tex, 0, static_cast<GLint>(x), static_cast<GLint>(y), 0, 1, 1, 1, GL_RGBA,
                              GL_UNSIGNED_BYTE, 4, px.data());
         return px;
-    }
-
-    std::string ReadFile(const std::filesystem::path& path)
-    {
-        std::ifstream file(path);
-        std::stringstream ss;
-        ss << file.rdbuf();
-        return ss.str();
-    }
-
-    std::filesystem::path GLSLDir()
-    {
-        // Not __FILE__: reproducible optimized builds trim the source-root prefix
-        // (/d1trimfile, -ffile-prefix-map), so __FILE__ is no longer absolute.
-        return std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Shaders" / "GLSL";
     }
 
     const char* kColorVS = R"(#version 450 core

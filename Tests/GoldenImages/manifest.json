@@ -27,6 +27,78 @@
       "tolerancePercent": 0.5,
       "reviewer": "Claude agent, RHI-230 (Mesa 25.2.8 Lavapipe; CPU-reference probes checked; owner review pending)",
       "baselineSha256": "936c6be7fe6a32f8fa099aacb6ad2eb84376c637b9dc346c9bdba4a1ae82b596"
+    },
+    {
+      "scene": "LitSphere_BasicVS_BasicPS",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
+      "baselineSha256": "8ecf40ebf35c6cda52bf960e58133f198abc981e568fb5696417f29cd510c049"
+    },
+    {
+      "scene": "PostProcess_ACES",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
+      "baselineSha256": "7a47e8896b561010375435d44b48ca4e828b9cdc859d9fc3aec93e101bc118db"
+    },
+    {
+      "scene": "PostProcess_Reinhard",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
+      "baselineSha256": "bca3f7d23d7d6e3823e1eda8367a4d450cf7f3e59ab2229a7501b5d594c67228"
+    },
+    {
+      "scene": "PostProcess_Uncharted2",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
+      "baselineSha256": "825045f7e8281b45fd42c36d09cd36381e7f96c42eb036c97a1fc39dec6ec5d9"
+    },
+    {
+      "scene": "PostProcess_FXAA",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
+      "baselineSha256": "1b3efa710b005ae3174f183754dc2e4382ae792bda9612dc3364895882885075"
+    },
+    {
+      "scene": "GaussianBlur_Horizontal",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
+      "baselineSha256": "7bc3d1881313a750bb45d138444c76006905bcc7132baf29c020194260145dfd"
+    },
+    {
+      "scene": "GaussianBlur_Vertical",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
+      "baselineSha256": "936c6be7fe6a32f8fa099aacb6ad2eb84376c637b9dc346c9bdba4a1ae82b596"
+    },
+    {
+      "scene": "BloomExtract",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
+      "baselineSha256": "5e4cb97dc705e0c5b52d86950b6f39842415da9de2bab6b094198e0b03246b0a"
     }
   ]
 }

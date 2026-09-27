@@ -183,6 +183,25 @@ DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
 
 The OpenGL backend contains a Linux GLX PBuffer and FBO-backed off-screen path. llvmpipe is an explicitly configured development route; it does not establish identical behavior or release parity with a GPU-backed path.
 
+### Shipped-shader goldens on llvmpipe (RHI-240)
+
+The `SparkOpenGLGoldenTests` CTest entry (labels `opengl`, `llvmpipe`, `opengl-golden`; Linux builds with OpenGL) runs the eight `OpenGLGolden_RHI240_*` tests in `Tests/TestRHI240OpenGLGoldenReal.cpp` with `SPARK_REQUIRE_OPENGL=1` and an exact `SPARK_TEST_EXPECT_COUNT=8`. Each test compiles the shipped `Shaders/GLSL` sources through a real `GLDevice` with a KHR_debug error counter, renders a fixed input, reads the target back and compares it with the committed baseline in `Tests/GoldenImages/opengl-llvmpipe/` through the manifest's reviewed thresholds and baseline SHA-256.
+
+| Scene | Programs | Input |
+|-------|----------|-------|
+| `LitSphere_BasicVS_BasicPS` | `BasicVS` + `BasicPS` | UV sphere with depth test, checker albedo, flat normal map, directional light, ambient and emissive |
+| `PostProcess_ACES`, `_Reinhard`, `_Uncharted2`, `_FXAA` | `FullscreenQuad` + `PostProcess` (default, `TONEMAP_REINHARD`, `TONEMAP_UNCHARTED2`, `FXAA_PASS`) | 64x64 HDR tiles with a hard-edged bright disc |
+| `GaussianBlur_Horizontal`, `_Vertical` | `FullscreenQuad` + `GaussianBlur` (`BLUR_HORIZONTAL`, default) | one-texel white row and column plus an orange block |
+| `BloomExtract` | `FullscreenQuad` + `BloomExtract` | the HDR tiles |
+
+- The context must be llvmpipe (`GL_RENDERER` contains `llvmpipe` and `isSoftwareDevice`). Otherwise the scene fails under `SPARK_REQUIRE_OPENGL=1` (this lane) and is skipped elsewhere, such as a Windows or Linux desktop with a GPU, so a hardware context never reports under this row. A Mesa build other than the reviewed 25.2.8 is still compared and logged for triage.
+- Where this lane is registered, the main `SparkEngineTests` entry adds `OpenGLGolden_` to its `SPARK_TEST_EXCLUDE`, so the baselines are compared in exactly one lane rather than in every Linux build, sanitizer and coverage run. The baselines were rendered on Ubuntu 24.04's stock `noble-updates` Mesa `25.2.8-0ubuntu0.24.04.2`; a hosted-runner match has not been recorded yet.
+- Each scene also checks probe pixels against a CPU evaluation of the shader formula (tonemaps, bloom soft knee, blur weights) or the scene geometry, and must end with zero KHR_debug errors. `OpenGLGolden_RHI240_ManifestCoversRowScenes` requires the manifest's `opengl-llvmpipe` entries to match the test's scenes exactly.
+- Thresholds are `perPixelThreshold` 2 and `tolerancePercent` 0.5; llvmpipe reproduces the baselines exactly (maximum distance 0). A change that moves pixels by one 8-bit step passes; a one-constant change that moves them further fails. Mutation-tested locally: ACES `a` 2.51 to 2.61, the FXAA `rgbB` blend 0.5 to 0.6, the `BasicPS` specular denominator 4.0 to 5.0, a bloom luma weight or the blur centre weight each fail the matching golden (`BasicVS` and `FullscreenQuad` were not mutation-tested). The FXAA and `BasicPS` changes are caught only by the golden, not by the formula probes.
+- On a mismatch the actual frame is written to `SPARK_GOLDEN_OUTPUT_DIR` (the lane uses `<build>/Tests/Output`) as `opengl-llvmpipe_<scene>.png` for review. Locally: `xvfb-run -a -s '-screen 0 1280x720x24' ctest --test-dir build/linux-gcc-release -L opengl-golden --output-on-failure`.
+
+This is software-rasterizer shader evidence, not an engine-pass golden: `GraphicsEngine`'s Linux passes are not involved and still record no real draws. It is also not hardware driver certification.
+
 ---
 
 ## IRHIDevice Interface
@@ -480,11 +499,12 @@ The `VulkanValidation` CTest entry (labels `vulkan`, `vulkan-lavapipe`) runs the
 
 ### Shipped-shader goldens on Lavapipe (RHI-230)
 
-The `VulkanGoldenTests` CTest entry (labels `vulkan`, `vulkan-lavapipe`, `vulkan-golden`) runs the four `VulkanGolden_RHI230_*` tests in `Tests/TestRHI230VulkanGoldenReal.cpp`. Each renders a fixed input through `FullscreenQuad.vert.spv` and a shipped fragment module from the build (`PostProcess` with the default ACES tonemap, `BloomExtract`, and the default vertical `GaussianBlur`). The device is a real `VulkanDevice` under the validation layer. The test reads the target back and compares it with the committed baseline in `Tests/GoldenImages/vulkan-lavapipe/` using the manifest's reviewed thresholds and baseline SHA-256. Each scene also checks probe pixels against a CPU evaluation of the shader formula and ends with zero validation errors. `VulkanGolden_RHI230_ManifestCoversRowScenes` requires the manifest's `vulkan-lavapipe` entries to match the test's scenes exactly.
+The `VulkanGoldenTests` CTest entry (labels `vulkan`, `vulkan-lavapipe`, `vulkan-golden`) runs the four `VulkanGolden_RHI230_*` tests in `Tests/TestRHI230VulkanGoldenReal.cpp`. Each renders a fixed input through `FullscreenQuad.vert.spv` and a shipped fragment module from the build (`PostProcess` with the default ACES tonemap, `BloomExtract`, and the default vertical `GaussianBlur`). The device is a real `VulkanDevice` under the validation layer. The test reads the target back and compares it with the committed baseline in `Tests/GoldenImages/vulkan-lavapipe/` using the manifest's thresholds (agent-proposed, owner review pending) and baseline SHA-256. Each scene also checks probe pixels against a CPU evaluation of the shader formula and ends with zero validation errors. `VulkanGolden_RHI230_ManifestCoversRowScenes` requires the manifest's `vulkan-lavapipe` entries to match the test's scenes exactly.
 
 - The device must be Lavapipe (`isSoftwareDevice` and an `llvmpipe` device name). Otherwise the test skips, or fails under `SPARK_REQUIRE_VULKAN_VALIDATION=1`, which the lane sets. A hardware GPU never reports under this row.
 - Thresholds are `perPixelThreshold` 2 and `tolerancePercent` 0.5. Lavapipe reproduces the baselines exactly (maximum distance 0), and the threshold allows about one 8-bit step per channel for Mesa drift. With these values, changing one constant in each shader (the ACES `a` coefficient, a bloom luma weight, the blur centre weight) fails the golden comparison as well as the formula probes.
 - Only the default variant of each stage has SPIR-V, so the define-selected variants (Reinhard/Uncharted2, FXAA, horizontal blur) have no Vulkan golden. On a mismatch the actual frame is written to `SPARK_GOLDEN_OUTPUT_DIR` (the lane uses `<build>/Tests/Output`) as `vulkan-lavapipe_<scene>.png` for review.
+- The baselines belong to one Mesa build, so only this lane compares them: where `VulkanGoldenTests` is registered, the main `SparkEngineTests` lane adds `VulkanGolden_RHI230_` to its `SPARK_TEST_EXCLUDE`. The baselines have not yet been matched on a hosted runner.
 
 ---
 
