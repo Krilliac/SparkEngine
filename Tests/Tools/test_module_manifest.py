@@ -261,7 +261,9 @@ class ManifestMutationTests(unittest.TestCase):
         self.assertIn('"SPARK_TEST_NAME_PREFIX=${_spark_module_kit_prefix};', cmake)
         self.assertNotIn('"SPARK_TEST_NAME=${_spark_module_kit_prefix};', cmake)
         runner = (ROOT / "Tests" / "TestMain.cpp").read_text(encoding="utf-8")
-        self.assertIn('std::getenv("SPARK_TEST_NAME_PREFIX")', runner)
+        # The runner reads the variable (into an owned copy) and applies it as an anchored prefix.
+        self.assertIn('"SPARK_TEST_NAME_PREFIX")', runner)
+        self.assertIn("std::strncmp(test->name, namePrefixFilter, std::strlen(namePrefixFilter))", runner)
 
     def test_windows_only_test_needs_a_per_platform_count(self) -> None:
         # FPSScene_FailedReloadPreservesLiveObjectIdentityAndRuntimeState is
