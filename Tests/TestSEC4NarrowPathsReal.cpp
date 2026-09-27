@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -105,6 +106,87 @@ namespace
         NarrowPathFixture(const NarrowPathFixture&) = delete;
         NarrowPathFixture& operator=(const NarrowPathFixture&) = delete;
     };
+
+    /// Writes @p path, creating its parent directories first.
+    void WriteTree(const sfs::path& path, const std::string& content)
+    {
+        std::error_code ec;
+        sfs::create_directories(path.parent_path(), ec);
+        WriteFile(path, content);
+    }
+
+    std::string ReadWholeFile(const sfs::path& path)
+    {
+        std::ifstream in(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+
+    /// PackageLegacy reads build/ and Assets/ relative to the working directory, so
+    /// each legacy case runs inside a fresh scratch tree made the current directory.
+    struct LegacyPackageFixture
+    {
+        static constexpr const char* kProject = "SEC4Legacy";
+
+        sfs::path root;
+        sfs::path previous;
+
+        explicit LegacyPackageFixture(const char* name)
+        {
+            root = sfs::temp_directory_path() / (std::string("spark_sec4_legacy_") + name);
+            std::error_code ec;
+            sfs::remove_all(root, ec);
+            sfs::create_directories(root / "build" / "Release", ec);
+            sfs::create_directories(root / "Assets", ec);
+            previous = sfs::current_path();
+            sfs::current_path(root);
+        }
+
+        ~LegacyPackageFixture()
+        {
+            std::error_code ec;
+            sfs::current_path(previous, ec);
+            sfs::remove_all(root, ec);
+        }
+
+        LegacyPackageFixture(const LegacyPackageFixture&) = delete;
+        LegacyPackageFixture& operator=(const LegacyPackageFixture&) = delete;
+
+        sfs::path Binaries() const { return root / "build" / "Release"; }
+        sfs::path Assets() const { return root / "Assets"; }
+        sfs::path OutputRoot() const { return root / "Package" / "SEC4Legacy_Windows_Release"; }
+
+        Spark::Build::LegacyPackageResult Package() const
+        {
+            auto& packager = Spark::Build::GamePackager::GetInstance();
+            packager.Initialize();
+            Spark::Build::LegacyPackageConfig config;
+            config.projectName = kProject;
+            config.outputDirectory = "Package";
+            config.platform = Spark::Build::PackagePlatform::WindowsX64;
+            config.includeEditor = false;
+            Spark::Build::LegacyPackageResult result = packager.PackageLegacy(config);
+            packager.Shutdown();
+            return result;
+        }
+    };
+
+    bool AnyErrorContains(const Spark::Build::LegacyPackageResult& result, const std::string& text)
+    {
+        return std::any_of(result.errors.begin(), result.errors.end(),
+                           [&text](const std::string& error) { return error.find(text) != std::string::npos; });
+    }
+
+#ifdef _WIN32
+    /// A Windows file name that is not well-formed UTF-16 (a lone high surrogate).
+    /// NTFS stores it, the wide file APIs open it, and it has no UTF-8 spelling.
+    sfs::path UnpairedSurrogateName(const wchar_t* prefix, const wchar_t* extension)
+    {
+        std::wstring name(prefix);
+        name.push_back(static_cast<wchar_t>(0xD800));
+        name += extension;
+        return sfs::path(name);
+    }
+#endif
 } // namespace
 
 TEST(SEC4NarrowPath_HelpersSpellNonAnsiNamesWithoutThrowing)
@@ -310,4 +392,123 @@ TEST(SEC4NarrowPath_SceneListingCarriesNonAnsiNamesAsUtf8)
     ASSERT_EQ(listed.size(), static_cast<size_t>(2));
     EXPECT_TRUE(std::find(listed.begin(), listed.end(), std::string("plain.scene")) != listed.end());
     EXPECT_TRUE(std::find(listed.begin(), listed.end(), kSnowUtf8 + ".scene") != listed.end());
+}
+
+TEST(SEC4NarrowPath_LegacyPackagerFiltersAndListsNonAnsiNames)
+{
+    LegacyPackageFixture fixture("utf8");
+    WriteFile(fixture.Binaries() / "Game.dll", "game");
+    WriteFile(fixture.Binaries() / "SparkEditor.dll", "editor");
+    WriteFile(fixture.Binaries() / SnowPath("Editor.dll"), "editor");
+    WriteFile(fixture.Binaries() / SnowPath(".dll"), "module");
+    WriteFile(fixture.Assets() / "plain.txt", "plain");
+    WriteFile(fixture.Assets() / SnowPath(".txt"), "snow");
+    WriteTree(fixture.Assets() / "Editor" / SnowPath(".txt"), "editor asset");
+
+    Spark::Build::LegacyPackageResult result;
+    EXPECT_NO_THROW(result = fixture.Package());
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(result.errors.empty());
+    EXPECT_FALSE(AnyErrorContains(result, "not valid Unicode"));
+    EXPECT_EQ(result.assetCount, static_cast<uint32_t>(2));
+    EXPECT_EQ(result.dllCount, static_cast<uint32_t>(2));
+
+    // Editor content is filtered on the real UTF-8 name, non-ANSI or not.
+    const sfs::path out = fixture.OutputRoot();
+    EXPECT_TRUE(sfs::exists(out / "Bin" / "Game.dll"));
+    EXPECT_TRUE(sfs::exists(out / "Bin" / SnowPath(".dll")));
+    EXPECT_FALSE(sfs::exists(out / "Bin" / "SparkEditor.dll"));
+    EXPECT_FALSE(sfs::exists(out / "Bin" / SnowPath("Editor.dll")));
+    EXPECT_TRUE(sfs::exists(out / "Assets" / SnowPath(".txt")));
+    EXPECT_FALSE(sfs::exists(out / "Assets" / "Editor"));
+
+    // The manifest names the non-ANSI entries in UTF-8, never as a placeholder.
+    const std::string manifest = ReadWholeFile(out / "manifest.txt");
+    EXPECT_TRUE(manifest.find(kSnowUtf8 + ".txt") != std::string::npos);
+    EXPECT_TRUE(manifest.find(kSnowUtf8 + ".dll") != std::string::npos);
+    EXPECT_TRUE(manifest.find("unrepresentable") == std::string::npos);
+    EXPECT_TRUE(manifest.find("Editor") == std::string::npos);
+    EXPECT_TRUE(result.outputPath.ends_with("SEC4Legacy_Windows_Release"));
+    EXPECT_TRUE(sfs::exists(Spark::FileUtils::PathFromUtf8(result.outputPath) / "manifest.txt"));
+}
+
+TEST(SEC4NarrowPath_LegacyPackagerRejectsUnpairedSurrogateEditorAsset)
+{
+#ifdef _WIN32
+    LegacyPackageFixture fixture("surrogate_asset");
+    WriteFile(fixture.Binaries() / "Game.dll", "game");
+    WriteFile(fixture.Assets() / "plain.txt", "plain");
+    const sfs::path editorAsset = sfs::path("Editor") / UnpairedSurrogateName(L"x", L".bin");
+    WriteTree(fixture.Assets() / editorAsset, "editor-only content");
+    if (!sfs::exists(fixture.Assets() / editorAsset) || Spark::FileUtils::TryPathToUtf8(editorAsset).has_value())
+    {
+        SKIP_TEST("filesystem cannot hold a name that is not well-formed UTF-16");
+    }
+
+    // Before the fix the editor filter ran on a placeholder that never starts with
+    // "Editor", so this editor-only asset was copied into the shipping package.
+    Spark::Build::LegacyPackageResult result;
+    EXPECT_NO_THROW(result = fixture.Package());
+    EXPECT_FALSE(sfs::exists(fixture.OutputRoot() / "Assets" / editorAsset));
+    EXPECT_FALSE(result.success);
+    EXPECT_TRUE(result.outputPath.empty());
+    EXPECT_TRUE(AnyErrorContains(result, "Asset name is not valid Unicode"));
+    EXPECT_FALSE(sfs::exists(fixture.OutputRoot() / "manifest.txt"));
+#else
+    SKIP_TEST("POSIX file names are bytes; every name has a UTF-8 path spelling");
+#endif
+}
+
+TEST(SEC4NarrowPath_LegacyPackagerRejectsUnpairedSurrogateEditorBinary)
+{
+#ifdef _WIN32
+    LegacyPackageFixture fixture("surrogate_binary");
+    WriteFile(fixture.Binaries() / "Game.dll", "game");
+    const sfs::path editorBinary = UnpairedSurrogateName(L"SparkEditor", L".dll");
+    WriteFile(fixture.Binaries() / editorBinary, "editor module");
+    if (!sfs::exists(fixture.Binaries() / editorBinary) || Spark::FileUtils::TryPathToUtf8(editorBinary).has_value())
+    {
+        SKIP_TEST("filesystem cannot hold a name that is not well-formed UTF-16");
+    }
+
+    // The extension is still .dll, so the binary filter selects it; the editor
+    // filter must not then wave it through on a placeholder name.
+    Spark::Build::LegacyPackageResult result;
+    EXPECT_NO_THROW(result = fixture.Package());
+    EXPECT_FALSE(sfs::exists(fixture.OutputRoot() / "Bin" / editorBinary));
+    EXPECT_FALSE(result.success);
+    EXPECT_TRUE(result.outputPath.empty());
+    EXPECT_TRUE(AnyErrorContains(result, "Binary name is not valid Unicode"));
+    EXPECT_FALSE(sfs::exists(fixture.OutputRoot() / "manifest.txt"));
+#else
+    SKIP_TEST("POSIX file names are bytes; every name has a UTF-8 path spelling");
+#endif
+}
+
+TEST(SEC4NarrowPath_LegacyPackagerManifestRefusesUnspellableStaleOutput)
+{
+#ifdef _WIN32
+    LegacyPackageFixture fixture("surrogate_manifest");
+    WriteFile(fixture.Binaries() / "Game.dll", "game");
+    WriteFile(fixture.Assets() / "plain.txt", "plain");
+    // The output directory is reused between runs; a file left in it that this run
+    // did not copy still lands in the manifest listing.
+    const sfs::path stale = fixture.OutputRoot() / "Assets" / UnpairedSurrogateName(L"stale", L".bin");
+    WriteTree(stale, "left over");
+    if (!sfs::exists(stale) || Spark::FileUtils::TryPathToUtf8(stale.filename()).has_value())
+    {
+        SKIP_TEST("filesystem cannot hold a name that is not well-formed UTF-16");
+    }
+
+    // Before the fix the manifest recorded "<unrepresentable name>" and the package
+    // was published as a success.
+    Spark::Build::LegacyPackageResult result;
+    EXPECT_NO_THROW(result = fixture.Package());
+    EXPECT_FALSE(result.success);
+    EXPECT_TRUE(result.outputPath.empty());
+    EXPECT_TRUE(AnyErrorContains(result, "Package output contains a file whose name is not valid Unicode"));
+    EXPECT_FALSE(sfs::exists(fixture.OutputRoot() / "manifest.txt"));
+#else
+    SKIP_TEST("POSIX file names are bytes; every name has a UTF-8 path spelling");
+#endif
 }
