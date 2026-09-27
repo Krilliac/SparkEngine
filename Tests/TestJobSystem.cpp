@@ -3,7 +3,11 @@
 #include "TestFramework.h"
 #include "Utils/JobSystem.h"
 #include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <numeric>
+#include <system_error>
+#include <thread>
 #include <vector>
 
 // Helper: stand-alone job system for test isolation (avoids the singleton's
@@ -256,4 +260,97 @@ TEST(JobSystem_GetPendingJobCount)
     // After WaitForAll, pending should be 0
     js.WaitForAll();
     EXPECT_EQ(js.GetPendingJobCount(), static_cast<size_t>(0));
+}
+
+// =============================================================================
+// Worker-count policy and partial-start rollback
+// =============================================================================
+
+TEST(JobSystemHardening_WorkerCountNeverUnderflowsAndIsCapped)
+{
+    using Spark::JobSystem;
+    constexpr uint32_t cap = JobSystem::kMaxWorkerThreads;
+
+    // hardware_concurrency() may legally return 0; hw - 1 must not wrap to UINT32_MAX.
+    static_assert(JobSystem::ResolveWorkerCount(0, 0) == 1);
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(0, 0), 1u);
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(0, 1), 1u);
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(0, 8), 7u);
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(3, 0), 3u);
+
+    // Operator-supplied counts are capped, not trusted.
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(UINT32_MAX, 16), cap);
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(cap + 1, 16), cap);
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(cap, 16), cap);
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(0, UINT32_MAX), cap);
+}
+
+TEST(JobSystemHardening_ParseWorkerCountRejectsGarbageAndSaturates)
+{
+    using Spark::JobSystem;
+    EXPECT_EQ(JobSystem::ParseWorkerCount("4"), 4u);
+    EXPECT_EQ(JobSystem::ParseWorkerCount(" 12 "), 12u);
+    EXPECT_EQ(JobSystem::ParseWorkerCount(""), 0u);
+    EXPECT_EQ(JobSystem::ParseWorkerCount("-1"), 0u);
+    EXPECT_EQ(JobSystem::ParseWorkerCount("4abc"), 0u);
+    EXPECT_EQ(JobSystem::ParseWorkerCount("abc"), 0u);
+    // std::atoi has undefined behaviour here; the parser saturates and Initialize caps.
+    EXPECT_EQ(JobSystem::ParseWorkerCount("99999999999999999999"), UINT32_MAX);
+    EXPECT_EQ(JobSystem::ResolveWorkerCount(JobSystem::ParseWorkerCount("99999999999999999999"), 8),
+              JobSystem::kMaxWorkerThreads);
+}
+
+TEST(JobSystemHardening_PartialStartFailureJoinsStartedThreads)
+{
+    std::vector<std::thread> threads;
+    std::atomic<bool> stop{false};
+    std::atomic<int> exited{0};
+    int started = 0;
+    bool stopRequested = false;
+    bool threw = false;
+
+    try
+    {
+        Spark::JobSystem::StartThreadsOrRollback(
+            threads, 5,
+            [&]
+            {
+                // The fourth start fails the way std::thread does when the OS refuses a thread.
+                if (started == 3)
+                    throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
+                ++started;
+                return std::thread(
+                    [&]
+                    {
+                        while (!stop.load())
+                            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                        exited.fetch_add(1);
+                    });
+            },
+            [&]
+            {
+                stopRequested = true;
+                stop.store(true);
+            });
+    }
+    catch (const std::system_error&)
+    {
+        threw = true;
+    }
+
+    // The failure reaches the caller and no joinable thread is left behind (one would
+    // call std::terminate when `threads` is destroyed): every started thread was joined.
+    EXPECT_TRUE(threw);
+    EXPECT_TRUE(stopRequested);
+    EXPECT_TRUE(threads.empty());
+    EXPECT_EQ(started, 3);
+    EXPECT_EQ(exited.load(), 3);
+
+    // Keep a failing assertion above from terminating the test binary.
+    stop.store(true);
+    for (auto& thread : threads)
+    {
+        if (thread.joinable())
+            thread.join();
+    }
 }

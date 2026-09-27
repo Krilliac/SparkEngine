@@ -1707,6 +1707,15 @@ set_tests_properties(SparkDocumentWriteTests PROPERTIES
     LABELS "compatibility;save;unit"
     TIMEOUT 30)
 
+# Security: JobSystem worker counts never underflow on a 0-thread host, operator-supplied
+# counts (-threads, SPARK_MAX_WORKER_THREADS) are parsed without atoi UB and capped, and a
+# partial worker start joins every started thread instead of leaving std::terminate behind.
+add_test(NAME SparkJobSystemHardeningTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkJobSystemHardeningTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=JobSystemHardening_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "security;core;unit"
+    TIMEOUT 30)
+
 # SAVE-230: editor prefabs fail closed on a newer SPARKPREFAB version, name the
 # component and line of damage, recover from the retained .bak, and a failed save
 # leaves the previous prefab byte-identical. PrefabManager saves to and reloads

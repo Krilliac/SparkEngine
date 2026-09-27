@@ -26,6 +26,7 @@
 #include "Utils/LogMacros.h" // SPARK_LOG_*
 #include "Utils/WineDetection.h"
 #include "Utils/CrashHandler.h"
+#include "Utils/JobSystem.h"
 #include "Utils/MultiISA.h"
 #include <Spark/Version.h>
 #include <cctype>
@@ -230,14 +231,15 @@ static bool ValidateSceneArgs(int argc, char* argv[])
  */
 static uint32_t ParseThreadCountArgs(int argc, char* argv[])
 {
+    // JobSystem::Initialize caps the count at JobSystem::kMaxWorkerThreads.
     uint32_t fromEnv = 0;
     if (const char* env = std::getenv("SPARK_MAX_WORKER_THREADS"))
-        fromEnv = static_cast<uint32_t>(std::max(0, std::atoi(env)));
+        fromEnv = Spark::JobSystem::ParseWorkerCount(env);
 
     for (int i = 1; i < argc - 1; ++i)
     {
         if (strcmp(argv[i], "-threads") == 0 || strcmp(argv[i], "--threads") == 0)
-            return static_cast<uint32_t>(std::max(0, std::atoi(argv[i + 1])));
+            return Spark::JobSystem::ParseWorkerCount(argv[i + 1]);
     }
     return fromEnv;
 }

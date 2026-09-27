@@ -26,6 +26,7 @@
 #include "ModuleManager.h"
 #include "Utils/Assert.h"
 #include "Utils/FreezeDetector.h"
+#include "Utils/JobSystem.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/Logger.h"
 #include "Utils/MultiISA.h"
@@ -103,16 +104,11 @@ static int ParseTestFrameLimit(LPWSTR cmdLine)
 static uint32_t ParseThreadCount(LPWSTR cmdLine)
 {
     // Env var fallback first so -threads overrides it when both are set.
+    // JobSystem::Initialize caps the count at JobSystem::kMaxWorkerThreads.
     uint32_t fromEnv = 0;
     if (const char* env = std::getenv("SPARK_MAX_WORKER_THREADS"))
     {
-        try
-        {
-            fromEnv = static_cast<uint32_t>(std::max(0, std::atoi(env)));
-        }
-        catch (...)
-        {
-        }
+        fromEnv = Spark::JobSystem::ParseWorkerCount(env);
     }
 
     // Exact token: `-threadsafe` must never be read as `-threads`.
