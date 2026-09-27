@@ -72,6 +72,49 @@ namespace
         return character.id;
     }
 
+    /// Transient refusals a continent authority retries instead of failing.
+    /// Conflict: another authority committed the row since this one read it.
+    /// Locked: the persistence lock stayed busy past TFDatabase's wait bound,
+    /// which contending authorities on a loaded machine hit routinely. Both
+    /// refusals commit nothing, so a retry can neither lose nor duplicate an
+    /// update; every other status is a real failure.
+    struct RetryCounts
+    {
+        int conflicts = 0;
+        int lockTimeouts = 0;
+    };
+
+    constexpr int kMaxAttempts = 1000;
+
+    bool CountRetryable(const TFDatabase& db, RetryCounts& counts)
+    {
+        switch (db.LastStatus())
+        {
+        case TFDatabaseStatus::Conflict:
+            ++counts.conflicts;
+            return true;
+        case TFDatabaseStatus::Locked:
+            ++counts.lockTimeouts;
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    /// Run one database operation, retrying only while it is refused with Locked.
+    template <typename Operation> bool RetryWhileLocked(TFDatabase& db, RetryCounts& counts, Operation&& operation)
+    {
+        for (int attempt = 0; attempt < kMaxAttempts; ++attempt)
+        {
+            if (operation())
+                return true;
+            if (db.LastStatus() != TFDatabaseStatus::Locked)
+                return false;
+            ++counts.lockTimeouts;
+        }
+        return false;
+    }
+
     /// Read-modify-write one character the way a continent authority does:
     /// acquire the row, compute absolute values from it, commit, and retry
     /// from a fresh acquire when another authority won the race.
@@ -81,30 +124,29 @@ namespace
         Failed,
     };
 
-    RmwResult AddFluxWithRetry(TFDatabase& db, uint64_t charId, int& conflicts, std::chrono::microseconds think)
+    RmwResult AddFluxWithRetry(TFDatabase& db, uint64_t charId, RetryCounts& counts, std::chrono::microseconds think)
     {
-        for (int attempt = 0; attempt < 1000; ++attempt)
+        for (int attempt = 0; attempt < kMaxAttempts; ++attempt)
         {
             TFCharacterRecord row;
-            if (!db.AcquireCharacter(charId, row))
+            if (!RetryWhileLocked(db, counts, [&] { return db.AcquireCharacter(charId, row); }))
                 return RmwResult::Failed;
             std::this_thread::sleep_for(think); // gameplay time between load and save
             if (db.SaveCharacterProgress(charId, row.xp + 1, row.rank, row.flux + 1, 1))
                 return RmwResult::Committed;
-            if (db.LastStatus() != TFDatabaseStatus::Conflict)
+            if (!CountRetryable(db, counts))
                 return RmwResult::Failed;
-            ++conflicts;
         }
         return RmwResult::Failed;
     }
 
-    RmwResult AddUnlockWithRetry(TFDatabase& db, uint64_t charId, const std::string& key, int& conflicts,
+    RmwResult AddUnlockWithRetry(TFDatabase& db, uint64_t charId, const std::string& key, RetryCounts& counts,
                                  std::chrono::microseconds think)
     {
-        for (int attempt = 0; attempt < 1000; ++attempt)
+        for (int attempt = 0; attempt < kMaxAttempts; ++attempt)
         {
             TFCharacterRecord row;
-            if (!db.AcquireCharacter(charId, row))
+            if (!RetryWhileLocked(db, counts, [&] { return db.AcquireCharacter(charId, row); }))
                 return RmwResult::Failed;
             std::this_thread::sleep_for(think); // gameplay time between load and save
             std::vector<std::string> unlocks = row.unlocks;
@@ -112,9 +154,8 @@ namespace
             if (db.SaveCharacterMeta(charId, unlocks, row.loadoutPrimary, row.loadoutSecondary, row.loadoutTool,
                                      row.loadoutGrenade, row.loadoutSuit, row.weaponStats))
                 return RmwResult::Committed;
-            if (db.LastStatus() != TFDatabaseStatus::Conflict)
+            if (!CountRetryable(db, counts))
                 return RmwResult::Failed;
-            ++conflicts;
         }
         return RmwResult::Failed;
     }
@@ -562,6 +603,16 @@ namespace
 {
     constexpr int kInterleavePeers = 4;
     constexpr int kRoundsPerPeer = 20; // half flux (+1), half unlock appends
+    // How long the coordinator holds the persistence lock after releasing the
+    // peers: longer than TFDatabase's 2 s lock wait, so every peer's first
+    // transaction is refused with Locked the way a stalled authority on a
+    // loaded machine refuses it, and must be retried rather than fail the peer.
+    constexpr std::chrono::seconds kAuthorityStall{5};
+
+    fs::path PeerReadyMarker(const fs::path& gate, const std::string& tag)
+    {
+        return fs::path(gate.string() + ".ready" + tag);
+    }
 
     /// Peer role: one independent continent authority on the shared root.
     void RunInterleavePeer()
@@ -573,25 +624,32 @@ namespace
         ASSERT_TRUE(sharedChar != 0 && !tag.empty() && !gate.empty());
 
         // Hold until every peer is running so the transactions really overlap.
+        WriteFile(PeerReadyMarker(gate, tag), "ready");
         const auto gateDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
         while (!fs::exists(gate) && std::chrono::steady_clock::now() < gateDeadline)
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         ASSERT_TRUE(fs::exists(gate));
 
+        RetryCounts retries;
         TFDatabase continent;
-        ASSERT_TRUE(continent.Open(path));
-        ASSERT_TRUE(SeedCharacter(continent, ("user_" + tag).c_str(), ("Child " + tag).c_str()) != 0);
-        int conflicts = 0;
+        ASSERT_TRUE(RetryWhileLocked(continent, retries, [&] { return continent.Open(path); }));
+        TFAccountRecord account;
+        TFCharacterRecord child;
+        ASSERT_TRUE(RetryWhileLocked(continent, retries,
+                                     [&] { return continent.CreateAccount("user_" + tag, "salt", "hash", account); }));
+        ASSERT_TRUE(
+            RetryWhileLocked(continent, retries, [&]
+                             { return continent.CreateCharacter(account.id, "Child " + tag, FactionId::MRA, child); }));
         constexpr std::chrono::microseconds kThink{500};
         for (int round = 0; round < kRoundsPerPeer; ++round)
         {
             const RmwResult result =
-                (round % 2 == 0) ? AddFluxWithRetry(continent, sharedChar, conflicts, kThink)
+                (round % 2 == 0) ? AddFluxWithRetry(continent, sharedChar, retries, kThink)
                                  : AddUnlockWithRetry(continent, sharedChar,
-                                                      "unlock_" + tag + "_" + std::to_string(round), conflicts, kThink);
+                                                      "unlock_" + tag + "_" + std::to_string(round), retries, kThink);
             ASSERT_TRUE(result == RmwResult::Committed);
         }
-        std::printf("TF120_PEER_CONFLICTS=%d\n", conflicts);
+        std::printf("TF120_PEER_CONFLICTS=%d\nTF120_PEER_LOCK_TIMEOUTS=%d\n", retries.conflicts, retries.lockTimeouts);
         std::fflush(stdout);
     }
 
@@ -630,6 +688,8 @@ TEST(TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates)
     const fs::path path = fs::absolute(FreshSharedDb("test_tf120_spawned.db"));
     const fs::path gate = fs::path(path.string() + ".gate");
     fs::remove(gate);
+    for (int peer = 0; peer < kInterleavePeers; ++peer)
+        fs::remove(PeerReadyMarker(gate, std::to_string(peer)));
     uint64_t sharedChar = 0;
     {
         TFDatabase seed;
@@ -650,23 +710,56 @@ TEST(TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates)
             SKIP_TEST("cannot spawn a peer test process: " + launched.error());
         peers.push_back(std::move(*launched));
     }
-    WriteFile(gate, "go"); // release every peer at once
+
+    // Wait until every peer is parked at the gate, so each one starts its first
+    // transaction while the stall below still holds the lock.
+    const auto readyDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    const auto allReady = [&]
+    {
+        for (int peer = 0; peer < kInterleavePeers; ++peer)
+        {
+            if (!fs::exists(PeerReadyMarker(gate, std::to_string(peer))))
+                return false;
+        }
+        return true;
+    };
+    while (!allReady() && std::chrono::steady_clock::now() < readyDeadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    EXPECT_TRUE(allReady());
+
+    {
+        // Stall the shared root the way a slow authority on a loaded machine
+        // does: hold the persistence lock past every peer's lock wait.
+        SavePaths::ExclusiveFileLock stall;
+        std::error_code stallEc;
+        EXPECT_TRUE(stall.Lock(path, std::chrono::seconds(10), stallEc));
+        WriteFile(gate, "go"); // release every peer at once
+        std::this_thread::sleep_for(kAuthorityStall);
+    }
 
     std::vector<std::string> logs(peers.size());
     const std::vector<int> codes = WaitPeers(peers, logs, std::chrono::seconds(180));
     fs::remove(gate);
+    for (int peer = 0; peer < kInterleavePeers; ++peer)
+        fs::remove(PeerReadyMarker(gate, std::to_string(peer)));
     int totalConflicts = 0;
+    int totalLockTimeouts = 0;
     for (size_t peer = 0; peer < peers.size(); ++peer)
     {
         EXPECT_EQ(codes[peer], 0);
         const long long conflicts = PeerReport(logs[peer], "TF120_PEER_CONFLICTS=");
-        EXPECT_TRUE(conflicts >= 0); // the peer really ran its role to completion
-        if (codes[peer] != 0 || conflicts < 0)
+        const long long lockTimeouts = PeerReport(logs[peer], "TF120_PEER_LOCK_TIMEOUTS=");
+        EXPECT_TRUE(conflicts >= 0 && lockTimeouts >= 0); // the peer really ran its role to completion
+        if (codes[peer] != 0 || conflicts < 0 || lockTimeouts < 0)
             std::fprintf(stderr, "---- TF120 peer %zu output ----\n%s\n----\n", peer, logs[peer].c_str());
         totalConflicts += conflicts > 0 ? static_cast<int>(conflicts) : 0;
+        totalLockTimeouts += lockTimeouts > 0 ? static_cast<int>(lockTimeouts) : 0;
     }
-    std::printf("[TF120] %d spawned authorities: %d stale commits rejected and retried\n", kInterleavePeers,
-                totalConflicts);
+    std::printf("[TF120] %d spawned authorities: %d stale commits rejected and retried, %d lock waits timed out "
+                "and retried\n",
+                kInterleavePeers, totalConflicts, totalLockTimeouts);
+    // The stall outlasted the peers' lock wait, so the Locked retry path really ran.
+    EXPECT_TRUE(totalLockTimeouts > 0);
 
     TFDatabase observer;
     ASSERT_TRUE(observer.Open(path));
