@@ -162,7 +162,8 @@ class RepositoryInventoryTests(unittest.TestCase):
     def test_live_configures_are_expanded_per_matrix_leg_with_owners(self) -> None:
         configs = self.data["workflowCmakeConfigs"]
         # reproducibility-windows (BLD-100) configures windows-shipping twice.
-        self.assertEqual(len(configs), 32)
+        # golden-linux (CI-110) and service-contract (NET-110) each own one leg.
+        self.assertEqual(len(configs), 34)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -181,12 +182,26 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "coverage",
                 "experimental-module-lifecycle",
                 "fuzz-policy",
+                "golden-linux",
                 "network-integration",
                 "network-security",
                 "reproducibility-windows",
                 "security-runtime",
+                "service-contract",
                 "telemetry-integration",
             ],
+        )
+        single_leg_presets = {
+            job: [entry["preset"] for entry in configs if entry["job"] == job]
+            for job in ("golden-linux", "service-contract", "network-security")
+        }
+        self.assertEqual(
+            single_leg_presets,
+            {
+                "golden-linux": ["linux-gcc-release"],
+                "service-contract": ["linux-shipping"],
+                "network-security": ["linux-shipping"],
+            },
         )
         # A matrix lane contributes one record per combination, so narrowing
         # `config: [Debug, Release]` to `[Debug]` removes a record outright.
