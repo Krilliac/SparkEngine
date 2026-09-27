@@ -7,6 +7,8 @@
 
 #include "../Utils/Serializer.h"
 
+#include <utility>
+
 namespace Spark::Graphics
 {
 
@@ -41,27 +43,36 @@ namespace Spark::Graphics
         if (r.HasError() || version != kShaderDaemonBlobVersion)
             return false;
 
-        out.target = static_cast<ShaderTarget>(r.Read<uint8_t>());
-        out.stage = static_cast<ShaderStage>(r.Read<uint8_t>());
-        out.success = r.Read<uint8_t>() != 0;
+        // Decode into a local and publish only on success, so a malformed blob never
+        // leaves `out` half-written.
+        CompiledShaderBlob decoded;
+        decoded.target = static_cast<ShaderTarget>(r.Read<uint8_t>());
+        decoded.stage = static_cast<ShaderStage>(r.Read<uint8_t>());
+        decoded.success = r.Read<uint8_t>() != 0;
 
-        auto bytecodeLen = r.Read<uint32_t>();
+        // The length comes from the daemon's opaque store: bound it by the bytes actually
+        // present (and the frame cap) before it sizes an allocation. Resizing first let an
+        // 8-byte blob claiming 0xFFFFFFFF bytes allocate ~4 GiB before the read failed.
+        const auto bytecodeLen = r.Read<uint32_t>();
+        if (r.HasError() || bytecodeLen > r.Remaining() || bytecodeLen > kMaxShaderDaemonBytecodeBytes)
+            return false;
+        decoded.bytecode.resize(bytecodeLen);
+        if (bytecodeLen > 0 && !r.ReadBytes(decoded.bytecode.data(), bytecodeLen))
+            return false;
+
+        decoded.entryPoint = r.ReadString();
+        decoded.errors = r.ReadString();
+
+        decoded.inputCount = r.Read<uint32_t>();
+        decoded.outputCount = r.Read<uint32_t>();
+        decoded.cbufferCount = r.Read<uint32_t>();
+        decoded.textureCount = r.Read<uint32_t>();
+        decoded.samplerCount = r.Read<uint32_t>();
+
         if (r.HasError())
             return false;
-        out.bytecode.resize(bytecodeLen);
-        if (bytecodeLen > 0 && !r.ReadBytes(out.bytecode.data(), bytecodeLen))
-            return false;
-
-        out.entryPoint = r.ReadString();
-        out.errors = r.ReadString();
-
-        out.inputCount = r.Read<uint32_t>();
-        out.outputCount = r.Read<uint32_t>();
-        out.cbufferCount = r.Read<uint32_t>();
-        out.textureCount = r.Read<uint32_t>();
-        out.samplerCount = r.Read<uint32_t>();
-
-        return !r.HasError();
+        out = std::move(decoded);
+        return true;
     }
 
 } // namespace Spark::Graphics

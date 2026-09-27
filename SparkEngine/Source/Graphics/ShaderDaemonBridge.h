@@ -41,12 +41,19 @@ namespace Spark::Graphics
 
     inline constexpr uint8_t kShaderDaemonBlobVersion = 1;
 
+    /// Largest bytecode a daemon blob may carry. Matches the daemon IPC frame cap
+    /// (`Daemon::kMaxPayloadSize`, 16 MiB): a blob that fits one frame cannot hold more.
+    inline constexpr uint32_t kMaxShaderDaemonBytecodeBytes = 16u * 1024u * 1024u;
+
     /// Serialise a compiled shader blob into bytes suitable for
     /// `ShaderServiceClient::PutCacheEntry`.
     [[nodiscard]] std::vector<uint8_t> EncodeCompiledShaderBlob(const CompiledShaderBlob& blob);
 
     /// Parse bytes from `ShaderServiceClient::GetCacheEntry` back into a
-    /// `CompiledShaderBlob`. Returns false on version mismatch or truncation.
+    /// `CompiledShaderBlob`. Returns false on version mismatch, truncation, or a
+    /// bytecode length larger than the bytes present or kMaxShaderDaemonBytecodeBytes.
+    /// The blob comes from another process, so every length is checked before it
+    /// sizes an allocation, and @p out is written only when the whole blob decodes.
     [[nodiscard]] bool DecodeCompiledShaderBlob(const std::vector<uint8_t>& bytes, CompiledShaderBlob& out);
 
 } // namespace Spark::Graphics
