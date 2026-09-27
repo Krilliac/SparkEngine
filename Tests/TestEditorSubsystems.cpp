@@ -1460,6 +1460,98 @@ TEST(ProjectManager_RecentProjectPathsNormalizeForAddAndRemove)
     EXPECT_FALSE(ec);
 }
 
+// SEC4: recent-project paths are stored as UTF-8. RefreshRecentProjects (the
+// launcher's Refresh button) must decode them as UTF-8, not the active code page:
+// otherwise every non-ASCII project reads as missing and its launch buttons vanish,
+// and a DBCS code page can throw out of the ImGui frame. U+0915 is in no ANSI code
+// page, so the ACP decode can never find this file.
+TEST(SEC4Launcher_RecentRefreshDecodesUtf8Paths)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-sec4-refresh-" + std::to_string(stamp));
+    const fs::path profileDir = root / "profile";
+    const fs::path projectDir = root / fs::u8path("proj-\xE0\xA4\x95");
+    const fs::path projectFile = projectDir / "Recent.sparkproject";
+    fs::create_directories(profileDir);
+    fs::create_directories(projectDir);
+    std::ofstream(projectFile, std::ios::binary) << "{\"name\":\"Recent\",\"version\":\"1.0.0\"}";
+    {
+        std::ofstream seed(profileDir / "RecentProjects.json", std::ios::binary);
+        seed << R"({"recentProjects":[{"name":"Recent","path":")" << TestPathUtf8(projectFile)
+             << R"(","engineVersion":"1.0","lastOpened":1}]})";
+    }
+
+    ProjectManager manager(TestPathUtf8(profileDir));
+    EXPECT_TRUE(manager.Initialize());
+    const auto loaded = manager.GetRecentProjects();
+    EXPECT_EQ(loaded.size(), static_cast<size_t>(1));
+    if (!loaded.empty())
+        EXPECT_TRUE(loaded.front().valid);
+
+    EXPECT_NO_THROW(manager.RefreshRecentProjects());
+    const auto refreshed = manager.GetRecentProjects();
+    EXPECT_EQ(refreshed.size(), static_cast<size_t>(1));
+    if (!refreshed.empty())
+        EXPECT_TRUE(refreshed.front().valid);
+
+    // Refresh still reports a project that disappeared.
+    std::error_code removeEc;
+    fs::remove(projectFile, removeEc);
+    EXPECT_FALSE(removeEc);
+    EXPECT_NO_THROW(manager.RefreshRecentProjects());
+    const auto afterRemoval = manager.GetRecentProjects();
+    EXPECT_EQ(afterRemoval.size(), static_cast<size_t>(1));
+    if (!afterRemoval.empty())
+        EXPECT_FALSE(afterRemoval.front().valid);
+
+    manager.Shutdown();
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+// SEC4: RecentProjects.json is user-editable. An entry whose lastOpened overflows
+// uint64 (std::stoull throws on every platform) or whose path is not UTF-8
+// (PathFromUtf8 throws on Windows) must be dropped, not escape Initialize().
+TEST(SEC4Launcher_RecentLoadSkipsUnreadableEntries)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-sec4-load-" + std::to_string(stamp));
+    const fs::path profileDir = root / "profile";
+    fs::create_directories(profileDir);
+    const std::string good = TestPathUtf8(root / "Good.sparkproject");
+    {
+        std::ofstream seed(profileDir / "RecentProjects.json", std::ios::binary);
+        seed << R"({"recentProjects":[)"
+             << R"({"name":"Overflow","path":")" << TestPathUtf8(root / "Overflow.sparkproject")
+             << R"(","engineVersion":"1.0","lastOpened":999999999999999999999999999},)"
+             << R"({"name":"BadText","path":")" << TestPathUtf8(root) << "/bad\xFF\xFE.sparkproject"
+             << R"(","engineVersion":"1.0","lastOpened":2},)"
+             << R"({"name":"Good","path":")" << good << R"(","engineVersion":"1.0","lastOpened":3}]})";
+    }
+
+    ProjectManager manager(TestPathUtf8(profileDir));
+    bool initialized = false;
+    EXPECT_NO_THROW(initialized = manager.Initialize());
+    EXPECT_TRUE(initialized);
+    const auto recent = manager.GetRecentProjects();
+    const auto hasName = [&](const std::string& name)
+    { return std::any_of(recent.begin(), recent.end(), [&](const RecentProject& rp) { return rp.name == name; }); };
+    EXPECT_FALSE(hasName("Overflow"));
+    EXPECT_TRUE(hasName("Good"));
+#ifdef _WIN32
+    EXPECT_FALSE(hasName("BadText"));
+#endif
+    EXPECT_NO_THROW(manager.RefreshRecentProjects());
+
+    manager.Shutdown();
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
 TEST(ProjectManager_RecordOpenedScenePersistsProjectRelativePath)
 {
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();

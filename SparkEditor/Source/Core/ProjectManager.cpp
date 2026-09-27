@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 #ifdef _WIN32
 #include <shlobj.h>
@@ -1923,7 +1924,20 @@ namespace SparkEditor
         std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
         for (auto& rp : m_recentProjects)
         {
-            rp.valid = fs::exists(rp.path);
+            // rp.path is UTF-8 (NormalizeProjectPath output). fs::exists(std::string)
+            // would decode it with the active code page on Windows: every non-ASCII
+            // entry would read as missing, and on a DBCS code page the conversion can
+            // throw out of the launcher's ImGui frame. Decode it as UTF-8 and use the
+            // non-throwing overload; an undecodable path is simply not valid.
+            try
+            {
+                std::error_code existsEc;
+                rp.valid = fs::exists(PathFromUtf8(rp.path), existsEc) && !existsEc;
+            }
+            catch (const std::exception&)
+            {
+                rp.valid = false;
+            }
         }
     }
 
@@ -2660,25 +2674,31 @@ namespace SparkEditor
             if (end == std::string::npos)
                 break;
 
-            std::string entry = content.substr(pos, end - pos + 1);
-            std::string name = ExtractJsonString(entry, "name");
-            std::string path = ExtractJsonString(entry, "path");
-            std::string engineVer = ExtractJsonString(entry, "engineVersion");
-            uint64_t lastOpened = ExtractJsonUint64(entry, "lastOpened");
-
             if (m_recentProjects.size() >= 15)
                 break; // hard cap - the UI never shows more
 
-            if (!path.empty())
+            // RecentProjects.json is user-editable. A path that is not valid UTF-8
+            // (PathFromUtf8 throws on Windows) or an out-of-range lastOpened (stoull
+            // throws) would otherwise escape Initialize(); drop just that entry.
+            try
             {
-                RecentProject rp;
-                rp.name = name;
-                rp.path = NormalizeProjectPath(path);
-                rp.engineVersion = engineVer;
-                rp.lastOpened = lastOpened;
-                std::error_code existsEc;
-                rp.valid = fs::exists(PathFromUtf8(path), existsEc) && !existsEc;
-                m_recentProjects.push_back(rp);
+                const std::string entry = content.substr(pos, end - pos + 1);
+                const std::string path = ExtractJsonString(entry, "path");
+                if (!path.empty())
+                {
+                    RecentProject rp;
+                    rp.name = ExtractJsonString(entry, "name");
+                    rp.path = NormalizeProjectPath(path);
+                    rp.engineVersion = ExtractJsonString(entry, "engineVersion");
+                    rp.lastOpened = ExtractJsonUint64(entry, "lastOpened");
+                    std::error_code existsEc;
+                    rp.valid = fs::exists(PathFromUtf8(path), existsEc) && !existsEc;
+                    m_recentProjects.push_back(std::move(rp));
+                }
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Skipping unreadable recent-project entry: " << e.what() << "\n";
             }
 
             pos = end + 1;
