@@ -1915,10 +1915,11 @@ set_tests_properties(PersistenceSecretsAtRest PROPERTIES
     TIMEOUT 60)
 
 # NET-100: TERRAFRONT login proves the password with SCRAM-SHA-256 (RFC 7677 vector, replay,
-# truncation, legacy PBKDF2 row migration, unknown-user salts, weak verifier rejection).
+# truncation, legacy PBKDF2 row migration, unknown-user salts, verifier policy floor and ceiling at
+# intake and when a stored row is loaded).
 add_test(NAME TFScramAuth COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(TFScramAuth PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TFScram_;SPARK_TEST_EXPECT_COUNT=8"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TFScram_;SPARK_TEST_EXPECT_COUNT=9"
     LABELS "network-security;persistence;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)

@@ -47,7 +47,9 @@ namespace Terrafront
         // future cost bump, never an unbounded (up to 2^32 rounds per login
         // attempt) database-controlled value.
         constexpr uint32_t kMinVerifyIterations = 100000;
-        constexpr uint32_t kMaxVerifyIterations = kPbkdf2Iterations * 4;
+        constexpr uint32_t kMaxVerifyIterations = TFAccountSystem::kMaxScramIterations;
+        static_assert(kMaxVerifyIterations == kPbkdf2Iterations * 4, "headroom for one future cost bump, no more");
+        static_assert(kSaltBytes == TFAccountSystem::kMinScramSaltBytes);
         constexpr size_t kNonceBytes = 24; // server and wrapper client nonces, hex-encoded
         constexpr size_t kMaxNonceChars = 128;
         constexpr const char* kLegacyScheme = "pbkdf2-sha256";
@@ -117,8 +119,16 @@ namespace Terrafront
             {
                 return false;
             }
+            // Salt length is bounded like the iteration count: the row is untrusted,
+            // and the salt is hashed into the first PBKDF2 block of every attempt.
+            const size_t saltHexChars = parts[2].size();
+            if (saltHexChars < TFAccountSystem::kMinScramSaltBytes * 2 ||
+                saltHexChars > TFAccountSystem::kMaxScramSaltBytes * 2)
+            {
+                return false;
+            }
             out.salt = Crypto::FromHex(parts[2]);
-            return !out.salt.empty() && ToDigest(Crypto::FromHex(parts[3]), out.storedKey) &&
+            return out.salt.size() * 2 == saltHexChars && ToDigest(Crypto::FromHex(parts[3]), out.storedKey) &&
                    ToDigest(Crypto::FromHex(parts[4]), out.serverKey);
         }
 
@@ -282,7 +292,11 @@ namespace Terrafront
             result.err = TFAuthErr::UsernameTooShort;
             return result;
         }
-        if (salt.size() < kSaltBytes || iterations < kPbkdf2Iterations)
+        // The verifier is client-derived, so it is untrusted input: a floor keeps it
+        // strong and a ceiling keeps every later login for the name bounded (the
+        // row's iteration count is paid by each login and handed to each client).
+        if (salt.size() < kMinScramSaltBytes || salt.size() > kMaxScramSaltBytes || iterations < kMinScramIterations ||
+            iterations > kMaxScramIterations)
         {
             result.err = TFAuthErr::WeakVerifier;
             return result;
@@ -467,6 +481,13 @@ namespace Terrafront
         {
             m_pendingLogins.erase(username);
             result.err = TFAuthErr::ServerError; // CSPRNG unavailable
+            return result;
+        }
+        // Client role: never run PBKDF2 on a challenge outside the verifier policy.
+        if (challenge.iterations > kMaxScramIterations || challenge.salt.size() > kMaxScramSaltBytes)
+        {
+            m_pendingLogins.erase(username);
+            result.err = TFAuthErr::ServerError;
             return result;
         }
 

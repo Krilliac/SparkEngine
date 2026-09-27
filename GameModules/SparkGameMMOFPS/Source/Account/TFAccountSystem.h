@@ -42,7 +42,7 @@ namespace Terrafront
         SessionActive,
         RemoteOnboardingDisabled,
         AccountInUse, // credentials valid, but another connection holds the account (wire value 9)
-        WeakVerifier  ///< RegisterVerifier: salt shorter than 16 bytes or fewer than 150000 iterations (wire value 10)
+        WeakVerifier  ///< RegisterVerifier: salt or iteration count outside the kMin/kMaxScram* policy (wire value 10)
     };
 
     struct TFAuthResult
@@ -71,7 +71,23 @@ namespace Terrafront
       public:
         void SetDatabase(TFDatabase* db) { m_db = db; } // core logic uses the db directly (unit-testable)
 
+        /**
+         * @name SCRAM verifier policy
+         * Enforced when a verifier is registered and again whenever a stored row is
+         * loaded, because a row's iteration count is paid by every login attempt
+         * for that name and is handed to the client in the challenge. A client
+         * must refuse a challenge outside [kMinScramIterations, kMaxScramIterations]
+         * before running PBKDF2, so a hostile server cannot stall it either.
+         * @{
+         */
+        static constexpr uint32_t kMinScramIterations = 150000; ///< intake floor (stored legacy rows: 100000)
+        static constexpr uint32_t kMaxScramIterations = 600000; ///< 4x the current cost; same bound as legacy rows
+        static constexpr size_t kMinScramSaltBytes = 16;
+        static constexpr size_t kMaxScramSaltBytes = 64;
+        /// @}
+
         /// Store a SCRAM verifier the client derived itself (the password never reaches the server).
+        /// WeakVerifier when the salt or iteration count is outside the verifier policy above.
         TFAuthResult RegisterVerifier(const std::string& username, const std::vector<uint8_t>& salt,
                                       uint32_t iterations, const Crypto::Sha256Digest& storedKey,
                                       const Crypto::Sha256Digest& serverKey);

@@ -318,15 +318,72 @@ TEST(TFScram_RegisterVerifierRejectsWeakParameters)
     EXPECT_FALSE(weakSalt.ok);
     EXPECT_TRUE(weakSalt.err == TFAuthErr::WeakVerifier);
 
+    // The verifier is client-derived: a ceiling keeps every later login for the
+    // name bounded. The keys are never derived here, so no PBKDF2 run is paid.
+    const Crypto::Sha256Digest anyKey{};
+    const TFAuthResult hugeCount =
+        accounts.RegisterVerifier("huge_iter", goodSalt, TFAccountSystem::kMaxScramIterations + 1, anyKey, anyKey);
+    EXPECT_FALSE(hugeCount.ok);
+    EXPECT_TRUE(hugeCount.err == TFAuthErr::WeakVerifier);
+    const TFAuthResult maxCount = accounts.RegisterVerifier("max_iter", goodSalt, 999999999u, anyKey,
+                                                            anyKey); // ParseIterations used to allow 9 digits
+    EXPECT_FALSE(maxCount.ok);
+    const std::vector<uint8_t> longSalt(TFAccountSystem::kMaxScramSaltBytes + 1, 0x5A);
+    const TFAuthResult hugeSalt = accounts.RegisterVerifier("huge_salt", longSalt, 150000, anyKey, anyKey);
+    EXPECT_FALSE(hugeSalt.ok);
+    EXPECT_TRUE(hugeSalt.err == TFAuthErr::WeakVerifier);
+
     TFAccountRecord rec;
     EXPECT_FALSE(db.FindAccountByUsername("weak_iter", rec));
     EXPECT_FALSE(db.FindAccountByUsername("weak_salt", rec));
+    EXPECT_FALSE(db.FindAccountByUsername("huge_iter", rec));
+    EXPECT_FALSE(db.FindAccountByUsername("max_iter", rec));
+    EXPECT_FALSE(db.FindAccountByUsername("huge_salt", rec));
 
     // A client-derived verifier registers without the password reaching the server.
     const Crypto::ScramKeys keys = Crypto::DeriveScramKeys("client-side pw", goodSalt, 150000);
     ASSERT_TRUE(accounts.RegisterVerifier("verifier_pilot", goodSalt, 150000, keys.storedKey, keys.serverKey).ok);
     EXPECT_TRUE(accounts.Login("verifier_pilot", "client-side pw").ok);
     EXPECT_FALSE(accounts.Login("verifier_pilot", "client-side pX").ok);
+
+    EXPECT_TRUE(db.Close());
+    fs::remove(path);
+}
+
+// A row planted or corrupted outside RegisterVerifier (the save directory is not
+// trusted) must not make a login run unbounded PBKDF2 or hand the client an
+// unbounded cost: it is unusable, and BeginLogin answers like an unknown user.
+// Without the load-time bound this test hangs until the CTest timeout.
+TEST(TFScram_StoredRowOutsidePolicyIsUnusable)
+{
+    const std::string path = FreshDb("test_tfscram_storedbound.db");
+    TFDatabase db;
+    ASSERT_TRUE(db.Open(path));
+    TFAccountSystem accounts;
+    accounts.SetDatabase(&db);
+
+    const std::string salt = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
+    const std::string key(64, 'a');
+    const std::string hugeIter = "scram-sha256$999999999$" + salt + "$" + key + "$" + key;
+    const std::string overMax = "scram-sha256$600001$" + salt + "$" + key + "$" + key;
+    const std::string longSalt = "scram-sha256$150000$" + std::string(130, 'b') + "$" + key + "$" + key;
+    const std::string oddSalt = "scram-sha256$150000$" + salt + "a$" + key + "$" + key;
+    TFAccountRecord rec;
+    ASSERT_TRUE(db.CreateAccount("planted_iter", salt, hugeIter, rec));
+    ASSERT_TRUE(db.CreateAccount("planted_salt", salt, longSalt, rec));
+
+    for (const std::string& row : {hugeIter, overMax, longSalt, oddSalt})
+    {
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("any password", row));
+    }
+
+    for (const char* user : {"planted_iter", "planted_salt"})
+    {
+        const TFScramChallenge challenge = accounts.BeginLogin(user);
+        EXPECT_EQ(challenge.iterations, uint32_t{150000}); // pseudo-salt path, not the row's cost
+        EXPECT_EQ(challenge.salt.size(), size_t{16});
+        EXPECT_FALSE(accounts.Login(user, "any password").ok);
+    }
 
     EXPECT_TRUE(db.Close());
     fs::remove(path);
