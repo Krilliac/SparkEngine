@@ -734,7 +734,7 @@
           "criterionDigest": "sha256:25b8b24da1b3",
           "state": "unmet",
           "evidence": [],
-          "note": "TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates shows concurrent TFDatabase character and flux writers lose nothing under the shared-root lock. No territory store is covered, and the operation-id idempotency ledger (b2d2953) has no caller or Persistence_Idempotency_* test."
+          "note": "TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates shows concurrent TFDatabase character and flux writers lose nothing under the shared-root lock. No territory store is covered, and no write carries an operation id: the uncalled idempotency ledger from b2d2953 was removed and the file schema is back to v2."
         },
         {
           "criterionDigest": "sha256:f67e46df6e00",

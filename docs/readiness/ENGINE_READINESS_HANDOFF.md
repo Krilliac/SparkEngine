@@ -2977,7 +2977,7 @@ MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic o
 Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Concurrent character/economy/territory writes cannot duplicate or lose state
-   - TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates shows concurrent TFDatabase character and flux writers lose nothing under the shared-root lock. No territory store is covered, and the operation-id idempotency ledger (b2d2953) has no caller or Persistence_Idempotency_* test.
+   - TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates shows concurrent TFDatabase character and flux writers lose nothing under the shared-root lock. No territory store is covered, and no write carries an operation id: the uncalled idempotency ledger from b2d2953 was removed and the file schema is back to v2.
 2. **[unmet]** N-1 migrations and rollback fixtures pass
    - The N-1 migration tests cover only the TFDatabase character store. No rollback or downgrade fixture exists, and no economy or territory store is migrated.
 3. **[unmet]** Forced process/database failure recovers to a documented point

@@ -81,7 +81,7 @@ These were committed because the owner asked for everything to be committed. The
 
 | Commit | Item | Gap |
 |--------|------|-----|
-| `b2d2953` | DATA-120 | The operation-id idempotency ledger has **no caller**: unlock purchases persist through a debounced sweep with no per-request id. It is either wired to per-request commits, or it gets removed. It also moves TFDatabase to schema v3. |
+| `b2d2953` | DATA-120 | The operation-id idempotency ledger has **no caller**: unlock purchases persist through a debounced sweep with no per-request id. It has since been removed and TFDatabase is back to schema v2; a v3 file with an empty ledger still loads (see `docs/specs/persistence.md`). |
 | `14d56eb` | REL-190 | The `profile-required-gates` job in `release.yml` was mid-edit when the session restarted. Review it before trusting it. |
 | `445f240`, `11058e2`, `3ff83ad`, `3d1adfc` | ENG-220, SDK-240, SAVE-230, MOD-390 | Started by readiness runs and interrupted (usage limit or restart) before an adversarial review. They build and their tests pass on Linux. |
 | `a4b152e` | SEC-120 | `VisualScriptGraphIO` (a `.vscript` JSON parser) is covered by the ENG-200 `Engine/Scripting` subtree exemption. Decide whether it should get its own SEC-120 parser entry. |

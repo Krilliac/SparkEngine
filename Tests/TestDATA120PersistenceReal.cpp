@@ -15,6 +15,7 @@
 #include "Persistence/TFPlayerMeta.h"
 #include "Persistence/TFSavePaths.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -256,9 +257,10 @@ TEST(Persistence_Migration_LegacyUnversionedFileUpgradesInPlace)
     EXPECT_TRUE(db.TouchLogin(1, 99));
     EXPECT_TRUE(db.Close());
 
-    // The first write stamps the current schema version.
+    // The first write stamps schema v2, which the previous build still loads.
     const std::string upgraded = ReadFile(path);
-    EXPECT_TRUE(upgraded.find("\"schemaVersion\"") != std::string::npos);
+    EXPECT_TRUE(upgraded.find("\"schemaVersion\": 2") != std::string::npos);
+    EXPECT_TRUE(upgraded.find("appliedOperations") == std::string::npos);
     TFDatabase reopened;
     ASSERT_TRUE(reopened.Open(path));
     ASSERT_TRUE(reopened.FindCharacterByName("Veteran", veteran));
@@ -267,12 +269,62 @@ TEST(Persistence_Migration_LegacyUnversionedFileUpgradesInPlace)
     fs::remove(path);
 }
 
+TEST(Persistence_Migration_RetiredLedgerSchemaLoadsOnlyWithEmptyLedger)
+{
+    // b2d2953 wrote schema v3: v2 content plus an "appliedOperations" ledger
+    // that no caller ever filled. Such a file loads and is rewritten as v2, so
+    // the previous build can read it again; a ledger that holds ids, or a v3
+    // file without the ledger, fails closed rather than being rewritten.
+    const std::string body = R"("revision": 4, "nextAccountId": 2, "nextCharId": 2,
+  "accounts": [{"id": 1, "username": "cloud", "salt": "s", "passwordHash": "h",
+                "createdAtMs": 1, "lastLoginMs": 2}],
+  "characters": [{"id": 1, "accountId": 1, "name": "Ledgered", "faction": 1, "xp": 10,
+                  "rank": 2, "flux": 30, "createdAtMs": 1, "lastPlayedMs": 2, "revision": 4}])";
+    const fs::path path = FreshDbPath("test_data120_v3ledger.db");
+    WriteFile(path, R"({"schemaVersion": 3, )" + body + R"(, "appliedOperations": []})");
+    {
+        TFDatabase db;
+        ASSERT_TRUE(db.Open(path));
+        TFCharacterRecord row;
+        ASSERT_TRUE(db.FindCharacterByName("Ledgered", row));
+        EXPECT_EQ(row.flux, uint32_t{30});
+        EXPECT_EQ(row.revision, uint64_t{4});
+        EXPECT_TRUE(db.TouchLogin(1, 99));
+        EXPECT_TRUE(db.Close());
+    }
+    const std::string rewritten = ReadFile(path);
+    EXPECT_TRUE(rewritten.find("\"schemaVersion\": 2") != std::string::npos);
+    EXPECT_TRUE(rewritten.find("appliedOperations") == std::string::npos);
+    {
+        TFDatabase reopened;
+        ASSERT_TRUE(reopened.Open(path));
+        TFCharacterRecord row;
+        ASSERT_TRUE(reopened.FindCharacterByName("Ledgered", row));
+        EXPECT_EQ(row.flux, uint32_t{30});
+        EXPECT_EQ(row.rank, uint16_t{2});
+        EXPECT_TRUE(reopened.Close());
+    }
+
+    for (const char* ledger : {R"(, "appliedOperations": ["purchase-1"])", R"(, "appliedOperations": {})", ""})
+    {
+        const std::string text = R"({"schemaVersion": 3, )" + body + ledger + "}";
+        WriteFile(path, text);
+        TFDatabase db;
+        EXPECT_FALSE(db.Open(path));
+        EXPECT_TRUE(db.LastStatus() == TFDatabaseStatus::UnsupportedVersion);
+        EXPECT_TRUE(ReadFile(path) == text);
+    }
+    fs::remove(path);
+}
+
 TEST(Persistence_Migration_NewerSchemaFailsClosedWithoutRewrite)
 {
     // Rollback guard: an older binary must never load-and-rewrite a file
     // written by a newer schema, which would silently drop the newer fields.
     const fs::path path = FreshDbPath("test_data120_newer.db");
-    const std::string newer = std::string(R"({"schemaVersion": )") + std::to_string(TFDatabase::kSchemaVersion + 1) +
+    // Above the retired v3 too, so this exercises the plain newer-schema gate.
+    const uint32_t kNewerSchema = std::max(TFDatabase::kSchemaVersion, TFDatabase::kRetiredLedgerSchemaVersion) + 1;
+    const std::string newer = std::string(R"({"schemaVersion": )") + std::to_string(kNewerSchema) +
                               R"(, "nextAccountId": 1, "nextCharId": 1, "accounts": [], "characters": [],
   "futureLedger": [{"txn": 1}]})";
     WriteFile(path, newer);

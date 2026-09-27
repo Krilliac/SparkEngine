@@ -1695,7 +1695,7 @@ else()
 endif()
 set(_spark_data120_persistence_selectors
     "Persistence_Transaction_=3"
-    "Persistence_Migration_=2"
+    "Persistence_Migration_=3"
     "Persistence_Durable_=${_spark_data120_durable_count}"
     "AsyncDatabaseReal_=1")
 foreach(_spark_data120_selector IN LISTS _spark_data120_persistence_selectors)

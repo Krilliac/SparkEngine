@@ -82,15 +82,6 @@ namespace Terrafront
         // are a single small file rewrite, so a longer wait means a stuck peer.
         constexpr std::chrono::milliseconds kLockTimeout{2000};
 
-        /// Idempotency keys are bounded printable ASCII so the ledger stays
-        /// small and a hostile or garbled key cannot smuggle control bytes.
-        bool IsValidOperationId(std::string_view id)
-        {
-            if (id.empty() || id.size() > TFDatabase::kMaxOperationIdLength)
-                return false;
-            return std::all_of(id.begin(), id.end(), [](char c) { return c >= 0x20 && c <= 0x7E; });
-        }
-
         int64_t NowMs()
         {
             using namespace std::chrono;
@@ -399,7 +390,14 @@ namespace Terrafront
             uint32_t schemaVersion = 0;
             if (!ReadUnsigned(root["schemaVersion"], schemaVersion) || schemaVersion == 0)
                 return LoadResult::Corrupt;
-            if (schemaVersion > kSchemaVersion)
+            if (schemaVersion == kRetiredLedgerSchemaVersion)
+            {
+                // Always-empty ledger == v2 content; any recorded id would be lost on rewrite.
+                if (!root.HasKey("appliedOperations") || !root["appliedOperations"].IsArray() ||
+                    root["appliedOperations"].Size() != 0)
+                    return LoadResult::UnsupportedVersion;
+            }
+            else if (schemaVersion > kSchemaVersion)
                 return LoadResult::UnsupportedVersion;
         }
 
@@ -517,26 +515,7 @@ namespace Terrafront
             nextCharId = maxCharacterId + 1;
         if (nextAccountId <= maxAccountId || nextCharId <= maxCharacterId)
             return LoadResult::Corrupt;
-
-        // Schema v3 idempotency ledger; absent on v0-v2 files (empty ledger).
-        std::deque<std::string> appliedOperations;
-        if (root.HasKey("appliedOperations"))
-        {
-            const auto& ledger = root["appliedOperations"];
-            if (!ledger.IsArray() || ledger.Size() > kMaxAppliedOperations)
-                return LoadResult::Corrupt;
-            std::unordered_set<std::string> seenOperations;
-            for (size_t i = 0; i < ledger.Size(); ++i)
-            {
-                if (!ledger[i].IsString() || !IsValidOperationId(ledger[i].AsString()) ||
-                    !seenOperations.insert(ledger[i].AsString()).second)
-                    return LoadResult::Corrupt;
-                appliedOperations.push_back(ledger[i].AsString());
-            }
-        }
-
         out = Snapshot{};
-        out.appliedOperations = std::move(appliedOperations);
         out.revision = fileRevision;
         out.nextAccountId = nextAccountId;
         out.nextCharId = nextCharId;
@@ -695,11 +674,6 @@ namespace Terrafront
             characters.PushBack(std::move(row));
         }
         root["characters"] = std::move(characters);
-
-        Spark::Json::Value ledger = Spark::Json::Value::MakeArray();
-        for (const std::string& operationId : snapshot.appliedOperations)
-            ledger.PushBack(Spark::Json::Value(operationId));
-        root["appliedOperations"] = std::move(ledger);
 
         std::error_code ec;
         auto parentPath = m_path.parent_path();
@@ -915,12 +889,10 @@ namespace Terrafront
         return CommitCharacterUpdates({update});
     }
 
-    bool TFDatabase::CommitCharacterUpdates(const std::vector<TFCharacterUpdate>& updates, std::string_view operationId)
+    bool TFDatabase::CommitCharacterUpdates(const std::vector<TFCharacterUpdate>& updates)
     {
         m_conflictCharId = 0;
         if (!m_open || updates.empty())
-            return false;
-        if (!operationId.empty() && !IsValidOperationId(operationId))
             return false;
 
         // Validate every row before touching anything so a bad row late in the
@@ -948,82 +920,55 @@ namespace Terrafront
         }
 
         uint64_t conflictCharId = 0;
-        bool alreadyApplied = false;
-        const bool committed = Transact(
-            "CommitCharacterUpdates",
-            [&](Snapshot& fresh, uint64_t newRevision)
-            {
-                // A retry of an operation that already committed (here or
-                // in an earlier process) must not apply twice, and its
-                // values may be older than rows changed since, so it
-                // writes nothing at all.
-                if (!operationId.empty() && std::find(fresh.appliedOperations.begin(), fresh.appliedOperations.end(),
-                                                      operationId) != fresh.appliedOperations.end())
-                {
-                    alreadyApplied = true;
-                    return false;
-                }
+        const bool committed =
+            Transact("CommitCharacterUpdates",
+                     [&](Snapshot& fresh, uint64_t newRevision)
+                     {
+                         // These are absolute values computed from an earlier read, so
+                         // every row must still be exactly the one this instance based
+                         // them on; otherwise another authority's change would be lost.
+                         std::vector<TFCharacterRecord*> rows;
+                         rows.reserve(updates.size());
+                         for (const TFCharacterUpdate& update : updates)
+                         {
+                             auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
+                                                    [&](const TFCharacterRecord& c) { return c.id == update.charId; });
+                             if (it == fresh.characters.end())
+                                 return false;
+                             const auto base = m_baseRevisions.find(update.charId);
+                             if (base == m_baseRevisions.end() || base->second != it->revision)
+                             {
+                                 conflictCharId = update.charId;
+                                 return false;
+                             }
+                             rows.push_back(&*it);
+                         }
 
-                // These are absolute values computed from an earlier read, so
-                // every row must still be exactly the one this instance based
-                // them on; otherwise another authority's change would be lost.
-                std::vector<TFCharacterRecord*> rows;
-                rows.reserve(updates.size());
-                for (const TFCharacterUpdate& update : updates)
-                {
-                    auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
-                                           [&](const TFCharacterRecord& c) { return c.id == update.charId; });
-                    if (it == fresh.characters.end())
-                        return false;
-                    const auto base = m_baseRevisions.find(update.charId);
-                    if (base == m_baseRevisions.end() || base->second != it->revision)
-                    {
-                        conflictCharId = update.charId;
-                        return false;
-                    }
-                    rows.push_back(&*it);
-                }
-
-                for (size_t i = 0; i < updates.size(); ++i)
-                {
-                    const TFCharacterUpdate& update = updates[i];
-                    TFCharacterRecord& row = *rows[i];
-                    if (update.writeProgress)
-                    {
-                        row.xp = update.xp;
-                        row.rank = update.rank;
-                        row.flux = update.flux;
-                        row.lastPlayedMs = update.lastPlayedMs;
-                    }
-                    if (update.writeMeta)
-                    {
-                        row.unlocks = update.unlocks;
-                        row.loadoutPrimary = update.loadoutPrimary;
-                        row.loadoutSecondary = update.loadoutSecondary;
-                        row.loadoutTool = update.loadoutTool;
-                        row.loadoutGrenade = update.loadoutGrenade;
-                        row.loadoutSuit = update.loadoutSuit;
-                        row.weaponStats = update.weaponStats;
-                    }
-                    row.revision = newRevision;
-                }
-                if (!operationId.empty())
-                {
-                    fresh.appliedOperations.emplace_back(operationId);
-                    while (fresh.appliedOperations.size() > kMaxAppliedOperations)
-                        fresh.appliedOperations.pop_front();
-                }
-                return true;
-            });
-
-        if (alreadyApplied)
-        {
-            m_status = TFDatabaseStatus::ReadyExisting;
-            SPARK_LOG_INFO(
-                Spark::LogCategory::Game, "[TF] character commit '%.*s' to %s was already applied; retry ignored",
-                static_cast<int>(operationId.size()), operationId.data(), SavePaths::Utf8ForLog(m_path).c_str());
-            return true;
-        }
+                         for (size_t i = 0; i < updates.size(); ++i)
+                         {
+                             const TFCharacterUpdate& update = updates[i];
+                             TFCharacterRecord& row = *rows[i];
+                             if (update.writeProgress)
+                             {
+                                 row.xp = update.xp;
+                                 row.rank = update.rank;
+                                 row.flux = update.flux;
+                                 row.lastPlayedMs = update.lastPlayedMs;
+                             }
+                             if (update.writeMeta)
+                             {
+                                 row.unlocks = update.unlocks;
+                                 row.loadoutPrimary = update.loadoutPrimary;
+                                 row.loadoutSecondary = update.loadoutSecondary;
+                                 row.loadoutTool = update.loadoutTool;
+                                 row.loadoutGrenade = update.loadoutGrenade;
+                                 row.loadoutSuit = update.loadoutSuit;
+                                 row.weaponStats = update.weaponStats;
+                             }
+                             row.revision = newRevision;
+                         }
+                         return true;
+                     });
 
         if (conflictCharId != 0)
         {
