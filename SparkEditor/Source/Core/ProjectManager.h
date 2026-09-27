@@ -114,6 +114,9 @@ namespace SparkEditor
         /// Newest .sparkproject "projectFileVersion" this build reads, and the one it writes.
         /// A document without the field is the legacy dialect and reads as this version.
         static constexpr uint64_t kProjectFileVersion = 1;
+        /// Largest .sparkproject / spark.project.json (or its .bak) the editor reads. Project
+        /// documents are small metadata; a larger file is rejected before it is read.
+        static constexpr uint64_t kMaximumProjectDocumentBytes = 4ull * 1024ull * 1024ull;
 
         ProjectManager();
         /// [editor thread] Use a caller-selected recent-project history directory.

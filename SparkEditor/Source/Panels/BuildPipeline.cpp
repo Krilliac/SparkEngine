@@ -344,10 +344,48 @@ namespace SparkEditor
             return true;
         }
 
-        bool CopyDirectoryContents(const fs::path& source, const fs::path& destination, std::string& error)
+        // True for a symbolic link, a junction or any other reparse point, and for an
+        // entry whose link status cannot be read (fail closed).
+        bool IsLinkOrReparsePoint(const fs::path& path)
+        {
+            std::error_code ec;
+            const fs::file_status status = fs::symlink_status(path, ec);
+            if (ec || fs::is_symlink(status))
+                return true;
+#ifdef _WIN32
+            const DWORD attributes = GetFileAttributesW(path.c_str());
+            return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+            return false;
+#endif
+        }
+
+        /// How CopyDirectoryContents treats links inside the source tree. Project content
+        /// is untrusted (an opened project may plant links to the developer's files), so
+        /// it is copied with Reject; the editor's own runtime directories keep Follow
+        /// (macOS frameworks legitimately contain symlinks).
+        enum class SourceLinkPolicy
+        {
+            Follow,
+            Reject
+        };
+
+        std::string LinkRejectedMessage(const fs::path& path)
+        {
+            return "Refusing to package '" + path.string() +
+                   "': project content must not be a symbolic link, junction or reparse point";
+        }
+
+        bool CopyDirectoryContents(const fs::path& source, const fs::path& destination, std::string& error,
+                                   SourceLinkPolicy linkPolicy = SourceLinkPolicy::Follow)
         {
             if (!fs::is_directory(source))
                 return true;
+            if (linkPolicy == SourceLinkPolicy::Reject && IsLinkOrReparsePoint(source))
+            {
+                error = LinkRejectedMessage(source);
+                return false;
+            }
 
             std::error_code ec;
             fs::create_directories(destination, ec);
@@ -359,6 +397,11 @@ namespace SparkEditor
 
             for (fs::recursive_directory_iterator it(source, ec), end; it != end && !ec; it.increment(ec))
             {
+                if (linkPolicy == SourceLinkPolicy::Reject && IsLinkOrReparsePoint(it->path()))
+                {
+                    error = LinkRejectedMessage(it->path());
+                    return false;
+                }
                 const fs::path relative = fs::relative(it->path(), source, ec);
                 if (ec)
                     break;
@@ -385,20 +428,27 @@ namespace SparkEditor
         bool CopyProjectContent(const fs::path& projectRoot, const fs::path& outputDirectory, bool includeAssets,
                                 std::string& error)
         {
-            if (includeAssets && !CopyDirectoryContents(projectRoot / "Assets", outputDirectory / "Assets", error))
+            constexpr SourceLinkPolicy untrusted = SourceLinkPolicy::Reject;
+            if (includeAssets &&
+                !CopyDirectoryContents(projectRoot / "Assets", outputDirectory / "Assets", error, untrusted))
                 return false;
-            if (!CopyDirectoryContents(projectRoot / "Scenes", outputDirectory / "Scenes", error) ||
-                !CopyDirectoryContents(projectRoot / "Config", outputDirectory / "Config", error))
+            if (!CopyDirectoryContents(projectRoot / "Scenes", outputDirectory / "Scenes", error, untrusted) ||
+                !CopyDirectoryContents(projectRoot / "Config", outputDirectory / "Config", error, untrusted))
                 return false;
 
             std::error_code ec;
             for (fs::directory_iterator it(projectRoot, ec), end; it != end && !ec; it.increment(ec))
             {
-                if (!it->is_regular_file(ec))
-                    continue;
                 const std::string filename = it->path().filename().string();
                 if (it->path().extension() != ".sparkproject" && filename != "spark.project.json" &&
                     filename != "spark.modules.json")
+                    continue;
+                if (IsLinkOrReparsePoint(it->path()))
+                {
+                    error = LinkRejectedMessage(it->path());
+                    return false;
+                }
+                if (!it->is_regular_file(ec))
                     continue;
                 fs::copy_file(it->path(), outputDirectory / it->path().filename(), fs::copy_options::overwrite_existing,
                               ec);
@@ -453,6 +503,59 @@ namespace SparkEditor
                 if (*candidateIt != *parentIt)
 #endif
                     return false;
+            }
+            return true;
+        }
+
+        /**
+         * Checks an output directory before anything is written to it. A lexical
+         * check alone trusts links: an opened project can ship "Build" (the default
+         * cook output parent) as a symlink or junction pointing at its own content or
+         * anywhere the developer can write. This walks every existing component below
+         * the project root and rejects links, then re-checks containment on
+         * link-resolved paths.
+         */
+        bool IsSafeOutputDirectory(const fs::path& sourceRoot, const fs::path& destination, std::string& error)
+        {
+            if (IsPathWithin(destination, sourceRoot))
+            {
+                fs::path current = sourceRoot;
+                for (const fs::path& part : destination.lexically_relative(sourceRoot))
+                {
+                    current /= part;
+                    std::error_code ec;
+                    const fs::file_status status = fs::symlink_status(current, ec);
+                    if (status.type() == fs::file_type::not_found)
+                        break; // the rest is created below as real directories
+                    if (ec || IsLinkOrReparsePoint(current) || !fs::is_directory(status))
+                    {
+                        error = "Output path component '" + current.string() +
+                                "' inside the project is a link, junction or non-directory";
+                        return false;
+                    }
+                }
+            }
+
+            std::error_code ec;
+            const fs::path resolvedDestination = fs::weakly_canonical(destination, ec);
+            if (ec)
+            {
+                error = "Could not resolve output directory '" + destination.string() + "': " + ec.message();
+                return false;
+            }
+            for (const char* content : {"Assets", "Scenes", "Config"})
+            {
+                const fs::path resolvedContent = fs::weakly_canonical(sourceRoot / content, ec);
+                if (ec)
+                {
+                    error = "Could not resolve project " + std::string(content) + ": " + ec.message();
+                    return false;
+                }
+                if (IsPathWithin(resolvedDestination, resolvedContent))
+                {
+                    error = "Output directory resolves inside the project's " + std::string(content) + " folder";
+                    return false;
+                }
             }
             return true;
         }
@@ -1167,6 +1270,14 @@ namespace SparkEditor
             m_running.store(false);
             return;
         }
+        std::string destinationError;
+        if (!IsSafeOutputDirectory(sourceRoot, destination, destinationError))
+        {
+            PushLog(BuildLogLine::Level::Error, destinationError);
+            m_result.store(BuildResult::Failed);
+            m_running.store(false);
+            return;
+        }
 
         std::error_code ec;
         fs::create_directories(destination, ec);
@@ -1242,6 +1353,13 @@ namespace SparkEditor
         namespace fs = std::filesystem;
         std::string detail;
         const fs::path destination = fs::absolute(outputDirectory).lexically_normal();
+        // Validate before the staging sibling is created, so nothing is written through a link.
+        if (!IsSafeOutputDirectory(fs::absolute(projectRoot).lexically_normal(), destination, detail))
+        {
+            if (error)
+                *error = std::move(detail);
+            return false;
+        }
         const fs::path staging = CreateUniqueSiblingPath(destination, "stage", detail);
         if (staging.empty())
         {
@@ -1308,6 +1426,8 @@ namespace SparkEditor
         if (destination == sourceRoot || IsPathWithin(destination, sourceRoot / "Assets") ||
             IsPathWithin(destination, sourceRoot / "Scenes") || IsPathWithin(destination, sourceRoot / "Config"))
             return fail("Package output cannot replace the project root or live inside packaged content");
+        if (!IsSafeOutputDirectory(sourceRoot, destination, detail))
+            return fail(detail);
 
         std::error_code ec;
         fs::create_directories(destination, ec);

@@ -413,6 +413,7 @@ add_executable(SparkTests
     TestPrefabPersistence.cpp
     TestPrefabCompatibility.cpp
     TestEditorStateCompatibility.cpp
+    TestEditorUntrustedProject.cpp
     TestTutorialSystem.cpp
     TestGoldenImageTest.cpp
     TestAnimNotify.cpp
@@ -2610,6 +2611,14 @@ set_tests_properties(CollaborativeEditingSecurity PROPERTIES
     LABELS "editor;collaboration;network;security"
     RUN_SERIAL TRUE
     TIMEOUT 180)
+
+# SEC2: an opened project is untrusted — cook/package refuse project links and
+# link-redirected output, and oversized project documents are refused unread.
+add_test(NAME EditorUntrustedProject COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(EditorUntrustedProject PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=UntrustedProject_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "editor;security;unit"
+    TIMEOUT 120)
 
 # HEAD-220: NullRHIDevice live-resource accounting follows resource lifetime
 # (leak/soak signal for packaged headless runs).

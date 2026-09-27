@@ -25,6 +25,7 @@
 #include <random>
 #include <set>
 #include <array>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
 
@@ -2059,6 +2060,30 @@ namespace SparkEditor
             [this](const std::string& path, bool useCache, std::string& content, std::string& reason)
         {
             content.clear();
+            const std::string tooLarge = "the file exceeds " + std::to_string(kMaximumProjectDocumentBytes) + " bytes";
+
+            // Size the document before anything (the file cache included) reads it: an
+            // opened project is untrusted, and an oversized document must never be
+            // materialized in memory.
+            const fs::path nativePath = PathFromUtf8(path);
+            std::error_code statError;
+            if (!fs::is_regular_file(nativePath, statError))
+            {
+                reason = "the file does not exist";
+                return ProjectDocumentStatus::Rejected;
+            }
+            const uintmax_t size = fs::file_size(nativePath, statError);
+            if (statError)
+            {
+                reason = "the file size could not be read";
+                return ProjectDocumentStatus::Rejected;
+            }
+            if (size > kMaximumProjectDocumentBytes)
+            {
+                reason = tooLarge;
+                return ProjectDocumentStatus::Rejected;
+            }
+
             if (useCache && m_fileCache)
             {
                 auto result = m_fileCache->ReadText(path);
@@ -2067,25 +2092,36 @@ namespace SparkEditor
             }
             if (content.empty())
             {
-                const fs::path nativePath = PathFromUtf8(path);
-                std::error_code existsError;
-                if (!fs::is_regular_file(nativePath, existsError))
-                {
-                    reason = "the file does not exist";
-                    return ProjectDocumentStatus::Rejected;
-                }
                 std::ifstream file(nativePath, std::ios::binary);
                 if (!file.is_open())
                 {
                     reason = "the file could not be opened";
                     return ProjectDocumentStatus::Rejected;
                 }
-                content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                // Bounded read: the file may have grown after it was sized.
+                std::array<char, 16 * 1024> chunk{};
+                while (file.read(chunk.data(), static_cast<std::streamsize>(chunk.size())) || file.gcount() > 0)
+                {
+                    const auto received = static_cast<size_t>(file.gcount());
+                    if (content.size() + received > kMaximumProjectDocumentBytes)
+                    {
+                        content.clear();
+                        reason = tooLarge;
+                        return ProjectDocumentStatus::Rejected;
+                    }
+                    content.append(chunk.data(), received);
+                }
                 if (file.bad())
                 {
                     reason = "the file could not be read";
                     return ProjectDocumentStatus::Rejected;
                 }
+            }
+            if (content.size() > kMaximumProjectDocumentBytes)
+            {
+                content.clear();
+                reason = tooLarge;
+                return ProjectDocumentStatus::Rejected;
             }
             return CheckProjectDocument(content, reason);
         };
