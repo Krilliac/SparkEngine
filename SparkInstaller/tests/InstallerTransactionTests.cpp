@@ -1,3 +1,4 @@
+#include "GitRunner.h"
 #include "Installer.h"
 #include "InstallState.h"
 #include "ProcessRunner.h"
@@ -430,13 +431,18 @@ namespace
             failures += Check(!error, name + ": could not create link target");
 #ifdef _WIN32
             // A junction needs no symlink privilege and is the Windows link
-            // shape std::filesystem does not portably report.
+            // shape std::filesystem does not portably report. mklink is a
+            // cmd.exe builtin (there is no mklink.exe) and RunSync does not
+            // go through a shell, so the builtin must run under cmd /c.
+            using SparkInstaller::GitRunner;
             SparkBuild::ProcessRunner runner;
             std::string output;
-            failures +=
-                Check(runner.RunSync("mklink /J \"" + destination.string() + "\" \"" + linkTarget.string() + "\"",
-                                     root.string(), output) == 0,
-                      name + ": could not create junction fixture: " + output);
+            failures += Check(runner.RunSync("cmd.exe /c mklink /J " +
+                                                 GitRunner::EncodeProcessRunnerArgument(destination.string()) + " " +
+                                                 GitRunner::EncodeProcessRunnerArgument(linkTarget.string()),
+                                             root.string(), output) == 0,
+                              name + ": could not create junction fixture: " + output);
+            failures += Check(fs::exists(destination), name + ": junction fixture is missing at the destination");
 #else
             fs::create_directory_symlink(linkTarget, destination, error);
             failures += Check(!error, name + ": could not create symlink fixture");
