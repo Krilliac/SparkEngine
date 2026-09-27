@@ -599,6 +599,8 @@ add_executable(SparkTests
     TestDaemonCodexFixes.cpp
     # Security hardening of the daemon cache services (cache-file validation, persistence)
     TestSecDaemonCacheHardening.cpp
+    # Security: daemon endpoint identity (pipe naming, first-instance, client SQOS + server SID)
+    TestSecDaemonPipeIdentity.cpp
     # Stats formatter used by the daemon.stats console command (Phase 6)
     TestDaemonDiagnostics.cpp
     # Comprehensive subsystem coverage
@@ -2089,6 +2091,22 @@ set_tests_properties(SecDaemonCacheHardening PROPERTIES
     LABELS "daemon;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
+
+# Security: SparkDaemon endpoint identity. Two tests run on every platform;
+# Windows adds three named-pipe tests (per-path pipe names, client SQOS at
+# identification level, server-SID check). The pinned count fails the lane if
+# a platform branch silently compiles its tests out.
+set(_spark_sec_daemon_pipe_count 2)
+if(WIN32)
+    math(EXPR _spark_sec_daemon_pipe_count "${_spark_sec_daemon_pipe_count} + 3")
+endif()
+add_test(NAME SecDaemonPipeIdentity COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SecDaemonPipeIdentity PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SecDaemonPipe_;SPARK_TEST_EXPECT_COUNT=${_spark_sec_daemon_pipe_count}"
+    LABELS "daemon;security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
+unset(_spark_sec_daemon_pipe_count)
 
 # OPS-110: SparkServer operator health (build identity, tick percentiles, RSS, drain ordering).
 if(TARGET SparkServerCore)

@@ -126,6 +126,8 @@ target_include_directories(SparkOrchestrator PRIVATE
 target_link_libraries(SparkOrchestrator PRIVATE Threads::Threads)
 if(WIN32)
     target_compile_definitions(SparkOrchestrator PRIVATE SPARK_PLATFORM_WINDOWS)
+    # DaemonClient authenticates the pipe server's user SID (token APIs).
+    target_link_libraries(SparkOrchestrator PRIVATE advapi32)
 elseif(APPLE)
     target_compile_definitions(SparkOrchestrator PRIVATE SPARK_PLATFORM_MACOS)
 else()
