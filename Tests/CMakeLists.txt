@@ -2034,7 +2034,13 @@ if(TARGET SparkGatewayCore)
             GatewayAreaControl_RejectsStaleAndFutureTimestamp
             GatewayAreaControl_RejectsReplayedNonce
             GatewayAreaControl_RejectsNewNoncesWhenReplayLedgerIsFull
-            GatewayAreaControl_AuditRecordOmitsSecrets)
+            GatewayAreaControl_AuditRecordOmitsSecrets
+            GatewayAreaControl_RejectsOversizeFrame
+            GatewayAreaControl_RejectsWrongServiceId
+            GatewayAreaControl_RejectsMalformedFrames
+            GatewayAreaControl_RejectsPhaseMismatch
+            GatewayAreaControl_RejectsOutOfRangeTimestamp
+            GatewayAreaControl_RejectsTruncatedAndOverlongHeaderFrames)
         add_test(NAME ${_gateway_area_control_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
         set_tests_properties(${_gateway_area_control_selector} PROPERTIES
             ENVIRONMENT "SPARK_TEST_NAME=${_gateway_area_control_selector};SPARK_TEST_EXPECT_COUNT=1"

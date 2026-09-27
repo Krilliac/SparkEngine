@@ -14,7 +14,9 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <future>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -28,6 +30,7 @@
 #include "GatewaySecurity.h"
 #include "ScopedLoggerBaseline.h"
 #include "Utils/DaemonClient.h"
+#include "Utils/DaemonProtocol.h"
 #include "Utils/Logger.h"
 // Keep the private-member access limited to this test translation unit; the
 // production header never exposes a test friend or macro-controlled authority.
@@ -83,12 +86,15 @@ namespace
 
     // Independent encoder for the documented area-control wire format, so the
     // hostile tests can forge frames the production client would never emit.
-    std::vector<uint8_t> ForgeAreaControlFrame(const std::vector<uint8_t>& key, AreaControlPhase phase,
-                                               const HandoffCommand& command, int64_t timestamp, uint64_t nonce,
-                                               std::string* macHex = nullptr)
+    // The timestamp is passed as its wire text so a test can sign values an
+    // int64_t cannot carry.
+    std::vector<uint8_t> ForgeAreaControlFrameWithTimestampText(const std::vector<uint8_t>& key, AreaControlPhase phase,
+                                                                const HandoffCommand& command,
+                                                                const std::string& timestampText, uint64_t nonce,
+                                                                std::string* macHex = nullptr)
     {
         const std::string body = std::to_string(GatewayProtocolMajor) + "\n" + std::to_string(GatewayProtocolMinor) +
-                                 "\n" + std::to_string(timestamp) + "\n" + std::to_string(nonce) + "\n" +
+                                 "\n" + timestampText + "\n" + std::to_string(nonce) + "\n" +
                                  std::to_string(static_cast<unsigned int>(phase)) + "\n" +
                                  std::to_string(command.epoch) + "\n" + std::to_string(command.sourceArea) + "\n" +
                                  std::to_string(command.targetArea) + "\n" + command.sessionId;
@@ -99,21 +105,135 @@ namespace
         return {frame.begin(), frame.end()};
     }
 
-    HandoffOperationResult SendRawAreaControlFrame(const std::string& endpoint, AreaControlPhase phase,
-                                                   const std::vector<uint8_t>& payload)
+    std::vector<uint8_t> ForgeAreaControlFrame(const std::vector<uint8_t>& key, AreaControlPhase phase,
+                                               const HandoffCommand& command, int64_t timestamp, uint64_t nonce,
+                                               std::string* macHex = nullptr)
+    {
+        return ForgeAreaControlFrameWithTimestampText(key, phase, command, std::to_string(timestamp), nonce, macHex);
+    }
+
+    std::string LocalAreaControlAddress(const std::string& endpoint)
     {
 #ifdef _WIN32
-        const std::string address = endpoint;
+        return endpoint;
 #else
-        const std::string address = "/tmp/" + endpoint + ".sock";
+        return "/tmp/" + endpoint + ".sock";
 #endif
+    }
+
+    // Sends one frame with an arbitrary service id and message type. A reply the
+    // client cannot accept (for example one addressed from another service) is
+    // reported as Unavailable, never as a service decision.
+    HandoffOperationResult SendRawFrame(const std::string& endpoint, Spark::Daemon::ServiceId service,
+                                        uint16_t messageType, const std::vector<uint8_t>& payload)
+    {
         Spark::Daemon::DaemonClient client;
-        if (!client.Connect(address))
+        if (!client.Connect(LocalAreaControlAddress(endpoint)))
             return HandoffOperationResult::Unavailable;
-        auto response = client.Request(Spark::Daemon::ServiceId::Orchestration, static_cast<uint16_t>(phase), payload);
+        auto response = client.Request(service, messageType, payload);
         if (!response || response->payload.size() != 1)
             return HandoffOperationResult::Unavailable;
         return static_cast<HandoffOperationResult>(response->payload[0]);
+    }
+
+    HandoffOperationResult SendRawAreaControlFrame(const std::string& endpoint, AreaControlPhase phase,
+                                                   const std::vector<uint8_t>& payload)
+    {
+        return SendRawFrame(endpoint, Spark::Daemon::ServiceId::Orchestration, static_cast<uint16_t>(phase), payload);
+    }
+
+    // Raw byte stream to the service endpoint, below the DaemonClient framing,
+    // so a test can send headers and truncated bodies no client would emit.
+    class RawAreaControlConnection
+    {
+      public:
+        explicit RawAreaControlConnection(const std::string& endpoint)
+        {
+#ifdef _WIN32
+            const std::wstring pipe = L"\\\\.\\pipe\\" + std::wstring(endpoint.begin(), endpoint.end());
+            for (int retry = 0; retry < 50 && m_handle == INVALID_HANDLE_VALUE; ++retry)
+            {
+                m_handle =
+                    CreateFileW(pipe.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+                if (m_handle == INVALID_HANDLE_VALUE)
+                    WaitNamedPipeW(pipe.c_str(), 20);
+            }
+#else
+            const std::string socketPath = LocalAreaControlAddress(endpoint);
+            m_socket = ::socket(AF_UNIX, SOCK_STREAM, 0);
+            sockaddr_un address{};
+            address.sun_family = AF_UNIX;
+            if (m_socket >= 0 && socketPath.size() < sizeof(address.sun_path))
+            {
+                std::memcpy(address.sun_path, socketPath.data(), socketPath.size());
+                if (::connect(m_socket, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0)
+                {
+                    ::close(m_socket);
+                    m_socket = -1;
+                }
+            }
+#endif
+        }
+
+        RawAreaControlConnection(const RawAreaControlConnection&) = delete;
+        RawAreaControlConnection& operator=(const RawAreaControlConnection&) = delete;
+
+        ~RawAreaControlConnection()
+        {
+#ifdef _WIN32
+            if (m_handle != INVALID_HANDLE_VALUE)
+                CloseHandle(m_handle);
+#else
+            if (m_socket >= 0)
+                ::close(m_socket);
+#endif
+        }
+
+        [[nodiscard]] bool IsOpen() const
+        {
+#ifdef _WIN32
+            return m_handle != INVALID_HANDLE_VALUE;
+#else
+            return m_socket >= 0;
+#endif
+        }
+
+        [[nodiscard]] bool Write(const std::vector<uint8_t>& bytes) const
+        {
+#ifdef _WIN32
+            DWORD written = 0;
+            return WriteFile(m_handle, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) != 0 &&
+                   written == bytes.size();
+#else
+            return ::send(m_socket, bytes.data(), bytes.size(), 0) == static_cast<ssize_t>(bytes.size());
+#endif
+        }
+
+      private:
+#ifdef _WIN32
+        HANDLE m_handle = INVALID_HANDLE_VALUE;
+#else
+        int m_socket = -1;
+#endif
+    };
+
+    std::vector<uint8_t> EncodeRawHeader(uint32_t payloadSize, AreaControlPhase phase)
+    {
+        const Spark::Daemon::FrameHeader header{
+            payloadSize, static_cast<uint16_t>(Spark::Daemon::ServiceId::Orchestration), static_cast<uint16_t>(phase)};
+        uint8_t encoded[Spark::Daemon::kFrameHeaderSize];
+        Spark::Daemon::EncodeFrameHeader(header, encoded);
+        return {std::begin(encoded), std::end(encoded)};
+    }
+
+    // Frames with no reply (dropped before a whole frame arrived) are only
+    // observable through the audit counter, so poll it against a deadline.
+    bool WaitForAuditCount(const LocalAreaControlService& service, AreaControlAuditReason reason, uint64_t expected)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (service.GetAuditCount(reason) < expected && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        return service.GetAuditCount(reason) == expected;
     }
 
     uint64_t TotalAuditCount(const LocalAreaControlService& service)
@@ -365,6 +485,290 @@ TEST(GatewayAreaControl_AuditRecordOmitsSecrets)
         EXPECT_TRUE(record.find('\r') == std::string::npos);
         EXPECT_TRUE(record.find("long-session-tail") == std::string::npos);
     }
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsOversizeFrame)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-oversize") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x58);
+    const std::string endpoint = UniqueName("spark-area-control-oversize");
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    // A genuine frame padded one byte past the body limit: the size check must
+    // reject it before decoding, so it is Oversize and not DecodeFailed.
+    const HandoffCommand command{"oversize-session", 1, 7, 7};
+    auto oversized = ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x4001);
+    oversized.resize(GatewayMaximumBodySize + 1, static_cast<uint8_t>('a'));
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, oversized) ==
+                HandoffOperationResult::Rejected);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Oversize), 1u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::DecodeFailed), 0u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
+    EXPECT_EQ(TotalAuditCount(service), 1u);
+    EXPECT_FALSE(std::filesystem::exists(state));
+
+    service.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsWrongServiceId)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-wrong-service") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x59);
+    const std::string endpoint = UniqueName("spark-area-control-wrong-service");
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    // A correctly signed frame addressed to another daemon service is refused
+    // before decoding. The reply comes back under the Orchestration service id,
+    // which the client rejects as a mismatch, so only the audit counter can say
+    // what the service decided.
+    const HandoffCommand command{"wrong-service-session", 1, 7, 7};
+    const auto frame = ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x5001);
+    EXPECT_TRUE(SendRawFrame(endpoint, Spark::Daemon::ServiceId::Asset,
+                             static_cast<uint16_t>(AreaControlPhase::Prepare),
+                             frame) != HandoffOperationResult::Applied);
+    EXPECT_TRUE(WaitForAuditCount(service, AreaControlAuditReason::WrongService, 1u));
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
+    EXPECT_EQ(TotalAuditCount(service), 1u);
+    EXPECT_FALSE(std::filesystem::exists(state));
+
+    // The rejection consumed no nonce and set no fence: the byte-identical
+    // frame on the right service is a first Prepare.
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, frame) == HandoffOperationResult::Applied);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 1u);
+
+    service.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsMalformedFrames)
+{
+    ScopedLoggerBaseline loggerBaseline;
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-malformed") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x5a);
+    const std::string endpoint = UniqueName("spark-area-control-malformed");
+
+    struct CapturedRecords
+    {
+        std::mutex mutex;
+        std::vector<std::string> records;
+    };
+    const auto captured = std::make_shared<CapturedRecords>();
+    auto& logger = Spark::Logger::Get();
+    logger.ClearSinks();
+    logger.AddSink(std::make_unique<Spark::CallbackSink>(
+        [captured](const Spark::LogMessage& message)
+        {
+            if (message.message.find("GatewayAreaControl:") == std::string::npos)
+                return;
+            std::lock_guard lock(captured->mutex);
+            captured->records.push_back(message.message);
+        }));
+
+    // Every case starts from the fields of one genuine, correctly signed frame
+    // and breaks exactly one rule of the wire format.
+    const HandoffCommand command{"malformed-session", 1, 7, 7};
+    std::string genuineMacHex;
+    const auto genuine =
+        ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x6001, &genuineMacHex);
+    std::vector<std::string> genuineFields;
+    {
+        const std::string text(genuine.begin(), genuine.end());
+        size_t begin = 0;
+        for (size_t end = text.find('\n'); end != std::string::npos; end = text.find('\n', begin))
+        {
+            genuineFields.push_back(text.substr(begin, end - begin));
+            begin = end + 1;
+        }
+        genuineFields.push_back(text.substr(begin));
+    }
+    ASSERT_EQ(genuineFields.size(), static_cast<size_t>(10));
+
+    const auto join = [](const std::vector<std::string>& fields)
+    {
+        std::string text;
+        for (size_t index = 0; index < fields.size(); ++index)
+            text += (index == 0 ? "" : "\n") + fields[index];
+        return std::vector<uint8_t>(text.begin(), text.end());
+    };
+    const auto mutate = [&](size_t field, std::string value)
+    {
+        std::vector<std::string> fields = genuineFields;
+        fields[field] = std::move(value);
+        return join(fields);
+    };
+
+    std::vector<std::vector<uint8_t>> cases;
+    cases.push_back({});                                                                               // empty payload
+    cases.push_back(join(std::vector<std::string>(genuineFields.begin(), genuineFields.begin() + 9))); // 9 fields
+    std::vector<std::string> elevenFields = genuineFields;
+    elevenFields.push_back("x");
+    cases.push_back(join(elevenFields));                                  // 11 fields
+    cases.push_back(mutate(0, std::to_string(GatewayProtocolMajor + 1))); // wrong major
+    cases.push_back(mutate(1, std::to_string(GatewayProtocolMinor + 1))); // newer minor
+    cases.push_back(mutate(2, "not-a-timestamp"));                        // non-numeric timestamp
+    cases.push_back(mutate(2, "-5"));                                     // signed timestamp
+    cases.push_back(mutate(3, ""));                                       // empty nonce
+    cases.push_back(mutate(4, "0"));                                      // phase below Prepare
+    cases.push_back(mutate(4, std::to_string(static_cast<unsigned int>(AreaControlPhase::Probe) + 1))); // above Probe
+    cases.push_back(mutate(6, "4294967296"));                // source beyond AreaID
+    cases.push_back(mutate(7, "4294967296"));                // target beyond AreaID
+    cases.push_back(mutate(8, ""));                          // empty session
+    cases.push_back(mutate(8, std::string(129, 's')));       // 129-character session
+    cases.push_back(mutate(9, genuineMacHex.substr(0, 63))); // 63-character MAC
+    cases.push_back(mutate(9, genuineMacHex + "0"));         // 65-character MAC
+    cases.push_back(mutate(9, std::string(64, 'g')));        // non-hex MAC
+    std::vector<uint8_t> trailingNewline = genuine;
+    trailingNewline.push_back('\n');
+    cases.push_back(trailingNewline); // trailing newline
+
+    {
+        LocalAreaControlService service(endpoint, key, state);
+        ASSERT_TRUE(service.Start());
+        for (const auto& payload : cases)
+            EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, payload) ==
+                        HandoffOperationResult::Rejected);
+        EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::DecodeFailed), static_cast<uint64_t>(cases.size()));
+        EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
+        EXPECT_EQ(TotalAuditCount(service), static_cast<uint64_t>(cases.size()));
+        EXPECT_FALSE(std::filesystem::exists(state));
+
+        // The genuine frame the cases were derived from is still accepted, so
+        // each rejection above is the single broken rule, not the base frame.
+        EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, genuine) ==
+                    HandoffOperationResult::Applied);
+        service.Stop();
+    }
+    logger.FlushAll();
+
+    std::lock_guard lock(captured->mutex);
+    ASSERT_EQ(captured->records.size(), cases.size() + 1);
+    for (size_t index = 0; index < cases.size(); ++index)
+    {
+        const std::string& record = captured->records[index];
+        EXPECT_STR_CONTAINS(record, "reason=decode_failed");
+        EXPECT_STR_CONTAINS(record, "session=- outcome=rejected");
+        EXPECT_TRUE(record.find(genuineMacHex) == std::string::npos);
+        EXPECT_TRUE(record.find(LowerHex(key)) == std::string::npos);
+        for (const char character : record)
+            EXPECT_TRUE(static_cast<unsigned char>(character) >= 0x20 && character != 0x7f);
+    }
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsPhaseMismatch)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-phase-mismatch") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x5b);
+    const std::string endpoint = UniqueName("spark-area-control-phase-mismatch");
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    // A correctly signed Prepare delivered under the Commit message type: the
+    // frame's routing phase must match the signed phase, and the mismatch is
+    // classified before the MAC, freshness or nonce ledger are consulted.
+    const HandoffCommand command{"phase-mismatch-session", 1, 7, 7};
+    const auto frame = ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x7001);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Commit, frame) == HandoffOperationResult::Rejected);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::PhaseMismatch), 1u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::MacInvalid), 0u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
+    EXPECT_EQ(TotalAuditCount(service), 1u);
+    EXPECT_FALSE(std::filesystem::exists(state));
+
+    // The mismatched delivery consumed no nonce: the same bytes under the
+    // signed phase are a first Prepare.
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, frame) == HandoffOperationResult::Applied);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 1u);
+
+    service.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsOutOfRangeTimestamp)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-timestamp-range") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x5c);
+    const std::string endpoint = UniqueName("spark-area-control-timestamp-range");
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    // Correctly signed timestamps that parse as uint64 but wrap negative when
+    // narrowed to int64_t must land outside the freshness window, never inside.
+    const HandoffCommand command{"timestamp-range-session", 1, 7, 7};
+    const auto wrapsToMinusOne =
+        ForgeAreaControlFrameWithTimestampText(key, AreaControlPhase::Prepare, command, "18446744073709551615", 0x8001);
+    const auto wrapsToMinimum =
+        ForgeAreaControlFrameWithTimestampText(key, AreaControlPhase::Prepare, command, "9223372036854775808", 0x8002);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, wrapsToMinusOne) ==
+                HandoffOperationResult::Rejected);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, wrapsToMinimum) ==
+                HandoffOperationResult::Rejected);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::TimestampWindow), 2u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
+    EXPECT_EQ(TotalAuditCount(service), 2u);
+    EXPECT_FALSE(std::filesystem::exists(state));
+
+    service.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsTruncatedAndOverlongHeaderFrames)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-truncated") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x5d);
+    const std::string endpoint = UniqueName("spark-area-control-truncated");
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    // A header claiming more than the daemon payload bound is dropped without
+    // allocating or waiting for the body. The connection stays open until the
+    // audit lands so the service cannot see a pre-accept disconnect instead.
+    {
+        RawAreaControlConnection connection(endpoint);
+        ASSERT_TRUE(connection.IsOpen());
+        EXPECT_TRUE(connection.Write(EncodeRawHeader(Spark::Daemon::kMaxPayloadSize + 1, AreaControlPhase::Prepare)));
+        EXPECT_TRUE(WaitForAuditCount(service, AreaControlAuditReason::Incomplete, 1u));
+    }
+
+    // A header followed by a short body: the service gives up at its I/O
+    // deadline and records the frame as incomplete.
+    {
+        RawAreaControlConnection connection(endpoint);
+        ASSERT_TRUE(connection.IsOpen());
+        std::vector<uint8_t> truncated = EncodeRawHeader(100, AreaControlPhase::Prepare);
+        truncated.insert(truncated.end(), 10, static_cast<uint8_t>('1'));
+        EXPECT_TRUE(connection.Write(truncated));
+        EXPECT_TRUE(WaitForAuditCount(service, AreaControlAuditReason::Incomplete, 2u));
+    }
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
+    EXPECT_EQ(TotalAuditCount(service), 2u);
+    EXPECT_FALSE(std::filesystem::exists(state));
+
+    // The service survives both and still applies a genuine frame.
+    const HandoffCommand command{"truncated-session", 1, 7, 7};
+    const auto genuine =
+        ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x9001);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, genuine) ==
+                HandoffOperationResult::Applied);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 1u);
+
+    service.Stop();
     std::filesystem::remove(state, error);
 }
 
