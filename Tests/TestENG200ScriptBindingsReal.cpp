@@ -10,6 +10,15 @@
  * - fireEvent() publishes Spark::ScriptEvent on the EngineContext EventBus,
  *   stamped with the entity whose script fired it.
  *
+ * - Contact dispatch: AngelScriptEngine::ConnectEventBus() delivers the
+ *   CollisionEvent / TriggerEnterEvent / TriggerExitEvent that the real
+ *   PhysicsSystem publishes after a step to OnCollision / OnTriggerEnter /
+ *   OnTriggerExit on both participants' scripts, with no game-module glue and
+ *   no physics trigger callback installed (ScriptLifecycle_ENG200_Contact*).
+ *
+ * - Entity id 0 (the physics "no entity" id) never receives contacts, and a
+ *   body asleep inside a sensor does not exit it.
+ *
  * Both bindings were previously no-op or log-only; every assertion here fails
  * against those versions.
  */
@@ -182,6 +191,165 @@ TEST(ScriptBindings_ENG200_FireEventWithoutEventBusDropsSafely)
     // A missing bus is a configuration problem, not a script fault.
     EXPECT_FALSE(fx.engine.IsScriptFaulted(entity));
     fx.engine.DetachScript(entity);
+}
+
+namespace
+{
+    /// Reports every contact callback as a ScriptEvent "<kind>:<other>" stamped with the receiving entity.
+    const char* const kContactProbeScript =
+        "class ContactProbe\n"
+        "{\n"
+        "    void OnCollision(EntityID other) { fireEvent(\"collision:\" + other); }\n"
+        "    void OnTriggerEnter(EntityID other) { fireEvent(\"enter:\" + other); }\n"
+        "    void OnTriggerExit(EntityID other) { fireEvent(\"exit:\" + other); }\n"
+        "}\n";
+
+    /// ScriptEvents published by contact probes, in order.
+    struct ContactLog
+    {
+        std::vector<Spark::ScriptEvent> events;
+        Spark::SubscriptionHandle subscription;
+
+        explicit ContactLog(Spark::EventBus& bus)
+            : subscription(
+                  bus.Subscribe<Spark::ScriptEvent>([this](const Spark::ScriptEvent& e) { events.push_back(e); }))
+        {
+        }
+
+        /// Number of events @p receiver's script fired with exactly @p name.
+        size_t Count(EntityID receiver, const std::string& name) const
+        {
+            size_t count = 0;
+            for (const auto& e : events)
+            {
+                if (e.sourceEntity == static_cast<uint32_t>(receiver) && e.eventName == name)
+                {
+                    ++count;
+                }
+            }
+            return count;
+        }
+
+        /// Index of the first event @p receiver fired with @p name, or events.size().
+        size_t IndexOf(EntityID receiver, const std::string& name) const
+        {
+            for (size_t i = 0; i < events.size(); ++i)
+            {
+                if (events[i].sourceEntity == static_cast<uint32_t>(receiver) && events[i].eventName == name)
+                {
+                    return i;
+                }
+            }
+            return events.size();
+        }
+    };
+
+    std::string ContactName(const char* kind, EntityID other)
+    {
+        return std::string(kind) + ":" + std::to_string(static_cast<uint32_t>(other));
+    }
+} // namespace
+
+TEST(ScriptLifecycle_ENG200_ContactDispatchReachesBothScriptsAndDisconnects)
+{
+    Spark::EventBus bus;
+    ContextEventBusScope busScope(&bus);
+    ContactLog log(bus);
+
+    ScriptBindingFixture fx;
+    EXPECT_TRUE(fx.ready);
+    EXPECT_TRUE(fx.Compile(kContactProbeScript, "ENG200ContactDirect"));
+
+    // Entity 0 is the physics "no entity" id and never receives contacts (ScriptLifecycle_ENG200_ContactNoEntity*).
+    (void)fx.world.CreateEntity("LevelRoot");
+    const EntityID a = fx.world.CreateEntity("A");
+    const EntityID b = fx.world.CreateEntity("B");
+    const EntityID doomed = fx.world.CreateEntity("Doomed");
+    const EntityID unscripted = fx.world.CreateEntity("Unscripted");
+    EXPECT_TRUE(fx.engine.AttachScript(a, "ContactProbe", "ENG200ContactDirect"));
+    EXPECT_TRUE(fx.engine.AttachScript(b, "ContactProbe", "ENG200ContactDirect"));
+    EXPECT_TRUE(fx.engine.AttachScript(doomed, "ContactProbe", "ENG200ContactDirect"));
+    fx.engine.ConnectEventBus(&bus);
+
+    const auto id = [](EntityID e) { return static_cast<uint32_t>(e); };
+    bus.Publish(Spark::CollisionEvent{id(a), id(b), 0.0f});
+    bus.Publish(Spark::TriggerEnterEvent{id(a), id(b)});
+    bus.Publish(Spark::TriggerExitEvent{id(a), id(b)});
+
+    // Both participants, each told about the other, the first-named participant first.
+    EXPECT_EQ(log.events.size(), static_cast<size_t>(6));
+    EXPECT_EQ(log.Count(a, ContactName("collision", b)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(b, ContactName("collision", a)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(a, ContactName("enter", b)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(b, ContactName("enter", a)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(a, ContactName("exit", b)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(b, ContactName("exit", a)), static_cast<size_t>(1));
+    EXPECT_TRUE(log.IndexOf(a, ContactName("collision", b)) < log.IndexOf(b, ContactName("collision", a)));
+
+    // A destroyed entity's script and an unscripted participant are skipped; the live side still hears it.
+    log.events.clear();
+    fx.world.DestroyEntity(doomed);
+    bus.Publish(Spark::CollisionEvent{id(doomed), id(a), 0.0f});
+    bus.Publish(Spark::CollisionEvent{id(unscripted), id(b), 0.0f});
+    EXPECT_EQ(log.events.size(), static_cast<size_t>(2));
+    EXPECT_EQ(log.Count(a, ContactName("collision", doomed)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(b, ContactName("collision", unscripted)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(doomed, ContactName("collision", a)), static_cast<size_t>(0));
+
+    // Disconnecting stops delivery; Shutdown() (fixture teardown) would too.
+    log.events.clear();
+    fx.engine.ConnectEventBus(nullptr);
+    bus.Publish(Spark::CollisionEvent{id(a), id(b), 0.0f});
+    bus.Publish(Spark::TriggerEnterEvent{id(a), id(b)});
+    EXPECT_TRUE(log.events.empty());
+
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(a));
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(b));
+}
+
+TEST(ScriptLifecycle_ENG200_ContactNoEntityIdNeverReachesEntityZero)
+{
+    Spark::EventBus bus;
+    ContextEventBusScope busScope(&bus);
+    ContactLog log(bus);
+
+    ScriptBindingFixture fx;
+    EXPECT_TRUE(fx.ready);
+    EXPECT_TRUE(fx.Compile(kContactProbeScript, "ENG200ContactNoEntity"));
+
+    // The first entity a World creates is entt::entity{0}, the same value physics uses for "no entity" (terrain,
+    // props, ragdoll parts). Give it a probe script: contacts of unowned bodies must not reach it.
+    const EntityID first = fx.world.CreateEntity("First");
+    const EntityID player = fx.world.CreateEntity("Player");
+    EXPECT_EQ(static_cast<uint32_t>(first), static_cast<uint32_t>(0));
+    EXPECT_TRUE(fx.engine.AttachScript(first, "ContactProbe", "ENG200ContactNoEntity"));
+    EXPECT_TRUE(fx.engine.AttachScript(player, "ContactProbe", "ENG200ContactNoEntity"));
+    fx.engine.ConnectEventBus(&bus);
+
+    // The player touches unowned bodies on either side of each event.
+    const uint32_t playerId = static_cast<uint32_t>(player);
+    bus.Publish(Spark::CollisionEvent{0, playerId, 0.0f});
+    bus.Publish(Spark::CollisionEvent{playerId, 0, 0.0f});
+    bus.Publish(Spark::TriggerEnterEvent{playerId, 0});
+    bus.Publish(Spark::TriggerExitEvent{playerId, 0});
+    // Two unowned bodies touching reach no script at all.
+    bus.Publish(Spark::CollisionEvent{0, 0, 0.0f});
+
+    // Only the player hears these, and it is told it touched the null entity, not entity 0.
+    const EntityID none = entt::null;
+    EXPECT_EQ(log.events.size(), static_cast<size_t>(4));
+    EXPECT_EQ(log.Count(player, ContactName("collision", none)), static_cast<size_t>(2));
+    EXPECT_EQ(log.Count(player, ContactName("enter", none)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(player, ContactName("exit", none)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(player, ContactName("collision", first)), static_cast<size_t>(0));
+    for (const auto& e : log.events)
+    {
+        EXPECT_TRUE(e.sourceEntity != static_cast<uint32_t>(first));
+    }
+
+    fx.engine.ConnectEventBus(nullptr);
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(first));
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(player));
 }
 
 #ifdef SPARK_TEST_HAS_PHYSICS
@@ -414,6 +582,225 @@ TEST(ScriptBindings_ENG200_GetSpeedReadsLiveBodyVelocity)
     }
     EXPECT_FALSE(fx.engine.IsScriptFaulted(bare));
     fx.engine.DetachScript(bare);
+}
+
+namespace
+{
+    /// Box collider of the given half extents on @p entity.
+    void AddBoxCollider(World& world, EntityID entity, const DirectX::XMFLOAT3& halfExtents)
+    {
+        ColliderComponent collider;
+        collider.shape = ColliderComponent::Shape::Box;
+        collider.halfExtents = halfExtents;
+        world.AddComponent<ColliderComponent>(entity, collider);
+    }
+} // namespace
+
+TEST(ScriptLifecycle_ENG200_ContactJoltCollisionReachesBothScripts)
+{
+    PhysicsRig rig;
+    EXPECT_TRUE(rig.ready);
+    if (!rig.ready)
+    {
+        return;
+    }
+
+    Spark::EventBus bus;
+    ContextEventBusScope busScope(&bus);
+    rig.physics->SetEventBus(&bus);
+    ContactLog log(bus);
+
+    ScriptBindingFixture fx;
+    EXPECT_TRUE(fx.ready);
+    EXPECT_TRUE(fx.Compile(kContactProbeScript, "ENG200ContactJolt"));
+    fx.engine.ConnectEventBus(&bus);
+
+    // A dynamic crate dropped 0.5 m onto a static floor. The level root takes entity 0 (the no-entity id).
+    (void)fx.world.CreateEntity("LevelRoot");
+    const EntityID floor = MakeBody(fx.world, "Floor", RigidBodyComponent::Type::Static);
+    fx.world.GetComponent<Transform>(floor)->position = {0.0f, -0.5f, 0.0f};
+    AddBoxCollider(fx.world, floor, {10.0f, 0.5f, 10.0f});
+    const EntityID crate = MakeBody(fx.world, "Crate", RigidBodyComponent::Type::Dynamic);
+    fx.world.GetComponent<Transform>(crate)->position = {0.0f, 1.0f, 0.0f};
+    EXPECT_TRUE(fx.engine.AttachScript(floor, "ContactProbe", "ENG200ContactJolt"));
+    EXPECT_TRUE(fx.engine.AttachScript(crate, "ContactProbe", "ENG200ContactJolt"));
+
+    rig.sync->Update(fx.world, kTick);
+    for (int i = 0; i < 120; ++i)
+    {
+        rig.physics->StepFixed(1);
+        rig.sync->Update(fx.world, kTick);
+    }
+
+    std::printf("  collision events: crate=%zu floor=%zu crate y=%.3f\n",
+                log.Count(crate, ContactName("collision", floor)), log.Count(floor, ContactName("collision", crate)),
+                fx.world.GetComponent<Transform>(crate)->position.y);
+    EXPECT_TRUE(log.Count(crate, ContactName("collision", floor)) >= 1);
+    EXPECT_TRUE(log.Count(floor, ContactName("collision", crate)) >= 1);
+    EXPECT_EQ(log.Count(crate, ContactName("collision", floor)), log.Count(floor, ContactName("collision", crate)));
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(crate));
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(floor));
+
+    fx.engine.ConnectEventBus(nullptr);
+    rig.physics->SetEventBus(nullptr);
+}
+
+TEST(ScriptLifecycle_ENG200_ContactJoltTriggerEnterExitReachesBothScripts)
+{
+    PhysicsRig rig;
+    EXPECT_TRUE(rig.ready);
+    if (!rig.ready)
+    {
+        return;
+    }
+
+    Spark::EventBus bus;
+    ContextEventBusScope busScope(&bus);
+    rig.physics->SetEventBus(&bus);
+    ContactLog log(bus);
+    std::vector<Spark::TriggerEnterEvent> enters;
+    auto enterSubscription =
+        bus.Subscribe<Spark::TriggerEnterEvent>([&enters](const Spark::TriggerEnterEvent& e) { enters.push_back(e); });
+
+    ScriptBindingFixture fx;
+    EXPECT_TRUE(fx.ready);
+    EXPECT_TRUE(fx.Compile(kContactProbeScript, "ENG200ContactSensor"));
+    fx.engine.ConnectEventBus(&bus);
+
+    // A static sensor volume at the origin and a crate that free-falls through it. No trigger callback is
+    // installed on PhysicsSystem: the EventBus alone must carry the overlap. The level root takes entity 0.
+    (void)fx.world.CreateEntity("LevelRoot");
+    const EntityID sensor = fx.world.CreateEntity("Sensor");
+    fx.world.AddComponent<Transform>(sensor);
+    RigidBodyComponent sensorBody;
+    sensorBody.type = RigidBodyComponent::Type::Static;
+    sensorBody.isTrigger = true;
+    fx.world.AddComponent<RigidBodyComponent>(sensor, sensorBody);
+    AddBoxCollider(fx.world, sensor, {1.0f, 1.0f, 1.0f});
+    const EntityID crate = MakeBody(fx.world, "Crate", RigidBodyComponent::Type::Dynamic);
+    fx.world.GetComponent<Transform>(crate)->position = {0.0f, 3.0f, 0.0f};
+    EXPECT_TRUE(fx.engine.AttachScript(sensor, "ContactProbe", "ENG200ContactSensor"));
+    EXPECT_TRUE(fx.engine.AttachScript(crate, "ContactProbe", "ENG200ContactSensor"));
+
+    rig.sync->Update(fx.world, kTick);
+    for (int i = 0; i < 180; ++i)
+    {
+        rig.physics->StepFixed(1);
+        rig.sync->Update(fx.world, kTick);
+    }
+
+    const float crateY = fx.world.GetComponent<Transform>(crate)->position.y;
+    std::printf("  trigger events: %zu script events, crate y=%.3f\n", log.events.size(), crateY);
+    EXPECT_TRUE(crateY < -2.0f); // fell all the way through: the sensor applied no contact force
+
+    // Exactly one enter and one exit per participant, enter first, each naming the other entity.
+    EXPECT_EQ(log.Count(crate, ContactName("enter", sensor)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(sensor, ContactName("enter", crate)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(crate, ContactName("exit", sensor)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(sensor, ContactName("exit", crate)), static_cast<size_t>(1));
+    EXPECT_TRUE(log.IndexOf(crate, ContactName("enter", sensor)) < log.IndexOf(crate, ContactName("exit", sensor)));
+    EXPECT_EQ(log.Count(crate, ContactName("collision", sensor)), static_cast<size_t>(0));
+
+    // The published roles follow the sensor, not Jolt's pair order.
+    EXPECT_EQ(enters.size(), static_cast<size_t>(1));
+    if (enters.size() == 1)
+    {
+        EXPECT_EQ(enters[0].entityId, static_cast<uint32_t>(crate));
+        EXPECT_EQ(enters[0].triggerId, static_cast<uint32_t>(sensor));
+    }
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(crate));
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(sensor));
+
+    fx.engine.ConnectEventBus(nullptr);
+    rig.physics->SetEventBus(nullptr);
+}
+
+TEST(ScriptLifecycle_ENG200_ContactJoltSleepingBodyStaysInsideTrigger)
+{
+    PhysicsRig rig;
+    EXPECT_TRUE(rig.ready);
+    if (!rig.ready)
+    {
+        return;
+    }
+
+    Spark::EventBus bus;
+    ContextEventBusScope busScope(&bus);
+    rig.physics->SetEventBus(&bus);
+    ContactLog log(bus);
+
+    ScriptBindingFixture fx;
+    EXPECT_TRUE(fx.ready);
+    EXPECT_TRUE(fx.Compile(kContactProbeScript, "ENG200ContactSleep"));
+    fx.engine.ConnectEventBus(&bus);
+
+    // A crate dropped onto a static floor inside a large static sensor. Jolt stops reporting contacts once the
+    // crate sleeps; the overlap must survive that instead of exiting while the crate is still inside.
+    (void)fx.world.CreateEntity("LevelRoot");
+    const EntityID floor = MakeBody(fx.world, "Floor", RigidBodyComponent::Type::Static);
+    fx.world.GetComponent<Transform>(floor)->position = {0.0f, -0.5f, 0.0f};
+    AddBoxCollider(fx.world, floor, {10.0f, 0.5f, 10.0f});
+    const EntityID sensor = fx.world.CreateEntity("Sensor");
+    fx.world.AddComponent<Transform>(sensor).position = {0.0f, 1.0f, 0.0f};
+    RigidBodyComponent sensorBody;
+    sensorBody.type = RigidBodyComponent::Type::Static;
+    sensorBody.isTrigger = true;
+    fx.world.AddComponent<RigidBodyComponent>(sensor, sensorBody);
+    AddBoxCollider(fx.world, sensor, {3.0f, 2.0f, 3.0f});
+    const EntityID crate = MakeBody(fx.world, "Crate", RigidBodyComponent::Type::Dynamic);
+    fx.world.GetComponent<Transform>(crate)->position = {0.0f, 1.0f, 0.0f};
+    EXPECT_TRUE(fx.engine.AttachScript(sensor, "ContactProbe", "ENG200ContactSleep"));
+    EXPECT_TRUE(fx.engine.AttachScript(crate, "ContactProbe", "ENG200ContactSleep"));
+
+    // Four seconds: the crate lands within the first second and Jolt's sleep threshold is 0.5 s at rest.
+    rig.sync->Update(fx.world, kTick);
+    for (int i = 0; i < 240; ++i)
+    {
+        rig.physics->StepFixed(1);
+        rig.sync->Update(fx.world, kTick);
+    }
+
+    auto* crateBody = fx.world.GetComponent<RigidBodyComponent>(crate)->physicsBodyHandle.As<PhysicsBody>();
+    EXPECT_TRUE(crateBody != nullptr);
+    if (!crateBody)
+    {
+        return;
+    }
+    std::printf("  sleeping crate: active=%d y=%.3f, %zu script events\n", crateBody->IsActive() ? 1 : 0,
+                fx.world.GetComponent<Transform>(crate)->position.y, log.events.size());
+    EXPECT_FALSE(crateBody->IsActive()); // the scenario under test: the crate is asleep inside the sensor
+    EXPECT_EQ(log.Count(crate, ContactName("enter", sensor)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(sensor, ContactName("enter", crate)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(crate, ContactName("exit", sensor)), static_cast<size_t>(0));
+    EXPECT_EQ(log.Count(sensor, ContactName("exit", crate)), static_cast<size_t>(0));
+
+    // Waking the crate in place (a small upward nudge) re-reports the overlap: still no exit and no second enter.
+    crateBody->SetLinearVelocity({0.0f, 1.0f, 0.0f});
+    for (int i = 0; i < 5; ++i)
+    {
+        rig.physics->StepFixed(1);
+        rig.sync->Update(fx.world, kTick);
+    }
+    EXPECT_TRUE(crateBody->IsActive());
+    EXPECT_EQ(log.Count(crate, ContactName("enter", sensor)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(crate, ContactName("exit", sensor)), static_cast<size_t>(0));
+
+    // Moving the crate (which wakes it) out of the sensor ends the overlap exactly once, with no second enter.
+    crateBody->SetPosition({20.0f, 1.0f, 0.0f});
+    crateBody->SetLinearVelocity({0.0f, 0.0f, 0.0f});
+    for (int i = 0; i < 10; ++i)
+    {
+        rig.physics->StepFixed(1);
+        rig.sync->Update(fx.world, kTick);
+    }
+    EXPECT_EQ(log.Count(crate, ContactName("enter", sensor)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(crate, ContactName("exit", sensor)), static_cast<size_t>(1));
+    EXPECT_EQ(log.Count(sensor, ContactName("exit", crate)), static_cast<size_t>(1));
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(crate));
+    EXPECT_FALSE(fx.engine.IsScriptFaulted(sensor));
+
+    fx.engine.ConnectEventBus(nullptr);
+    rig.physics->SetEventBus(nullptr);
 }
 
 #endif // SPARK_TEST_HAS_PHYSICS

@@ -22,6 +22,7 @@
 #include "Engine/Localization/LocalizationSystem.h"
 #include "Engine/Rendering/MovieRenderPipeline.h"
 #include "Engine/Replay/ReplaySystem.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
 #include "Engine/World/ProximityTriggerSystem.h"
 #include "Input/InputActionSystem.h"
 #include "Input/InputManager.h"
@@ -321,6 +322,53 @@ TEST(EngineWiring_TriggerVolumeComponentPublishesEnterEventFromLifecycleTick)
     Spark::World::ProximityTriggerSystem::GetInstance().RemoveTrigger(tv.runtimeTriggerID);
     world.DestroyEntity(visitor);
     world.DestroyEntity(volume);
+}
+
+// ============================================================================
+// ENG-200: the lifecycle connects the script runtime to the engine EventBus, so
+// physics contact events reach entity scripts with no game-module glue
+// ============================================================================
+
+TEST(EngineWiring_LifecycleConnectsScriptContactDispatch)
+{
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+    World& world = SetupContextWithWorld();
+    InitializeProductionLifecycle();
+    auto* ctx = EngineContext::Get();
+    AngelScriptEngine* scripts = ctx->GetScriptEngine();
+    ASSERT_TRUE(scripts != nullptr);
+
+    ASSERT_TRUE(
+        scripts->CompileScriptFromString("class WiringContactProbe\n"
+                                         "{\n"
+                                         "    void OnCollision(EntityID other) { fireEvent(\"wired:\" + other); }\n"
+                                         "}\n",
+                                         "EngineWiringContactProbe"));
+    // Entity 0 is the physics "no entity" id and never takes part in script contacts. Only the first entity a fresh
+    // World creates has that id, so the filler absorbs it and both participants are real entities.
+    const EntityID filler = world.CreateEntity("wiring_contact_filler");
+    const EntityID probe = world.CreateEntity("wiring_contact_probe");
+    const EntityID other = world.CreateEntity("wiring_contact_other");
+    ASSERT_TRUE(scripts->AttachScript(probe, "WiringContactProbe", "EngineWiringContactProbe"));
+
+    std::vector<Spark::ScriptEvent> received;
+    auto subscription = ContextEventBus().Subscribe<Spark::ScriptEvent>([&received](const Spark::ScriptEvent& e)
+                                                                        { received.push_back(e); });
+
+    // Published exactly as PhysicsSystem publishes it after a step. Only the lifecycle's ConnectEventBus() call
+    // routes it to the script: nothing in this test connects the script engine to the bus.
+    ContextEventBus().Publish(Spark::CollisionEvent{static_cast<uint32_t>(probe), static_cast<uint32_t>(other), 0.0f});
+
+    ASSERT_EQ(received.size(), static_cast<size_t>(1));
+    EXPECT_EQ(received.front().sourceEntity, static_cast<uint32_t>(probe));
+    EXPECT_EQ(received.front().eventName, "wired:" + std::to_string(static_cast<uint32_t>(other)));
+
+    scripts->DetachScript(probe);
+    world.DestroyEntity(probe);
+    world.DestroyEntity(other);
+    world.DestroyEntity(filler);
+    Spark::Core::Lifecycle::ShutdownGameplaySystemsImpl();
+#endif
 }
 
 // ============================================================================

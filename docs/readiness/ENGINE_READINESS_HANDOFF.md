@@ -2708,8 +2708,8 @@ Script objects/methods are cached, but entity identity and production start/upda
 Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Actual script moves an entity, receives collision/event, and drives audio/animation
-   - Evidence: `Tests/TestENG200ScriptFaultsReal.cpp`, `Tests/TestENG200ScriptBindingsReal.cpp`
-   - A real script moves an entity via CallUpdate and, through applyForce(), a Dynamic Jolt body; getSpeed() reads the live body and fireEvent() publishes Spark::ScriptEvent with its source entity (ScriptBindings_*). Scripts still get no production collision/event dispatch and audio/animation is untested.
+   - Evidence: `Tests/TestENG200ScriptFaultsReal.cpp`, `Tests/TestENG200ScriptBindingsReal.cpp`, `Tests/TestEngineWiringReal.cpp`
+   - A script moves a Dynamic Jolt body via applyForce(); getSpeed() reads it; fireEvent() publishes ScriptEvent (ScriptBindings_*). On a test-connected bus, Jolt collision and sensor enter/exit reach both scripts, never id 0, no exit while asleep (ScriptLifecycle_ENG200_Contact*). EngineWiring_LifecycleConnectsScriptContactDispatch checks gameplay init connects it. Audio/animation untested.
 2. **[implemented]** Compile/runtime failure disables safely with actionable diagnostics
    - Evidence: `Tests/TestENG200ScriptFaultsReal.cpp`, `SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp`
    - The real AngelScriptEngine reports compile, runtime, constructor and sandbox-runaway faults with section:line diagnostics. The faulted script is disabled and not re-run, and this is asserted by trace counts.

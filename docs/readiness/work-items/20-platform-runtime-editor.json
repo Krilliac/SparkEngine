@@ -2263,9 +2263,10 @@
           "state": "unmet",
           "evidence": [
             "Tests/TestENG200ScriptFaultsReal.cpp",
-            "Tests/TestENG200ScriptBindingsReal.cpp"
+            "Tests/TestENG200ScriptBindingsReal.cpp",
+            "Tests/TestEngineWiringReal.cpp"
           ],
-          "note": "A real script moves an entity via CallUpdate and, through applyForce(), a Dynamic Jolt body; getSpeed() reads the live body and fireEvent() publishes Spark::ScriptEvent with its source entity (ScriptBindings_*). Scripts still get no production collision/event dispatch and audio/animation is untested."
+          "note": "A script moves a Dynamic Jolt body via applyForce(); getSpeed() reads it; fireEvent() publishes ScriptEvent (ScriptBindings_*). On a test-connected bus, Jolt collision and sensor enter/exit reach both scripts, never id 0, no exit while asleep (ScriptLifecycle_ENG200_Contact*). EngineWiring_LifecycleConnectsScriptContactDispatch checks gameplay init connects it. Audio/animation untested."
         },
         {
           "criterionDigest": "sha256:cd885ff23a2b",

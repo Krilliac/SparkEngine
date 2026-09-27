@@ -425,6 +425,18 @@ class PhysicsSystem
     {
         m_triggerCallback = callback;
     }
+    /**
+     * @brief Publish contact events on @p bus (non-owning; nullptr stops publishing).
+     *
+     * Each step publishes Spark::CollisionEvent per solid contact and
+     * Spark::TriggerEnterEvent / Spark::TriggerExitEvent once per sensor overlap
+     * begin/end, with triggerId = the sensor body's entity. An overlap whose
+     * bodies have all gone to sleep (or are static) stays active, so a body
+     * resting inside a sensor gets no exit until it wakes and leaves. Bodies
+     * created outside the ECS report entity id 0 ("no entity"). Events are published
+     * whether or not the collision/trigger callbacks are installed, synchronously
+     * on the thread that steps the world (the game thread, per the stepping contract).
+     */
     void SetEventBus(Spark::EventBus* bus) { m_eventBus = bus; }
 
     // =========================================================================

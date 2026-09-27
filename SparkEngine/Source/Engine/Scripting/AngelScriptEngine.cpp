@@ -648,6 +648,9 @@ void AngelScriptEngine::Shutdown()
     SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
     SPARK_LOG_INFO(Spark::LogCategory::Scripting, "AngelScriptEngine shutting down...");
 
+    // Stop contact dispatch before the instances it would call are released.
+    ConnectEventBus(nullptr);
+
     // Detach and clean up every entity script.
     for (auto& [entityID, instance] : m_entityScripts)
     {
@@ -1141,6 +1144,24 @@ void AngelScriptEngine::CallOnCollision(EntityID entity, EntityID other)
     }
 }
 
+void AngelScriptEngine::CallOnTriggerEnter(EntityID entity, EntityID other)
+{
+    if (ScriptInstance* inst = GetScriptInstance(entity))
+    {
+        DispatchCallback(*inst, inst->onTriggerEnterMethod, "OnTriggerEnter()",
+                         [other](asIScriptContext* ctx) { ctx->SetArgDWord(0, static_cast<asDWORD>(other)); });
+    }
+}
+
+void AngelScriptEngine::CallOnTriggerExit(EntityID entity, EntityID other)
+{
+    if (ScriptInstance* inst = GetScriptInstance(entity))
+    {
+        DispatchCallback(*inst, inst->onTriggerExitMethod, "OnTriggerExit()",
+                         [other](asIScriptContext* ctx) { ctx->SetArgDWord(0, static_cast<asDWORD>(other)); });
+    }
+}
+
 void AngelScriptEngine::DispatchCallback(ScriptInstance& instance, asIScriptFunction* method, const char* callbackName,
                                          const std::function<void(asIScriptContext*)>& setArgs)
 {
@@ -1451,6 +1472,8 @@ void AngelScriptEngine::CacheScriptMethods(ScriptInstance& instance)
     instance.startMethod = instance.typeInfo->GetMethodByDecl("void Start()");
     instance.updateMethod = instance.typeInfo->GetMethodByDecl("void Update(float)");
     instance.onCollisionMethod = instance.typeInfo->GetMethodByDecl("void OnCollision(EntityID)");
+    instance.onTriggerEnterMethod = instance.typeInfo->GetMethodByDecl("void OnTriggerEnter(EntityID)");
+    instance.onTriggerExitMethod = instance.typeInfo->GetMethodByDecl("void OnTriggerExit(EntityID)");
 }
 
 void AngelScriptEngine::CleanupScriptInstance(ScriptInstance& instance)
@@ -1469,6 +1492,8 @@ void AngelScriptEngine::CleanupScriptInstance(ScriptInstance& instance)
     instance.startMethod = nullptr;
     instance.updateMethod = nullptr;
     instance.onCollisionMethod = nullptr;
+    instance.onTriggerEnterMethod = nullptr;
+    instance.onTriggerExitMethod = nullptr;
 }
 
 void AngelScriptEngine::MessageCallback(const asSMessageInfo* msg, void* param)
@@ -1542,6 +1567,7 @@ void AngelScriptEngine::Shutdown()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
     SPARK_LOG_INFO(Spark::LogCategory::Scripting, "AngelScriptEngine shutting down (stub)...");
+    ConnectEventBus(nullptr);
     LogWarning("AngelScript support is not compiled in. Shutdown is a no-op.");
     if (s_instance == this)
     {
@@ -1587,6 +1613,16 @@ void AngelScriptEngine::CallUpdate(EntityID /*entity*/, float /*deltaTime*/)
 }
 
 void AngelScriptEngine::CallOnCollision(EntityID /*entity*/, EntityID /*other*/)
+{
+    // No-op without AngelScript.
+}
+
+void AngelScriptEngine::CallOnTriggerEnter(EntityID /*entity*/, EntityID /*other*/)
+{
+    // No-op without AngelScript.
+}
+
+void AngelScriptEngine::CallOnTriggerExit(EntityID /*entity*/, EntityID /*other*/)
 {
     // No-op without AngelScript.
 }

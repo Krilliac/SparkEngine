@@ -1310,6 +1310,13 @@ if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
             ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_;SPARK_TEST_EXPECT_COUNT=5"
             LABELS "scripting;scripting-integration;physics;integration"
             TIMEOUT 120)
+        # ENG-200: engine-owned collision/trigger dispatch from the real Jolt world
+        # and EventBus to script OnCollision/OnTriggerEnter/OnTriggerExit (same file).
+        add_test(NAME ScriptContactDispatchReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(ScriptContactDispatchReal PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptLifecycle_ENG200_Contact;SPARK_TEST_EXPECT_COUNT=5"
+            LABELS "scripting;scripting-integration;physics;integration"
+            TIMEOUT 120)
     endif()
 endif()
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
@@ -1763,7 +1770,7 @@ endif()
 set(_spark_life_selectors
     "ModuleLifecycle_=6"
     "ModuleABI_=${_spark_life_module_abi_count}"
-    "EngineWiring_=9"
+    "EngineWiring_=10"
     "ModuleHotReload_=15")
 if(NOT WIN32)
     list(APPEND _spark_life_selectors "EngineLifecycle_=22")

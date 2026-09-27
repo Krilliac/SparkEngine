@@ -10,7 +10,11 @@
  *
  * - **Script compilation** from files or in-memory strings
  * - **Entity binding** — attach/detach script classes to ECS entities
- * - **Lifecycle callbacks** — Start(), Update(float), OnCollision(EntityID)
+ * - **Lifecycle callbacks** — Start(), Update(float), OnCollision(EntityID),
+ *   OnTriggerEnter(EntityID), OnTriggerExit(EntityID)
+ * - **Engine-owned contact dispatch** — ConnectEventBus() routes the physics
+ *   CollisionEvent / TriggerEnterEvent / TriggerExitEvent (and authored
+ *   TriggerVolumeComponent overlaps) to both participants' scripts
  * - **Engine API exposure** — math types, components, input, and utility
  *   functions are registered and callable from script code
  * - **Error reporting** — compilation and runtime errors are captured and
@@ -76,6 +80,7 @@ struct asSMessageInfo;
 #include <string>
 #include <vector>
 #include "../ECS/Components.h"
+#include "../../Utils/EventBus.h"
 #include "ScriptSandbox.h"
 
 /**
@@ -195,6 +200,51 @@ class AngelScriptEngine
      */
     void CallOnCollision(EntityID entity, EntityID other);
 
+    /**
+     * @brief Call the script's OnTriggerEnter(EntityID) method for an entity
+     * @param entity The entity whose script OnTriggerEnter() should be invoked
+     * @param other  The other participant: the trigger volume for the entering
+     *               entity, or the entering entity for the trigger's own script
+     */
+    void CallOnTriggerEnter(EntityID entity, EntityID other);
+
+    /**
+     * @brief Call the script's OnTriggerExit(EntityID) method for an entity
+     * @param entity The entity whose script OnTriggerExit() should be invoked
+     * @param other  The other participant (see CallOnTriggerEnter())
+     */
+    void CallOnTriggerExit(EntityID entity, EntityID other);
+
+    /**
+     * @brief Dispatch engine contact events on @p bus to attached scripts.
+     *
+     * Subscribes to Spark::CollisionEvent, Spark::TriggerEnterEvent and
+     * Spark::TriggerExitEvent. Each event is delivered to the scripts of both
+     * participants — OnCollision / OnTriggerEnter / OnTriggerExit receives the
+     * other entity — first to CollisionEvent::entityA or the entering entity,
+     * then to the other one; an entity with no script, no matching method, a
+     * faulted script, or (when a World is bound) a destroyed entity id is
+     * skipped. Id 0 is the physics "no entity" sentinel (a body created outside
+     * the ECS, such as terrain): it never receives a callback, and the other
+     * participant's callback receives entt::null for it. Because entity 0 is
+     * also the first entity a World creates, that entity's script never
+     * receives contact callbacks. PhysicsSystem publishes these after each step and the
+     * TriggerVolumeComponent bridge publishes authored overlaps, so scripts need
+     * no game-module glue to receive them.
+     *
+     * Thread affinity: handlers run synchronously on the publishing thread, which
+     * for physics is the game thread that steps the world (the same thread that
+     * must run every other script call). Allocation: three subscriptions per
+     * connection; dispatch itself allocates only what DispatchCallback does.
+     *
+     * Replaces any previous connection; nullptr disconnects. Shutdown() disconnects.
+     * The bus must outlive the connection or be disconnected first (a handle that
+     * outlives its bus is inert).
+     *
+     * @param bus Engine EventBus (EngineContext::GetEventBus()), or nullptr.
+     */
+    void ConnectEventBus(Spark::EventBus* bus);
+
     // ========================================================================
     // Error Handling and Singleton Access
     // ========================================================================
@@ -303,22 +353,41 @@ class AngelScriptEngine
      */
     struct ScriptInstance
     {
-        asIScriptObject* object = nullptr;              ///< The instantiated script object
-        asITypeInfo* typeInfo = nullptr;                ///< Type metadata for the script class
-        asIScriptContext* context = nullptr;            ///< Execution context for calling methods
-        asIScriptFunction* startMethod = nullptr;       ///< Cached pointer to the Start() method
-        asIScriptFunction* updateMethod = nullptr;      ///< Cached pointer to the Update(float) method
-        asIScriptFunction* onCollisionMethod = nullptr; ///< Cached pointer to the OnCollision(EntityID) method
-        std::string className;                          ///< Name of the script class
-        std::string moduleName;                         ///< Name of the module containing the class
-        bool faulted = false;                           ///< Disabled by a runtime fault until re-attached
-        EntityID entity = entt::null;                   ///< Owning entity (context user data for GetExecutingEntity)
+        asIScriptObject* object = nullptr;                 ///< The instantiated script object
+        asITypeInfo* typeInfo = nullptr;                   ///< Type metadata for the script class
+        asIScriptContext* context = nullptr;               ///< Execution context for calling methods
+        asIScriptFunction* startMethod = nullptr;          ///< Cached pointer to the Start() method
+        asIScriptFunction* updateMethod = nullptr;         ///< Cached pointer to the Update(float) method
+        asIScriptFunction* onCollisionMethod = nullptr;    ///< Cached pointer to the OnCollision(EntityID) method
+        asIScriptFunction* onTriggerEnterMethod = nullptr; ///< Cached pointer to OnTriggerEnter(EntityID)
+        asIScriptFunction* onTriggerExitMethod = nullptr;  ///< Cached pointer to OnTriggerExit(EntityID)
+        std::string className;                             ///< Name of the script class
+        std::string moduleName;                            ///< Name of the module containing the class
+        bool faulted = false;                              ///< Disabled by a runtime fault until re-attached
+        EntityID entity = entt::null;                      ///< Owning entity (context user data for GetExecutingEntity)
     };
 
     std::unordered_map<EntityID, ScriptInstance> m_entityScripts; ///< Active script instances by entity ID
     std::string m_lastError;                                      ///< Last error message from AS engine
     std::string m_firstCompileError; ///< First compiler error of the current build (kept for diagnostics)
-    std::unique_ptr<Spark::ScriptSandbox> m_sandbox; ///< Script execution sandbox
+    std::unique_ptr<Spark::ScriptSandbox> m_sandbox;               ///< Script execution sandbox
+    std::vector<Spark::SubscriptionHandle> m_contactSubscriptions; ///< ConnectEventBus() subscriptions
+
+    /// Which contact callback DispatchContact() delivers.
+    enum class ContactCallback : uint8_t
+    {
+        Collision,
+        TriggerEnter,
+        TriggerExit
+    };
+
+    /**
+     * @brief Deliver one contact event to both participants' scripts.
+     * @param callback Callback to invoke
+     * @param first    Participant dispatched first (collision entityA / entering entity)
+     * @param second   Other participant (collision entityB / trigger volume)
+     */
+    void DispatchContact(ContactCallback callback, EntityID first, EntityID second);
 
     // Sandbox security configuration staged via ConfigureSandboxSecurity()
     // before Initialize() constructs m_sandbox and registers the engine API.
@@ -516,7 +585,7 @@ class AngelScriptEngine
     ScriptInstance* GetScriptInstance(EntityID entity);
 
     /**
-     * @brief Cache method pointers (Start, Update, OnCollision) for a script instance
+     * @brief Cache lifecycle and contact method pointers for a script instance
      * @param instance The script instance to cache methods for
      */
     void CacheScriptMethods(ScriptInstance& instance);

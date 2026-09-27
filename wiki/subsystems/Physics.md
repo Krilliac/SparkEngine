@@ -359,6 +359,25 @@ physics.SetTriggerCallback([](PhysicsBody* trigger, PhysicsBody* other, bool ent
 });
 ```
 
+The trigger callback receives the two bodies in the order Jolt reported them, so check
+`IsTrigger()` to tell which one is the sensor.
+
+### EventBus contact events
+
+With `SetEventBus()` set (the engine does this in `InitPhysics()`), every step also publishes
+`Spark::CollisionEvent` for each new solid contact and `Spark::TriggerEnterEvent` /
+`Spark::TriggerExitEvent` once when a sensor overlap begins or ends. These are published whether or
+not callbacks are installed. In the trigger events, `triggerId` is always the sensor body's entity
+and `entityId` is the body that entered it. Jolt stops reporting contacts for a sleeping body, so an
+overlap whose bodies are all asleep or static stays active: a crate that comes to rest inside a
+sensor gets no exit (and no second enter when it wakes). The exit fires on the first step after a
+woken body is no longer reported inside, so a sleeping body moved out without being activated
+exits only once it wakes. `SetTriggerCallback()` follows the same enter/exit rules. A body created
+outside the ECS (terrain, props, ragdoll parts) reports entity id `0`, the physics "no entity"
+value. The script runtime subscribes to these events to call
+`OnCollision` / `OnTriggerEnter` / `OnTriggerExit` (see
+[Scripting with AngelScript](Scripting-with-AngelScript.md#contact-dispatch-engine-owned)).
+
 ---
 
 ## CollisionSystem (Static Utility Class)

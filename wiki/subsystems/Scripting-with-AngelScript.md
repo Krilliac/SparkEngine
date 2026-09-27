@@ -107,7 +107,9 @@ class EnemyBehavior
 |----------|-----------|------------|-------|
 | `Start` | `void Start()` | Once, when the script is first attached | Initialization logic goes here |
 | `Update` | `void Update(float dt)` | Every frame, with delta time in seconds | Main game loop tick |
-| `OnCollision` | `void OnCollision(uint entityId)` | When the entity collides with another | Requires a collider component |
+| `OnCollision` | `void OnCollision(EntityID other)` | When the entity's physics body starts touching another solid body | Requires a `RigidBodyComponent`; `other` is the other entity |
+| `OnTriggerEnter` | `void OnTriggerEnter(EntityID other)` | When an overlap with a sensor body (`RigidBodyComponent::isTrigger`) or an authored `TriggerVolumeComponent` begins | Delivered to both sides: the entering entity gets the trigger, the trigger's own script gets the entering entity |
+| `OnTriggerExit` | `void OnTriggerExit(EntityID other)` | When that overlap ends | Same participants as `OnTriggerEnter`; a body removed from the world gets no exit, and a body asleep inside the sensor has not exited |
 
 ### Execution Order
 
@@ -117,7 +119,42 @@ Lifecycle callbacks are dispatched during the **Scripting** phase of the ECS upd
 Physics -> Animation -> AI -> Scripting -> Audio -> Lifecycle -> Render
 ```
 
-Within the Scripting phase, `Start()` is called before `Update()` for any newly attached scripts. `OnCollision()` is dispatched after the Physics phase delivers collision events.
+Within the Scripting phase, `Start()` is called before `Update()` for any newly attached scripts.
+
+### Contact dispatch (engine-owned)
+
+Contact callbacks do not need game-module glue. At startup the lifecycle
+(`InitScriptingAndPlatformSystems`) calls `AngelScriptEngine::ConnectEventBus(ctx->GetEventBus())`,
+which subscribes the script runtime to the events `PhysicsSystem` publishes after every step:
+
+| EventBus event | Published by | Script callback (both participants) |
+|----------------|--------------|-------------------------------------|
+| `Spark::CollisionEvent{entityA, entityB}` | `PhysicsSystem` on each new solid contact | `OnCollision(other)`: `entityA` first, then `entityB` |
+| `Spark::TriggerEnterEvent{entityId, triggerId}` | `PhysicsSystem` once per sensor-overlap start; the `TriggerVolumeComponent` bridge for authored volumes | `OnTriggerEnter(other)`: entering entity first, then the trigger |
+| `Spark::TriggerExitEvent{entityId, triggerId}` | Same sources, once when the overlap ends | `OnTriggerExit(other)` |
+
+Rules:
+
+- `PhysicsSystem` publishes trigger events whether or not a `SetTriggerCallback()` is installed, and
+  `triggerId` is always the sensor body's entity (not Jolt's pair order).
+- The callbacks run synchronously on the thread that steps physics. By the module stepping contract
+  that is the game thread, the same thread every other script call must use.
+- An entity with no script, no matching method, or a faulted script is skipped. When a World is
+  bound, an entity id that the World no longer holds is also skipped, because destroying an entity
+  does not remove its physics body. A faulting contact callback disables the script like any other
+  callback.
+- Entity id `0` is the physics "no entity" value, reported by bodies created outside the ECS
+  (terrain, props, ragdoll parts). It never receives a callback, and the other participant's callback
+  gets `other` equal to the null entity (the value `getEntityByName()` returns when nothing
+  matches). Because the first entity a World creates also has id `0`, that entity's script never
+  receives contact callbacks; give it a non-scripted role, such as a level root.
+- A body that falls asleep inside a sensor stays inside: no `OnTriggerExit` fires until it wakes
+  and leaves, and waking inside the sensor does not fire a second `OnTriggerEnter`.
+- `ConnectEventBus(nullptr)` and `Shutdown()` disconnect.
+
+Covered by `Tests/TestENG200ScriptBindingsReal.cpp` (`ScriptLifecycle_ENG200_Contact*`, CTest
+`ScriptContactDispatchReal`, label `scripting-integration`), which drives a real Jolt world with no
+trigger callback installed.
 
 ## Physics and Event Bindings (AngelScriptEngine)
 
@@ -259,6 +296,9 @@ public:
     void CallStart(EntityID entity);
     void CallUpdate(EntityID entity, float deltaTime);
     void CallOnCollision(EntityID entity, EntityID other);
+    void CallOnTriggerEnter(EntityID entity, EntityID other);
+    void CallOnTriggerExit(EntityID entity, EntityID other);
+    void ConnectEventBus(Spark::EventBus* bus); // engine-owned contact dispatch
 
     // Error handling
     std::string GetLastError() const;

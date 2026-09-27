@@ -770,6 +770,9 @@ namespace Spark::Core::Lifecycle
             {
                 ctx->SetScriptEngine(&s_angelScript);
                 AngelScriptEngine::BindWorld(ctx->GetWorld());
+                // Physics and trigger-volume contacts reach script OnCollision/OnTriggerEnter/OnTriggerExit
+                // through the engine EventBus; Shutdown() disconnects.
+                s_angelScript.ConnectEventBus(ctx->GetEventBus());
                 SPARK_LOG_INFO(Spark::LogCategory::Core, "AngelScriptEngine initialized");
             }
             else

@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2578,
+      "line": 2585,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1396,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2616,
+      "line": 2623,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1405,10 +1405,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2236,
+      "line": 2243,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2181",
+          "id": "Tests/CMakeLists.txt:2188",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1491,7 +1491,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1439,
+      "line": 1446,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2633,10 +2633,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 3136,
+      "line": 3143,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3134",
+          "id": "Tests/CMakeLists.txt:3141",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4444,7 +4444,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 3136,
+          "line": 3143,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

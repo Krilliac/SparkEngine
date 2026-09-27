@@ -677,6 +677,20 @@ void PhysicsSystem::UpdateMetrics()
     m_metrics.substeps = static_cast<uint32_t>(m_maxSubsteps);
 }
 
+namespace
+{
+    /// Assigns the EventBus roles of one sensor overlap: triggerId is the sensor body's entity and entityId the
+    /// body that entered it, whatever order Jolt reported the pair in. Two sensors keep the reported order.
+    Spark::TriggerEnterEvent MakeTriggerEnterEvent(const PhysicsBody& bodyA, const PhysicsBody& bodyB)
+    {
+        if (bodyA.IsTrigger() && !bodyB.IsTrigger())
+        {
+            return Spark::TriggerEnterEvent{bodyB.GetEntityID(), bodyA.GetEntityID()};
+        }
+        return Spark::TriggerEnterEvent{bodyA.GetEntityID(), bodyB.GetEntityID()};
+    }
+} // namespace
+
 void PhysicsSystem::ProcessCollisions()
 {
     if (!m_joltSystem)
@@ -685,6 +699,20 @@ void PhysicsSystem::ProcessCollisions()
     std::vector<std::pair<PhysicsBody*, PhysicsBody*>> currentTriggerPairs;
     currentTriggerPairs.reserve(m_activeTriggerPairs.size());
     DispatchCollisionCallbacks(currentTriggerPairs);
+
+    // Jolt stops reporting contacts for a body that goes to sleep, so an overlap whose bodies are all asleep (or
+    // static, like most sensors) has no report this step although nothing moved. Keep such a pair active instead of
+    // exiting it: the exit fires once a woken body is no longer reported inside, and waking inside the sensor
+    // re-reports the overlap as the already-active pair, so no second enter fires either.
+    for (const auto& prev : m_activeTriggerPairs)
+    {
+        if (std::find(currentTriggerPairs.begin(), currentTriggerPairs.end(), prev) == currentTriggerPairs.end() &&
+            !prev.first->IsActive() && !prev.second->IsActive())
+        {
+            currentTriggerPairs.push_back(prev);
+        }
+    }
+
     UpdateTriggerExitEvents(currentTriggerPairs);
     m_activeTriggerPairs = std::move(currentTriggerPairs);
 }
@@ -718,25 +746,20 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
                 continue;
             outTriggerPairs.push_back(pair);
 
-            if (m_triggerCallback)
+            const bool wasActive =
+                std::find(m_activeTriggerPairs.begin(), m_activeTriggerPairs.end(), pair) != m_activeTriggerPairs.end();
+            if (!wasActive)
             {
-                bool wasActive = false;
-                for (const auto& prev : m_activeTriggerPairs)
-                {
-                    if (prev.first == first && prev.second == second)
-                    {
-                        wasActive = true;
-                        break;
-                    }
-                }
-                if (!wasActive)
+                if (m_triggerCallback)
                 {
                     m_triggerCallback(bodyA, bodyB, true);
+                }
 
-                    if (m_eventBus)
-                    {
-                        m_eventBus->Publish(Spark::TriggerEnterEvent{bodyA->GetEntityID(), bodyB->GetEntityID()});
-                    }
+                // Published whether or not a trigger callback is installed: the EventBus is how engine-owned
+                // consumers (script OnTriggerEnter/OnTriggerExit dispatch) observe sensor overlaps.
+                if (m_eventBus)
+                {
+                    m_eventBus->Publish(MakeTriggerEnterEvent(*bodyA, *bodyB));
                 }
             }
             continue;
@@ -768,7 +791,7 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
 void PhysicsSystem::UpdateTriggerExitEvents(
     const std::vector<std::pair<PhysicsBody*, PhysicsBody*>>& currentTriggerPairs)
 {
-    if (!m_triggerCallback)
+    if (!m_triggerCallback && !m_eventBus)
         return;
 
     for (const auto& prev : m_activeTriggerPairs)
@@ -784,13 +807,15 @@ void PhysicsSystem::UpdateTriggerExitEvents(
         }
         if (!stillActive)
         {
-            m_triggerCallback(prev.first, prev.second, false);
+            if (m_triggerCallback)
+            {
+                m_triggerCallback(prev.first, prev.second, false);
+            }
 
             if (m_eventBus)
             {
-                auto idA = prev.first->GetEntityID();
-                auto idB = prev.second->GetEntityID();
-                m_eventBus->Publish(Spark::TriggerExitEvent{idA, idB});
+                const Spark::TriggerEnterEvent roles = MakeTriggerEnterEvent(*prev.first, *prev.second);
+                m_eventBus->Publish(Spark::TriggerExitEvent{roles.entityId, roles.triggerId});
             }
         }
     }
