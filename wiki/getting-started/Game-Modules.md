@@ -10,7 +10,7 @@ SparkEngine contains **11 in-tree game-module directories** with differing proto
 
 | Module | LOC | Genre / focus | Key engine subsystems wired |
 |--------|-----|---------------|------------------------------|
-| [SparkGame](#sparkgame)                     | ~870   | Base / showcase — a bit of everything | All core subsystems |
+| [SparkGame](#sparkgame)                     | ~870   | Engine-systems showcase / template; not a game | All core subsystems |
 | [SparkGameFPS](#sparkgamefps)               | ~22.7K | First-person shooter | Weapons, player controller, death->respawn->score loop, quicksave profile, AI (LAN path experimental) |
 | [SparkGameMMO](#sparkgamemmo)               | ~10.0K | Massively multiplayer online | AreaServer, WorldServer, persistence, dialogue |
 | [SparkGameMMOFPS](#sparkgamemmofps)         | —      | MMOFPS / Terrafront | Combined-arms MMOFPS systems |
@@ -28,7 +28,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 
 ## SparkGame
 
-**Purpose:** baseline module with a `GameplayShowcase` scene that walks new contributors through every subsystem at least once. It follows the same CMake module pattern as the other in-tree targets; it is not a prerequisite target for them.
+**Purpose:** engine-systems showcase and module template: a `GameplayShowcase` scene that walks new contributors through every subsystem at least once. It is not a game; it is experimental and outside `stable-v1` (MOD-300). It follows the same CMake module pattern as the other in-tree targets; it is not a prerequisite target for them. `tools/check-module-positioning.py` fails if a public page labels it a game or an FPS.
 
 - **Source:** `GameModules/SparkGame/Source/`
 - **Primary headers:** `Core/SparkGame.h`, `Core/GameplayShowcase.h`

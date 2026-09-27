@@ -270,5 +270,5 @@ root build currently enumerates 11 in-tree module directories when
 
 | Module | Description | Load Order |
 |--------|-------------|------------|
-| **SparkGame** | FPS arena showcase (player, weapons, enemies, projectiles) | 1000 |
+| **SparkGame** | Engine-systems showcase and module template (not a game) | 999 |
 | **SparkGameMMO** | MMO networking showcase (chat, guilds, inventory, crafting) | 1001 |

@@ -12,7 +12,7 @@
 
 This page inventories selected source surfaces in the FPS module, standalone debug console, and offline shader compiler. It does not assign completion percentages or certify that the products build, run, or pass tests at the current commit.
 
-> **Naming note:** The original audit referred to the FPS game as `SparkGame`. The repository has since split the modules — `GameModules/SparkGame/` is a base/showcase module, while the FPS source lives in `GameModules/SparkGameFPS/`. The 11 directory inventory is SparkGame, SparkGameARPG, SparkGameFPS, SparkGameMMO, SparkGameMMOFPS, SparkGameOpenWorld, SparkGamePlatformer, SparkGameRacing, SparkGameRPG, SparkGameRTS, and SparkGameVisualScript.
+> **Naming note:** The original audit referred to the FPS game as `SparkGame`. The repository has since split the modules — `GameModules/SparkGame/` is an engine-systems showcase and module template (not a game; MOD-300), while the FPS source lives in `GameModules/SparkGameFPS/`. The 11 directory inventory is SparkGame, SparkGameARPG, SparkGameFPS, SparkGameMMO, SparkGameMMOFPS, SparkGameOpenWorld, SparkGamePlatformer, SparkGameRacing, SparkGameRPG, SparkGameRTS, and SparkGameVisualScript. `tools/check-module-positioning.py` keeps that public label honest: README, module README, or wiki text that calls the showcase a finished or playable game, or an FPS, arena, or shooter, fails the check.
 
 ## SparkGameFPS — Example FPS Game Module
 

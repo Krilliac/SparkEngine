@@ -2961,6 +2961,16 @@ set_tests_properties(OpenWorldAssets_RegisteredAssetsExist PROPERTIES
     LABELS "module;openworld;asset;unit"
     TIMEOUT 60)
 
+# MOD-300: tools/check-module-positioning.py fails when a public doc labels SparkGame a
+# game or an FPS, or its README loses the showcase disclaimers (Tests/Tools/test_check_module_positioning.py).
+add_test(
+    NAME ModulePositioning_SparkGameLabelIsShowcase
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_check_module_positioning.py)
+set_tests_properties(ModulePositioning_SparkGameLabelIsShowcase PROPERTIES
+    LABELS "module;docs;unit;python"
+    TIMEOUT 60)
+
 # GOV-400 LicenseInventory_*: the staged-package notice-coverage gate
 # (cmake/ValidateStagedPackageNotices.cmake) against fixture packages, and the
 # notices generator's shared rule set, parity with the CMake gate, and the real
