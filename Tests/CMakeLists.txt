@@ -634,6 +634,8 @@ add_executable(SparkTests
     TestTFAbilityWire.cpp
     # W11 death-recap wire freeze + damage-log ring semantics (header-only)
     TestTFDeathRecapWire.cpp
+    # TF-110 forged TF_LoadoutChange decode (header-only)
+    TestTFLoadoutWire.cpp
     # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp
@@ -1819,6 +1821,23 @@ set_tests_properties(OnlineServicesDegraded PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Degraded_;SPARK_TEST_EXPECT_COUNT=7"
     LABELS "online-services;unit"
     TIMEOUT 30)
+
+# TF-110: TERRAFRONT server trust boundary. Forged loadout/fire state is rejected
+# and audited (TFServerValidation + Net/TFLoadoutWire.h). Exact counts per family.
+set(_spark_tf110_selectors
+    "TF110_ForgedState_=4"
+    "TF110_LoadoutWire_=3")
+foreach(_spark_tf110_selector IN LISTS _spark_tf110_selectors)
+    string(REPLACE "=" ";" _spark_tf110_parts "${_spark_tf110_selector}")
+    list(GET _spark_tf110_parts 0 _spark_tf110_prefix)
+    list(GET _spark_tf110_parts 1 _spark_tf110_count)
+    string(REGEX REPLACE "_$" "" _spark_tf110_name "${_spark_tf110_prefix}")
+    add_test(NAME ${_spark_tf110_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(${_spark_tf110_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_tf110_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_tf110_count}"
+        LABELS "terrafront;unit"
+        TIMEOUT 30)
+endforeach()
 
 # LIFE-200: the production LifecycleCompositionRoot fails closed on injected
 # stage failures (false return, std::exception, unknown throw, throwing shutdown).

@@ -12,6 +12,8 @@
 #include "Game/TFGrenadeSystem.h" // loadout-depth wave: grenade choice key constants (single source of truth)
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystemInternal.h"
+#include "Game/TFServerValidation.h"  // TF-110: forged loadout-ext audit
+#include "Net/TFServerSim.h"          // TF-110: audit timestamp clock
 #include "Persistence/TFUnlockTree.h" // W6 progression expansion: unlock table
 #include "Utils/JsonUtils.h"
 #include "Utils/LogMacros.h"
@@ -341,7 +343,12 @@ namespace Terrafront
         std::memcpy(&msg, data, sizeof(msg));
         msg.grenadeKey[sizeof(msg.grenadeKey) - 1] = '\0';
         msg.suitKey[sizeof(msg.suitKey) - 1] = '\0';
-        ServerSetLoadoutExt(sender, std::string(msg.grenadeKey), std::string(msg.suitKey));
+        if (!ServerSetLoadoutExt(sender, std::string(msg.grenadeKey), std::string(msg.suitKey)))
+        {
+            // TF-110: a grenade/suit pick the player is not eligible for.
+            const double now = m_ctx->serverSim ? m_ctx->serverSim->ServerTime() : 0.0;
+            TFServerValidation::Get().RecordForgedStateReject(sender, TFForgedState::LoadoutExtIneligible, now);
+        }
     }
 
     bool TFProgressionSystem::ServerSetLoadoutExt(PlayerId player, const std::string& grenadeKey,

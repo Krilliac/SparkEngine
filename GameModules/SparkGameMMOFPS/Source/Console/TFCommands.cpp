@@ -429,7 +429,7 @@ void TerrafrontModule::RegisterConsoleCommands()
         [this](const std::vector<std::string>&) -> std::string
         {
             const auto& stats = TFServerValidation::Get().Stats();
-            if (stats.empty())
+            if (stats.empty() && TFServerValidation::Get().AuditTrail().empty())
             {
                 return m_ctx.IsAuthority() ? "[TF] anti-cheat: no violations recorded"
                                            : "[TF] anti-cheat: no data (this instance is not the server)";
@@ -440,7 +440,15 @@ void TerrafrontModule::RegisterConsoleCommands()
             {
                 os << "\n  p" << player << "  moveClamps=" << st.movementClamps << " (spikes=" << st.movementSpikes
                    << ")  fireRateRejects=" << st.fireRateRejects << "  fireOriginRejects=" << st.fireOriginRejects
-                   << "  inputRateRejects=" << st.inputRateRejects;
+                   << "  inputRateRejects=" << st.inputRateRejects << "  forged=" << st.forgedStateRejects;
+            }
+            // TF-110: the forged-state audit trail outlives kicked sessions.
+            const auto& audit = TFServerValidation::Get().AuditTrail();
+            if (!audit.empty())
+            {
+                const TFForgedStateAudit& last = audit.back();
+                os << "\n  forged-state audit: " << audit.size() << " record" << (audit.size() == 1 ? "" : "s")
+                   << ", latest kind=" << ForgedStateName(last.kind) << " player=" << last.player;
             }
             return os.str();
         },

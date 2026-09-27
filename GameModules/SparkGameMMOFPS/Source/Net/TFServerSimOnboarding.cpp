@@ -22,6 +22,8 @@
 #include "Game/TFGrenadeSystem.h"     // grenades lane (W10): GrenadeThrow routing
 #include "Game/TFPingSystem.h"        // ping-system lane (W11): PingPlace routing
 #include "Game/TFSquadSystem.h"
+#include "Game/TFServerValidation.h" // TF-110: forged loadout audit
+#include "Net/TFLoadoutWire.h"       // TF-110: forged WeaponId rejection
 #include "Utils/LogMacros.h"
 #include "Utils/ScopeGuard.h"
 #include "Utils/SecureMemory.h"
@@ -32,6 +34,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <optional>
 #include <string>
 
 namespace Terrafront
@@ -188,18 +191,28 @@ namespace Terrafront
                 break;
             TF_LoadoutChange lc{};
             std::memcpy(&lc, data, sizeof(lc));
-            auto keyOf = [&](uint16_t wid) -> std::string
+            // TF-110: an id that resolves to no weapon is forged state, never
+            // the class default (kInvalidWeapon is the only default marker).
+            const std::optional<TFLoadoutWireKeys> keys =
+                DecodeLoadoutChange(lc,
+                                    [this](uint16_t wid) -> const std::string*
+                                    {
+                                        const WeaponDef* def = m_ctx->data->GetWeapon(static_cast<WeaponId>(wid));
+                                        return def ? &def->key : nullptr;
+                                    });
+            if (!keys)
             {
-                if (wid == kInvalidWeapon)
-                    return {};
-                const WeaponDef* def = m_ctx->data->GetWeapon(static_cast<WeaponId>(wid));
-                return def ? def->key : std::string{};
-            };
+                TFServerValidation::Get().RecordForgedStateReject(sender, TFForgedState::LoadoutUnknownWeapon,
+                                                                  ServerTime());
+                break;
+            }
             TFLoadout lo;
-            lo.primary = keyOf(lc.primary);
-            lo.secondary = keyOf(lc.secondary);
-            lo.tool = keyOf(lc.tool);
-            m_ctx->progression->ServerSetLoadout(sender, lo);
+            lo.primary = keys->primary;
+            lo.secondary = keys->secondary;
+            lo.tool = keys->tool;
+            if (!m_ctx->progression->ServerSetLoadout(sender, lo))
+                TFServerValidation::Get().RecordForgedStateReject(sender, TFForgedState::LoadoutIneligible,
+                                                                  ServerTime());
             break;
         }
         // loadout-depth wave: grenade + suit picks (size-validated inside).
