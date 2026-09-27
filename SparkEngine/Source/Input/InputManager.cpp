@@ -712,11 +712,14 @@ void InputManager::Initialize(HWND hwnd)
     RECT rect;
     GetClientRect(hwnd, &rect);
     POINT center = {(rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2};
-    ClientToScreen(hwnd, &center);
-    SetCursorPos(center.x, center.y);
 
+    // The manager starts uncaptured, where WM_MOUSEMOVE reports CLIENT
+    // coordinates: seed in that space so the first move is not a window-offset jump.
     m_mouseX = m_prevMouseX = center.x;
     m_mouseY = m_prevMouseY = center.y;
+
+    ClientToScreen(hwnd, &center);
+    SetCursorPos(center.x, center.y);
 
     SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager initialized (Windows)");
     Spark::SimpleConsole::GetInstance().Log("InputManager initialized with console integration.", "SUCCESS");
@@ -734,13 +737,13 @@ void InputManager::Update()
 
     LatchFrameEdges();
 
-    m_prevMouseX = m_mouseX;
-    m_prevMouseY = m_mouseY;
-
     // Cursor capture needs the window; a windowless manager (tests, tools)
     // still advances key/button edges and uncaptured deltas.
     if (m_mouseCaptured && m_hwnd)
     {
+        m_prevMouseX = m_mouseX;
+        m_prevMouseY = m_mouseY;
+
         // Mouse-look capture only owns the cursor while OUR window is
         // foreground. Recentering an unfocused window's cursor hijacks the
         // user's pointer during automated/background runs, and the stale
@@ -796,8 +799,12 @@ void InputManager::Update()
     }
     else
     {
+        // The delta is measured against the previous frame's position, so it
+        // must be taken before that position is advanced (as on POSIX).
         m_mouseDeltaX = m_mouseX - m_prevMouseX;
         m_mouseDeltaY = m_mouseY - m_prevMouseY;
+        m_prevMouseX = m_mouseX;
+        m_prevMouseY = m_mouseY;
         ProcessMouseDelta(m_mouseDeltaX, m_mouseDeltaY);
     }
 }
@@ -895,6 +902,15 @@ void InputManager::CaptureMouse(bool capture)
             }
             m_captureHadFocus = false;
             m_mouseCaptured = false;
+            // Capture left SCREEN coordinates in the mouse position, while
+            // uncaptured deltas are measured in CLIENT coordinates: re-seed from
+            // the cursor so the first uncaptured frame reports no fake motion.
+            POINT cursor;
+            if (m_hwnd && GetCursorPos(&cursor) && ScreenToClient(m_hwnd, &cursor))
+            {
+                m_mouseX = m_prevMouseX = cursor.x;
+                m_mouseY = m_prevMouseY = cursor.y;
+            }
             Spark::SimpleConsole::GetInstance().Log("Mouse capture released.", "INFO");
         }
     }

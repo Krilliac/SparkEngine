@@ -620,12 +620,13 @@ namespace Spark
     {
         Registration registration{std::move(serialize), std::move(deserialize), m_registrationOwner};
         auto existing = m_serializers.find(typeName);
-        if (existing != m_serializers.end() && !existing->second.ownerId.empty() && !m_registrationOwner.empty() &&
+        if (existing != m_serializers.end() && !m_registrationOwner.empty() &&
             existing->second.ownerId != m_registrationOwner)
         {
             // A hot-reload replacement registers while the outgoing image is
-            // still live. Keep the outgoing entry underneath so its owner-scoped
-            // teardown removes exactly its own callbacks, never the replacement's.
+            // still live, and a module may override an engine built-in. Keep the
+            // entry underneath so the owner-scoped teardown removes exactly its
+            // own callbacks and re-exposes the replacement's or the engine's.
             m_shadowedSerializers[typeName].push_back(std::move(existing->second));
             existing->second = std::move(registration);
             return;

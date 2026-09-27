@@ -82,7 +82,9 @@ void GameplayShowcase::Shutdown()
 
     if (m_registeredTagSerializer)
     {
-        Spark::ComponentSerializerRegistry::GetInstance().Unregister("TagComponent");
+        // The host registry it was registered on (see RegisterCustomSerializer).
+        if (auto* serializers = m_context ? m_context->GetComponentSerializers() : nullptr)
+            serializers->Unregister("TagComponent");
         m_registeredTagSerializer = false;
     }
 
@@ -230,13 +232,25 @@ void GameplayShowcase::RegisterCustomSerializer()
     // Register a custom serializer for TagComponent as a showcase example.
     // Built-in components (Transform, Health, Name) are already registered
     // by SaveSystem::Initialize(). Game modules register their own custom types here.
+    //
+    // Register on the HOST's registry. SparkEngineLib is linked statically into
+    // this module on Windows, so ComponentSerializerRegistry::GetInstance() here
+    // is a module-local copy the host SaveSystem never reads and the host's
+    // owner-scoped teardown never reaches.
+    auto* registry = m_context->GetComponentSerializers();
+    if (!registry)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                       "Showcase TagComponent serializer not registered: host exposes no ComponentSerializerRegistry");
+        return;
+    }
+
     // Never replace an engine serializer. A module-owned one may be the
     // outgoing image during hot reload; the host keeps it underneath ours and
     // removes it with that image, so register ours on top.
-    auto& registry = Spark::ComponentSerializerRegistry::GetInstance();
-    if (!registry.HasSerializer("TagComponent") || !registry.GetSerializerOwner("TagComponent").empty())
+    if (!registry->HasSerializer("TagComponent") || !registry->GetSerializerOwner("TagComponent").empty())
     {
-        registry.Register(
+        registry->Register(
             "TagComponent",
             [](const void* comp) -> Spark::SerializedComponent
             {

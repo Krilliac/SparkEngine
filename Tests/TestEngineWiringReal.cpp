@@ -463,15 +463,27 @@ TEST(EngineWiring_ConsoleSimulatedKeyReleaseIsAppliedOnTheInputThread)
     EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
 
     // The frame tick drains due releases too. Edges are latched per Update(), so
-    // a frame must observe C down before a later frame can see it released.
-    input.Console_SimulateKeyPress("C", 250);
+    // a frame must observe C down before a later frame can see it released. The
+    // deadline is generous so a loaded host cannot release C before the first
+    // frame; frames then tick until the release lands, bounded well past it.
+    constexpr auto releaseAfter = std::chrono::milliseconds(1000);
+    const auto pressedAt = std::chrono::steady_clock::now();
+    input.Console_SimulateKeyPress("C", static_cast<int>(releaseAfter.count()));
     input.Update();
-    EXPECT_TRUE(input.IsKeyDown('C'));
+    ASSERT_TRUE(input.IsKeyDown('C'));
     EXPECT_TRUE(input.WasKeyPressed('C'));
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    input.Update();
+    const auto giveUpAt = pressedAt + releaseAfter + std::chrono::seconds(30);
+    while (input.IsKeyDown('C') && std::chrono::steady_clock::now() < giveUpAt)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        input.Update();
+        if (input.IsKeyDown('C'))
+            EXPECT_FALSE(input.WasKeyPressed('C')); // held, not re-pressed, until the release frame
+    }
     EXPECT_FALSE(input.IsKeyDown('C'));
     EXPECT_TRUE(input.WasKeyReleased('C'));
+    // Released by the tick no earlier than its deadline.
+    EXPECT_TRUE(std::chrono::steady_clock::now() - pressedAt >= releaseAfter);
     EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
 
     // Clearing the input states also forgets the pending timed releases.
@@ -483,4 +495,37 @@ TEST(EngineWiring_ConsoleSimulatedKeyReleaseIsAppliedOnTheInputThread)
     input.Console_SimulateKeyPress("D", 0);
     EXPECT_FALSE(input.IsKeyDown('D'));
     EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 0u);
+}
+
+// Uncaptured mouse motion delivered by the pump before the tick is that frame's
+// delta. The Windows Update() used to advance the previous position before
+// measuring against it, so every uncaptured delta there was zero.
+TEST(EngineWiring_UncapturedMouseMoveIsTheFrameDelta)
+{
+    InputManager input; // No window and no capture: WM_MOUSEMOVE carries client coordinates.
+    const auto mouseMove = [&input](int x, int y)
+    {
+        const uint32_t packed = (static_cast<uint32_t>(y) << 16) | static_cast<uint32_t>(x);
+        input.HandleMessage(WM_MOUSEMOVE, 0, static_cast<LPARAM>(packed));
+    };
+
+    input.Update(); // an idle frame at the origin
+    mouseMove(100, 40);
+    input.Update();
+    EXPECT_EQ(input.GetMousePosition().x, 100);
+    EXPECT_EQ(input.GetMousePosition().y, 40);
+    EXPECT_EQ(input.GetMouseDelta().x, 100);
+    EXPECT_EQ(input.GetMouseDelta().y, 40);
+
+    // Several moves in one frame add up to one delta from the previous frame.
+    mouseMove(110, 30);
+    mouseMove(130, 25);
+    input.Update();
+    EXPECT_EQ(input.GetMouseDelta().x, 30);
+    EXPECT_EQ(input.GetMouseDelta().y, -15);
+
+    // A frame without motion has no delta.
+    input.Update();
+    EXPECT_EQ(input.GetMouseDelta().x, 0);
+    EXPECT_EQ(input.GetMouseDelta().y, 0);
 }

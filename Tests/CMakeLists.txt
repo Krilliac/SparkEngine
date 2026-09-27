@@ -870,7 +870,7 @@ target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_LEGACY_MODULE_PATH="$<TARGET_FILE:SparkLegacyModuleFixture>"
     SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
 
-if(TARGET SparkGame AND NOT WIN32)
+if(TARGET SparkGame)
     add_dependencies(SparkTests SparkGame)
     target_compile_definitions(SparkTests PRIVATE
         SPARK_TEST_SPARK_GAME_MODULE_PATH="$<TARGET_FILE:SparkGame>")
@@ -1816,6 +1816,11 @@ set_tests_properties(LifecycleCompositionRootFailure PROPERTIES
 #   parent-directory cleanup) or 3 POSIX-only (verified shadow, read-only
 #   install, private stage), plus 1 POSIX test that needs the SparkGame module.
 #   EngineLifecycle_: the whole family is compiled only on non-Windows hosts.
+#   LIFE200_: 3 in-process, plus 2 that reload the real SparkGame module.
+set(_spark_life_life200_count 3)
+if(TARGET SparkGame)
+    math(EXPR _spark_life_life200_count "${_spark_life_life200_count} + 2")
+endif()
 set(_spark_life_module_abi_count 27)
 if(WIN32)
     math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 2")
@@ -1828,8 +1833,9 @@ endif()
 set(_spark_life_selectors
     "ModuleLifecycle_=6"
     "ModuleABI_=${_spark_life_module_abi_count}"
-    "EngineWiring_=10"
-    "ModuleHotReload_=15")
+    "EngineWiring_=11"
+    "ModuleHotReload_=15"
+    "LIFE200_=${_spark_life_life200_count}")
 if(NOT WIN32)
     list(APPEND _spark_life_selectors "EngineLifecycle_=22")
 endif()

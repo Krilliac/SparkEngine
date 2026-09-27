@@ -53,6 +53,17 @@ namespace
         const PhysicsSystem* GetPhysics() const override { return nullptr; }
         Spark::SaveSystem* GetSaveSystem() override { return m_saveSystem; }
         const Spark::SaveSystem* GetSaveSystem() const override { return m_saveSystem; }
+        // The save capability comes with the registry the host SaveSystem reads.
+        // A module must register there: on Windows its own GetInstance() is a
+        // module-local copy that the host's owner scoping never reaches.
+        Spark::ComponentSerializerRegistry* GetComponentSerializers() override
+        {
+            return m_saveSystem ? &Spark::ComponentSerializerRegistry::GetInstance() : nullptr;
+        }
+        const Spark::ComponentSerializerRegistry* GetComponentSerializers() const override
+        {
+            return m_saveSystem ? &Spark::ComponentSerializerRegistry::GetInstance() : nullptr;
+        }
         uint32_t GetEngineVersion() const override { return SPARK_ENGINE_VERSION_PACKED; }
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
 
@@ -132,7 +143,7 @@ namespace
     }
 } // namespace
 
-#if !defined(_WIN32) && defined(SPARK_TEST_SPARK_GAME_MODULE_PATH)
+#ifdef SPARK_TEST_SPARK_GAME_MODULE_PATH
 namespace
 {
     /// Removes the host's TagComponent serializer for the test and restores it afterwards.
@@ -172,7 +183,10 @@ TEST(LIFE200_SparkGameSuccessfulReloadKeepsReplacementRegistrations)
     manager.InitializeAll(&context);
     ASSERT_TRUE(manager.GetModule(kShowcaseModule) != nullptr);
     ASSERT_TRUE(AllShowcaseCommandsRegistered(console));
+    // Registered on the host registry under the module's owner scope; on Windows
+    // a registration into the module's own static copy leaves the host empty.
     ASSERT_TRUE(serializerScope.serializers.HasSerializer("TagComponent"));
+    EXPECT_FALSE(serializerScope.serializers.GetSerializerOwner("TagComponent").empty());
 
     // Two consecutive swaps: each outgoing image's name-based teardown runs
     // after its replacement registered the same names.
@@ -186,6 +200,7 @@ TEST(LIFE200_SparkGameSuccessfulReloadKeepsReplacementRegistrations)
         EXPECT_TRUE(detector.HasRule("Base.HealthInvariant"));
         EXPECT_EQ(detector.GetRuleCount(), initialRuleCount + 1);
         ASSERT_TRUE(serializerScope.serializers.HasSerializer("TagComponent"));
+        EXPECT_FALSE(serializerScope.serializers.GetSerializerOwner("TagComponent").empty());
         // The surviving serializer must belong to the live image; the outgoing
         // image has already been unmapped.
         EXPECT_EQ(SerializeTagThroughRegistry(), std::string("TagComponent:life200"));
@@ -356,4 +371,60 @@ TEST(LIFE200_SerializerRegistryTeardownIsOwnerScoped)
     EXPECT_EQ(registry.Serialize(typeName, nullptr).typeName, std::string("new"));
     EXPECT_EQ(registry.UnregisterByOwner("life200-new"), size_t{1});
     EXPECT_FALSE(registry.HasSerializer(typeName));
+}
+
+TEST(LIFE200_OwnedSerializerShadowsEngineEntryAndRestoresIt)
+{
+    using Registry = Spark::ComponentSerializerRegistry;
+    auto& registry = Registry::GetInstance();
+    const std::string typeName = "LIFE200EngineOwnedComponent";
+    const auto serializerFor = [](std::string marker)
+    {
+        return [marker](const void*)
+        {
+            Spark::SerializedComponent serialized;
+            serialized.typeName = marker;
+            return serialized;
+        };
+    };
+    const auto noDeserialize = [](World&, EntityID, const Spark::SerializedComponent&) {};
+    struct Cleanup final
+    {
+        Registry& registry;
+        const std::string& typeName;
+        ~Cleanup()
+        {
+            registry.UnregisterByOwner("life200-module");
+            registry.Unregister(typeName);
+        }
+    } cleanup{registry, typeName};
+
+    // The engine's own registration (no owner scope), as RegisterBuiltins makes it.
+    registry.Register(typeName, serializerFor("engine"), noDeserialize);
+    ASSERT_TRUE(registry.GetSerializerOwner(typeName).empty());
+
+    // A module overriding the built-in shadows it rather than destroying it.
+    {
+        Registry::ScopedRegistrationOwner owner(registry, "life200-module");
+        registry.Register(typeName, serializerFor("module"), noDeserialize);
+    }
+    EXPECT_EQ(registry.GetSerializerOwner(typeName), std::string("life200-module"));
+    EXPECT_EQ(registry.Serialize(typeName, nullptr).typeName, std::string("module"));
+
+    // Unloading the module restores the engine entry instead of leaving the type unsaveable.
+    EXPECT_EQ(registry.UnregisterByOwner("life200-module"), size_t{1});
+    ASSERT_TRUE(registry.HasSerializer(typeName));
+    EXPECT_TRUE(registry.GetSerializerOwner(typeName).empty());
+    EXPECT_EQ(registry.Serialize(typeName, nullptr).typeName, std::string("engine"));
+
+    // The module's own name-based teardown restores it the same way.
+    {
+        Registry::ScopedRegistrationOwner owner(registry, "life200-module");
+        registry.Register(typeName, serializerFor("module-again"), noDeserialize);
+        EXPECT_TRUE(registry.Unregister(typeName));
+        EXPECT_FALSE(registry.Unregister(typeName));
+    }
+    ASSERT_TRUE(registry.HasSerializer(typeName));
+    EXPECT_EQ(registry.Serialize(typeName, nullptr).typeName, std::string("engine"));
+    EXPECT_EQ(registry.UnregisterByOwner("life200-module"), size_t{0});
 }

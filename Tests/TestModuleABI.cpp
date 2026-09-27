@@ -82,6 +82,15 @@ namespace
         const PhysicsSystem* GetPhysics() const override { return nullptr; }
         Spark::SaveSystem* GetSaveSystem() override { return m_saveSystem; }
         const Spark::SaveSystem* GetSaveSystem() const override { return m_saveSystem; }
+        // The save capability comes with the registry the host SaveSystem reads.
+        Spark::ComponentSerializerRegistry* GetComponentSerializers() override
+        {
+            return m_saveSystem ? &Spark::ComponentSerializerRegistry::GetInstance() : nullptr;
+        }
+        const Spark::ComponentSerializerRegistry* GetComponentSerializers() const override
+        {
+            return m_saveSystem ? &Spark::ComponentSerializerRegistry::GetInstance() : nullptr;
+        }
         Spark::WeatherSystem* GetWeather() override { return m_weather; }
         const Spark::WeatherSystem* GetWeather() const override { return m_weather; }
         Spark::UI::UISystem* GetUI() override { return m_ui; }

@@ -262,7 +262,10 @@ namespace Spark
         /**
      * @brief Register a (de)serializer pair for a component type.
      *
-     * Overwrites any existing registration for `typeName`. Call this once per
+     * Outside a ScopedRegistrationOwner this overwrites any existing registration
+     * for `typeName`. Inside one, an existing entry of a different owner (another
+     * module image or the engine's built-in) is shadowed instead and becomes
+     * active again when the scope owner's entry is removed. Call this once per
      * component type during engine/game initialization, before any Save or Load
      * operations.
      *
