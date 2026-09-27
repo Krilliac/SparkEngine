@@ -540,6 +540,123 @@ def online_service_spec_contract_errors(
     return errors
 
 
+# NET-110: no local JSON store, demo service or owner-local reference process
+# may be described as production infrastructure anywhere in the documentation.
+LOCAL_STORE_PRODUCTION_CLAIM = re.compile(
+    r"\b(?:production[\s-](?:ready|grade|quality|infrastructure|database|backend|service|server)s?"
+    r"|scalable\s+backends?|enterprise[\s-]grade|battle[\s-]tested)\b",
+    re.IGNORECASE,
+)
+LOCAL_STORE_NOUN = re.compile(
+    r"\b(?:TFDatabase|TFWorldSave|TFOutfitStore|JSON\s+(?:store|database|file)s?"
+    r"|MMO(?:FPS)?\s+(?:persistence|database|backend)s?|account\s+databases?|NullOnlinePlatform"
+    r"|KeyFileAuthenticator|SparkGateway|SparkDaemon|demo\s+(?:server|service|backend)s?|AsyncDatabase)\b",
+    re.IGNORECASE,
+)
+# Quoted acceptance criteria and ledger notes restate these rules; they are not claims.
+_LOCAL_STORE_CLAIM_EXCLUDED = ("docs/readiness/work-items/",)
+_ADAPTER_NAME_LITERAL = re.compile(
+    r"\b(?:GetPlatformName|GetLastError|GetName)\s*\(\s*\)\s*const\s*(?:override\s*|final\s*|noexcept\s*)*"
+    r"\{\s*return\s+\"([^\"]*)\"",
+)
+
+
+def local_store_production_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject sentences or table rows that call a local store or demo service production infrastructure.
+
+    Same unit and negation rules as ``hosted_online_service_claim_errors``: a
+    unit that also carries a negation documents the boundary and is allowed.
+    """
+    errors: list[str] = []
+    for location, text in sorted(surfaces.items()):
+        for number, line in enumerate(text.splitlines(), start=1):
+            is_table_row = line.lstrip().startswith("|")
+            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+                claim = LOCAL_STORE_PRODUCTION_CLAIM.search(unit)
+                if claim is None or _SERVICE_CLAIM_NEGATION.search(unit):
+                    continue
+                noun = LOCAL_STORE_NOUN.search(unit)
+                if noun is None:
+                    continue
+                errors.append(
+                    f"{location}:{number}: markets {noun.group(0)!r} as {claim.group(0)!r}; local stores, "
+                    "demo services and reference processes are not production infrastructure (NET-110)"
+                )
+    return errors
+
+
+def _json_strings(value: Any) -> Iterable[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _json_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _json_strings(item)
+
+
+def local_store_claim_surfaces(repo_root: Path, paths: Iterable[str] | None = None) -> dict[str, str]:
+    """Documentation text the local-store production-claim rule governs.
+
+    Tracked Markdown under wiki/ and docs/ (minus the readiness ledger and
+    handoff, which quote the criteria), the root and module READMEs and DESIGN
+    documents, module.json descriptions, and every string in docs/site/*.json.
+    """
+    if paths is None:
+        paths = tracked_paths()
+    surfaces: dict[str, str] = {}
+    for relative in sorted(paths):
+        if relative.startswith(_LOCAL_STORE_CLAIM_EXCLUDED) or (
+            relative.startswith("docs/readiness/") and "HANDOFF" in relative
+        ):
+            continue
+        is_markdown = relative.endswith(".md") and (
+            relative.startswith(("wiki/", "docs/"))
+            or relative == "README.md"
+            or fnmatch.fnmatch(relative, "GameModules/*/README.md")
+            or fnmatch.fnmatch(relative, "GameModules/*/DESIGN.md")
+        )
+        is_module_manifest = fnmatch.fnmatch(relative, "GameModules/*/module.json")
+        is_site_json = fnmatch.fnmatch(relative, "docs/site/*.json")
+        if not (is_markdown or is_module_manifest or is_site_json):
+            continue
+        text = _cached_source_text(repo_root / relative)
+        if text is None:
+            continue
+        if is_markdown:
+            surfaces[relative] = text
+            continue
+        try:
+            encoded = text.encode("utf-8")
+            document = decode_json_bytes(encoded, relative, maximum=len(encoded))
+        except SiteDataError:
+            continue  # malformed JSON is reported by the validators that own the file
+        if is_module_manifest:
+            description = document.get("description") if isinstance(document, dict) else None
+            if isinstance(description, str):
+                surfaces[f"{relative}#description"] = description
+        else:
+            surfaces[relative] = "\n".join(_json_strings(document))
+    return surfaces
+
+
+def adapter_name_production_errors(repo_root: Path, source_paths: Iterable[str] | None = None) -> list[str]:
+    """An online-service adapter's reported name or error text must not call it production."""
+    errors: list[str] = []
+    adapter_files = sorted({relative for relative, _ in online_service_adapter_classes(repo_root, source_paths).values()})
+    for relative in adapter_files:
+        text = _cached_source_text(repo_root / relative) or ""
+        for match in _ADAPTER_NAME_LITERAL.finditer(text):
+            if re.search(r"production", match.group(1), re.IGNORECASE):
+                number = text.count("\n", 0, match.start()) + 1
+                errors.append(
+                    f"{relative}:{number}: adapter reports {match.group(1)!r}; no adapter in this repository "
+                    "is production (docs/specs/online-services.md section 6)"
+                )
+    return errors
+
+
 def build_matrix_evidence_errors(
     inventory: Any, report: Any, profile: dict[str, Any] | None
 ) -> list[str]:
@@ -2770,7 +2887,9 @@ class Validator:
         )
 
     def validate_online_service_boundary(self) -> None:
-        """No governed public surface may claim hosted online services (OD-08, NET-110)."""
+        """Online-service boundary (OD-08, NET-110): no hosted-service or local-store production claim,
+        a boundary specification whose diagram, boundary table and adapter register match the code, and no
+        adapter that reports itself as production."""
         texts: dict[str, str] = {}
         for surface in sorted(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES | ONLINE_SERVICE_BOUNDARY_SURFACES):
             path = REPO_ROOT / surface
@@ -2783,6 +2902,10 @@ class Validator:
         if ONLINE_SERVICE_SPEC in texts:
             for violation in online_service_spec_contract_errors(texts[ONLINE_SERVICE_SPEC], REPO_ROOT):
                 self.error("onlineServiceBoundary", violation)
+        for violation in local_store_production_claim_errors(local_store_claim_surfaces(REPO_ROOT)):
+            self.error("onlineServiceBoundary", violation)
+        for violation in adapter_name_production_errors(REPO_ROOT):
+            self.error("onlineServiceBoundary", violation)
 
     def validate_build_matrix_evidence(self) -> None:
         """The build-matrix configuration evidence is part of the contract, not beside it.

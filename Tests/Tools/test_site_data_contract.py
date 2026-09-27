@@ -852,6 +852,89 @@ class OnlineServiceBoundaryTests(unittest.TestCase):
             adapter_errors,
         )
 
+    # -- Local stores are never production infrastructure (NET-110 criterion 4) --
+
+    def local_store_claims(self, text: str) -> list[str]:
+        return site_data_validate.local_store_production_claim_errors({"page.md": text})
+
+    def test_local_store_production_claims_are_rejected(self) -> None:
+        for text in (
+            "TFDatabase is a production-grade backend.",
+            "The MMOFPS persistence layer is battle-tested.",
+            "SparkGateway is production-ready infrastructure for your launch.",
+            "Use the JSON store as a production database.",
+            "| TFDatabase | Production-ready JSON store |",
+        ):
+            with self.subTest(text=text):
+                errors = self.local_store_claims(text)
+                self.assertEqual(1, len(errors), errors)
+                self.assertIn("page.md:1: markets", errors[0])
+                self.assertIn("NET-110", errors[0])
+
+    def test_negated_or_unrelated_production_wording_is_allowed(self) -> None:
+        for text in (
+            "TFDatabase is not production infrastructure.",
+            "| TFDatabase | Local JSON store; never a production database |",
+            "SparkDaemon is a single-host reference, not a production-grade fleet.",
+            "Star Citizen's replication layer is the production-grade example.",
+            "TFDatabase keeps accounts in a JSON file.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual([], self.local_store_claims(text))
+
+    def test_local_store_claim_in_another_sentence_is_still_rejected(self) -> None:
+        errors = self.local_store_claims("Passwords are never stored in plaintext. TFDatabase is production-grade.")
+        self.assertEqual(1, len(errors), errors)
+
+    def test_local_store_surfaces_cover_module_descriptions_and_skip_quoted_criteria(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            files = {
+                "GameModules/Demo/module.json": json.dumps(
+                    {"name": "Demo", "description": "Battle-tested MMO persistence for live games"}
+                ),
+                "GameModules/Demo/README.md": "Demo module.\n",
+                "docs/site/readiness.json": json.dumps({"rows": [{"text": "AsyncDatabase is enterprise-grade"}]}),
+                "docs/readiness/work-items/10-net.json": "No local JSON/demo service is production-ready infrastructure",
+                "docs/readiness/ENGINE_READINESS_HANDOFF.md": "TFDatabase is production-grade.\n",
+                "SparkEngine/Source/Notes.md": "TFDatabase is production-grade.\n",
+            }
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            surfaces = site_data_validate.local_store_claim_surfaces(root, files)
+        self.assertEqual(
+            {"GameModules/Demo/module.json#description", "GameModules/Demo/README.md", "docs/site/readiness.json"},
+            set(surfaces),
+        )
+        errors = site_data_validate.local_store_production_claim_errors(surfaces)
+        self.assertEqual(2, len(errors), errors)
+        self.assertTrue(errors[0].startswith("GameModules/Demo/module.json#description:1: markets"), errors)
+        self.assertTrue(errors[1].startswith("docs/site/readiness.json:1: markets 'AsyncDatabase'"), errors)
+
+    def test_adapter_reporting_itself_as_production_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "Engine").mkdir()
+            (root / "Engine" / "Adapter.h").write_text(
+                "class ProductionSteam final : public IOnlinePlatform\n{\n"
+                "    std::string GetPlatformName() const override { return \"Steam (Production)\"; }\n"
+                "    std::string GetLastError() const override { return \"stub\"; }\n};\n",
+                encoding="utf-8",
+            )
+            errors = site_data_validate.adapter_name_production_errors(root, ["Engine/Adapter.h"])
+        self.assertEqual(1, len(errors), errors)
+        self.assertTrue(errors[0].startswith("Engine/Adapter.h:3: adapter reports 'Steam (Production)'"), errors)
+
+    def test_repository_markets_no_local_store_or_adapter_as_production(self) -> None:
+        surfaces = site_data_validate.local_store_claim_surfaces(REPO_ROOT)
+        self.assertIn("README.md", surfaces)
+        self.assertIn("docs/specs/online-services.md", surfaces)
+        self.assertNotIn("docs/readiness/ENGINE_READINESS_HANDOFF.md", surfaces)
+        self.assertEqual([], site_data_validate.local_store_production_claim_errors(surfaces))
+        self.assertEqual([], site_data_validate.adapter_name_production_errors(REPO_ROOT))
+
 
 class TransitiveDependencyTests(ContractTestCase):
     """Frozen case 4: profile dependency closure is transitive and diagnostic."""
