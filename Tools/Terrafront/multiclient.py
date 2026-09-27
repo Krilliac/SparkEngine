@@ -45,12 +45,35 @@ complete observations than the scenario schedules, a server observation without
 its per-player progression lines, or a scenario verdict that lacks the views it
 needs all fail the run.
 
+Impaired runs (--impair, --seed). Every process applies latency, jitter, loss,
+duplication and reordering through the engine's net_* commands before it hosts
+or connects; settle times and the position tolerance widen with the delay
+(impaired()). The run fails unless every process reports the requested values
+twice through net_impair AND in the module image's "[TF-OBSERVE] net" line at
+every checkpoint (impairment_problems), so impairment that was silently off can
+never count as impaired convergence.
+
+Cold restart (cold_restart, ungraceful_restart; TF-120). Phase 1 builds
+non-default authoritative state (legal loadout, wallet, a kill, two flipped
+regions), then the harness hard-kills the server: after an ok tf_save, or with
+no save at all once the progression debounce has passed. Phase 2 starts a new
+server on the same TF_SAVE_ROOT, logs the same account back in and requires the
+state, the character and exactly one character row to be restored
+(restart_verdict).
+
+Soak (--soak-seconds; TF-110). A server with bots and two looping clients is
+sampled against soak_budgets.json: tick time (tf_perf), per-client downlink,
+replication rate and drops (the net line), and the RSS slope of every process.
+The budgets are provisional harness guards, not SLOs.
+
 Usage:
   multiclient.py --engine <SparkEngine> --module <SparkGameMMOFPS> \
-      --scenario onboard_spawn_move --workdir <dir> [--cwd <asset root>]
+      --scenario onboard_spawn_move [territory ...] --workdir <dir> [--cwd <asset root>] \
+      [--impair 80,20,0.03,2,3 --seed 20260927]
+  multiclient.py ... --soak-seconds 120 --workdir <dir> [--budgets soak_budgets.json]
 
-Exit status 0 means every checkpoint converged and the scenario verdict held;
-the JSON summary on stdout carries the per-checkpoint verdicts either way.
+Exit status 0 means every run passed; the JSON summary on stdout carries the
+per-checkpoint verdicts and measurements either way.
 """
 
 from __future__ import annotations
@@ -66,7 +89,7 @@ import socket
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 
@@ -96,6 +119,18 @@ SERVER_STEP_PERIOD_S = 1.0
 # held-region bonus, at most 5 at the initial territory map (regions.json).
 FLUX_INCOME_SLACK = 8
 FACTION_IDS = {"mra": 1, "auc": 2, "hlx": 3}
+# Impaired runs (--impair): the reorder hold is InstabilitySettings::reorderHoldMs,
+# the resend allowance covers one reliable retransmit after a dropped packet, and
+# the sprint speed (classes.json sprintSpeed) turns a delay into a position slack.
+REORDER_HOLD_S = 0.04
+RESEND_ALLOWANCE_S = 0.5
+MAX_PAWN_SPEED_MPS = 7.2
+CHECKPOINT_PAD_S = 0.5
+CLIENT_TAIL_S = 2.5
+MAX_IMPAIR_SEED = 2147483647  # net_impair_seed accepts [0, INT32_MAX]
+IMPAIR_SEED_ROLES = 16
+IMPAIR_MIN_PROBES = 2  # one right after configuring, one at the end of the run
+IMPAIR_VALUE_TOLERANCE = 0.05  # the simulators print one decimal
 NO_PLAYER = 0xFFFFFFFF  # kInvalidPlayer: an empty seat
 # World/TFSanctuaryZone.h: the no-damage staging rectangle every first spawn lands in.
 SANCTUARY_MIN_X, SANCTUARY_MAX_X, SANCTUARY_MIN_Z, SANCTUARY_MAX_Z = 40.0, 600.0, 3496.0, 4056.0
@@ -127,13 +162,37 @@ class Vehicle:
 
 @dataclass(frozen=True)
 class Progress:
-    """Saved primary, wallet, rank and kill tally of one player."""
+    """Saved primary, wallet, rank, kill tally, xp and unlock set of one player.
+
+    The server's per-player lines carry every field; a self line carries only
+    the first four, so xp and unlocks keep their defaults there.
+    """
 
     player: int
     loadout: str
     flux: int
     rank: int
     kills: int = 0
+    xp: int = 0
+    unlocks: str = "-"
+
+
+@dataclass(frozen=True)
+class NetView:
+    """One process's "[TF-OBSERVE] net" line: transport counters and module-image impairment."""
+
+    bytes_sent: int
+    bytes_received: int
+    packets_sent: int
+    packets_received: int
+    packets_dropped: int
+    impaired: bool
+    lag_ms: float
+    jitter_ms: float
+    loss_pct: float
+    dup_pct: float
+    reorder_pct: float
+    seed: int
 
 
 @dataclass
@@ -149,6 +208,7 @@ class Observation:
     vehicles: dict[int, Vehicle] = field(default_factory=dict)
     players: dict[int, Progress] = field(default_factory=dict)  # authority only
     self_progress: Progress | None = None
+    net: NetView | None = None  # absent while the process has no live NetworkManager
 
     def complete(self) -> bool:
         counts = (len(self.pawns) == self.expected_pawns and len(self.regions) == self.expected_regions and
@@ -199,6 +259,8 @@ class Scenario:
     absent: tuple[tuple[int, int], ...] = ()
     offline: tuple[tuple[int, int], ...] = ()
     walk_settle_s: float = MOVE_SETTLE_S
+    event_settle_s: float = EVENT_SETTLE_S
+    position_tolerance_m: float = POSITION_TOLERANCE_M
 
 
 ONBOARDING = (
@@ -359,8 +421,9 @@ def motion_windows(scenario: Scenario) -> list[tuple[float, float]]:
             if verb == "tf_walk":
                 windows.append((at, at + float(arguments[2]) + scenario.walk_settle_s))
             else:
-                windows.append((at, at + EVENT_SETTLE_S))
-    windows += [(step.start, step.end + EVENT_SETTLE_S) for step in scenario.server_steps if step.changes_world]
+                windows.append((at, at + scenario.event_settle_s))
+    windows += [(step.start, step.end + scenario.event_settle_s) for step in scenario.server_steps
+                if step.changes_world]
     return sorted(set(windows))
 
 
@@ -380,6 +443,153 @@ def schedule_violations(scenario: Scenario) -> list[str]:
         if step.end > scenario.client_seconds:
             violations.append(f"{scenario.name}: server step '{step.command}' ends after the clients exit")
     return violations
+
+
+# --------------------------------------------------------------------------- impairment
+
+
+@dataclass(frozen=True)
+class Impairment:
+    """--impair '<lagMs>,<jitterMs>,<lossFrac>,<dupPct>,<reorderPct>' plus --seed.
+
+    Every process applies it through the engine's net_* commands before it
+    hosts or connects. Process k seeds the simulator with seed + k so the
+    loss/dup/reorder streams differ between processes but every run is
+    reproducible.
+    """
+
+    lag_ms: float
+    jitter_ms: float
+    loss: float
+    dup_pct: float
+    reorder_pct: float
+    seed: int
+
+    @classmethod
+    def parse(cls, text: str, seed: int) -> "Impairment":
+        parts = text.split(",")
+        if len(parts) != 5:
+            raise ValueError(f"--impair needs 5 comma-separated values, got {text!r}")
+        lag, jitter, loss, dup, reorder = (float(part) for part in parts)
+        if not all(math.isfinite(v) for v in (lag, jitter, loss, dup, reorder)):
+            raise ValueError(f"--impair values must be finite: {text!r}")
+        if lag < 0 or jitter < 0 or not 0 <= loss <= 1 or not 0 <= dup <= 100 or not 0 <= reorder <= 100:
+            raise ValueError(f"--impair value out of range: {text!r}")
+        if lag == jitter == loss == dup == reorder == 0:
+            raise ValueError("--impair that impairs nothing would prove nothing")
+        if not 1 <= seed <= MAX_IMPAIR_SEED - IMPAIR_SEED_ROLES:
+            raise ValueError(f"--seed must lie in [1, {MAX_IMPAIR_SEED - IMPAIR_SEED_ROLES}] (0 is nondeterministic)")
+        return cls(lag, jitter, loss, dup, reorder, seed)
+
+    def commands(self, role_index: int) -> list[str]:
+        """Engine console commands that apply this impairment, ending with the first status probe."""
+        return [f"net_impair_seed {self.seed + role_index}", f"net_lag {self.lag_ms:g}",
+                f"net_jitter {self.jitter_ms:g}", f"net_loss {self.loss:g}", f"net_dup {self.dup_pct:g}",
+                f"net_reorder {self.reorder_pct:g}", "net_impair"]
+
+    def expected(self, role_index: int) -> tuple[float, float, float, float, float, int]:
+        """(lag, jitter, loss %, dup %, reorder %, seed) as the simulators report them."""
+        return (self.lag_ms, self.jitter_ms, self.loss * 100.0, self.dup_pct, self.reorder_pct,
+                self.seed + role_index)
+
+    def settle_s(self) -> float:
+        """Extra settle time after any change: a round trip at the worst delay, the reorder hold, a resend."""
+        resend = RESEND_ALLOWANCE_S if self.loss > 0 else 0.0
+        return 2.0 * (self.lag_ms + self.jitter_ms) / 1000.0 + REORDER_HOLD_S + resend
+
+    def position_slack_m(self) -> float:
+        """How far a sprinting pawn moves during one worst-case one-way delay."""
+        return MAX_PAWN_SPEED_MPS * (self.lag_ms + self.jitter_ms) / 1000.0
+
+
+def impaired(scenario: Scenario, impairment: Impairment) -> Scenario:
+    """@p scenario with its settle times and position tolerance widened for @p impairment.
+
+    A checkpoint the wider settle windows no longer keep quiet moves to the
+    middle of its quiet gap (or, after the last change, just past the margin);
+    schedule_violations still has the last word, so a schedule with no room
+    left is refused rather than run.
+    """
+    extra = impairment.settle_s()
+    widened = replace(scenario, walk_settle_s=scenario.walk_settle_s + extra,
+                      event_settle_s=scenario.event_settle_s + extra,
+                      position_tolerance_m=scenario.position_tolerance_m + impairment.position_slack_m())
+    windows = motion_windows(widened)
+    checkpoints = []
+    for checkpoint in widened.checkpoints:
+        before = max((end for start, end in windows if start <= checkpoint), default=0.0)
+        after = min((start for start, _ in windows if start > checkpoint), default=None)
+        if checkpoint - before <= QUIET_MARGIN_S:
+            checkpoint = (before + after) / 2.0 if after is not None else before + QUIET_MARGIN_S + CHECKPOINT_PAD_S
+        checkpoints.append(round(checkpoint, 2))
+    client_seconds = widened.client_seconds
+    if checkpoints:
+        client_seconds = max(client_seconds, checkpoints[-1] + CLIENT_TAIL_S)
+    return replace(widened, checkpoints=tuple(checkpoints),
+                   client_seconds=round(client_seconds, 2))
+
+
+IMPAIR_STATUS_FIELDS = (
+    ("lag", re.compile(r"Latency:\s+([\d.]+) ms")),
+    ("jitter", re.compile(r"Jitter:\s+\+/-([\d.]+) ms")),
+    ("loss", re.compile(r"Packet loss:\s+([\d.]+)%")),
+    ("reorder", re.compile(r"Reorder:\s+([\d.]+)%")),
+    ("dup", re.compile(r"Duplicate:\s+([\d.]+)%")),
+    ("seed", re.compile(r"Seed:\s+(\d+)")),
+)
+
+
+def parse_impair_status(lines: list[str]) -> tuple[float, float, float, float, float, int] | None:
+    """(lag, jitter, loss %, dup %, reorder %, seed) from one net_impair output, or None unless ENABLED."""
+    text = "\n".join(lines)
+    if "InstabilitySimulator: ENABLED" not in text:
+        return None
+    values = {}
+    for name, pattern in IMPAIR_STATUS_FIELDS:
+        match = pattern.search(text)
+        if match is None:
+            return None
+        values[name] = float(match.group(1))
+    return (values["lag"], values["jitter"], values["loss"], values["dup"], values["reorder"], int(values["seed"]))
+
+
+def impair_matches(seen: tuple, expected: tuple) -> bool:
+    close = all(abs(a - b) <= IMPAIR_VALUE_TOLERANCE for a, b in zip(seen[:5], expected[:5]))
+    return close and seen[5] == expected[5]
+
+
+def impairment_problems(impairment: Impairment, logs: list["RoleLog"], views: "RunViews") -> list[str]:
+    """Impairment must be ON with the requested values in BOTH simulators of every process, for the whole run.
+
+    net_impair reads the simulator the engine's net_* commands configure; the
+    module's "[TF-OBSERVE] net" line reads the one compiled into the module
+    image, which impairs every module-side send. A run that converged with
+    either of them off proves nothing about impaired convergence. logs[0] is
+    the server, logs[1:] the clients in order.
+    """
+    problems = []
+    for index, log in enumerate(logs):
+        expected = impairment.expected(index)
+        probes = command_outputs(log.entries, "net_impair")
+        if len(probes) < IMPAIR_MIN_PROBES:
+            problems.append(f"{log.role}: {len(probes)} net_impair probes, expected at least {IMPAIR_MIN_PROBES}")
+        for seconds, lines in probes:
+            seen = parse_impair_status(lines)
+            if seen is None or not impair_matches(seen, expected):
+                problems.append(f"{log.role}: net_impair at t={seconds:.1f}s reported {seen or 'disabled'}, "
+                                f"expected {expected}")
+        observed = views.server if index == 0 else views.clients[index - 1]
+        for checkpoint, view in enumerate(observed):
+            if view is None:
+                continue  # already a convergence failure
+            net = view.net
+            module = None
+            if net is not None and net.impaired:
+                module = (net.lag_ms, net.jitter_ms, net.loss_pct, net.dup_pct, net.reorder_pct, net.seed)
+            if module is None or not impair_matches(module, expected):
+                problems.append(f"{log.role}: checkpoint {checkpoint} module-image impairment is "
+                                f"{module or 'disabled'}, expected {expected}")
+    return problems
 
 
 # --------------------------------------------------------------------------- parsing
@@ -429,8 +639,13 @@ def _parse_body_line(current: Observation, kind: str, values: dict[str, str]) ->
         current.vehicles[vehicle.net] = vehicle
     elif kind == "player":
         progress = Progress(int(values["id"]), values["loadout"], int(values["flux"]), int(values["rank"]),
-                            int(values["kills"]))
+                            int(values["kills"]), int(values["xp"]), values["unlocks"])
         current.players[progress.player] = progress
+    elif kind == "net":
+        current.net = NetView(int(values["bytesSent"]), int(values["bytesReceived"]), int(values["packetsSent"]),
+                              int(values["packetsReceived"]), int(values["packetsDropped"]), values["impair"] == "1",
+                              float(values["lagMs"]), float(values["jitterMs"]), float(values["lossPct"]),
+                              float(values["dupPct"]), float(values["reorderPct"]), int(values["seed"]))
 
 
 def parse_observations(lines: list[str]) -> list[Observation]:
@@ -555,7 +770,8 @@ def compare_regions(server: Observation, client: Observation, label: str) -> lis
     return [f"{label}: region owners differ from the server for regions {differing}"]
 
 
-def compare_vehicles(server: Observation, client: Observation, label: str) -> list[str]:
+def compare_vehicles(server: Observation, client: Observation, label: str,
+                     tolerance: float = POSITION_TOLERANCE_M) -> list[str]:
     problems = []
     if set(client.vehicles) != set(server.vehicles):
         return [f"{label}: vehicles {sorted(client.vehicles)} != server {sorted(server.vehicles)}"]
@@ -565,12 +781,13 @@ def compare_vehicles(server: Observation, client: Observation, label: str) -> li
             problems.append(f"{label}: vehicle {net} kind/driver/hp {(seen.kind, seen.driver, seen.hp)} != server "
                             f"{(truth.kind, truth.driver, truth.hp)}")
         gap = math.dist(seen.pos, truth.pos)
-        if gap > POSITION_TOLERANCE_M:
+        if gap > tolerance:
             problems.append(f"{label}: vehicle {net} position {seen.pos} is {gap:.2f} m from server {truth.pos}")
     return problems
 
 
-def compare_views(server: Observation, client: Observation, label: str) -> list[str]:
+def compare_views(server: Observation, client: Observation, label: str,
+                  tolerance: float = POSITION_TOLERANCE_M) -> list[str]:
     problems = []
     if client.continent != server.continent:
         problems.append(f"{label}: continent {client.continent!r} != server {server.continent!r}")
@@ -586,10 +803,10 @@ def compare_views(server: Observation, client: Observation, label: str) -> list[
         if seen.health != truth.health:
             problems.append(f"{label}: player {player} health {seen.health} != server {truth.health}")
         gap = math.dist(seen.pos, truth.pos)
-        if gap > POSITION_TOLERANCE_M:
+        if gap > tolerance:
             problems.append(f"{label}: player {player} position {seen.pos} is {gap:.2f} m from server {truth.pos}")
     problems += compare_regions(server, client, label)
-    problems += compare_vehicles(server, client, label)
+    problems += compare_vehicles(server, client, label, tolerance)
     # No own-progression compare: a pure client's self line always reads flux=0
     # rank=1 loadout=default, because TFProgressionSystem fills its records only on
     # the authority and TFClientNet keeps no replicated wallet. Rank, wallet and
@@ -665,14 +882,26 @@ def evaluate_checkpoint(scenario: Scenario, index: int, server: RoleLog, clients
                     verdict["problems"].append(f"{client.role}: server faction {pawn.faction} != chosen "
                                                f"{client.faction}")
             if view is not None:
-                verdict["problems"].extend(compare_views(server_view, view, client.role))
+                verdict["problems"].extend(compare_views(server_view, view, client.role,
+                                                         scenario.position_tolerance_m))
         verdict["client_players"] = selves
     verdict["converged"] = not verdict["problems"]
     return verdict, server_view, views
 
 
-def evaluate(scenario: Scenario, server: RoleLog, clients: list[RoleLog]) -> dict:
-    """Pair every scheduled client checkpoint with a server observation, compare them, then run the verdict."""
+def evaluate(scenario: Scenario, server: RoleLog, clients: list[RoleLog],
+             impairment: Impairment | None = None) -> dict:
+    """Pair every scheduled client checkpoint with a server observation, compare them, then run the verdict.
+
+    With @p impairment the run must also prove the impairment was live in every
+    process (impairment_problems).
+    """
+    return evaluate_views(scenario, server, clients, impairment)[0]
+
+
+def evaluate_views(scenario: Scenario, server: RoleLog, clients: list[RoleLog],
+                   impairment: Impairment | None = None) -> tuple[dict, RunViews]:
+    """evaluate() plus the per-checkpoint views it compared (the restart comparison reuses them)."""
     problems: list[str] = []
     for log in [server, *clients]:
         if log.returncode != 0:
@@ -717,7 +946,12 @@ def evaluate(scenario: Scenario, server: RoleLog, clients: list[RoleLog]) -> dic
     outcome = VERDICTS.get(scenario.name)
     if outcome is not None:
         problems += outcome(views)
-    return {"scenario": scenario.name, "passed": not problems, "problems": problems, "checkpoints": checkpoints}
+    if impairment is not None:
+        problems += impairment_problems(impairment, [server, *clients], views)
+    summary = {"scenario": scenario.name, "passed": not problems, "problems": problems, "checkpoints": checkpoints}
+    if impairment is not None:
+        summary["impairment"] = impairment.expected(0)
+    return summary, views
 
 
 # --------------------------------------------------------------------------- scenario verdicts
@@ -900,6 +1134,279 @@ VERDICTS: dict[str, Callable[[RunViews], list[str]]] = {
 }
 
 
+# --------------------------------------------------------------------------- TF-120 cold restart
+
+# Phase 1: client1 (MRA) saves a legal primary, has its wallet topped up and
+# kills client2 (AUC) in the arena; the server flips two outposts. Phase 2 is a
+# fresh server process on the same save root that client1 logs back into.
+RESTART_PRIMARY = FORGED_LEGAL_PRIMARY
+RESTART_FLUX_FLOOR = 300
+RESTART_CAPTURES = ((3, FACTION_IDS["auc"]), (7, FACTION_IDS["mra"]))  # an MRA and an HLX outpost at boot
+RESTART_CLIENT_TAIL_S = 5.0  # progression debounce (TFProgressionSystem kSaveDebounceSec = 2 s) plus margin
+SAVE_CONFIRM_TIMEOUT_S = 15.0
+SAVE_OK = "[TF] save: territory ok, progression ok"
+CHAR_LIST_HEADER = re.compile(r"\[TF\] characters \((\d+)\):")
+CHAR_LIST_ROW = re.compile(r"^\s*\[\d+\] .*\bid (\d+)\s*$")
+
+_FACTION_TAGS = {value: key for key, value in FACTION_IDS.items()}
+RESTART_PHASE1 = Scenario(
+    name="cold_restart",
+    client_factions=("mra", "auc"),
+    client_steps=ONBOARDING,
+    solo_steps=(
+        (0, 14.0, f"tf_give {RESTART_PRIMARY}"),
+        (0, 31.5, "tf_aim_at enemy"),
+        *_volley(0, 32.0, 0.2, 25),
+        (0, 45.0, "tf_char_list"),
+    ),
+    server_steps=(
+        ServerStep(13.0, 24.0, "tf_place_faction mra {:.0f} {:.0f}".format(*ARENA_MRA)),
+        ServerStep(13.0, 24.0, "tf_place_faction auc {:.0f} {:.0f}".format(*ARENA_AUC)),
+        ServerStep(13.0, 24.0, f"tf_flux_floor mra {RESTART_FLUX_FLOOR}"),
+        *(ServerStep(38.0, 49.0, f"tf_capture {region} {_FACTION_TAGS[owner]}") for region, owner in RESTART_CAPTURES),
+        ServerStep(50.0, 61.0, "tf_save", changes_world=False),
+    ),
+    checkpoints=(28.0, 53.0),
+    absent=((1, 1),),
+    client_seconds=62.0,
+)
+# The same run without any explicit tf_save: only the debounced and immediate
+# commits (docs/specs/persistence.md) stand between the state and the kill.
+UNGRACEFUL_PHASE1 = replace(RESTART_PHASE1, name="ungraceful_restart",
+                            server_steps=tuple(s for s in RESTART_PHASE1.server_steps if s.command != "tf_save"))
+RESTART_RETURN = Scenario(
+    name="restart_return",
+    client_factions=("mra",),
+    client_steps=(
+        (1.0, "tf_connect 127.0.0.1:{port}"),
+        (3.0, "tf_login {user} {password}"),
+        (4.5, "tf_char_list"),
+        (6.0, "tf_char_list"),
+        (7.5, "tf_enter 0"),
+        (9.0, "tf_faction {faction}"),
+        (10.0, "tf_spawn"),
+    ),
+    checkpoints=(15.0,),
+    client_seconds=18.0,
+)
+RESTART_SCENARIOS = {"cold_restart": RESTART_PHASE1, "ungraceful_restart": UNGRACEFUL_PHASE1}
+
+
+def character_ids(entries: list[AuditEntry]) -> list[int] | None:
+    """Character ids of the last tf_char_list that printed a list, or None when none did."""
+    listed = None
+    for _, lines in command_outputs(entries, "tf_char_list"):
+        header = next((CHAR_LIST_HEADER.search(line) for line in lines if CHAR_LIST_HEADER.search(line)), None)
+        if header is None:
+            continue
+        ids = [int(row.group(1)) for row in map(CHAR_LIST_ROW.match, lines) if row]
+        # A list whose rows do not add up to its own count is a truncated read, not an answer.
+        listed = ids if len(ids) == int(header.group(1)) else None
+    return listed
+
+
+def restart_baseline_problems(before: Progress | None, regions: dict[int, int]) -> list[str]:
+    """Phase 1 must end in non-default state, or restoring it proves nothing."""
+    if before is None:
+        return ["restart: phase 1 server progression for client1 is missing"]
+    problems = []
+    if before.loadout != RESTART_PRIMARY:
+        problems.append(f"restart: phase 1 loadout {before.loadout}, expected {RESTART_PRIMARY}")
+    if before.flux < RESTART_FLUX_FLOOR:
+        problems.append(f"restart: phase 1 flux {before.flux} is below the {RESTART_FLUX_FLOOR} floor")
+    if before.kills < 1 or before.xp <= 0:
+        problems.append(f"restart: phase 1 earned no kill/xp (kills {before.kills}, xp {before.xp})")
+    for region, owner in RESTART_CAPTURES:
+        if regions.get(region) != owner:
+            problems.append(f"restart: phase 1 region {region} owner {regions.get(region)}, expected {owner}")
+    return problems
+
+
+def restart_verdict(before_view: Observation, before_id: int, after_view: Observation, after_id: int,
+                    characters_before: list[int] | None, characters_after: list[int] | None) -> list[str]:
+    """Phase 2 must restore phase 1's authoritative state: territory, character, progression, one character row."""
+    before = before_view.players.get(before_id)
+    problems = restart_baseline_problems(before, before_view.regions)
+    after = after_view.players.get(after_id)
+    if after is None or after_id not in after_view.pawns:
+        return problems + [f"restart: the returning player {after_id} has no pawn/progression after the restart"]
+    if before is not None:
+        for name in ("loadout", "rank", "xp", "kills", "unlocks"):
+            if getattr(after, name) != getattr(before, name):
+                problems.append(f"restart: {name} {getattr(after, name)} was restored, expected "
+                                f"{getattr(before, name)}")
+        # Flux keeps ticking in: at most two continent income ticks separate the views.
+        if not before.flux <= after.flux <= before.flux + 2 * FLUX_INCOME_SLACK:
+            problems.append(f"restart: flux {after.flux} was restored, expected {before.flux}")
+    if before_id in before_view.pawns and after_view.pawns[after_id].faction != before_view.pawns[before_id].faction:
+        problems.append(f"restart: faction {after_view.pawns[after_id].faction} was restored, expected "
+                        f"{before_view.pawns[before_id].faction}")
+    if after_view.regions != before_view.regions:
+        differing = sorted(r for r in set(before_view.regions) | set(after_view.regions)
+                           if before_view.regions.get(r) != after_view.regions.get(r))
+        problems.append(f"restart: region owners differ after the restart for regions {differing}")
+    if characters_before is None or len(characters_before) != 1:
+        problems.append(f"restart: phase 1 character list {characters_before}, expected exactly one character")
+    elif characters_after != characters_before:
+        problems.append(f"restart: character list {characters_after} after the restart, expected "
+                        f"{characters_before} (a missing or duplicated character row)")
+    return problems
+
+
+# --------------------------------------------------------------------------- TF-110 soak
+
+SOAK_BUDGETS_PATH = Path(__file__).resolve().with_name("soak_budgets.json")
+SOAK_BUDGETS_SCHEMA = "terrafront-soak-budgets/1"
+SOAK_BUDGET_KEYS = ("bots", "sampleIntervalS", "warmupS", "tickHz", "maxTickAvgP95Ms", "maxTickPeakMs",
+                    "replicationHz", "minClientPacketsPerSecond", "maxClientDownlinkKBps",
+                    "maxDroppedPacketFraction", "maxRssSlopeMiBPerHour", "rssSampleIntervalS")
+SOAK_SERVER_TAIL_S = 10.0
+SOAK_LOOP_S = 6.0  # one walk out, one walk back, a shot after each
+PERF_TOTAL = re.compile(r"measured total: ([\d.]+) ms")
+PERF_PEAK = re.compile(r"\bpeak ([\d.]+) ms")
+BOTS_ACTIVE = re.compile(r"\[TF\] bots active: (\d+)")
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "ops"))
+from server_soak import MIN_FIT_SAMPLES, fit_rss_slope, read_process_rss  # noqa: E402  (OPS-110 slope fit)
+
+
+def load_soak_budgets(path: Path) -> dict:
+    """The provisional soak guards; a missing, non-positive or unknown-schema file fails closed."""
+    try:
+        budgets = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise HarnessError(f"{path}: {error}") from error
+    if not isinstance(budgets, dict):
+        raise HarnessError(f"{path}: not a JSON object")
+    if budgets.get("schema") != SOAK_BUDGETS_SCHEMA or budgets.get("provisional") is not True:
+        raise HarnessError(f"{path}: schema must be {SOAK_BUDGETS_SCHEMA} and provisional must be true")
+    for key in SOAK_BUDGET_KEYS:
+        value = budgets.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0:
+            raise HarnessError(f"{path}: budget {key!r} must be a positive number, got {value!r}")
+    return budgets
+
+
+def percentile(values: list[float], fraction: float) -> float:
+    """Nearest-rank percentile of a non-empty sample."""
+    ordered = sorted(values)
+    return ordered[max(0, math.ceil(fraction * len(ordered)) - 1)]
+
+
+def perf_samples(entries: list[AuditEntry]) -> list[tuple[float, float, float]]:
+    """(seconds, measured tick total ms, sum of phase peaks ms) per tf_perf report that had samples.
+
+    tf_perf keeps ~2 s rings per phase: the total is the mean tick over the last
+    ring, the peaks cover everything since the previous "tf_perf reset", and
+    their sum bounds the worst single tick of that window from above.
+    """
+    samples = []
+    for seconds, lines in command_outputs(entries, "tf_perf"):
+        text = "\n".join(lines)
+        total = PERF_TOTAL.search(text)
+        if total is not None:
+            samples.append((seconds, float(total.group(1)), sum(float(p) for p in PERF_PEAK.findall(text))))
+    return samples
+
+
+def expected_soak_samples(budgets: dict, soak_seconds: float) -> int:
+    return max(1, math.floor((soak_seconds - budgets["warmupS"]) / budgets["sampleIntervalS"]) - 1)
+
+
+def client_net_problems(label: str, samples: list[Sample], budgets: dict, needed: int) -> tuple[list[str], dict]:
+    """Per-client downlink, replication rate and drop fraction between consecutive post-warmup samples."""
+    usable = [s for s in samples if s.seconds >= budgets["warmupS"] and s.observation is not None]
+    problems = []
+    if len(usable) < needed:
+        problems.append(f"{label}: {len(usable)} post-warmup observations, expected at least {needed}")
+    for sample in usable:
+        view = sample.observation
+        if view.self_id not in view.pawns or view.net is None:
+            problems.append(f"{label}: at t={sample.seconds:.1f}s its own pawn or its net line is missing")
+    downlinks, rates, drops = [], [], []
+    for first, second in zip(usable, usable[1:]):
+        a, b = first.observation.net, second.observation.net
+        span = second.seconds - first.seconds
+        if a is None or b is None or span <= 0:
+            continue
+        received = b.packets_received - a.packets_received
+        downlinks.append((b.bytes_received - a.bytes_received) / 1024.0 / span)
+        rates.append(received / span)
+        drops.append((b.packets_dropped - a.packets_dropped) / max(received, 1))
+    if len(downlinks) < needed - 1:
+        problems.append(f"{label}: {len(downlinks)} traffic intervals, expected at least {needed - 1}")
+    if downlinks and max(downlinks) > budgets["maxClientDownlinkKBps"]:
+        problems.append(f"{label}: downlink {max(downlinks):.1f} KB/s exceeds {budgets['maxClientDownlinkKBps']}")
+    if rates and min(rates) < budgets["minClientPacketsPerSecond"]:
+        problems.append(f"{label}: {min(rates):.1f} packets/s received, below the "
+                        f"{budgets['minClientPacketsPerSecond']} a {budgets['replicationHz']} Hz replication needs")
+    if drops and max(drops) > budgets["maxDroppedPacketFraction"]:
+        problems.append(f"{label}: dropped fraction {max(drops):.3f} exceeds {budgets['maxDroppedPacketFraction']}")
+    metrics = {"maxDownlinkKBps": max(downlinks, default=None), "minPacketsPerSecond": min(rates, default=None),
+               "maxDroppedFraction": max(drops, default=None)}
+    return problems, metrics
+
+
+def rss_problems(label: str, rss: list[tuple[float, int]], budgets: dict,
+                 soak_seconds: float) -> tuple[list[str], dict]:
+    """Least-squares RSS slope after warmup (OPS-110 fit_rss_slope) against the provisional cap."""
+    slope, growth, count = fit_rss_slope([(t, value, 0) for t, value in rss], budgets["warmupS"], soak_seconds)
+    metrics = {"rssSlopeMiBPerHour": None if slope is None else slope / (1024.0 * 1024.0), "rssSamples": count,
+               "rssGrowthBytes": growth}
+    if slope is None:
+        return [f"{label}: {count} RSS samples after warmup, at least {MIN_FIT_SAMPLES} needed"], metrics
+    if metrics["rssSlopeMiBPerHour"] > budgets["maxRssSlopeMiBPerHour"]:
+        return [f"{label}: RSS grows {metrics['rssSlopeMiBPerHour']:.1f} MiB/h, above the provisional "
+                f"{budgets['maxRssSlopeMiBPerHour']} MiB/h"], metrics
+    return [], metrics
+
+
+def evaluate_soak(budgets: dict, soak_seconds: float, server: RoleLog, clients: list[RoleLog],
+                  rss: dict[str, list[tuple[float, int]]]) -> dict:
+    """Every budget in soak_budgets.json, over the post-warmup window; any crash or short sample set fails."""
+    problems: list[str] = []
+    metrics: dict = {}
+    for log in [server, *clients]:
+        if log.returncode != 0:
+            problems.append(f"{log.role}: exited with {log.returncode}")
+        problems += [f"{log.role}: scripted command reported ERR: {e.command}" for e in log.entries if not e.ok]
+        if log.anchor is None:
+            problems.append(f"{log.role}: no audit trail was written")
+    needed = expected_soak_samples(budgets, soak_seconds)
+
+    perf = [p for p in perf_samples(server.entries) if p[0] >= budgets["warmupS"]]
+    if len(perf) < needed:
+        problems.append(f"server: {len(perf)} post-warmup tf_perf samples, expected at least {needed}")
+    else:
+        p95 = percentile([total for _, total, _ in perf], 0.95)
+        worst = max(peak for _, _, peak in perf)
+        metrics["server"] = {"tickAvgP95Ms": p95, "tickPeakBoundMs": worst, "perfSamples": len(perf)}
+        if p95 > budgets["maxTickAvgP95Ms"]:
+            problems.append(f"server: tick p95 {p95:.2f} ms exceeds {budgets['maxTickAvgP95Ms']} ms "
+                            f"({budgets['tickHz']} Hz)")
+        if worst > budgets["maxTickPeakMs"]:
+            problems.append(f"server: a tick window peaked at {worst:.2f} ms, above {budgets['maxTickPeakMs']} ms")
+    bots = []
+    for seconds, lines in command_outputs(server.entries, "tf_bots"):
+        if seconds >= budgets["warmupS"]:
+            active = BOTS_ACTIVE.search("\n".join(lines))
+            bots.append((seconds, int(active.group(1)) if active else None))
+    if len(bots) < needed or any(count != budgets["bots"] for _, count in bots):
+        problems.append(f"server: bot counts {[count for _, count in bots]}, expected {budgets['bots']} at "
+                        f"least {needed} times")
+
+    for client in clients:
+        client_problems, metrics[client.role] = client_net_problems(client.role, observe_samples(client.entries),
+                                                                    budgets, needed)
+        problems += client_problems
+    for log in [server, *clients]:
+        memory_problems, memory = rss_problems(log.role, rss.get(log.role, []), budgets, soak_seconds)
+        problems += memory_problems
+        metrics.setdefault(log.role, {}).update(memory)
+    return {"scenario": "soak", "passed": not problems, "problems": problems, "soakSeconds": soak_seconds,
+            "provisionalBudgets": {k: budgets[k] for k in SOAK_BUDGET_KEYS}, "metrics": metrics}
+
+
 # --------------------------------------------------------------------------- processes
 
 
@@ -923,7 +1430,24 @@ def server_step_times(step: ServerStep) -> list[float]:
     return times
 
 
-def server_script(port: int, run_seconds: float, scenario: Scenario | None = None) -> str:
+def render_script(timeline: list[tuple[float, str]], impairment: Impairment | None, role_index: int,
+                  run_seconds: float) -> str:
+    """An -exec script: frame-0 setup (tf_status, then any impairment) and the timeline sorted by time.
+
+    An impaired process probes net_impair again just before it exits, so the
+    run proves the impairment stayed on, not only that it was switched on.
+    """
+    setup = ["tf_status"]
+    if impairment is not None:
+        setup += impairment.commands(role_index)
+        timeline = [*timeline, (run_seconds - 0.5, "net_impair")]
+    timeline = sorted(timeline, key=lambda item: item[0])
+    return "".join(f"0 {command}\n" for command in setup) + \
+        "".join(f"t{format_seconds(when)} {command}\n" for when, command in timeline)
+
+
+def server_script(port: int, run_seconds: float, scenario: Scenario | None = None,
+                  impairment: Impairment | None = None) -> str:
     timeline = [(0.5, f"tf_dedicated {port}")]
     at = 1.0
     while at < run_seconds - 0.5:
@@ -931,22 +1455,44 @@ def server_script(port: int, run_seconds: float, scenario: Scenario | None = Non
         at += SERVER_OBSERVE_INTERVAL_S
     for step in scenario.server_steps if scenario else ():
         timeline += [(when, step.command) for when in server_step_times(step)]
-    timeline.sort(key=lambda item: item[0])
-    return "0 tf_status\n" + "".join(f"t{format_seconds(when)} {command}\n" for when, command in timeline)
+    return render_script(timeline, impairment, 0, run_seconds)
 
 
-def client_script(scenario: Scenario, port: int, faction: str, index: int = 0) -> str:
-    values = {
-        "port": port,
-        "faction": faction,
-        "user": "mc" + secrets.token_hex(6),
-        "password": secrets.token_urlsafe(18),
-        "name": "MC" + secrets.token_hex(5),
-    }
+def fresh_credentials() -> dict[str, str]:
+    return {"user": "mc" + secrets.token_hex(6), "password": secrets.token_urlsafe(18),
+            "name": "MC" + secrets.token_hex(5)}
+
+
+def client_script(scenario: Scenario, port: int, faction: str, index: int = 0,
+                  credentials: dict[str, str] | None = None, impairment: Impairment | None = None) -> str:
+    values = {"port": port, "faction": faction, **(credentials or fresh_credentials())}
     timeline = [(at, template.format(**values)) for at, template in timed_client_steps(scenario, index)]
     timeline += [(at, "tf_observe") for at in scenario.checkpoints]
-    timeline.sort(key=lambda item: item[0])
-    return "0 tf_status\n" + "".join(f"t{format_seconds(at)} {command}\n" for at, command in timeline)
+    return render_script(timeline, impairment, index + 1, scenario.client_seconds)
+
+
+def soak_server_script(port: int, budgets: dict, soak_seconds: float) -> str:
+    interval = budgets["sampleIntervalS"]
+    timeline = [(0.5, f"tf_dedicated {port}"), (2.0, f"tf_bots {budgets['bots']}")]
+    at = interval
+    while at < soak_seconds:
+        timeline += [(at, "tf_observe"), (at + 0.2, "tf_perf"), (at + 0.4, "tf_perf reset"), (at + 0.6, "tf_bots")]
+        at += interval
+    return render_script(timeline, None, 0, soak_seconds)
+
+
+def soak_client_script(port: int, faction: str, budgets: dict, soak_seconds: float) -> str:
+    values = {"port": port, "faction": faction, **fresh_credentials()}
+    timeline = [(at, template.format(**values)) for at, template in ONBOARDING]
+    at = ONBOARDING[-1][0] + 2.5
+    while at + SOAK_LOOP_S < soak_seconds:
+        timeline += [(at, "tf_walk 1 0 2"), (at + 2.5, "tf_fire"), (at + 3.0, "tf_walk -1 0 2"), (at + 5.5, "tf_fire")]
+        at += SOAK_LOOP_S
+    at = budgets["sampleIntervalS"]
+    while at < soak_seconds:
+        timeline.append((at + 0.1, "tf_observe"))
+        at += budgets["sampleIntervalS"]
+    return render_script(timeline, None, 0, soak_seconds)
 
 
 @dataclass
@@ -955,13 +1501,22 @@ class Child:
     process: subprocess.Popen
     audit: Path
     anchor: float | None = None
+    started: float = field(default_factory=time.monotonic)
+    killed: bool = False  # terminated by the harness on purpose (restart runs)
 
     def poll_anchor(self) -> None:
         if self.anchor is None and self.audit.exists():
             self.anchor = time.monotonic()
 
+    def log(self) -> RoleLog:
+        text = self.audit.read_text(encoding="utf-8", errors="replace") if self.audit.exists() else ""
+        # A deliberate kill is the scenario, not a crash; every other exit status counts.
+        returncode = 0 if self.killed else self.process.returncode
+        return RoleLog(self.role, returncode, self.anchor if text else None, parse_audit(text))
 
-def launch(role: str, args: argparse.Namespace, workdir: Path, script: str, seconds: float) -> Child:
+
+def launch(role: str, args: argparse.Namespace, workdir: Path, script: str, seconds: float,
+           save_root: Path | None = None) -> Child:
     role_dir = workdir / role
     # The audit is append-only: a previous run's trail would replay stale views.
     shutil.rmtree(role_dir, ignore_errors=True)
@@ -969,7 +1524,7 @@ def launch(role: str, args: argparse.Namespace, workdir: Path, script: str, seco
     cfg = role_dir / f"{role}.cfg"
     cfg.write_text(script, encoding="utf-8", newline="\n")
     audit = role_dir / "exec_audit.log"
-    env = dict(os.environ, TF_SAVE_ROOT=str(role_dir / "saves"), SPARK_RHI_BACKEND="null")
+    env = dict(os.environ, TF_SAVE_ROOT=str(save_root or role_dir / "saves"), SPARK_RHI_BACKEND="null")
     command = [str(args.engine), "-headless", "-no-subprocess", "-require-game", "-threads", "2", "-game",
                str(args.module), "-exec", str(cfg), "-exec-audit", str(audit), "-test-seconds",
                format_seconds(seconds)]
@@ -983,21 +1538,23 @@ def wait_for_server(server: Child, deadline: float) -> None:
     while time.monotonic() < deadline:
         server.poll_anchor()
         if server.process.poll() is not None:
-            raise HarnessError(f"server exited with {server.process.returncode} before it started listening")
+            raise HarnessError(f"{server.role} exited with {server.process.returncode} before it started listening")
         if server.audit.exists():
             for entry in parse_audit(server.audit.read_text(encoding="utf-8", errors="replace")):
                 if entry.command.startswith("tf_dedicated"):
                     if any("dedicated server started" in line for line in entry.output):
                         return
-                    raise HarnessError("server: tf_dedicated did not start a dedicated server")
+                    raise HarnessError(f"{server.role}: tf_dedicated did not start a dedicated server")
         time.sleep(POLL_INTERVAL_S)
-    raise HarnessError(f"server did not start listening within {SERVER_READY_TIMEOUT_S} s")
+    raise HarnessError(f"{server.role} did not start listening within {SERVER_READY_TIMEOUT_S} s")
 
 
-def wait_for_exit(children: list[Child], deadline: float) -> None:
+def wait_for_exit(children: list[Child], deadline: float, on_poll: Callable[[], None] | None = None) -> None:
     while any(child.process.poll() is None for child in children):
         for child in children:
             child.poll_anchor()
+        if on_poll is not None:
+            on_poll()
         if time.monotonic() > deadline:
             raise HarnessError("timed out waiting for the processes to exit")
         time.sleep(POLL_INTERVAL_S)
@@ -1005,54 +1562,253 @@ def wait_for_exit(children: list[Child], deadline: float) -> None:
         child.poll_anchor()
 
 
-def run(args: argparse.Namespace) -> dict:
-    scenario = SCENARIOS[args.scenario]
+def stop_all(children: list[Child]) -> None:
+    for child in children:
+        if child.process.poll() is None:
+            child.process.kill()
+            child.process.wait()
+
+
+def run(args: argparse.Namespace, name: str, workdir: Path) -> dict:
+    """One scenario: a dedicated server plus its clients, optionally under args.impairment."""
+    scenario = SCENARIOS[name]
+    if args.impairment is not None:
+        scenario = impaired(scenario, args.impairment)
     violations = schedule_violations(scenario)
     if violations:
         raise HarnessError("; ".join(violations))
-    workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
     port = free_udp_port()
     deadline = time.monotonic() + args.timeout
     server_seconds = scenario.client_seconds + SERVER_TAIL_S
     children: list[Child] = []
     try:
-        server = launch("server", args, workdir, server_script(port, server_seconds, scenario), server_seconds)
+        server = launch("server", args, workdir, server_script(port, server_seconds, scenario, args.impairment),
+                        server_seconds)
         children.append(server)
         wait_for_server(server, min(deadline, time.monotonic() + SERVER_READY_TIMEOUT_S))
         for index, faction in enumerate(scenario.client_factions):
-            script = client_script(scenario, port, faction, index)
+            script = client_script(scenario, port, faction, index, impairment=args.impairment)
             children.append(launch(f"client{index + 1}", args, workdir, script, scenario.client_seconds))
         wait_for_exit(children, deadline)
     finally:
-        for child in children:
-            if child.process.poll() is None:
-                child.process.kill()
-                child.process.wait()
+        stop_all(children)
         for index in range(len(scenario.client_factions)):
             (workdir / f"client{index + 1}" / f"client{index + 1}.cfg").unlink(missing_ok=True)
 
-    logs = []
-    for child in children:
-        text = child.audit.read_text(encoding="utf-8", errors="replace") if child.audit.exists() else ""
-        logs.append(RoleLog(child.role, child.process.returncode, child.anchor if text else None, parse_audit(text)))
+    logs = [child.log() for child in children]
     for log, faction in zip(logs[1:], scenario.client_factions):
         log.faction = faction
-    summary = evaluate(scenario, logs[0], logs[1:])
+    summary = evaluate(scenario, logs[0], logs[1:], args.impairment)
     summary["port"] = port
     summary["workdir"] = str(workdir)
     return summary
+
+
+def kill_after_commit(server: Child, graceful: bool) -> list[str]:
+    """Hard-kill the phase 1 server once its state is committed: after an ok tf_save, or after the debounce."""
+    problems = []
+    if graceful:
+        deadline = time.monotonic() + SAVE_CONFIRM_TIMEOUT_S
+        while not any(SAVE_OK in "\n".join(lines) for _, lines in command_outputs(server.log().entries, "tf_save")):
+            if time.monotonic() > deadline:
+                problems.append(f"{server.role}: no tf_save reported '{SAVE_OK}' before the kill")
+                break
+            time.sleep(POLL_INTERVAL_S)
+    else:
+        time.sleep(RESTART_CLIENT_TAIL_S)
+        if command_outputs(server.log().entries, "tf_save"):
+            problems.append(f"{server.role}: ran tf_save, so the kill did not test the debounced commit")
+    if server.process.poll() is not None:
+        problems.append(f"{server.role}: exited with {server.process.returncode} before the harness killed it")
+    else:
+        server.process.kill()  # TerminateProcess / SIGKILL: no shutdown path, no final flush
+        server.process.wait()
+        server.killed = True
+    return problems
+
+
+def run_restart(args: argparse.Namespace, name: str, workdir: Path) -> dict:
+    """TF-120: phase 1 builds state and is hard-killed; phase 2 restarts on the same save root and compares."""
+    phase1 = RESTART_SCENARIOS[name]
+    violations = schedule_violations(phase1) + schedule_violations(RESTART_RETURN)
+    if violations:
+        raise HarnessError("; ".join(violations))
+    workdir.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + args.timeout
+    credentials = [fresh_credentials() for _ in phase1.client_factions]
+    children: list[Child] = []
+    problems: list[str] = []
+    try:
+        port = free_udp_port()
+        server = launch("server", args, workdir, server_script(port, phase1.client_seconds + SERVER_TAIL_S, phase1),
+                        phase1.client_seconds + SERVER_TAIL_S)
+        children.append(server)
+        wait_for_server(server, min(deadline, time.monotonic() + SERVER_READY_TIMEOUT_S))
+        clients = [launch(f"client{i + 1}", args, workdir, client_script(phase1, port, faction, i, credentials[i]),
+                          phase1.client_seconds) for i, faction in enumerate(phase1.client_factions)]
+        children += clients
+        wait_for_exit(clients, deadline, server.poll_anchor)
+        problems += kill_after_commit(server, graceful=any(s.command == "tf_save" for s in phase1.server_steps))
+
+        port = free_udp_port()
+        seconds = RESTART_RETURN.client_seconds + SERVER_TAIL_S
+        restarted = launch("server-restart", args, workdir, server_script(port, seconds, RESTART_RETURN), seconds,
+                           save_root=workdir / "server" / "saves")
+        children.append(restarted)
+        wait_for_server(restarted, min(deadline, time.monotonic() + SERVER_READY_TIMEOUT_S))
+        returning = launch("client1-restart", args, workdir,
+                           client_script(RESTART_RETURN, port, phase1.client_factions[0], 0, credentials[0]),
+                           RESTART_RETURN.client_seconds)
+        children.append(returning)
+        wait_for_exit([restarted, returning], deadline)
+    finally:
+        stop_all(children)
+        for child in children:
+            (workdir / child.role / f"{child.role}.cfg").unlink(missing_ok=True)
+
+    logs = {child.role: child.log() for child in children}
+    for role, faction in (("client1", "mra"), ("client2", "auc"), ("client1-restart", "mra")):
+        logs[role].faction = faction
+    first, first_views = evaluate_views(phase1, logs["server"], [logs["client1"], logs["client2"]])
+    second, second_views = evaluate_views(RESTART_RETURN, logs["server-restart"], [logs["client1-restart"]])
+    problems += [f"phase 1: {p}" for p in first["problems"]] + [f"phase 2: {p}" for p in second["problems"]]
+    before_view, after_view = first_views.server[-1], second_views.server[-1]
+    before_id, after_id = first_views.self_id(0, -1), second_views.self_id(0, -1)
+    if before_view is None or after_view is None or before_id is None or after_id is None:
+        problems.append("restart: a phase 1 or phase 2 final checkpoint view is missing")
+    else:
+        problems += restart_verdict(before_view, before_id, after_view, after_id,
+                                    character_ids(logs["client1"].entries),
+                                    character_ids(logs["client1-restart"].entries))
+    return {"scenario": name, "passed": not problems, "problems": problems,
+            "checkpoints": first["checkpoints"] + second["checkpoints"], "workdir": str(workdir)}
+
+
+def read_rss(pid: int) -> int | None:
+    """Resident set of a live child in bytes (Linux /proc, Windows working set), or None."""
+    if sys.platform != "win32":
+        return read_process_rss(pid)
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessMemoryCounters(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                    *((name, ctypes.c_size_t) for name in (
+                        "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage",
+                        "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage",
+                        "PeakPagefileUsage"))]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.K32GetProcessMemoryInfo.argtypes = (wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD)
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    process_query_limited_information, process_vm_read = 0x1000, 0x0010
+    handle = kernel32.OpenProcess(process_query_limited_information | process_vm_read, False, pid)
+    if not handle:
+        return None
+    try:
+        counters = ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        if not kernel32.K32GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+            return None
+        return int(counters.WorkingSetSize)
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def run_soak(args: argparse.Namespace, workdir: Path) -> dict:
+    """TF-110 soak: server + bots + two looping clients; tick, traffic and RSS are sampled against the budgets."""
+    budgets = load_soak_budgets(args.budgets)
+    soak_seconds = args.soak_seconds
+    if soak_seconds <= budgets["warmupS"] + 2 * budgets["sampleIntervalS"]:
+        raise HarnessError(f"--soak-seconds {soak_seconds} leaves no post-warmup samples")
+    workdir.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + args.timeout
+    rss: dict[str, list[tuple[float, int]]] = {}
+    children: list[Child] = []
+    next_sample = [0.0]
+
+    def sample_rss() -> None:
+        now = time.monotonic()
+        if now < next_sample[0]:
+            return
+        next_sample[0] = now + budgets["rssSampleIntervalS"]
+        for child in children:
+            value = read_rss(child.process.pid) if child.process.poll() is None else None
+            if value is not None:
+                rss.setdefault(child.role, []).append((now - child.started, value))
+
+    try:
+        port = free_udp_port()
+        server = launch("server", args, workdir, soak_server_script(port, budgets, soak_seconds),
+                        soak_seconds + SOAK_SERVER_TAIL_S)
+        children.append(server)
+        wait_for_server(server, min(deadline, time.monotonic() + SERVER_READY_TIMEOUT_S))
+        for index, faction in enumerate(("mra", "auc")):
+            children.append(launch(f"client{index + 1}", args, workdir,
+                                   soak_client_script(port, faction, budgets, soak_seconds), soak_seconds))
+        wait_for_exit(children, deadline, sample_rss)
+    finally:
+        stop_all(children)
+        for child in children:
+            (workdir / child.role / f"{child.role}.cfg").unlink(missing_ok=True)
+    logs = [child.log() for child in children]
+    summary = evaluate_soak(budgets, soak_seconds, logs[0], logs[1:], rss)
+    summary["workdir"] = str(workdir)
+    return summary
+
+
+def run_all(args: argparse.Namespace) -> dict:
+    """Every requested run; several scenarios each get their own sub-directory and must all pass."""
+    workdir = Path(args.workdir).resolve()
+    if args.soak_seconds is not None:
+        runs = [lambda: run_soak(args, workdir)]
+        names = ["soak"]
+    else:
+        names = args.scenario
+        runs = []
+        for name in names:
+            target = workdir / name if len(names) > 1 else workdir
+            runner = run_restart if name in RESTART_SCENARIOS else run
+            runs.append(lambda runner=runner, name=name, target=target: runner(args, name, target))
+    summaries = []
+    for name, runner in zip(names, runs):
+        try:
+            summaries.append(runner())
+        except HarnessError as error:
+            summaries.append({"scenario": name, "passed": False, "problems": [str(error)], "checkpoints": []})
+    if len(summaries) == 1:
+        return summaries[0]
+    return {"passed": all(s["passed"] for s in summaries), "runs": summaries,
+            "problems": [f"{s['scenario']}: {p}" for s in summaries for p in s["problems"]]}
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--engine", required=True, type=Path, help="SparkEngine executable")
     parser.add_argument("--module", required=True, type=Path, help="SparkGameMMOFPS module")
-    parser.add_argument("--scenario", required=True, choices=sorted(SCENARIOS))
+    parser.add_argument("--scenario", nargs="+", choices=sorted([*SCENARIOS, *RESTART_SCENARIOS]),
+                        help="one or more scenarios, run in order")
+    parser.add_argument("--soak-seconds", type=float, help="run the TF-110 soak for this long instead")
+    parser.add_argument("--budgets", type=Path, default=SOAK_BUDGETS_PATH, help="soak budget file")
+    parser.add_argument("--impair", help="'<lagMs>,<jitterMs>,<lossFrac>,<dupPct>,<reorderPct>' for every process")
+    parser.add_argument("--seed", type=int, default=1, help="impairment RNG seed (process k uses seed + k)")
     parser.add_argument("--workdir", required=True, help="per-run directory for scripts, audits and saves")
     parser.add_argument("--cwd", type=Path, help="asset root the processes run in (default: the engine's directory)")
-    parser.add_argument("--timeout", type=float, default=200.0, help="wall-clock limit for the whole run")
+    parser.add_argument("--timeout", type=float, default=200.0, help="wall-clock limit for each run")
     args = parser.parse_args(argv)
+    if (args.scenario is None) == (args.soak_seconds is None):
+        parser.error("give exactly one of --scenario or --soak-seconds")
+    args.impairment = None
+    if args.impair is not None:
+        if args.scenario is None or any(name not in SCENARIOS for name in args.scenario):
+            parser.error("--impair applies to the convergence scenarios only")
+        try:
+            args.impairment = Impairment.parse(args.impair, args.seed)
+        except ValueError as error:
+            parser.error(str(error))
     args.engine = args.engine.resolve()
     args.module = args.module.resolve()
     args.cwd = (args.cwd or args.engine.parent).resolve()
@@ -1061,14 +1817,15 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"not a file: {required}")
 
     try:
-        summary = run(args)
+        summary = run_all(args)
     except HarnessError as error:
-        summary = {"scenario": args.scenario, "passed": False, "problems": [str(error)], "checkpoints": []}
+        summary = {"scenario": "soak", "passed": False, "problems": [str(error)], "checkpoints": []}
+    label = "soak" if args.soak_seconds is not None else " ".join(args.scenario)
     print(json.dumps(summary, indent=2))
     if not summary["passed"]:
-        print(f"TerrafrontMultiClient {args.scenario}: FAILED", file=sys.stderr)
+        print(f"TerrafrontMultiClient {label}: FAILED", file=sys.stderr)
         return 1
-    print(f"TerrafrontMultiClient {args.scenario}: {len(summary['checkpoints'])} checkpoints converged")
+    print(f"TerrafrontMultiClient {label}: passed")
     return 0
 
 

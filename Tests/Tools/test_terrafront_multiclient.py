@@ -49,13 +49,23 @@ def fmt(pos: tuple[float, float, float]) -> str:
     return ",".join(f"{v:.2f}" for v in pos)
 
 
+def net_line(impair: tuple | None = None, received: tuple[int, int] = (0, 0), dropped: int = 0) -> str:
+    """A "[TF-OBSERVE] net" line. impair: (lag, jitter, loss %, dup %, reorder %, seed) or None (off);
+    received: (bytesReceived, packetsReceived)."""
+    lag, jitter, loss, dup, reorder, seed = impair or (0.0, 0.0, 0.0, 0.0, 0.0, 0)
+    return (f"[TF-OBSERVE] net bytesSent=100 bytesReceived={received[0]} packetsSent=10 "
+            f"packetsReceived={received[1]} packetsDropped={dropped} impair={1 if impair else 0} lagMs={lag:.1f} "
+            f"jitterMs={jitter:.1f} lossPct={loss:.1f} dupPct={dup:.1f} reorderPct={reorder:.1f} seed={seed}")
+
+
 def observation(role: str, self_id: int, pawns: dict, regions: dict | None = None, vehicles: dict | None = None,
-                players: dict | None = None) -> list[str]:
+                players: dict | None = None, net_view: str | None = None) -> list[str]:
     """tf_observe output split into lines, as it lands in the audit (first line prefixed).
 
-    vehicles: net -> (kind, driver, hp, pos); players: id -> (loadout, flux, rank, kills).
+    vehicles: net -> (kind, driver, hp, pos); players: id -> (loadout, flux, rank, kills[, xp, unlocks]).
     The server prints one player line per pawn. A pure client holds no progression, so its
-    self line is PURE_CLIENT_SELF whatever @p players (the server's truth) says.
+    self line is PURE_CLIENT_SELF whatever @p players (the server's truth) says. @p net_view is an
+    optional net_line().
     """
     regions = DEFAULT_REGIONS if regions is None else regions
     vehicles = vehicles or {}
@@ -73,8 +83,12 @@ def observation(role: str, self_id: int, pawns: dict, regions: dict | None = Non
         lines.append(f"[TF-OBSERVE] vehicle net={net} def={kind} driver={driver} hp={hp} pos={fmt(pos)}")
     if role == "server":
         for player in sorted(pawns):
-            loadout, flux, rank, kills = players.get(player, DEFAULT_PROGRESS)
-            lines.append(f"[TF-OBSERVE] player id={player} loadout={loadout} flux={flux} rank={rank} kills={kills}")
+            loadout, flux, rank, kills, *extra = players.get(player, DEFAULT_PROGRESS)
+            xp, unlocks = extra or (0, "-")
+            lines.append(f"[TF-OBSERVE] player id={player} loadout={loadout} flux={flux} rank={rank} xp={xp} "
+                         f"unlocks={unlocks} kills={kills}")
+    if net_view is not None:
+        lines.append(net_view)
     return lines
 
 
@@ -95,13 +109,13 @@ def world_at(wall: float, anchors: tuple[float, ...] = (CLIENT_ANCHOR, CLIENT_AN
 
 
 def server_audit(until: float = 70.0, anchors: tuple[float, ...] = (CLIENT_ANCHOR, CLIENT_ANCHOR),
-                 scenario: multiclient.Scenario = SCENARIO) -> str:
+                 scenario: multiclient.Scenario = SCENARIO, net_view: str | None = None) -> str:
     lines = entry(0, 0.0, "tf_status", ["    > [TF] TERRAFRONT role=standalone"])
     lines += entry(15, 0.5, "tf_dedicated 23000", ["    > [TF] dedicated server started on port 23000"])
     at, frame = 1.0, 30
     while at < until:
         world = world_at(SERVER_ANCHOR + at, anchors, scenario)
-        lines += entry(frame, at, "tf_observe", observation("server", SERVER_SELF, world))
+        lines += entry(frame, at, "tf_observe", observation("server", SERVER_SELF, world, net_view=net_view))
         at += multiclient.SERVER_OBSERVE_INTERVAL_S
         frame += 15
     return "\n".join(lines) + "\n"
@@ -675,6 +689,300 @@ class ProcessTests(unittest.TestCase):
             self.assertFalse(stale.exists())
         self.assertEqual(code, 1)
         self.assertIn("server exited with", out.getvalue())
+
+
+# --------------------------------------------------------------------------- impaired runs
+
+IMPAIRMENT = multiclient.Impairment.parse("80,20,0.03,2,3", 20260927)
+IMPAIRED_TRIO = ("onboard_spawn_move", "combat_kill_respawn", "territory")
+
+
+def impair_probe(frame: int, seconds: float, values: tuple | None) -> list[str]:
+    """One net_impair entry exactly as the engine prints InstabilitySimulator::Console_GetStatus()."""
+    if values is None:
+        return entry(frame, seconds, "net_impair", ["    > InstabilitySimulator: disabled"])
+    lag, jitter, loss, dup, reorder, seed = values
+    return entry(frame, seconds, "net_impair", [
+        "    > InstabilitySimulator: ENABLED", f"  Latency:     {lag:.1f} ms", f"  Jitter:      +/-{jitter:.1f} ms",
+        f"  Packet loss: {loss:.1f}%", f"  Reorder:     {reorder:.1f}% (hold 40.0 ms)", f"  Duplicate:   {dup:.1f}%",
+        f"  Seed:        {seed}", "  Queued pkts: 0"])
+
+
+def impaired_logs(module_on: bool = True, engine_probes: tuple[bool, ...] = (True, True)) -> tuple:
+    """A converged onboard_spawn_move run under IMPAIRMENT; each flag switches one proof of it off."""
+    def probes(role: int) -> list[str]:
+        values = IMPAIRMENT.expected(role)
+        return [line for index, on in enumerate(engine_probes)
+                for line in impair_probe(1 + index, 0.0 if index == 0 else 69.0, values if on else None)]
+
+    def net(role: int) -> str:
+        return net_line(IMPAIRMENT.expected(role) if module_on else None)
+
+    server_text = "\n".join(probes(0)) + "\n" + server_audit(net_view=net(0))
+    server = multiclient.RoleLog("server", 0, SERVER_ANCHOR, multiclient.parse_audit(server_text))
+    clients = []
+    for index, (self_id, faction) in enumerate(zip(CLIENT_PLAYERS, ("mra", "auc"))):
+        views = [observation("client", self_id, truth, net_view=net(index + 1)) for truth in TRUTH]
+        text = "\n".join(probes(index + 1)) + "\n" + client_audit(self_id, views)
+        clients.append(multiclient.RoleLog(f"client{index + 1}", 0, CLIENT_ANCHOR, multiclient.parse_audit(text),
+                                           faction))
+    return server, clients
+
+
+class ImpairmentTests(unittest.TestCase):
+    def evaluate(self, **kwargs) -> dict:
+        server, clients = impaired_logs(**kwargs)
+        return multiclient.evaluate(multiclient.impaired(SCENARIO, IMPAIRMENT), server, clients, IMPAIRMENT)
+
+    def test_bad_impairment_arguments_are_refused(self) -> None:
+        for text, seed in (("80,20,0.03,2", 1), ("0,0,0,0,0", 1), ("80,20,1.5,2,3", 1), ("80,20,0.03,2,3", 0),
+                           ("80,nan,0.03,2,3", 1)):
+            with self.assertRaises(ValueError, msg=text):
+                multiclient.Impairment.parse(text, seed)
+
+    def test_impaired_schedules_stay_quiet_and_widen(self) -> None:
+        for name in IMPAIRED_TRIO:
+            base = multiclient.SCENARIOS[name]
+            slowed = multiclient.impaired(base, IMPAIRMENT)
+            self.assertEqual(multiclient.schedule_violations(slowed), [], name)
+            self.assertEqual(slowed.name, base.name)  # the scenario verdict still runs
+            self.assertGreater(slowed.event_settle_s, base.event_settle_s)
+            self.assertGreater(slowed.position_tolerance_m, base.position_tolerance_m)
+            self.assertEqual(len(slowed.checkpoints), len(base.checkpoints))
+            self.assertGreaterEqual(slowed.client_seconds, slowed.checkpoints[-1])
+
+    def test_converged_run_with_live_impairment_passes(self) -> None:
+        summary = self.evaluate()
+        self.assertTrue(summary["passed"], summary["problems"])
+
+    def test_module_image_without_impairment_fails_although_converged(self) -> None:
+        # RED proof: the engine probes say ENABLED and every checkpoint converged, but
+        # the module image that impairs server sends never was: that is not impaired.
+        summary = self.evaluate(module_on=False)
+        self.assertTrue(all(c["converged"] for c in summary["checkpoints"]))
+        self.assertFalse(summary["passed"])
+        self.assertIn("module-image impairment is disabled", " ".join(summary["problems"]))
+
+    def test_engine_simulator_switched_off_fails(self) -> None:
+        summary = self.evaluate(engine_probes=(True, False))
+        self.assertFalse(summary["passed"])
+        self.assertIn("reported disabled", " ".join(summary["problems"]))
+
+    def test_missing_final_probe_fails(self) -> None:
+        summary = self.evaluate(engine_probes=(True,))
+        self.assertFalse(summary["passed"])
+        self.assertIn("1 net_impair probes", " ".join(summary["problems"]))
+
+    def test_wrong_value_fails(self) -> None:
+        wrong = multiclient.Impairment.parse("40,20,0.03,2,3", 20260927)
+        server, clients = impaired_logs()
+        summary = multiclient.evaluate(multiclient.impaired(SCENARIO, wrong), server, clients, wrong)
+        self.assertFalse(summary["passed"])
+
+    def test_impaired_scripts_configure_before_connecting_and_probe_at_the_end(self) -> None:
+        script = multiclient.client_script(multiclient.SCENARIOS["territory"], 23000, "mra", 0,
+                                           impairment=IMPAIRMENT).splitlines()
+        self.assertEqual(script[:8], ["0 tf_status", "0 net_impair_seed 20260928", "0 net_lag 80", "0 net_jitter 20",
+                                      "0 net_loss 0.03", "0 net_dup 2", "0 net_reorder 3", "0 net_impair"])
+        self.assertTrue(script[-1].endswith(" net_impair"))
+        server = multiclient.server_script(23000, 40.0, impairment=IMPAIRMENT).splitlines()
+        self.assertIn("0 net_impair_seed 20260927", server)
+        self.assertLess(server.index("0 net_impair"), server.index("t0.5 tf_dedicated 23000"))
+
+    def test_impair_is_refused_outside_the_convergence_scenarios(self) -> None:
+        for extra in (["--scenario", "cold_restart"], ["--soak-seconds", "120"]):
+            with tempfile.TemporaryDirectory() as workdir, redirect_stderr(io.StringIO()), \
+                    self.assertRaises(SystemExit):
+                multiclient.main(["--engine", sys.executable, "--module", __file__, "--workdir", workdir,
+                                  "--impair", "80,20,0.03,2,3", *extra])
+
+
+# --------------------------------------------------------------------------- soak
+
+SOAK_BUDGETS = multiclient.load_soak_budgets(multiclient.SOAK_BUDGETS_PATH)
+SOAK_SECONDS = 120.0
+
+
+def soak_logs(perf_until: float = SOAK_SECONDS, tick_ms: float = 4.0, downlink_kbps: float = 40.0,
+              bots: int = 32) -> tuple:
+    """A soak whose server reports tick totals and bot counts and whose clients report traffic every interval."""
+    interval = SOAK_BUDGETS["sampleIntervalS"]
+    lines = entry(0, 0.0, "tf_status", ["    > [TF] TERRAFRONT role=standalone"])
+    at, frame = interval, 100
+    while at < perf_until:
+        lines += entry(frame, at + 0.2, "tf_perf", [
+            "    > [TF] server tick perf (budget 16.667 ms @ 60 Hz):",
+            f"  movement: avg {tick_ms / 2:.3f} ms  peak {tick_ms:.3f} ms  (n=120)",
+            f"  ai: avg {tick_ms / 2:.3f} ms  peak {tick_ms:.3f} ms  (n=120)",
+            f"  measured total: {tick_ms:.3f} ms   headroom: {16.667 - tick_ms:.3f} ms (76%)"])
+        lines += entry(frame + 1, at + 0.6, "tf_bots", [f"    > [TF] bots active: {bots}  (tf_bots <0-32> to set)"])
+        at, frame = at + interval, frame + 10
+    server = multiclient.RoleLog("server", 0, SERVER_ANCHOR, multiclient.parse_audit("\n".join(lines) + "\n"))
+    clients = []
+    for index, self_id in enumerate(CLIENT_PLAYERS):
+        lines = entry(0, 0.0, "tf_status", ["    > [TF] TERRAFRONT role=standalone"])
+        at, frame, received, packets = interval, 100, 0, 0
+        while at < SOAK_SECONDS:
+            view = observation("client", self_id, TRUTH[0], net_view=net_line(received=(received, packets)))
+            lines += entry(frame, at + 0.1, "tf_observe", view)
+            received += int(downlink_kbps * 1024 * interval)
+            packets += 22 * interval
+            at, frame = at + interval, frame + 10
+        clients.append(multiclient.RoleLog(f"client{index + 1}", 0, CLIENT_ANCHOR,
+                                           multiclient.parse_audit("\n".join(lines) + "\n")))
+    return server, clients
+
+
+def rss_series(growth_bytes_per_s: float = 0.0) -> list[tuple[float, int]]:
+    return [(float(t), int(400 * 1024 * 1024 + growth_bytes_per_s * t + (t % 3) * 4096)) for t in range(0, 121)]
+
+
+def flat_rss() -> dict:
+    return {role: rss_series() for role in ("server", "client1", "client2")}
+
+
+class SoakTests(unittest.TestCase):
+    def evaluate(self, rss: dict | None = None, **kwargs) -> dict:
+        server, clients = soak_logs(**kwargs)
+        return multiclient.evaluate_soak(SOAK_BUDGETS, SOAK_SECONDS, server, clients,
+                                         flat_rss() if rss is None else rss)
+
+    def test_budget_file_is_provisional_and_complete(self) -> None:
+        self.assertTrue(SOAK_BUDGETS["provisional"])
+        self.assertEqual(SOAK_BUDGETS["tickHz"], 60)
+        self.assertLessEqual(SOAK_BUDGETS["maxTickAvgP95Ms"], round(1000.0 / SOAK_BUDGETS["tickHz"], 1))
+
+    def test_budget_file_missing_a_key_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "budgets.json"
+            broken = {k: v for k, v in SOAK_BUDGETS.items() if k != "maxRssSlopeMiBPerHour"}
+            path.write_text(multiclient.json.dumps(broken), encoding="utf-8")
+            with self.assertRaises(multiclient.HarnessError):
+                multiclient.load_soak_budgets(path)
+            path.write_text(multiclient.json.dumps({**SOAK_BUDGETS, "provisional": False}), encoding="utf-8")
+            with self.assertRaises(multiclient.HarnessError):
+                multiclient.load_soak_budgets(path)
+
+    def test_p95_is_nearest_rank(self) -> None:
+        self.assertEqual(multiclient.percentile([float(v) for v in range(1, 21)], 0.95), 19.0)
+        self.assertEqual(multiclient.percentile([5.0], 0.95), 5.0)
+
+    def test_quiet_soak_passes(self) -> None:
+        summary = self.evaluate()
+        self.assertTrue(summary["passed"], summary["problems"])
+        self.assertAlmostEqual(summary["metrics"]["client1"]["maxDownlinkKBps"], 40.0, places=3)
+
+    def test_flat_rss_passes_and_linear_growth_fails(self) -> None:
+        problems, metrics = multiclient.rss_problems("server", rss_series(), SOAK_BUDGETS, SOAK_SECONDS)
+        self.assertEqual(problems, [])
+        self.assertLess(abs(metrics["rssSlopeMiBPerHour"]), 1.0)
+        # 128 KiB/s is 450 MiB/h: a leak the provisional cap must catch.
+        problems, _ = multiclient.rss_problems("server", rss_series(128 * 1024), SOAK_BUDGETS, SOAK_SECONDS)
+        self.assertIn("RSS grows", " ".join(problems))
+
+    def test_missing_samples_fail(self) -> None:
+        # RED proof: a server that stopped reporting tf_perf halfway is not a passing soak.
+        summary = self.evaluate(perf_until=60.0)
+        self.assertFalse(summary["passed"])
+        self.assertIn("post-warmup tf_perf samples", " ".join(summary["problems"]))
+        summary = self.evaluate(rss={"server": rss_series()[:5]})
+        self.assertIn("RSS samples after warmup", " ".join(summary["problems"]))
+
+    def test_budget_breaches_fail(self) -> None:
+        self.assertIn("tick p95", " ".join(self.evaluate(tick_ms=20.0)["problems"]))
+        self.assertIn("downlink", " ".join(self.evaluate(downlink_kbps=400.0)["problems"]))
+        self.assertIn("bot counts", " ".join(self.evaluate(bots=12)["problems"]))
+
+    def test_crashed_child_fails(self) -> None:
+        server, clients = soak_logs()
+        clients[1].returncode = -11
+        summary = multiclient.evaluate_soak(SOAK_BUDGETS, SOAK_SECONDS, server, clients, flat_rss())
+        self.assertIn("client2: exited with -11", summary["problems"])
+
+    def test_soak_scripts_spawn_bots_and_sample(self) -> None:
+        server = multiclient.soak_server_script(23000, SOAK_BUDGETS, SOAK_SECONDS)
+        self.assertIn("t2.0 tf_bots 32\n", server)
+        self.assertEqual(server.count(" tf_perf reset\n"), 11)
+        client = multiclient.soak_client_script(23000, "mra", SOAK_BUDGETS, SOAK_SECONDS)
+        self.assertEqual(client.count(" tf_observe\n"), 11)
+        self.assertGreater(client.count(" tf_fire\n"), 20)
+
+
+# --------------------------------------------------------------------------- cold restart
+
+RESTART_BEFORE = ("mra_rifle", 312, 2, 1, 150, "-")  # loadout, flux, rank, kills, xp, unlocks
+RESTART_REGIONS = {**DEFAULT_REGIONS, 3: 2, 7: 1}
+
+
+def restart_view(player: int, progress: tuple, regions: dict | None = None) -> multiclient.Observation:
+    return parsed("server", SERVER_SELF, {player: pawn(1, 450, ARENA_A)}, players={player: progress},
+                  regions=RESTART_REGIONS if regions is None else regions)
+
+
+def char_list_audit(ids: list[int], count: int | None = None) -> list:
+    rows = [f"  [{i}] MCabc  MRA  rank 2  id {cid}" for i, cid in enumerate(ids)]
+    text = "\n".join(entry(40, 4.5, "tf_char_list", ["    > [TF] no characters (log in first, or none created yet)"]) +
+                     entry(50, 6.0, "tf_char_list",
+                           [f"    > [TF] characters ({len(ids) if count is None else count}):", *rows])) + "\n"
+    return multiclient.parse_audit(text)
+
+
+class RestartTests(unittest.TestCase):
+    def verdict(self, after: tuple = RESTART_BEFORE, regions_after: dict | None = None,
+                chars_after: list[int] | None = None, before: tuple = RESTART_BEFORE) -> list[str]:
+        return multiclient.restart_verdict(restart_view(2, before), 2, restart_view(5, after, regions_after), 5,
+                                           [41], [41] if chars_after is None else chars_after)
+
+    def test_restored_state_passes(self) -> None:
+        self.assertEqual(self.verdict(), [])
+        income = ("mra_rifle", 312 + multiclient.FLUX_INCOME_SLACK, 2, 1, 150, "-")
+        self.assertEqual(self.verdict(after=income), [])
+
+    def test_default_state_after_restart_fails(self) -> None:
+        # RED proof: a phase 2 that shares no save root comes up with default state.
+        problems = " ".join(self.verdict(after=("default", 0, 1, 0, 0, "-"), regions_after=DEFAULT_REGIONS))
+        for name in ("loadout default", "flux 0", "xp 0", "kills 0", "region owners differ"):
+            self.assertIn(name, problems)
+
+    def test_default_phase_one_proves_nothing(self) -> None:
+        default = ("default", 0, 1, 0, 0, "-")
+        problems = multiclient.restart_verdict(restart_view(2, default, DEFAULT_REGIONS), 2,
+                                               restart_view(5, default, DEFAULT_REGIONS), 5, [41], [41])
+        self.assertIn("restart: phase 1 loadout default", " ".join(problems))
+        self.assertIn("phase 1 region 3 owner 1", " ".join(problems))
+
+    def test_duplicate_or_missing_character_rows_fail(self) -> None:
+        self.assertIn("duplicated", " ".join(self.verdict(chars_after=[41, 42])))
+        self.assertIn("duplicated", " ".join(self.verdict(chars_after=[])))
+
+    def test_unlock_or_rank_loss_fails(self) -> None:
+        self.assertIn("unlocks - was restored", " ".join(self.verdict(
+            before=("mra_rifle", 312, 2, 1, 150, "wpn_x"), after=("mra_rifle", 312, 2, 1, 150, "-"))))
+        self.assertIn("rank 1 was restored", " ".join(self.verdict(after=("mra_rifle", 312, 1, 1, 150, "-"))))
+
+    def test_character_list_parse(self) -> None:
+        self.assertEqual(multiclient.character_ids(char_list_audit([41])), [41])
+        self.assertEqual(multiclient.character_ids(char_list_audit([41, 42])), [41, 42])
+        self.assertIsNone(multiclient.character_ids(char_list_audit([41], count=2)))  # truncated rows
+        self.assertIsNone(multiclient.character_ids(char_list_audit([])[:1]))
+
+    def test_restart_schedules_are_quiet_and_only_the_graceful_one_saves(self) -> None:
+        for scenario in (*multiclient.RESTART_SCENARIOS.values(), multiclient.RESTART_RETURN):
+            self.assertEqual(multiclient.schedule_violations(scenario), [], scenario.name)
+        saves = {name: [s for s in scenario.server_steps if s.command == "tf_save"]
+                 for name, scenario in multiclient.RESTART_SCENARIOS.items()}
+        self.assertTrue(saves["cold_restart"])
+        self.assertEqual(saves["ungraceful_restart"], [])
+
+    def test_returning_client_reuses_its_credentials(self) -> None:
+        credentials = multiclient.fresh_credentials()
+        first = multiclient.client_script(multiclient.RESTART_PHASE1, 23000, "mra", 0, credentials)
+        again = multiclient.client_script(multiclient.RESTART_RETURN, 23001, "mra", 0, credentials)
+        login = f"tf_login {credentials['user']} {credentials['password']}"
+        self.assertIn(login, first)
+        self.assertIn(login, again)
+        self.assertNotIn("tf_register", again)
+        self.assertNotIn("tf_char_create", again)
 
 
 if __name__ == "__main__":

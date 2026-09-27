@@ -358,3 +358,98 @@ uniqueness + ownership-checked delete + enter-world. All drive
 game-module level (console-driven loopback flow + screenshots), not by
 `SparkTests`, since `TFServerSim.cpp` is a full-module file with engine
 dependencies outside the minimal-dependency unit-test build.
+
+## 8. Multi-process harness: impairment, soak budgets, cold restart (TF-110, TF-120)
+
+`Tools/Terrafront/multiclient.py` drives real `SparkEngine` processes (one
+dedicated server, headless clients) through `-exec` scripts and compares their
+`tf_observe` output. Beyond the convergence scenarios it has three modes. The
+unit tests in `Tests/Tools/test_terrafront_multiclient.py` cover every verdict
+on every host. The process runs are CTest entries behind
+`SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS`.
+
+### Impaired convergence (`--impair`, `--seed`)
+
+Every process runs `net_impair_seed`, `net_lag`, `net_jitter`, `net_loss`,
+`net_dup` and `net_reorder` at frame 0, before it hosts or connects. Process
+*k* uses seed + *k*. Settle times grow by one worst-case round trip, the
+reorder hold and one resend. The position tolerance grows by the distance a
+sprinting pawn covers in one worst-case one-way delay. A checkpoint that the
+wider windows no longer keep quiet moves inside its quiet gap. The run fails
+unless impairment is proven live twice:
+
+- `net_impair` reports the requested values right after setup and again just
+  before the process exits. This is the simulator the engine's `net_*`
+  commands configure.
+- Every checkpoint's `[TF-OBSERVE] net` line reports the same values. This is
+  the `InstabilitySimulator` compiled into the module image. The module links
+  the engine statically, so it has its own copy, and module-side sends
+  (`TFServerSim` -> `NetworkManager::SendToClient` -> `SendImpaired`) go
+  through it.
+
+If only one of the two is configured, the run fails even though every
+checkpoint converged. CTest: `TerrafrontMultiClient_ImpairedConvergence`
+(80 ms, 20 ms, 3 % loss, 2 % duplication, 3 % reordering, seed 20260927) over
+`onboard_spawn_move`, `combat_kill_respawn` and `territory`.
+
+### Soak (`--soak-seconds`)
+
+The server runs `tf_bots <bots>`, and two clients onboard, then walk and fire in
+a loop. Every `sampleIntervalS` the harness samples:
+
+- the server's `tf_perf` report, followed by `tf_perf reset`;
+- the server's bot count;
+- each client's `[TF-OBSERVE] net` counters;
+- every process's RSS, once per second. It reads `/proc` on Linux (reused from
+  `tools/ops/server_soak.py`) and the working set via `K32GetProcessMemoryInfo`
+  on Windows.
+
+`Tools/Terrafront/soak_budgets.json` holds the limits. **They are provisional
+harness guards, not SLOs.** Samples taken before `warmupS` are ignored. The run
+fails on any of the following:
+
+- a child exits non-zero;
+- fewer samples than the window should hold;
+- the p95 of the ~2 s mean tick exceeds 16.7 ms (60 Hz);
+- the sum of per-phase peaks exceeds `maxTickPeakMs`;
+- a client receives fewer packets per second than 20 Hz replication needs;
+- a client's downlink exceeds its cap;
+- a client's dropped fraction exceeds its cap;
+- the least-squares RSS slope exceeds `maxRssSlopeMiBPerHour`.
+
+`TFPerfCounters` keeps average/peak rings, not a per-tick histogram, so the tick
+"p95" is taken across window means. The per-tick p95/p99 is still open. The
+bot count is capped by `kTFMaxBots` (32), so the run has 34 actors, not the 100
+that the W4 perf pass names. CTest `TerrafrontSoak_Short` runs 120 s (label
+`terrafront-soak`). The 30-minute gate is the same command with
+`--soak-seconds 1800`.
+
+### Cold restart (`cold_restart`, `ungraceful_restart`)
+
+Phase 1 builds state that differs from the defaults:
+
+- client1 saves `mra_rifle` as its primary;
+- client1's wallet is raised to 300 flux;
+- client1 kills client2 in the arena;
+- the server flips regions 3 and 7.
+
+After the clients exit, the harness hard-kills the server with
+TerminateProcess/SIGKILL. `cold_restart` kills after a `tf_save` reports
+`territory ok, progression ok`. `ungraceful_restart` never saves explicitly and
+kills once the 2 s progression debounce has passed. That point is the recovery
+point in `docs/specs/persistence.md`, and region flips persist immediately.
+
+Phase 2 starts a new server on the same `TF_SAVE_ROOT`. The same account logs
+back in (no register, no create). The comparison requires all of the following:
+
+- equal region owners;
+- equal faction, loadout, rank, xp, kill tally and unlock set;
+- flux within the continent income slack;
+- exactly the one phase-1 character id in `tf_char_list`.
+
+A phase 1 that ends at the default state fails on its own, so a restart that
+lost everything cannot pass by matching an empty baseline. Unlock purchases have
+no client harness verb yet, so the unlock set compared here is the rank-granted
+one. Vehicles are out of scope; see TF-120/vehicle-restart-semantics. CTest:
+`TerrafrontRestart_ColdRestartRestoresAuthoritativeState` and
+`TerrafrontRestart_UngracefulKillRestoresLastCommit`.

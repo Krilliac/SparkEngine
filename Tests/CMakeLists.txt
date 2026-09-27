@@ -3766,6 +3766,44 @@ if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEA
             RUN_SERIAL TRUE
             TIMEOUT 240)
     endforeach()
+    set(_tf_harness ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tools/Terrafront/multiclient.py
+        --engine $<TARGET_FILE:SparkEngine> --module $<TARGET_FILE:SparkGameMMOFPS>)
+    set(_tf_runs ${CMAKE_BINARY_DIR}/Testing/terrafront-multiclient)
+    # TF-110: the same checkpoints under 80 ms / 20 ms / 3% loss / 2% dup / 3%
+    # reorder with a fixed seed; fails unless impairment was live in every process.
+    add_test(
+        NAME TerrafrontMultiClient_ImpairedConvergence
+        COMMAND ${_tf_harness} --scenario onboard_spawn_move combat_kill_respawn territory
+            --impair 80,20,0.03,2,3 --seed 20260927 --timeout 150 --workdir ${_tf_runs}/impaired)
+    set_tests_properties(TerrafrontMultiClient_ImpairedConvergence PROPERTIES
+        LABELS "terrafront-multiclient;network;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 360)
+    # TF-110: 120 s soak against Tools/Terrafront/soak_budgets.json (provisional
+    # guards). The 30-minute run is the same command with --soak-seconds 1800.
+    add_test(
+        NAME TerrafrontSoak_Short
+        COMMAND ${_tf_harness} --soak-seconds 120 --timeout 280 --workdir ${_tf_runs}/soak)
+    set_tests_properties(TerrafrontSoak_Short PROPERTIES
+        LABELS "terrafront-soak;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+    # TF-120: a hard-killed server restarts on the same save root with its
+    # authoritative state, after an explicit save and after the debounced commit.
+    foreach(_tf_run IN ITEMS
+            ColdRestartRestoresAuthoritativeState:cold_restart
+            UngracefulKillRestoresLastCommit:ungraceful_restart)
+        string(REPLACE ":" ";" _tf_run "${_tf_run}")
+        list(GET _tf_run 0 _tf_name)
+        list(GET _tf_run 1 _tf_scenario)
+        add_test(
+            NAME TerrafrontRestart_${_tf_name}
+            COMMAND ${_tf_harness} --scenario ${_tf_scenario} --timeout 280 --workdir ${_tf_runs}/${_tf_scenario})
+        set_tests_properties(TerrafrontRestart_${_tf_name} PROPERTIES
+            LABELS "terrafront-multiclient;persistence;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 300)
+    endforeach()
 endif()
 
 # SEC-110: lock-derived SPDX 2.3 SBOM generation (commit and dependency-lock
