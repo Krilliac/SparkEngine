@@ -690,8 +690,7 @@ TEST(VisualScriptDemo_EverySoundCueShipsItsAudio)
     {
         const bool listed = std::find(SoundCues.begin(), SoundCues.end(), cue) != SoundCues.end();
         if (!listed)
-            std::printf("  playSound cue '%s' is not in SoundCues
-", cue.c_str());
+            std::printf("  playSound cue '%s' is not in SoundCues\n", cue.c_str());
         EXPECT_TRUE(listed);
     }
     for (const auto cue : SoundCues)
@@ -700,8 +699,8 @@ TEST(VisualScriptDemo_EverySoundCueShipsItsAudio)
         EXPECT_EQ(wav.parent_path().filename().string(), std::string("VisualScript"));
         std::error_code error;
         if (!std::filesystem::is_regular_file(wav, error))
-            std::printf("  sound cue '%s' has no audio at %s
-", std::string(cue).c_str(), wav.generic_string().c_str());
+            std::printf("  sound cue '%s' has no audio at %s\n", std::string(cue).c_str(),
+                        wav.generic_string().c_str());
         EXPECT_TRUE(std::filesystem::is_regular_file(wav, error));
         EXPECT_TRUE(requested.count(std::string(cue)) == 1);
     }
