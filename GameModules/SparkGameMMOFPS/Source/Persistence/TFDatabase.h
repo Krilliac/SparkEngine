@@ -52,6 +52,16 @@
  * Schema v2 adds the file "revision" and per-character "revision" keys; v0/v1
  * files load with revision 0 and upgrade on the next write.
  *
+ * DATA-120 idempotency: a CommitCharacterUpdates call may carry an operation
+ * id. The id is recorded in the file's "appliedOperations" ledger by the same
+ * atomic write that applies the batch, so a retried purchase or transfer whose
+ * id is already recorded succeeds without writing anything, in this process
+ * or after a restart, and cannot overwrite rows other authorities changed in
+ * between. The ledger keeps the newest kMaxAppliedOperations ids (FIFO).
+ * Schema v3 adds the ledger; v0-v2 files load with an empty ledger and
+ * upgrade on the next write, and a v2 build refuses a v3 file rather than
+ * rewriting it without the ledger.
+ *
  * DATA-120 backup/restore (TFDatabaseBackup.cpp, recovery point documented in
  * docs/specs/persistence.md): CreateBackup copies the committed file under the
  * authority lock into a durable, re-verified backup plus a sha256sum-format
@@ -70,6 +80,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <deque>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -187,7 +198,13 @@ namespace Terrafront
     {
       public:
         /// On-disk schema written by this build. Files without the key are v0.
-        static constexpr uint32_t kSchemaVersion = 2;
+        static constexpr uint32_t kSchemaVersion = 3;
+        /// Operation ids kept in the applied-operations ledger; the oldest is
+        /// evicted first. A retry older than this many keyed commits is no
+        /// longer recognised and falls back to the revision check.
+        static constexpr size_t kMaxAppliedOperations = 1024;
+        /// Operation ids are 1..kMaxOperationIdLength printable ASCII characters.
+        static constexpr size_t kMaxOperationIdLength = 128;
 
         TFDatabase() = default;
         ~TFDatabase();
@@ -241,7 +258,12 @@ namespace Terrafront
         /// nothing on disk) if any row is invalid, names an unknown character,
         /// repeats a character, the write fails, or (status Conflict) any row
         /// changed since this instance's baseline for it.
-        bool CommitCharacterUpdates(const std::vector<TFCharacterUpdate>& updates);
+        /// @param operationId Optional idempotency key, unique per logical
+        ///        operation (e.g. one purchase request). When the ledger already
+        ///        holds it, the call returns true and writes nothing; otherwise
+        ///        it is recorded atomically with the batch. A malformed id
+        ///        (empty is "no key"; too long or non-printable) fails the call.
+        bool CommitCharacterUpdates(const std::vector<TFCharacterUpdate>& updates, std::string_view operationId = {});
 
         /// Snapshot the committed file at `dbPath` into `backupPath` plus the
         /// digest sidecar BackupDigestPath(backupPath). Holds the authority lock
@@ -283,6 +305,7 @@ namespace Terrafront
             std::vector<TFCharacterRecord> characters;
             uint64_t nextAccountId = 1;
             uint64_t nextCharId = 1;
+            std::deque<std::string> appliedOperations; ///< idempotency ledger, oldest first
         };
 
         /// Mutation callback: edits the fresh snapshot, stamping changed
