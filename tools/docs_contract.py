@@ -1243,7 +1243,9 @@ def load_symbols(path: Path) -> list[Symbol]:
     try:
         payload = read_regular_bytes(path, label="symbol TSV", maximum=MAX_GENERATED_BYTES)
         with io.StringIO(payload.decode("utf-8"), newline="") as stream:
-            for line_no, row in enumerate(csv.reader(stream, delimiter="\t"), start=1):
+            # The writer joins fields with bare tabs and never quotes (tsv_row strips tabs and newlines),
+            # so read without quote handling: a brief that starts with '"' must round-trip verbatim.
+            for line_no, row in enumerate(csv.reader(stream, delimiter="\t", quoting=csv.QUOTE_NONE), start=1):
                 if line_no > MAX_GENERATED_FILES * 4096:
                     raise ContractError("symbol TSV exceeds row-count bound")
                 if len(row) != 5:

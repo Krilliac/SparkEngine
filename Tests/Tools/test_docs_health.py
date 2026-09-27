@@ -115,6 +115,18 @@ class FooBar {
 
 
 class DocsGenerationHostileTests(unittest.TestCase):
+    def test_symbol_tsv_round_trips_briefs_that_contain_quotes(self) -> None:
+        # The writer never quotes fields, so a brief opening with '"' must come back verbatim
+        # (csv's default quoting used to strip the quotes and fail the source projection check).
+        symbols = [
+            docs_contract.Symbol("SparkEngine/Source/A.h", 3, "function", "Describe", '"entity #N (\'name\')" label.'),
+            docs_contract.Symbol("SparkEngine/Source/A.h", 9, "class", "Quoted", 'Holds a "quoted" word and a trailing "'),
+        ]
+        with tempfile.TemporaryDirectory(prefix="docs-tsv-quotes-") as directory:
+            path = Path(directory) / ".symbols.tsv"
+            path.write_text("\n".join("\t".join(value.tsv_row()) for value in symbols) + "\n", encoding="utf-8")
+            self.assertEqual(docs_contract.load_symbols(path), symbols)
+
     def test_duplicate_json_members_are_rejected_by_both_contract_readers(self) -> None:
         with MiniContract() as fixture:
             source = json.loads(fixture.contract.read_text(encoding="utf-8"))
