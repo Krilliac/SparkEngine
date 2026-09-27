@@ -526,9 +526,13 @@
         },
         {
           "criterionDigest": "sha256:9e45c6dbf688",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No test reloads a showcase quicksave and compares exact state."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestSparkGameShowcase.cpp",
+            "GameModules/SparkGame/Source/Core/GameplayShowcase.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "SparkGameShowcase_QuickLoadRestoresExactState loads the real module with a SaveSystem in a temp dir, quicksaves, diverges (damage, destroy, spawn), quickloads and requires the name/transform/health/tag snapshot to match exactly, the coroutine stopped and tracking rebuilt. Linux-only; local runs, no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:904f84ed4a14",
@@ -971,7 +975,6 @@
       ],
       "plannedTestSelectors": [
         "MMOAccount_*",
-        "MMOWorld_*",
         "MMOPersistence_*"
       ]
     },
@@ -1037,7 +1040,7 @@
           "evidence": [
             "Tests/TestMOD330ARPGDungeonReal.cpp"
           ],
-          "note": "Only the boss snapshot round-trips. There is no UI round-trip and no full hero/skills/loot save through SaveSystem."
+          "note": "ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, learned skills, cooldowns, loot and boss through the real SaveSystem, and forged state is rejected. There is still no UI round-trip, so the criterion stays unmet."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",
@@ -1767,7 +1770,7 @@
           "criterionDigest": "sha256:4c73ad5bea74",
           "state": "unmet",
           "evidence": [],
-          "note": "The physics, audio, animation and event bindings only log or do nothing. Collision dispatch has no caller, and no module hot-reload test exists."
+          "note": "Engine collision and trigger dispatch now reaches scripts (ENG-200), but the playSound and playAnimation bindings only log and there is no module hot-reload test."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",

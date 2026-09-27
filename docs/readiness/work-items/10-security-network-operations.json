@@ -132,10 +132,7 @@
       "profileApplicability": {
         "stable-v1": "shared"
       },
-      "plannedCiJobs": [
-        "security-runtime",
-        "network-integration"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -494,7 +491,7 @@
           "criterionDigest": "sha256:1294cd87e10f",
           "state": "unmet",
           "evidence": [],
-          "note": "No tamper, replay, downgrade or key-rotation suite runs through a production authenticated transport."
+          "note": "SecureChannel (RFC 8439 ChaCha20-Poly1305) has Transport_Tamper/Replay/Downgrade/KeyRotation/FuzzPacket tests, but it is not wired into NetworkManager or any game transport and there is no handshake, so no production authenticated transport fails closed on malformed handshakes."
         },
         {
           "criterionDigest": "sha256:c7a82159fc73",
@@ -506,7 +503,7 @@
           "criterionDigest": "sha256:04b666ab668b",
           "state": "unmet",
           "evidence": [],
-          "note": "The custom XOR/FNV NetworkEncryption and TFCrypto primitives are still in the tree, and no independent review is recorded."
+          "note": "The XOR/FNV prototype was deleted and replaced by an in-tree ChaCha20-Poly1305 SecureChannel with known-answer tests; TFCrypto keeps self-implemented SHA-256/HMAC/PBKDF2. No independent review is recorded and the advertised transport does not use SecureChannel yet."
         }
       ],
       "commands": [
@@ -686,8 +683,7 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "service-contract",
-        "network-integration"
+        "service-contract"
       ],
       "plannedTestSelectors": []
     },
@@ -738,7 +734,7 @@
           "criterionDigest": "sha256:25b8b24da1b3",
           "state": "unmet",
           "evidence": [],
-          "note": "The Persistence_Transaction tests cover only single-writer atomicity in TFDatabase. No concurrent-writer or territory-store test exists."
+          "note": "TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates shows concurrent TFDatabase character and flux writers lose nothing under the shared-root lock. No territory store is covered, and the operation-id idempotency ledger (b2d2953) has no caller or Persistence_Idempotency_* test."
         },
         {
           "criterionDigest": "sha256:f67e46df6e00",
@@ -1057,7 +1053,7 @@
           "criterionDigest": "sha256:3d3d8ebe5028",
           "state": "unmet",
           "evidence": [],
-          "note": "There are no soak, load or p95/p99 budget runs. The smoke and scheduled soaks need hosted or history evidence."
+          "note": "Server_Soak runs a 60 s SparkServer soak with RSS-slope and tickP95/P99 guards, and one local 1800 s run passed as precursor only. The budgets are provisional harness guards, not SLOs, and no hosted release smoke or scheduled soak history exists."
         },
         {
           "criterionDigest": "sha256:6a1b58381966",
@@ -1201,7 +1197,7 @@
           "criterionDigest": "sha256:4570b349bbe5",
           "state": "unmet",
           "evidence": [],
-          "note": "No required long soak exists or has been run."
+          "note": "tools/perf-budget/run_nullrhi_soak.py and Soak_NullRHIHeadlessSmoke (120 s) detect leak slope, crashes and hangs locally. Only a >=1 h run with --expected-sha may record a result; none has run hosted, and nullrhi.soak budgets stay pending_measurement."
         },
         {
           "criterionDigest": "sha256:aa587eb5dfef",

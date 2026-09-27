@@ -1883,7 +1883,7 @@
           "evidence": [
             "SparkEngine/Source/Core/SparkEngineLinux.cpp"
           ],
-          "note": "The -scene flag is advertised but loads no scene. No test checks that CLI claims match behaviour."
+          "note": "The Linux host now honors -scene (LinuxScenePreview) and GamePackager copy failures fail the package (GamePackager_ASSET220_*). No test checks every advertised CLI and packager claim against behaviour, and the CLI_* selector is still planned."
         },
         {
           "criterionDigest": "sha256:94cbedf9f93f",

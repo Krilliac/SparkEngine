@@ -985,7 +985,7 @@
           "criterionDigest": "sha256:8ddf41e62b9f",
           "state": "unmet",
           "evidence": [],
-          "note": "Private-symbol mapping and build IDs are not implemented. ShippingManifest_* is planned."
+          "note": "ShippingManifest_PrivateSymbols and ShippingManifest_SymbolManifestTool map installed Linux ELF images to split .debug files by build-id, and clang/lld-link PE fixtures to PDBs. No MSVC Windows Shipping artifact has been mapped; that needs a Windows run."
         },
         {
           "criterionDigest": "sha256:efd875760a6e",
@@ -1102,9 +1102,14 @@
         },
         {
           "criterionDigest": "sha256:a060209998d6",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Complete per-artifact toolchain and dependency-lock manifests remain open."
+          "state": "implemented",
+          "evidence": [
+            "tools/release_build_provenance.py",
+            "Tests/Tools/test_release_build_provenance.py",
+            ".github/workflows/release.yml",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ArtifactIntegrity_BuildProvenance drives record/verify: each package job records source SHA, committed dependency-lock digest, toolchain (v2: Windows SDK, MSVC tools, linker, ISA floor) and configuration; verify rejects unrecorded published bytes and stable without one v2 Windows Shipping record. Fixture-only; no hosted Windows release run."
         },
         {
           "criterionDigest": "sha256:82f7d0d8ba4d",
@@ -1365,7 +1370,7 @@
       "definitionOfDone": ["Exact-SHA predecessor rehearsal and protected sign-off pass"],
       "profileApplicability": {"stable-v1": "outside"},
       "predecessorOnly": true,
-      "plannedCiJobs": ["profile-required-gates", "release-approval"],
+      "plannedCiJobs": ["release-approval"],
       "plannedTestSelectors": ["ReleaseProfilePredecessorRehearsal_*"]
     },
     {
@@ -1418,7 +1423,7 @@
       "outOfScope": ["First-predecessor bootstrap qualification"],
       "definitionOfDone": ["Hosted exact-SHA N-1 rehearsal and rollback pass"],
       "profileApplicability": {"stable-v1": "required"},
-      "plannedCiJobs": ["profile-required-gates", "release-approval"],
+      "plannedCiJobs": ["release-approval"],
       "plannedTestSelectors": ["ReleaseProfileNMinusOneRehearsal_*"]
     },
     {
@@ -1545,7 +1550,7 @@
           "criterionDigest": "sha256:f24b9e8fd483",
           "state": "unmet",
           "evidence": [],
-          "note": "The profile-required-gates and release-approval jobs are still in plannedCiJobs. The ReleaseProfileRehearsal_Qualification* selector is still planned."
+          "note": "profile-required-gates now exists in release.yml, but the release-approval job does not, and the ReleaseProfileRehearsal_Qualification* selector is still planned. Blocking on failure also needs a hosted run."
         },
         {
           "criterionDigest": "sha256:90bdc7c18dcd",
@@ -1565,7 +1570,7 @@
       "outOfScope": ["Publishing artifacts or changing final readiness", "Protocol migration, production-service backup/restore, and incident drills owned by G12 and OPS-110"],
       "definitionOfDone": ["All supported-host rehearsals pass at the candidate SHA", "Qualification sign-off and protected approval evidence are retained", "No planned qualification job or selector remains"],
       "profileApplicability": {"stable-v1": "shared"},
-      "plannedCiJobs": ["profile-required-gates", "release-approval"],
+      "plannedCiJobs": ["release-approval"],
       "plannedTestSelectors": ["ReleaseProfileRehearsal_Qualification*"]
     },
     {
