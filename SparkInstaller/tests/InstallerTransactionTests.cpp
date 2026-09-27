@@ -471,7 +471,7 @@ namespace
             missingCMake ? (root / "missing" / "cmake-does-not-exist").string() : executable.string();
         context.configManager.config.buildPath = (destination / "build").string();
         // Isolate each case: only the free-space case can fail the space check.
-        context.minFreeBytes = impossibleFreeSpace ? std::numeric_limits<std::uintmax_t>::max() : 0;
+        context.minFreeBytes = impossibleFreeSpace ? std::numeric_limits<std::uintmax_t>::max() : std::uintmax_t{0};
         context.log = [&log](const std::string& line)
         {
             log += line;
