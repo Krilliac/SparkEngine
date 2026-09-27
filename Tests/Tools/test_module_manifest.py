@@ -220,13 +220,14 @@ class ManifestMutationTests(unittest.TestCase):
     def test_windows_only_test_needs_a_per_platform_count(self) -> None:
         # FPSScene_FailedReloadPreservesLiveObjectIdentityAndRuntimeState is
         # compiled only under SPARK_PLATFORM_WINDOWS, so one integer cannot hold.
-        self.assertEqual({"windows": 5, "other": 4}, self.selector("SparkGameFPS", "FPSScene_")["count"])
-        self.edit_selector("SparkGameFPS", "FPSScene_", count=5)
-        self.assert_named_error("declared count 5 for FPSScene_ disagrees with 4 registered TEST( definitions "
+        # ca8d513 added the portable FPSScene_DataOnlyLoadNeedsNoGraphicsOrInput, so 6 on Windows, 5 elsewhere.
+        self.assertEqual({"windows": 6, "other": 5}, self.selector("SparkGameFPS", "FPSScene_")["count"])
+        self.edit_selector("SparkGameFPS", "FPSScene_", count=6)
+        self.assert_named_error("declared count 6 for FPSScene_ disagrees with 5 registered TEST( definitions "
                                 "whose name starts with it (other build)")
-        self.edit_selector("SparkGameFPS", "FPSScene_", count={"windows": 4, "other": 4})
+        self.edit_selector("SparkGameFPS", "FPSScene_", count={"windows": 5, "other": 5})
         self.assert_named_error("per-platform count for FPSScene_ is equal on every platform; declare one integer")
-        self.edit_selector("SparkGameFPS", "FPSScene_", count={"windows": 5, "linux": 4})
+        self.edit_selector("SparkGameFPS", "FPSScene_", count={"windows": 6, "linux": 5})
         self.assert_named_error("per-platform count must map exactly ['windows', 'other'] to positive integers")
 
     def test_preprocessor_platform_tracking(self) -> None:
