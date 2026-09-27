@@ -10,6 +10,8 @@
 #include <cerrno>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <optional>
 #include <sstream>
 #include <system_error>
 
@@ -138,8 +140,21 @@ namespace Spark
             {
                 modIt->second.enabled =
                     entry.HasKey("enabled") && entry["enabled"].IsBool() ? entry["enabled"].AsBool() : false;
-                modIt->second.loadOrder =
-                    entry.HasKey("loadOrder") && entry["loadOrder"].IsNumber() ? entry["loadOrder"].AsInt() : 0;
+                // A missing, non-integer or out-of-int-range loadOrder falls back
+                // to the default priority instead of an undefined conversion.
+                std::optional<int> loadOrder;
+                if (entry.HasKey("loadOrder"))
+                {
+                    loadOrder = entry["loadOrder"].TryAsInt();
+                    if (!loadOrder)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                       "ModSystem::LoadConfig: mod '%s' loadOrder is not an integer in int range; "
+                                       "using 0",
+                                       modId.c_str());
+                    }
+                }
+                modIt->second.loadOrder = loadOrder.value_or(0);
                 m_modStates[modId] = modIt->second.enabled ? ModState::Available : ModState::Disabled;
             }
         }
@@ -200,10 +215,19 @@ namespace Spark
             }
         }
 
-        // Extract load order if present
-        if (root.HasKey("loadOrder") && root["loadOrder"].IsNumber())
+        // Extract load order if present. A manifest that declares one must declare
+        // an exact int: a fraction or out-of-range number rejects the manifest.
+        if (root.HasKey("loadOrder"))
         {
-            info.loadOrder = root["loadOrder"].AsInt();
+            const std::optional<int> loadOrder = root["loadOrder"].TryAsInt();
+            if (!loadOrder)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "ModSystem: mod manifest '%s' rejected: loadOrder must be an integer in %d..%d",
+                                path.c_str(), std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+                return false;
+            }
+            info.loadOrder = *loadOrder;
         }
 
         return !info.id.empty();

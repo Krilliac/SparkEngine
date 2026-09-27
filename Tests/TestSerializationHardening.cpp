@@ -206,3 +206,63 @@ TEST(SerializationHardening_CurrentSceneRejectsDamagedFieldsAndRecoversBackup)
     EXPECT_EQ(recovered.GetEntityCount(), static_cast<size_t>(1));
     EXPECT_EQ(FirstEntityName(recovered), std::string("First"));
 }
+
+// Finding 71: AsInt did static_cast<int> on any finite double, which is
+// undefined behaviour outside int (x86 yields INT_MIN).
+TEST(SerializationHardening_JsonAsIntNeverConvertsOutOfRangeNumbers)
+{
+    const auto parse = [](const char* text)
+    {
+        Json::Value value;
+        std::string error;
+        const bool ok = Json::ParseStrict(text, &value, &error);
+        EXPECT_TRUE(ok);
+        return value;
+    };
+
+    EXPECT_EQ(parse("2147483648").AsInt(7), 7);
+    EXPECT_EQ(parse("-2147483649").AsInt(7), 7);
+    EXPECT_EQ(parse("1e300").AsInt(7), 7);
+    EXPECT_EQ(parse("-1e300").AsInt(7), 7);
+    EXPECT_EQ(parse("2147483647").AsInt(7), INT_MAX);
+    EXPECT_EQ(parse("-2147483648").AsInt(7), INT_MIN);
+    // In-range fractions keep their historical truncation toward zero.
+    EXPECT_EQ(parse("2147483647.5").AsInt(7), INT_MAX);
+    EXPECT_EQ(parse("-2147483648.5").AsInt(7), INT_MIN);
+    EXPECT_EQ(parse("1.5").AsInt(7), 1);
+
+    EXPECT_TRUE(parse("42").TryAsInt() == std::optional<int>(42));
+    EXPECT_TRUE(parse("-2147483648").TryAsInt() == std::optional<int>(INT_MIN));
+    EXPECT_TRUE(parse("2147483647").TryAsInt() == std::optional<int>(INT_MAX));
+    EXPECT_FALSE(parse("2147483648").TryAsInt().has_value());
+    EXPECT_FALSE(parse("-2147483649").TryAsInt().has_value());
+    EXPECT_FALSE(parse("1.5").TryAsInt().has_value());
+    EXPECT_FALSE(parse("\"5\"").TryAsInt().has_value());
+}
+
+// Finding 71 (consumer): mod loadOrder went through the unchecked AsInt.
+TEST(SerializationHardening_ModLoadOrderMustBeAnExactInt)
+{
+    ScratchDirectory scratch("modorder");
+    const std::filesystem::path mods = scratch.Path() / "mods";
+    WriteText(mods / "Good" / "mod.json", R"({"id":"Good","name":"Good","version":"1.0","loadOrder":5})");
+    WriteText(mods / "Huge" / "mod.json", R"({"id":"Huge","name":"Huge","version":"1.0","loadOrder":2147483648})");
+    WriteText(mods / "Frac" / "mod.json", R"({"id":"Frac","name":"Frac","version":"1.0","loadOrder":1.5})");
+
+    ModSystem system;
+    EXPECT_EQ(system.ScanForMods(PathToUtf8(mods)), static_cast<size_t>(1));
+    const ModInfo* good = system.GetModInfo("Good");
+    ASSERT_TRUE(good != nullptr);
+    EXPECT_EQ(good->loadOrder, 5);
+    EXPECT_TRUE(system.GetModInfo("Huge") == nullptr);
+    EXPECT_TRUE(system.GetModInfo("Frac") == nullptr);
+
+    // The mod-state config falls back to the default priority.
+    const std::filesystem::path config = scratch.Path() / "mods.json";
+    WriteText(config, R"({"mods":[{"id":"Good","enabled":true,"loadOrder":1e300}]})");
+    ASSERT_TRUE(system.LoadConfig(PathToUtf8(config)));
+    good = system.GetModInfo("Good");
+    ASSERT_TRUE(good != nullptr);
+    EXPECT_EQ(good->loadOrder, 0);
+    EXPECT_TRUE(good->enabled);
+}

@@ -37,8 +37,10 @@
 
 #include "LogMacros.h"
 
+#include <cmath>
 #include <cstdint>
 #include <exception>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -171,13 +173,43 @@ namespace Spark::Json
             return fallback;
         }
 
+        /**
+         * @brief Number truncated toward zero, or @p fallback.
+         *
+         * Returns @p fallback (and logs) for a non-number and for a number whose
+         * truncation does not fit in int: converting such a double with
+         * static_cast is undefined behaviour, and the parser stores any finite
+         * number (2147483648, 1e300). Fractions keep their historical truncation;
+         * use TryAsInt where a document field must be an exact integer.
+         */
         [[nodiscard]] int AsInt(int fallback = 0) const
         {
             if (auto* val = std::get_if<double>(&m_data))
-                return static_cast<int>(*val);
+            {
+                // Truncation lands in int exactly when the value is strictly
+                // inside (INT_MIN - 1, INT_MAX + 1); both bounds are exact doubles.
+                if (std::isfinite(*val) && *val > -2147483649.0 && *val < 2147483648.0)
+                    return static_cast<int>(*val);
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsInt: %g does not fit in int", *val);
+                return fallback;
+            }
             SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsInt called on non-number (type=%d)",
                            static_cast<int>(GetType()));
             return fallback;
+        }
+
+        /**
+         * @brief The number as an int when it is an exact integer in int range.
+         * @return std::nullopt for a non-number, a fraction, or a value outside int.
+         */
+        [[nodiscard]] std::optional<int> TryAsInt() const noexcept
+        {
+            const auto* val = std::get_if<double>(&m_data);
+            if (!val || !std::isfinite(*val) || *val != std::trunc(*val) || *val < -2147483648.0 || *val > 2147483647.0)
+            {
+                return std::nullopt;
+            }
+            return static_cast<int>(*val);
         }
 
         [[nodiscard]] const std::string& AsString() const
