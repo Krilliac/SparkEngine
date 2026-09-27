@@ -1725,6 +1725,15 @@ set_tests_properties(SparkPhaseFaultIsolationTests PROPERTIES
     LABELS "security;ecs;unit"
     TIMEOUT 30)
 
+# Security: FileUtils / LocalFileCache treat engine path strings as UTF-8 on Windows
+# instead of decoding them in the active ANSI code page (missed files, writes to a
+# mojibake-named sibling); legacy code-page strings keep their native meaning.
+add_test(NAME SparkUtf8PathTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkUtf8PathTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=Utf8Path_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "security;filesystem;unit"
+    TIMEOUT 30)
+
 # SAVE-230: editor prefabs fail closed on a newer SPARKPREFAB version, name the
 # component and line of damage, recover from the retained .bak, and a failed save
 # leaves the previous prefab byte-identical. PrefabManager saves to and reloads
