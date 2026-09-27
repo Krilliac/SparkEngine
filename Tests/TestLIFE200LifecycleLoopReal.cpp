@@ -11,6 +11,15 @@
  * loop alternates a rolled-back startup with a clean one, so a failed boot can
  * neither latch the services dead nor leak what it had already started.
  *
+ * A third test injects a failing stage at every boundary between the
+ * production init stages (before InitDebug, after InitDebug, after
+ * InitNetworking, after InitGameplay), failing by returning false, throwing a
+ * std::exception and throwing a non-std value; each rolled-back boot must
+ * leave no published service, ECS phase system, console command or thread
+ * behind, keep its root latched, and let the next boot start cleanly. A fourth
+ * proves an Update stage that throws escapes RunUpdate without poisoning the
+ * root: every such cycle still shuts down to the same footprint.
+ *
  * A CycleWatchdog bounds every cycle: a deadlock aborts the run with the cycle
  * named instead of hanging until the CTest timeout. The Lifecycle_LifecycleLoop
  * CTest carries the lifecycle label, so the Linux ASan/TSan presets run these
@@ -36,6 +45,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -65,19 +75,64 @@ namespace
         RequiredStage{"Shutdown", LifecyclePhase::Shutdown},
     };
 
-    /// Fails startup after every production init stage has published its services.
-    class InjectedFailureStage final : public LifecycleStage
+    /// How an injected stage fails the phase it takes part in.
+    enum class InjectedFault : std::uint8_t
     {
-      public:
-        std::string_view Name() const override { return "InjectedFailure"; }
-        LifecycleOrder Order() const override { return LifecycleOrder::Render; }
-        LifecycleThreadAffinity ThreadAffinity() const override { return LifecycleThreadAffinity::MainThread; }
-        bool SupportsInitialize() const override { return true; }
-        bool Initialize() override { return false; }
+        ReturnFalse,
+        ThrowStdException,
+        ThrowUnknown
     };
 
-    /// A fresh root over the real production stages, optionally with a failing tail stage.
-    std::unique_ptr<LifecycleCompositionRoot> MakeProductionRoot(bool injectFailure)
+    /// A stage that fails its Initialize (or throws from its Update) at a chosen
+    /// (Order, Name) position between the production stages.
+    class FaultStage final : public LifecycleStage
+    {
+      public:
+        FaultStage(LifecycleOrder order, std::string_view name, LifecyclePhase phase, InjectedFault fault,
+                   int* invocations)
+            : m_order(order), m_name(name), m_phase(phase), m_fault(fault), m_invocations(invocations)
+        {
+        }
+
+        std::string_view Name() const override { return m_name; }
+        LifecycleOrder Order() const override { return m_order; }
+        LifecycleThreadAffinity ThreadAffinity() const override { return LifecycleThreadAffinity::MainThread; }
+        bool SupportsInitialize() const override { return m_phase == LifecyclePhase::Initialize; }
+        bool SupportsUpdate() const override { return m_phase == LifecyclePhase::Update; }
+
+        bool Initialize() override
+        {
+            Fire();
+            return false;
+        }
+
+        void Update(float /*dt*/) override { Fire(); }
+
+      private:
+        void Fire()
+        {
+            if (m_invocations != nullptr)
+                ++*m_invocations;
+            switch (m_fault)
+            {
+            case InjectedFault::ReturnFalse:
+                return;
+            case InjectedFault::ThrowStdException:
+                throw std::runtime_error("injected lifecycle stage failure");
+            case InjectedFault::ThrowUnknown:
+                throw 42;
+            }
+        }
+
+        LifecycleOrder m_order;
+        std::string_view m_name;
+        LifecyclePhase m_phase;
+        InjectedFault m_fault;
+        int* m_invocations;
+    };
+
+    /// A fresh root over the real production stages, plus an optional injected stage.
+    std::unique_ptr<LifecycleCompositionRoot> MakeProductionRoot(std::unique_ptr<LifecycleStage> injected = nullptr)
     {
         std::vector<std::unique_ptr<LifecycleStage>> stages;
         stages.push_back(Spark::Core::Lifecycle::CreateInitDebugStage());
@@ -85,9 +140,17 @@ namespace
         stages.push_back(Spark::Core::Lifecycle::CreateInitGameplayStage());
         stages.push_back(Spark::Core::Lifecycle::CreateUpdateStage());
         stages.push_back(Spark::Core::Lifecycle::CreateShutdownStage());
-        if (injectFailure)
-            stages.push_back(std::make_unique<InjectedFailureStage>());
+        if (injected)
+            stages.push_back(std::move(injected));
         return std::make_unique<LifecycleCompositionRoot>(std::move(stages), kProductionShape);
+    }
+
+    /// Fails startup after every production init stage has published its services.
+    std::unique_ptr<LifecycleCompositionRoot> MakeFailingTailRoot()
+    {
+        return MakeProductionRoot(std::make_unique<FaultStage>(LifecycleOrder::Render, "InjectedFailure",
+                                                               LifecyclePhase::Initialize, InjectedFault::ReturnFalse,
+                                                               nullptr));
     }
 
     /// Platform startup provides a World and an EventBus before the lifecycle runs.
@@ -163,7 +226,7 @@ TEST(LifecycleLoop_ProductionStagesRepeatedBootShutdownLeavesNoStaleServices)
     for (int cycle = 0; cycle < kBootCycles; ++cycle)
     {
         watchdog.Arm("production boot/shutdown cycle " + std::to_string(cycle));
-        auto root = MakeProductionRoot(/*injectFailure=*/false);
+        auto root = MakeProductionRoot();
         ASSERT_TRUE(root->IsConfigurationValid());
         ASSERT_TRUE(root->RunInitialize());
         EXPECT_TRUE(ServicesPublished(*ctx));
@@ -211,7 +274,7 @@ TEST(LifecycleLoop_FailedBootThenCleanBootRepublishesServices)
         // A startup that fails after every production stage initialized rolls
         // back through the real Shutdown stage and latches only its own root.
         watchdog.Arm("failed boot in round " + std::to_string(round));
-        auto failed = MakeProductionRoot(/*injectFailure=*/true);
+        auto failed = MakeFailingTailRoot();
         ASSERT_TRUE(failed->IsConfigurationValid());
         EXPECT_FALSE(failed->RunInitialize());
         EXPECT_TRUE(failed->GetState() == LifecycleRootState::Failed);
@@ -220,7 +283,7 @@ TEST(LifecycleLoop_FailedBootThenCleanBootRepublishesServices)
 
         // The next boot on the same context starts from scratch and republishes.
         watchdog.Arm("clean boot after failure in round " + std::to_string(round));
-        auto clean = MakeProductionRoot(/*injectFailure=*/false);
+        auto clean = MakeProductionRoot();
         ASSERT_TRUE(clean->RunInitialize());
         EXPECT_TRUE(ServicesPublished(*ctx));
         clean->RunUpdate(1.0f / 60.0f);
@@ -236,6 +299,160 @@ TEST(LifecycleLoop_FailedBootThenCleanBootRepublishesServices)
             ASSERT_TRUE(baseline.threads > 0);
             continue;
         }
+        EXPECT_EQ(footprint.consoleCommands, baseline.consoleCommands);
+        EXPECT_LE(footprint.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
+    }
+}
+
+namespace
+{
+    /// A slot between production init stages, pinned by the root's (Order, Name) sort.
+    struct InjectionPoint
+    {
+        LifecycleOrder order;
+        std::string_view name;
+        std::string_view where;
+    };
+
+    constexpr std::array<InjectionPoint, 4> kInitBoundaries = {
+        InjectionPoint{LifecycleOrder::Diagnostics, "0Inject", "before InitDebug"},
+        InjectionPoint{LifecycleOrder::Physics, "Inject", "after InitDebug"},
+        InjectionPoint{LifecycleOrder::AI, "ZInject", "after InitNetworking"},
+        InjectionPoint{LifecycleOrder::Render, "Inject", "after InitGameplay"},
+    };
+
+    struct FaultCase
+    {
+        InjectedFault fault;
+        std::string_view name;
+    };
+
+    constexpr std::array<FaultCase, 3> kFaults = {
+        FaultCase{InjectedFault::ReturnFalse, "return false"},
+        FaultCase{InjectedFault::ThrowStdException, "throw std::exception"},
+        FaultCase{InjectedFault::ThrowUnknown, "throw non-std value"},
+    };
+
+    /// Boots and shuts down a clean production root; returns the footprint it leaves.
+    CycleFootprint CleanCycle(EngineContext& ctx, const Spark::SimpleConsole& console)
+    {
+        auto root = MakeProductionRoot();
+        EXPECT_TRUE(root->RunInitialize());
+        EXPECT_TRUE(ServicesPublished(ctx));
+        root->RunUpdate(1.0f / 60.0f);
+        EXPECT_TRUE(root->RunShutdown());
+        EXPECT_TRUE(ServicesWithdrawn(ctx));
+        EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
+        root.reset();
+        return SampleFootprint(console);
+    }
+
+    /// True when RunUpdate let a stage exception reach the caller.
+    bool UpdateEscaped(LifecycleCompositionRoot& root)
+    {
+        try
+        {
+            root.RunUpdate(1.0f / 60.0f);
+        }
+        catch (...)
+        {
+            return true;
+        }
+        return false;
+    }
+} // namespace
+
+TEST(LifecycleLoop_InjectedFailureAtEveryInitBoundaryUnwinds)
+{
+    EngineContext* ctx = PrepareContext();
+    ConsoleScope consoleScope;
+    LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
+
+    // Warm-up: process-lifetime state (lazy singletons, pools) starts here.
+    watchdog.Arm("warm-up boot before fault injection");
+    const CycleFootprint baseline = CleanCycle(*ctx, consoleScope.console);
+    watchdog.Disarm();
+    ASSERT_TRUE(baseline.threads > 0);
+
+    for (const InjectionPoint& point : kInitBoundaries)
+    {
+        for (const FaultCase& faultCase : kFaults)
+        {
+            const std::string label = std::string(faultCase.name) + " " + std::string(point.where);
+            watchdog.Arm("injected failure: " + label);
+
+            int invocations = 0;
+            auto failed = MakeProductionRoot(std::make_unique<FaultStage>(
+                point.order, point.name, LifecyclePhase::Initialize, faultCase.fault, &invocations));
+            ASSERT_TRUE(failed->IsConfigurationValid());
+            EXPECT_FALSE(failed->RunInitialize());
+            EXPECT_EQ(invocations, 1);
+            EXPECT_TRUE(failed->GetState() == LifecycleRootState::Failed);
+
+            // Rollback withdrew whatever the stages before the fault had published.
+            EXPECT_TRUE(ServicesWithdrawn(*ctx));
+            EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
+            const CycleFootprint afterRollback = SampleFootprint(consoleScope.console);
+            EXPECT_EQ(afterRollback.consoleCommands, baseline.consoleCommands);
+            EXPECT_LE(afterRollback.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
+
+            // The latched root refuses both transitions and runs no stage again.
+            EXPECT_FALSE(failed->RunShutdown());
+            EXPECT_FALSE(failed->RunInitialize());
+            EXPECT_EQ(invocations, 1);
+            EXPECT_TRUE(failed->GetState() == LifecycleRootState::Failed);
+            EXPECT_TRUE(ServicesWithdrawn(*ctx));
+            EXPECT_EQ(SampleFootprint(consoleScope.console).consoleCommands, baseline.consoleCommands);
+            failed.reset();
+
+            // No stale singleton, thread or registration blocks the next boot.
+            watchdog.Arm("clean boot after injected failure: " + label);
+            const CycleFootprint afterClean = CleanCycle(*ctx, consoleScope.console);
+            watchdog.Disarm();
+            EXPECT_EQ(afterClean.consoleCommands, baseline.consoleCommands);
+            EXPECT_LE(afterClean.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
+        }
+    }
+}
+
+TEST(LifecycleLoop_ThrowingUpdateStageDoesNotLeakAcrossCycles)
+{
+    EngineContext* ctx = PrepareContext();
+    ConsoleScope consoleScope;
+    LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
+
+    watchdog.Arm("warm-up boot before throwing updates");
+    const CycleFootprint baseline = CleanCycle(*ctx, consoleScope.console);
+    watchdog.Disarm();
+    ASSERT_TRUE(baseline.threads > 0);
+
+    for (int cycle = 0; cycle < kAlternatingRounds; ++cycle)
+    {
+        watchdog.Arm("throwing update cycle " + std::to_string(cycle));
+        const InjectedFault fault = (cycle % 2 == 0) ? InjectedFault::ThrowStdException : InjectedFault::ThrowUnknown;
+        int invocations = 0;
+        auto root = MakeProductionRoot(std::make_unique<FaultStage>(LifecycleOrder::Render, "ThrowingUpdate",
+                                                                    LifecyclePhase::Update, fault, &invocations));
+        ASSERT_TRUE(root->RunInitialize());
+        EXPECT_TRUE(ServicesPublished(*ctx));
+
+        // RunUpdate is not a containment boundary: the host's frame loop sees the
+        // exception. The root itself stays Initialized and keeps its services.
+        for (int frame = 0; frame < kUpdatesPerCycle; ++frame)
+            EXPECT_TRUE(UpdateEscaped(*root));
+        EXPECT_EQ(invocations, kUpdatesPerCycle);
+        EXPECT_TRUE(root->GetState() == LifecycleRootState::Initialized);
+        EXPECT_TRUE(ServicesPublished(*ctx));
+
+        // Shutdown after the throwing frames is complete and clean.
+        ASSERT_TRUE(root->RunShutdown());
+        EXPECT_TRUE(root->GetState() == LifecycleRootState::ShutDown);
+        EXPECT_TRUE(ServicesWithdrawn(*ctx));
+        EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
+        root.reset();
+        watchdog.Disarm();
+
+        const CycleFootprint footprint = SampleFootprint(consoleScope.console);
         EXPECT_EQ(footprint.consoleCommands, baseline.consoleCommands);
         EXPECT_LE(footprint.threads, baseline.threads + LifecycleLoop::kOsThreadSlack);
     }
