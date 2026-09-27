@@ -33,8 +33,10 @@
  * Allocation: one SecureChannel per completed handshake; never per packet.
  * Scalability tier: connection setup only, not a per-frame path.
  *
- * Not provided here: carrying these messages in NetworkManager's Connect path,
- * and anti-amplification cookies. Both are later NET-100 slices.
+ * NetworkManager carries these messages: the ClientHello is the Connect payload
+ * and the ServerHello follows the echoed version in ConnectAccepted
+ * (docs/specs/networking-wire-format.md). Not provided: anti-amplification
+ * cookies (a later NET-100 slice).
  */
 
 #pragma once

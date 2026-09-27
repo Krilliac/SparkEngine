@@ -20,7 +20,11 @@ CONNECT = 1
 CONNECT_ACCEPTED = 2
 # Connect payload prefix: handshake magic "SPNH" + protocol version (NetworkManager.h).
 HANDSHAKE_MAGIC = 0x484E5053
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
+# NET-100 v2 framing (docs/specs/networking-wire-format.md): every datagram starts with a
+# frame-kind byte; Connect/ConnectAccepted travel in plaintext handshake frames.
+FRAME_HANDSHAKE = 0x01
+HANDSHAKE_SUITE = 1
 
 
 class ManagedProcess:
@@ -141,10 +145,13 @@ def wait_health(
 
 
 def connect_packet(player_name: str) -> bytes:
-    name = player_name.encode("utf-8")
-    payload = struct.pack("<IHH", HANDSHAKE_MAGIC, PROTOCOL_VERSION, len(name)) + name
+    # A v2 ClientHello: magic, version, suite, an X25519 public key and a nonce. The admission
+    # probe only needs the server's ConnectAccepted (which it cannot and does not verify), so a
+    # random 32-byte key stands in for a real ephemeral key; the name would follow sealed.
+    del player_name
+    payload = struct.pack("<IHB", HANDSHAKE_MAGIC, PROTOCOL_VERSION, HANDSHAKE_SUITE) + os.urandom(32) + os.urandom(16)
     header = struct.pack("<IHBIIfI", MAGIC, CONNECT, 1, 0, 0, 0.0, len(payload))
-    return header + payload
+    return bytes([FRAME_HANDSHAKE]) + header + payload
 
 
 def require_udp_admission(port: int, player_name: str) -> None:
@@ -162,8 +169,12 @@ def require_udp_admission(port: int, player_name: str) -> None:
                     response, _ = client.recvfrom(4096)
                 except socket.timeout:
                     break
-                if len(response) >= 6 and struct.unpack_from("<I", response, 0)[0] == MAGIC:
-                    if struct.unpack_from("<H", response, 4)[0] == CONNECT_ACCEPTED:
+                if (
+                    len(response) >= 7
+                    and response[0] == FRAME_HANDSHAKE
+                    and struct.unpack_from("<I", response, 1)[0] == MAGIC
+                ):
+                    if struct.unpack_from("<H", response, 5)[0] == CONNECT_ACCEPTED:
                         return
         raise RuntimeError(f"SparkServer on UDP {port} did not return ConnectAccepted")
     finally:
@@ -292,6 +303,10 @@ def main() -> int:
     endpoint_paths: list[Path] = []
     with tempfile.TemporaryDirectory(prefix="spark-server-gateway-") as temporary:
         root = Path(temporary)
+        # NET-100: SparkServer creates its persistent server identity under the per-user data
+        # directory. Point that at the scratch tree so the test never touches the real one.
+        os.environ["LOCALAPPDATA"] = str(root / "userdata")
+        os.environ["XDG_DATA_HOME"] = str(root / "userdata")
         try:
             key_file = root / "gateway.key"
             make_private_key(key_file, args.gateway)

@@ -126,20 +126,38 @@ namespace Spark::Net
     /// without it predates protocol negotiation and is rejected as ProtocolMissing.
     constexpr uint32_t NETWORK_HANDSHAKE_MAGIC = 0x484E5053;
 
-    /// Session protocol version carried in Connect and echoed in ConnectAccepted. Peers must
-    /// match exactly; bump it on every incompatible wire change (docs/specs/networking-wire-format.md).
-    constexpr uint16_t NETWORK_PROTOCOL_VERSION = 1;
+    /// Session protocol version carried in Connect (inside the ClientHello, so it is bound into
+    /// the signed handshake transcript) and echoed in ConnectAccepted. Peers must match exactly;
+    /// bump it on every incompatible wire change (docs/specs/networking-wire-format.md).
+    /// Version 2 (NET-100): every datagram is framed, and everything but the handshake is sealed.
+    constexpr uint16_t NETWORK_PROTOCOL_VERSION = 2;
+
+    /// Outer frame kind, the first byte of every v2 datagram (NET-100).
+    /// Handshake frames carry only Connect, ConnectAccepted and ConnectRejected in plaintext;
+    /// every other message travels in a Sealed frame: [0x02][SecureChannel packet], whose
+    /// plaintext is the serialized message and whose associated data is the frame-kind byte.
+    constexpr uint8_t NETWORK_FRAME_HANDSHAKE = 0x01;
+    constexpr uint8_t NETWORK_FRAME_SEALED = 0x02;
+
+    /// Send-key rotation policy for a SecureChannel (NET-100 nonce discipline). A sender rotates
+    /// after this many sealed packets or this much session time, whichever comes first; once the
+    /// 8-bit epoch space is exhausted the channel is dropped and the session must be re-established.
+    constexpr uint64_t SECURE_ROTATE_AFTER_PACKETS = uint64_t{1} << 31;
+    constexpr float SECURE_ROTATE_AFTER_SECONDS = 600.0f;
 
     /// Typed reason carried in the ConnectRejected trailer (and recorded for client-side refusals).
     enum class ConnectRejectReason : uint8_t
     {
-        Unspecified = 0,        ///< Legacy or malformed rejection with no typed trailer
-        ServerFull = 1,         ///< Every client slot is occupied
-        ProtocolMissing = 2,    ///< Connect lacks the handshake magic and version
-        ProtocolTooOld = 3,     ///< Client protocol version is older than the server's
-        ProtocolTooNew = 4,     ///< Client protocol version is newer than the server's
-        MalformedHandshake = 5, ///< Magic and version present but the rest of the payload is malformed
-        ProtocolMismatch = 6    ///< Client-side: ConnectAccepted echoed a different version
+        Unspecified = 0,            ///< Legacy or malformed rejection with no typed trailer
+        ServerFull = 1,             ///< Every client slot is occupied
+        ProtocolMissing = 2,        ///< Connect lacks the handshake magic and version
+        ProtocolTooOld = 3,         ///< Client protocol version is older than the server's
+        ProtocolTooNew = 4,         ///< Client protocol version is newer than the server's
+        MalformedHandshake = 5,     ///< Magic and version present but the rest of the payload is malformed
+        ProtocolMismatch = 6,       ///< Client-side: ConnectAccepted echoed a different version
+        UnsupportedSuite = 7,       ///< ClientHello names a cipher suite the server does not speak
+        ServerIdentityMismatch = 8, ///< Client-side: the server's key is not the pinned / recorded one
+        HandshakeAuthFailed = 9     ///< Client-side: bad signature, weak key, or unusable trust store
     };
 
     enum class ChannelType
@@ -169,7 +187,8 @@ namespace Spark::Net
         Disconnected,
         Connecting,
         Connected,
-        Disconnecting
+        Disconnecting,
+        Securing ///< Server-side: handshake answered, waiting for the client's sealed ClientFinished
     };
 
     // ============================================================================
@@ -211,6 +230,9 @@ namespace Spark::Net
         // (DeltaSnapshotManager), distinct from the reliable-channel sequences
         // acknowledged by MessageType::Ack; the two must never be mixed.
         DeltaAck,
+
+        // NET-100: first sealed client message; carries the player name and completes admission.
+        ClientFinished,
 
         // Custom
         UserDefined = 1000
@@ -289,18 +311,11 @@ namespace Spark::Net
         bool m_error = false;
     };
 
-    /**
-     * @brief Serialize a Connect request payload: handshake magic, protocol version, player name.
-     * @param buffer Destination buffer; the request is appended.
-     * @param playerName Display name the server records for the new client.
-     * @param protocolVersion Version to advertise. Production clients always send NETWORK_PROTOCOL_VERSION.
-     */
-    inline void WriteConnectRequest(NetBuffer& buffer, const std::string& playerName,
-                                    uint16_t protocolVersion = NETWORK_PROTOCOL_VERSION)
+    /// True for the three messages that travel in plaintext Handshake frames.
+    [[nodiscard]] constexpr bool IsHandshakeMessage(MessageType type) noexcept
     {
-        buffer.WriteUint32(NETWORK_HANDSHAKE_MAGIC);
-        buffer.WriteUint16(protocolVersion);
-        buffer.WriteString(playerName);
+        return type == MessageType::Connect || type == MessageType::ConnectAccepted ||
+               type == MessageType::ConnectRejected;
     }
 
     // ============================================================================
@@ -453,6 +468,14 @@ namespace Spark::Net
         uint32_t fullEntitySyncs = 0; ///< Initial full snapshots sent to admitted clients.
         float bandwidthUp = 0.0f;     ///< KB/s
         float bandwidthDown = 0.0f;   ///< KB/s
+
+        /// NET-100: sealed frames dropped by SecureChannel::Open, indexed by OpenResult
+        /// (Malformed, UnsupportedVersion, UnknownKeyEpoch, AuthenticationFailed, Replayed; [0] unused).
+        std::array<uint32_t, 6> securityDrops{};
+        uint32_t plaintextFramesDropped = 0; ///< Unframed, unknown-kind or out-of-state plaintext frames refused
+        uint32_t unsealedSendsRefused = 0;   ///< Outgoing non-handshake messages with no SecureChannel to seal them
+        uint32_t keyRotations = 0;           ///< Send-key rotations performed
+        uint32_t handshakeFailures = 0;      ///< Handshakes refused or abandoned (either role)
     };
 
     // ============================================================================
@@ -853,6 +876,12 @@ namespace Spark::Net
         void RejectPendingConnect(ClientID pendingID, ConnectRejectReason reason, const std::string& text);
         /// Client-side: fail a Connecting handshake closed (state, socket, and queued lifecycle traffic).
         void AbandonClientHandshake(ConnectRejectReason reason, std::string text);
+        /// Client-side: verify ConnectAccepted's ServerHello against the configured trust, install the
+        /// channel and send the sealed ClientFinished. Runs from the ConnectAccepted protocol handler.
+        void CompleteClientHandshake(const NetworkMessage& accepted);
+        /// Server-side: a Securing client proved its channel with ClientFinished; admit it.
+        /// @return false when the ClientFinished payload is malformed (the client stays Securing).
+        bool PromoteSecuringClient(ClientID clientID, const NetworkMessage& finished);
         /// Client-side: end a Connecting/Connected session the server closed (Disconnect) or
         /// that went silent past m_connectionTimeout. Closes the socket and discards the
         /// lifecycle's queued traffic and replicated state. @p keepReconnectArmed is true only
@@ -888,8 +917,23 @@ namespace Spark::Net
         /// Deserialize raw bytes into a NetworkMessage
         bool DeserializeMessage(const uint8_t* data, size_t length, NetworkMessage& outMsg) const;
 
-        /// Send raw bytes to a specific address
+        /// Send raw bytes to a specific address (final boundary; never called with an unframed message)
         bool SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr, bool localOnly = false);
+
+        /**
+         * @brief Frame one serialized message for @p peerKey and send it (NET-100)
+         *
+         * Handshake messages go out as [NETWORK_FRAME_HANDSHAKE][message]. Everything else is
+         * sealed with the peer's SecureChannel as [NETWORK_FRAME_SEALED][packet], or refused
+         * (unsealedSendsRefused) when the peer has none: there is no plaintext fallback. Sealing
+         * happens here, at transmit time, so delayed and retransmitted copies each get a fresh
+         * sequence number. Also applies the send-key rotation policy.
+         */
+        bool SendFrameTo(ClientID peerKey, const std::vector<uint8_t>& serialized, const sockaddr_in& addr,
+                         bool localOnly);
+
+        /// Server: answer an unframed (pre-v2) Connect with an unframed typed ConnectRejected it can parse.
+        void SendLegacyRejection(const sockaddr_in& addr, const NetworkMessage& legacyConnect);
 
         /// Send one serialized datagram through the InstabilitySimulator: drop,
         /// duplicate, reorder-hold or delay it, or send it now when impairment
@@ -911,7 +955,28 @@ namespace Spark::Net
         std::unordered_map<ClientID, sockaddr_in> m_clientAddresses;
 #endif // ENABLE_NETWORKING
 
-        NetworkSecurityConfig m_securityConfig;   ///< Guarded by m_apiMutex; survives lifecycles (SetSecurityConfig).
+        NetworkSecurityConfig m_securityConfig; ///< Guarded by m_apiMutex; survives lifecycles (SetSecurityConfig).
+
+        /// One established SecureChannel and its rotation bookkeeping (NET-100).
+        struct PeerChannel
+        {
+            std::unique_ptr<SecureChannel> channel;
+            uint64_t sealedSinceRotation = 0;
+            float rotatedAt = 0.0f; ///< m_serverTime of the last rotation (or establishment)
+        };
+        /// Channels keyed by peer (ClientID on a server, SERVER_PEER on a client). Guarded by
+        /// m_apiMutex; erased with the peer (RemoveClientState, lifecycle ends, epoch exhaustion).
+        std::unordered_map<ClientID, PeerChannel> m_secureChannels;
+        /// Client-side: the handshake in flight while Connecting (null otherwise).
+        std::unique_ptr<ClientHandshake> m_clientHandshake;
+        /// Server-side: the ClientHello and ConnectAccepted of each Securing client, so a retransmitted
+        /// identical Connect is answered once more (1:1, never amplified) instead of creating state.
+        struct PendingAccept
+        {
+            std::vector<uint8_t> clientHello;
+            NetworkMessage accept;
+        };
+        std::unordered_map<ClientID, PendingAccept> m_pendingAccepts;
         NetworkEndpointPolicy m_endpointPolicy{}; ///< Captured once and unchanged for the active socket lifecycle.
         bool m_allowLanAdvertisement = false;     ///< Authoritative server option for discovery publishers.
 

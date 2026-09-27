@@ -28,8 +28,9 @@
  * Nonce scheme: [key epoch u8][0 0 0][sequence u64 LE]. Each epoch has its own
  * key and the sender's sequence only increases, so no (key, nonce) pair repeats.
  *
- * Not provided here (tracked under NET-100): the key-agreement handshake that
- * produces the shared secret, and wiring into NetworkManager's live UDP path.
+ * The shared secret comes from SecureHandshake.h; NetworkManager keeps one
+ * SecureChannel per peer and seals every post-handshake datagram with it
+ * (frame-kind byte as associated data; docs/specs/networking-wire-format.md).
  *
  * Thread affinity: a SecureChannel is used by one thread at a time; the free
  * functions are reentrant. Ownership: SecureChannel owns its keys and wipes them

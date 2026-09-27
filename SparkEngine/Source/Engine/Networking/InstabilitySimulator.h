@@ -10,6 +10,13 @@
  * commands (net_lag, net_loss, net_jitter, net_reorder, net_dup,
  * net_impair_seed) or the [Network] Simulated* settings during development to
  * stress-test netcode under adverse conditions.
+ *
+ * NET-100: held packets are serialized messages, not wire frames. NetworkManager
+ * frames and seals each one for its destinationKey only when it is released
+ * (SendFrameTo), so every delayed or duplicated copy gets its own SecureChannel
+ * sequence number, and a held packet whose peer has no channel any more is
+ * dropped rather than sent. Held copies of sensitive messages are erased with
+ * their lifecycle (DiscardPacketsThroughLifecycle).
  */
 
 #pragma once

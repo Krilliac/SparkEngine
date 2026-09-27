@@ -16,6 +16,7 @@
 #include "../../Utils/ScopeGuard.h"
 #include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
+#include <format>
 #include <sstream>
 #include <cmath>
 #include <cstring>
@@ -500,6 +501,110 @@ namespace Spark::Net
         m_bytesSentSinceSample += static_cast<uint64_t>(sent);
         m_stats.bytesSent += static_cast<uint64_t>(sent);
         return true;
+    }
+
+    bool NetworkManager::SendFrameTo(ClientID peerKey, const std::vector<uint8_t>& serialized, const sockaddr_in& addr,
+                                     bool localOnly)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        if (serialized.size() < NETWORK_WIRE_HEADER_SIZE)
+        {
+            return false;
+        }
+        // The type sits at bytes 4..5 of our own serialization (SerializeMessage).
+        const auto type =
+            static_cast<MessageType>(static_cast<uint16_t>(serialized[4]) | static_cast<uint16_t>(serialized[5] << 8));
+        std::vector<uint8_t> frame;
+        if (IsHandshakeMessage(type))
+        {
+            frame.reserve(serialized.size() + 1);
+            frame.push_back(NETWORK_FRAME_HANDSHAKE);
+            frame.insert(frame.end(), serialized.begin(), serialized.end());
+            return SendRawTo(frame, addr, localOnly);
+        }
+
+        const auto channelIt = m_secureChannels.find(peerKey);
+        if (channelIt == m_secureChannels.end() || !channelIt->second.channel)
+        {
+            // No channel, no transmission: there is no plaintext fallback (NET-100).
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.unsealedSendsRefused++;
+            return false;
+        }
+        PeerChannel& peer = channelIt->second;
+        static constexpr uint8_t kSealedAad[1] = {NETWORK_FRAME_SEALED};
+        std::vector<uint8_t> sealed;
+        if (!peer.channel->Seal(serialized, sealed, kSealedAad))
+        {
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.unsealedSendsRefused++;
+            return false;
+        }
+        frame.reserve(sealed.size() + 1);
+        frame.push_back(NETWORK_FRAME_SEALED);
+        frame.insert(frame.end(), sealed.begin(), sealed.end());
+        const bool sent = SendRawTo(frame, addr, localOnly);
+
+        // Nonce discipline: the sequence space per key is never approached. Rotating is
+        // unilateral (the receiver accepts epoch + 1 once it authenticates); when the epoch
+        // space is spent the channel is dropped and the peer must handshake again.
+        ++peer.sealedSinceRotation;
+        if (peer.sealedSinceRotation >= SECURE_ROTATE_AFTER_PACKETS ||
+            m_serverTime - peer.rotatedAt >= SECURE_ROTATE_AFTER_SECONDS)
+        {
+            if (peer.channel->RotateSendKey())
+            {
+                peer.sealedSinceRotation = 0;
+                peer.rotatedAt = m_serverTime;
+                m_stats.keyRotations++;
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "Secure channel to peer %u exhausted its key epochs; the session must be re-established",
+                               peerKey);
+                m_secureChannels.erase(channelIt);
+            }
+        }
+        return sent;
+    }
+
+    void NetworkManager::SendLegacyRejection(const sockaddr_in& addr, const NetworkMessage& legacyConnect)
+    {
+        // Pre-v2 peers parse only unframed messages. Tell them why, in their own format, and
+        // keep no state: no client ID, no address entry, no retransmission. The old Connect
+        // schema minimum (8 payload bytes) bounds the reply to about twice the request.
+        if (legacyConnect.payload.size() < 8)
+        {
+            return;
+        }
+        NetBuffer request;
+        request.WriteBytes(legacyConnect.payload.data(), legacyConnect.payload.size());
+        const uint32_t magic = request.ReadUint32();
+        const uint16_t version = request.ReadUint16();
+        ConnectRejectReason reason = ConnectRejectReason::ProtocolTooOld;
+        if (request.HasError() || magic != NETWORK_HANDSHAKE_MAGIC)
+        {
+            reason = ConnectRejectReason::ProtocolMissing;
+        }
+        else if (version > NETWORK_PROTOCOL_VERSION)
+        {
+            reason = ConnectRejectReason::ProtocolTooNew;
+        }
+
+        NetworkMessage reject;
+        reject.type = MessageType::ConnectRejected;
+        reject.channel = ChannelType::Unreliable;
+        NetBuffer payload;
+        payload.WriteString(std::format("Server speaks protocol version {}", NETWORK_PROTOCOL_VERSION));
+        payload.WriteUint8(static_cast<uint8_t>(reason));
+        payload.WriteUint16(NETWORK_PROTOCOL_VERSION);
+        reject.payload = payload.GetData();
+        const std::vector<uint8_t> serialized = SerializeMessage(reject);
+        if (!serialized.empty())
+        {
+            SendRawTo(serialized, addr, false);
+        }
     }
 
     int NetworkManager::ReceiveRaw(std::vector<uint8_t>& outData, sockaddr_in& outSender)

@@ -1,10 +1,10 @@
 # Networking
 
-SparkEngine includes an **experimental, unauthenticated** UDP networking system for local multiplayer development, with entity replication, client-side prediction, lag compensation, pluggable transports, and dedicated server support. The security helper classes are prototypes and are not integrated into the active `NetworkManager` wire path strongly enough to support confidentiality or peer-authentication claims.
+SparkEngine includes an **experimental** UDP networking system for multiplayer development, with entity replication, client-side prediction, lag compensation, pluggable transports, and dedicated server support. Since protocol version 2 (NET-100) the active `NetworkManager` wire path authenticates the server with a signed X25519 handshake and seals every post-handshake datagram with ChaCha20-Poly1305 (libsodium); it has not had an independent cryptographic review, and players are authenticated by game code inside the channel, not by the transport.
 
 **Source:** `SparkEngine/Source/Engine/Networking/`
 
-> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). First-party endpoints bind to IPv4 loopback by default. Isolated LAN development requires canonical CIDR through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address` (for example `192.168.1.20/24`). The prefix must keep the complete subnet inside RFC1918 space; the exact network and directed-broadcast addresses are rejected, and peers are restricted to concrete hosts in that same subnet. Wildcard, public, documentation/test, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, missing-prefix, and alternate textual forms are rejected before socket creation. The captured policy is threaded through gameplay, discovery, collaboration, and live-editor socket lifecycles and filters peer endpoints before packet parsing and every send/retry boundary. Gateway-managed area processes require loopback and reject a conflicting LAN bind. This boundary does not add authentication or encryption, so NET-100 and release gates remain blocked pending reviewed AEAD transport. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
+> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). First-party endpoints bind to IPv4 loopback by default. Isolated LAN development requires canonical CIDR through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address` (for example `192.168.1.20/24`). The prefix must keep the complete subnet inside RFC1918 space; the exact network and directed-broadcast addresses are rejected, and peers are restricted to concrete hosts in that same subnet. Wildcard, public, documentation/test, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, missing-prefix, and alternate textual forms are rejected before socket creation. The captured policy is threaded through gameplay, discovery, collaboration, and live-editor socket lifecycles and filters peer endpoints before packet parsing and every send/retry boundary. Gateway-managed area processes require loopback and reject a conflicting LAN bind. This boundary is containment; authentication and encryption come from the NET-100 secure transport described under [SecureChannel](#networkencryption-advanced), which still awaits independent review. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
 
 `NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests always set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the exact destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission. Selecting a private-LAN bind does not enable remote credential onboarding.
 
@@ -48,7 +48,9 @@ The networking subsystem is composed of several layered modules that work togeth
 | `SteamTransport.h` | Stub transport for future Steam Networking Sockets |
 | `ClientPrediction.h` | Client-side prediction and server reconciliation |
 | `NetworkSecurity.h` | Single-use, expiring CSPRNG connection-token registry; not encryption or peer authentication |
-| `NetworkEncryption.h` | In-tree RFC 8439 ChaCha20-Poly1305 `SecureChannel` (no production caller, not independently reviewed) plus rate limiter |
+| `NetworkEncryption.h` | libsodium-backed RFC 8439 ChaCha20-Poly1305 `SecureChannel` (seals every post-handshake `NetworkManager` datagram; not independently reviewed) plus rate limiter |
+| `SecureHandshake.h` | Signed-ephemeral X25519 key agreement carried in `Connect` / `ConnectAccepted` |
+| `NetworkTrustStore.h` | Server identity file, client `ServerTrust` (pinned or trust-on-first-use `known_hosts`), `NetworkSecurityConfig` |
 | `NetworkIntegration.h` | `NetworkStack` -- transport selection plus connection-token registry |
 | `DedicatedServer.h` | Headless server: tick loop, local admin commands, map rotation, LAN broadcast |
 | `AreaServer.h` | Per-area server process for scalable multiplayer worlds |
@@ -493,11 +495,11 @@ using Token = ConnectionToken;                            // TOKEN_SIZE (16) byt
 
 The repeating-key XOR "encryption" prototype (`PacketEncrypt`/`Encrypt`/`GetEncryptionKey`, `NetworkStack::Encrypt`/`Decrypt`, and the `enableEncryption` flags in `NetworkStackConfig` and `[Network]` engine settings) was deleted under NET-100. `Tests/TestNetworkSecurity.cpp` static-asserts that the API stays gone, and `Tests/Tools/test_network_security_csprng.py` (label `network-security`) fails if XOR transform code returns to these headers.
 
-> **Warning:** The active `NetworkManager` UDP path is unauthenticated and unencrypted. NET-100 remains open and blocking: `SecureChannel` has no key-agreement handshake or production caller. Its primitives are libsodium's (OD-06).
+> **Warning:** The `NetworkManager` UDP path (protocol version 2) authenticates the server and seals every datagram after the handshake, but NET-100 remains open: the composition has not been independently reviewed, anti-amplification cookies are missing, and SparkGateway tickets are not yet bound to the UDP session. Its primitives are libsodium's (OD-06).
 
 ### NetworkEncryption (Advanced)
 
-Holds thin wrappers over libsodium's RFC 8439 ChaCha20-Poly1305 and HKDF-SHA256, the `SecureChannel` packet channel built on them, the fail-closed token helpers, and an independent rate limiter. `SecureChannel` has no production caller yet: there is no key-agreement handshake and `NetworkManager` does not use it.
+Holds thin wrappers over libsodium's RFC 8439 ChaCha20-Poly1305 and HKDF-SHA256, the `SecureChannel` packet channel built on them, the fail-closed token helpers, and an independent rate limiter. `NetworkManager` keeps one `SecureChannel` per peer (`m_secureChannels`), created by the handshake below, and seals every non-handshake message with it at transmit time (`SendFrameTo`); see [Networking Wire Format](../specifications/Networking-Wire-Format.md#security) for the frame rules and nonce discipline.
 
 ```cpp
 constexpr size_t SESSION_KEY_SIZE = 32;                     // shared secret / ChaCha20 key
@@ -520,7 +522,7 @@ Nonces are `[key epoch][0 0 0][sequence u64 LE]`: every epoch has its own key an
 
 Tests: `Tests/TestNET100TransportReal.cpp` (`Transport_*`) and `Tests/TestNET100Libsodium.cpp` (`Transport_Libsodium_*`). No cryptographic primitive is implemented in `Engine/Networking`; the `SparkNetworkSecurityCsprngContract` CTest fails if a ChaCha20, Poly1305 or HMAC implementation reappears there. libsodium is the pinned `ThirdParty/Security/libsodium` submodule (1.0.22), built by `cmake/SparkLibsodium.cmake`.
 
-### SecureHandshake (key agreement, not yet on the wire)
+### SecureHandshake (key agreement in Connect)
 
 `SecureHandshake.h` produces the shared secret `SecureChannel` needs, with libsodium primitives only. The server holds a long-term Ed25519 identity (`GenerateServerIdentity`) whose public key the client pins. The client is anonymous at the transport layer. One round trip:
 
@@ -538,7 +540,7 @@ Both sides hash the transcript `th = SHA-256("SPNH-v2" || ClientHello || ServerH
 | `ClientHandshake::Finish(serverHello, pinnedKey)` | Checks suite and pinned identity, verifies the signature, returns the client `SecureChannel` |
 | `HandshakeError` | `Malformed`, `UnsupportedVersion`, `UnsupportedSuite`, `BadSignature`, `ServerIdentityMismatch`, `WeakSharedSecret` (low-order X25519 point), `CsprngFailure`, `InvalidState` |
 
-Tests: `Tests/TestNET100Handshake.cpp` (`Transport_Handshake_*`, CTest `NetworkSecurity_Transport_Handshake`, exact count 9): interoperating channels, wrong pinned key, every ServerHello byte flip, every truncation and extension, version and suite downgrade, a replayed ServerHello, low-order client points, and deterministic rejection of malformed hellos. `NetworkManager`'s `Connect` path does not carry these messages yet (a later NET-100 slice).
+Tests: `Tests/TestNET100Handshake.cpp` (`Transport_Handshake_*`, CTest `NetworkSecurity_Transport_Handshake`, exact count 9): interoperating channels, wrong pinned key, every ServerHello byte flip, every truncation and extension, version and suite downgrade, a replayed ServerHello, low-order client points, and deterministic rejection of malformed hellos. `NetworkManager` carries them in production: the ClientHello is the `Connect` payload and the ServerHello follows the echoed version in `ConnectAccepted`; the server holds the new slot in state `Securing` until the client's sealed `ClientFinished` arrives. The server's identity and the client's trust come from `NetworkSecurityConfig` (`NetworkTrustStore.h`): `StartServer` refuses without an identity, `Connect` refuses without a usable pin or known_hosts path, and `UseDefaultSecurityConfig` fills them from `<user data>/net`. Wired tests: `Tests/TestSecureTransportWired.cpp` (CTest `NetworkSecureTransportWired`) and `Tests/TestNET100TrustStore.cpp` (`Transport_TrustStore_*`).
 
 ### RateLimiter
 

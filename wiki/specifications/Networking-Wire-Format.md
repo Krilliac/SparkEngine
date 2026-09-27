@@ -200,11 +200,14 @@ Reliable messages use a sliding-window acknowledgment scheme:
 ```
 Client                          Server
   │                               │
-  │──── Connect ─────────────────>│
-  │     (magic, version, name)    │
+  │──── Connect ─────────────────>│  plaintext frame
+  │     (ClientHello)             │
   │                               │
-  │<─── ConnectAccepted ──────────│
-  │  (clientID, serverTime, ver)  │
+  │<─── ConnectAccepted ──────────│  plaintext frame
+  │  (clientID, time, ver,        │
+  │   signed ServerHello)         │
+  │                               │
+  │═══► ClientFinished (name) ═══>│  sealed from here on
   │                               │
   │<─── GameStateSync ────────────│
   │     (full world state)        │
@@ -214,19 +217,21 @@ Client                          Server
   │     (ongoing keepalive)       │
 ```
 
-The `Connect` payload opens with the handshake magic `0x484E5053` ("SPNH") and the `uint16`
-`NETWORK_PROTOCOL_VERSION` (currently `1`), followed by the length-prefixed player name. Before it
-considers a client slot, the server rejects a missing (`ProtocolMissing`), older (`ProtocolTooOld`),
-newer (`ProtocolTooNew`), or malformed (`MalformedHandshake`) handshake. It also rejects with
-`ServerFull` when every slot is taken. `ConnectRejected` carries the reason text, then a typed
-`uint8` reason code and the server's protocol version. `ConnectAccepted` echoes the negotiated
-version, and a client refuses (`ProtocolMismatch`) an echo that differs from its own. The exact
-layouts are in `docs/specs/networking-wire-format.md`, and the evidence is the CTest
-`NetworkSessionCompatibility` (`Tests/TestSessionCompatibilityReal.cpp`). Version negotiation is
-not authentication. A current client talking to a pre-negotiation (legacy) server gets no typed
-refusal. The legacy server admits it and replies with the old 8-byte `ConnectAccepted`, which the
-client drops as malformed. The client then fails at its connect timeout with reason `Unspecified`,
-and the legacy server holds the slot until its heartbeat timeout.
+Protocol version 2 (NET-100) frames every datagram: a first byte of `0x01` marks a plaintext
+handshake frame (only `Connect`, `ConnectAccepted`, `ConnectRejected`), and `0x02` marks a sealed
+frame (a ChaCha20-Poly1305 `SecureChannel` packet around the message). The `Connect` payload is
+exactly the 55-byte ClientHello: handshake magic `0x484E5053` ("SPNH"), the `uint16`
+`NETWORK_PROTOCOL_VERSION` (currently `2`), the suite byte, an X25519 ephemeral key and a nonce;
+the player name no longer travels in `Connect`. Before it considers a client slot, the server
+rejects a missing (`ProtocolMissing`), older (`ProtocolTooOld`), newer (`ProtocolTooNew`),
+malformed (`MalformedHandshake`) or wrong-suite (`UnsupportedSuite`) handshake, and it rejects with
+`ServerFull` when every slot is taken. `ConnectAccepted` echoes the version and carries the
+server's signed ServerHello; the client checks the server key against its pin or known_hosts
+(`ServerIdentityMismatch`) and the signature (`HandshakeAuthFailed`), then sends the player name
+in a sealed `ClientFinished`, which is what admits it. A version-1 client's unframed `Connect` gets
+an unframed typed `ProtocolTooOld`. The exact layouts are in `docs/specs/networking-wire-format.md`;
+the evidence is the CTests `NetworkSessionCompatibility` (`Tests/TestSessionCompatibilityReal.cpp`)
+and `NetworkSecureTransportWired` (`Tests/TestSecureTransportWired.cpp`).
 
 ---
 
@@ -247,12 +252,14 @@ Transports implement the `ITransport` interface and are selected via `TransportT
 
 The active UDP path binds to loopback or one canonical RFC1918 interface/prefix and admits only concrete peers in the captured subnet. Missing/invalid prefixes, exact network/directed-broadcast addresses, wildcard/public/test/multicast/limited-broadcast/CGNAT values, mapped IPv6, and alternate textual encodings fail closed. Peer scope is checked before packet deserialization and again on all gameplay send/retry paths. Client traffic is bound to the configured server address and port, and server-side client identity is bound to the endpoint recorded during `Connect`. Wire-supplied sender IDs are not trusted. Undefined channels, malformed built-in payload sizes, and unauthenticated custom messages are rejected before dispatch.
 
-This endpoint boundary and tuple binding reduce accidental exposure and spoofing surface; they are not cryptographic authentication. Transparent endpoint migration is unsupported and requires reconnecting. The legacy XOR prototype has been deleted; `NetworkSecurity` is only a single-use connection-token registry, and the libsodium-backed ChaCha20-Poly1305 `SecureChannel` in `NetworkEncryption` has no handshake or caller on this wire path. The wire therefore has no confidentiality, peer authentication, or attacker-resistant integrity. NET-100 and all dependent release gates remain blocked until that channel carries this wire path (OD-06: libsodium supplies the primitives). The signed-ephemeral X25519 key agreement that will key it exists as a socket-free state machine (`SecureHandshake.h`, layouts in [Networking](../subsystems/Networking.md#securehandshake-key-agreement-not-yet-on-the-wire)); `Connect` does not carry it yet.
+Since protocol version 2 (NET-100) every datagram after the handshake is sealed with libsodium's ChaCha20-Poly1305 in a `SecureChannel` keyed by the signed-ephemeral X25519 handshake ([Networking](../subsystems/Networking.md#securehandshake-key-agreement-in-connect)); OD-06: libsodium supplies every primitive. The client authenticates the server's Ed25519 identity (a pinned key, or trust on first use recorded in `known_hosts`), and each sealed frame is authenticated, replay-checked in a 256-packet window, and opened only with the channel of the peer its endpoint belongs to. A plaintext gameplay frame, a frame sealed under another peer's key, and any tampered, replayed, truncated or out-of-epoch frame are dropped and counted (`NetworkStats::securityDrops`, `plaintextFramesDropped`). There is no plaintext mode, and a message marked `sensitive` is refused unless a channel to its destination exists. Send keys rotate every 600 s or 2^31 packets.
+
+The transport does not authenticate players: account authentication runs inside the channel (TERRAFRONT uses SCRAM, so no password crosses the wire). SparkGateway admission tickets are not yet bound to the UDP session; the decided design presents the ticket inside the sealed `ClientFinished`. The implementation has not had an independent cryptographic review, and anti-amplification cookies are not implemented (a `ConnectAccepted` is about 2.3 times its `Connect`), so NET-100 stays open until both land.
 
 Planned security work includes:
 
-- Token-based authentication
-- Rate limiting (packets per second per client)
-- Authenticated encryption and session key rotation
+- Gateway ticket presented in `ClientFinished` and checked by the area server
+- Anti-amplification cookies for `Connect`
+- Independent review of the handshake and channel composition
 
 See [Networking](../subsystems/Networking.md) for the full networking architecture overview.

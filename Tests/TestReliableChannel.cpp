@@ -420,9 +420,11 @@ TEST(ReliableChannel_MaxRetriesExceeded)
 #if defined(SPARK_TEST_HAS_NETWORKING) && defined(ENABLE_NETWORKING)
 
 #include "Engine/Networking/NetworkManager.h"
+#include "Fixtures/SecureTestPeer.h"
 #include "Utils/ScopeGuard.h"
 #include "Utils/SecureMemory.h"
 #include <chrono>
+#include <memory>
 #include <thread>
 
 namespace TestReliablePerPeer
@@ -430,10 +432,12 @@ namespace TestReliablePerPeer
     namespace Net = Spark::Net;
 
     constexpr uint32_t kWireMagic = 0x5350524B; // "SPRK"
-    static_assert(Net::NETWORK_WIRE_HEADER_SIZE == 23, "version-1 wire header must remain byte-compatible");
+    static_assert(Net::NETWORK_WIRE_HEADER_SIZE == 23, "the inner message header must remain byte-compatible");
 
     /// Raw UDP endpoint speaking the engine wire format — lets one test process
-    /// simulate multiple independent clients against the singleton server.
+    /// simulate multiple independent clients against the singleton server. It runs
+    /// the NET-100 v2 handshake in Connect and seals/opens every later datagram, so
+    /// the reliability behaviour under test is exercised on the production path.
     class RawUdpClient
     {
       public:
@@ -506,23 +510,46 @@ namespace TestReliablePerPeer
             if (!payload.empty())
                 buf.WriteBytes(payload.data(), payload.size());
 
-            const auto& data = buf.GetData();
+            const auto data = SparkTestFixtures::FrameForSend(m_channel.get(), buf.GetData());
+            return SendDatagram(data);
+        }
+
+        bool SendDatagram(std::span<const uint8_t> data)
+        {
+            if (data.empty())
+                return false;
             const int sent =
                 ::sendto(m_socket, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0,
                          reinterpret_cast<const sockaddr*>(&m_serverAddr), sizeof(m_serverAddr));
             return sent == static_cast<int>(data.size());
         }
 
+        std::optional<std::vector<uint8_t>> ReceiveDatagram()
+        {
+            std::vector<uint8_t> raw(Net::MAX_UDP_WIRE_DATAGRAM_SIZE);
+            sockaddr_in from{};
+            socklen_t fromLen = sizeof(from);
+            const int received = ::recvfrom(m_socket, reinterpret_cast<char*>(raw.data()), static_cast<int>(raw.size()),
+                                            0, reinterpret_cast<sockaddr*>(&from), &fromLen);
+            if (received <= 0)
+                return std::nullopt;
+            raw.resize(static_cast<size_t>(received));
+            return raw;
+        }
+
         /// Non-blocking receive of one engine-format message. False = nothing waiting.
         bool TryReceive(Net::NetworkMessage& outMsg)
         {
             outMsg.ClearSensitivePayload();
-            std::vector<uint8_t> raw(Net::MAX_UDP_WIRE_DATAGRAM_SIZE);
+            const auto datagram = ReceiveDatagram();
+            if (!datagram)
+                return false;
+            auto inner = SparkTestFixtures::OpenFrame(m_channel.get(), *datagram);
+            if (!inner)
+                return false;
+            std::vector<uint8_t> raw = std::move(*inner);
             const auto clearRaw = Spark::MakeScopeExit([&raw] { Spark::SecureClear(raw); });
-            sockaddr_in from{};
-            socklen_t fromLen = sizeof(from);
-            int received = ::recvfrom(m_socket, reinterpret_cast<char*>(raw.data()), static_cast<int>(raw.size()), 0,
-                                      reinterpret_cast<sockaddr*>(&from), &fromLen);
+            const int received = static_cast<int>(raw.size());
             if (received < static_cast<int>(Net::NETWORK_WIRE_HEADER_SIZE))
                 return false;
             m_lastWireSize = static_cast<size_t>(received);
@@ -553,31 +580,17 @@ namespace TestReliablePerPeer
             return buf.IsValid();
         }
 
-        /// Handshake: send Connect and pump the server until ConnectAccepted arrives.
+        /// Handshake: the v2 Connect / ConnectAccepted / sealed ClientFinished exchange.
         bool Connect(Net::NetworkManager& server, const std::string& name)
         {
-            Net::NetBuffer payload;
-            Net::WriteConnectRequest(payload, name);
-            for (int attempt = 0; attempt < 50; ++attempt)
-            {
-                Send(Net::MessageType::Connect, Net::ChannelType::Reliable, 0, payload.GetData());
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                server.Update(0.01f);
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-
-                Net::NetworkMessage msg;
-                while (TryReceive(msg))
-                {
-                    if (msg.type == Net::MessageType::ConnectAccepted && msg.payload.size() >= 4)
-                    {
-                        Net::NetBuffer acceptBuf;
-                        acceptBuf.WriteBytes(msg.payload.data(), msg.payload.size());
-                        m_clientID = acceptBuf.ReadUint32();
-                        return true;
-                    }
-                }
-            }
-            return false;
+            auto session = SparkTestFixtures::RawHandshake(
+                server, [this](std::span<const uint8_t> data) { return SendDatagram(data); },
+                [this] { return ReceiveDatagram(); }, name);
+            if (!session)
+                return false;
+            m_clientID = session->id;
+            m_channel = std::move(session->channel);
+            return true;
         }
 
         /// Drain the socket; count messages of the given type and record the last sequence seen.
@@ -603,6 +616,7 @@ namespace TestReliablePerPeer
       private:
         SOCKET m_socket = INVALID_SOCKET;
         sockaddr_in m_serverAddr{};
+        std::unique_ptr<Net::SecureChannel> m_channel;
         Net::ClientID m_clientID = 0;
         uint8_t m_lastWireChannel = 0xFF;
         size_t m_lastWireSize = 0;
@@ -718,7 +732,7 @@ TEST(ReliablePerPeer_AckFromOnePeerDoesNotClearAnothers)
     EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
 
     // Server reliable broadcast: each peer gets its own sequence stream
-    // (seq 1 = ConnectAccepted, seq 2 = this chat message, per peer).
+    // (ConnectAccepted is unreliable, so this chat message is seq 1 per peer).
     Net::NetworkMessage chat;
     chat.type = Net::MessageType::ChatMessage;
     chat.channel = Net::ChannelType::Reliable;
@@ -730,14 +744,14 @@ TEST(ReliablePerPeer_AckFromOnePeerDoesNotClearAnothers)
     Net::SequenceNumber seqToB = 0;
     EXPECT_GE(clientA.DrainCount(Net::MessageType::ChatMessage, seqToA), 1);
     EXPECT_GE(clientB.DrainCount(Net::MessageType::ChatMessage, seqToB), 1);
-    EXPECT_EQ(seqToA, 2u);
-    EXPECT_EQ(seqToB, 2u);
+    EXPECT_EQ(seqToA, 1u);
+    EXPECT_EQ(seqToB, 1u);
 
-    // A acknowledges its whole stream: ackSeq=2 with bitfield bit 0 = seq 1.
+    // A acknowledges its whole stream: ackSeq=1, no older sequences.
     // This must clear ONLY A's unacked map — B never acked anything.
     std::vector<uint8_t> ackPayload(8);
     const uint32_t ackSeq = seqToA;
-    const uint32_t ackBits = 0x1u;
+    const uint32_t ackBits = 0x0u;
     std::memcpy(ackPayload.data(), &ackSeq, 4);
     std::memcpy(ackPayload.data() + 4, &ackBits, 4);
     clientA.Send(Net::MessageType::Ack, Net::ChannelType::Unreliable, 0, ackPayload);
@@ -842,7 +856,7 @@ TEST(NetworkWire_MaxPlusOneReliableRejectedBeforeSequenceAllocation)
     }
 
     EXPECT_TRUE(found);
-    EXPECT_EQ(received.sequence, 2u); // ConnectAccepted consumed sequence 1.
+    EXPECT_EQ(received.sequence, 1u); // the rejected oversize message consumed no sequence
     EXPECT_TRUE(received.payload == valid.payload);
     EXPECT_EQ(nm.GetStats().packetsDropped, droppedBefore + 1);
     nm.Shutdown();
@@ -897,9 +911,9 @@ TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
         });
 
     std::vector<uint8_t> request{'p', 'l', 'a', 'i', 'n', 't', 'e', 'x', 't'};
-    // Version 1 reserves every channel value above 2. In particular, the
-    // formerly proposed 0x80 sensitivity bit must remain invalid so old and
-    // new peers enforce the same 23-byte format.
+    // The message format reserves every channel value above 2. In particular, the
+    // formerly proposed 0x80 sensitivity bit must remain invalid, even inside an
+    // authenticated sealed frame.
     EXPECT_TRUE(client.SendRawChannel(Net::MessageType::UserDefined, 0x81, 1, request, true));
     PumpServer(nm, 10);
     EXPECT_EQ(serverDispatchCount, 0);

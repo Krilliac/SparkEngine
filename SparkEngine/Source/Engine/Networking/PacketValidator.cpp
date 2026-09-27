@@ -42,16 +42,17 @@ namespace Spark::Net
     void PacketValidator::RegisterDefaultSchemas()
     {
         // Connection messages
-        // Connect: handshake magic (4) + protocol version (2) + length-prefixed name (>= 2).
+        // Connect (v2): exactly one 55-byte ClientHello. The bounds stay loose so HandleConnect can
+        // answer an older or malformed hello with a typed rejection instead of silence.
         RegisterSchema(MessageType::Connect, {.minPayloadSize = 8,
                                               .maxPayloadSize = 256,
                                               .requiresAuth = false,
                                               .allowedFromClient = true,
                                               .allowedFromServer = false});
 
-        // ConnectAccepted: client ID (4) + server time (4) + echoed protocol version (2).
-        RegisterSchema(MessageType::ConnectAccepted, {.minPayloadSize = 10,
-                                                      .maxPayloadSize = 10,
+        // ConnectAccepted: client ID (4) + server time (4) + echoed protocol version (2) + ServerHello (145).
+        RegisterSchema(MessageType::ConnectAccepted, {.minPayloadSize = 155,
+                                                      .maxPayloadSize = 155,
                                                       .requiresAuth = false,
                                                       .allowedFromClient = false,
                                                       .allowedFromServer = true});
@@ -162,6 +163,13 @@ namespace Spark::Net
                                                   .requiresAuth = true,
                                                   .allowedFromClient = false,
                                                   .allowedFromServer = true});
+
+        // NET-100 ClientFinished (client -> server, sealed): length-prefixed player name (<= 64 bytes).
+        RegisterSchema(MessageType::ClientFinished, {.minPayloadSize = 2,
+                                                     .maxPayloadSize = 2 + 64,
+                                                     .requiresAuth = true,
+                                                     .allowedFromClient = true,
+                                                     .allowedFromServer = false});
 
         // Delta replication acknowledgement (client -> server only):
         // [4 bytes deltaSequence] echoed from an applied EntityStateUpdate

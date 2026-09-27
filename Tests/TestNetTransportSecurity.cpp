@@ -11,6 +11,8 @@
 #include "TestFramework.h"
 #include "Engine/Networking/DeltaSnapshotManager.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Fixtures/NetworkTestSecurity.h"
+#include "Fixtures/SecureTestPeer.h"
 
 #ifdef ENABLE_NETWORKING
 
@@ -76,12 +78,6 @@ namespace
         return packet;
     }
 
-    std::vector<uint8_t> ConnectPayload()
-    {
-        NetBuffer buffer;
-        WriteConnectRequest(buffer, "SecTransport");
-        return buffer.GetData();
-    }
 
     uint16_t WireType(const std::vector<uint8_t>& datagram)
     {
@@ -98,7 +94,9 @@ namespace
                (static_cast<uint32_t>(datagram[13]) << 16) | (static_cast<uint32_t>(datagram[14]) << 24);
     }
 
-    /// Non-blocking loopback UDP socket that speaks the raw wire format.
+    /// Non-blocking loopback UDP socket that speaks the raw wire format. NET-100 v2: sends are
+    /// framed (handshake types) or sealed with the peer's channel once a handshake installed one,
+    /// and Drain/DrainFrom return the inner messages of frames this peer can open.
     class RawPeer
     {
       public:
@@ -133,11 +131,74 @@ namespace
 
         [[nodiscard]] bool IsReady() const { return m_socket != INVALID_SOCKET; }
 
-        bool Send(const std::vector<uint8_t>& datagram) const
+        bool Send(const std::vector<uint8_t>& message) const { return SendTo(m_server, message); }
+
+        bool SendRaw(std::span<const uint8_t> datagram) const { return SendRawTo(m_server, datagram); }
+
+        std::optional<std::vector<uint8_t>> ReceiveRaw() const
         {
-            return sendto(m_socket, reinterpret_cast<const char*>(datagram.data()), static_cast<int>(datagram.size()),
-                          0, reinterpret_cast<const sockaddr*>(&m_server),
-                          sizeof(m_server)) == static_cast<int>(datagram.size());
+            std::array<uint8_t, 8192> buffer{};
+            const int received = recvfrom(m_socket, reinterpret_cast<char*>(buffer.data()),
+                                          static_cast<int>(buffer.size()), 0, nullptr, nullptr);
+            if (received <= 0)
+                return std::nullopt;
+            return std::vector<uint8_t>(buffer.begin(), buffer.begin() + received);
+        }
+
+        /// Client role: the full v2 handshake with @p nm (pumped). Returns the assigned id.
+        ClientID Handshake(NetworkManager& nm) const
+        {
+            auto session = SparkTestFixtures::RawHandshake(
+                nm, [this](std::span<const uint8_t> datagram) { return SendRaw(datagram); },
+                [this] { return ReceiveRaw(); }, "SecTransport");
+            if (!session)
+                return INVALID_CLIENT;
+            m_channel = std::move(session->channel);
+            return session->id;
+        }
+
+        /// Client role, split in two for burst tests: send the framed Connect...
+        bool BeginHandshake() const
+        {
+            m_handshake = std::make_unique<ClientHandshake>();
+            auto hello = m_handshake->Begin(NETWORK_PROTOCOL_VERSION);
+            return hello && Send(SparkTestFixtures::BuildWire(MessageType::Connect, *hello, ChannelType::Reliable));
+        }
+
+        /// ...then verify the ConnectAccepted already queued and send the sealed ClientFinished.
+        bool FinishHandshake() const
+        {
+            while (auto datagram = ReceiveRaw())
+            {
+                auto inner = SparkTestFixtures::OpenFrame(nullptr, *datagram);
+                auto message = inner ? SparkTestFixtures::ParseWire(*inner) : std::nullopt;
+                if (!message || message->type != MessageType::ConnectAccepted)
+                    continue;
+                constexpr size_t kPrefix = 4 + 4 + 2;
+                if (message->payload.size() != kPrefix + SERVER_HELLO_SIZE)
+                    return false;
+                auto channel = m_handshake->Finish(std::span(message->payload).subspan(kPrefix),
+                                                   SparkTestFixtures::TestServerIdentity().publicKey);
+                if (!channel)
+                    return false;
+                m_channel = std::move(*channel);
+                return Send(SparkTestFixtures::BuildWire(MessageType::ClientFinished,
+                                                         SparkTestFixtures::EncodeName("SecTransport")));
+            }
+            return false;
+        }
+
+        /// Server role: answer @p clientHello as the pinned test identity; returns the framed accept.
+        std::vector<uint8_t> AcceptClientHello(std::span<const uint8_t> clientHello, ClientID assigned) const
+        {
+            auto response = RespondToClientHello(clientHello, SparkTestFixtures::TestServerIdentity());
+            if (!response)
+                return {};
+            m_channel = std::move(response->channel);
+            return SparkTestFixtures::BuildWire(MessageType::ConnectAccepted,
+                                                SparkTestFixtures::SecureRawServer::AcceptPayload(
+                                                    assigned, NETWORK_PROTOCOL_VERSION, response->serverHello),
+                                                ChannelType::Unreliable);
         }
 
         /// Read every datagram currently queued on the socket.
@@ -151,7 +212,10 @@ namespace
                                               static_cast<int>(buffer.size()), 0, nullptr, nullptr);
                 if (received <= 0)
                     break;
-                datagrams.emplace_back(buffer.begin(), buffer.begin() + received);
+                auto inner = SparkTestFixtures::OpenFrame(
+                    m_channel.get(), std::span<const uint8_t>(buffer.data(), static_cast<size_t>(received)));
+                if (inner)
+                    datagrams.push_back(std::move(*inner));
             }
             return datagrams;
         }
@@ -180,13 +244,23 @@ namespace
                              reinterpret_cast<sockaddr*>(&datagram.from), &fromLength);
                 if (received <= 0)
                     break;
-                datagram.bytes.assign(buffer.begin(), buffer.begin() + received);
+                auto inner = SparkTestFixtures::OpenFrame(
+                    m_channel.get(), std::span<const uint8_t>(buffer.data(), static_cast<size_t>(received)));
+                if (!inner)
+                    continue;
+                datagram.bytes = std::move(*inner);
                 datagrams.push_back(std::move(datagram));
             }
             return datagrams;
         }
 
-        bool SendTo(const sockaddr_in& destination, const std::vector<uint8_t>& datagram) const
+        bool SendTo(const sockaddr_in& destination, const std::vector<uint8_t>& message) const
+        {
+            const auto frame = SparkTestFixtures::FrameForSend(m_channel.get(), message);
+            return SendRawTo(destination, frame.empty() ? std::span<const uint8_t>(message) : frame);
+        }
+
+        bool SendRawTo(const sockaddr_in& destination, std::span<const uint8_t> datagram) const
         {
             return sendto(m_socket, reinterpret_cast<const char*>(datagram.data()), static_cast<int>(datagram.size()),
                           0, reinterpret_cast<const sockaddr*>(&destination),
@@ -216,6 +290,8 @@ namespace
       private:
         SOCKET m_socket = INVALID_SOCKET;
         sockaddr_in m_server{};
+        mutable std::unique_ptr<SecureChannel> m_channel;     ///< Opening advances the replay window
+        mutable std::unique_ptr<ClientHandshake> m_handshake; ///< BeginHandshake / FinishHandshake
     };
 
     NetworkManager& FreshManager()
@@ -240,21 +316,9 @@ namespace
     }
 
     /// Admit one raw peer and return the ClientID the server assigned it.
-    ClientID AdmitPeer(NetworkManager& nm, const RawPeer& peer, uint32_t connectSequence = 1)
+    ClientID AdmitPeer(NetworkManager& nm, const RawPeer& peer)
     {
-        const size_t before = nm.GetClients().size();
-        if (!peer.Send(BuildWire(MessageType::Connect, ChannelType::Reliable, connectSequence, ConnectPayload())))
-            return INVALID_CLIENT;
-        if (!PumpUntil(nm, [&] { return nm.GetClients().size() > before; }))
-            return INVALID_CLIENT;
-        ClientID newest = INVALID_CLIENT;
-        for (const auto& [id, info] : nm.GetClients())
-        {
-            (void)info;
-            if (newest == INVALID_CLIENT || id > newest)
-                newest = id;
-        }
-        return newest;
+        return peer.Handshake(nm);
     }
 
     /// Drive the singleton as a client against @p fakeServer until the handshake completes.
@@ -263,30 +327,26 @@ namespace
     {
         if (!nm.Connect("127.0.0.1", fakeServer.LocalPort(), "SessionProbe", NetworkEndpointPolicy::Loopback()))
             return false;
-        bool sawConnect = false;
-        const bool received =
-            PumpUntil(nm,
-                      [&]
-                      {
-                          for (const auto& datagram : fakeServer.DrainFrom())
-                          {
-                              if (WireType(datagram.bytes) == static_cast<uint16_t>(MessageType::Connect))
-                              {
-                                  clientEndpoint = datagram.from;
-                                  sawConnect = true;
-                              }
-                          }
-                          return sawConnect;
-                      });
+        std::vector<uint8_t> clientHello;
+        const bool received = PumpUntil(
+            nm,
+            [&]
+            {
+                for (const auto& datagram : fakeServer.DrainFrom())
+                {
+                    if (WireType(datagram.bytes) == static_cast<uint16_t>(MessageType::Connect))
+                    {
+                        clientEndpoint = datagram.from;
+                        clientHello.assign(datagram.bytes.begin() + NETWORK_WIRE_HEADER_SIZE, datagram.bytes.end());
+                    }
+                }
+                return !clientHello.empty();
+            });
         if (!received)
             return false;
 
-        NetBuffer accept;
-        accept.WriteUint32(42);  // assigned client ID
-        accept.WriteFloat(0.0f); // server time
-        accept.WriteUint16(NETWORK_PROTOCOL_VERSION);
-        if (!fakeServer.SendTo(clientEndpoint,
-                               BuildWire(MessageType::ConnectAccepted, ChannelType::Reliable, 1, accept.GetData())))
+        const auto accept = fakeServer.AcceptClientHello(clientHello, 42);
+        if (accept.empty() || !fakeServer.SendTo(clientEndpoint, accept))
             return false;
         return PumpUntil(nm, [&] { return nm.GetConnectionState() == ConnectionState::Connected; });
     }
@@ -547,10 +607,17 @@ TEST(NetTransportSec_FullEntitySyncsAreBudgetedPerUpdate)
     {
         peers.push_back(std::make_unique<RawPeer>(nm.GetBoundPort()));
         ASSERT_TRUE(peers.back()->IsReady());
-        ASSERT_TRUE(peers.back()->Send(BuildWire(MessageType::Connect, ChannelType::Reliable, 1, ConnectPayload())));
+        ASSERT_TRUE(peers.back()->BeginHandshake());
     }
-    // Let every Connect land so one Update admits the whole burst.
+    // Every Connect lands and is answered in one Update; then every ClientFinished lands
+    // before the next, so that one Update admits the whole burst.
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    nm.Update(0.016f);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    for (const auto& peer : peers)
+        ASSERT_TRUE(peer->FinishHandshake());
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    ASSERT_EQ(nm.GetStats().fullEntitySyncs, 0u);
     nm.Update(0.016f);
 
     ASSERT_EQ(nm.GetClients().size(), kPeers);
@@ -646,8 +713,9 @@ TEST(NetTransportSec_OrderedDeliveryContinuesAcrossSequenceWrap)
     {
         RawPeer peer(nm.GetBoundPort());
         ASSERT_TRUE(peer.IsReady());
-        // Connect on a sequence far from the wrap so it cannot collide with the dedup window below.
-        const ClientID admitted = AdmitPeer(nm, peer, 100);
+        // The handshake uses reliable sequence 0 (untracked), so it cannot collide with the
+        // dedup window below.
+        const ClientID admitted = AdmitPeer(nm, peer);
         ASSERT_TRUE(admitted != INVALID_CLIENT);
         NetworkManagerTransportSecurityTestAccess::SeedExpectedOrderedSequence(nm, admitted, 0xFFFFFFFFu);
 

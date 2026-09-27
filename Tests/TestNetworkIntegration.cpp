@@ -738,9 +738,10 @@ TEST(NetworkManager_HandleConnectCreatesClient)
     connectMsg.type = MessageType::Connect;
     connectMsg.channel = ChannelType::Reliable;
     connectMsg.senderID = INVALID_CLIENT;
-    NetBuffer buf;
-    WriteConnectRequest(buf, "TestPlayer");
-    connectMsg.payload = buf.GetData();
+    ClientHandshake handshake; // v2 Connect payload is a ClientHello (NET-100)
+    auto hello = handshake.Begin(NETWORK_PROTOCOL_VERSION);
+    ASSERT_TRUE(hello.has_value());
+    connectMsg.payload.assign(hello->begin(), hello->end());
 
     // The HandleConnect is private but is registered as a handler.
     // We can test indirectly by checking client count changes won't crash.

@@ -276,7 +276,9 @@ add_executable(SparkTests
     TestNET100Libsodium.cpp
     TestNET100Handshake.cpp
     TestNET100TrustStore.cpp
+    TestSecureTransportWired.cpp
     Fixtures/NetworkTestSecurity.cpp
+    Fixtures/SecureTestPeer.cpp
     TestSessionCompatibilityReal.cpp
     TestLogger.cpp
     TestProfiler.cpp
@@ -2132,9 +2134,19 @@ endforeach()
 if(ENABLE_NETWORKING)
     add_test(NAME NetworkSessionCompatibility COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(NetworkSessionCompatibility PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestSessionCompatibilityReal.cpp;SPARK_TEST_EXPECT_COUNT=10"
+        ENVIRONMENT "SPARK_TEST_FILE=TestSessionCompatibilityReal.cpp;SPARK_TEST_EXPECT_COUNT=11"
         LABELS "network-security;network;security;unit"
         TIMEOUT 60)
+    # NET-100: the v2 handshake and sealed datagrams through the production NetworkManager over
+    # loopback UDP: wrong/tampered/downgraded server identity, truncated or suite-downgraded
+    # ClientHello, missing ClientFinished, tamper/replay/reorder/wrong-key/truncation of sealed
+    # frames, sensitive-without-channel refusal, send-key rotation, and packet captures that must
+    # contain no player name, chat text or credential bytes.
+    add_test(NAME NetworkSecureTransportWired COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetworkSecureTransportWired PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestSecureTransportWired.cpp;SPARK_TEST_EXPECT_COUNT=15"
+        LABELS "network-security;network;security"
+        TIMEOUT 120)
 endif()
 
 # NET-110: IOnlinePlatform conformance (docs/specs/online-services.md 5.1, 6) across

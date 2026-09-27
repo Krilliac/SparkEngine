@@ -127,13 +127,19 @@ static std::vector<uint8_t> BuildPacket(MessageType type, ChannelType channel, u
     return std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
 }
 
-/// Build a connect request packet with a player name
-static std::vector<uint8_t> BuildConnectPacket(const std::string& playerName)
+/// Build a framed v2 connect request (NET-100): a fresh ClientHello in a plaintext handshake frame.
+/// The name is not on the wire any more; it would follow in a sealed ClientFinished, which these
+/// stress peers never send, so every slot they open stays Securing until the connection timeout.
+static std::vector<uint8_t> BuildConnectPacket(const std::string& /*playerName*/)
 {
-    NetBuffer nameBuf;
-    WriteConnectRequest(nameBuf, playerName);
-    return BuildPacket(MessageType::Connect, ChannelType::Reliable, 0, 0, 0.0f,
-                       std::vector<uint8_t>(nameBuf.GetData().begin(), nameBuf.GetData().end()));
+    ClientHandshake handshake;
+    const auto hello = handshake.Begin(NETWORK_PROTOCOL_VERSION);
+    if (!hello)
+        return {};
+    auto wire = BuildPacket(MessageType::Connect, ChannelType::Reliable, 0, 0, 0.0f,
+                            std::vector<uint8_t>(hello->begin(), hello->end()));
+    wire.insert(wire.begin(), NETWORK_FRAME_HANDSHAKE);
+    return wire;
 }
 
 static constexpr uint16_t TEST_PORT_BASE = 29000;

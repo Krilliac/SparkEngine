@@ -15,10 +15,15 @@ namespace Spark::Net
     // The same payload ceiling applies to every channel. In particular, a
     // 5 KiB Reliable/ReliableOrdered payload is supported; fragmentation and
     // reassembly below this UDP boundary are delegated to the IP stack.
+    // NET-100 (protocol v2): every datagram is one frame-kind byte plus either the plaintext
+    // handshake message or a SecureChannel packet (10-byte header + 16-byte tag) around it, so
+    // the payload ceiling leaves room for the largest frame (NetworkConnection.cpp asserts the
+    // overhead against SECURE_PACKET_OVERHEAD).
     inline constexpr std::size_t NETWORK_WIRE_HEADER_SIZE = 23;
+    inline constexpr std::size_t NETWORK_FRAME_OVERHEAD = 1 + 10 + 16;
     inline constexpr std::size_t MAX_UDP_WIRE_DATAGRAM_SIZE = 65'507;
     inline constexpr std::size_t MAX_NETWORK_MESSAGE_PAYLOAD_SIZE =
-        MAX_UDP_WIRE_DATAGRAM_SIZE - NETWORK_WIRE_HEADER_SIZE;
+        MAX_UDP_WIRE_DATAGRAM_SIZE - NETWORK_WIRE_HEADER_SIZE - NETWORK_FRAME_OVERHEAD;
 
     [[nodiscard]] inline constexpr bool IsNetworkPayloadSizeValid(std::size_t payloadSize) noexcept
     {

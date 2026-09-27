@@ -21,6 +21,7 @@
 #include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
 #include <format>
+#include <span>
 #include <sstream>
 #include <cstring>
 #include <algorithm>
@@ -34,6 +35,10 @@
 using namespace DirectX;
 namespace Spark::Net
 {
+    static_assert(NETWORK_FRAME_OVERHEAD == 1 + SECURE_PACKET_OVERHEAD,
+                  "NetworkWireLimits.h must reserve one frame-kind byte plus the SecureChannel overhead");
+    static_assert(static_cast<size_t>(OpenResult::Replayed) < std::tuple_size_v<decltype(NetworkStats::securityDrops)>);
+
 #ifdef ENABLE_NETWORKING
     namespace
     {
@@ -96,39 +101,12 @@ namespace Spark::Net
                          {
                              if (GetRole() == NetworkRole::Client)
                              {
-                                 NetBuffer buf;
-                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                 const ClientID assignedID = buf.ReadUint32();
-                                 buf.ReadFloat(); // server time; informational only
-                                 const uint16_t serverVersion = buf.ReadUint16();
-                                 if (buf.HasError() || assignedID == INVALID_CLIENT)
-                                 {
-                                     SPARK_LOG_WARN(Spark::LogCategory::Network,
-                                                    "Ignoring malformed ConnectAccepted packet");
-                                     return;
-                                 }
-
-                                 // The server must echo the version this client offered. Anything
-                                 // else means the peers disagree about the wire format, so refuse the
-                                 // session instead of exchanging traffic neither side can trust.
-                                 if (serverVersion != NETWORK_PROTOCOL_VERSION)
-                                 {
-                                     AbandonClientHandshake(ConnectRejectReason::ProtocolMismatch,
-                                                            std::format("Server accepted with protocol version {}, "
-                                                                        "client requires {}",
-                                                                        serverVersion, NETWORK_PROTOCOL_VERSION));
-                                     return;
-                                 }
-
-                                 std::lock_guard<std::mutex> stateLock(m_stateMutex);
-                                 m_localClientID = assignedID;
-                                 m_connectionState = ConnectionState::Connected;
-
-                                 // Mark as connected for auto-reconnect tracking
-                                 m_wasConnected = true;
-                                 m_reconnectAttempts = 0;
+                                 CompleteClientHandshake(msg);
                              }
                          });
+        // Admission happens in ProcessIncoming (PromoteSecuringClient); the dispatched copy only
+        // exists so the reliable layer acknowledges it.
+        registerInternal(MessageType::ClientFinished, [](const NetworkMessage&) {});
         registerInternal(MessageType::ConnectRejected,
                          [this](const NetworkMessage& msg)
                          {
@@ -147,7 +125,8 @@ namespace Spark::Net
                                  const uint8_t code = buf.ReadUint8();
                                  const uint16_t serverVersion = buf.ReadUint16();
                                  if (!buf.HasError() &&
-                                     code <= static_cast<uint8_t>(ConnectRejectReason::MalformedHandshake))
+                                     (code <= static_cast<uint8_t>(ConnectRejectReason::MalformedHandshake) ||
+                                      code == static_cast<uint8_t>(ConnectRejectReason::UnsupportedSuite)))
                                  {
                                      reason = static_cast<ConnectRejectReason>(code);
                                      SPARK_LOG_DEBUG(Spark::LogCategory::Network,
@@ -301,6 +280,9 @@ namespace Spark::Net
         }
 
         m_peers.clear();
+        m_secureChannels.clear();
+        m_pendingAccepts.clear();
+        m_clientHandshake.reset();
         m_lagCompensator.Clear();
         m_serverTime = 0.0f;
         m_nextClientID = 1;
@@ -508,6 +490,8 @@ namespace Spark::Net
         }
         m_lagCompensator.Clear();
         m_peers.clear();
+        m_secureChannels.clear();
+        m_pendingAccepts.clear();
         m_allowLanAdvertisement = false;
 
         {
@@ -537,8 +521,11 @@ namespace Spark::Net
         }
 
         // A client has one remote peer. Clearing its reliability state destroys
-        // sensitive unacknowledged and ordered-buffer copies from this lifecycle.
+        // sensitive unacknowledged and ordered-buffer copies from this lifecycle,
+        // and its channel keys are wiped with the SecureChannel.
         m_peers.clear();
+        m_secureChannels.clear();
+        m_clientHandshake.reset();
 
         // The simulator is process-global, so discard only manager-owned packets
         // from completed lifecycles and preserve epoch-zero generic traffic.
@@ -587,6 +574,16 @@ namespace Spark::Net
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Connecting to %s:%u as '%s'", address.c_str(), port,
                        playerName.c_str());
 
+        // The ephemeral key is generated before any socket exists, so a CSPRNG failure
+        // leaves no half-started lifecycle behind.
+        auto handshake = std::make_unique<ClientHandshake>();
+        auto clientHello = handshake->Begin(NETWORK_PROTOCOL_VERSION);
+        if (!clientHello)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing client startup: handshake key generation failed");
+            return false;
+        }
+
         // Save connection params for auto-reconnect
         m_lastServerAddress = address;
         m_lastServerPort = port;
@@ -618,17 +615,18 @@ namespace Spark::Net
         }
         m_lastServerPacketTime = m_serverTime;
         m_allowLanAdvertisement = false;
+        m_secureChannels.clear();
+        m_clientHandshake = std::move(handshake);
         ++m_lifecycleEpoch;
 
-        // Send connect request
+        // Connect carries only the ClientHello (NET-100 v2): magic, version, suite, the
+        // ephemeral X25519 key and a nonce. The player name waits for the sealed ClientFinished.
         NetworkMessage connectMsg;
         connectMsg.type = MessageType::Connect;
         connectMsg.channel = ChannelType::Reliable;
         connectMsg.senderID = INVALID_CLIENT;
         connectMsg.timestamp = 0.0f;
-        NetBuffer buf;
-        WriteConnectRequest(buf, playerName);
-        connectMsg.payload = buf.GetData();
+        connectMsg.payload.assign(clientHello->begin(), clientHello->end());
         SendMessage(connectMsg);
 
         return true;
@@ -703,6 +701,9 @@ namespace Spark::Net
             m_inputHistory.clear();
         }
         m_peers.clear();
+        m_secureChannels.clear();
+        m_pendingAccepts.clear();
+        m_clientHandshake.reset();
         m_allowLanAdvertisement = false;
     }
 
@@ -746,6 +747,15 @@ namespace Spark::Net
                             "Rejecting local-only network message before queueing for a non-loopback server");
             m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
             m_stats.packetsDropped++;
+            return;
+        }
+        // NET-100 invariant: sensitive payloads only ever leave inside an established channel.
+        if (msg.sensitive && GetRole() == NetworkRole::Client && !m_secureChannels.contains(SERVER_PEER))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing a sensitive network message: no secure channel to the server yet");
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.unsealedSendsRefused++;
             return;
         }
 #endif
@@ -826,6 +836,14 @@ namespace Spark::Net
             m_stats.packetsDropped++;
             return;
         }
+        if (copy.sensitive && !m_secureChannels.contains(client))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing a sensitive network message: client %u has no secure channel", client);
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.unsealedSendsRefused++;
+            return;
+        }
 
         // Assign this client's own reliable sequence and track for
         // retransmission — sequence streams and unacked maps are per peer, so
@@ -871,7 +889,14 @@ namespace Spark::Net
         std::vector<ClientID> clientIDs;
         clientIDs.reserve(m_clients.size());
         for (const auto& [id, info] : m_clients)
-            clientIDs.push_back(id);
+        {
+            // A Securing client has not proven its channel yet (NET-100): it receives
+            // nothing but its ConnectAccepted until ClientFinished promotes it.
+            if (info.state == ConnectionState::Connected)
+            {
+                clientIDs.push_back(id);
+            }
+        }
         return clientIDs;
     }
 
@@ -1288,10 +1313,20 @@ namespace Spark::Net
                                              older ? "older" : "newer", NETWORK_PROTOCOL_VERSION));
             return INVALID_CLIENT;
         }
-        std::string playerName = request.ReadString();
-        if (request.HasError() || request.RemainingBytes() != 0)
+        // v2 Connect is exactly one ClientHello (NET-100). Its suite byte is checked here, before
+        // the capacity check and before any signature work, so a wrong or downgraded suite is
+        // refused with its own reason and costs the server nothing.
+        if (msg.payload.size() != CLIENT_HELLO_SIZE)
         {
             RejectPendingConnect(pendingID, ConnectRejectReason::MalformedHandshake, "Malformed connect request");
+            m_stats.handshakeFailures++;
+            return INVALID_CLIENT;
+        }
+        if (msg.payload[6] != HANDSHAKE_SUITE_X25519_ED25519_CHACHAPOLY_HKDF_SHA256)
+        {
+            RejectPendingConnect(pendingID, ConnectRejectReason::UnsupportedSuite,
+                                 std::format("Unsupported handshake suite {}", static_cast<unsigned>(msg.payload[6])));
+            m_stats.handshakeFailures++;
             return INVALID_CLIENT;
         }
 
@@ -1301,35 +1336,214 @@ namespace Spark::Net
                                  std::format("Server full ({}/{})", m_clients.size(), m_maxClients));
             return INVALID_CLIENT;
         }
+        if (!m_securityConfig.identity)
+        {
+            // StartServer refuses without an identity; a caller that cleared it since gets no sessions.
+            RejectPendingConnect(pendingID, ConnectRejectReason::Unspecified, "Server has no identity");
+            return INVALID_CLIENT;
+        }
+
+        auto response = RespondToClientHello(msg.payload, *m_securityConfig.identity);
+        if (!response)
+        {
+            const ConnectRejectReason reason = response.error() == HandshakeError::UnsupportedSuite
+                                                   ? ConnectRejectReason::UnsupportedSuite
+                                                   : ConnectRejectReason::MalformedHandshake;
+            RejectPendingConnect(pendingID, reason, "Handshake refused");
+            m_stats.handshakeFailures++;
+            return INVALID_CLIENT;
+        }
 
         const ClientID newID = m_nextClientID;
         m_nextClientID = AdvanceGeneratedClientID(newID);
         ClientInfo info;
         info.id = newID;
-        info.state = ConnectionState::Connected;
-        info.lastHeartbeatTime = m_serverTime;
-        info.name = playerName.empty() ? "Player_" + std::to_string(newID) : std::move(playerName);
+        info.state = ConnectionState::Securing; // admitted only once ClientFinished opens under this channel
+        info.lastHeartbeatTime = m_serverTime;  // a client that never finishes times out like a silent one
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients[newID] = info;
         }
+        m_secureChannels[newID] = PeerChannel{std::move(response->channel), 0, m_serverTime};
 
-        // Register the new connection for delta snapshot tracking
-        DeltaSnapshotManager::GetInstance().RegisterConnection(newID);
-
-        // Send acceptance with assigned client ID, echoing the negotiated protocol version
+        // ConnectAccepted: [client id u32][server time f32][echoed version u16][ServerHello].
+        // It is unreliable: a lost one is answered again when the client retransmits its
+        // Connect, so the server never sends more than one datagram per datagram received.
         NetworkMessage accept;
         accept.type = MessageType::ConnectAccepted;
-        accept.channel = ChannelType::Reliable;
+        accept.channel = ChannelType::Unreliable;
         NetBuffer respBuf;
         respBuf.WriteUint32(newID);
         respBuf.WriteFloat(m_serverTime);
         respBuf.WriteUint16(NETWORK_PROTOCOL_VERSION);
+        respBuf.WriteBytes(response->serverHello.data(), response->serverHello.size());
         accept.payload = respBuf.GetData();
+        m_pendingAccepts[newID] = PendingAccept{msg.payload, accept};
         SendToClient(newID, accept);
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u accepted ('%s'), %d/%d slots used", newID,
-                       info.name.c_str(), static_cast<int>(m_clients.size()), m_maxClients);
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u securing, %d/%d slots used", newID,
+                       static_cast<int>(m_clients.size()), m_maxClients);
         return newID;
+    }
+
+    bool NetworkManager::PromoteSecuringClient(ClientID clientID, const NetworkMessage& finished)
+    {
+        // ClientFinished: [player name, u16 length + bytes] and nothing else.
+        NetBuffer buf;
+        buf.WriteBytes(finished.payload.data(), finished.payload.size());
+        std::string playerName = buf.ReadString();
+        constexpr size_t kMaxPlayerNameBytes = 64;
+        if (buf.HasError() || buf.RemainingBytes() != 0 || playerName.size() > kMaxPlayerNameBytes)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Malformed ClientFinished from securing client %u", clientID);
+            return false;
+        }
+
+        std::string admittedName;
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            auto it = m_clients.find(clientID);
+            if (it == m_clients.end() || it->second.state != ConnectionState::Securing)
+            {
+                return false;
+            }
+            it->second.state = ConnectionState::Connected;
+            it->second.lastHeartbeatTime = m_serverTime;
+            it->second.name = playerName.empty() ? "Player_" + std::to_string(clientID) : std::move(playerName);
+            admittedName = it->second.name;
+        }
+        m_pendingAccepts.erase(clientID);
+
+        // Register the new connection for delta snapshot tracking
+        DeltaSnapshotManager::GetInstance().RegisterConnection(clientID);
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u accepted ('%s'), %d/%d slots used", clientID,
+                       admittedName.c_str(), static_cast<int>(m_clients.size()), m_maxClients);
+        return true;
+    }
+
+    void NetworkManager::CompleteClientHandshake(const NetworkMessage& accepted)
+    {
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            if (m_connectionState != ConnectionState::Connecting)
+            {
+                return;
+            }
+        }
+        if (!m_clientHandshake)
+        {
+            return; // a duplicate ConnectAccepted after the handshake already finished
+        }
+
+        NetBuffer buf;
+        buf.WriteBytes(accepted.payload.data(), accepted.payload.size());
+        const ClientID assignedID = buf.ReadUint32();
+        buf.ReadFloat(); // server time; informational only
+        const uint16_t serverVersion = buf.ReadUint16();
+        if (buf.HasError() || assignedID == INVALID_CLIENT)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Ignoring malformed ConnectAccepted packet");
+            return;
+        }
+
+        // The server must echo the version this client offered. Anything else means the peers
+        // disagree about the wire format, so refuse the session instead of exchanging traffic
+        // neither side can trust.
+        if (serverVersion != NETWORK_PROTOCOL_VERSION)
+        {
+            m_stats.handshakeFailures++;
+            AbandonClientHandshake(ConnectRejectReason::ProtocolMismatch,
+                                   std::format("Server accepted with protocol version {}, client requires {}",
+                                               serverVersion, NETWORK_PROTOCOL_VERSION));
+            return;
+        }
+        constexpr size_t kAcceptPrefix = 4 + 4 + 2;
+        if (accepted.payload.size() != kAcceptPrefix + SERVER_HELLO_SIZE)
+        {
+            // Not a v2 ConnectAccepted (e.g. a legacy 10-byte echo): it can never authenticate
+            // a server, so it is ignored without consuming the handshake.
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Ignoring ConnectAccepted without a ServerHello");
+            return;
+        }
+        const std::span<const uint8_t> serverHello = std::span(accepted.payload).subspan(kAcceptPrefix);
+
+        std::string endpoint;
+#ifdef ENABLE_NETWORKING
+        endpoint = FormatKnownHostsEndpoint(ntohl(m_serverAddress.sin_addr.s_addr), ntohs(m_serverAddress.sin_port));
+#endif
+        ServerPublicKey presented{};
+        std::copy_n(serverHello.begin() + 1, presented.size(), presented.begin());
+        const auto expected = ResolveExpectedServerKey(m_securityConfig.trust, endpoint, presented);
+        if (!expected)
+        {
+            m_stats.handshakeFailures++;
+            AbandonClientHandshake(ConnectRejectReason::HandshakeAuthFailed,
+                                   std::format("Server trust unusable: {}", TrustStoreErrorText(expected.error())));
+            return;
+        }
+
+        auto channel = m_clientHandshake->Finish(serverHello, expected->key);
+        m_clientHandshake.reset();
+        if (!channel)
+        {
+            m_stats.handshakeFailures++;
+            const bool identityMismatch = channel.error() == HandshakeError::ServerIdentityMismatch;
+            AbandonClientHandshake(identityMismatch ? ConnectRejectReason::ServerIdentityMismatch
+                                                    : ConnectRejectReason::HandshakeAuthFailed,
+                                   identityMismatch ? "Server identity does not match the trusted key"
+                                                    : "Server handshake failed authentication");
+            return;
+        }
+        if (expected->firstUse)
+        {
+            // Trust on first use records the key only after its signature verified.
+            if (auto recorded = RecordKnownHost(m_securityConfig.trust.knownHostsPath, endpoint, expected->key);
+                !recorded)
+            {
+                m_stats.handshakeFailures++;
+                AbandonClientHandshake(
+                    ConnectRejectReason::HandshakeAuthFailed,
+                    std::format("Cannot record server key: {}", TrustStoreErrorText(recorded.error())));
+                return;
+            }
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Trusting server %s on first use", endpoint.c_str());
+        }
+
+        m_secureChannels[SERVER_PEER] = PeerChannel{std::move(*channel), 0, m_serverTime};
+        // The Connect has been answered: stop retransmitting it.
+        PeerState& serverPeer = GetPeerState(SERVER_PEER);
+        for (auto it = serverPeer.unacknowledgedMessages.begin(); it != serverPeer.unacknowledgedMessages.end();)
+        {
+            if (it->second.type == MessageType::Connect)
+            {
+                serverPeer.reliableOriginalSendTime.erase(it->first);
+                serverPeer.retransmitCounts.erase(it->first);
+                it = serverPeer.unacknowledgedMessages.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            m_localClientID = assignedID;
+            m_connectionState = ConnectionState::Connected;
+
+            // Mark as connected for auto-reconnect tracking
+            m_wasConnected = true;
+            m_reconnectAttempts = 0;
+        }
+
+        // First sealed message: proves this client holds the channel and carries the name.
+        NetworkMessage finished;
+        finished.type = MessageType::ClientFinished;
+        finished.channel = ChannelType::Reliable;
+        finished.senderID = assignedID;
+        NetBuffer nameBuf;
+        nameBuf.WriteString(m_lastPlayerName);
+        finished.payload = nameBuf.GetData();
+        SendMessage(finished);
     }
 
     void NetworkManager::HandleDisconnect(const NetworkMessage& msg)
@@ -1381,8 +1595,10 @@ namespace Spark::Net
         }
 
         // Drop the peer's reliability state (sequence streams, unacked maps,
-        // dedup window) so a reused ClientID starts fresh.
+        // dedup window) and its channel keys so a reused ClientID starts fresh.
         m_peers.erase(clientID);
+        m_secureChannels.erase(clientID);
+        m_pendingAccepts.erase(clientID);
         // Each admitted client is queued for its initial sync at most once.
         const auto pendingSync = std::find(m_pendingFullSyncs.begin(), m_pendingFullSyncs.end(), clientID);
         if (pendingSync != m_pendingFullSyncs.end())
@@ -1522,10 +1738,6 @@ namespace Spark::Net
                 continue;
             }
 
-            NetworkMessage msg;
-            if (!DeserializeMessage(rawData.data(), rawData.size(), msg))
-                continue;
-
             ClientID trustedSender = INVALID_CLIENT;
             if (role == NetworkRole::Server)
             {
@@ -1537,6 +1749,77 @@ namespace Spark::Net
                         break;
                     }
                 }
+            }
+
+            // NET-100 framing. Only a Sealed frame that SecureChannel::Open authenticates for this
+            // exact peer, or a plaintext Handshake frame of the one type this role and state
+            // expect, ever reaches deserialization. Everything else is dropped and counted.
+            NetworkMessage msg;
+            std::vector<uint8_t> opened;
+            const auto clearOpened = Spark::MakeScopeExit([&opened] { Spark::SecureClear(opened); });
+            const uint8_t frameKind = rawData[0];
+            if (frameKind == NETWORK_FRAME_SEALED)
+            {
+                const ClientID peerKey = role == NetworkRole::Server ? trustedSender : SERVER_PEER;
+                const auto channelIt = peerKey == INVALID_CLIENT && role == NetworkRole::Server
+                                           ? m_secureChannels.end()
+                                           : m_secureChannels.find(peerKey);
+                if (channelIt == m_secureChannels.end() || !channelIt->second.channel)
+                {
+                    m_stats.plaintextFramesDropped++;
+                    continue;
+                }
+                const uint8_t aad[1] = {NETWORK_FRAME_SEALED};
+                const OpenResult opening =
+                    channelIt->second.channel->Open(std::span(rawData).subspan(1), opened, std::span(aad));
+                if (opening != OpenResult::Ok)
+                {
+                    m_stats.securityDrops[static_cast<size_t>(opening)]++;
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping sealed datagram (open result %u)",
+                                    static_cast<unsigned>(opening));
+                    continue;
+                }
+                if (!DeserializeMessage(opened.data(), opened.size(), msg) || IsHandshakeMessage(msg.type))
+                {
+                    m_stats.plaintextFramesDropped++;
+                    continue;
+                }
+            }
+            else if (frameKind == NETWORK_FRAME_HANDSHAKE)
+            {
+                if (!DeserializeMessage(rawData.data() + 1, rawData.size() - 1, msg))
+                {
+                    continue;
+                }
+                const bool expected =
+                    (role == NetworkRole::Server && msg.type == MessageType::Connect) ||
+                    (role == NetworkRole::Client && GetConnectionState() == ConnectionState::Connecting &&
+                     (msg.type == MessageType::ConnectAccepted || msg.type == MessageType::ConnectRejected));
+                if (!expected)
+                {
+                    m_stats.plaintextFramesDropped++;
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping plaintext %u outside the handshake",
+                                    static_cast<unsigned>(msg.type));
+                    continue;
+                }
+            }
+            else
+            {
+                // A pre-v2 peer sends an unframed "SPRK" message. Its Connect gets one unframed,
+                // typed ConnectRejected it can parse; nothing else from it is read.
+                m_stats.plaintextFramesDropped++;
+                constexpr uint8_t kLegacyMagic[4] = {0x4B, 0x52, 0x50, 0x53}; // "SPRK" little-endian
+                const bool legacyShaped = rawData.size() >= sizeof(kLegacyMagic) &&
+                                          std::equal(std::begin(kLegacyMagic), std::end(kLegacyMagic), rawData.begin());
+                if (role == NetworkRole::Server && trustedSender == INVALID_CLIENT && legacyShaped &&
+                    DeserializeMessage(rawData.data(), rawData.size(), msg) && msg.type == MessageType::Connect)
+                {
+                    SendLegacyRejection(senderAddr, msg);
+                }
+                continue;
+            }
+            if (role == NetworkRole::Server)
+            {
                 msg.senderID = trustedSender;
             }
 
@@ -1586,9 +1869,18 @@ namespace Spark::Net
 
                     // Duplicate-address detection: if this address already has
                     // an active connection, ignore the redundant Connect to
-                    // prevent slot exhaustion from repeated packets.
+                    // prevent slot exhaustion from repeated packets. A Securing
+                    // client retransmitting the same ClientHello lost our
+                    // ConnectAccepted: answer it once more (one reply per request).
                     if (trustedSender != INVALID_CLIENT)
                     {
+                        const auto pending = m_pendingAccepts.find(trustedSender);
+                        if (pending != m_pendingAccepts.end() && pending->second.clientHello == msg.payload)
+                        {
+                            const NetworkMessage accept = pending->second.accept;
+                            SendToClient(trustedSender, accept);
+                            continue;
+                        }
                         SPARK_LOG_DEBUG(Spark::LogCategory::Network,
                                         "Ignoring duplicate Connect from already-connected address");
                         continue;
@@ -1605,12 +1897,9 @@ namespace Spark::Net
                     }
                     m_clientAddresses[pendingID] = senderAddr;
 
-                    const ClientID admittedID = HandleConnect(msg);
-                    if (admittedID != INVALID_CLIENT)
-                    {
-                        msg.senderID = admittedID;
-                        newlyConnected.push_back(std::move(msg));
-                    }
+                    // HandleConnect answers with ConnectAccepted and leaves the client Securing;
+                    // it is surfaced as newly connected only when its ClientFinished opens.
+                    [[maybe_unused]] const ClientID securingID = HandleConnect(msg);
                     continue;
                 }
 
@@ -1618,6 +1907,39 @@ namespace Spark::Net
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping packet from unknown client endpoint");
                     continue;
+                }
+
+                ConnectionState senderState = ConnectionState::Disconnected;
+                {
+                    std::lock_guard<std::mutex> lock(m_clientsMutex);
+                    const auto it = m_clients.find(trustedSender);
+                    if (it != m_clients.end())
+                    {
+                        senderState = it->second.state;
+                    }
+                }
+                if (senderState == ConnectionState::Securing)
+                {
+                    if (msg.type == MessageType::ClientFinished)
+                    {
+                        if (!PromoteSecuringClient(trustedSender, msg))
+                        {
+                            continue;
+                        }
+                        // The admission event observers see (senderID = the new client).
+                        NetworkMessage admitted;
+                        admitted.type = MessageType::Connect;
+                        admitted.channel = ChannelType::Reliable;
+                        admitted.senderID = trustedSender;
+                        admitted.timestamp = m_serverTime;
+                        newlyConnected.push_back(std::move(admitted));
+                        // Fall through: the reliable layer still acknowledges ClientFinished.
+                    }
+                    else if (msg.type != MessageType::Ack)
+                    {
+                        // Nothing but ClientFinished (and ACKs of our ConnectAccepted) before admission.
+                        continue;
+                    }
                 }
             }
 
@@ -1704,7 +2026,7 @@ namespace Spark::Net
                         m_stats.packetsDropped++;
                         continue;
                     }
-                    SendRawTo(packet.data, m_serverAddress, packet.localOnly);
+                    SendFrameTo(SERVER_PEER, packet.data, m_serverAddress, packet.localOnly);
                 }
                 else if (m_role == NetworkRole::Server)
                 {
@@ -1718,7 +2040,8 @@ namespace Spark::Net
                         m_stats.packetsDropped++;
                         continue;
                     }
-                    SendRawTo(packet.data, addrIt->second, packet.localOnly);
+                    SendFrameTo(static_cast<ClientID>(packet.destinationKey), packet.data, addrIt->second,
+                                packet.localOnly);
                 }
             }
         }
@@ -1763,12 +2086,19 @@ namespace Spark::Net
             {
                 // Impairment decisions are per destination, so each client
                 // gets its own copy to drop, delay or duplicate independently.
+                // Each destination is sealed under its own channel; clients still
+                // Securing receive no broadcast traffic.
                 const bool impaired = instability.GetSettings().enabled;
+                const std::vector<ClientID> admitted = GetConnectedClientIDs();
                 for (const auto& [id, addr] : m_clientAddresses)
                 {
+                    if (std::find(admitted.begin(), admitted.end(), id) == admitted.end())
+                    {
+                        continue;
+                    }
                     if (!impaired)
                     {
-                        SendRawTo(serialized, addr, msg.localOnly);
+                        SendFrameTo(id, serialized, addr, msg.localOnly);
                         continue;
                     }
                     std::vector<uint8_t> perClient = serialized;
@@ -1809,7 +2139,7 @@ namespace Spark::Net
         // delaying or dropping it would guarantee it is never transmitted.
         if (!settings.enabled || msg.type == MessageType::Disconnect)
         {
-            SendRawTo(serialized, addr, msg.localOnly);
+            SendFrameTo(destination, serialized, addr, msg.localOnly);
             return;
         }
 
@@ -1838,7 +2168,7 @@ namespace Spark::Net
                                     msg.ownerLifecycleEpoch, destination);
             return;
         }
-        SendRawTo(serialized, addr, msg.localOnly);
+        SendFrameTo(destination, serialized, addr, msg.localOnly);
     }
 #endif // ENABLE_NETWORKING
 
@@ -1941,7 +2271,8 @@ namespace Spark::Net
                         if (sensitive)
                             Spark::SecureClear(serialized);
                     });
-                SendRawTo(serialized, *destination, retransmitMsg.localOnly);
+                SendFrameTo(role == NetworkRole::Client ? SERVER_PEER : peerKey, serialized, *destination,
+                            retransmitMsg.localOnly);
             }
         }
 #endif // ENABLE_NETWORKING
@@ -1954,6 +2285,11 @@ namespace Spark::Net
     void NetworkManager::UpdateHeartbeat(float deltaTime)
     {
         m_heartbeatTimer += deltaTime;
+        // A client only heartbeats inside its channel; while Connecting it has none.
+        if (GetRole() == NetworkRole::Client && GetConnectionState() != ConnectionState::Connected)
+        {
+            return;
+        }
         if (m_heartbeatTimer >= m_heartbeatInterval)
         {
             m_heartbeatTimer = 0.0f;

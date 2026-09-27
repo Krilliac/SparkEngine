@@ -15,6 +15,8 @@
 #include "TestFramework.h"
 #include "Game/MultiplayerSystem.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Fixtures/NetworkTestSecurity.h"
+#include "Fixtures/SecureTestPeer.h"
 
 #include <array>
 #include <chrono>
@@ -331,22 +333,22 @@ namespace
             wire.WriteUint32(static_cast<uint32_t>(body.size()));
             if (!body.empty())
                 wire.WriteBytes(body.data(), body.size());
-            const auto& datagram = wire.GetData();
+            // NET-100 v2: handshake messages travel in plaintext frames, everything else sealed.
+            const auto datagram = SparkTestFixtures::FrameForSend(m_channel.get(), wire.GetData());
+            return !datagram.empty() && SendDatagram(datagram);
+        }
+
+        bool SendDatagram(std::span<const uint8_t> datagram) const
+        {
             const int sent =
                 sendto(m_socket, reinterpret_cast<const char*>(datagram.data()), static_cast<int>(datagram.size()), 0,
                        reinterpret_cast<const sockaddr*>(&m_remote), sizeof(m_remote));
             return sent == static_cast<int>(datagram.size());
         }
 
-        bool Send(SparkFPS::FPSMessageType type, const std::vector<uint8_t>& body) const
+        std::optional<std::vector<uint8_t>> ReceiveDatagram(sockaddr_in* outSender = nullptr) const
         {
-            return Send(static_cast<Spark::Net::MessageType>(type), Spark::Net::ChannelType::Unreliable, 0, body);
-        }
-
-        /// Read one pending datagram; false when none is waiting or it is not a Spark packet.
-        bool Receive(WireMessage& out, sockaddr_in* outSender = nullptr) const
-        {
-            std::array<uint8_t, 65536> buffer{};
+            std::vector<uint8_t> buffer(65536);
             sockaddr_in from{};
 #ifdef SPARK_PLATFORM_WINDOWS
             int fromLength = sizeof(from);
@@ -357,10 +359,43 @@ namespace
                 recvfrom(m_socket, reinterpret_cast<char*>(buffer.data()), static_cast<int>(buffer.size()), 0,
                          reinterpret_cast<sockaddr*>(&from), &fromLength);
             if (received <= 0)
+                return std::nullopt;
+            buffer.resize(static_cast<size_t>(received));
+            if (outSender)
+                *outSender = from;
+            return buffer;
+        }
+
+        /// Client role: run the v2 handshake against the NetworkManager singleton server.
+        bool Handshake(const std::string& name)
+        {
+            auto session = SparkTestFixtures::RawHandshake(
+                Spark::Net::NetworkManager::GetInstance(), [this](std::span<const uint8_t> datagram)
+                { return SendDatagram(datagram); }, [this] { return ReceiveDatagram(); }, name);
+            if (!session)
+                return false;
+            m_channel = std::move(session->channel);
+            return true;
+        }
+
+        bool Send(SparkFPS::FPSMessageType type, const std::vector<uint8_t>& body) const
+        {
+            return Send(static_cast<Spark::Net::MessageType>(type), Spark::Net::ChannelType::Unreliable, 0, body);
+        }
+
+        /// Read one pending datagram; false when none is waiting or it is not a Spark packet.
+        bool Receive(WireMessage& out, sockaddr_in* outSender = nullptr) const
+        {
+            sockaddr_in from{};
+            const auto datagram = ReceiveDatagram(&from);
+            if (!datagram)
+                return false;
+            const auto inner = SparkTestFixtures::OpenFrame(m_channel.get(), *datagram);
+            if (!inner)
                 return false;
 
             Spark::Net::NetBuffer wire;
-            wire.WriteBytes(buffer.data(), static_cast<size_t>(received));
+            wire.WriteBytes(inner->data(), inner->size());
             const uint32_t magic = wire.ReadUint32();
             out.type = static_cast<Spark::Net::MessageType>(wire.ReadUint16());
             wire.ReadUint8();  // channel
@@ -398,12 +433,14 @@ namespace
                 return false;
             m_remote = clientAddress;
 
-            Spark::Net::NetBuffer payload;
-            payload.WriteUint32(assignedId);
-            payload.WriteFloat(0.0f); // server time
-            payload.WriteUint16(Spark::Net::NETWORK_PROTOCOL_VERSION);
-            if (!Send(Spark::Net::MessageType::ConnectAccepted, Spark::Net::ChannelType::Reliable, 1,
-                      payload.GetData()))
+            // Answer the ClientHello as the pinned test identity and keep the server channel.
+            auto response = Spark::Net::RespondToClientHello(connect.payload, SparkTestFixtures::TestServerIdentity());
+            if (!response)
+                return false;
+            m_channel = std::move(response->channel);
+            const auto payload = SparkTestFixtures::SecureRawServer::AcceptPayload(
+                assignedId, Spark::Net::NETWORK_PROTOCOL_VERSION, response->serverHello);
+            if (!Send(Spark::Net::MessageType::ConnectAccepted, Spark::Net::ChannelType::Unreliable, 0, payload))
                 return false;
 
             return PumpUntil(client, [&] { return client.GetLocalClientId() == assignedId; });
@@ -414,6 +451,7 @@ namespace
 
         SOCKET m_socket = INVALID_SOCKET;
         sockaddr_in m_remote{};
+        mutable std::unique_ptr<Spark::Net::SecureChannel> m_channel; ///< Open() advances its replay window
         mutable size_t m_inputsReceived = 0;
         bool m_ready = false;
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -1008,10 +1046,8 @@ TEST(FPSMultiplayerProduction_NetworkPathServerAdmitsInputAndBroadcastsSnapshots
     Access::SetSpawnPoints(server, {{0.0f, 1.0f, 0.0f, 0.0f}});
     remote.SetRemotePort(Spark::Net::NetworkManager::GetInstance().GetBoundPort());
 
-    // Admission through NetworkManager's handshake spawns the player and its score row.
-    Spark::Net::NetBuffer connect;
-    Spark::Net::WriteConnectRequest(connect, "RawPeer");
-    ASSERT_TRUE(remote.Send(Spark::Net::MessageType::Connect, Spark::Net::ChannelType::Reliable, 1, connect.GetData()));
+    // Admission through NetworkManager's v2 handshake spawns the player and its score row.
+    ASSERT_TRUE(remote.Handshake("RawPeer"));
     ASSERT_TRUE(PumpUntil(server, [&] { return server.GetAllPlayerStates().size() == 2; }));
     uint32_t remoteId = Spark::Net::INVALID_CLIENT;
     for (const auto& [id, state] : server.GetAllPlayerStates())
