@@ -654,6 +654,78 @@ def adapter_name_production_errors(repo_root: Path, source_paths: Iterable[str] 
                     f"{relative}:{number}: adapter reports {match.group(1)!r}; no adapter in this repository "
                     "is production (docs/specs/online-services.md section 6)"
                 )
+# INST-130: the nightly also publishes SparkInstaller-Linux-x64 and
+# SparkInstaller-macOS-arm64 (release.yml build-installer). Those installers are
+# experimental and owned by their platform capability and PLT-* work, never by
+# the Windows installer certification that stable-v1 requires.
+INSTALLER_PRODUCT_KINDS = frozenset({"installer", "package"})
+NON_WINDOWS_INSTALLER_CAPABILITIES = ("platform.linux", "platform.macos")
+_NON_WINDOWS_INSTALLER_WORDING = re.compile(
+    r"\b(?:linux|macos|mac\s+os|os\s+x|appimage|flatpak|snap|deb|rpm|dmg|notari[sz]\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def installer_platform_ownership_errors(contract: dict[str, Any]) -> list[str]:
+    """Keep experimental non-Windows installers out of stable installer certification."""
+
+    errors: list[str] = []
+    readiness = contract.get("readiness", {})
+    capabilities = {
+        capability.get("id"): capability for capability in readiness.get("capabilities", [])
+    }
+
+    for profile in readiness.get("releaseProfiles", []):
+        profile_id = profile.get("id", "?")
+        included = set(profile.get("includedCapabilityIds", []))
+        for owner in NON_WINDOWS_INSTALLER_CAPABILITIES:
+            if profile_id == "stable-v1" and owner in included:
+                errors.append(
+                    f"releaseProfiles.{profile_id}.includedCapabilityIds: {owner} owns an experimental "
+                    "installer and cannot be part of stable-v1"
+                )
+        for index, product in enumerate(profile.get("buildProducts", [])):
+            if product.get("target") != "SparkInstaller" and product.get("kind") not in INSTALLER_PRODUCT_KINDS:
+                continue
+            build_profile = str(product.get("buildProfile", ""))
+            if build_profile.startswith("windows-"):
+                continue
+            location = f"releaseProfiles.{profile_id}.buildProducts[{index}] ({product.get('target')})"
+            if product.get("applicability") == "required":
+                errors.append(
+                    f"{location}: non-Windows installer build {build_profile!r} cannot be required; "
+                    "it stays experimental under its platform work"
+                )
+            owners = set(product.get("capabilityIds", []))
+            if "platform.windows" in owners or not owners.intersection(NON_WINDOWS_INSTALLER_CAPABILITIES):
+                errors.append(
+                    f"{location}: non-Windows installer must be owned by "
+                    f"{' or '.join(NON_WINDOWS_INSTALLER_CAPABILITIES)}, not platform.windows"
+                )
+
+    for item in contract.get("workItems", []):
+        if item.get("area") != "installer":
+            continue
+        if item.get("profileApplicability", {}).get("stable-v1") != "required":
+            continue
+        for field in ("implementationScope", "acceptanceCriteria", "definitionOfDone"):
+            for index, text in enumerate(item.get(field, [])):
+                match = _NON_WINDOWS_INSTALLER_WORDING.search(str(text))
+                if match:
+                    errors.append(
+                        f"workItems.{item.get('id')}.{field}[{index}]: stable-v1 installer work names a "
+                        f"non-Windows installer ({match.group(0)!r}); that certification belongs to PLT-* work"
+                    )
+
+    for owner in NON_WINDOWS_INSTALLER_CAPABILITIES:
+        capability = capabilities.get(owner)
+        if capability is None:
+            errors.append(f"capabilities.{owner}: installer-owning platform capability is missing")
+            continue
+        if not any(str(item).startswith("PLT-") for item in capability.get("blockingWorkItemIds", [])):
+            errors.append(
+                f"capabilities.{owner}: owns an experimental installer but lists no PLT-* blocking work item"
+            )
     return errors
 
 
@@ -3440,6 +3512,8 @@ class Validator:
             self.error(f"{finding.path}:{finding.line}", finding.message)
         self.validate_public_numeric_claims()
         self.validate_online_service_boundary()
+        for message in installer_platform_ownership_errors(self.contract):
+            self.error("installerPlatformOwnership", message)
         self.validate_legal(strict_public_wording=legal)
         if assets:
             self.validate_asset_surface()

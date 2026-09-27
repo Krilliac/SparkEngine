@@ -943,6 +943,95 @@ class OnlineServiceBoundaryTests(unittest.TestCase):
         self.assertEqual([], site_data_validate.adapter_name_production_errors(REPO_ROOT))
 
 
+class InstallerPlatformOwnershipTests(ContractTestCase):
+    """INST-130: experimental platform installers stay owned by their platform work."""
+
+    def installer_product(self, contract: dict[str, Any]) -> dict[str, Any]:
+        return next(
+            product
+            for product in self.profile_of(contract)["buildProducts"]
+            if product["target"] == "SparkInstaller"
+        )
+
+    def test_repository_contract_keeps_installer_ownership(self) -> None:
+        self.assertEqual([], site_data_validate.installer_platform_ownership_errors(self.contract))
+
+    def test_required_non_windows_installer_build_is_rejected(self) -> None:
+        product = self.installer_product(self.mutable)
+        product["buildProfile"] = "linux-gcc-release"
+        errors = site_data_validate.installer_platform_ownership_errors(self.mutable)
+        self.assertTrue(
+            any("non-Windows installer build 'linux-gcc-release' cannot be required" in e for e in errors),
+            errors,
+        )
+        self.assertTrue(any("not platform.windows" in e for e in errors), errors)
+        self.assert_rejected(self.mutable, "installerPlatformOwnership")
+
+    def test_non_windows_installer_package_owned_by_windows_is_rejected(self) -> None:
+        self.profile_of(self.mutable)["buildProducts"].append(
+            {
+                "target": "SparkInstaller-macOS",
+                "kind": "package",
+                "buildProfile": "macos-release",
+                "applicability": "outside",
+                "capabilityIds": ["platform.windows"],
+                "requiredOptions": {},
+            }
+        )
+        errors = site_data_validate.installer_platform_ownership_errors(self.mutable)
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("must be owned by platform.linux or platform.macos", errors[0])
+
+    def test_experimental_platform_owned_installer_is_accepted(self) -> None:
+        self.profile_of(self.mutable)["buildProducts"].append(
+            {
+                "target": "SparkInstaller-Linux",
+                "kind": "installer",
+                "buildProfile": "linux-gcc-release",
+                "applicability": "outside",
+                "capabilityIds": ["platform.linux"],
+                "requiredOptions": {},
+            }
+        )
+        self.assertEqual([], site_data_validate.installer_platform_ownership_errors(self.mutable))
+
+    def test_stable_installer_work_naming_macos_installer_is_rejected(self) -> None:
+        item = self.items_of(self.mutable)["INST-130"]
+        item["implementationScope"].append("Certify the notarized macOS installer package")
+        errors = site_data_validate.installer_platform_ownership_errors(self.mutable)
+        self.assertTrue(
+            any(e.startswith("workItems.INST-130.implementationScope[") and "PLT-*" in e for e in errors),
+            errors,
+        )
+        self.assert_rejected(self.mutable, "stable-v1 installer work names a non-Windows installer")
+
+    def test_predecessor_only_installer_work_is_not_stable_scope(self) -> None:
+        item = self.items_of(self.mutable)["INST-132"]
+        self.assertEqual("outside", item["profileApplicability"]["stable-v1"])
+        item["implementationScope"].append("Linux bootstrap notes")
+        self.assertEqual([], site_data_validate.installer_platform_ownership_errors(self.mutable))
+
+    def test_platform_capability_without_plt_work_is_rejected(self) -> None:
+        capability = self.capabilities_of(self.mutable)["platform.macos"]
+        capability["blockingWorkItemIds"] = [
+            item for item in capability["blockingWorkItemIds"] if not item.startswith("PLT-")
+        ]
+        errors = site_data_validate.installer_platform_ownership_errors(self.mutable)
+        self.assertEqual(
+            ["capabilities.platform.macos: owns an experimental installer but lists no PLT-* blocking work item"],
+            errors,
+        )
+
+    def test_stable_profile_including_linux_installer_owner_is_rejected(self) -> None:
+        self.profile_of(self.mutable)["includedCapabilityIds"].append("platform.linux")
+        errors = site_data_validate.installer_platform_ownership_errors(self.mutable)
+        self.assertIn(
+            "releaseProfiles.stable-v1.includedCapabilityIds: platform.linux owns an experimental "
+            "installer and cannot be part of stable-v1",
+            errors,
+        )
+
+
 class TransitiveDependencyTests(ContractTestCase):
     """Frozen case 4: profile dependency closure is transitive and diagnostic."""
 
