@@ -97,8 +97,9 @@ class EnemyBehavior
 - Every script class must be declared at the top level of the `.as` file.
 - Method names are case-sensitive and must match the lifecycle signatures exactly.
 - Member variables are instance-scoped and persist between ordinary `Update()`
-  calls. Hot reload does not preserve per-instance script state; constructors
-  run again for recreated instances.
+  calls. Hot reload recreates each instance with its constructor and then
+  carries over fields whose name and type are unchanged; see
+  [Hot-reload state rules](#hot-reload-state-rules).
 - Scripts can define additional methods beyond the lifecycle callbacks; they are callable from other scripts or from C++ via the AngelScript context API.
 
 ## Lifecycle Callbacks
@@ -308,6 +309,10 @@ public:
     void CallOnTriggerExit(EntityID entity, EntityID other);
     void ConnectEventBus(Spark::EventBus* bus); // engine-owned contact dispatch
 
+    // Hot reload (see "Hot-reload state rules")
+    bool HotReloadModule(const std::string& moduleName);
+    const HotReloadReport& GetLastHotReloadReport() const;
+
     // Error handling
     std::string GetLastError() const;
 
@@ -461,7 +466,26 @@ graph->DeserializeFromJSON(json);
 
 ## Hot Reload
 
-The `ScriptHotReloadManager` watches script directories for file changes and automatically recompiles modified scripts without restarting the engine.
+### Hot-reload state rules
+
+`AngelScriptEngine::HotReloadModule(moduleName)` recompiles a module compiled with `CompileScriptFile()` from its source file and re-attaches every entity script of that module. It applies these rules, which `Tests/TestENG200ScriptHotReloadReal.cpp` (CTest `ScriptHotReloadReal`, `ScriptHotReload_ENG200_*`) checks one by one:
+
+| Rule | Behaviour |
+|------|-----------|
+| R1 | The new source is first compiled into a throwaway staging module. If that fails, nothing changes: the old instances keep running with their state, and the call returns false with the compiler diagnostic. |
+| R2 | A field whose name **and** type declaration are the same in the old and new class keeps the old instance's value. Types are matched by declaration text (`int`, `Vector3`, `MyEnum`), not by type id, because ids change when a module is rebuilt. |
+| R3 | Carried types are primitives, enums, `string`, and registered POD value types such as `Vector3`. |
+| R4 | Handles (`Foo@`), script-class objects, arrays and other reference types are **not** carried. A handle would point into the old module's objects, so these fields keep the value the new constructor gave them. |
+| R5 | A new field keeps its constructor value. A removed field, or one whose type changed, is dropped. |
+| R6 | The constructor runs for the new instance; `Start()` is **not** called again. `Update()` and the contact callbacks continue with the next dispatch. |
+| R7 | An instance disabled by a runtime fault comes back enabled, with its carried state. |
+| R8 | If the class no longer exists in the new module, or may not attach in the current client/server context, that entity is left without a script. The failure is reported and the call returns false. |
+
+`GetLastHotReloadReport()` returns the counts for the last call: `instances`, `carried`, `defaulted`, `dropped` and `failedAttaches`. It also returns one note per distinct dropped field or failed re-attach, such as `Mod::Keeper.speed: retyped from float to int, constructor value kept`. The engine logs the counts as one info line and each note as a warning. Modules compiled with `CompileScriptFromString()` have no source file and cannot be hot-reloaded.
+
+### File watcher
+
+The `ScriptHotReloadManager` watches script directories for file changes and calls a recompile callback for each changed file. The engine does not create one by default (`script_hotreload_status` reports it unavailable); a game or tool that wants reload-on-save creates it and calls `HotReloadModule()` from the callback, so attached scripts follow the state rules above.
 
 ### Configuration
 
@@ -473,7 +497,8 @@ hotReload.SetDebounceMs(300);  // 300ms debounce to avoid rapid re-triggers
 
 hotReload.SetRecompileCallback([&](const std::string& file) -> RecompileResult {
     RecompileResult result;
-    result.success = scriptEngine.CompileScriptFile(file);
+    // The module name is the file stem (CompileScriptFile's convention).
+    result.success = scriptEngine.HotReloadModule(std::filesystem::path(file).stem().string());
     result.filePath = file;
     if (!result.success)
         result.errorMessage = scriptEngine.GetLastError();

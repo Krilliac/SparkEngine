@@ -381,6 +381,7 @@ add_executable(SparkTests
     TestENG200ScriptBindingsReal.cpp
     TestENG200ScriptAudioAnimationReal.cpp
     TestScriptHotReload.cpp
+    TestENG200ScriptHotReloadReal.cpp
     TestVRSystem.cpp
     TestSeamlessAreaManager.cpp
     TestAreaAssetLoader.cpp
@@ -1355,6 +1356,13 @@ if(SPARK_ANGELSCRIPT_AVAILABLE)
     set_tests_properties(ScriptMediaBindingsReal PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_ENG200_Media;SPARK_TEST_EXPECT_COUNT=5"
         LABELS "scripting;scripting-integration;audio;animation;integration"
+        TIMEOUT 120)
+    # ENG-200: AngelScriptEngine::HotReloadModule() state rules R1-R8 against real
+    # .as files (TestENG200ScriptHotReloadReal.cpp).
+    add_test(NAME ScriptHotReloadReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(ScriptHotReloadReal PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptHotReload_ENG200_;SPARK_TEST_EXPECT_COUNT=8"
+        LABELS "scripting;scripting-integration;integration"
         TIMEOUT 120)
 endif()
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)

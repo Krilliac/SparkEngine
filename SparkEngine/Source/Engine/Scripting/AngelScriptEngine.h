@@ -474,35 +474,87 @@ class AngelScriptEngine
      * @return "<where> <reason> at <section>:<line>:<column> in '<function>'"
      */
     std::string DescribeScriptFault(asIScriptContext* ctx, int execResult, const std::string& where) const;
-#endif
 
-    // ========================================================================
-    // Internal Helpers
-    // ========================================================================
+    /// How a script field's value crosses a hot reload (rules R3/R4, see HotReloadModule()).
+    enum class FieldCarry : uint8_t
+    {
+        Bytes,     ///< Primitive, enum or registered POD value type: copied byte for byte.
+        String,    ///< The registered `string` type: copied by value.
+        NotCarried ///< Handle, script object, array or other reference type: keeps its constructor value.
+    };
+
+    /// One field of a script instance captured before hot reload detaches it.
+    struct FieldSnapshot
+    {
+        std::string name;     ///< Field name.
+        std::string typeDecl; ///< Type declaration; matched by text because type ids change on rebuild.
+        FieldCarry carry = FieldCarry::NotCarried;
+        std::vector<unsigned char> bytes; ///< Value for FieldCarry::Bytes.
+        std::string text;                 ///< Value for FieldCarry::String.
+    };
+
+    /** @brief Snapshot every field of @p object that the hot-reload rules can carry. */
+    std::vector<FieldSnapshot> CaptureFields(asIScriptObject* object) const;
+
+    /**
+     * @brief Copy snapshot values into a freshly constructed instance by name and type.
+     * @param object   New instance (constructor already ran)
+     * @param fields   Snapshot of the instance it replaces
+     * @param location "module::Class" prefix for report notes
+     */
+    void RestoreFields(asIScriptObject* object, const std::vector<FieldSnapshot>& fields, const std::string& location);
+#endif
 
     // ========================================================================
     // Hot-Reload Support
     // ========================================================================
 
+  public:
+    /// Outcome of the last HotReloadModule() call (field counts are summed over all instances).
+    struct HotReloadReport
+    {
+        size_t instances = 0;           ///< Instances re-attached to the new module.
+        size_t carried = 0;             ///< Fields that kept their value from the old instance.
+        size_t defaulted = 0;           ///< Fields new in this version (constructor value).
+        size_t dropped = 0;             ///< Old values discarded: field removed, retyped, or not carried.
+        size_t failedAttaches = 0;      ///< Instances that could not be re-attached (entity left without a script).
+        std::vector<std::string> notes; ///< One line per distinct dropped field or failed re-attach.
+    };
+
     /**
-     * @brief Recompile a module and re-attach all entity scripts that reference it
+     * @brief Recompile a module from its source file and re-attach its entity scripts, keeping their state.
      *
-     * First validates that the new source compiles into a throwaway staging
-     * module; if compilation fails, nothing is changed and false is returned
-     * (all live scripts stay intact). On success, every entity script of the
-     * module is detached, the module is recompiled under its real name, and
-     * each script is re-attached by running its default constructor again.
+     * Hot-reload state rules (wiki: "Hot-reload state rules"):
+     * - R1 The new source is compiled into a staging module first; if it fails,
+     *      nothing changes and false is returned.
+     * - R2 A field whose name and type declaration match in the old and new
+     *      class keeps the old instance's value.
+     * - R3 Carried types: primitives, enums, `string`, and registered POD
+     *      value types such as Vector3.
+     * - R4 Handles, script-class objects, arrays and other reference types are
+     *      not carried; they keep the value the new constructor gave them.
+     * - R5 New fields keep their constructor value; removed and retyped fields
+     *      are dropped and listed in the report.
+     * - R6 The constructor runs, Start() is not called again; Update() and
+     *      contact callbacks continue from the next dispatch.
+     * - R7 A faulted instance comes back un-faulted, with its carried state.
+     * - R8 An instance whose class is missing from the new module (or may not
+     *      attach in the current script context) is left without a script,
+     *      counted in failedAttaches and reported; the call returns false.
      *
-     * @note Per-instance script state is NOT preserved: constructors re-run and
-     *       all fields reset. There are no Serialize()/Deserialize() hooks.
+     * Game thread only, like every script call. Allocates the snapshots and
+     * report; not for per-frame use.
      *
-     * @param moduleName Name of the module to reload
+     * @param moduleName Name of a module compiled with CompileScriptFile()
      * @return true only if recompilation and every re-attach succeeded
      */
     bool HotReloadModule(const std::string& moduleName);
 
+    /** @brief Report of the last HotReloadModule() call (empty before the first). */
+    const HotReloadReport& GetLastHotReloadReport() const { return m_lastHotReloadReport; }
+
     /**
-     * @brief Get the file path associated with a compiled module
+     * @brief Get the source file of a module compiled with CompileScriptFile()
      * @param moduleName Module name
      * @return File path, or empty string if not found
      */
@@ -519,7 +571,6 @@ class AngelScriptEngine
     // Script Execution Context (Client/Server)
     // ========================================================================
 
-  public:
     /**
      * @brief Script execution context for multiplayer separation
      */
@@ -557,6 +608,8 @@ class AngelScriptEngine
 
     /// Maps module name -> source file path for hot-reload
     std::unordered_map<std::string, std::string> m_moduleFilePaths;
+
+    HotReloadReport m_lastHotReloadReport; ///< Filled by HotReloadModule()
 
     /// Declared execution context per script class, keyed by "module::class".
     /// Populated at compile time from class metadata tags ([server]/[client]);
