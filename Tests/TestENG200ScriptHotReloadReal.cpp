@@ -272,7 +272,8 @@ TEST(ScriptHotReload_ENG200_HandlesAreNotCarried)
     EXPECT_EQ(report.carried, static_cast<size_t>(1));
     EXPECT_EQ(report.dropped, static_cast<size_t>(2));
     EXPECT_TRUE(HasNoteContaining(report, "Holder.box: Box@ is not carried"));
-    EXPECT_TRUE(HasNoteContaining(report, "Holder.items: array<int> is not carried"));
+    // The engine registers the add-on array as the default array type, so AngelScript declares it as "int[]".
+    EXPECT_TRUE(HasNoteContaining(report, "Holder.items: int[] is not carried"));
 }
 
 TEST(ScriptHotReload_ENG200_StartIsNotRerunAndUpdateContinues)
