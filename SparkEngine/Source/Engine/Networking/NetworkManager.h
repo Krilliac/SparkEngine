@@ -518,7 +518,53 @@ namespace Spark::Net
         void RegisterHandler(MessageType type, MessageHandler handler);
         /** Register a handler whose received payload copies must be erased on release. */
         void RegisterSensitiveHandler(MessageType type, MessageHandler handler);
+        /// Remove every application observer. Inside a ScopedRegistrationOwner only that owner's are removed.
         void ClearHandlers();
+
+        /**
+         * @brief Remove the application observer for @p type.
+         *
+         * Inside a ScopedRegistrationOwner, a slot owned by a different owner is left in place, so an
+         * outgoing module image cannot remove what its hot-reload replacement registered.
+         */
+        void UnregisterHandler(MessageType type);
+
+        /**
+         * @brief Remove every application observer and the timeout handler registered under @p ownerId.
+         *
+         * ModuleManager calls this after a module's OnUnload and before its image is unmapped, so no
+         * std::function whose invoker or destructor lives in that image outlives it. Handler copies taken
+         * by Update() exist only for the duration of one dispatch on the game thread; module reload and
+         * unload run on the game thread outside Update(), so no copy is in flight when the image goes away.
+         *
+         * @return Number of observers removed (the timeout handler counts as one).
+         */
+        size_t UnregisterHandlersByOwner(const std::string& ownerId);
+
+        /**
+         * @brief Attributes application handler writes on @p manager to @p ownerId for the scope's lifetime.
+         *
+         * Every RegisterHandler / RegisterSensitiveHandler / SetTimeoutHandler inside the scope records
+         * @p ownerId as the slot's owner. Removal (UnregisterHandler, ClearHandlers, clearing the timeout
+         * handler) never touches a slot owned by a different owner. A @p teardown scope additionally
+         * refuses to replace another owner's slot, so a module's OnUnload cannot overwrite the handler
+         * its already-initialized replacement installed. Scopes nest; the destructor restores the previous
+         * owner. Thread affinity: game thread (module lifecycle).
+         */
+        class ScopedRegistrationOwner final
+        {
+          public:
+            ScopedRegistrationOwner(NetworkManager& manager, std::string ownerId, bool teardown = false);
+            ~ScopedRegistrationOwner();
+
+            ScopedRegistrationOwner(const ScopedRegistrationOwner&) = delete;
+            ScopedRegistrationOwner& operator=(const ScopedRegistrationOwner&) = delete;
+
+          private:
+            NetworkManager& m_manager;
+            std::string m_previousOwner;
+            bool m_previousTeardown = false;
+        };
 
         // Entity replication
         uint32_t RegisterReplicatedEntity(const ReplicatedEntity& entity);
@@ -644,14 +690,11 @@ namespace Spark::Net
         /// @brief Remove a client's visibility scope, reverting to "see everything".
         void ClearClientScope(ClientID client);
 
-        /// Register a callback for client timeout events (server-side). A client whose
-        /// server goes silent or closes the session instead transitions to Disconnected
+        /// Register (or, with an empty handler, clear) the callback for client timeout events (server-side).
+        /// A client whose server goes silent or closes the session instead transitions to Disconnected
         /// (GetConnectionState/GetLastConnectionError) and auto-reconnect takes over.
-        void SetTimeoutHandler(std::function<void(ClientID)> handler)
-        {
-            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
-            m_timeoutHandler = std::move(handler);
-        }
+        /// Honors the ScopedRegistrationOwner ownership rules described on RegisterHandler's scope.
+        void SetTimeoutHandler(std::function<void(ClientID)> handler);
 
         /// Get estimated round-trip time in milliseconds.
         float GetEstimatedRTT() const
@@ -879,8 +922,22 @@ namespace Spark::Net
         std::unordered_map<uint16_t, MessageHandler> m_internalHandlers;
         std::unordered_map<uint16_t, MessageHandler> m_handlers;
         std::unordered_set<uint16_t> m_sensitiveMessageTypes;
+        /// Registration owner of each application observer slot; absent means unowned (engine/host code).
+        std::unordered_map<uint16_t, std::string> m_handlerOwners;
         mutable std::mutex m_queueMutex;   ///< Protects m_outgoingQueue, m_incomingQueue
-        mutable std::mutex m_handlerMutex; ///< Protects m_handlers (lowest in lock order)
+        mutable std::mutex m_handlerMutex; ///< Protects m_handlers, m_handlerOwners (lowest in lock order)
+
+        // Active ScopedRegistrationOwner state and the timeout handler's owner (guarded by m_apiMutex).
+        std::string m_registrationOwner;
+        bool m_registrationTeardown = false;
+        std::string m_timeoutHandlerOwner;
+
+        /// True when the current registration scope may replace (@p replacing) or remove the slot owned by
+        /// @p slotOwner. Callers hold m_apiMutex.
+        [[nodiscard]] bool MayWriteOwnedSlot(const std::string& slotOwner, bool replacing) const;
+        /// Detach every observer owned by @p ownerId. The caller destroys the returned callbacks after
+        /// m_handlerMutex is released (and while the owner's image is still mapped).
+        [[nodiscard]] std::vector<MessageHandler> TakeHandlersOwnedBy(const std::string& ownerId);
 
         // Reliable message tracking — all sequence-keyed reliability state is
         // per peer (see PeerState below). Two clients both numbering their

@@ -400,9 +400,11 @@ namespace SparkFPS
         void OnStateSnapshotReceived(const NetworkPlayerState& snapshot);
 
         // -- NetworkManager message flow --
-        /// Register this system's observers with NetworkManager. NetworkManager::Shutdown clears the
-        /// message handlers; StopServer and Disconnect clear the timeout handler, which it keeps.
+        /// Register this system's observers (and the timeout handler) with NetworkManager.
         void RegisterNetworkHandlers();
+        /// Remove everything RegisterNetworkHandlers installed. StopServer and Disconnect call it, so no
+        /// callback into this object or module image survives the session.
+        void UnregisterNetworkHandlers();
         /// Server: decode one client's PlayerInput. Malformed and over-rate inputs are dropped
         /// here; ApplyClientInput rejects or sanitizes the rest, and only an applied input
         /// spends the sender's input budget.

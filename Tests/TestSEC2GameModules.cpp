@@ -136,6 +136,119 @@ TEST(SEC2GM_WaveCompositionClampsInputs)
 }
 
 // ---------------------------------------------------------------------------
+// NetworkManager handler ownership across module hot reload
+// ---------------------------------------------------------------------------
+
+#ifdef ENABLE_NETWORKING
+
+#include "Engine/Networking/NetworkManager.h"
+
+namespace
+{
+    using SEC2NetworkManager = Spark::Net::NetworkManager;
+
+    Spark::Net::MessageType SEC2TestMessageType(uint16_t offset)
+    {
+        return static_cast<Spark::Net::MessageType>(
+            static_cast<uint16_t>(static_cast<uint16_t>(Spark::Net::MessageType::UserDefined) + 200u + offset));
+    }
+
+    /// A handler that keeps @p token alive exactly as long as NetworkManager keeps the handler.
+    SEC2NetworkManager::MessageHandler SEC2TokenHandler(std::shared_ptr<int> token)
+    {
+        return [held = std::move(token)](const Spark::Net::NetworkMessage&) { (void)held; };
+    }
+} // namespace
+
+TEST(SEC2GM_NetworkHotReloadKeepsReplacementHandlers)
+{
+    auto& network = SEC2NetworkManager::GetInstance();
+    const Spark::Net::MessageType type = SEC2TestMessageType(1);
+    const std::string outgoingOwner = "SEC2GM_Outgoing#1";
+    const std::string replacementOwner = "SEC2GM_Replacement#2";
+
+    auto outgoingToken = std::make_shared<int>(1);
+    const std::weak_ptr<int> outgoingAlive = outgoingToken;
+    {
+        SEC2NetworkManager::ScopedRegistrationOwner scope(network, outgoingOwner);
+        network.RegisterHandler(type, SEC2TokenHandler(std::move(outgoingToken)));
+    }
+    EXPECT_FALSE(outgoingAlive.expired());
+
+    // ModuleManager::ReloadModule initializes the replacement first; its handler takes over the slot,
+    // destroying the outgoing callback while the outgoing image is still mapped.
+    auto replacementToken = std::make_shared<int>(2);
+    const std::weak_ptr<int> replacementAlive = replacementToken;
+    {
+        SEC2NetworkManager::ScopedRegistrationOwner scope(network, replacementOwner);
+        network.RegisterHandler(type, SEC2TokenHandler(std::move(replacementToken)));
+    }
+    EXPECT_TRUE(outgoingAlive.expired());
+    EXPECT_FALSE(replacementAlive.expired());
+
+    // Then the outgoing image tears down. The old MMO code overwrote the slot with an empty lambda compiled
+    // into the outgoing image; none of these writes may touch the replacement's handler.
+    {
+        SEC2NetworkManager::ScopedRegistrationOwner scope(network, outgoingOwner, true);
+        network.RegisterHandler(type, [](const Spark::Net::NetworkMessage&) {});
+        network.RegisterSensitiveHandler(type, [](const Spark::Net::NetworkMessage&) {});
+        network.UnregisterHandler(type);
+        network.ClearHandlers();
+    }
+    EXPECT_FALSE(replacementAlive.expired());
+    EXPECT_EQ(network.UnregisterHandlersByOwner(outgoingOwner), static_cast<size_t>(0));
+    EXPECT_FALSE(replacementAlive.expired());
+
+    // Unloading the replacement removes what it owns.
+    EXPECT_EQ(network.UnregisterHandlersByOwner(replacementOwner), static_cast<size_t>(1));
+    EXPECT_TRUE(replacementAlive.expired());
+}
+
+TEST(SEC2GM_NetworkUnloadRemovesEveryOwnedCallback)
+{
+    auto& network = SEC2NetworkManager::GetInstance();
+    const Spark::Net::MessageType hostType = SEC2TestMessageType(2);
+    const Spark::Net::MessageType moduleType = SEC2TestMessageType(3);
+    const Spark::Net::MessageType teardownType = SEC2TestMessageType(4);
+    const std::string moduleOwner = "SEC2GM_Module#3";
+
+    auto hostToken = std::make_shared<int>(1);
+    const std::weak_ptr<int> hostAlive = hostToken;
+    network.RegisterHandler(hostType, SEC2TokenHandler(std::move(hostToken)));
+
+    auto moduleToken = std::make_shared<int>(2);
+    const std::weak_ptr<int> moduleAlive = moduleToken;
+    auto timeoutToken = std::make_shared<int>(3);
+    const std::weak_ptr<int> timeoutAlive = timeoutToken;
+    {
+        SEC2NetworkManager::ScopedRegistrationOwner scope(network, moduleOwner);
+        network.RegisterHandler(moduleType, SEC2TokenHandler(std::move(moduleToken)));
+        network.SetTimeoutHandler([held = std::move(timeoutToken)](Spark::Net::ClientID) { (void)held; });
+    }
+
+    // A teardown that installs its own placeholder (the old pattern) still produces an owned slot.
+    auto teardownToken = std::make_shared<int>(4);
+    const std::weak_ptr<int> teardownAlive = teardownToken;
+    {
+        SEC2NetworkManager::ScopedRegistrationOwner scope(network, moduleOwner, true);
+        network.RegisterHandler(teardownType, SEC2TokenHandler(std::move(teardownToken)));
+    }
+
+    // Before the image is unmapped every callback it owns is destroyed; host handlers survive.
+    EXPECT_EQ(network.UnregisterHandlersByOwner(moduleOwner), static_cast<size_t>(3));
+    EXPECT_TRUE(moduleAlive.expired());
+    EXPECT_TRUE(timeoutAlive.expired());
+    EXPECT_TRUE(teardownAlive.expired());
+    EXPECT_FALSE(hostAlive.expired());
+
+    // Host code outside any scope keeps unrestricted removal.
+    network.UnregisterHandler(hostType);
+    EXPECT_TRUE(hostAlive.expired());
+}
+
+#endif // ENABLE_NETWORKING
+
+// ---------------------------------------------------------------------------
 // Module sources compiled only with ImGui (RTS fog of war, MMO chat)
 // ---------------------------------------------------------------------------
 
@@ -212,4 +325,64 @@ TEST(SEC2GM_RTSRestoreRejectsUnboundedVisionRange)
     EXPECT_FALSE(error.empty());
 }
 
+#ifdef ENABLE_NETWORKING
+
+#include "../GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.h"
+#include "Spark/IEngineContext.h"
+
+namespace
+{
+    /// Context exposing only the engine NetworkManager, as the MMO module sees it.
+    class SEC2NetworkContext final : public Spark::IEngineContext
+    {
+      public:
+        GraphicsEngine* GetGraphics() override { return nullptr; }
+        const GraphicsEngine* GetGraphics() const override { return nullptr; }
+        InputManager* GetInput() override { return nullptr; }
+        const InputManager* GetInput() const override { return nullptr; }
+        Timer* GetTimer() override { return nullptr; }
+        const Timer* GetTimer() const override { return nullptr; }
+        Spark::EventBus* GetEventBus() override { return nullptr; }
+        const Spark::EventBus* GetEventBus() const override { return nullptr; }
+        ::AudioEngine* GetAudio() override { return nullptr; }
+        const ::AudioEngine* GetAudio() const override { return nullptr; }
+        PhysicsSystem* GetPhysics() override { return nullptr; }
+        const PhysicsSystem* GetPhysics() const override { return nullptr; }
+        Spark::Net::NetworkManager* GetNetwork() override { return &Spark::Net::NetworkManager::GetInstance(); }
+        uint32_t GetEngineVersion() const override { return 0; }
+        uint32_t GetSDKVersion() const override { return 0; }
+    };
+} // namespace
+
+TEST(SEC2GM_MMOChatHotReloadTeardownKeepsReplacementHandler)
+{
+    auto& network = Spark::Net::NetworkManager::GetInstance();
+    SEC2NetworkContext context;
+    const std::string outgoingOwner = "SEC2GM_MMOOutgoing#4";
+    const std::string replacementOwner = "SEC2GM_MMOReplacement#5";
+
+    MMO::MMOChatSystem outgoing;
+    {
+        Spark::Net::NetworkManager::ScopedRegistrationOwner scope(network, outgoingOwner);
+        ASSERT_TRUE(outgoing.Initialize(&context));
+    }
+    MMO::MMOChatSystem replacement;
+    {
+        Spark::Net::NetworkManager::ScopedRegistrationOwner scope(network, replacementOwner);
+        ASSERT_TRUE(replacement.Initialize(&context));
+    }
+
+    // Reload order: the replacement is live before the outgoing module's OnUnload runs.
+    {
+        Spark::Net::NetworkManager::ScopedRegistrationOwner scope(network, outgoingOwner, true);
+        outgoing.Shutdown();
+    }
+
+    // The outgoing image owns nothing any more, and the chat slot still belongs to the replacement.
+    EXPECT_EQ(network.UnregisterHandlersByOwner(outgoingOwner), static_cast<size_t>(0));
+    EXPECT_EQ(network.UnregisterHandlersByOwner(replacementOwner), static_cast<size_t>(1));
+    replacement.Shutdown();
+}
+
+#endif // ENABLE_NETWORKING
 #endif // SPARK_TEST_HAS_IMGUI

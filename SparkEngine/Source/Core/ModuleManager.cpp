@@ -12,6 +12,9 @@
 #include "Spark/Version.h"
 #include "Utils/CrashHandler.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/NetworkManager.h"
+#endif
 #include "Utils/SparkConsole.h"
 #include "Utils/InvalidStateDetector.h"
 #include "Utils/LocalFileCache.h"
@@ -68,21 +71,38 @@ namespace
                std::to_string(s_moduleRegistrationSerial.fetch_add(1, std::memory_order_relaxed));
     }
 
+    /// Whether a registration scope wraps a module's OnLoad or its OnUnload.
+    enum class ModuleRegistrationPhase
+    {
+        Load,
+        Teardown,
+    };
+
     /// Attributes every host registry write and name-based removal to one module image.
     /// Module teardown removes registrations by shared names; this scope keeps an
     /// outgoing image from removing what its hot-reload replacement registered.
+    /// A Teardown scope also stops the outgoing image from overwriting a network
+    /// handler the replacement installed (see NetworkManager::ScopedRegistrationOwner).
     struct ModuleRegistrationScope final
     {
-        explicit ModuleRegistrationScope(const std::string& ownerId)
+        ModuleRegistrationScope(const std::string& ownerId, ModuleRegistrationPhase phase)
             : console(Spark::SimpleConsole::GetInstance(), ownerId),
               detector(Spark::InvalidStateDetector::GetInstance(), ownerId),
               serializers(Spark::ComponentSerializerRegistry::GetInstance(), ownerId)
+#ifdef ENABLE_NETWORKING
+              ,
+              network(Spark::Net::NetworkManager::GetInstance(), ownerId, phase == ModuleRegistrationPhase::Teardown)
+#endif
         {
+            (void)phase;
         }
 
         Spark::SimpleConsole::ScopedRegistrationOwner console;
         Spark::InvalidStateDetector::ScopedRegistrationOwner detector;
         Spark::ComponentSerializerRegistry::ScopedRegistrationOwner serializers;
+#ifdef ENABLE_NETWORKING
+        Spark::Net::NetworkManager::ScopedRegistrationOwner network;
+#endif
     };
 
     void AccumulateLifecycleEvidence(ModuleManager::LifecycleEvidence& target,
@@ -1455,7 +1475,7 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing module: %s", entry.name.c_str());
         console.LogInfo("Initializing module: " + entry.name);
-        ModuleRegistrationScope registrationScope(entry.registrationOwner);
+        ModuleRegistrationScope registrationScope(entry.registrationOwner, ModuleRegistrationPhase::Load);
         bool loadSucceeded = false;
         try
         {
@@ -1699,7 +1719,7 @@ void ModuleManager::ShutdownAllAfterPreflight()
         if (it->initialized && it->instance)
         {
             console.LogInfo("Shutting down module: " + it->name);
-            ModuleRegistrationScope registrationScope(it->registrationOwner);
+            ModuleRegistrationScope registrationScope(it->registrationOwner, ModuleRegistrationPhase::Teardown);
             it->instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             if (!it->isLegacyAdapter)
@@ -1878,7 +1898,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         // Commit only after the replacement is fully usable.
         if (entry.initialized && entry.instance)
         {
-            ModuleRegistrationScope registrationScope(entry.registrationOwner);
+            ModuleRegistrationScope registrationScope(entry.registrationOwner, ModuleRegistrationPhase::Teardown);
             entry.instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             if (!entry.isLegacyAdapter)
@@ -2082,12 +2102,20 @@ void ModuleManager::UnregisterModuleRegistrations(const LoadedModule& entry)
     const size_t removedRules = Spark::InvalidStateDetector::GetInstance().RemoveRulesByOwner(entry.registrationOwner);
     const size_t removedSerializers =
         Spark::ComponentSerializerRegistry::GetInstance().UnregisterByOwner(entry.registrationOwner);
-    if (removedCommands != 0 || removedRules != 0 || removedSerializers != 0)
+    size_t removedNetworkHandlers = 0;
+#ifdef ENABLE_NETWORKING
+    // Every caller runs this while the module image is still mapped: a network callback whose invoker or
+    // destructor lives in that image must be destroyed now, not by a later packet, a later replacement or the
+    // engine-shutdown ClearHandlers after FreeLibrary/dlclose.
+    removedNetworkHandlers =
+        Spark::Net::NetworkManager::GetInstance().UnregisterHandlersByOwner(entry.registrationOwner);
+#endif
+    if (removedCommands != 0 || removedRules != 0 || removedSerializers != 0 || removedNetworkHandlers != 0)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core,
-                       "Removed %zu console command(s), %zu invalid-state rule(s) and %zu save serializer(s) owned by "
-                       "module '%s'",
-                       removedCommands, removedRules, removedSerializers, entry.name.c_str());
+                       "Removed %zu console command(s), %zu invalid-state rule(s), %zu save serializer(s) and %zu "
+                       "network handler(s) owned by module '%s'",
+                       removedCommands, removedRules, removedSerializers, removedNetworkHandlers, entry.name.c_str());
     }
 }
 

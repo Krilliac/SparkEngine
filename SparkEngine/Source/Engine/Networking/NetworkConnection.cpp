@@ -25,6 +25,7 @@
 #include <cstring>
 #include <algorithm>
 #include <utility>
+#include <vector>
 
 #ifdef SendMessage
 #undef SendMessage
@@ -296,6 +297,7 @@ namespace Spark::Net
             m_internalHandlers.clear();
             m_handlers.clear();
             m_sensitiveMessageTypes.clear();
+            m_handlerOwners.clear();
         }
 
         m_peers.clear();
@@ -817,44 +819,198 @@ namespace Spark::Net
         SendToAll(msg);
     }
 
+    NetworkManager::ScopedRegistrationOwner::ScopedRegistrationOwner(NetworkManager& manager, std::string ownerId,
+                                                                     bool teardown)
+        : m_manager(manager)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(manager.m_apiMutex);
+        m_previousOwner = std::move(manager.m_registrationOwner);
+        m_previousTeardown = manager.m_registrationTeardown;
+        manager.m_registrationOwner = std::move(ownerId);
+        manager.m_registrationTeardown = teardown;
+    }
+
+    NetworkManager::ScopedRegistrationOwner::~ScopedRegistrationOwner()
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_manager.m_apiMutex);
+        m_manager.m_registrationOwner = std::move(m_previousOwner);
+        m_manager.m_registrationTeardown = m_previousTeardown;
+    }
+
+    bool NetworkManager::MayWriteOwnedSlot(const std::string& slotOwner, bool replacing) const
+    {
+        // Host/engine code outside any scope keeps the historical unrestricted behavior.
+        if (m_registrationOwner.empty() || slotOwner.empty() || slotOwner == m_registrationOwner)
+            return true;
+        // An initializing owner may take over another owner's slot (a hot-reload replacement installs its
+        // handlers before the outgoing image is torn down). Nobody may remove another owner's slot, and a
+        // tearing-down owner may not overwrite one either.
+        return replacing && !m_registrationTeardown;
+    }
+
     void NetworkManager::RegisterHandler(MessageType type, MessageHandler handler)
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ASSERT_MSG(handler != nullptr, "NetworkManager::RegisterHandler — handler must not be null");
-        std::lock_guard<std::mutex> lock(m_handlerMutex);
-        const uint16_t value = static_cast<uint16_t>(type);
-        // Complete the potentially-allocating handler insertion first. A
-        // normal registration replaces both the callback and its local
-        // classification; allocation failure must leave the old pair intact.
-        m_handlers[value] = std::move(handler);
-        m_sensitiveMessageTypes.erase(value);
+        MessageHandler displaced;
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            const uint16_t value = static_cast<uint16_t>(type);
+            const auto ownerIt = m_handlerOwners.find(value);
+            const std::string& slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
+            if (!MayWriteOwnedSlot(slotOwner, true))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "RegisterHandler: '%s' is tearing down and may not replace message type %u owned by "
+                               "'%s'",
+                               m_registrationOwner.c_str(), static_cast<unsigned>(value), slotOwner.c_str());
+                return;
+            }
+            // Complete the potentially-allocating handler insertion first. A
+            // normal registration replaces both the callback and its local
+            // classification; allocation failure must leave the old pair intact.
+            MessageHandler& slot = m_handlers[value];
+            if (!m_registrationOwner.empty())
+                m_handlerOwners[value] = m_registrationOwner;
+            else
+                m_handlerOwners.erase(value);
+            displaced = std::exchange(slot, std::move(handler));
+            m_sensitiveMessageTypes.erase(value);
+        }
+        // `displaced` is destroyed here, outside m_handlerMutex, while its owner's image is still mapped.
     }
 
     void NetworkManager::RegisterSensitiveHandler(MessageType type, MessageHandler handler)
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ASSERT_MSG(handler != nullptr, "NetworkManager::RegisterSensitiveHandler — handler must not be null");
+        MessageHandler displaced;
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            const uint16_t value = static_cast<uint16_t>(type);
+            const auto ownerIt = m_handlerOwners.find(value);
+            const std::string& slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
+            if (!MayWriteOwnedSlot(slotOwner, true))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "RegisterSensitiveHandler: '%s' is tearing down and may not replace message type %u "
+                               "owned by '%s'",
+                               m_registrationOwner.c_str(), static_cast<unsigned>(value), slotOwner.c_str());
+                return;
+            }
+            const auto [sensitiveIt, inserted] = m_sensitiveMessageTypes.insert(value);
+            try
+            {
+                MessageHandler& slot = m_handlers[value];
+                if (!m_registrationOwner.empty())
+                    m_handlerOwners[value] = m_registrationOwner;
+                else
+                    m_handlerOwners.erase(value);
+                displaced = std::exchange(slot, std::move(handler));
+            }
+            catch (...)
+            {
+                if (inserted)
+                    m_sensitiveMessageTypes.erase(sensitiveIt);
+                throw;
+            }
+        }
+    }
+
+    void NetworkManager::UnregisterHandler(MessageType type)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        MessageHandler removed;
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            const uint16_t value = static_cast<uint16_t>(type);
+            const auto ownerIt = m_handlerOwners.find(value);
+            const std::string slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
+            if (!MayWriteOwnedSlot(slotOwner, false))
+                return;
+            const auto handlerIt = m_handlers.find(value);
+            if (handlerIt != m_handlers.end())
+            {
+                removed = std::move(handlerIt->second);
+                m_handlers.erase(handlerIt);
+            }
+            m_handlerOwners.erase(value);
+            m_sensitiveMessageTypes.erase(value);
+        }
+    }
+
+    std::vector<NetworkManager::MessageHandler> NetworkManager::TakeHandlersOwnedBy(const std::string& ownerId)
+    {
+        std::vector<MessageHandler> removed;
         std::lock_guard<std::mutex> lock(m_handlerMutex);
-        const uint16_t value = static_cast<uint16_t>(type);
-        const auto [sensitiveIt, inserted] = m_sensitiveMessageTypes.insert(value);
-        try
+        for (auto ownerIt = m_handlerOwners.begin(); ownerIt != m_handlerOwners.end();)
         {
-            m_handlers[value] = std::move(handler);
+            if (ownerIt->second != ownerId)
+            {
+                ++ownerIt;
+                continue;
+            }
+            const auto handlerIt = m_handlers.find(ownerIt->first);
+            if (handlerIt != m_handlers.end())
+            {
+                removed.push_back(std::move(handlerIt->second));
+                m_handlers.erase(handlerIt);
+            }
+            m_sensitiveMessageTypes.erase(ownerIt->first);
+            ownerIt = m_handlerOwners.erase(ownerIt);
         }
-        catch (...)
+        return removed;
+    }
+
+    size_t NetworkManager::UnregisterHandlersByOwner(const std::string& ownerId)
+    {
+        if (ownerId.empty())
+            return 0;
+
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        const std::vector<MessageHandler> removed = TakeHandlersOwnedBy(ownerId);
+        size_t removedCount = removed.size();
+        if (m_timeoutHandlerOwner == ownerId)
         {
-            if (inserted)
-                m_sensitiveMessageTypes.erase(sensitiveIt);
-            throw;
+            m_timeoutHandler = nullptr;
+            m_timeoutHandlerOwner.clear();
+            ++removedCount;
         }
+        // `removed` destroys the owner's callbacks here, outside m_handlerMutex, before its image is unmapped.
+        return removedCount;
+    }
+
+    void NetworkManager::SetTimeoutHandler(std::function<void(ClientID)> handler)
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+        const bool clearing = !handler;
+        if (!MayWriteOwnedSlot(m_timeoutHandlerOwner, !clearing))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "SetTimeoutHandler: '%s' may not %s the timeout handler owned by '%s'",
+                           m_registrationOwner.c_str(), clearing ? "clear" : "replace", m_timeoutHandlerOwner.c_str());
+            return;
+        }
+        m_timeoutHandler = std::move(handler);
+        m_timeoutHandlerOwner = clearing ? std::string() : m_registrationOwner;
     }
 
     void NetworkManager::ClearHandlers()
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
-        std::lock_guard<std::mutex> lock(m_handlerMutex);
-        m_handlers.clear();
-        m_sensitiveMessageTypes.clear();
+        if (!m_registrationOwner.empty())
+        {
+            // A scoped owner clears only the observers it registered (never the timeout handler, as before).
+            [[maybe_unused]] const std::vector<MessageHandler> removed = TakeHandlersOwnedBy(m_registrationOwner);
+            return;
+        }
+        std::unordered_map<uint16_t, MessageHandler> removed;
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            removed.swap(m_handlers);
+            m_sensitiveMessageTypes.clear();
+            m_handlerOwners.clear();
+        }
     }
 
     // --------------------------------------------------------------------------

@@ -460,10 +460,10 @@ namespace MMO
         auto* nm = m_context ? m_context->GetNetwork() : nullptr;
         if (nm)
         {
+            // The relay observer captures this object and lives in this module image; remove (never
+            // replace) it with the server it serves, so no callback outlives this object or image.
+            nm->UnregisterHandler(Spark::Net::MessageType::EntityStateUpdate);
             nm->StopServer();
-            // NetworkManager has no per-handler unregister API; replace the observer
-            // so no callback keeps pointing at this object after it is destroyed.
-            nm->RegisterHandler(Spark::Net::MessageType::EntityStateUpdate, [](const Spark::Net::NetworkMessage&) {});
         }
         m_knownClients.clear();
         m_serverPlayerEntities.clear();

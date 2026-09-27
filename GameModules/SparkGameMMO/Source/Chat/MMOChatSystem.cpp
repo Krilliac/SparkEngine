@@ -193,10 +193,11 @@ namespace MMO
 #ifdef ENABLE_NETWORKING
         if (auto* netMgr = m_context ? m_context->GetNetwork() : nullptr)
         {
-            // NetworkManager currently has one handler slot per message type and
-            // no unregister API. Replace the DLL-owned callback before unload so
-            // hot reload cannot invoke a lambda whose code/data have been freed.
-            netMgr->RegisterHandler(kMMOChatMessageType, [](const Spark::Net::NetworkMessage&) {});
+            // Remove (never replace) the chat observer: an empty replacement lambda is itself
+            // code in this image, and during hot reload it overwrote the replacement module's
+            // handler. Inside the module's teardown scope NetworkManager leaves a slot the
+            // replacement already owns untouched.
+            netMgr->UnregisterHandler(kMMOChatMessageType);
         }
 #endif
         m_history.clear();

@@ -186,9 +186,8 @@ namespace SparkFPS
     void FPSMultiplayerSystem::StopServer()
     {
         auto& network = Spark::Net::NetworkManager::GetInstance();
-        // NetworkManager::Shutdown clears message handlers but not the timeout handler, and
-        // the NetworkManager outlives this module's image: release the callback into it here.
-        network.SetTimeoutHandler(nullptr);
+        // The NetworkManager outlives this module's image: release every callback into it here.
+        UnregisterNetworkHandlers();
         network.StopServer();
         m_isActive = false;
         m_playerStates.clear();
@@ -222,9 +221,9 @@ namespace SparkFPS
     void FPSMultiplayerSystem::Disconnect()
     {
         auto& network = Spark::Net::NetworkManager::GetInstance();
-        // See StopServer: the timeout handler must not outlive the session. NetworkManager
-        // invokes a copy of it, so clearing it from inside that callback is safe.
-        network.SetTimeoutHandler(nullptr);
+        // See StopServer: no callback may outlive the session. NetworkManager invokes
+        // copies, so clearing them from inside one of those callbacks is safe.
+        UnregisterNetworkHandlers();
         network.Disconnect();
         m_isActive = false;
         m_playerStates.clear();

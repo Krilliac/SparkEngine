@@ -114,6 +114,22 @@ namespace SparkFPS
                                 [this](const NetworkMessage& message) { HandleSnapshotMessage(message); });
     }
 
+    void FPSMultiplayerSystem::UnregisterNetworkHandlers()
+    {
+        using Spark::Net::MessageType;
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+
+        // Every observer above captures `this` and lives in this module image, and the
+        // NetworkManager can outlive both (StopServer/Disconnect do not clear observers).
+        // Remove them, and the timeout handler, when the session ends. NetworkManager
+        // invokes copies, so this is safe from inside one of these callbacks.
+        network.SetTimeoutHandler(nullptr);
+        network.UnregisterHandler(MessageType::Connect);
+        network.UnregisterHandler(MessageType::Disconnect);
+        network.UnregisterHandler(static_cast<MessageType>(FPSMessageType::PlayerInput));
+        network.UnregisterHandler(static_cast<MessageType>(FPSMessageType::StateSnapshot));
+    }
+
     void FPSMultiplayerSystem::HandlePeerDisconnected(uint32_t clientId)
     {
         if (!m_isActive)

@@ -495,10 +495,13 @@ namespace MMO
             if (const auto* local = GetLocalPlayer(); local && local->networkId != 0)
                 netMgr->UnregisterReplicatedEntity(local->networkId);
 
-            // NetworkManager has no per-handler unregister API. Replace module-owned
-            // handlers so no callback retains this DLL object after hot unload.
-            netMgr->RegisterHandler(Spark::Net::MessageType::EntitySpawn, [](const Spark::Net::NetworkMessage&) {});
-            netMgr->RegisterHandler(Spark::Net::MessageType::EntityDestroy, [](const Spark::Net::NetworkMessage&) {});
+            // Remove (never replace) this system's observers. Replacing them with an empty
+            // lambda left a callback compiled into this image behind after unload, and during
+            // hot reload it overwrote the replacement's handlers. Inside the module's teardown
+            // scope NetworkManager leaves a slot the replacement already owns untouched, and
+            // ModuleManager removes anything this image still owns before unmapping it.
+            netMgr->UnregisterHandler(Spark::Net::MessageType::EntitySpawn);
+            netMgr->UnregisterHandler(Spark::Net::MessageType::EntityDestroy);
         }
 #endif
         m_players.clear();
