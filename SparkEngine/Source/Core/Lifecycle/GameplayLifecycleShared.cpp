@@ -1425,6 +1425,8 @@ namespace Spark::Core::Lifecycle
         // (architecture contract, Invariant 3). This is the ONLY tick site for
         // the Spark::ECS phase systems — Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp
         // guards the registration; do not remove this pump without replacing it.
+        // Each system is fault-isolated under its own "ECS:<name>" key inside
+        // UpdateAll; this outer guard is only a backstop.
         SPARK_GUARDED_UPDATE("ECS_Phases", "Core", { GetPhaseSystemManagerImpl().UpdateAll(*world, dt); });
 
         Profiler::GetInstance().EndFrame();

@@ -1716,6 +1716,15 @@ set_tests_properties(SparkJobSystemHardeningTests PROPERTIES
     LABELS "security;core;unit"
     TIMEOUT 30)
 
+# Security: each ECS phase system runs under its own fault-isolator key, so one throwing
+# system is disabled alone and the later phases keep running instead of the whole
+# "ECS_Phases" pipeline being skipped and then disabled.
+add_test(NAME SparkPhaseFaultIsolationTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkPhaseFaultIsolationTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PhaseFaultIsolation_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "security;ecs;unit"
+    TIMEOUT 30)
+
 # SAVE-230: editor prefabs fail closed on a newer SPARKPREFAB version, name the
 # component and line of damage, recover from the retained .bak, and a failed save
 # leaves the previous prefab byte-identical. PrefabManager saves to and reloads
