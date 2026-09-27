@@ -7,13 +7,16 @@
 
 #include "PrefabManager.h"
 #include "../SceneSystem/SceneComponentCodec.h"
+#include "Engine/SaveSystem/SaveFileDurability.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cinttypes>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <string>
 #include <system_error>
 #include <utility>
 
@@ -41,6 +44,19 @@ namespace SparkEditor
             }
             return std::none_of(name.begin(), name.end(),
                                 [](unsigned char c) { return c < 0x20 || c == '/' || c == '\\' || c == ':'; });
+        }
+
+        /// Bytes PrefabAsset::TryLoad would read from @p path: 0 for a missing file, a symbolic
+        /// link or a file over PrefabAsset::kMaxPrefabFileBytes, which it rejects unread.
+        std::uintmax_t ReadablePrefabBytes(const std::filesystem::path& path)
+        {
+            std::error_code error;
+            if (!std::filesystem::is_regular_file(std::filesystem::symlink_status(path, error)))
+            {
+                return 0;
+            }
+            const std::uintmax_t size = std::filesystem::file_size(path, error);
+            return (error || size > PrefabAsset::kMaxPrefabFileBytes) ? 0 : size;
         }
     } // namespace
 
@@ -259,27 +275,59 @@ namespace SparkEditor
             return 0; // no project open, or a project without prefabs
         }
 
+        // The project is untrusted, so the listing is bounded too: a directory of millions of
+        // prefab files must not become millions of loads (or diagnostics).
         std::vector<std::filesystem::path> files;
+        bool tooManyFiles = false;
         for (std::filesystem::directory_iterator entry(m_projectPrefabDirectory, error), end; !error && entry != end;
              entry.increment(error))
         {
+            // `.sparkprefab.bak` and `.sparkprefab.tmp` siblings have other extensions. Symbolic
+            // links are kept so TryLoad names them in its rejection instead of dropping them silently.
             std::error_code typeError;
-            // `.sparkprefab.bak` and `.sparkprefab.tmp` siblings have other extensions.
-            if (entry->is_regular_file(typeError) && entry->path().extension() == ".sparkprefab")
+            const std::filesystem::file_status status = entry->symlink_status(typeError);
+            if (typeError || entry->path().extension() != ".sparkprefab" ||
+                !(std::filesystem::is_regular_file(status) || std::filesystem::is_symlink(status)))
             {
-                files.push_back(entry->path());
+                continue;
             }
+            if (files.size() == kMaxProjectPrefabFiles)
+            {
+                tooManyFiles = true;
+                break;
+            }
+            files.push_back(entry->path());
         }
         if (error)
         {
             diagnostics.push_back("Could not list every project prefab in '" + PathToUtf8(m_projectPrefabDirectory) +
                                   "': " + error.message());
         }
+        if (tooManyFiles)
+        {
+            diagnostics.push_back("'" + PathToUtf8(m_projectPrefabDirectory) + "' holds more than " +
+                                  std::to_string(kMaxProjectPrefabFiles) + " prefab files; only the first " +
+                                  std::to_string(kMaxProjectPrefabFiles) + " listed were considered");
+        }
         std::sort(files.begin(), files.end());
 
+        // Charge each file with every byte its load may read, the `.bak` included, so a sweep of
+        // small damaged primaries cannot pull in large backups past the budget. budgetUsed never
+        // exceeds kMaxProjectPrefabBytes, so the subtraction below cannot wrap.
+        std::uintmax_t budgetUsed = 0;
+        size_t overBudget = 0;
         size_t loaded = 0;
         for (const auto& file : files)
         {
+            const std::uintmax_t cost =
+                ReadablePrefabBytes(file) + ReadablePrefabBytes(Spark::SaveFileDurability::BackupPathFor(file));
+            if (cost > kMaxProjectPrefabBytes - budgetUsed)
+            {
+                ++overBudget;
+                continue;
+            }
+            budgetUsed += cost;
+
             std::string loadError;
             if (LoadPrefab(PathToUtf8(file), &loadError))
             {
@@ -289,6 +337,12 @@ namespace SparkEditor
             {
                 diagnostics.push_back(std::move(loadError));
             }
+        }
+        if (overBudget > 0)
+        {
+            diagnostics.push_back(std::to_string(overBudget) + " prefab file(s) in '" +
+                                  PathToUtf8(m_projectPrefabDirectory) + "' were not loaded: together the project's " +
+                                  "prefabs exceed the " + std::to_string(kMaxProjectPrefabBytes) + "-byte load budget");
         }
         return loaded;
     }

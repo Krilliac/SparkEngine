@@ -12,9 +12,12 @@
 #include "TestFramework.h"
 #include "Prefabs/PrefabAsset.h"
 #include "Prefabs/PrefabManager.h"
+#include "Prefabs/PrefabTextFormat.h"
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -117,6 +120,30 @@ namespace
     bool IsUntouchedSentinel(const SparkEditor::PrefabAsset& prefab)
     {
         return prefab.GetName() == "Sentinel" && prefab.GetComponents().size() == 1 && prefab.HasComponent("Marker");
+    }
+
+    std::string PathUtf8(const fs::path& path)
+    {
+        const std::u8string utf8 = path.u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    /// A well-formed prefab whose one string property is @p payloadBytes long; the parser alone
+    /// accepts it at any size.
+    SparkEditor::PrefabAsset MakeBlob(const std::string& name, size_t payloadBytes)
+    {
+        SparkEditor::PrefabAsset blob(name);
+        SparkEditor::SerializedComponent data;
+        data.typeName = "Blob";
+        data.properties["payload"] = std::string(payloadBytes, 'x');
+        blob.AddComponent(data);
+        return blob;
+    }
+
+    std::string RenderBlob(const std::string& name, size_t payloadBytes)
+    {
+        const SparkEditor::PrefabAsset blob = MakeBlob(name, payloadBytes);
+        return SparkEditor::PrefabTextFormat::Render(blob.GetName(), blob.GetComponents());
     }
 
 #if defined(_WIN32)
@@ -445,4 +472,148 @@ TEST(PrefabPersistence_ProjectPrefabsReloadAndRejectedFileKeepsLoadedPrefab)
     std::vector<std::string> none;
     EXPECT_EQ(closed.LoadProjectPrefabs(none), static_cast<size_t>(0));
     EXPECT_TRUE(none.empty());
+}
+
+// SEC4: a shared or downloaded project's Prefabs directory is untrusted and loads on project open.
+
+TEST(PrefabPersistence_OversizedFileIsRejectedBeforeItIsRead)
+{
+    PrefabScratch scratch("oversize");
+    const size_t cap = static_cast<size_t>(SparkEditor::PrefabAsset::kMaxPrefabFileBytes);
+    const size_t overhead = RenderBlob("Blob", 0).size();
+
+    // A file of exactly the limit still loads.
+    WriteBytes(scratch.Native("Fits.sparkprefab"), RenderBlob("Blob", cap - overhead));
+    ASSERT_EQ(static_cast<size_t>(fs::file_size(scratch.Native("Fits.sparkprefab"))), cap);
+    SparkEditor::PrefabAsset fits;
+    std::string error;
+    ASSERT_TRUE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Fits.sparkprefab"), fits, error));
+
+    // One byte more is refused by size, although the grammar alone accepts it.
+    const std::string over = RenderBlob("Blob", cap - overhead + 1);
+    SparkEditor::PrefabTextFormat::ParsedPrefab parsed;
+    std::string reason;
+    ASSERT_TRUE(SparkEditor::PrefabTextFormat::Parse(over, parsed, reason) ==
+                SparkEditor::PrefabTextFormat::ParseResult::Ok);
+    WriteBytes(scratch.Native("Big.sparkprefab"), over);
+    const std::string tooBig = "the file is " + std::to_string(cap + 1) + " bytes, larger than the " +
+                               std::to_string(cap) + "-byte prefab limit";
+
+    SparkEditor::PrefabAsset out = Sentinel();
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Big.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "Big.sparkprefab' was rejected: " + tooBig);
+
+    // The .bak fallback is bounded the same way.
+    WriteBytes(scratch.Native("Big.sparkprefab"), "SPARKPREFAB one\n");
+    WriteBytes(scratch.Native("Big.sparkprefab.bak"), over);
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Big.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "Big.sparkprefab.bak' was not usable: " + tooBig);
+
+    // Save refuses a prefab TryLoad could not read back, and writes nothing.
+    SparkEditor::PrefabAsset big = MakeBlob("Blob", cap - overhead + 1);
+    EXPECT_FALSE(big.Save(scratch.Utf8("Saved.sparkprefab")));
+    EXPECT_FALSE(fs::exists(scratch.Native("Saved.sparkprefab")));
+}
+
+TEST(PrefabPersistence_SymlinkedProjectPrefabIsNotFollowed)
+{
+    PrefabScratch scratch("symlink");
+    const fs::path prefabs = scratch.Native("Project") / "Prefabs";
+    fs::create_directories(prefabs);
+    SparkEditor::PrefabAsset target = MakeCrate(5.0f);
+    target.SetName("Linked");
+    ASSERT_TRUE(target.Save(scratch.Utf8("Target.sparkprefab")));
+
+    std::error_code linkError;
+    fs::create_symlink(scratch.Native("Target.sparkprefab"), prefabs / "Linked.sparkprefab", linkError);
+    if (linkError)
+    {
+        SKIP_TEST("cannot create a symbolic link here: " + linkError.message());
+    }
+
+    SparkEditor::PrefabAsset out = Sentinel();
+    std::string error;
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(PathUtf8(prefabs / "Linked.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "the path is a symbolic link or not a regular file");
+
+    SparkEditor::PrefabManager manager;
+    manager.SetProjectPrefabDirectory(prefabs);
+    std::vector<std::string> diagnostics;
+    EXPECT_EQ(manager.LoadProjectPrefabs(diagnostics), static_cast<size_t>(0));
+    EXPECT_TRUE(manager.GetPrefab("Linked") == nullptr);
+    ASSERT_EQ(diagnostics.size(), static_cast<size_t>(1));
+    EXPECT_STR_CONTAINS(diagnostics[0], "symbolic link");
+}
+
+TEST(PrefabPersistence_ProjectSweepStopsAtByteBudgetCountingBackups)
+{
+    PrefabScratch scratch("budget");
+    const std::uintmax_t cap = SparkEditor::PrefabAsset::kMaxPrefabFileBytes;
+    const size_t filesToFill = static_cast<size_t>(SparkEditor::PrefabManager::kMaxProjectPrefabBytes / cap);
+    ASSERT_TRUE(filesToFill > 1);
+
+    // Primaries that use the whole budget (zero-filled, so each is rejected once read) leave no
+    // room for a well-formed prefab that sorts after them.
+    const fs::path full = scratch.Native("Full") / "Prefabs";
+    fs::create_directories(full);
+    for (size_t i = 0; i < filesToFill; ++i)
+    {
+        const fs::path file = full / ("A" + std::to_string(i) + ".sparkprefab");
+        WriteBytes(file, "");
+        fs::resize_file(file, cap);
+    }
+    SparkEditor::PrefabAsset zed = MakeCrate(3.0f);
+    zed.SetName("Zed");
+    ASSERT_TRUE(zed.Save(PathUtf8(full / "Zed.sparkprefab")));
+
+    SparkEditor::PrefabManager manager;
+    manager.SetProjectPrefabDirectory(full);
+    std::vector<std::string> diagnostics;
+    EXPECT_EQ(manager.LoadProjectPrefabs(diagnostics), static_cast<size_t>(0));
+    EXPECT_TRUE(manager.GetPrefab("Zed") == nullptr);
+    ASSERT_EQ(diagnostics.size(), filesToFill + 1);
+    EXPECT_STR_CONTAINS(diagnostics.back(), "1 prefab file(s) in '");
+    EXPECT_STR_CONTAINS(diagnostics.back(), "-byte load budget");
+
+    // Tiny damaged primaries cannot pull in full-size backups past the budget: every .bak their
+    // load may read is charged too, so the last one does not fit.
+    const fs::path backups = scratch.Native("Backups") / "Prefabs";
+    fs::create_directories(backups);
+    for (size_t i = 0; i < filesToFill; ++i)
+    {
+        const fs::path file = backups / ("B" + std::to_string(i) + ".sparkprefab");
+        WriteBytes(file, "x");
+        const fs::path backup = backups / ("B" + std::to_string(i) + ".sparkprefab.bak");
+        WriteBytes(backup, "");
+        fs::resize_file(backup, cap);
+    }
+    SparkEditor::PrefabManager second;
+    second.SetProjectPrefabDirectory(backups);
+    diagnostics.clear();
+    EXPECT_EQ(second.LoadProjectPrefabs(diagnostics), static_cast<size_t>(0));
+    ASSERT_EQ(diagnostics.size(), filesToFill);
+    EXPECT_STR_CONTAINS(diagnostics.back(), "1 prefab file(s) in '");
+}
+
+TEST(PrefabPersistence_ProjectSweepConsidersAtMostMaxFiles)
+{
+    PrefabScratch scratch("count");
+    const fs::path prefabs = scratch.Native("Project") / "Prefabs";
+    fs::create_directories(prefabs);
+    const size_t cap = SparkEditor::PrefabManager::kMaxProjectPrefabFiles;
+    for (size_t i = 0; i <= cap; ++i)
+    {
+        WriteBytes(prefabs / ("P" + std::to_string(i) + ".sparkprefab"), "");
+    }
+
+    SparkEditor::PrefabManager manager;
+    manager.SetProjectPrefabDirectory(prefabs);
+    std::vector<std::string> diagnostics;
+    EXPECT_EQ(manager.LoadProjectPrefabs(diagnostics), static_cast<size_t>(0));
+    // One line for the limit, then one per considered (empty, so rejected) file.
+    ASSERT_EQ(diagnostics.size(), cap + 1);
+    EXPECT_STR_CONTAINS(diagnostics[0], "holds more than " + std::to_string(cap) + " prefab files");
 }

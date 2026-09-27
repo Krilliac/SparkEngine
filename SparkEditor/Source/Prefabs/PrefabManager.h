@@ -103,11 +103,22 @@ namespace SparkEditor
          * Each file goes through LoadPrefab, so a damaged file falls back to its `.bak` and a
          * rejected file leaves any already-loaded prefab of the same name in place.
          *
+         * The directory comes from an untrusted project, so the sweep is bounded: symbolic links
+         * are rejected unread by TryLoad, at most kMaxProjectPrefabFiles files are considered, and
+         * a file whose readable bytes (primary plus `.bak`) would take the sweep past
+         * kMaxProjectPrefabBytes is skipped. A file over PrefabAsset::kMaxPrefabFileBytes is
+         * rejected unread and costs nothing. Anything left out is reported in @p diagnostics.
+         *
          * @param diagnostics Receives one actionable message per rejected file and per file loaded
-         *                    from its `.bak`
+         *                    from its `.bak`, plus one per limit that left files unloaded
          * @return Number of prefabs loaded
          */
         size_t LoadProjectPrefabs(std::vector<std::string>& diagnostics);
+
+        /// Most `*.sparkprefab` files LoadProjectPrefabs considers in one project.
+        static constexpr size_t kMaxProjectPrefabFiles = 2048;
+        /// Most bytes of project prefab files LoadProjectPrefabs reads in one sweep.
+        static constexpr std::uintmax_t kMaxProjectPrefabBytes = 32u * 1024u * 1024u;
 
         /**
          * @brief Load a prefab from disk (see PrefabAsset::TryLoad for validation and recovery)

@@ -1916,12 +1916,13 @@ set_tests_properties(SparkSEC2PersistenceTests PROPERTIES
 # SAVE-230: editor prefabs fail closed on a newer SPARKPREFAB version, name the
 # component and line of damage, recover from the retained .bak, and a failed save
 # leaves the previous prefab byte-identical. PrefabManager saves to and reloads
-# from <project>/Prefabs and never writes into the working directory.
+# from <project>/Prefabs and never writes into the working directory. Project
+# prefabs are untrusted: file size, symlinks, file count and total bytes are bounded.
 add_test(NAME SparkPrefabPersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkPrefabPersistenceTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=8"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=12"
     LABELS "compatibility;prefab;unit"
-    TIMEOUT 30)
+    TIMEOUT 60)
 
 # SAVE-230: editor prefabs read SPARKPREFAB 1 (N-1) and 2 (N) and write 2 only. The
 # committed v1 fixture loads in place with its declared values and is never rewritten,

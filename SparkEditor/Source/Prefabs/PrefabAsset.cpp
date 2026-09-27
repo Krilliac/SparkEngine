@@ -14,9 +14,11 @@
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
+#include <string>
 #include <system_error>
 #include <utility>
 
@@ -32,22 +34,55 @@ namespace SparkEditor
         PrefabTextFormat::ParseResult ReadPrefabFile(const std::filesystem::path& path,
                                                      PrefabTextFormat::ParsedPrefab& out, std::string& reason)
         {
-            std::error_code existsError;
-            if (!std::filesystem::is_regular_file(path, existsError))
+            // Project prefabs come from shared or downloaded projects, so the file is untrusted:
+            // symlink_status does not follow a link that could point at any large readable file.
+            std::error_code statusError;
+            const std::filesystem::file_status status = std::filesystem::symlink_status(path, statusError);
+            if (statusError || !std::filesystem::exists(status))
             {
                 reason = "the file does not exist";
                 return PrefabTextFormat::ParseResult::Rejected;
             }
+            if (!std::filesystem::is_regular_file(status))
+            {
+                reason = "the path is a symbolic link or not a regular file";
+                return PrefabTextFormat::ParseResult::Rejected;
+            }
+
+            // Bound the bytes before reading any: the parser caps counts, not the size of a value.
+            std::error_code sizeError;
+            const std::uintmax_t size = std::filesystem::file_size(path, sizeError);
+            if (sizeError)
+            {
+                reason = "the file size could not be read";
+                return PrefabTextFormat::ParseResult::Rejected;
+            }
+            if (size > PrefabAsset::kMaxPrefabFileBytes)
+            {
+                reason = "the file is " + std::to_string(size) + " bytes, larger than the " +
+                         std::to_string(PrefabAsset::kMaxPrefabFileBytes) + "-byte prefab limit";
+                return PrefabTextFormat::ParseResult::Rejected;
+            }
+
             std::ifstream input(path, std::ios::binary);
             if (!input.is_open())
             {
                 reason = "the file could not be opened";
                 return PrefabTextFormat::ParseResult::Rejected;
             }
-            const std::string text{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+            // size <= kMaxPrefabFileBytes, so it fits both size_t and streamsize.
+            std::string text(static_cast<std::size_t>(size), '\0');
+            input.read(text.data(), static_cast<std::streamsize>(size));
             if (input.bad())
             {
                 reason = "the file could not be read";
+                return PrefabTextFormat::ParseResult::Rejected;
+            }
+            text.resize(static_cast<std::size_t>(input.gcount())); // a file that shrank parses as truncated
+            // A file that grew after the size check is never read past the checked size.
+            if (input.peek() != std::char_traits<char>::eof())
+            {
+                reason = "the file changed size while it was being read";
                 return PrefabTextFormat::ParseResult::Rejected;
             }
             return PrefabTextFormat::Parse(text, out, reason);
@@ -132,14 +167,23 @@ namespace SparkEditor
             }
         }
 
+        const std::string text = PrefabTextFormat::Render(m_name, m_components);
+        if (text.size() > kMaxPrefabFileBytes)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Refusing to save prefab '%s': it renders to %zu bytes, larger than the %zu-byte prefab "
+                            "limit TryLoad reads",
+                            m_name.c_str(), text.size(), static_cast<size_t>(kMaxPrefabFileBytes));
+            return false;
+        }
+
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving prefab '%s' with %zu components to: %s", m_name.c_str(),
                        m_components.size(), path.c_str());
         // Refreshing the .bak from a primary TryLoad rejected would replace the only good copy
         // with the damaged file before the rename that repairs the primary can fail.
         const bool retainBackup = !(m_recoveredFromBackup && path == m_filePath);
         std::error_code writeError;
-        if (!Spark::SaveFileDurability::WriteFileAtomically(
-                PathFromUtf8(path), PrefabTextFormat::Render(m_name, m_components), retainBackup, writeError))
+        if (!Spark::SaveFileDurability::WriteFileAtomically(PathFromUtf8(path), text, retainBackup, writeError))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor,
                             "Failed to save prefab '%s' to '%s': %s. The previous file is unchanged", m_name.c_str(),
