@@ -5,9 +5,11 @@
  * @date 2026
  *
  * Replaces the former XOR keystream + 32-bit FNV tag prototype. Packets are
- * sealed with the IETF ChaCha20-Poly1305 AEAD construction from RFC 8439,
- * pinned by the RFC's published known-answer vectors in
- * Tests/TestNET100TransportReal.cpp.
+ * sealed with libsodium's IETF ChaCha20-Poly1305 AEAD (RFC 8439), keys are
+ * derived with libsodium's HKDF-SHA256, and randomness comes from
+ * randombytes_buf (NET-100, owner decision OD-06). No primitive is implemented
+ * here; the RFC's published known-answer vectors in
+ * Tests/TestNET100TransportReal.cpp pin the composition.
  *
  * Security properties provided by SecureChannel (each one is exercised by a
  * production-linked test):
@@ -23,11 +25,18 @@
  *  - fail-closed version handling: there is no plaintext or legacy mode, and
  *    any header version other than SECURE_TRANSPORT_VERSION is rejected.
  *
- * Not provided here (tracked under NET-100): the key-agreement handshake that
- * produces the shared secret, wiring into NetworkManager's live UDP path, and
- * independent review of this in-house implementation of the RFC primitive.
+ * Nonce scheme: [key epoch u8][0 0 0][sequence u64 LE]. Each epoch has its own
+ * key and the sender's sequence only increases, so no (key, nonce) pair repeats.
  *
- * Build: Compiled when ENABLE_NETWORKING is defined.
+ * Not provided here (tracked under NET-100): the key-agreement handshake that
+ * produces the shared secret, and wiring into NetworkManager's live UDP path.
+ *
+ * Thread affinity: a SecureChannel is used by one thread at a time; the free
+ * functions are reentrant. Ownership: SecureChannel owns its keys and wipes them
+ * with sodium_memzero. Allocation: Seal/Open allocate the output buffer and the
+ * associated-data copy per packet (to be pooled when wired into the live path).
+ *
+ * Build: compiled in every configuration; requires libsodium (spark_sodium).
  */
 
 #pragma once

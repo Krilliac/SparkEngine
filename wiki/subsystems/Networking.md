@@ -493,11 +493,11 @@ using Token = ConnectionToken;                            // TOKEN_SIZE (16) byt
 
 The repeating-key XOR "encryption" prototype (`PacketEncrypt`/`Encrypt`/`GetEncryptionKey`, `NetworkStack::Encrypt`/`Decrypt`, and the `enableEncryption` flags in `NetworkStackConfig` and `[Network]` engine settings) was deleted under NET-100. `Tests/TestNetworkSecurity.cpp` static-asserts that the API stays gone, and `Tests/Tools/test_network_security_csprng.py` (label `network-security`) fails if XOR transform code returns to these headers.
 
-> **Warning:** The active `NetworkManager` UDP path is unauthenticated and unencrypted. NET-100 remains open and blocking: `SecureChannel` has no key-agreement handshake or production caller, and OD-06 replaces the in-tree primitive with libsodium.
+> **Warning:** The active `NetworkManager` UDP path is unauthenticated and unencrypted. NET-100 remains open and blocking: `SecureChannel` has no key-agreement handshake or production caller. Its primitives are libsodium's (OD-06).
 
 ### NetworkEncryption (Advanced)
 
-Holds the in-tree RFC 8439 ChaCha20-Poly1305 construction, the `SecureChannel` packet channel built on it, the fail-closed token helpers, and an independent rate limiter. `SecureChannel` has no production caller yet: there is no key-agreement handshake and `NetworkManager` does not use it.
+Holds thin wrappers over libsodium's RFC 8439 ChaCha20-Poly1305 and HKDF-SHA256, the `SecureChannel` packet channel built on them, the fail-closed token helpers, and an independent rate limiter. `SecureChannel` has no production caller yet: there is no key-agreement handshake and `NetworkManager` does not use it.
 
 ```cpp
 constexpr size_t SESSION_KEY_SIZE = 32;                     // shared secret / ChaCha20 key
@@ -510,12 +510,15 @@ constexpr size_t SECURE_HEADER_SIZE = 1 + 1 + 8;            // [version][key epo
 
 | Function / type | Description |
 |-----------------|-------------|
-| `GenerateSessionKey(outKey)` / `GenerateConnectionToken(outToken)` | OS CSPRNG; return false (output zeroed) on failure |
-| `ValidateToken(expected, received)` | Constant-time token comparison |
-| `ChaCha20Poly1305Seal` / `ChaCha20Poly1305Open` | Raw RFC 8439 AEAD; the caller owns nonce uniqueness |
+| `EnsureSodium()` | Runs `sodium_init()` once per process; false means every crypto call fails closed |
+| `GenerateSessionKey(outKey)` / `GenerateConnectionToken(outToken)` | libsodium `randombytes_buf`; return false (output zeroed) when libsodium is unavailable |
+| `ValidateToken(expected, received)` | Constant-time token comparison (`sodium_memcmp`) |
+| `ChaCha20Poly1305Seal` / `ChaCha20Poly1305Open` | Raw RFC 8439 AEAD (`crypto_aead_chacha20poly1305_ietf_*`); the caller owns nonce uniqueness |
 | `SecureChannel::Seal` / `Open` | Per-direction HKDF keys, sender-owned sequence numbers, authenticated replay window, epoch ratchet; `Open` returns an `OpenResult` drop reason |
 
-Tests: `Tests/TestNET100TransportReal.cpp` (`Transport_*`). The implementation is in-house and not independently reviewed; OD-06 replaces it with libsodium.
+Nonces are `[key epoch][0 0 0][sequence u64 LE]`: every epoch has its own key and the sender's sequence only increases, so a (key, nonce) pair never repeats. Keys are wiped with `sodium_memzero`.
+
+Tests: `Tests/TestNET100TransportReal.cpp` (`Transport_*`) and `Tests/TestNET100Libsodium.cpp` (`Transport_Libsodium_*`). No cryptographic primitive is implemented in `Engine/Networking`; the `SparkNetworkSecurityCsprngContract` CTest fails if a ChaCha20, Poly1305 or HMAC implementation reappears there. libsodium is the pinned `ThirdParty/Security/libsodium` submodule (1.0.22), built by `cmake/SparkLibsodium.cmake`.
 
 ### RateLimiter
 

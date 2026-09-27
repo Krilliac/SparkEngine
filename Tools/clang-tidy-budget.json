@@ -3,7 +3,7 @@
   "description": "CI-110 clang-tidy diagnostic budget: distinct diagnostics per file and check across every shipped-product translation unit, measured with the clang-tidy CI lane configuration. The checks and total fields summarize the files map. Lower entries as diagnostics are fixed; raising one is a reviewed exception. Regenerate with Tools/clang_tidy_budget.py update.",
   "clangTidyMajorVersion": 18,
   "measuredAt": "Local clang-tidy 18.1.3 (Ubuntu 24.04) with the clang-tidy lane's libc++ Debug configure, over all 955 shipped-product translation units of the shared working tree while HEAD moved from 1ea8275 to e82fe3a (2026-09-26). Not a hosted measurement: refresh from the first hosted clang-tidy-output artifact if counts differ.",
-  "total": 16656,
+  "total": 16640,
   "checks": {
     "bugprone-assignment-in-if-condition": 6,
     "bugprone-branch-clone": 62,
@@ -41,7 +41,7 @@
     "modernize-raw-string-literal": 78,
     "modernize-redundant-void-arg": 1,
     "modernize-return-braced-init-list": 184,
-    "modernize-use-auto": 404,
+    "modernize-use-auto": 401,
     "modernize-use-default-member-init": 112,
     "modernize-use-emplace": 97,
     "modernize-use-equals-default": 20,
@@ -62,7 +62,7 @@
     "performance-trivially-destructible": 1,
     "performance-unnecessary-copy-initialization": 7,
     "performance-unnecessary-value-param": 110,
-    "readability-braces-around-statements": 13950,
+    "readability-braces-around-statements": 13937,
     "readability-inconsistent-declaration-parameter-name": 24
   },
   "files": {
@@ -2727,15 +2727,10 @@
       "readability-braces-around-statements": 41
     },
     "SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp": {
-      "modernize-use-auto": 1,
-      "readability-braces-around-statements": 15
+      "readability-braces-around-statements": 14
     },
     "SparkEngine/Source/Engine/Networking/NetworkEncryption.h": {
       "bugprone-implicit-widening-of-multiplication-result": 1
-    },
-    "SparkEngine/Source/Engine/Networking/NetworkEncryptionAead.cpp": {
-      "modernize-use-auto": 2,
-      "readability-braces-around-statements": 12
     },
     "SparkEngine/Source/Engine/Networking/NetworkInterpolation.cpp": {
       "google-build-using-namespace": 1
