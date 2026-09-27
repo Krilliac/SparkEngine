@@ -13,7 +13,7 @@
   "coverage_claim": false,
   "inputs": {
     "corpus_manifest": "05ff409e62f606cfa44dc4727153bc09a9160ee2bff4cb620b64200038858ef1",
-    "inventory": "c8c7c131b963696339daf61960f7bcad7b491a835921dbdfdcfd5a1c28e7e777"
+    "inventory": "2b556a1d8e0065f5bb6cd6d0d46de36dc5c9b2a24a334ec38c9eb4b53eef552e"
   },
   "inventory": {
     "blocked_count": 132,
@@ -23,7 +23,7 @@
     "excluded_subtrees": [
       {
         "expires": "2027-08-23",
-        "hidden_candidate_count": 8,
+        "hidden_candidate_count": 9,
         "owner": "net-100-protocol-campaign",
         "path": "SparkEngine/Source/Engine/Networking",
         "ticket": "NET-100"
@@ -65,7 +65,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 2086,
+    "scanned_file_count": 2087,
     "unclassified_candidate_count": 0
   },
   "passed": false,

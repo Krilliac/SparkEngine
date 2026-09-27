@@ -23,11 +23,11 @@
     "excluded_subtrees": [
       {
         "path": "SparkEngine/Source/Engine/Networking",
-        "reason": "Packet and protocol campaigns are owned by NET-100 behind readiness gate G12; audited 2026-08-28 as containing no untrusted-file parser (write-only ofstream in DedicatedServer.cpp only).",
+        "reason": "Packet and protocol campaigns are owned by NET-100 behind readiness gate G12; audited 2026-08-28 as containing no untrusted-file parser (write-only ofstream in DedicatedServer.cpp only). 2026-09-27: SecureHandshake.cpp (NET-100 handshake core) is the ninth hidden candidate. It decodes untrusted network bytes, not files: fixed-size ClientHello/ServerHello records checked for exact length and magic before any field is read. This exclusion waives only its classification; its fuzz target remains open NET-100 protocol-campaign work.",
         "ticket": "NET-100",
         "owner": "net-100-protocol-campaign",
         "expires": "2027-08-23",
-        "hidden_candidate_count": 8
+        "hidden_candidate_count": 9
       },
       {
         "path": "SparkEngine/Source/Engine/Scripting",
