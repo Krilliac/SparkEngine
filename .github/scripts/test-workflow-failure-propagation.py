@@ -3331,12 +3331,19 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertEqual(unprotected_tee_steps(unsafe), ["Launch staged executable"])
 
     def test_installer_builds_every_registered_contract_test(self) -> None:
-        build_step = named_step(self.build, "Build SparkInstaller and registered contract tests")
-        self.assertIn("SparkInstallerGitTests", build_step)
-        self.assertIn("SparkInstallerInstallStateTests", build_step)
-        self.assertIn("SparkInstallerTransactionTests", build_step)
-        self.assertIn("SparkBuildProcessRunnerTests", build_step)
-        self.assertIn("SparkBuildDownloaderTests", build_step)
+        # Both workflows run every registered installer test with --no-tests=error,
+        # so an executable left out of either build step fails that job.
+        for workflow in (self.build, self.release):
+            build_step = named_step(workflow, "Build SparkInstaller and registered contract tests")
+            for target in (
+                "SparkInstallerGitTests",
+                "SparkInstallerInstallStateTests",
+                "SparkInstallerTransactionTests",
+                "SparkBuildProcessRunnerTests",
+                "SparkBuildDownloaderTests",
+            ):
+                with self.subTest(target=target):
+                    self.assertIn(target, build_step)
 
     def test_generated_documentation_requires_the_captured_status_to_exit(self) -> None:
         generated_docs = named_step(
