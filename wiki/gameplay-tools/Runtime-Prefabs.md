@@ -208,8 +208,16 @@ prefab->Serialize(writer);
 // Deserialize
 Spark::BinaryReader reader("prefabs/guard.prefab");
 auto loaded = std::make_unique<Spark::ECS::RuntimePrefab>("");
-loaded->Deserialize(reader);
+if (!loaded->Deserialize(reader))
+{
+    // Wrong magic, a version other than PrefabFileHeader::kVersion, or a truncated
+    // stream. The prefab is left exactly as it was.
+}
 ```
+
+`Deserialize` returns `false` for a stream it cannot read: a wrong magic, a
+version other than `PrefabFileHeader::kVersion` (a newer writer's layout), or a
+stream that ends early. It changes the prefab only on success.
 
 ### Registry File I/O
 
