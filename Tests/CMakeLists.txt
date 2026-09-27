@@ -3177,6 +3177,35 @@ set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
     LABELS "rendering;golden;unit;python"
     TIMEOUT 60)
 
+# TF-110: TERRAFRONT multi-client harness (Tools/Terrafront/multiclient.py). The
+# unit test covers the audit parser and the convergence comparator on every
+# host; OnboardSpawnMove runs a real dedicated server plus two headless clients
+# (register, log in, enter, spawn, walk) and fails unless both clients agree
+# with the server at every checkpoint.
+add_test(
+    NAME TerrafrontMultiClient_Harness
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_terrafront_multiclient.py -v)
+set_tests_properties(TerrafrontMultiClient_Harness PROPERTIES
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    LABELS "terrafront;unit;python"
+    TIMEOUT 120)
+if(ENABLE_NETWORKING AND SPARK_HEADLESS_SUPPORT AND TARGET SparkEngine AND TARGET SparkGameMMOFPS)
+    add_dependencies(SparkTests SparkEngine SparkGameMMOFPS)
+    add_test(
+        NAME TerrafrontMultiClient_OnboardSpawnMove
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tools/Terrafront/multiclient.py
+            --engine $<TARGET_FILE:SparkEngine>
+            --module $<TARGET_FILE:SparkGameMMOFPS>
+            --scenario onboard_spawn_move
+            --workdir ${CMAKE_BINARY_DIR}/Testing/terrafront-multiclient/onboard_spawn_move)
+    set_tests_properties(TerrafrontMultiClient_OnboardSpawnMove PROPERTIES
+        LABELS "terrafront-multiclient;network;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 240)
+endif()
+
 # SEC-110: lock-derived SPDX 2.3 SBOM generation (commit and dependency-lock
 # binding, --check reproducibility) and package-inventory reconciliation
 # against forged, unlocked, and missing third-party payload.
