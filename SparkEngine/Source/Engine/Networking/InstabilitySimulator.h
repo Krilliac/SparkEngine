@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+class EngineSettings;
+
 namespace Spark::Net
 {
 
@@ -154,5 +156,23 @@ namespace Spark::Net
         /// @brief Generate a random float in [0, 1)
         float RandomFloat();
     };
+
+    // ========================================================================
+    // EngineSettings bridge
+    // ========================================================================
+
+    /// @brief Map the [Network] Simulated* engine settings onto simulator settings.
+    ///
+    /// SimulatedPacketLoss is a 0-1 fraction in EngineSettings and becomes a
+    /// 0-100 percent here; SimulatedReorderPercent passes through. Values are
+    /// clamped to their valid ranges (non-finite values become zero), and the
+    /// result is enabled when any impairment is non-zero.
+    [[nodiscard]] InstabilitySettings ImpairmentFromEngineSettings(const ::EngineSettings& settings);
+
+    /// @brief Push ImpairmentFromEngineSettings(settings) into the process
+    ///        simulator. The console net_* commands and network bring-up both
+    ///        call this, so a config file and a console edit take the same path.
+    /// @return The settings now in effect.
+    InstabilitySettings ApplyImpairmentSettings(const ::EngineSettings& settings);
 
 } // namespace Spark::Net

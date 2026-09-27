@@ -473,10 +473,15 @@ class EngineSettings
         int sendBufferSize = 65536;
         int receiveBufferSize = 65536;
         bool enableCompression = false;
-        // Lag simulation (development only)
+        // Lag simulation (development only). Spark::Net::ApplyImpairmentSettings
+        // pushes these into the InstabilitySimulator at network bring-up and on
+        // every net_* console edit.
         float simulatedLatencyMs = 0.0f;
-        float simulatedPacketLoss = 0.0f;
+        float simulatedPacketLoss = 0.0f; // fraction 0-1
         float simulatedJitterMs = 0.0f;
+        float simulatedReorderPercent = 0.0f;   // 0-100
+        float simulatedDuplicatePercent = 0.0f; // 0-100
+        int simulatedImpairmentSeed = 0;        // 0 = nondeterministic
     };
 
     // =====================================================================

@@ -481,6 +481,11 @@ namespace Spark::Core::Lifecycle
             }
         }
 
+        // [Network] Simulated* values from settings files take effect before any
+        // -exec script hosts or connects; ApplyImpairmentSettings logs at WARN
+        // whenever impairment is enabled.
+        Spark::Net::ApplyImpairmentSettings(EngineSettings::GetInstance());
+
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "NetworkingLifecycle", 0.0);
     }
 

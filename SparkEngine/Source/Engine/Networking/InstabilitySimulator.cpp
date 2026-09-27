@@ -4,6 +4,7 @@
  */
 
 #include "InstabilitySimulator.h"
+#include "../../Core/EngineSettings.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/ScopeGuard.h"
 #include "../../Utils/SecureMemory.h"
@@ -246,6 +247,49 @@ namespace Spark::Net
         std::lock_guard lock(m_mutex);
         m_delayedQueue.clear();
         m_settings = InstabilitySettings{};
+    }
+
+    // ========================================================================
+    // EngineSettings bridge
+    // ========================================================================
+
+    namespace
+    {
+        float FiniteClamped(float value, float lo, float hi)
+        {
+            return std::isfinite(value) ? std::clamp(value, lo, hi) : 0.0f;
+        }
+    } // namespace
+
+    InstabilitySettings ImpairmentFromEngineSettings(const ::EngineSettings& settings)
+    {
+        const auto& net = settings.Network();
+        constexpr float kMaxDelayMs = 60000.0f;
+
+        InstabilitySettings out;
+        out.latencyMs = FiniteClamped(net.simulatedLatencyMs, 0.0f, kMaxDelayMs);
+        out.jitterMs = FiniteClamped(net.simulatedJitterMs, 0.0f, kMaxDelayMs);
+        out.packetLossPercent = FiniteClamped(net.simulatedPacketLoss, 0.0f, 1.0f) * 100.0f;
+        out.reorderPercent = FiniteClamped(net.simulatedReorderPercent, 0.0f, 100.0f);
+        out.enabled =
+            out.latencyMs > 0.0f || out.jitterMs > 0.0f || out.packetLossPercent > 0.0f || out.reorderPercent > 0.0f;
+        return out;
+    }
+
+    InstabilitySettings ApplyImpairmentSettings(const ::EngineSettings& settings)
+    {
+        const InstabilitySettings impairment = ImpairmentFromEngineSettings(settings);
+        auto& simulator = InstabilitySimulator::GetInstance();
+        simulator.SetSettings(impairment);
+        if (impairment.enabled)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "Network impairment ENABLED (dev only): latency=%.1fms jitter=%.1fms loss=%.1f%% "
+                           "reorder=%.1f%%",
+                           impairment.latencyMs, impairment.jitterMs, impairment.packetLossPercent,
+                           impairment.reorderPercent);
+        }
+        return simulator.GetSettings();
     }
 
 } // namespace Spark::Net

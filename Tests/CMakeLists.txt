@@ -1033,6 +1033,9 @@ target_sources(SparkTests PRIVATE
     TestTextureZombiePool.cpp
 )
 
+# TF-110: the real net_* console commands drive the InstabilitySimulator.
+target_sources(SparkTests PRIVATE TestNetImpairmentWiring.cpp)
+
 # =============================================================================
 # Hardening regression tests (claude/harden-fleet) — shared TestMain runner
 # =============================================================================
@@ -1838,6 +1841,15 @@ foreach(_spark_tf110_selector IN LISTS _spark_tf110_selectors)
         LABELS "terrafront;unit"
         TIMEOUT 30)
 endforeach()
+
+# TF-110: network impairment reaches the wire. NetImpairmentWiring pins the
+# net_* console -> EngineSettings -> InstabilitySimulator bridge.
+add_test(NAME NetImpairmentWiring COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(NetImpairmentWiring PROPERTIES
+    ENVIRONMENT "SPARK_TEST_FILE=TestNetImpairmentWiring.cpp;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "network;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 30)
 
 # LIFE-200: the production LifecycleCompositionRoot fails closed on injected
 # stage failures (false return, std::exception, unknown throw, throwing shutdown).

@@ -15,11 +15,17 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/PostProcessingPipeline.h"
 #include "Graphics/WeatherSystem.h"
+#include "Engine/Networking/InstabilitySimulator.h"
 #include "Utils/SparkConsole.h"
 
+#include <charconv>
+#include <cmath>
+#include <format>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <cmath>
+#include <system_error>
+#include <vector>
 
 // Forward declaration for ext commands
 namespace Spark
@@ -310,50 +316,99 @@ namespace Spark
     // Network commands
     // ========================================================================
 
-    static void RegisterNetworkCommands(SimpleConsole& console)
+    // Parses one whole-token decimal in [lo, hi]. Rejects trailing garbage,
+    // NaN/inf and out-of-range values so a typo never changes impairment state.
+    static std::optional<double> ParseImpairmentValue(const std::string& text, double lo, double hi)
+    {
+        double value = 0.0;
+        const char* begin = text.data();
+        const char* end = begin + text.size();
+        const auto [ptr, ec] = std::from_chars(begin, end, value);
+        if (ec != std::errc{} || ptr != end || !std::isfinite(value) || value < lo || value > hi)
+            return std::nullopt;
+        return value;
+    }
+
+    // Writes one [Network] key, then pushes the whole section into the
+    // InstabilitySimulator so the console and config files take the same path.
+    static void SetImpairmentValue(const char* key, double value)
+    {
+        auto& settings = EngineSettings::GetInstance();
+        settings.SetValue("Network", key, std::format("{}", value));
+        Spark::Net::ApplyImpairmentSettings(settings);
+    }
+
+    static void RegisterImpairmentValueCommand(SimpleConsole& console, const char* name, const char* key, double hi,
+                                               const char* usage, const char* help)
     {
         console.RegisterCommand(
-            "net_lag",
-            [](const std::vector<std::string>& args) -> std::string
+            name,
+            [key, hi, usage](const std::vector<std::string>& args) -> std::string
             {
-                if (args.empty())
-                    return "Usage: net_lag <milliseconds>  (0 to disable)";
-                auto& settings = EngineSettings::GetInstance();
-                try
-                {
-                    settings.SetValue("Network", "SimulatedLatencyMs", args[0]);
-                    return "Simulated latency set to " + args[0] + " ms";
-                }
-                catch (const std::exception&)
-                {
-                    return "Invalid number";
-                }
+                if (args.size() != 1)
+                    return usage;
+                const std::optional<double> value = ParseImpairmentValue(args[0], 0.0, hi);
+                if (!value)
+                    return std::string("Invalid value '") + args[0] + "' (state unchanged). " + usage;
+                SetImpairmentValue(key, *value);
+                return Spark::Net::InstabilitySimulator::GetInstance().Console_GetStatus();
             },
-            "Simulate network latency (dev only)", "Network");
+            help, "Network");
+    }
+
+    static void RegisterNetworkCommands(SimpleConsole& console)
+    {
+        RegisterImpairmentValueCommand(console, "net_lag", "SimulatedLatencyMs", 60000.0,
+                                       "Usage: net_lag <milliseconds>  (0 to disable)",
+                                       "Simulate network latency (dev only)");
+        RegisterImpairmentValueCommand(console, "net_loss", "SimulatedPacketLoss", 1.0,
+                                       "Usage: net_loss <fraction>  (0.0-1.0, e.g. 0.05 = 5%)",
+                                       "Simulate packet loss (dev only)");
+        RegisterImpairmentValueCommand(console, "net_jitter", "SimulatedJitterMs", 60000.0,
+                                       "Usage: net_jitter <milliseconds>  (0 to disable)",
+                                       "Simulate network jitter (dev only)");
+        RegisterImpairmentValueCommand(console, "net_reorder", "SimulatedReorderPercent", 100.0,
+                                       "Usage: net_reorder <percent>  (0-100)",
+                                       "Simulate packet reordering (dev only)");
+        RegisterImpairmentValueCommand(console, "net_dup", "SimulatedDuplicatePercent", 100.0,
+                                       "Usage: net_dup <percent>  (0-100)", "Simulate packet duplication (dev only)");
 
         console.RegisterCommand(
-            "net_loss",
+            "net_impair_seed",
             [](const std::vector<std::string>& args) -> std::string
             {
-                if (args.empty())
-                    return "Usage: net_loss <percent>  (0.0-1.0, e.g. 0.05 = 5%)";
-                auto& settings = EngineSettings::GetInstance();
-                settings.SetValue("Network", "SimulatedPacketLoss", args[0]);
-                return "Simulated packet loss set to " + args[0];
+                constexpr const char* kUsage = "Usage: net_impair_seed <0-2147483647>  (0 = nondeterministic)";
+                if (args.size() != 1)
+                    return kUsage;
+                int seed = 0;
+                const char* begin = args[0].data();
+                const char* end = begin + args[0].size();
+                const auto [ptr, ec] = std::from_chars(begin, end, seed);
+                if (ec != std::errc{} || ptr != end || seed < 0)
+                    return std::string("Invalid seed '") + args[0] + "' (state unchanged). " + kUsage;
+                SetImpairmentValue("SimulatedImpairmentSeed", seed);
+                return "Impairment seed set to " + std::to_string(seed);
             },
-            "Simulate packet loss (dev only)", "Network");
+            "Seed the network impairment RNG for reproducible runs (dev only)", "Network");
 
         console.RegisterCommand(
-            "net_jitter",
-            [](const std::vector<std::string>& args) -> std::string
+            "net_impair_off",
+            [](const std::vector<std::string>&) -> std::string
             {
-                if (args.empty())
-                    return "Usage: net_jitter <milliseconds>  (0 to disable)";
                 auto& settings = EngineSettings::GetInstance();
-                settings.SetValue("Network", "SimulatedJitterMs", args[0]);
-                return "Simulated jitter set to " + args[0] + " ms";
+                for (const char* key :
+                     {"SimulatedLatencyMs", "SimulatedPacketLoss", "SimulatedJitterMs", "SimulatedReorderPercent",
+                      "SimulatedDuplicatePercent", "SimulatedImpairmentSeed"})
+                    settings.SetValue("Network", key, "0");
+                Spark::Net::ApplyImpairmentSettings(settings);
+                return Spark::Net::InstabilitySimulator::GetInstance().Console_GetStatus();
             },
-            "Simulate network jitter (dev only)", "Network");
+            "Disable all simulated network impairment (dev only)", "Network");
+
+        console.RegisterCommand(
+            "net_impair", [](const std::vector<std::string>&) -> std::string
+            { return Spark::Net::InstabilitySimulator::GetInstance().Console_GetStatus(); },
+            "Show simulated network impairment state (dev only)", "Network");
     }
 
     // ========================================================================

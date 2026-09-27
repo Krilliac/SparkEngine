@@ -226,6 +226,9 @@ SPARK_REFLECT_FIELD(NS, enableCompression, "EnableCompression")
 SPARK_REFLECT_FIELD(NS, simulatedLatencyMs, "SimulatedLatencyMs")
 SPARK_REFLECT_FIELD(NS, simulatedPacketLoss, "SimulatedPacketLoss")
 SPARK_REFLECT_FIELD(NS, simulatedJitterMs, "SimulatedJitterMs")
+SPARK_REFLECT_FIELD(NS, simulatedReorderPercent, "SimulatedReorderPercent")
+SPARK_REFLECT_FIELD(NS, simulatedDuplicatePercent, "SimulatedDuplicatePercent")
+SPARK_REFLECT_FIELD(NS, simulatedImpairmentSeed, "SimulatedImpairmentSeed")
 SPARK_REFLECT_END(NS)
 
 using DS = EngineSettings::DebugSettings;
