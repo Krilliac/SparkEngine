@@ -1603,7 +1603,8 @@ namespace Spark
             void VulkanDevice::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
                 auto* vkBuf = static_cast<VulkanBuffer*>(buffer);
-                if (!vkBuf || !data || size == 0 || offset + size > vkBuf->GetSize())
+                // IsBufferRangeValid avoids `offset + size`, which wrapped for a huge offset.
+                if (!vkBuf || !data || !IsBufferRangeValid(vkBuf->GetSize(), offset, size))
                     return;
                 if (!vkBuf->IsHostVisible())
                 {

@@ -19,6 +19,7 @@
 #include "../../../Utils/Validate.h"
 #include <algorithm>
 #include <cassert>
+#include <climits>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -1724,6 +1725,23 @@ namespace Spark
             void D3D11Device::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
                 auto* d3dBuf = static_cast<D3D11Buffer*>(buffer);
+                if (!d3dBuf || !data)
+                    return;
+                // Reject a range outside the buffer before either path: the Dynamic path memcpys
+                // into a mapping of exactly GetSize() bytes, and the static path narrows the range
+                // to UINT for the D3D11_BOX. D3D11 ByteWidth is a UINT, so a larger size is invalid.
+                const uint64_t bufferSize = d3dBuf->GetSize();
+                if (!IsBufferRangeValid(bufferSize, offset, size) || bufferSize > UINT_MAX)
+                {
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D11Device::UpdateBuffer: range [%llu, +%llu) outside '%s' (%llu bytes) "
+                                            "- update dropped",
+                                            static_cast<unsigned long long>(offset),
+                                            static_cast<unsigned long long>(size), d3dBuf->GetDebugName().c_str(),
+                                            static_cast<unsigned long long>(bufferSize));
+                    return;
+                }
+
                 if (d3dBuf->GetDesc().access == RHIBufferAccess::Dynamic)
                 {
                     void* mapped = MapBuffer(buffer);
@@ -1737,7 +1755,6 @@ namespace Spark
                 {
                     // A null D3D11_BOX updates the whole resource and ignores size/offset.
                     // For a partial update, describe the exact byte range to write.
-                    const uint64_t bufferSize = d3dBuf->GetSize();
                     if (offset != 0 || size < bufferSize)
                     {
                         D3D11_BOX box = {};

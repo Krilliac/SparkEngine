@@ -2193,7 +2193,12 @@ namespace Spark
             void GLDevice::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
-                glNamedBufferSubData(glBuf->GetGLBuffer(), offset, size, data);
+                // Same contract as the other backends: drop an out-of-range or null upload
+                // rather than hand the driver a pointer it would read past.
+                if (!glBuf || !data || !IsBufferRangeValid(glBuf->GetSize(), offset, size))
+                    return;
+                glNamedBufferSubData(glBuf->GetGLBuffer(), static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size),
+                                     data);
             }
 
             void GLDevice::UpdateTexture(IRHITexture* texture, const void* data, uint32_t mipLevel, uint32_t arraySlice)

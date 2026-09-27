@@ -1169,12 +1169,17 @@ namespace Spark
             void MetalDevice::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
                 auto* metalBuffer = dynamic_cast<MetalBuffer*>(buffer);
-                if (metalBuffer == nullptr || data == nullptr)
+                if (metalBuffer == nullptr || data == nullptr ||
+                    !IsBufferRangeValid(metalBuffer->GetSize(), offset, size))
                 {
                     return;
                 }
 
                 uint8_t* base = reinterpret_cast<uint8_t*>([metalBuffer->GetMTLBuffer() contents]);
+                if (base == nullptr)
+                {
+                    return; // Private storage has no CPU mapping.
+                }
                 std::memcpy(base + offset, data, size);
             }
 
