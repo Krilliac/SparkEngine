@@ -14,6 +14,12 @@
 #include <string>
 #include <vector>
 
+namespace tinyobj
+{
+    struct attrib_t;
+    struct shape_t;
+} // namespace tinyobj
+
 namespace Spark::Graphics::Detail
 {
     struct OBJStaticVertex
@@ -55,4 +61,24 @@ namespace Spark::Graphics::Detail
      * @return true when a non-empty static triangle mesh was loaded.
      */
     bool LoadOBJStaticMesh(const std::filesystem::path& path, OBJStaticMeshData& meshData, std::string& error);
+
+    /**
+     * @brief Fail-closed index check for code that walks tinyobjloader output itself.
+     *
+     * tinyobjloader turns any positive OBJ face index into idx - 1 without an
+     * upper bound and only warns about out-of-range indices, so a crafted file
+     * parses "successfully" with indices past the attribute arrays. Every
+     * consumer that indexes attrib.vertices/normals/texcoords directly must call
+     * this after parsing and reject the file when it returns false.
+     *
+     * Thread affinity: any thread (pure function). Allocation: none.
+     *
+     * @param attrib Parsed attribute arrays.
+     * @param shapes Parsed shapes whose face indices are checked.
+     * @param error Receives a diagnostic on failure.
+     * @return true when every vertex index addresses a position and every
+     *         non-negative normal/texcoord index addresses an element.
+     */
+    bool ValidateOBJIndices(const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes,
+                            std::string& error);
 } // namespace Spark::Graphics::Detail

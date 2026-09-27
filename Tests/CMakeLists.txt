@@ -335,6 +335,7 @@ add_executable(SparkTests
     TestDirectStorageLoader.cpp
     TestMeshShaderPipeline.cpp
     TestSparkPak.cpp
+    TestAssetParserHardening.cpp
     TestNetworkManagerOrchestration.cpp
     TestNetworkManagerEdgeCases.cpp
     TestECSystemOrdering.cpp
@@ -1686,6 +1687,16 @@ if(NOT WIN32)
         LABELS "compatibility;save;process"
         TIMEOUT 300)
 endif()
+
+# SEC-assets: untrusted asset-parser regressions (SparkPak TOC binding and bounds,
+# the repo-authored stb_image stub BMP/TGA decoders, OBJ face-index validation,
+# the Windows TGA texture loader and the non-Windows EXR texture path). Tests that
+# only apply to one platform still register everywhere, so the count is fixed.
+add_test(NAME SparkAssetParserHardeningTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkAssetParserHardeningTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AssetSec_;SPARK_TEST_EXPECT_COUNT=11"
+    LABELS "security;assets;unit"
+    TIMEOUT 120)
 
 # SAVE-230: the whole-document writer behind prefab and project saves keeps the
 # destination and its retained .bak byte-identical on failure and refreshes the

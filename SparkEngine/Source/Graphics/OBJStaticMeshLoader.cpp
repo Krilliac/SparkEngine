@@ -170,6 +170,37 @@ namespace Spark::Graphics::Detail
         }
     } // namespace
 
+    bool ValidateOBJIndices(const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes,
+                            std::string& error)
+    {
+        const size_t positionCount = attrib.vertices.size() / 3;
+        const size_t normalCount = attrib.normals.size() / 3;
+        const size_t texCoordCount = attrib.texcoords.size() / 2;
+
+        for (const tinyobj::shape_t& shape : shapes)
+        {
+            for (const tinyobj::index_t& index : shape.mesh.indices)
+            {
+                if (index.vertex_index < 0 || static_cast<size_t>(index.vertex_index) >= positionCount)
+                {
+                    error = "OBJ face references a position index out of range";
+                    return false;
+                }
+                if (index.normal_index >= 0 && static_cast<size_t>(index.normal_index) >= normalCount)
+                {
+                    error = "OBJ face references a normal index out of range";
+                    return false;
+                }
+                if (index.texcoord_index >= 0 && static_cast<size_t>(index.texcoord_index) >= texCoordCount)
+                {
+                    error = "OBJ face references a texture coordinate index out of range";
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     bool LoadOBJStaticMesh(const std::filesystem::path& path, OBJStaticMeshData& meshData, std::string& error)
     {
         meshData = {};
