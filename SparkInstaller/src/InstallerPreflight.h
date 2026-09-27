@@ -29,7 +29,8 @@ namespace SparkInstaller::Preflight
     std::uintmax_t DefaultMinFreeBytes(const InstallerContext& ctx);
 
     // Read-only checks run before the installer touches the destination:
-    // destination is not a symlink/junction, its nearest existing ancestor is
+    // no existing component of the destination path is a symlink/junction
+    // (root-owned POSIX system links excepted), its nearest existing ancestor is
     // writable (one probe file is created and removed) and has enough free
     // space, CMake runs unless skipBuild, and in Update mode a present install
     // marker parses. ctx.destination must already be absolute and ctx.mode

@@ -537,8 +537,34 @@ namespace
     {
         Fresh,
         Link,
+        LinkedAncestor, // a link two levels above an ordinary existing directory
         CorruptMarkerUpdate
     };
+
+    // Creates a directory junction (Windows) or symlink at @p link pointing to @p target.
+    int CreateDirectoryLink(const fs::path& link, const fs::path& target, const fs::path& root, const std::string& name)
+    {
+#ifdef _WIN32
+        // A junction needs no symlink privilege and is the Windows link
+        // shape std::filesystem does not portably report. mklink is a
+        // cmd.exe builtin (there is no mklink.exe) and RunSync does not
+        // go through a shell, so the builtin must run under cmd /c.
+        using SparkInstaller::GitRunner;
+        SparkBuild::ProcessRunner runner;
+        std::string output;
+        int failures =
+            Check(runner.RunSync("cmd.exe /c mklink /J " + GitRunner::EncodeProcessRunnerArgument(link.string()) + " " +
+                                     GitRunner::EncodeProcessRunnerArgument(target.string()),
+                                 root.string(), output) == 0,
+                  name + ": could not create junction fixture: " + output);
+        return failures + Check(fs::exists(link), name + ": junction fixture is missing");
+#else
+        (void)root;
+        std::error_code error;
+        fs::create_directory_symlink(target, link, error);
+        return Check(!error, name + ": could not create symlink fixture");
+#endif
+    }
 
     // Runs the installer against a fixture that preflight must refuse and
     // proves it returns exit 10 before any git or build command ran. The only
@@ -552,28 +578,22 @@ namespace
 
         fs::path destination = root / "install";
         const fs::path linkTarget = root / "real-install";
+        const fs::path linkedParent = root / "linked-parent";
         if (kind == PreflightDestination::Link)
         {
             fs::create_directories(linkTarget, error);
             failures += Check(!error, name + ": could not create link target");
-#ifdef _WIN32
-            // A junction needs no symlink privilege and is the Windows link
-            // shape std::filesystem does not portably report. mklink is a
-            // cmd.exe builtin (there is no mklink.exe) and RunSync does not
-            // go through a shell, so the builtin must run under cmd /c.
-            using SparkInstaller::GitRunner;
-            SparkBuild::ProcessRunner runner;
-            std::string output;
-            failures += Check(runner.RunSync("cmd.exe /c mklink /J " +
-                                                 GitRunner::EncodeProcessRunnerArgument(destination.string()) + " " +
-                                                 GitRunner::EncodeProcessRunnerArgument(linkTarget.string()),
-                                             root.string(), output) == 0,
-                              name + ": could not create junction fixture: " + output);
-            failures += Check(fs::exists(destination), name + ": junction fixture is missing at the destination");
-#else
-            fs::create_directory_symlink(linkTarget, destination, error);
-            failures += Check(!error, name + ": could not create symlink fixture");
-#endif
+            failures += CreateDirectoryLink(destination, linkTarget, root, name);
+        }
+        else if (kind == PreflightDestination::LinkedAncestor)
+        {
+            // root/linked-parent -> root/real-install; linked-parent/existing is
+            // an ordinary directory, so it is the nearest existing ancestor of
+            // the destination and is not itself a link.
+            fs::create_directories(linkTarget / "existing", error);
+            failures += Check(!error, name + ": could not create link target");
+            failures += CreateDirectoryLink(linkedParent, linkTarget, root, name);
+            destination = linkedParent / "existing" / "install";
         }
         else if (kind == PreflightDestination::CorruptMarkerUpdate)
         {
@@ -618,6 +638,12 @@ namespace
             failures += Check(fs::is_empty(linkTarget, error), name + ": refused install wrote through the link");
             fs::remove(destination, error);
         }
+        else if (kind == PreflightDestination::LinkedAncestor)
+        {
+            failures += Check(fs::is_empty(linkTarget / "existing", error),
+                              name + ": refused install wrote through the linked ancestor");
+            fs::remove(linkedParent, error);
+        }
 
         fs::remove_all(root, error);
         return failures;
@@ -635,6 +661,10 @@ namespace
         failures +=
             RunPreflightRefusalTest(executable, "linked destination", PreflightDestination::Link, "destination-link",
                                     /*impossibleFreeSpace=*/false, /*missingCMake=*/false);
+        // SEC finding 23: a link above the nearest existing ancestor is refused too.
+        failures += RunPreflightRefusalTest(executable, "linked destination ancestor",
+                                            PreflightDestination::LinkedAncestor, "destination-link",
+                                            /*impossibleFreeSpace=*/false, /*missingCMake=*/false);
         failures += RunPreflightRefusalTest(executable, "corrupt marker update",
                                             PreflightDestination::CorruptMarkerUpdate, "corrupt-install-marker",
                                             /*impossibleFreeSpace=*/false, /*missingCMake=*/false);

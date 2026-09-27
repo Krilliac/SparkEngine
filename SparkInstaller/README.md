@@ -74,7 +74,7 @@ code **10** and leaves the destination exactly as it was.
 
 | Check | Failure code |
 |---|---|
-| The destination, or its nearest existing ancestor when it does not exist yet, is not a symlink or NTFS junction. | `destination-link` |
+| No existing component of the destination path is a symlink or NTFS junction (on Linux/macOS, root-owned system symlinks such as macOS `/var` are allowed). | `destination-link` |
 | That directory exists as a directory and accepts a create + remove of a `.sparkinstaller-preflight-<pid>` probe file. | `destination-not-directory`, `destination-not-writable` |
 | Free space on that volume meets the disk budget below. | `insufficient-free-space`, `free-space-unknown` |
 | `cmake --version` runs (skipped with `--skip-build`). | `cmake-unavailable` |

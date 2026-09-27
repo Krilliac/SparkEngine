@@ -18,6 +18,7 @@
 #endif
 #include <windows.h>
 #else
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -62,6 +63,49 @@ namespace SparkInstaller::Preflight
 #else
             return false;
 #endif
+        }
+
+        // A root-owned symlink is part of the system layout (macOS /var and /tmp,
+        // distribution merged-/usr links): no unprivileged principal can have
+        // planted or retargeted it. A root installer cannot tell system links
+        // from its own, so it refuses them all, as does Windows for junctions.
+        bool IsSystemOwnedLink(const fs::path& path)
+        {
+#ifdef _WIN32
+            (void)path;
+            return false;
+#else
+            struct stat info
+            {
+            };
+            return ::geteuid() != 0 && ::lstat(path.c_str(), &info) == 0 && S_ISLNK(info.st_mode) && info.st_uid == 0;
+#endif
+        }
+
+        // The first existing component of @p destination (root excluded) that is
+        // a symlink or junction, or an empty path when none is. Checking only the
+        // nearest existing ancestor missed a link higher up, e.g. C:\a being a
+        // junction under an ordinary C:\a\b.
+        fs::path FirstLinkedComponent(const fs::path& destination)
+        {
+            fs::path current;
+            for (const fs::path& part : destination)
+            {
+                current /= part;
+                if (current == current.root_path())
+                {
+                    continue; // "C:", "C:\", "\\server\" or "/"
+                }
+                if (!PathEntryExists(current))
+                {
+                    break; // nothing deeper exists yet
+                }
+                if (IsSymlinkOrJunction(current) && !IsSystemOwnedLink(current))
+                {
+                    return current;
+                }
+            }
+            return {};
         }
 
         unsigned long CurrentProcessId()
@@ -118,12 +162,14 @@ namespace SparkInstaller::Preflight
         const fs::path destination = fs::path(ctx.destination);
         const fs::path ancestor = NearestExistingAncestor(destination);
 
-        const bool linked = IsSymlinkOrJunction(ancestor);
+        const fs::path linkedComponent = FirstLinkedComponent(destination);
+        const bool linked = !linkedComponent.empty();
         if (linked)
         {
-            failures.push_back({"destination-link",
-                                (ancestor == destination ? "destination " : "destination ancestor ") +
-                                    ancestor.string() + " is a symlink or junction; choose the real directory path"});
+            failures.push_back(
+                {"destination-link", (linkedComponent == destination ? "destination " : "destination path component ") +
+                                         linkedComponent.string() +
+                                         " is a symlink or junction; choose the real directory path"});
         }
 
         std::error_code error;
