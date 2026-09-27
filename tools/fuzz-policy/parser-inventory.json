@@ -35,7 +35,7 @@
         "ticket": "ENG-200",
         "owner": "eng-200-scripting-campaign",
         "expires": "2027-08-23",
-        "hidden_candidate_count": 3
+        "hidden_candidate_count": 2
       }
     ],
     "excluded_files": [],
@@ -2428,6 +2428,17 @@
   ],
   "deferred_candidates": [],
   "exempt_candidates": [
+    {
+      "source_file": "GameModules/SparkGame/Source/Core/ShowcaseLocalization.cpp",
+      "classification": "delegating-call-site",
+      "justification": "LoadShowcaseStrings passes the fixed kShowcaseLanguageFiles paths (Assets/Localization/SparkGame/showcase_en.json and showcase_fr.json under the content root) to the engine StringTable::LoadFromFile and LocalizationSystem::LoadLanguage, then only checks the decoded tables with HasEntry against the compiled-in key list; the file decodes no localization bytes itself, so the catalog-parsing risk stays with the localization-system record.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "localization-system"
+      ]
+    },
     {
       "source_file": "GameModules/SparkGameFPS/Source/Core/HeadlessArena.cpp",
       "classification": "delegating-call-site",

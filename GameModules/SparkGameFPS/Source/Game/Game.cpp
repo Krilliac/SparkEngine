@@ -819,8 +819,22 @@ void Game::HandleInput(float)
         return;
     }
 
+#ifdef SPARK_PLATFORM_WINDOWS
+    // On Windows mouse-look belongs to the captured cursor: a click in the
+    // window captures it and Escape releases it. Uncaptured, InputManager still
+    // reports WM_MOUSEMOVE deltas whenever the pointer merely crosses the
+    // window -- the user working in another app, or the pointer that
+    // InputManager::Initialize warped to the window center -- and turning the
+    // camera on those made unattended runs (and their screenshots) depend on
+    // whatever the desktop pointer happened to do.
+    const bool mouseLookActive = m_input->IsMouseCaptured();
+#else
+    // The POSIX/SDL path never enters capture on click, so the uncaptured
+    // cursor is the only mouse-look source there.
+    const bool mouseLookActive = true;
+#endif
     auto [dx, dy] = m_input->GetMouseDelta();
-    if (dx != 0 || dy != 0)
+    if (mouseLookActive && (dx != 0 || dy != 0))
     {
         constexpr float mouseSens = 0.005f;
         m_camera->Yaw(dx * mouseSens);

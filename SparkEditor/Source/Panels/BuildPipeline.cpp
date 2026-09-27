@@ -288,8 +288,11 @@ namespace SparkEditor
                 return false;
             }
 
+            // is_directory(p, ec) reports a missing path as an error, so a
+            // first-time package (no previous destination) must be checked
+            // with exists() first, which treats not-found as a plain false.
             fs::path backup;
-            const bool hadDestination = fs::is_directory(destination, ec);
+            const bool hadDestination = fs::exists(destination, ec) && fs::is_directory(destination, ec);
             if (ec)
             {
                 error = "Could not inspect package destination: " + ec.message();

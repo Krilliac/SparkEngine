@@ -16,7 +16,8 @@ frames; `report` opens the GitHub playtest issue form. The shipped
 `bin/PLAYTESTING.md` explains the workflow and safe report contents. These
 commands do not certify the still-blocked `stable-v1` release.
 
-- `WASD` moves, mouse looks, left mouse fires, `R` reloads, and `Space` jumps.
+- `WASD` moves, left mouse fires, `R` reloads, and `Space` jumps.
+- On Windows, click in the window to capture the mouse for mouse-look; `Esc` releases it.
 - `1`-`4` select loadout slots; `F` and `G` activate class abilities.
 - `F5`-`F10` select a class, while `[` and `]` cycle classes.
 - `V` enters or exits the nearest vehicle.

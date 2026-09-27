@@ -13,11 +13,11 @@
   "coverage_claim": false,
   "inputs": {
     "corpus_manifest": "05ff409e62f606cfa44dc4727153bc09a9160ee2bff4cb620b64200038858ef1",
-    "inventory": "bc74b8090eca33b121e2d264e772cad5b1b1f270295e8c63af1887d879a7fe15"
+    "inventory": "dd5e2ae031a054dafbf5de2a82b040a8dc0871c3be0f81b647c45207cc0199d4"
   },
   "inventory": {
     "blocked_count": 131,
-    "candidate_count": 292,
+    "candidate_count": 294,
     "deferred_candidate_count": 0,
     "excluded_files": [],
     "excluded_subtrees": [
@@ -30,20 +30,20 @@
       },
       {
         "expires": "2027-08-23",
-        "hidden_candidate_count": 3,
+        "hidden_candidate_count": 2,
         "owner": "eng-200-scripting-campaign",
         "path": "SparkEngine/Source/Engine/Scripting",
         "ticket": "ENG-200"
       }
     ],
     "exempt_by_classification": {
-      "delegating-call-site": 69,
+      "delegating-call-site": 70,
       "developer-tooling": 3,
       "helper": 10,
       "not-a-parser": 31,
       "same-process-data": 6
     },
-    "exempt_candidate_count": 119,
+    "exempt_candidate_count": 120,
     "fuzzed_count": 6,
     "parser_count": 137,
     "scan_roots": [
@@ -65,7 +65,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 2051,
+    "scanned_file_count": 2068,
     "unclassified_candidate_count": 0
   },
   "passed": false,
