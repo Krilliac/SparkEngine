@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -210,7 +211,11 @@ class CTestPolicyValidator(unittest.TestCase):
         policy = self._policy_module()
         with tempfile.TemporaryDirectory() as temporary:
             outer = Path(temporary)
-            init = subprocess.run(["git", "init", "-q", str(outer)], capture_output=True, check=False)
+            # Strip inherited GIT_* variables: with GIT_DIR/GIT_WORK_TREE set by a caller,
+            # `git init` re-initialises that repository (and rewrites its core.worktree)
+            # instead of creating one in the temporary directory.
+            clean_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+            init = subprocess.run(["git", "init", "-q", str(outer)], capture_output=True, check=False, env=clean_env)
             if init.returncode != 0:
                 self.skipTest("git is unavailable to create the enclosing repository")
             root = outer / "copy"
