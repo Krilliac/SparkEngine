@@ -306,7 +306,7 @@ def collect_metrics(
     panel_content = panel_path.read_text(encoding="utf-8", errors="ignore")
     editor_panels = len(re.findall(r"\btryRegister\s*\(\s*\"", panel_content))
 
-    palette_path = REPO_ROOT / "SparkEngine" / "Source" / "Engine" / "Scripting" / "VisualScriptCompiler.cpp"
+    palette_path = REPO_ROOT / "SparkEngine" / "Source" / "Engine" / "Scripting" / "VisualScriptNodePalette.cpp"
     palette_content = palette_path.read_text(encoding="utf-8", errors="ignore")
     palette_match = re.search(r"\bkPalette\s*=\s*\{(?P<body>.*?)\};", palette_content, flags=re.DOTALL)
     visual_nodes = len(re.findall(r"\{\s*ScriptNodeType::", palette_match.group("body") if palette_match else ""))
@@ -373,7 +373,7 @@ def collect_metrics(
         metric("editor.panels", "Registered editor panels", editor_panels, source_evidence("SparkEditor/Source/Core/EditorPanelFactory.cpp", "Editor panel registrations"), "panels"),
         metric("shaders.hlsl", "HLSL shader files", hlsl, source_evidence("Shaders/HLSL", "HLSL source tree"), "files"),
         metric("shaders.glsl", "GLSL shader files", glsl, source_evidence("Shaders/GLSL", "GLSL source tree"), "files"),
-        metric("visualScript.nodes", "Visual-script palette nodes", visual_nodes, source_evidence("SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp", "Node palette"), "nodes"),
+        metric("visualScript.nodes", "Visual-script palette nodes", visual_nodes, source_evidence("SparkEngine/Source/Engine/Scripting/VisualScriptNodePalette.cpp", "Node palette"), "nodes"),
         metric("networking.lines", "Networking and online-services lines", networking_lines, source_evidence("SparkEngine/Source/Engine/Networking", "Networking source tree"), "lines"),
         metric("modules.discovered", "CMake-discovered game modules", len(modules), source_evidence("GameModules", "Module directories with CMakeLists.txt"), "modules"),
         metric("module.fps.files", "FPS module source files", fps["files"], source_evidence(fps["sourcePath"], "FPS module source"), "files"),

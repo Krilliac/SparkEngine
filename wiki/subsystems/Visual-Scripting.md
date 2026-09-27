@@ -9,15 +9,17 @@ SparkEngine now includes a **unified visual scripting system** — a single, pro
 | Component | File | Purpose |
 |-----------|------|---------|
 | `VisualScriptCompiler` | `SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.h` | Node graph → AngelScript compiler |
+| `VisualScriptGraphIO` | `SparkEngine/Source/Engine/Scripting/VisualScriptGraphIO.h` | `.vscript` graph files: fail-closed parse, canonical save |
 | `VisualScriptPanel` | `SparkEditor/Source/Panels/VisualScriptPanel.h` | ImGui node graph editor |
 
 ### How It Works
 
 1. Non-coders build gameplay logic by connecting nodes in the Visual Script panel
-2. Clicking **Compile** runs `VisualScriptCompiler::Compile()` which generates a `.as` file
-3. The generated file is written to `Assets/Scripts/Generated/`
-4. The existing `ScriptHotReload` system detects the change and recompiles automatically
-5. **No new runtime** — visual scripts use the same AngelScript pipeline as hand-written scripts
+2. **Save**/**Load** read and write the graph as a `.vscript` file through the engine's `VisualScriptGraphIO`
+3. Clicking **Compile** runs `VisualScriptCompiler::Compile()` which generates a `.as` file
+4. The generated file is written to `Assets/Scripts/Generated/`
+5. The existing `ScriptHotReload` system detects the change and recompiles automatically
+6. **No new runtime** — visual scripts use the same AngelScript pipeline as hand-written scripts
 
 ### Node Types (~60 types across 8 categories)
 
@@ -26,8 +28,9 @@ SparkEngine now includes a **unified visual scripting system** — a single, pro
 | **Events** | OnStart, OnUpdate, OnTriggerEnter, OnDamaged, OnKeyPress, OnCollision |
 | **Flow Control** | Branch (If), ForLoop, Sequence |
 | **Actions** | SetPosition, PlaySound, PlayAnimation, SpawnEntity, PrintMessage |
-| **Math** | Add, Subtract, Multiply, Divide, Lerp, Clamp, Random |
-| **Logic** | AND, OR, NOT, Equal, Greater, Less |
+| **Math** | Add, Subtract, Multiply, Divide, Lerp, Clamp, Random, Break/Make Vector3, To Int |
+| **Logic** | AND, OR, NOT, Equal, Greater, Less, Select |
+| **Text** | Append (string + any value) |
 | **Getters** | GetKeyDown, GetDeltaTime, GetSelf |
 | **Constants** | Float, Int, Bool, String, Vector3 |
 | **Variables** | GetVariable, SetVariable |
@@ -169,16 +172,12 @@ panel.AddNodeAtPositionDirect(Spark::Scripting::ScriptNodeType::ApplyForce, 700.
 
 Drag from an output pin to an input pin to create a connection. The system enforces type safety:
 
-```cpp
-// Type compatibility check (from VisualScriptPanel)
-// Execution pins only connect to Execution pins
-// Data pins connect if types match, or if either pin is PinKind::Any
-bool AreTypesCompatible(PinKind a, PinKind b)
-{
-    if (a == PinKind::Any || b == PinKind::Any) return true;
-    return a == b;
-}
-```
+The panel and the `.vscript` loader share one rule, `VisualScriptGraphIO::ArePinKindsCompatible()`:
+Execution pins connect only to Execution pins; data pins connect when the kinds match, when either is `Any`,
+or between `Int` and `Float`. An input takes one wire, and an execution output feeds one input: a new wire into
+an input, or out of an execution output, replaces the old one. The panel also names new variables uniquely, clamps
+`Int` defaults to the exact float range (±2^24) and stops adding nodes before ids pass `kMaxNodeId`, so every graph
+it builds can be saved.
 
 Pin types and their wire colors:
 
@@ -218,10 +217,16 @@ struct VariableDecl
 Click the **Compile** button. The compiler performs:
 
 1. **Find event entry points** -- Scans for `OnStart`, `OnUpdate`, `OnTriggerEnter`, etc.
-2. **Topological sort** -- Walks execution and data connections to determine evaluation order
-3. **Code emission** -- Generates AngelScript class with member variables and lifecycle methods
-4. **Write to disk** -- Saves `.as` file to `Assets/Scripts/Generated/`
-5. **Hot reload** -- `ScriptHotReload` detects the file change and recompiles automatically
+2. **Walk execution wires** -- Each event's chain is emitted in order. Branch, Sequence and ForLoop emit their
+   output chains inside their own blocks, so control flow nests (an `else if` is a Branch on a False output).
+   Branch and Sequence end a chain; ForLoop continues from its Completed pin.
+3. **Evaluate data at the point of use** -- Pure data nodes (no execution pins) are re-evaluated in a scoped block
+   in front of every statement that reads them, so a Get Variable after a Set Variable in the same chain sees the
+   new value. Execution or data cycles, and variable defaults that are not a literal of the variable's type, fail
+   the compile with an error.
+4. **Code emission** -- Generates AngelScript class with member variables and lifecycle methods
+5. **Write to disk** -- Saves `.as` file to `Assets/Scripts/Generated/` (binary, so the bytes match on every platform)
+6. **Hot reload** -- `ScriptHotReload` detects the file change and recompiles automatically
 
 ```cpp
 // Programmatic compilation
@@ -334,6 +339,11 @@ healFunction.parameters.push_back(amountParam);
 graph.functions.push_back(healFunction);
 ```
 
+A function body starts at its entry statements: statement nodes with no incoming execution wire, taken in the
+order the nodes are listed. Each entry is emitted with its downstream chain, so Branch, Sequence and ForLoop nest
+exactly as they do in event methods and their targets are not emitted a second time. A body whose every statement
+sits on an execution cycle fails the compile.
+
 This compiles to:
 
 ```angelscript
@@ -417,22 +427,53 @@ class AddConnectionCommand : public EditorCommand
 };
 ```
 
-## Save/Load Graph Persistence
+## The .vscript Graph File
 
-Graphs can be saved and loaded independently of compilation:
+`VisualScriptGraphIO` (engine side, used by the editor panel and by tests) owns the graph file format:
 
 ```cpp
-// Save graph to JSON
-panel.SaveGraph("Assets/Scripts/Graphs/PlayerController.vsgraph");
-
-// Load graph from JSON
-panel.LoadGraph("Assets/Scripts/Graphs/PlayerController.vsgraph");
+auto graph = Spark::Scripting::VisualScriptGraphIO::LoadFile("Assets/Graphs/PlayerController.vscript");
+if (!graph)
+    SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", graph.error().c_str()); // names file and element
+auto saved = Spark::Scripting::VisualScriptGraphIO::SaveFile(path, *graph);  // atomic: temp file + rename
 ```
+
+A `.vscript` file is JSON with `"format": "spark.vscript"` and `"version": 1`, the class name, an optional
+description (emitted as the generated file's header comment), variables, nodes, connections, functions and custom
+events. Node types and pin kinds are stored by name (`"type": "Branch"`, `"kind": "Float"`), never by enum value.
+Each node records its pins with their defaults and its editor position.
+
+Loading fails closed. An unknown or repeated key, format, version, node type or pin kind, a duplicate, zero or
+out-of-range (above 2^24 - 1) node id, a wire to a missing node or pin, an execution wire joined to a data pin,
+incompatible data kinds, a second wire into one input, or a second wire out of one execution output rejects the
+whole file, and the message names the element (`graph.connections[3].to: ...`). The editor keeps
+its current graph when a load fails. `SaveFile` parses its own output before writing, so it never writes a file that
+would not load. The editor panel has no canvas for function sub-graphs or custom events yet; it keeps a loaded
+graph's definitions and writes them back on save, and its variable name, type and default fields hold every value
+the loader accepts, so a Load then Save in the panel loses nothing. Output is canonical, with one node or wire per line, a fixed key order and floats in shortest
+round-trip form. Re-saving an unchanged graph therefore reproduces the file byte for byte, and graph diffs stay
+reviewable.
+
+### Checked-in module graphs
+
+`GameModules/SparkGameVisualScript/Assets/Graphs/*.vscript` are the sources of that module's five shipped scripts
+(`Assets/Scripts/Generated/*.as`). `VisualScriptGraphs_CheckedInGraphsRegenerateShippedScripts`
+(`Tests/TestMOD390VisualScriptGraphsReal.cpp`) compiles each graph and requires the shipped `.as` to match byte for
+byte. `VisualScriptGameplay_*` plays those scripts to the five-pickup win, so the demo's gameplay is authored as
+graphs. After editing a graph, regenerate:
+
+```bash
+SPARK_VSCRIPT_OUTPUT_DIR=/tmp/vscript SPARK_TEST_NAME=VisualScriptGraphs_CheckedIn build/linux-gcc-release/bin/SparkTests
+cp /tmp/vscript/*.as GameModules/SparkGameVisualScript/Assets/Scripts/Generated/
+cp /tmp/vscript/*.vscript GameModules/SparkGameVisualScript/Assets/Graphs/   # canonical form
+```
+
+Then update the SHA-256 values in `GameModules/SparkGameVisualScript/Assets/manifest.json`.
 
 ## Performance Considerations
 
 1. **No runtime overhead** -- Visual scripts compile to the same AngelScript as hand-written code. There is no visual script interpreter or VM.
-2. **Compile-time cost** -- The topological sort and code generation are O(N) where N is the node count. Compilation is near-instant for typical graphs (< 200 nodes).
+2. **Compile-time cost** -- Code generation walks each execution chain once and each statement's data inputs once. Compilation is near-instant for typical graphs (< 200 nodes).
 3. **Hot reload latency** -- After compilation, `ScriptHotReload` detects the file change within one frame and triggers AngelScript recompilation. Total turnaround is typically under 100ms.
 4. **Graph size** -- Large graphs (500+ nodes) may slow canvas rendering in the editor. Consider splitting logic across multiple scripts attached to different entities.
 

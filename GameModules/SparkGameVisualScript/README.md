@@ -5,6 +5,15 @@ creates the demo entities, binds each script instance to its real ECS entity, an
 Movement, jumping, patrol/chase behavior, damage, healing, collection, scoring, and win/lose rules remain in the
 generated scripts under `Assets/Scripts/Generated`.
 
+Those scripts are compiled from visual-script graphs checked in under `Assets/Graphs` (`PlayerController.vscript`,
+`Collectible.vscript`, `EnemyPatrol.vscript`, `GameManager.vscript`, `HealthPickup.vscript`). The engine's
+`VisualScriptGraphIO` reads them, and they open in the editor's Visual Script panel. The graphs are the source of
+truth: `VisualScriptGraphs_CheckedInGraphsRegenerateShippedScripts` (`Tests/TestMOD390VisualScriptGraphsReal.cpp`)
+compiles each one with `VisualScriptCompiler` and fails unless the result matches the shipped `.as` byte for byte. To
+change gameplay, edit a graph and regenerate: run that test with `SPARK_VSCRIPT_OUTPUT_DIR=<dir>`, copy the `.as` it
+writes over `Assets/Scripts/Generated` (and the canonical `.vscript` over `Assets/Graphs`), then update the SHA-256
+values in `Assets/manifest.json`. Only the generated `.as` files are staged into builds.
+
 ## Play
 
 - `WASD` — move

@@ -77,6 +77,12 @@ namespace Spark::Scripting
         RandomRange = 210,
         Abs = 211,
         Negate = 212,
+        BreakVector3 = 213, ///< Vector3 -> x, y, z floats
+        MakeVector3 = 214,  ///< x, y, z floats -> Vector3 (member-wise; no constructor call)
+        ToInt = 215,        ///< Float -> Int (truncates toward zero)
+
+        // Text
+        AppendString = 216, ///< String + any printable value -> String
 
         // Logic
         And = 250,
@@ -88,6 +94,7 @@ namespace Spark::Scripting
         Less = 256,
         GreaterEqual = 257,
         LessEqual = 258,
+        Select = 259, ///< Condition ? A : B, typed by the output pin
 
         // Variables
         GetVariable = 300,

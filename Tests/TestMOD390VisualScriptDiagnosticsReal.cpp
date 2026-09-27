@@ -30,6 +30,8 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <utility>
 
 namespace
 {
@@ -100,6 +102,24 @@ namespace
             std::ofstream out(path, std::ios::binary | std::ios::trunc);
             out << text;
             return static_cast<bool>(out);
+        }
+
+        /// 1-based line number and text of the one line of a copied script containing `needle` (0 when not unique).
+        std::pair<size_t, std::string> FindLine(std::string_view fileName, std::string_view needle) const
+        {
+            std::ifstream in(scriptRoot / fileName, std::ios::binary);
+            std::pair<size_t, std::string> found{0, {}};
+            size_t lineNumber = 0;
+            for (std::string line; std::getline(in, line);)
+            {
+                ++lineNumber;
+                if (line.find(needle) == std::string::npos)
+                    continue;
+                if (found.first != 0)
+                    return {0, {}};
+                found = {lineNumber, line};
+            }
+            return found;
         }
 
         uint32_t CountDemoEntities()
@@ -173,13 +193,16 @@ TEST(VisualScriptDiagnostics_CompileErrorRejectsLoadWithFileLine)
     DiagnosticsFixture fx;
     ASSERT_TRUE(fx.ready);
 
-    // Collectible.as line 22 is "        baseY = pos.y;" inside Start().
-    ASSERT_TRUE(fx.Rewrite("Collectible.as", "        baseY = pos.y;\n", "        baseY = undefinedMod390Symbol;\n"));
+    // Start() stores the spawn height with the only "baseY = n..." assignment; break that statement.
+    const auto [line, text] = fx.FindLine("Collectible.as", "baseY = n");
+    ASSERT_TRUE(line != 0);
+    const std::string broken = text.substr(0, text.find("baseY")) + "baseY = undefinedMod390Symbol;";
+    ASSERT_TRUE(fx.Rewrite("Collectible.as", text + "\n", broken + "\n"));
 
     EXPECT_FALSE(fx.Load());
     const std::string error = fx.demo->GetLastError();
     EXPECT_STR_CONTAINS(error, "Failed to compile");
-    EXPECT_STR_CONTAINS(error, (fx.scriptRoot / "Collectible.as").generic_string() + ":22:");
+    EXPECT_STR_CONTAINS(error, (fx.scriptRoot / "Collectible.as").generic_string() + ":" + std::to_string(line) + ":");
     EXPECT_STR_CONTAINS(error, "undefinedMod390Symbol");
     EXPECT_TRUE(fx.demo->GetScriptRoot().empty());
 
@@ -196,8 +219,10 @@ TEST(VisualScriptDiagnostics_AttachFailureRollsBackAllEntities)
     ASSERT_TRUE(fx.ready);
 
     // HealthPickup is spawned last, so ten entities already hold started
-    // scripts when its constructor faults on line 10 (integer division by a
-    // runtime zero during member initialization).
+    // scripts when its constructor faults on the healAmount line (integer
+    // division by a runtime zero during member initialization).
+    const size_t faultLine = fx.FindLine("HealthPickup.as", "    float healAmount = 30.0f;").first;
+    ASSERT_TRUE(faultLine != 0);
     ASSERT_TRUE(fx.Rewrite("HealthPickup.as", "    float healAmount = 30.0f;\n",
                            "    int faultDivisor = 0; float healAmount = 30.0f + float(1 / faultDivisor);\n"));
 
@@ -206,7 +231,7 @@ TEST(VisualScriptDiagnostics_AttachFailureRollsBackAllEntities)
 
     const std::string error = fx.demo->GetLastError();
     EXPECT_STR_CONTAINS(error, "Failed to attach HealthPickup");
-    EXPECT_STR_CONTAINS(error, (fx.scriptRoot / "HealthPickup.as").generic_string() + ":10");
+    EXPECT_STR_CONTAINS(error, (fx.scriptRoot / "HealthPickup.as").generic_string() + ":" + std::to_string(faultLine));
     fx.ExpectNothingLeftBehind();
 
     // The rollback leaves the world and engine reusable: repairing the script
@@ -243,7 +268,7 @@ TEST(VisualScriptDiagnostics_SelfEntityPlaceholderRejectedWithFileLine)
     {
         DiagnosticsFixture fx;
         ASSERT_TRUE(fx.ready);
-        ASSERT_TRUE(fx.Rewrite("EnemyPatrol.as", "    uint selfEntity = 0;\n", "    uint selfEntity = 7;\n"));
+        ASSERT_TRUE(fx.Rewrite("EnemyPatrol.as", "    uint selfEntity = 0;", "    uint selfEntity = 7;"));
 
         EXPECT_FALSE(fx.Load());
         const std::string error = fx.demo->GetLastError();
@@ -252,17 +277,20 @@ TEST(VisualScriptDiagnostics_SelfEntityPlaceholderRejectedWithFileLine)
         fx.ExpectNothingLeftBehind();
     }
 
-    // Duplicate placeholder on line 9: ambiguous binding is rejected with the offending line.
+    // Duplicate placeholder on one line: ambiguous binding is rejected with the offending line.
     {
         DiagnosticsFixture fx;
         ASSERT_TRUE(fx.ready);
-        ASSERT_TRUE(fx.Rewrite("EnemyPatrol.as", "    uint selfEntity = 0;\n",
-                               "    uint selfEntity = 0; // uint selfEntity = 0;\n"));
+        const std::string line = std::to_string(fx.FindLine("EnemyPatrol.as", "uint selfEntity = 0;").first);
+        ASSERT_TRUE(line != "0");
+        ASSERT_TRUE(fx.Rewrite("EnemyPatrol.as", "    uint selfEntity = 0;",
+                               "    uint selfEntity = 0; // uint selfEntity = 0;"));
 
         EXPECT_FALSE(fx.Load());
         const std::string error = fx.demo->GetLastError();
-        EXPECT_STR_CONTAINS(error, (fx.scriptRoot / "EnemyPatrol.as").generic_string() + ":9: EnemyPatrol declares");
-        EXPECT_STR_CONTAINS(error, "first at line 9");
+        EXPECT_STR_CONTAINS(error, (fx.scriptRoot / "EnemyPatrol.as").generic_string() + ":" + line +
+                                       ": EnemyPatrol declares");
+        EXPECT_STR_CONTAINS(error, "first at line " + line);
         fx.ExpectNothingLeftBehind();
     }
 }

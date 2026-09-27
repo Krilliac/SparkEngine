@@ -38,6 +38,9 @@ FuzzerTests/corpora/crash-manifest/*.json text eol=lf
 # .sparkscene seeds deliberately carry CRLF, lone CR, NUL and non-UTF-8 bytes;
 # store them verbatim so neither normalization nor autocrlf rewrites a seed.
 FuzzerTests/corpora/scene-manifest/*.sparkscene -text
+# Reflected-scene compatibility fixtures are recorded with SHA-256 digests in their
+# README and v1-reflected-courtyard is byte-for-byte SerializeWorld output; keep them verbatim.
+Tests/Fixtures/Compatibility/ReflectedScene/*.sparkscene -text
 # .spk seeds are binary archives; autocrlf must never touch a byte of them.
 FuzzerTests/corpora/sparkpak-reader/*.spk -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
@@ -133,3 +136,6 @@ Assets/README.md -text
 # checkout; Windows autocrlf rewrote them and broke the asset-integrity job.
 GameModules/*/Assets/manifest.json text eol=lf
 GameModules/*/Assets/**/*.as text eol=lf
+# Visual-script graphs are hashed by the manifest and compared byte-for-byte
+# against their canonical serialization, so they stay LF as well.
+GameModules/*/Assets/**/*.vscript text eol=lf
