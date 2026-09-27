@@ -14,8 +14,9 @@ never supplies a license from memory: a component whose notice file is absent,
 whose declared license is not a single SPDX identifier, whose tracked payload is
 a repository-authored stub, or whose tree carries undeclared license files is
 listed under "ATTENTION REQUIRED" instead of being guessed at. Tracked font
-files outside ``ThirdParty/`` are listed there too, because fonts carry their
-own licenses and nothing else in the repository inventories them.
+files outside ``ThirdParty/`` carry their own licenses: each needs an entry in
+``<font dir>/LICENSES/fonts.json`` that names its committed upstream license
+text and agrees with the font's own name table, or it is listed there too.
 
 The package notice-coverage rule set (font suffixes, third-party install
 paths, and what counts as reproduced license text) lives in
@@ -41,6 +42,7 @@ import hashlib
 import json
 import os
 import re
+import struct
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -579,17 +581,164 @@ def _has_sibling_license(rel: str, tracked: Iterable[str]) -> bool:
     return False
 
 
-def uncovered_fonts(supply_chain: dict, tracked: list[str]) -> list[str]:
-    """Tracked font files outside every locked ThirdParty container."""
-    fonts = []
-    for rel in tracked:
-        if not _is_font(rel):
-            continue
-        if _under(rel, "ThirdParty"):
-            continue
-        if not _has_sibling_license(rel, tracked):
-            fonts.append(rel)
+# --------------------------------------------------------------------------- fonts outside ThirdParty/
+
+FONT_MANIFEST_NAME = "LICENSES/fonts.json"
+FONT_MANIFEST_FIELDS = ("family", "version", "license", "copyright", "license_file", "license_source")
+NAME_COPYRIGHT, NAME_LICENSE_DESCRIPTION = 0, 13
+# Name-table license descriptions (nameID 13) this tool can classify. A
+# description matching none of them is reported for owner classification.
+LICENSE_DESCRIPTIONS = (
+    (re.compile(r"SIL Open Font License,? Version 1\.1", re.IGNORECASE), "OFL-1.1"),
+    (re.compile(r"Apache License,? Version 2\.0", re.IGNORECASE), "Apache-2.0"),
+)
+
+
+@dataclass(frozen=True)
+class FontNotice:
+    font: str
+    family: str
+    version: str
+    license: str
+    copyright: str
+    license_file: str
+    license_source: str
+
+
+@dataclass
+class FontInventory:
+    notices: list[FontNotice] = field(default_factory=list)
+    texts: dict[str, str] = field(default_factory=dict)  # license file -> normalized text
+    findings: list[str] = field(default_factory=list)
+
+
+def font_name_table(data: bytes) -> dict[int, str]:
+    """Return the English name-table strings of an sfnt font (TrueType/OpenType/TTC).
+
+    Windows Unicode records win over Unicode-platform records, which win over
+    Macintosh Roman ones. Raises ValueError for anything that is not a readable
+    sfnt with a name table (for example a compressed WOFF).
+    """
+    try:
+        base = struct.unpack_from(">I", data, 12)[0] if data[:4] == b"ttcf" else 0
+        table_count = struct.unpack_from(">H", data, base + 4)[0]
+        for index in range(table_count):
+            tag, _checksum, offset, _length = struct.unpack_from(">4sIII", data, base + 12 + 16 * index)
+            if tag != b"name":
+                continue
+            _format, count, string_offset = struct.unpack_from(">HHH", data, offset)
+            ranked: dict[int, tuple[int, str]] = {}
+            for record in range(count):
+                platform, encoding, language, name_id, length, start = struct.unpack_from(
+                    ">6H", data, offset + 6 + 12 * record
+                )
+                raw = data[offset + string_offset + start : offset + string_offset + start + length]
+                if platform == 3 and encoding in (0, 1, 10) and language == 0x409:
+                    rank, text = 0, raw.decode("utf-16-be")
+                elif platform == 0:
+                    rank, text = 1, raw.decode("utf-16-be")
+                elif platform == 1 and encoding == 0 and language == 0:
+                    rank, text = 2, raw.decode("mac_roman")
+                else:
+                    continue
+                if name_id not in ranked or rank < ranked[name_id][0]:
+                    ranked[name_id] = (rank, text)
+            return {name_id: text for name_id, (_rank, text) in ranked.items()}
+    except (struct.error, UnicodeDecodeError) as exc:
+        raise ValueError(f"malformed sfnt: {exc}") from exc
+    raise ValueError("no name table (not an uncompressed TrueType/OpenType font)")
+
+
+def _parse_font_manifest(raw: bytes, label: str) -> dict[str, dict[str, str]]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise NoticeInputError(f"{label}: invalid JSON: {exc}") from exc
+    fonts = data.get("fonts") if isinstance(data, dict) and data.get("schema") == 1 else None
+    if not isinstance(fonts, dict) or not fonts:
+        raise NoticeInputError(f"{label}: expected schema 1 with a non-empty 'fonts' object")
+    for name, entry in fonts.items():
+        if PurePosixPath(name).name != name or not isinstance(entry, dict):
+            raise NoticeInputError(f"{label}: fonts[{name!r}] must be a bare file name mapped to an object")
+        if set(entry) != set(FONT_MANIFEST_FIELDS) or not all(isinstance(v, str) and v for v in entry.values()):
+            raise NoticeInputError(f"{label}: fonts[{name!r}] must have exactly the non-empty string fields "
+                                   + ", ".join(FONT_MANIFEST_FIELDS))
+        if not SINGLE_SPDX_ID.match(entry["license"]):
+            raise NoticeInputError(f"{label}: fonts[{name!r}].license must be a single SPDX identifier")
+        if PurePosixPath(entry["license_file"]).name != entry["license_file"]:
+            raise NoticeInputError(f"{label}: fonts[{name!r}].license_file must be a file name in LICENSES/")
     return fonts
+
+
+def font_inventory(tracked: list[str], read: Callable[[str], bytes | None]) -> FontInventory:
+    """Match every tracked font outside ThirdParty/ to its license inventory.
+
+    A font in directory D is covered only by an entry in D/LICENSES/fonts.json
+    whose license file is tracked, carries a copyright statement and operative
+    license terms, and whose recorded copyright and license agree with the
+    font's own name table. A license file that merely sits in the same
+    directory does not say which font it covers, so it does not count.
+    """
+    rules = load_package_rules()
+    tracked_set = set(tracked)
+    inventory = FontInventory()
+    manifests: dict[str, dict[str, dict[str, str]]] = {}
+    for rel in tracked:
+        if rel.endswith("/" + FONT_MANIFEST_NAME) and not _under(rel, "ThirdParty"):
+            raw = read(rel)
+            if raw is None:
+                raise NoticeInputError(f"{rel} is tracked but cannot be read")
+            manifests[rel[: -len(FONT_MANIFEST_NAME) - 1]] = _parse_font_manifest(raw, rel)
+    for rel in tracked:
+        if not _is_font(rel) or _under(rel, "ThirdParty"):
+            continue
+        directory, name = str(PurePosixPath(rel).parent), PurePosixPath(rel).name
+        manifest_rel = f"{directory}/{FONT_MANIFEST_NAME}"
+        entry = manifests.get(directory, {}).get(name)
+        if entry is None:
+            inventory.findings.append(f"no license file on disk for {rel} (no entry in {manifest_rel})")
+            continue
+
+        problems = []
+        license_rel = f"{directory}/LICENSES/{entry['license_file']}"
+        raw_license = read(license_rel) if license_rel in tracked_set else None
+        if raw_license is None:
+            problems.append(f"license file {license_rel} is not tracked")
+        else:
+            text = normalize_text(raw_license, license_rel)
+            if len(text.encode("utf-8")) < rules.minimum_bytes or not rules.copyright.search(text):
+                problems.append(f"{license_rel} has no copyright statement or is too short to be a license")
+            elif not rules.operative_terms.search(text):
+                problems.append(f"{license_rel} has no operative license terms")
+            else:
+                inventory.texts[license_rel] = text
+        raw_font = read(rel)
+        try:
+            names = font_name_table(raw_font or b"")
+        except ValueError as exc:
+            names = {}
+            problems.append(f"cannot read the font's name table: {exc}")
+        if names:
+            embedded = names.get(NAME_COPYRIGHT, "")
+            if embedded != entry["copyright"]:
+                problems.append(f"recorded copyright {entry['copyright']!r} is not the font's own {embedded!r}")
+            description = names.get(NAME_LICENSE_DESCRIPTION, "")
+            if description:
+                spdx = next((s for pattern, s in LICENSE_DESCRIPTIONS if pattern.search(description)), None)
+                if spdx is None:
+                    problems.append(f"font license description {description[:80]!r} needs owner classification")
+                elif spdx != entry["license"]:
+                    problems.append(f"recorded license {entry['license']} but the font declares {spdx}")
+        if problems:
+            inventory.findings.extend(f"{rel}: {problem}" for problem in problems)
+            continue
+        inventory.notices.append(FontNotice(rel, **{key: entry[key] for key in FONT_MANIFEST_FIELDS}))
+
+    for directory, manifest in sorted(manifests.items()):
+        for name in sorted(manifest):
+            if f"{directory}/{name}" not in tracked_set:
+                inventory.findings.append(f"{directory}/{FONT_MANIFEST_NAME} names untracked font {name}")
+    return inventory
 
 
 # --------------------------------------------------------------------------- rendering
@@ -599,7 +748,7 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def render(components: list[Component], supply_chain: dict, fonts: list[str]) -> str:
+def render(components: list[Component], supply_chain: dict, fonts: FontInventory) -> str:
     out: list[str] = []
     add = out.append
     with_notice = sum(1 for c in components if c.has_notice)
@@ -626,7 +775,8 @@ def render(components: list[Component], supply_chain: dict, fonts: list[str]) ->
     add(f"Locked third-party components: {len(components)}")
     add(f"Components with at least one notice file on disk: {with_notice}")
     add(f"Components with attention items: {len(flagged)}")
-    add(f"Tracked font files outside ThirdParty/ without a license file: {len(fonts)}")
+    add(f"Tracked font files outside ThirdParty/ with license text: {len(fonts.notices)}")
+    add(f"Font license attention items outside ThirdParty/: {len(fonts.findings)}")
     add("")
     for index, component in enumerate(components, start=1):
         license_ = component.entry.license if component.entry else "UNKNOWN"
@@ -637,16 +787,34 @@ def render(components: list[Component], supply_chain: dict, fonts: list[str]) ->
     add(RULE)
     add("ATTENTION REQUIRED")
     add(RULE)
-    if not flagged and not fonts:
+    if not flagged and not fonts.findings:
         add("None.")
     for component in flagged:
         add(f"* {component.display_name} ({component.path})")
         for finding in component.findings:
             add(f"    - {finding}")
-    if fonts:
-        add("* Font files outside ThirdParty/ (not covered by dependencies.lock)")
-        for rel in fonts:
-            add(f"    - no license file on disk for {rel}")
+    if fonts.findings:
+        add(f"* Font files outside ThirdParty/ (inventoried by <font dir>/{FONT_MANIFEST_NAME})")
+        for finding in fonts.findings:
+            add(f"    - {finding}")
+    add("")
+
+    add(RULE)
+    add("FONTS OUTSIDE ThirdParty/")
+    add(RULE)
+    if not fonts.notices:
+        add("None.")
+    for font in fonts.notices:
+        add(f"* {font.font}: {font.family} {font.version} - {font.license}")
+        add(f"    Copyright (font name table): {font.copyright}")
+        add(f"    License file: {PurePosixPath(font.font).parent}/LICENSES/{font.license_file}")
+        add(f"    Upstream license text: {font.license_source}")
+    for rel, text in sorted(fonts.texts.items()):
+        add("")
+        add(SUBRULE)
+        add(f"License file: {rel} (sha256 of normalized text {_sha256(text)})")
+        add(SUBRULE)
+        out.append(text.rstrip("\n"))
     add("")
 
     add(RULE)
@@ -693,7 +861,7 @@ def render(components: list[Component], supply_chain: dict, fonts: list[str]) ->
 # --------------------------------------------------------------------------- entry points
 
 
-def load(root: Path) -> tuple[list[Component], dict, list[str]]:
+def load(root: Path) -> tuple[list[Component], dict, FontInventory]:
     try:
         manifest_text = (root / MANIFEST_PATH).read_text(encoding="utf-8")
         supply_text = (root / SUPPLY_CHAIN_PATH).read_text(encoding="utf-8")
@@ -703,7 +871,12 @@ def load(root: Path) -> tuple[list[Component], dict, list[str]]:
     manifest = parse_manifest(manifest_text, supply_chain["submodule_gitlinks"])
     tracked = git_tracked_files(root)
     components = build_components(root, manifest, supply_chain, tracked)
-    return components, supply_chain, uncovered_fonts(supply_chain, tracked)
+
+    def read(rel: str) -> bytes | None:
+        path = root / rel
+        return path.read_bytes() if path.is_file() else None
+
+    return components, supply_chain, font_inventory(tracked, read)
 
 
 def generate(root: Path = REPO_ROOT) -> tuple[str, list[Component]]:
@@ -725,7 +898,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--require-complete",
         action="store_true",
-        help="exit 1 if any locked component has no notice file on disk",
+        help="exit 1 if any locked component, or any font outside ThirdParty/, has no license text on disk",
     )
     args = parser.parse_args(argv)
     if args.check_package is not None:
@@ -734,11 +907,12 @@ def main(argv: list[str] | None = None) -> int:
     output = args.output or root / OUTPUT_NAME
 
     try:
-        text, components = generate(root)
+        components, supply_chain, fonts = load(root)
     except NoticeInputError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    text = render(components, supply_chain, fonts)
     status = 0
     if args.check:
         current = output.read_bytes().decode("utf-8").replace("\r\n", "\n") if output.is_file() else None
@@ -755,6 +929,9 @@ def main(argv: list[str] | None = None) -> int:
         missing = [c.path for c in components if not c.has_notice]
         if missing:
             print("components without a notice file on disk: " + ", ".join(missing), file=sys.stderr)
+            status = 1
+        for finding in fonts.findings:
+            print(f"font without license text: {finding}", file=sys.stderr)
             status = 1
     return status
 

@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "description": "GOV-400 license inventory for the editor fonts in SparkEditor/Fonts. tools/governance/generate_third_party_notices.py reads it: every tracked font in the parent directory must have an entry; 'copyright' must equal the font's name-table copyright string (nameID 0); 'license' must agree with the font's name-table license description (nameID 13) when the font carries one; 'license_file' is the upstream license text, committed verbatim from 'license_source', and is reproduced in THIRD_PARTY_NOTICES. The directory is installed with the fonts (SparkEditor/CMakeLists.txt).",
+  "fonts": {
+    "IBMPlexSans-Bold.ttf": {
+      "family": "IBM Plex Sans",
+      "version": "3.004",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2018 IBM Corp. All rights reserved.",
+      "license_file": "OFL-1.1-IBMPlexSans.txt",
+      "license_source": "https://github.com/IBM/plex/blob/master/LICENSE.txt"
+    },
+    "IBMPlexSans-Regular.ttf": {
+      "family": "IBM Plex Sans",
+      "version": "3.004",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2018 IBM Corp. All rights reserved.",
+      "license_file": "OFL-1.1-IBMPlexSans.txt",
+      "license_source": "https://github.com/IBM/plex/blob/master/LICENSE.txt"
+    },
+    "IBMPlexSans-SemiBold.ttf": {
+      "family": "IBM Plex Sans",
+      "version": "3.004",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2018 IBM Corp. All rights reserved.",
+      "license_file": "OFL-1.1-IBMPlexSans.txt",
+      "license_source": "https://github.com/IBM/plex/blob/master/LICENSE.txt"
+    },
+    "JetBrainsMono-Regular.ttf": {
+      "family": "JetBrains Mono",
+      "version": "2.304",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)",
+      "license_file": "OFL-1.1-JetBrainsMono.txt",
+      "license_source": "https://github.com/JetBrains/JetBrainsMono/blob/v2.304/OFL.txt"
+    },
+    "Roboto-Bold.ttf": {
+      "family": "Roboto",
+      "version": "2.001047",
+      "license": "Apache-2.0",
+      "copyright": "Copyright 2015 Google Inc. All Rights Reserved.",
+      "license_file": "Apache-2.0-Roboto.txt",
+      "license_source": "https://github.com/googlefonts/roboto/blob/v2.138/LICENSE"
+    },
+    "Roboto-Regular.ttf": {
+      "family": "Roboto",
+      "version": "2.001047",
+      "license": "Apache-2.0",
+      "copyright": "Copyright 2015 Google Inc. All Rights Reserved.",
+      "license_file": "Apache-2.0-Roboto.txt",
+      "license_source": "https://github.com/googlefonts/roboto/blob/v2.138/LICENSE"
+    },
+    "fa-solid-900.ttf": {
+      "family": "Font Awesome 6 Free Solid",
+      "version": "6.7.2",
+      "license": "OFL-1.1",
+      "copyright": "Copyright (c) Font Awesome",
+      "license_file": "FontAwesome-Free-6.7.2-LICENSE.txt",
+      "license_source": "https://github.com/FortAwesome/Font-Awesome/blob/6.7.2/LICENSE.txt"
+    }
+  }
+}

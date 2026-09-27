@@ -28,8 +28,8 @@ is follow-up work for decision D8.
 ## Third-party inventory
 
 `THIRD_PARTY_NOTICES` covers 16 locked components. All 16 have at least one
-notice file on disk. Seven of them have attention items. Seven tracked font
-files outside `ThirdParty/` have no license file at all.
+notice file on disk. Seven of them have attention items. The seven editor fonts
+outside `ThirdParty/` have their upstream license text on disk (item 4).
 
 | License family (as declared) | Components | Duty the on-disk text states |
 |---|---|---|
@@ -63,8 +63,16 @@ The generator does not guess any of them.
    `Assets/Fonts/Roboto-Regular.ttf` and `Assets/UI.tga` have no license file.
 4. **Editor fonts.** `SparkEditor/Fonts/` holds IBMPlexSans (3 weights),
    JetBrainsMono-Regular, Roboto (2 weights), and fa-solid-900. Its
-   `CMakeLists.txt` installs them to `bin/EditorAssets/Fonts`. The repository
-   has no license file for any of them, and neither notice file names them.
+   `CMakeLists.txt` installs them, with their `LICENSES/` directory, to
+   `bin/EditorAssets/Fonts`. `SparkEditor/Fonts/LICENSES/` holds each font's
+   upstream license text, committed verbatim, and `fonts.json` maps each font
+   to it. The generator checks that the recorded copyright and license match
+   the font's own name table: IBM Plex Sans, JetBrains Mono, and Font Awesome
+   Free 6.7.2 are OFL-1.1, and Roboto 2.001047 is Apache-2.0. The repository
+   `THIRD_PARTY_NOTICES` reproduces these texts. The packaged
+   `THIRD_PARTY_NOTICES.txt` still does not name the fonts, because no
+   `dependencies.lock` entry covers them. The remaining work is that entry and
+   the legal review of the texts.
 5. **Submodule notice copies.** The six submodule notices live in
    `ThirdParty/Licenses/`. A checkout without submodules cannot compare these
    copies with upstream.
@@ -206,24 +214,22 @@ These choices change `ThirdParty/` or its locks, which the SEC-110 lane owns.
   (`Jolt/`, `Build/`, `LICENSE`), which removes the LGPL-3.0 data and the
   assets that have no license; (b) keep it and declare each extra license
   file in `dependencies.lock`.
-- **Editor fonts:** get each font's license text from its upstream
-  distribution (do not supply it from memory), add the texts next to the
-  fonts, and give them an inventory entry so both notice files include them.
-  List the font file names in the entry's required files: the packaged notice
-  prints them on a `Files:` line, and the staged-package gate
-  (`cmake/ValidateStagedPackageNotices.cmake`, rules in
-  `cmake/PackageNoticeCoverageRules.json`, also run by
+- **Editor fonts:** the upstream license texts are now next to the fonts in
+  `SparkEditor/Fonts/LICENSES/` (item 4). What remains is an inventory entry
+  so the packaged notice file includes them too. List the font file names in
+  the entry's required files: the packaged notice prints them on a `Files:`
+  line, and the staged-package gate (`cmake/ValidateStagedPackageNotices.cmake`,
+  rules in `cmake/PackageNoticeCoverageRules.json`, also run by
   `generate_third_party_notices.py --check-package <install root>`) covers a
   shipped font only when an entry names it and reproduces license text. Today
   it reports all 7 editor fonts; `ValidateStagedPackageExecutables.cmake` runs
-  it in report mode until these texts land, after which the default should
+  it in report mode until that entry lands, after which the default should
   become `enforce`.
 - **SPDX fields:** rewrite the free-text `license` fields as SPDX expressions
   once the choices in the inventory table are made.
 - **Files that change:** `ThirdParty/dependencies.lock`;
   `ThirdParty/supply-chain.lock` (through `tools/check-supply-chain.py
-  --update`); `ThirdParty/**` payload; license files for `SparkEditor/Fonts/`;
-  `cmake/SparkThirdPartyAudit.cmake` (if packaged notices must include fonts
+  --update`); `ThirdParty/**` payload; `cmake/SparkThirdPartyAudit.cmake` (if packaged notices must include fonts
   and extra notices, or should reuse the repository generator);
   `THIRD_PARTY_NOTICES` (regenerated).
 

@@ -14,6 +14,7 @@ import importlib.util
 import io
 import json
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -54,6 +55,51 @@ def _run_main(*args: str) -> tuple[int, str, str]:
     return code, out.getvalue(), err.getvalue()
 
 
+def _repo_read(rel: str) -> bytes | None:
+    path = REPO_ROOT / rel
+    return path.read_bytes() if path.is_file() else None
+
+
+def _sfnt(names: dict[int, str]) -> bytes:
+    """A minimal sfnt holding only a Windows-English name table."""
+    strings = b""
+    records = b""
+    for name_id, text in sorted(names.items()):
+        raw = text.encode("utf-16-be")
+        records += struct.pack(">6H", 3, 1, 0x409, name_id, len(raw), len(strings))
+        strings += raw
+    table = struct.pack(">HHH", 0, len(names), 6 + len(records)) + records + strings
+    header = struct.pack(">IHHHH", 0x00010000, 1, 16, 0, 0)
+    directory = struct.pack(">4sIII", b"name", 0, len(header) + 16, len(table))
+    return header + directory + table
+
+
+FIXTURE_COPYRIGHT = "Copyright 2026 Fixture Foundry"
+OFL_DESCRIPTION = "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+OFL_TEXT = (
+    f"{FIXTURE_COPYRIGHT}\n\n{OFL_DESCRIPTION}\n\n"
+    "Permission is hereby granted, free of charge, to any person obtaining a copy of the Font\n"
+    "Software, to use, study, copy, merge, embed, modify, redistribute, and sell copies.\n"
+)
+
+
+def _font_entry(**overrides: str) -> dict[str, str]:
+    entry = {
+        "family": "Fixture Sans",
+        "version": "1.0",
+        "license": "OFL-1.1",
+        "copyright": FIXTURE_COPYRIGHT,
+        "license_file": "OFL-1.1-Fixture.txt",
+        "license_source": "https://example.invalid/fixture/OFL.txt",
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _font_manifest(**overrides: str) -> str:
+    return json.dumps({"schema": 1, "fonts": {"A.ttf": _font_entry(**overrides)}})
+
+
 class RepositoryNoticesTests(unittest.TestCase):
     """Checks against the real checkout."""
 
@@ -80,6 +126,25 @@ class RepositoryNoticesTests(unittest.TestCase):
         first, _ = notices.generate(REPO_ROOT)
         second, _ = notices.generate(REPO_ROOT)
         self.assertEqual(first.encode("utf-8"), second.encode("utf-8"))
+
+    def test_every_font_outside_thirdparty_has_license_text(self) -> None:
+        tracked = notices.git_tracked_files(REPO_ROOT)
+        fonts = [rel for rel in tracked if notices._is_font(rel) and not rel.startswith("ThirdParty/")]
+        self.assertTrue(fonts, "no tracked fonts outside ThirdParty/; the check would be vacuous")
+        self.assertEqual(self.fonts.findings, [])
+        self.assertEqual(sorted(f.font for f in self.fonts.notices), sorted(fonts))
+        self.assertNotIn("no license file on disk for SparkEditor/Fonts", self.text)
+        self.assertTrue(self.fonts.texts)
+        for rel, text in self.fonts.texts.items():
+            self.assertIn(text.rstrip("\n"), self.text, f"{rel} text is not reproduced verbatim")
+
+    def test_removing_an_editor_font_license_file_is_reported(self) -> None:
+        tracked = [rel for rel in notices.git_tracked_files(REPO_ROOT) if not rel.endswith("/Apache-2.0-Roboto.txt")]
+        inventory = notices.font_inventory(tracked, _repo_read)
+        self.assertEqual(
+            sorted(f.split(":", 1)[0] for f in inventory.findings),
+            ["SparkEditor/Fonts/Roboto-Bold.ttf", "SparkEditor/Fonts/Roboto-Regular.ttf"],
+        )
 
     def test_committed_file_is_current(self) -> None:
         committed = REPO_ROOT / notices.OUTPUT_NAME
@@ -113,7 +178,7 @@ class FixtureDetectionTests(unittest.TestCase):
         alpha = next(c for c in components if c.path == "ThirdParty/Alpha")
         self.assertFalse(alpha.has_notice)
         self.assertTrue(any("missing on disk: ThirdParty/Alpha/LICENSE" in f for f in alpha.findings))
-        rendered = notices.render(components, FIXTURE_SUPPLY_CHAIN, [])
+        rendered = notices.render(components, FIXTURE_SUPPLY_CHAIN, notices.FontInventory())
         self.assertIn("NO LICENSE TEXT AVAILABLE ON DISK FOR THIS COMPONENT.", rendered)
 
     def test_container_without_manifest_entry_is_reported(self) -> None:
@@ -144,9 +209,94 @@ class FixtureDetectionTests(unittest.TestCase):
         self.assertIn("font file has no license file beside it", joined)
         self.assertEqual([p for p, _ in alpha.extra_notices], ["ThirdParty/Alpha/Assets/LICENSE.txt"])
 
-    def test_fonts_outside_thirdparty_are_reported(self) -> None:
-        tracked = ["Editor/Fonts/A.ttf", "Other/Fonts/B.otf", "Other/Fonts/OFL.txt", "Other/Fonts/LICENSE"]
-        self.assertEqual(notices.uncovered_fonts(FIXTURE_SUPPLY_CHAIN, tracked), ["Editor/Fonts/A.ttf"])
+    @staticmethod
+    def _fonts(overrides: dict[str, bytes | str | None] | None = None, names: dict[int, str] | None = None):
+        """Font inventory of a fixture tree; an override value of None removes that file."""
+        tree: dict[str, bytes | str | None] = {
+            "Editor/Fonts/A.ttf": _sfnt(names if names is not None else {0: FIXTURE_COPYRIGHT, 13: OFL_DESCRIPTION}),
+            "Editor/Fonts/LICENSES/fonts.json": _font_manifest(),
+            "Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt": OFL_TEXT,
+        }
+        tree.update(overrides or {})
+        files = {rel: value for rel, value in tree.items() if value is not None}
+
+        def read(rel: str) -> bytes | None:
+            value = files.get(rel)
+            return value.encode("utf-8") if isinstance(value, str) else value
+
+        return notices.font_inventory(sorted(files), read)
+
+    def test_font_with_matching_license_inventory_is_covered(self) -> None:
+        inventory = self._fonts()
+        self.assertEqual(inventory.findings, [])
+        self.assertEqual([f.font for f in inventory.notices], ["Editor/Fonts/A.ttf"])
+        self.assertEqual(list(inventory.texts), ["Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt"])
+        rendered = notices.render([], FIXTURE_SUPPLY_CHAIN, inventory)
+        self.assertIn(OFL_TEXT.rstrip("\n"), rendered)
+        self.assertIn("Editor/Fonts/A.ttf: Fixture Sans 1.0 - OFL-1.1", rendered)
+
+    def test_font_license_inventory_failures_are_reported(self) -> None:
+        two_fonts = json.dumps({"schema": 1, "fonts": {"A.ttf": _font_entry(), "B.ttf": _font_entry()}})
+        cases = {
+            "a sibling LICENSE does not say which font it covers": (
+                {"Editor/Fonts/LICENSES/fonts.json": None, "Editor/Fonts/LICENSE": OFL_TEXT},
+                "no license file on disk for Editor/Fonts/A.ttf",
+            ),
+            "license file not tracked": (
+                {"Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt": None},
+                "license file Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt is not tracked",
+            ),
+            "license file without operative terms": (
+                {"Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt": FIXTURE_COPYRIGHT + "\n" + "x" * 300},
+                "has no operative license terms",
+            ),
+            "recorded copyright differs from the font": (
+                {"Editor/Fonts/LICENSES/fonts.json": _font_manifest(copyright="Copyright 1999 Someone Else")},
+                f"is not the font's own '{FIXTURE_COPYRIGHT}'",
+            ),
+            "recorded license differs from the font": (
+                {"Editor/Fonts/LICENSES/fonts.json": _font_manifest(license="Apache-2.0")},
+                "recorded license Apache-2.0 but the font declares OFL-1.1",
+            ),
+            "unreadable font": ({"Editor/Fonts/A.ttf": b"wOF2 compressed"}, "cannot read the font's name table"),
+            "manifest names an untracked font": (
+                {"Editor/Fonts/LICENSES/fonts.json": two_fonts},
+                "Editor/Fonts/LICENSES/fonts.json names untracked font B.ttf",
+            ),
+        }
+        for label, (overrides, expected) in cases.items():
+            with self.subTest(label):
+                inventory = self._fonts(overrides)
+                self.assertTrue(any(expected in f for f in inventory.findings), inventory.findings)
+                if label != "manifest names an untracked font":
+                    self.assertEqual(inventory.notices, [])
+
+    def test_unclassified_font_license_description_needs_owner(self) -> None:
+        inventory = self._fonts(names={0: FIXTURE_COPYRIGHT, 13: "Custom EULA, see vendor"})
+        self.assertTrue(any("needs owner classification" in f for f in inventory.findings), inventory.findings)
+        self.assertEqual(inventory.notices, [])
+
+    def test_font_without_license_description_uses_the_recorded_license(self) -> None:
+        self.assertEqual(self._fonts(names={0: FIXTURE_COPYRIGHT}).findings, [])
+
+    def test_malformed_font_manifest_fails_closed(self) -> None:
+        cases = {
+            "not json": "{",
+            "schema": json.dumps({"schema": 2, "fonts": {"A.ttf": _font_entry()}}),
+            "missing field": json.dumps({"schema": 1, "fonts": {"A.ttf": {"license": "OFL-1.1"}}}),
+            "non-SPDX license": _font_manifest(license="OFL or whatever"),
+            "license file outside LICENSES/": _font_manifest(license_file="../OFL.txt"),
+        }
+        for label, manifest in cases.items():
+            with self.subTest(label):
+                with self.assertRaises(notices.NoticeInputError):
+                    self._fonts({"Editor/Fonts/LICENSES/fonts.json": manifest})
+
+    def test_font_name_table_is_read_from_the_font(self) -> None:
+        names = notices.font_name_table(_sfnt({0: "Copyright X", 13: OFL_DESCRIPTION}))
+        self.assertEqual(names, {0: "Copyright X", 13: OFL_DESCRIPTION})
+        with self.assertRaises(ValueError):
+            notices.font_name_table(b"\x00\x01\x00\x00\x00\x01")
 
     def test_line_endings_do_not_change_output(self) -> None:
         lf = self._components({"ThirdParty/Alpha/LICENSE": MIT_TEXT, "ThirdParty/Licenses/sub-LICENSE.txt": MIT_TEXT})
@@ -157,7 +307,8 @@ class FixtureDetectionTests(unittest.TestCase):
             }
         )
         self.assertEqual(
-            notices.render(lf, FIXTURE_SUPPLY_CHAIN, []), notices.render(crlf, FIXTURE_SUPPLY_CHAIN, [])
+            notices.render(lf, FIXTURE_SUPPLY_CHAIN, notices.FontInventory()),
+            notices.render(crlf, FIXTURE_SUPPLY_CHAIN, notices.FontInventory()),
         )
 
     def test_malformed_manifests_fail_closed(self) -> None:
@@ -248,8 +399,11 @@ class PackageRuleSetTests(unittest.TestCase):
         self.assertTrue({".ttf", ".otf", ".woff", ".woff2"} <= rules.font_suffixes)
         tracked = [f"Editor/Fonts/A{suffix}" for suffix in sorted(rules.font_suffixes)] + ["Editor/Fonts/A.png"]
         self.assertEqual(
-            notices.uncovered_fonts(FIXTURE_SUPPLY_CHAIN, tracked),
-            [f"Editor/Fonts/A{suffix}" for suffix in sorted(rules.font_suffixes)],
+            notices.font_inventory(tracked, lambda rel: None).findings,
+            [
+                f"no license file on disk for Editor/Fonts/A{suffix} (no entry in Editor/Fonts/LICENSES/fonts.json)"
+                for suffix in sorted(rules.font_suffixes)
+            ],
         )
 
     def test_malformed_rules_fail_closed(self) -> None:
@@ -435,6 +589,14 @@ class EndToEndTests(unittest.TestCase):
         code, _, err = _run_main("--root", str(self.root), "--require-complete")
         self.assertEqual(code, 1)
         self.assertIn("ThirdParty/Alpha", err)
+
+    def test_require_complete_fails_on_a_font_without_license_text(self) -> None:
+        (self.root / "Editor").mkdir()
+        (self.root / "Editor" / "Face.ttf").write_bytes(_sfnt({0: FIXTURE_COPYRIGHT}))
+        subprocess.run(["git", "-C", str(self.root), "add", "-A"], check=True)
+        code, _, err = _run_main("--root", str(self.root), "--require-complete")
+        self.assertEqual(code, 1)
+        self.assertIn("font without license text: no license file on disk for Editor/Face.ttf", err)
 
     def test_malformed_lock_exits_two(self) -> None:
         (self.root / "ThirdParty" / "supply-chain.lock").write_text("{not json", encoding="utf-8")
