@@ -111,7 +111,9 @@ TEST(LiveServer_ClientConnectAccepted)
 
     const bool gotAccepted = client.AwaitType(nm, MessageType::ConnectAccepted).has_value();
     EXPECT_TRUE(gotAccepted);
-    EXPECT_EQ(static_cast<int>(nm.GetClients().size()), 1);
+    // The slot is held (Securing) but is not a player until its sealed ClientFinished.
+    EXPECT_EQ(static_cast<int>(nm.GetClientSlots().size()), 1);
+    EXPECT_EQ(static_cast<int>(nm.GetClients().size()), 0);
 
     nm.StopServer();
     nm.Shutdown();
