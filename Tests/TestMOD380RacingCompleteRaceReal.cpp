@@ -7,7 +7,8 @@
  * RacingVehicleSystem::FixedUpdate() -- the same calls SparkGameRacingModule::OnUpdate/OnFixedUpdate make, one
  * shared-world physics tick per 60 Hz frame -- so the cars, the track colliders they drive on, the barrier walls
  * that keep them on the circuit, lap validation through the Jolt checkpoint sensor gates, AI driving, standings,
- * and results are exercised end to end.
+ * and results are exercised end to end. The RacingCompleteRace_*Save* tests carry a finished race's results and best
+ * laps through RacingEngineSystems::SaveRaceData/LoadRaceData on the real SaveSystem into a restarted module.
  */
 
 #include "TestFramework.h"
@@ -17,16 +18,25 @@
 #include "RacingPhysicsTestWorld.h"
 
 #include "../GameModules/SparkGameRacing/Source/AI/RacingAIDriver.h"
+#include "../GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.h"
+#include "../GameModules/SparkGameRacing/Source/Core/RacingPersistence.h"
 #include "../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.h"
 #include "../GameModules/SparkGameRacing/Source/Race/RacingRaceManager.h"
 #include "../GameModules/SparkGameRacing/Source/Track/RacingTrackSystem.h"
 #include "../GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/SaveSystem/SaveSystem.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <memory>
 #include <set>
+#include <sstream>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 using namespace Racing;
 
@@ -408,6 +418,331 @@ TEST(RacingCompleteRace_CheckpointSensorOrderStillRejectsInfieldCut)
     EXPECT_EQ(rig.race.GetRacer(playerId)->currentLap, 1u);
     EXPECT_EQ(rig.race.GetRacer(playerId)->lapTimes.size(), static_cast<size_t>(1));
     EXPECT_EQ(rig.race.GetRacer(playerId)->lastCheckpoint, finish.index);
+}
+
+namespace
+{
+    /// Engine context the module's save bridge sees: the rig's shared physics world, a World, and the SaveSystem.
+    class RacingSaveContext final : public Spark::IEngineContext
+    {
+      public:
+        RacingSaveContext(PhysicsSystem* physics, Spark::SaveSystem* saveSystem, ::World* world)
+            : m_physics(physics), m_saveSystem(saveSystem), m_world(world)
+        {
+        }
+
+        GraphicsEngine* GetGraphics() override { return nullptr; }
+        const GraphicsEngine* GetGraphics() const override { return nullptr; }
+        InputManager* GetInput() override { return nullptr; }
+        const InputManager* GetInput() const override { return nullptr; }
+        Timer* GetTimer() override { return nullptr; }
+        const Timer* GetTimer() const override { return nullptr; }
+        Spark::EventBus* GetEventBus() override { return nullptr; }
+        const Spark::EventBus* GetEventBus() const override { return nullptr; }
+        ::AudioEngine* GetAudio() override { return nullptr; }
+        const ::AudioEngine* GetAudio() const override { return nullptr; }
+        PhysicsSystem* GetPhysics() override { return m_physics; }
+        const PhysicsSystem* GetPhysics() const override { return m_physics; }
+        ::World* GetWorld() override { return m_world; }
+        const ::World* GetWorld() const override { return m_world; }
+        Spark::SaveSystem* GetSaveSystem() override { return m_saveSystem; }
+        const Spark::SaveSystem* GetSaveSystem() const override { return m_saveSystem; }
+        uint32_t GetEngineVersion() const override { return 0; }
+        uint32_t GetSDKVersion() const override { return 0; }
+
+      private:
+        PhysicsSystem* m_physics = nullptr;
+        Spark::SaveSystem* m_saveSystem = nullptr;
+        ::World* m_world = nullptr;
+    };
+
+    /**
+     * The module's save bridge on the real SaveSystem singleton, writing into an isolated directory that outlives
+     * every rig bound to it. Bind() models a module (re)start: a fresh World, a fresh RacingEngineSystems wired to
+     * the rig exactly as SparkGameRacingModule::OnLoad does, and the SaveSystem re-initialized onto the directory
+     * (RacingEngineSystems::Initialize points it at "Saves/Racing"). The original directory is restored on
+     * destruction. Declare the bridge before the rigs it binds.
+     */
+    class RacingSaveBridge
+    {
+      public:
+        explicit RacingSaveBridge(const char* name)
+            : m_saveSystem(Spark::SaveSystem::GetInstance()), m_previousDirectory(m_saveSystem.GetSaveDirectory()),
+              m_directory(std::filesystem::temp_directory_path() / (std::string("spark_mod380_") + name))
+        {
+            std::error_code error;
+            std::filesystem::remove_all(m_directory, error);
+        }
+
+        ~RacingSaveBridge()
+        {
+            Unbind();
+            m_saveSystem.SetSaveDirectory(m_previousDirectory);
+            std::error_code error;
+            std::filesystem::remove_all(m_directory, error);
+        }
+
+        RacingSaveBridge(const RacingSaveBridge&) = delete;
+        RacingSaveBridge& operator=(const RacingSaveBridge&) = delete;
+
+        bool Bind(RaceRig& rig)
+        {
+            Unbind();
+            m_world = std::make_unique<::World>();
+            m_world->AddComponent<Transform>(m_world->CreateEntity("mod380-race-world"));
+            m_context = std::make_unique<RacingSaveContext>(rig.world.physics.get(), &m_saveSystem, m_world.get());
+            m_engine = std::make_unique<RacingEngineSystems>();
+            const bool bound = m_engine->Initialize(m_context.get(), &rig.vehicles, &rig.track, &rig.race, &rig.ai);
+            m_saveSystem.SetFileCache(nullptr);
+            return m_saveSystem.Initialize(m_directory.string()) && bound;
+        }
+
+        void Unbind()
+        {
+            if (m_engine)
+                m_engine->Shutdown();
+            m_engine.reset();
+            m_context.reset();
+            m_world.reset();
+        }
+
+        RacingEngineSystems& Engine() { return *m_engine; }
+        ::World& World() { return *m_world; }
+        Spark::SaveSystem& Save() { return m_saveSystem; }
+        const std::filesystem::path& Directory() const { return m_directory; }
+
+        /// Write a slot whose only racing state is @p payload, as a damaged or edited save would carry it.
+        bool WriteRawSlot(const std::string& slot, const std::string& payload)
+        {
+            Spark::SaveMetadata meta;
+            meta.saveName = slot;
+            meta.sceneName = "RacingTampered";
+            return m_saveSystem.Save(
+                slot, *m_world, meta,
+                std::unordered_map<std::string, std::string>{{std::string(RacingPersistence::StateKey), payload}});
+        }
+
+      private:
+        Spark::SaveSystem& m_saveSystem;
+        std::string m_previousDirectory;
+        std::filesystem::path m_directory;
+        std::unique_ptr<::World> m_world;
+        std::unique_ptr<RacingSaveContext> m_context;
+        std::unique_ptr<RacingEngineSystems> m_engine;
+    };
+
+    bool StartsWith(const std::string& text, const std::string& prefix)
+    {
+        return text.rfind(prefix, 0) == 0;
+    }
+
+    /**
+     * Rewrite one whitespace-separated field of vehicle @p vehicleId's "R" record in a SPARK_RACING_STATE_V1
+     * payload (field 0 is the "R" tag; racer names in the demo roster carry no spaces).
+     */
+    std::string EditRacerField(const std::string& payload, uint32_t vehicleId, size_t field, const std::string& value)
+    {
+        std::istringstream lines(payload);
+        std::string out;
+        std::string line;
+        const std::string recordPrefix = "R " + std::to_string(vehicleId) + " ";
+        while (std::getline(lines, line))
+        {
+            if (StartsWith(line, recordPrefix))
+            {
+                std::istringstream tokens(line);
+                std::vector<std::string> fields;
+                for (std::string token; tokens >> token;)
+                    fields.push_back(token);
+                if (field < fields.size())
+                    fields[field] = value;
+                line.clear();
+                for (size_t i = 0; i < fields.size(); ++i)
+                    line += (i == 0 ? "" : " ") + fields[i];
+            }
+            out += line + '\n';
+        }
+        return out;
+    }
+
+    // Field indices of the "R" record (see RacingPersistence::Serialize).
+    constexpr size_t kRacerCurrentLapField = 4;
+    constexpr size_t kRacerPositionField = 7;
+    constexpr size_t kRacerBestLapField = 10;
+
+    std::string FloatText(float value)
+    {
+        std::ostringstream out;
+        out.precision(9);
+        out << value;
+        return out.str();
+    }
+
+    /// Run a rig to results and let one more frame park every finisher, as the module does on its next update.
+    void FinishAndPark(RaceRig& rig)
+    {
+        rig.RunToResults(400.0f);
+        rig.Frame(rig.Autopilot());
+    }
+} // namespace
+
+// A finished circuit race is saved through the module's race_save path, the module and its physics world are torn
+// down, and a restarted module on another track loads the slot: every placing, finish time, lap time, and best lap
+// comes back bit-identical, stays fixed while the loaded results are on screen, and the player can restart from
+// the loaded results into a fresh race that is itself completable.
+TEST(RacingCompleteRace_ResultsAndBestLapsSurviveSaveSystemRestart)
+{
+    RacingSaveBridge bridge("results");
+    auto source = std::make_unique<RaceRig>(0);
+    ASSERT_TRUE(source->ready);
+    ASSERT_TRUE(bridge.Bind(*source));
+    FinishAndPark(*source);
+    ExpectValidResults(*source);
+
+    const RacingRaceSnapshot expected = source->race.CaptureState();
+    const std::string expectedResults = source->race.GetResultsString();
+    const float expectedPlayerBestLap = source->race.GetPlayerBestLap();
+    const uint32_t expectedTrackId = source->track.GetCurrentTrack().id;
+    const std::string expectedTrackName = source->track.GetCurrentTrack().name;
+    ASSERT_TRUE(expectedPlayerBestLap > 0.0f);
+
+    ASSERT_EQ(bridge.Engine().SaveRaceData("mod380_results"), std::string("Race data saved to slot: mod380_results"));
+    bridge.Unbind();
+    source.reset();
+
+    // Restart: a new module on a different track with its own countdown roster, bound to a fresh World.
+    auto restarted = std::make_unique<RaceRig>(2);
+    ASSERT_TRUE(restarted->ready);
+    ASSERT_TRUE(bridge.Bind(*restarted));
+    ASSERT_NE(restarted->track.GetCurrentTrack().id, expectedTrackId);
+    ASSERT_TRUE(restarted->race.GetState() == RaceState::Countdown);
+
+    ASSERT_TRUE(bridge.Save().SaveExists("mod380_results"));
+    Spark::SaveMetadata meta;
+    ASSERT_TRUE(bridge.Save().GetSaveMetadata("mod380_results", meta));
+    EXPECT_EQ(meta.sceneName, expectedTrackName);
+
+    ASSERT_EQ(bridge.Engine().LoadRaceData("mod380_results"),
+              std::string("Race data loaded from slot: mod380_results"));
+    EXPECT_EQ(restarted->track.GetCurrentTrack().id, expectedTrackId);
+    EXPECT_TRUE(restarted->race.GetState() == RaceState::Finished);
+    EXPECT_EQ(restarted->race.GetTotalLaps(), expected.totalLaps);
+    EXPECT_EQ(restarted->race.GetRaceTime(), expected.raceTime);
+    EXPECT_EQ(restarted->race.GetPlayerBestLap(), expectedPlayerBestLap);
+    EXPECT_EQ(restarted->race.GetResultsString(), expectedResults);
+
+    const auto expectRacersMatchSavedResults = [&]()
+    {
+        ASSERT_EQ(restarted->race.GetRacerCount(), expected.racers.size());
+        for (const RacerState& saved : expected.racers)
+        {
+            const RacerState* loaded = restarted->race.GetRacer(saved.vehicleId);
+            ASSERT_TRUE(loaded != nullptr);
+            EXPECT_EQ(loaded->name, saved.name);
+            EXPECT_EQ(loaded->isPlayer, saved.isPlayer);
+            EXPECT_EQ(loaded->position, saved.position);
+            EXPECT_TRUE(loaded->finished);
+            EXPECT_FALSE(loaded->dnf);
+            EXPECT_EQ(loaded->currentLap, saved.currentLap);
+            EXPECT_EQ(loaded->finishTime, saved.finishTime);
+            EXPECT_EQ(loaded->totalTime, saved.totalTime);
+            EXPECT_EQ(loaded->bestLapTime, saved.bestLapTime);
+            EXPECT_TRUE(loaded->lapTimes == saved.lapTimes);
+        }
+    };
+    expectRacersMatchSavedResults();
+
+    // The loaded results hold while the restarted module keeps running its frames.
+    for (int frame = 0; frame < 300; ++frame)
+        restarted->Frame(restarted->Autopilot());
+    EXPECT_TRUE(restarted->race.GetState() == RaceState::Finished);
+    expectRacersMatchSavedResults();
+    EXPECT_EQ(restarted->race.GetResultsString(), expectedResults);
+
+    // Restart from the loaded results: a fresh race on the saved track that the whole field completes.
+    ASSERT_TRUE(SetupRaceRoster(restarted->Sim(), restarted->world.Context()));
+    EXPECT_TRUE(restarted->race.GetState() == RaceState::Countdown);
+    for (const RacerState& racer : restarted->race.GetRacers())
+    {
+        EXPECT_EQ(racer.currentLap, 0u);
+        EXPECT_TRUE(racer.lapTimes.empty());
+        EXPECT_EQ(racer.bestLapTime, -1.0f);
+    }
+    restarted->RunToResults(400.0f);
+    ExpectValidResults(*restarted);
+}
+
+// Edited results are refused before the SaveSystem restores the World: a best lap faster than any lap driven, a
+// duplicated placing, and a finish without the final lap each fail race_load with the live race and World intact.
+TEST(RacingCompleteRace_SaveRejectsEditedResultsBeforeWorldRestore)
+{
+    RacingSaveBridge bridge("tampered");
+    RaceRig rig(0);
+    ASSERT_TRUE(rig.ready);
+    ASSERT_TRUE(bridge.Bind(rig));
+    FinishAndPark(rig);
+    ExpectValidResults(rig);
+
+    const RacingPersistenceSnapshot finished = RacingPersistence::Capture(rig.track, rig.vehicles, rig.race, rig.ai);
+    std::string error;
+    const std::string honest = RacingPersistence::Serialize(finished, error);
+    ASSERT_FALSE(honest.empty());
+
+    const RacerState* player = nullptr;
+    const RacerState* rival = nullptr;
+    for (const RacerState& racer : finished.race.racers)
+    {
+        if (racer.isPlayer)
+            player = &racer;
+        else if (!rival)
+            rival = &racer;
+    }
+    ASSERT_TRUE(player != nullptr && rival != nullptr);
+
+    const std::vector<std::pair<std::string, std::string>> edits = {
+        {"faster_best_lap",
+         EditRacerField(honest, player->vehicleId, kRacerBestLapField, FloatText(player->bestLapTime - 5.0f))},
+        {"duplicate_placing",
+         EditRacerField(honest, player->vehicleId, kRacerPositionField, std::to_string(rival->position))},
+        {"finish_without_final_lap",
+         EditRacerField(honest, player->vehicleId, kRacerCurrentLapField, std::to_string(player->currentLap - 1))},
+    };
+    RacingPersistenceSnapshot decoded;
+    ASSERT_TRUE(RacingPersistence::Deserialize(honest, decoded, error));
+    ASSERT_TRUE(bridge.WriteRawSlot("honest", honest));
+    for (const auto& [slot, payload] : edits)
+    {
+        ASSERT_NE(payload, honest);
+        EXPECT_FALSE(RacingPersistence::Deserialize(payload, decoded, error));
+        ASSERT_TRUE(bridge.WriteRawSlot(slot, payload));
+    }
+
+    // A live race is running when the edited slots are loaded; neither it nor the World may change.
+    ASSERT_TRUE(SetupRaceRoster(rig.Sim(), rig.world.Context()));
+    for (int frame = 0; frame < 30; ++frame)
+        rig.Frame({});
+    bridge.World().CreateEntity("mod380-after-save");
+    const size_t liveEntities = bridge.World().GetEntityCount();
+    const RacingRaceSnapshot live = rig.race.CaptureState();
+    for (const auto& [slot, payload] : edits)
+    {
+        const std::string result = bridge.Engine().LoadRaceData(slot);
+        EXPECT_STR_CONTAINS(result, "Invalid racing state in slot '" + slot + "'");
+        EXPECT_EQ(bridge.World().GetEntityCount(), liveEntities);
+        EXPECT_TRUE(rig.race.GetState() == live.state);
+        EXPECT_EQ(rig.race.GetCountdownTimer(), live.countdownTimer);
+        EXPECT_EQ(rig.race.GetRacerCount(), live.racers.size());
+        for (const RacerState& racer : rig.race.GetRacers())
+        {
+            EXPECT_EQ(racer.currentLap, 0u);
+            EXPECT_EQ(racer.bestLapTime, -1.0f);
+        }
+    }
+
+    // The untouched slot still loads the saved results.
+    EXPECT_EQ(bridge.Engine().LoadRaceData("honest"), std::string("Race data loaded from slot: honest"));
+    EXPECT_TRUE(rig.race.GetState() == RaceState::Finished);
+    EXPECT_EQ(rig.race.GetPlayerBestLap(), player->bestLapTime);
 }
 
 #endif // SPARK_TEST_HAS_IMGUI && SPARK_TEST_HAS_PHYSICS

@@ -257,21 +257,38 @@ namespace Racing
         if (!save->SaveExists(slotName))
             return "No save found for slot: " + slotName;
 
-        std::unordered_map<std::string, std::string> customState;
-        if (!save->Load(slotName, *world, customState))
-            return "Failed to load race data from slot: " + slotName;
-
-        const auto encoded = customState.find(std::string(RacingPersistence::StateKey));
-        if (encoded == customState.end())
-            return "Save has no racing state: " + slotName;
-
+        // Decode and validate the racing state before the SaveSystem commits the ECS world, so a slot with no,
+        // damaged, or tampered racing state (or one saved on a track this build does not have) leaves both the
+        // world and the running race untouched.
         RacingPersistenceSnapshot snapshot;
         std::string error;
-        if (!RacingPersistence::Deserialize(encoded->second, snapshot, error) ||
-            !RacingPersistence::Apply(snapshot, *m_trackSystem, *m_vehicleSystem, *m_raceManager, *m_aiDriver, error))
+        const auto decodeRaceState = [&](const std::unordered_map<std::string, std::string>& state)
         {
+            const auto encoded = state.find(std::string(RacingPersistence::StateKey));
+            if (encoded == state.end())
+            {
+                error = "save has no racing state";
+                return false;
+            }
+            if (!RacingPersistence::Deserialize(encoded->second, snapshot, error))
+                return false;
+            if (snapshot.trackId > m_trackSystem->GetTrackCount())
+            {
+                error = "saved track is unavailable";
+                return false;
+            }
+            return true;
+        };
+
+        std::unordered_map<std::string, std::string> customState;
+        if (!save->Load(slotName, *world, customState, decodeRaceState))
+        {
+            if (error.empty())
+                return "Failed to load race data from slot: " + slotName;
             return "Invalid racing state in slot '" + slotName + "': " + error;
         }
+        if (!RacingPersistence::Apply(snapshot, *m_trackSystem, *m_vehicleSystem, *m_raceManager, *m_aiDriver, error))
+            return "Invalid racing state in slot '" + slotName + "': " + error;
 
         return "Race data loaded from slot: " + slotName;
     }

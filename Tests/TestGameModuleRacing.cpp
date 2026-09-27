@@ -129,31 +129,80 @@ TEST(Racing_VehicleSystem_VehicleCountAndList)
     sys.Shutdown();
 }
 
+namespace
+{
+    struct FrameRateRun
+    {
+        float nitro = 0.0f;
+        float speed = 0.0f;
+        float positionX = 0.0f;
+        float positionZ = 0.0f;
+        bool ok = false;
+    };
+
+    // Drives one car for two seconds of game time on a fresh Jolt world, rendering frames at framesPerSecond and
+    // stepping the vehicle system at the fixed 60 Hz physics rate from an accumulator (the module's frame loop).
+    FrameRateRun DriveAtFrameRate(int framesPerSecond)
+    {
+        FrameRateRun run;
+        RacingPhysicsTestWorld world;
+        if (!world.ready)
+            return run;
+        RacingTrackSystem track;
+        RacingVehicleSystem vehicles;
+        track.Initialize(world.Context());
+        if (!vehicles.Initialize(world.Context()))
+            return run;
+
+        const auto& start = track.GetWaypoint(0);
+        const auto& next = track.GetWaypoint(1);
+        const float heading = std::atan2(next.x - start.x, next.z - start.z);
+        vehicles.CreateVehicle("Player", VehicleType::SportsCar, true, {start.x, start.y, start.z, heading});
+
+        constexpr float kFixedStep = 1.0f / 60.0f;
+        const float frameTime = 1.0f / static_cast<float>(framesPerSecond);
+        float accumulator = 0.0f;
+        for (int frame = 0; frame < 2 * framesPerSecond; ++frame)
+        {
+            vehicles.ApplyInput(0.75f, 0.0f, 0.0f, true, false, frameTime);
+            vehicles.Update(frameTime);
+            accumulator += frameTime;
+            while (accumulator >= kFixedStep - 1.0e-6f)
+            {
+                vehicles.FixedUpdate(kFixedStep);
+                accumulator -= kFixedStep;
+            }
+        }
+
+        const VehicleInstance* player = vehicles.GetPlayerVehicle();
+        if (player)
+        {
+            run.nitro = player->nitro;
+            run.speed = player->speed;
+            run.positionX = player->positionX;
+            run.positionZ = player->positionZ;
+            run.ok = vehicles.GetStepCount() == 120u;
+        }
+        vehicles.Shutdown();
+        track.Shutdown();
+        return run;
+    }
+} // namespace
+
 TEST(Racing_VehicleSystem_InputIsFrameRateIndependent)
 {
-    RacingPhysicsTestWorld world;
-    ASSERT_TRUE(world.ready);
-    RacingVehicleSystem sixtyHz;
-    RacingVehicleSystem thirtyHz;
-    ASSERT_TRUE(sixtyHz.Initialize(world.Context()));
-    ASSERT_TRUE(thirtyHz.Initialize(world.Context()));
-    sixtyHz.CreateVehicle("60 Hz", VehicleType::SportsCar, true, {0.0f, 0.0f, 0.0f, 0.0f});
-    thirtyHz.CreateVehicle("30 Hz", VehicleType::SportsCar, true, {10.0f, 0.0f, 0.0f, 0.0f});
+    // The same held input at 60 and 30 rendered frames per second yields the same car after two seconds: nitro
+    // drains by elapsed time, and the latched command drives the same 120 fixed Jolt ticks either way.
+    const FrameRateRun sixtyHz = DriveAtFrameRate(60);
+    const FrameRateRun thirtyHz = DriveAtFrameRate(30);
+    ASSERT_TRUE(sixtyHz.ok);
+    ASSERT_TRUE(thirtyHz.ok);
 
-    // Nitro drain and the latched driver command depend on elapsed time, not on the input-call rate.
-    for (int frame = 0; frame < 60; ++frame)
-        sixtyHz.ApplyInput(0.75f, 0.0f, 0.0f, true, false, 1.0f / 60.0f);
-    for (int frame = 0; frame < 30; ++frame)
-        thirtyHz.ApplyInput(0.75f, 0.0f, 0.0f, true, false, 1.0f / 30.0f);
-
-    EXPECT_NEAR(sixtyHz.GetPlayerVehicle()->nitro, thirtyHz.GetPlayerVehicle()->nitro, 0.001f);
-    EXPECT_NEAR(sixtyHz.GetPlayerVehicle()->throttleInput, thirtyHz.GetPlayerVehicle()->throttleInput, 0.001f);
-    EXPECT_NEAR(sixtyHz.GetPlayerVehicle()->throttleInput, 0.75f, 0.001f);
-    EXPECT_GE(sixtyHz.GetPlayerVehicle()->nitro, 0.0f);
-    EXPECT_GE(thirtyHz.GetPlayerVehicle()->nitro, 0.0f);
-
-    sixtyHz.Shutdown();
-    thirtyHz.Shutdown();
+    EXPECT_NEAR(sixtyHz.nitro, thirtyHz.nitro, 0.001f);
+    EXPECT_GT(sixtyHz.speed, 20.0f); // the car really drove
+    EXPECT_NEAR(sixtyHz.speed, thirtyHz.speed, 0.02f * sixtyHz.speed);
+    EXPECT_NEAR(sixtyHz.positionX, thirtyHz.positionX, 0.25f);
+    EXPECT_NEAR(sixtyHz.positionZ, thirtyHz.positionZ, 0.25f);
 }
 
 TEST(Racing_VehicleSystem_InputRejectsInvalidDeltaTime)
@@ -642,6 +691,67 @@ TEST(Racing_Persistence_RoundTripsAndAtomicallyRestoresRaceState)
     vehicles.FixedUpdate(1.0f / 60.0f);
     EXPECT_GT(vehicles.GetVehicle(playerId)->speed, 190.0f);
 
+    vehicles.Shutdown();
+    tracks.Shutdown();
+}
+
+TEST(Racing_Persistence_RejectsOutOfRangeVehicleSnapshotsWithoutTouchingTheRace)
+{
+    // Saved vehicle values go straight into Jolt on restore, so a hand-edited save that is merely finite must still
+    // be refused: foreign stats (mass/torque/gearing), runaway speed or an off-world position.
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
+    RacingTrackSystem tracks;
+    EXPECT_TRUE(tracks.Initialize(world.Context()));
+    RacingVehicleSystem vehicles;
+    ASSERT_TRUE(vehicles.Initialize(world.Context()));
+    RacingRaceManager race;
+    EXPECT_TRUE(race.Initialize(nullptr));
+    RacingAIDriver ai;
+    ASSERT_TRUE(ai.Initialize(nullptr));
+
+    const uint32_t playerId = vehicles.CreateVehicle("Player", VehicleType::Formula, true, {5.0f, 0.0f, -3.0f, 0.25f});
+    ASSERT_TRUE(playerId != 0u);
+    race.RegisterRacer(playerId, "Player", true);
+    race.StartRace(RaceMode::TimeTrial, 2);
+
+    const RacingPersistenceSnapshot valid = RacingPersistence::Capture(tracks, vehicles, race, ai);
+    std::string error;
+    ASSERT_TRUE(RacingPersistence::Validate(valid, error));
+    ASSERT_EQ(valid.vehicles.size(), static_cast<size_t>(1));
+
+    std::vector<RacingPersistenceSnapshot> corrupt(5, valid);
+    corrupt[0].vehicles[0].baseStats.weight = 3.0e38f; // overflows Jolt inertia
+    corrupt[1].vehicles[0].baseStats = RacingVehicleSystem::GetDefaultStats(VehicleType::Kart); // wrong type
+    corrupt[2].vehicles[0].speed = 1.0e6f;     // above the body's limit
+    corrupt[3].vehicles[0].positionX = 1.0e7f; // off the world
+    corrupt[4].vehicles[0].rpm = 1.0e9f;
+
+    const RacingRaceSnapshot raceBefore = race.CaptureState();
+    for (const RacingPersistenceSnapshot& snapshot : corrupt)
+    {
+        EXPECT_FALSE(RacingVehicleSystem::ValidateSnapshot(snapshot.vehicles));
+        EXPECT_FALSE(RacingPersistence::Validate(snapshot, error));
+        EXPECT_FALSE(error.empty());
+        EXPECT_FALSE(RacingPersistence::Apply(snapshot, tracks, vehicles, race, ai, error));
+        EXPECT_FALSE(vehicles.RestoreState(snapshot.vehicles));
+
+        // The running race keeps its car, chassis, stats and pose.
+        const VehicleInstance* player = vehicles.GetVehicle(playerId);
+        ASSERT_TRUE(player != nullptr);
+        EXPECT_TRUE(vehicles.HasChassis(playerId));
+        EXPECT_EQ(player->baseStats.weight, RacingVehicleSystem::GetDefaultStats(VehicleType::Formula).weight);
+        EXPECT_NEAR(player->positionX, 5.0f, 0.001f);
+        EXPECT_EQ(vehicles.GetVehicleCount(), static_cast<size_t>(1));
+        EXPECT_TRUE(race.GetMode() == RaceMode::TimeTrial);
+        EXPECT_EQ(race.CaptureState().racers.size(), raceBefore.racers.size());
+    }
+
+    // The untouched capture still restores.
+    EXPECT_TRUE(RacingPersistence::Apply(valid, tracks, vehicles, race, ai, error));
+    EXPECT_TRUE(vehicles.HasChassis(playerId));
+
+    ai.Shutdown();
     vehicles.Shutdown();
     tracks.Shutdown();
 }

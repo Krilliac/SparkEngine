@@ -255,6 +255,31 @@ namespace Racing
             for (float lap : racer.lapTimes)
                 if (!std::isfinite(lap) || lap < 0.0f)
                     return false;
+
+            // Lap records must be the ones OnLapCompleted produces: one lap time per completed lap, the best lap
+            // is the fastest of them (-1 before the first lap), and a racer finishes exactly on the final lap at
+            // a race time the clock has reached. A save that edits a best lap or a finishing result is refused.
+            if (racer.lapTimes.size() != racer.currentLap)
+                return false;
+            const float fastestLap = racer.lapTimes.empty() ? -1.0f : *std::ranges::min_element(racer.lapTimes);
+            if (racer.bestLapTime != fastestLap)
+                return false;
+            if (racer.finished &&
+                (racer.dnf || racer.currentLap != snapshot.totalLaps || racer.finishTime > snapshot.raceTime))
+                return false;
+            if (!racer.finished && (racer.currentLap >= snapshot.totalLaps || racer.finishTime != 0.0f))
+                return false;
+        }
+
+        // Placings are a permutation of 1..N, and a finished race has no racer still on track.
+        std::vector<bool> placingTaken(snapshot.racers.size(), false);
+        for (const RacerState& racer : snapshot.racers)
+        {
+            if (racer.position == 0 || racer.position > placingTaken.size() || placingTaken[racer.position - 1])
+                return false;
+            placingTaken[racer.position - 1] = true;
+            if (snapshot.state == RaceState::Finished && !racer.finished && !racer.dnf)
+                return false;
         }
 
         std::unordered_set<uint32_t> championshipIds;

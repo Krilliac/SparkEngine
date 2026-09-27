@@ -167,7 +167,8 @@ namespace Racing
         /// Physics ticks this system has advanced the shared world by since Initialize().
         uint64_t GetStepCount() const { return m_stepCount; }
 
-        /** Check a persistence snapshot (IDs, enums, finite ranges, at most one player) without applying it. */
+        /** Check a persistence snapshot without applying it: IDs, enums, stats equal to the type defaults, bounded
+         *  pose/speed/rpm/boost ranges, at most one player. */
         static bool ValidateSnapshot(const std::vector<VehicleInstance>& vehicles);
 
         /** Replace every vehicle from a validated snapshot, rebuilding each chassis at its saved pose and speed. */

@@ -1,6 +1,6 @@
 /**
  * @file TestPhysicsTeardownGuard.cpp
- * @brief Regression tests for the physics teardown-order guard (W10 exit AV).
+ * @brief Regression tests for the physics teardown-order guard (W10 exit AV) and the shape cache key.
  *
  * A module that fails OnLoad is only destroyed at ModuleManager::UnloadAll,
  * which historically ran AFTER ShutdownPhysics — its destructor then released
@@ -334,6 +334,51 @@ TEST(PhysicsTrigger_RemovedBodyLeavesNoStaleOverlap)
     physics->SetTriggerCallback(nullptr);
     physics->RemoveBody(next);
     physics->RemoveBody(sensor);
+    physics->Shutdown();
+#endif
+}
+
+TEST(PhysicsShapeCache_InlineMeshesWithEqualCountsKeepTheirOwnGeometry)
+{
+#ifdef SPARK_TEST_HAS_PHYSICS
+    // The shape cache used to key inline meshes by vertex/index counts only, so a second mesh with the same counts
+    // (e.g. another procedurally built road surface) silently reused the first mesh's geometry. Each body must
+    // collide where its own vertices are.
+    auto physics = std::make_unique<PhysicsSystem>();
+    ASSERT_TRUE(SUCCEEDED(physics->Initialize()));
+
+    auto makeQuad = [&](const char* name, float minX)
+    {
+        PhysicsBodyDesc desc;
+        desc.name = name;
+        desc.type = PhysicsBodyType::Static;
+        desc.mass = 0.0f;
+        desc.shape.type = CollisionShapeType::Mesh;
+        desc.shape.vertices = {
+            {minX, 0.0f, 0.0f}, {minX + 4.0f, 0.0f, 0.0f}, {minX + 4.0f, 0.0f, 4.0f}, {minX, 0.0f, 4.0f}};
+        desc.shape.indices = {0, 2, 1, 0, 3, 2};
+        return physics->CreateBody(desc);
+    };
+
+    std::shared_ptr<PhysicsBody> first = makeQuad("shape_cache_quad_a", 0.0f);
+    std::shared_ptr<PhysicsBody> second = makeQuad("shape_cache_quad_b", 10.0f);
+    ASSERT_TRUE(first != nullptr);
+    ASSERT_TRUE(second != nullptr);
+
+    const RaycastHit hitSecond = physics->Raycast({12.0f, 5.0f, 2.0f}, {0.0f, -1.0f, 0.0f}, 10.0f);
+    ASSERT_TRUE(hitSecond.hasHit);
+    EXPECT_TRUE(hitSecond.body == second.get());
+    EXPECT_NEAR(hitSecond.point.y, 0.0f, 0.01f);
+
+    const RaycastHit hitFirst = physics->Raycast({2.0f, 5.0f, 2.0f}, {0.0f, -1.0f, 0.0f}, 10.0f);
+    ASSERT_TRUE(hitFirst.hasHit);
+    EXPECT_TRUE(hitFirst.body == first.get());
+
+    // Between the quads there is no geometry at all.
+    EXPECT_FALSE(physics->Raycast({7.0f, 5.0f, 2.0f}, {0.0f, -1.0f, 0.0f}, 10.0f).hasHit);
+
+    physics->RemoveBody(second);
+    physics->RemoveBody(first);
     physics->Shutdown();
 #endif
 }

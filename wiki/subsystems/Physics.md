@@ -126,6 +126,13 @@ enum class CollisionShapeType {
 > SparkGameRacing chassis and run-off slab (MOD-380): a desc filled with half-extents yields a body half the
 > intended size.
 
+> **Shape cache key.** `CreateCollisionShape` caches shapes for the life of the `PhysicsSystem` and returns the
+> cached shape on a key match, so `HashShape` (`PhysicsShapeFactory.cpp`) hashes every geometry field, including the
+> vertex, index and heightfield data by content. Before MOD-380's review it hashed only the counts, so two inline
+> meshes with the same vertex/index counts (two procedurally built road surfaces, say) shared the first mesh's
+> geometry. `PhysicsShapeCache_InlineMeshesWithEqualCountsKeepTheirOwnGeometry` (`Tests/TestPhysicsTeardownGuard.cpp`)
+> raycasts both meshes in one world. Cached shapes are not evicted until `Shutdown()`.
+
 ### CollisionShapeDesc
 
 ```cpp

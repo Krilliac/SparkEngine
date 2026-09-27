@@ -102,6 +102,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 
 - **Source:** `GameModules/SparkGameRacing/Source/`
 - **Wires:** [Physics](../subsystems/Physics.md) (vehicle subsystem), [Camera System](../subsystems/Camera-System.md) (chase/cockpit), [Audio](../subsystems/Audio.md), [Cinematic Sequencer](../gameplay-tools/Cinematic-Sequencer.md).
+- **Save restore:** `race_load` rebuilds every chassis from the saved vehicles, so `RacingVehicleSystem::ValidateSnapshot` requires each vehicle's stats to equal its type's defaults (a save cannot change mass, torque or gearing) and bounds position, speed, rpm and boost before anything reaches Jolt (`Racing_Persistence_RejectsOutOfRangeVehicleSnapshotsWithoutTouchingTheRace`).
 
 ## SparkGameVisualScript
 

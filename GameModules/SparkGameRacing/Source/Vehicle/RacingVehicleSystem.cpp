@@ -223,27 +223,48 @@ namespace Racing
 
     bool RacingVehicleSystem::ValidateSnapshot(const std::vector<VehicleInstance>& vehicles)
     {
+        // Snapshot values are fed straight into Jolt by RestoreState(), so they are bounded, not only finite.
+        // Stats are never tuned at runtime (every vehicle is spawned with GetDefaultStats(type)), so a saved vehicle
+        // must carry exactly its type's stats: a save cannot give a car another mass, torque or gearing. Positions
+        // stay within a Jolt-safe world extent and speed within twice the governed top speed (nitro/drift boost adds
+        // 30%, downhill runs a little more), well under the chassis body's linear velocity limit.
+        constexpr float kMaxSnapshotCoordinate = 100000.0f; // metres from the world origin
+        constexpr float kMaxSnapshotSpeedFactor = 2.0f;
+        constexpr float kMaxSnapshotRpm = 20000.0f;       // Jolt engine RPM read-back never exceeds maxRPM
+        constexpr float kMaxSnapshotBoostSeconds = 10.0f; // live boosts last at most 2 s (a full drift charge)
+
+        const auto withinCoordinate = [](float value)
+        { return std::isfinite(value) && std::fabs(value) <= kMaxSnapshotCoordinate; };
+        const auto sameStats = [](const VehicleStats& a, const VehicleStats& b)
+        {
+            return a.maxSpeed == b.maxSpeed && a.acceleration == b.acceleration && a.handling == b.handling &&
+                   a.braking == b.braking && a.weight == b.weight && a.durability == b.durability &&
+                   a.driftBonus == b.driftBonus;
+        };
+
         std::unordered_set<uint32_t> ids;
         ids.reserve(vehicles.size());
         size_t playerCount = 0;
         for (const VehicleInstance& vehicle : vehicles)
         {
-            const VehicleStats& stats = vehicle.baseStats;
             if (vehicle.id == 0 || vehicle.id == std::numeric_limits<uint32_t>::max() || vehicle.name.empty() ||
                 vehicle.name.size() > 256 || vehicle.type >= VehicleType::Count ||
-                vehicle.driftState >= DriftState::Count || vehicle.currentSurface >= SurfaceType::Count ||
-                !std::isfinite(stats.maxSpeed) || !std::isfinite(stats.acceleration) ||
-                !std::isfinite(stats.handling) || !std::isfinite(stats.braking) || !std::isfinite(stats.weight) ||
-                !std::isfinite(stats.durability) || !std::isfinite(stats.driftBonus) || stats.maxSpeed <= 0.0f ||
-                stats.acceleration < 0.0f || stats.handling < 0.0f || stats.braking < 0.0f || stats.weight <= 0.0f ||
-                stats.durability <= 0.0f || stats.driftBonus < 0.0f || !std::isfinite(vehicle.positionX) ||
-                !std::isfinite(vehicle.positionY) || !std::isfinite(vehicle.positionZ) ||
-                !std::isfinite(vehicle.heading) || !std::isfinite(vehicle.speed) || !std::isfinite(vehicle.rpm) ||
-                !std::isfinite(vehicle.steerAngle) || !std::isfinite(vehicle.driftCharge) ||
-                !std::isfinite(vehicle.boostTimer) || !std::isfinite(vehicle.nitro) || !std::isfinite(vehicle.damage) ||
-                vehicle.speed < 0.0f || vehicle.rpm < 0.0f || vehicle.driftCharge < 0.0f ||
-                vehicle.driftCharge > 1.0f || vehicle.boostTimer < 0.0f || vehicle.nitro < 0.0f ||
-                vehicle.nitro > 1.0f || vehicle.damage < 0.0f || !ids.insert(vehicle.id).second)
+                vehicle.driftState >= DriftState::Count || vehicle.currentSurface >= SurfaceType::Count)
+            {
+                return false;
+            }
+
+            const VehicleStats& stats = vehicle.baseStats;
+            if (!sameStats(stats, GetDefaultStats(vehicle.type)) || !withinCoordinate(vehicle.positionX) ||
+                !withinCoordinate(vehicle.positionY) || !withinCoordinate(vehicle.positionZ) ||
+                !withinCoordinate(vehicle.heading) || !std::isfinite(vehicle.speed) || vehicle.speed < 0.0f ||
+                vehicle.speed > kMaxSnapshotSpeedFactor * stats.maxSpeed || !std::isfinite(vehicle.rpm) ||
+                vehicle.rpm < 0.0f || vehicle.rpm > kMaxSnapshotRpm || !std::isfinite(vehicle.steerAngle) ||
+                std::fabs(vehicle.steerAngle) > 1.0f || !std::isfinite(vehicle.driftCharge) ||
+                vehicle.driftCharge < 0.0f || vehicle.driftCharge > 1.0f || !std::isfinite(vehicle.boostTimer) ||
+                vehicle.boostTimer < 0.0f || vehicle.boostTimer > kMaxSnapshotBoostSeconds ||
+                !std::isfinite(vehicle.nitro) || vehicle.nitro < 0.0f || vehicle.nitro > 1.0f ||
+                !std::isfinite(vehicle.damage) || vehicle.damage < 0.0f || !ids.insert(vehicle.id).second)
             {
                 return false;
             }
