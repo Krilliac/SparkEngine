@@ -67,20 +67,32 @@ fail() { echo "[wine-build] ERROR: $*" >&2; exit 1; }
 # Everything under the build directory is later executed as root (generators, configure, make, make install),
 # so nobody but the invoking user may be able to write to it or swap it out. A shared, predictable path such as
 # /tmp/wine-build lets any local user pre-create it and plant or race-edit the sources.
+#
+# The caller must pass the canonical path (resolve it with `cd -P` first) and use only that path afterwards. A
+# symlink anywhere in the path is rejected, because whoever owns it can re-point it after the check. Every
+# ancestor must be owned by root or the invoking user: the owner of a directory can always rename entries in it,
+# sticky bit or not, and so could move the checked directory away and substitute their own.
 require_private_dir() {
     local dir="$1"
     [[ -d "$dir" && ! -L "$dir" ]] || fail "build directory $dir is not a real directory"
-    [[ "$(stat -c %u "$dir")" == "$EUID" ]] || fail "build directory $dir is not owned by uid $EUID"
-    (( ( 8#$(stat -c %a "$dir") & 8#022 ) == 0 )) || fail "build directory $dir is group- or world-writable"
+    local canonical
+    canonical="$(cd -P -- "$dir" && pwd -P)" || fail "build directory $dir cannot be resolved"
+    [[ "$canonical" == "$dir" ]] || fail "build directory $dir is not canonical (resolves to $canonical)"
+    [[ "$(stat -c %u -- "$dir")" == "$EUID" ]] || fail "build directory $dir is not owned by uid $EUID"
+    (( ( 8#$(stat -c %a -- "$dir") & 8#022 ) == 0 )) || fail "build directory $dir is group- or world-writable"
 
     # An ancestor that others can write to without the sticky bit lets them rename the directory away and
     # substitute their own.
-    local ancestor
-    ancestor="$(cd "$dir" && pwd -P)"
+    local ancestor="$dir"
     while [[ "$ancestor" != "/" ]]; do
-        ancestor="$(dirname "$ancestor")"
+        ancestor="$(dirname -- "$ancestor")"
+        local owner
+        owner="$(stat -c %u -- "$ancestor")"
+        if [[ "$owner" != "0" && "$owner" != "$EUID" ]]; then
+            fail "build directory ancestor $ancestor is owned by uid $owner, not root or uid $EUID"
+        fi
         local mode
-        mode=$(( 8#$(stat -c %a "$ancestor") ))
+        mode=$(( 8#$(stat -c %a -- "$ancestor") ))
         if (( (mode & 8#022) != 0 && (mode & 8#1000) == 0 )); then
             fail "build directory ancestor $ancestor is writable by others and not sticky"
         fi
@@ -135,8 +147,11 @@ if [[ -z "$BUILD_DIR" ]]; then
 elif [[ ! -e "$BUILD_DIR" && ! -L "$BUILD_DIR" ]]; then
     mkdir -m 0700 -- "$BUILD_DIR"
 fi
+# Canonicalise once and use only the canonical path from here on (cd, verify dir, rm -rf, the executed .exe),
+# so a symlinked component cannot be re-pointed between the check and its use.
+BUILD_DIR="$(cd -P -- "$BUILD_DIR" && pwd -P)" || fail "cannot resolve build directory $BUILD_DIR"
 require_private_dir "$BUILD_DIR"
-cd "$BUILD_DIR"
+cd -- "$BUILD_DIR"
 
 # The source comes only from `apt-get source`, which verifies every file it fetches (or reuses in this directory)
 # against the signed Sources index. No tarball found lying around elsewhere is ever trusted.

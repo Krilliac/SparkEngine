@@ -74,7 +74,12 @@ class BuildWinePatchedStaticTests(unittest.TestCase):
     def test_default_build_dir_is_private_and_checked(self) -> None:
         code = _code(BUILD_SCRIPT)
         self.assertIn('mktemp -d "${TMPDIR:-/tmp}/wine-build.', code)
-        self.assertRegex(code, r'require_private_dir "\$BUILD_DIR"\ncd "\$BUILD_DIR"')
+        # Canonicalised once before the check, and the checked canonical path is the one used afterwards.
+        self.assertRegex(
+            code,
+            r'BUILD_DIR="\$\(cd -P -- "\$BUILD_DIR" && pwd -P\)" \|\| fail [^\n]*\n'
+            r'require_private_dir "\$BUILD_DIR"\ncd -- "\$BUILD_DIR"',
+        )
 
     def test_source_comes_from_apt_source_verification(self) -> None:
         code = _code(BUILD_SCRIPT)
@@ -142,7 +147,9 @@ class SetupMingwWineBehaviorTests(unittest.TestCase):
 class BuildDirPrivacyBehaviorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp.name)
+        # Canonical, because require_private_dir rejects any path with a symlinked component (macOS /var, a
+        # symlinked TMPDIR).
+        self.root = Path(os.path.realpath(self.temp.name))
         os.chmod(self.root, 0o700)
 
     def tearDown(self) -> None:
@@ -154,6 +161,24 @@ class BuildDirPrivacyBehaviorTests(unittest.TestCase):
             'fail() { echo "ERROR: $*" >&2; exit 1; }\n'
             + _function_source(BUILD_SCRIPT, "require_private_dir")
             + f'require_private_dir "{target}"\n'
+        )
+        return subprocess.run([_bash(), "-c", harness], capture_output=True, text=True, timeout=60)
+
+    def _resolve_and_require(self, target: Path) -> subprocess.CompletedProcess[str]:
+        """Runs the script's own canonicalise-then-check lines, then prints the BUILD_DIR it goes on to use."""
+        match = re.search(
+            r'^BUILD_DIR="\$\(cd -P [^\n]*\nrequire_private_dir "\$BUILD_DIR"\n',
+            BUILD_SCRIPT.read_text(encoding="utf-8"),
+            re.M,
+        )
+        self.assertIsNotNone(match, "canonicalise-then-check sequence not found in the script")
+        harness = (
+            "set -euo pipefail\n"
+            'fail() { echo "ERROR: $*" >&2; exit 1; }\n'
+            + _function_source(BUILD_SCRIPT, "require_private_dir")
+            + f'BUILD_DIR="{target}"\n'
+            + match.group(0)
+            + 'printf "%s" "$BUILD_DIR"\n'
         )
         return subprocess.run([_bash(), "-c", harness], capture_output=True, text=True, timeout=60)
 
@@ -181,6 +206,26 @@ class BuildDirPrivacyBehaviorTests(unittest.TestCase):
         link.symlink_to(real, target_is_directory=True)
         self._assert_rejected(link)
 
+    def test_symlinked_ancestor_is_rejected(self) -> None:
+        # root/link -> root/real; target link/build. The last component is a real directory, so a check that
+        # looks only at it (or walks only the resolved path) accepts a path whose link can be re-pointed later.
+        real = self.root / "real"
+        real.mkdir(mode=0o700)
+        (real / "build").mkdir(mode=0o700)
+        link = self.root / "link"
+        link.symlink_to(real, target_is_directory=True)
+        self._assert_rejected(link / "build")
+
+    def test_script_uses_canonical_path_through_symlinked_ancestor(self) -> None:
+        real = self.root / "real"
+        real.mkdir(mode=0o700)
+        (real / "build").mkdir(mode=0o700)
+        link = self.root / "link"
+        link.symlink_to(real, target_is_directory=True)
+        result = self._resolve_and_require(link / "build")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, os.path.realpath(real / "build"), "later steps must use the resolved path")
+
     def test_writable_non_sticky_ancestor_is_rejected(self) -> None:
         shared = self.root / "shared"
         shared.mkdir()
@@ -203,6 +248,16 @@ class BuildDirPrivacyBehaviorTests(unittest.TestCase):
         target = self.root / "build"
         target.mkdir(mode=0o700)
         os.chown(target, 65534, 65534)
+        self._assert_rejected(target)
+
+    @unittest.skipUnless(POSIX and os.geteuid() == 0, "needs root to plant a directory owned by another uid")
+    def test_ancestor_owned_by_another_user_is_rejected(self) -> None:
+        # Mode 0755 passes the write-bit test, but its owner can still rename our directory away.
+        other = self.root / "other"
+        other.mkdir(mode=0o755)
+        target = other / "build"
+        target.mkdir(mode=0o700)
+        os.chown(other, 65534, 65534)
         self._assert_rejected(target)
 
 
