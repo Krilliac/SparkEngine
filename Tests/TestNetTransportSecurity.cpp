@@ -125,6 +125,56 @@ namespace
             return datagrams;
         }
 
+        struct Datagram
+        {
+            std::vector<uint8_t> bytes;
+            sockaddr_in from{};
+        };
+
+        /// Read every queued datagram together with its source endpoint.
+        std::vector<Datagram> DrainFrom() const
+        {
+            std::vector<Datagram> datagrams;
+            for (;;)
+            {
+                std::array<uint8_t, 8192> buffer{};
+                Datagram datagram;
+#ifdef SPARK_PLATFORM_WINDOWS
+                int fromLength = sizeof(datagram.from);
+#else
+                socklen_t fromLength = sizeof(datagram.from);
+#endif
+                const int received =
+                    recvfrom(m_socket, reinterpret_cast<char*>(buffer.data()), static_cast<int>(buffer.size()), 0,
+                             reinterpret_cast<sockaddr*>(&datagram.from), &fromLength);
+                if (received <= 0)
+                    break;
+                datagram.bytes.assign(buffer.begin(), buffer.begin() + received);
+                datagrams.push_back(std::move(datagram));
+            }
+            return datagrams;
+        }
+
+        bool SendTo(const sockaddr_in& destination, const std::vector<uint8_t>& datagram) const
+        {
+            return sendto(m_socket, reinterpret_cast<const char*>(datagram.data()), static_cast<int>(datagram.size()),
+                          0, reinterpret_cast<const sockaddr*>(&destination),
+                          sizeof(destination)) == static_cast<int>(datagram.size());
+        }
+
+        [[nodiscard]] uint16_t LocalPort() const
+        {
+            sockaddr_in local{};
+#ifdef SPARK_PLATFORM_WINDOWS
+            int localLength = sizeof(local);
+#else
+            socklen_t localLength = sizeof(local);
+#endif
+            if (getsockname(m_socket, reinterpret_cast<sockaddr*>(&local), &localLength) != 0)
+                return 0;
+            return ntohs(local.sin_port);
+        }
+
         void Close()
         {
             if (m_socket != INVALID_SOCKET)
@@ -174,6 +224,40 @@ namespace
                 newest = id;
         }
         return newest;
+    }
+
+    /// Drive the singleton as a client against @p fakeServer until the handshake completes.
+    /// Returns the client's endpoint as the fake server saw it.
+    bool ConnectClientToFakeServer(NetworkManager& nm, const RawPeer& fakeServer, sockaddr_in& clientEndpoint)
+    {
+        if (!nm.Connect("127.0.0.1", fakeServer.LocalPort(), "SessionProbe", NetworkEndpointPolicy::Loopback()))
+            return false;
+        bool sawConnect = false;
+        const bool received =
+            PumpUntil(nm,
+                      [&]
+                      {
+                          for (const auto& datagram : fakeServer.DrainFrom())
+                          {
+                              if (WireType(datagram.bytes) == static_cast<uint16_t>(MessageType::Connect))
+                              {
+                                  clientEndpoint = datagram.from;
+                                  sawConnect = true;
+                              }
+                          }
+                          return sawConnect;
+                      });
+        if (!received)
+            return false;
+
+        NetBuffer accept;
+        accept.WriteUint32(42);  // assigned client ID
+        accept.WriteFloat(0.0f); // server time
+        accept.WriteUint16(NETWORK_PROTOCOL_VERSION);
+        if (!fakeServer.SendTo(clientEndpoint,
+                               BuildWire(MessageType::ConnectAccepted, ChannelType::Reliable, 1, accept.GetData())))
+            return false;
+        return PumpUntil(nm, [&] { return nm.GetConnectionState() == ConnectionState::Connected; });
     }
 
     /// True when the manager still exposes the pre-fix server-side input queue.
@@ -281,6 +365,82 @@ TEST(NetTransportSec_DeltaReRegistrationStartsFromEmptyBaseline)
 
     deltas.UnregisterConnection(connectionId);
     EXPECT_FALSE(deltas.HasConnection(connectionId));
+}
+
+// ============================================================================
+// Finding 41: a client never ended its session. A server Disconnect (kick or
+// shutdown) ran server-only cleanup and a silent server was never detected,
+// so the client stayed Connected with its socket open and auto-reconnect
+// could never run.
+// ============================================================================
+
+TEST(NetTransportSec_ClientEndsSessionOnServerDisconnect)
+{
+    auto& nm = FreshManager();
+    RawPeer fakeServer(0);
+    ASSERT_TRUE(fakeServer.IsReady());
+    sockaddr_in clientEndpoint{};
+    ASSERT_TRUE(ConnectClientToFakeServer(nm, fakeServer, clientEndpoint));
+    EXPECT_TRUE(nm.GetBoundPort() != 0);
+
+    NetBuffer reason;
+    reason.WriteString("kicked by test");
+    ASSERT_TRUE(fakeServer.SendTo(clientEndpoint,
+                                  BuildWire(MessageType::Disconnect, ChannelType::Reliable, 2, reason.GetData())));
+    EXPECT_TRUE(PumpUntil(nm, [&] { return nm.GetConnectionState() == ConnectionState::Disconnected; }));
+
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Disconnected));
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+    EXPECT_EQ(nm.GetLocalClientID(), INVALID_CLIENT);
+    EXPECT_EQ(nm.GetBoundPort(), static_cast<uint16_t>(0)); // socket closed
+    EXPECT_TRUE(nm.GetLastConnectionError().find("kicked by test") != std::string::npos);
+
+    fakeServer.Close();
+    nm.Shutdown();
+}
+
+TEST(NetTransportSec_ClientDetectsSilentServerAndAutoReconnects)
+{
+    auto& nm = FreshManager();
+    RawPeer fakeServer(0);
+    ASSERT_TRUE(fakeServer.IsReady());
+    sockaddr_in clientEndpoint{};
+    ASSERT_TRUE(ConnectClientToFakeServer(nm, fakeServer, clientEndpoint));
+
+    NetworkManager::AutoReconnectConfig reconnect;
+    reconnect.enabled = true;
+    reconnect.baseDelay = 0.5f;
+    reconnect.maxDelay = 1.0f;
+    reconnect.maxAttempts = 2;
+    nm.SetAutoReconnect(reconnect);
+
+    // The fake server now says nothing; 1 s steps pass the 10 s liveness limit.
+    (void)fakeServer.DrainFrom();
+    EXPECT_TRUE(PumpUntil(nm, [&] { return nm.GetConnectionState() == ConnectionState::Disconnected; }, 20, 1.0f));
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+    EXPECT_TRUE(nm.GetLastConnectionError().find("timed out") != std::string::npos);
+    (void)fakeServer.DrainFrom(); // retransmissions from the ended session are not a reconnect
+
+    // The ended session unblocks auto-reconnect: a fresh Connect reaches the server.
+    bool reconnectSeen = false;
+    EXPECT_TRUE(PumpUntil(
+        nm,
+        [&]
+        {
+            for (const auto& datagram : fakeServer.DrainFrom())
+            {
+                if (WireType(datagram.bytes) == static_cast<uint16_t>(MessageType::Connect))
+                    reconnectSeen = true;
+            }
+            return reconnectSeen;
+        },
+        40, 0.1f));
+    EXPECT_TRUE(reconnectSeen);
+
+    nm.SetAutoReconnect(NetworkManager::AutoReconnectConfig{});
+    nm.Disconnect();
+    fakeServer.Close();
+    nm.Shutdown();
 }
 
 #endif // ENABLE_NETWORKING

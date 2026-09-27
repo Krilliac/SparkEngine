@@ -535,6 +535,7 @@ namespace Spark::Net
             m_lastConnectionError.clear();
             m_lastConnectRejectReason = ConnectRejectReason::Unspecified;
         }
+        m_lastServerPacketTime = m_serverTime;
         m_allowLanAdvertisement = false;
         ++m_lifecycleEpoch;
 
@@ -955,6 +956,43 @@ namespace Spark::Net
         SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", text.c_str());
     }
 
+    void NetworkManager::TerminateClientSession(std::string reason)
+    {
+        uint64_t endedLifecycleEpoch = 0;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
+                m_connectionState == ConnectionState::Disconnected)
+                return;
+            endedLifecycleEpoch = m_lifecycleEpoch;
+            m_lastConnectionError = reason;
+            m_connectionState = ConnectionState::Disconnected;
+            m_role = NetworkRole::None;
+            m_localClientID = INVALID_CLIENT;
+            // m_wasConnected is left as-is: a session that was established keeps
+            // auto-reconnect armed, a handshake that never completed does not.
+        }
+        // The epoch bump stops the rest of the Update batch that delivered the
+        // terminal packet, exactly like an application-initiated Disconnect().
+        ++m_lifecycleEpoch;
+#ifdef ENABLE_NETWORKING
+        CloseSocket();
+#endif
+        DiscardClientLifecycleTraffic(endedLifecycleEpoch);
+        {
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            m_replicatedEntities.clear();
+            ++m_replicationMutationEpoch;
+        }
+        m_lagCompensator.Clear();
+        {
+            std::lock_guard<std::mutex> lock(m_inputMutex);
+            m_inputHistory.clear();
+        }
+        m_allowLanAdvertisement = false;
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "Client session ended: %s", reason.c_str());
+    }
+
     ClientID NetworkManager::HandleConnect(const NetworkMessage& msg)
     {
         if (GetRole() != NetworkRole::Server)
@@ -1032,6 +1070,26 @@ namespace Spark::Net
 
     void NetworkManager::HandleDisconnect(const NetworkMessage& msg)
     {
+        // A client only hears Disconnect from its own server endpoint (ProcessIncoming
+        // drops every other source): the server kicked it or shut down, so the session
+        // is over. The server-side cleanup below must never run here -- it would erase
+        // the client's SERVER_PEER reliability state and INVALID_CLIENT-owned entities
+        // while leaving the session Connected with its socket open.
+        if (GetRole() == NetworkRole::Client)
+        {
+            std::string reason = "Disconnected by server";
+            if (!msg.payload.empty())
+            {
+                NetBuffer buf;
+                buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                std::string supplied = buf.ReadString();
+                if (!buf.HasError() && !supplied.empty())
+                    reason += ": " + supplied;
+            }
+            TerminateClientSession(std::move(reason));
+            return;
+        }
+
         const ClientID clientID = msg.senderID;
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnecting", clientID);
         RemoveClientState(clientID);
@@ -1129,14 +1187,22 @@ namespace Spark::Net
                 RemoveClientState(id);
             }
         }
+#ifdef ENABLE_NETWORKING
         else if (m_role == NetworkRole::Client)
         {
-            // Client-side: detect server timeout (no heartbeat received)
-            // The client tracks server liveness via m_serverTime advancing and
-            // heartbeat responses. If no messages arrive for connectionTimeout,
-            // the connection is considered lost.
-            // (Server heartbeat responses update m_serverTime via Update())
+            // The server heartbeats every m_heartbeatInterval, so a client that has
+            // heard nothing from its server endpoint for m_connectionTimeout (while
+            // handshaking or connected) has lost the session. Ending it here closes
+            // the socket and lets auto-reconnect run instead of idling forever.
+            const ConnectionState state = GetConnectionState();
+            if ((state == ConnectionState::Connecting || state == ConnectionState::Connected) &&
+                m_serverTime - m_lastServerPacketTime > m_connectionTimeout)
+            {
+                TerminateClientSession(
+                    std::format("Server timed out (no traffic for {:.1f}s)", m_serverTime - m_lastServerPacketTime));
+            }
         }
+#endif // ENABLE_NETWORKING
 
         return timedOut;
     }
@@ -1226,6 +1292,11 @@ namespace Spark::Net
                 }
             }
             SPARK_BRANCH_GUARD_END("network_packet_gateway")
+
+            // Client liveness: any validated datagram from the server endpoint
+            // (heartbeats included) proves the session is still alive.
+            if (role == NetworkRole::Client)
+                m_lastServerPacketTime = m_serverTime;
 
             // On the server, map sender address to a client ID
             if (role == NetworkRole::Server)

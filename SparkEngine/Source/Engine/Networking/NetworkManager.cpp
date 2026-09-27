@@ -862,6 +862,10 @@ namespace Spark::Net
 
         // Check for timed-out clients (server) or server timeout (client)
         std::vector<ClientID> timedOutClients = CheckConnectionTimeouts();
+        // A client whose server went silent has just ended its session; nothing
+        // of the ended lifecycle may be flushed or retransmitted below.
+        if (m_lifecycleEpoch != updateLifecycleEpoch)
+            return;
         TimeoutHandler timeoutHandler = m_timeoutHandler;
 
         // Update bandwidth stats every second

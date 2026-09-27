@@ -608,7 +608,9 @@ namespace Spark::Net
         /// @brief Remove a client's visibility scope, reverting to "see everything".
         void ClearClientScope(ClientID client);
 
-        /// Register a callback for client timeout events (server-side).
+        /// Register a callback for client timeout events (server-side). A client whose
+        /// server goes silent or closes the session instead transitions to Disconnected
+        /// (GetConnectionState/GetLastConnectionError) and auto-reconnect takes over.
         void SetTimeoutHandler(std::function<void(ClientID)> handler)
         {
             std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
@@ -740,6 +742,11 @@ namespace Spark::Net
         void RejectPendingConnect(ClientID pendingID, ConnectRejectReason reason, const std::string& text);
         /// Client-side: fail a Connecting handshake closed (state, socket, and queued lifecycle traffic).
         void AbandonClientHandshake(ConnectRejectReason reason, std::string text);
+        /// Client-side: end a Connecting/Connected session the server closed (Disconnect) or
+        /// that went silent past m_connectionTimeout. Closes the socket, discards the
+        /// lifecycle's queued traffic and replicated state, and leaves m_wasConnected set so
+        /// auto-reconnect can run. Requires m_apiMutex.
+        void TerminateClientSession(std::string reason);
         void HandleDisconnect(const NetworkMessage& msg);
         /// Server-side: forget one client everywhere it is tracked (client/address tables,
         /// reliability state, delta baselines, interest scope, owned entities). The single
@@ -805,7 +812,8 @@ namespace Spark::Net
         float m_serverTime = 0.0f;
         float m_heartbeatInterval = 1.0f;
         float m_heartbeatTimer = 0.0f;
-        float m_connectionTimeout = 10.0f; ///< Seconds before a client is considered timed out
+        float m_connectionTimeout = 10.0f;   ///< Seconds before a client is considered timed out
+        float m_lastServerPacketTime = 0.0f; ///< Client-side: m_serverTime of the last datagram from the server
 
         NetworkStats m_stats;
         LagCompensator m_lagCompensator;
@@ -889,7 +897,7 @@ namespace Spark::Net
 
         // Connection timeout — handler + notification
         using TimeoutHandler = std::function<void(ClientID)>;
-        TimeoutHandler m_timeoutHandler; ///< Called when a client times out (server) or server times out (client)
+        TimeoutHandler m_timeoutHandler; ///< Server-side: called with each timed-out client ID
 
         /// @brief Checks heartbeat freshness, removes timed-out clients, and
         /// returns their IDs for callback delivery after m_apiMutex is released.

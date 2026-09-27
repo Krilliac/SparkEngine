@@ -1934,7 +1934,7 @@ endif()
 if(ENABLE_NETWORKING)
     add_test(NAME NetTransportSecurity COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(NetTransportSecurity PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestNetTransportSecurity.cpp;SPARK_TEST_NAME_PREFIX=NetTransportSec_;SPARK_TEST_EXPECT_COUNT=3"
+        ENVIRONMENT "SPARK_TEST_FILE=TestNetTransportSecurity.cpp;SPARK_TEST_NAME_PREFIX=NetTransportSec_;SPARK_TEST_EXPECT_COUNT=5"
         LABELS "network;security;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)
