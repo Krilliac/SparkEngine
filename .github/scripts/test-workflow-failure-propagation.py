@@ -96,6 +96,7 @@ VALIDATE_ALL_REQUIRED_INVOCATIONS = {
     "check-doxygen-coverage.sh": ("validate-ci-tools", "bash tools/check-doxygen-coverage.sh check"),
     "check-cross-utilization.sh": ("validate-ci-tools", "bash tools/check-cross-utilization.sh"),
     "check-di-singletons.sh": ("validate-ci-tools", "bash tools/check-di-singletons.sh"),
+    "check-module-asset-refs.py": ("validate-ci-tools", "python3 tools/check-module-asset-refs.py"),
     # The non-gated .sh runs this declarative validation plus the adversarial
     # unit tests, which validate-ci-tools also runs as its own step.
     "check-module-evidence.sh": (
@@ -525,71 +526,196 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
     ):
         errors.append("stable-v1 publication gate must not continue on error")
 
-    errors.extend(profile_required_gates_job_errors(workflow, readiness))
+    errors.extend(profile_required_gates_job_errors(workflow))
     return errors
 
 
-PROFILE_GATES_JOB = "profile-required-gates"
-PROFILE_GATES_REQUIRED_CI_STEP = "Verify candidate commit passed Required CI Gate"
-PROFILE_GATES_FUZZ_STEP = "Verify SEC-120 parser fuzz-policy closure"
+class UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys.
 
-
-def profile_required_gates_job_errors(workflow: str, readiness: str) -> list[str]:
-    """REL-190: candidate gating is a named job the release job cannot bypass.
-
-    The stage-specific readiness validator, the exact Required CI Gate check,
-    and the SEC-120 fuzz closure run in ``profile-required-gates``; ``release``
-    (the environment-protected publisher) must need that job, and the gates job
-    may not be skipped, tolerated, or granted publication authority.
+    PyYAML silently keeps the last of two equal keys, so a second ``needs:`` or
+    ``if:`` would let a structural check read one value while a reviewer reads
+    the other. A duplicate is refused instead of resolved.
     """
 
-    errors: list[str] = []
+
+def _construct_unique_mapping(loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False) -> dict:
+    loader.flatten_mapping(node)
+    seen: set[object] = set()
+    for key_node, _value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"duplicate mapping key {key!r}", key_node.start_mark
+            )
+        seen.add(key)
+    return loader.construct_mapping(node, deep=deep)
+
+
+UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping)
+
+
+def job_needs(job: dict) -> list[object]:
+    """Return a job's ``needs`` as a list, whichever YAML form declares it."""
+
+    needs = job.get("needs", [])
+    return list(needs) if isinstance(needs, list) else [needs]
+
+
+def yaml_strings(value: object) -> list[str]:
+    """Return every string scalar nested anywhere inside a parsed YAML value."""
+
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for item in value.values() for text in yaml_strings(item)]
+    if isinstance(value, list):
+        return [text for item in value for text in yaml_strings(item)]
+    return []
+
+
+def normalized_run_lines(run: object) -> list[str] | None:
+    """Return a ``run:`` script as whitespace-normalized logical lines.
+
+    Line continuations and indentation are presentation; every token that can
+    change the exit status (``|| true``, ``|| :``, ``; exit 0``, ``set +e``)
+    survives normalization, so an exact comparison still fails closed.
+    """
+
+    if not isinstance(run, str):
+        return None
+    return [" ".join(line.split()) for line in run.replace("\\\n", " ").splitlines() if line.strip()]
+
+
+PROFILE_GATES_JOB = "profile-required-gates"
+PROFILE_GATES_CHECKOUT_STEP = "Checkout exact candidate source"
+PROFILE_GATES_REQUIRED_CI_STEP = "Verify candidate commit passed Required CI Gate"
+PROFILE_GATES_READINESS_STEP = "Verify stable-v1 candidate is qualified for versioned publication"
+PROFILE_GATES_FUZZ_STEP = "Verify SEC-120 parser fuzz-policy closure"
+# Every other job key -- if, continue-on-error, environment, strategy, uses,
+# secrets, env, concurrency -- could skip, tolerate, re-route, or arm the job,
+# so the gates job is held to an allowlist rather than a list of known bypasses.
+PROFILE_GATES_JOB_KEYS = frozenset({"needs", "runs-on", "timeout-minutes", "permissions", "steps"})
+PROFILE_GATES_READ_ONLY_SCOPES = frozenset({"read", "none"})
+
+
+def profile_required_gates_job_errors(workflow: str) -> list[str]:
+    """REL-190: candidate gating is a named job the release job cannot bypass.
+
+    The exact Required CI Gate check, the stage-specific readiness validator and
+    the SEC-120 fuzz closure run in ``profile-required-gates``. ``release`` (the
+    environment-protected publisher) must need that job and must carry no
+    job-level ``if``: GitHub skips a job whose dependency failed only through the
+    implicit ``success()`` condition, and ``always()`` or ``!cancelled()``
+    replaces it. The gates job itself may not be skipped, tolerated, suppressed
+    or granted publication authority. The workflow is parsed as YAML so quoting,
+    flow mappings, ``permissions: write-all`` and duplicate keys cannot hide a
+    bypass from a line-oriented match.
+    """
+
     try:
-        gates = yaml_section(workflow, PROFILE_GATES_JOB, indent=2)
-        release = yaml_section(workflow, "release", indent=2)
-    except AssertionError as error:
-        return [str(error)]
+        document = yaml.load(workflow, Loader=UniqueKeyLoader)
+    except yaml.YAMLError as error:
+        return [f"release workflow is not valid YAML: {error}"]
+    jobs = document.get("jobs") if isinstance(document, dict) else None
+    if not isinstance(jobs, dict):
+        return ["release workflow has no jobs mapping"]
+    gates = jobs.get(PROFILE_GATES_JOB)
+    release = jobs.get("release")
+    if not isinstance(gates, dict) or not isinstance(release, dict):
+        return ["release workflow must define both profile-required-gates and release jobs"]
 
-    release_needs = re.search(r"(?m)^    needs:\s*\[([^\]]*)\]\s*(?:#.*)?$", release)
-    needed = {name.strip() for name in release_needs.group(1).split(",")} if release_needs else set()
-    if PROFILE_GATES_JOB not in needed:
+    errors: list[str] = []
+    for job_id, job in jobs.items():
+        if not isinstance(job, dict):
+            errors.append(f"job {job_id} is not a mapping")
+            continue
+        for needed in job_needs(job):
+            if needed not in jobs:
+                errors.append(f"job {job_id} needs unknown job {needed!r}")
+
+    if PROFILE_GATES_JOB not in job_needs(release):
         errors.append("release job must need profile-required-gates")
-    if not exact_field(gates, "needs", "[prepare]"):
-        errors.append("profile-required-gates must need exactly [prepare]")
-    for key in ("if", "continue-on-error", "environment"):
-        if re.search(rf"""(?m)^    (?:{key}|'{key}'|"{key}")\s*:""", gates):
-            errors.append(f"profile-required-gates must not declare job-level {key}")
-    if re.search(r"(?m)^      [a-z-]+:\s*write\s*$", gates) or "secrets." in gates:
-        errors.append("profile-required-gates must hold no write permission or secret")
-    if re.search(r"""(?m)^\s+(?:continue-on-error|'continue-on-error'|"continue-on-error")\s*:""", gates):
-        errors.append("profile-required-gates steps must not continue on error")
+    if "if" in release:
+        errors.append(
+            "release job must not declare a job-level if: a status function such as always() "
+            "would run it after profile-required-gates failed"
+        )
 
-    gate_steps = [name for name, _block in step_blocks(gates)]
-    release_steps = [name for name, _block in step_blocks(release)]
-    if readiness not in gates or readiness in release:
-        errors.append("stable-v1 publication gate must run in profile-required-gates, not in release")
-    for required_step in (PROFILE_GATES_REQUIRED_CI_STEP, PROFILE_GATES_FUZZ_STEP):
-        if gate_steps.count(required_step) != 1:
-            errors.append(f"profile-required-gates must run exactly one {required_step!r} step")
-    if PROFILE_GATES_FUZZ_STEP in release_steps:
-        errors.append("SEC-120 fuzz closure belongs to profile-required-gates, not release")
-    if PROFILE_GATES_REQUIRED_CI_STEP in gate_steps:
-        required_ci = dict(step_blocks(gates))[PROFILE_GATES_REQUIRED_CI_STEP]
-        if "python3 .github/scripts/verify-exact-required-gate.py" not in required_ci:
-            errors.append("profile-required-gates must run the exact Required CI Gate verifier")
-        if re.search(r"(?m)^      if:", required_ci) or "|| true" in required_ci:
-            errors.append("profile-required-gates Required CI check must be unconditional and fail closed")
-        stable_gate_name = "Verify stable-v1 candidate is qualified for versioned publication"
-        if stable_gate_name in gate_steps and gate_steps.index(stable_gate_name) != (
-            gate_steps.index(PROFILE_GATES_REQUIRED_CI_STEP) + 1
-        ):
-            errors.append("stable-v1 publication gate must run immediately after Required CI")
-    if PROFILE_GATES_FUZZ_STEP in gate_steps:
-        fuzz = dict(step_blocks(gates))[PROFILE_GATES_FUZZ_STEP]
-        if run_command(fuzz, indent=6) != (
-            "python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure"
-        ) or re.search(r"(?m)^      if:", fuzz):
-            errors.append("profile-required-gates must run the unconditional SEC-120 closure check")
+    unexpected_keys = sorted(str(key) for key in gates if key not in PROFILE_GATES_JOB_KEYS)
+    if unexpected_keys:
+        errors.append(f"profile-required-gates declares disallowed job-level keys {unexpected_keys}")
+    if job_needs(gates) != ["prepare"]:
+        errors.append("profile-required-gates must need exactly [prepare]")
+    permissions = gates.get("permissions")
+    if not isinstance(permissions, dict) or any(
+        scope not in PROFILE_GATES_READ_ONLY_SCOPES for scope in permissions.values()
+    ):
+        errors.append("profile-required-gates permissions must be an explicit read-only mapping")
+    prepare = jobs.get("prepare")
+    prepare_outputs = prepare.get("outputs") if isinstance(prepare, dict) else None
+    for text in yaml_strings(gates):
+        if re.search(r"\bsecrets\s*[.\[]", text):
+            errors.append("profile-required-gates must not reference a secret")
+        for needed, output in re.findall(r"\bneeds\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)", text):
+            if needed != "prepare" or not isinstance(prepare_outputs, dict) or output not in prepare_outputs:
+                errors.append(f"profile-required-gates references undeclared needs.{needed}.outputs.{output}")
+
+    steps = gates.get("steps")
+    if not isinstance(steps, list) or not all(isinstance(step, dict) for step in steps):
+        return errors + ["profile-required-gates steps must be a list of mappings"]
+    expected_order = [
+        PROFILE_GATES_CHECKOUT_STEP,
+        PROFILE_GATES_REQUIRED_CI_STEP,
+        PROFILE_GATES_READINESS_STEP,
+        PROFILE_GATES_FUZZ_STEP,
+    ]
+    if [step.get("name") for step in steps] != expected_order:
+        errors.append(f"profile-required-gates must run exactly the steps {expected_order} in order")
+    by_name = {step.get("name"): step for step in steps}
+
+    checkout = by_name.get(PROFILE_GATES_CHECKOUT_STEP, {})
+    if (
+        set(checkout) != {"name", "uses", "with"}
+        or not str(checkout.get("uses", "")).startswith("actions/checkout@")
+        or checkout.get("with") != {"ref": "${{ github.sha }}", "persist-credentials": False}
+    ):
+        errors.append("profile-required-gates must check out the exact candidate commit without credentials")
+
+    required_ci = by_name.get(PROFILE_GATES_REQUIRED_CI_STEP, {})
+    if (
+        set(required_ci) != {"name", "env", "run"}
+        or required_ci.get("env") != {"GH_TOKEN": "${{ github.token }}", "TARGET_SHA": "${{ github.sha }}"}
+        or normalized_run_lines(required_ci.get("run")) != [
+            "set -euo pipefail",
+            'GITHUB_OUTPUT="$RUNNER_TEMP/profile-required-gates-exact-ci.out" '
+            "python3 .github/scripts/verify-exact-required-gate.py",
+        ]
+    ):
+        errors.append("profile-required-gates Required CI check must be the exact unconditional fail-closed verifier")
+
+    # The readiness command itself is pinned by versioned_publication_gate_errors.
+    readiness = by_name.get(PROFILE_GATES_READINESS_STEP, {})
+    if (
+        set(readiness) != {"name", "if", "shell", "run"}
+        or readiness.get("if") != "needs.prepare.outputs.is_versioned == 'true'"
+        or readiness.get("shell") != "bash"
+    ):
+        errors.append("profile-required-gates readiness gate must be the exact versioned-only bash step")
+
+    fuzz = by_name.get(PROFILE_GATES_FUZZ_STEP, {})
+    if set(fuzz) != {"name", "run"} or normalized_run_lines(fuzz.get("run")) != [
+        "python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure"
+    ]:
+        errors.append("profile-required-gates must run the unconditional SEC-120 closure check")
+
+    release_steps = release.get("steps")
+    release_step_names = {
+        step.get("name") for step in release_steps if isinstance(step, dict)
+    } if isinstance(release_steps, list) else set()
+    for moved in (PROFILE_GATES_READINESS_STEP, PROFILE_GATES_FUZZ_STEP):
+        if moved in release_step_names:
+            errors.append(f"{moved!r} belongs to profile-required-gates, not release")
     return errors
 
 
@@ -1197,7 +1323,12 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 ),
                 (
                     "Build security runtime targets",
-                    ("set -o pipefail", "cmake --build --preset linux-shipping --target SparkTests"),
+                    (
+                        "set -o pipefail",
+                        "cmake --build --preset linux-shipping",
+                        "SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests",
+                        "SparkCrashReporterFakeGh",
+                    ),
                 ),
                 (
                     "Run RemoteAdmin selectors",
@@ -2304,15 +2435,22 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_telemetry_ctest_selector_rejects_hostile_mutations(self) -> None:
         mutations = {
             "missing source": self.tests_cmake.replace("    TestTelemetrySpool.cpp\n", "", 1),
-            "warning downgrade": self.tests_cmake.replace(" --warn-is-error)", ")", 1),
+            # Anchored on TelemetrySpool: other tests precede it with the same
+            # flag and count, and mutating one of those leaves this contract
+            # untouched.
+            "warning downgrade": self.tests_cmake.replace(
+                "add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)",
+                "add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests>)",
+                1,
+            ),
             "selector widened": self.tests_cmake.replace(
                 "SPARK_TEST_NAME=Telemetry_SpoolRecovery",
                 "SPARK_TEST_NAME=Telemetry_",
                 1,
             ),
             "selected count reduced": self.tests_cmake.replace(
-                f"SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT}",
-                f"SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT - 1}",
+                f"SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT}",
+                f"SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT - 1}",
                 1,
             ),
         }
@@ -2393,6 +2531,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         mutations["security runtime label dropped"] = self.build.replace(
             "for label in remote-admin gateway crash-security; do",
             "for label in remote-admin gateway; do",
+            1,
+        )
+        mutations["security runtime crash-security executables unbuilt"] = self.build.replace(
+            "SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \\\n"
+            "          SparkCrashReporterFakeGh 2>&1 | tee security-build.log",
+            "SparkTests 2>&1 | tee security-build.log",
             1,
         )
         mutations["security runtime off shipping"] = self.build.replace(
@@ -2721,44 +2865,161 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             ),
             "gate after tag mutation": gate_after_tag_binding,
         }
-        # REL-190: the gates job must stay a named, unskippable, read-only
-        # prerequisite of the environment-protected release job.
-        release_needs = "    needs: [prepare, profile-required-gates, build-windows,"
-        gates_header = "  profile-required-gates:\n    needs: [prepare]\n"
-        gates_required_ci = named_step(self.release, "Verify candidate commit passed Required CI Gate")
-        fuzz = named_step(self.release, "Verify SEC-120 parser fuzz-policy closure")
-        mutations.update({
-            "release no longer needs gates": self.release.replace(
-                release_needs, "    needs: [prepare, build-windows,", 1
-            ),
-            "gates job skipped": self.release.replace(
-                gates_header, f"{gates_header}    if: false\n", 1
-            ),
-            "gates job tolerated": self.release.replace(
-                gates_header, f"{gates_header}    continue-on-error: true\n", 1
-            ),
-            "gates job granted environment": self.release.replace(
-                gates_header, f"{gates_header}    environment: stable-release\n", 1
-            ),
-            "gates job granted write": self.release.replace(
-                gates_header, f"{gates_header}    permissions:\n      contents: write\n", 1
-            ).replace("    permissions:\n      actions: read\n      contents: read\n      statuses: read\n", "", 1),
-            "gates Required CI dropped": self.release.replace(gates_required_ci, "", 1),
-            "gates Required CI suppressed": self.release.replace(
-                gates_required_ci, suppress_run_command(gates_required_ci).replace(" || echo ignored", " || true"), 1
-            ),
-            "fuzz closure dropped": self.release.replace(fuzz, "", 1),
-            "fuzz closure made conditional": self.release.replace(
-                fuzz, inject_before_run(fuzz, "      if: needs.prepare.outputs.is_versioned == 'true'"), 1
-            ),
-            "gate moved back into release": self.release.replace(readiness, "", 1).replace(
-                tag_binding, f"{tag_binding}\n{readiness}", 1
-            ).replace(gates_required_ci, "", 1),
-        })
         for label, mutated in mutations.items():
             with self.subTest(mutation=label):
                 self.assertNotEqual(mutated, self.release, "mutation fixture did not alter YAML")
                 self.assertTrue(versioned_publication_gate_errors(mutated), label)
+
+    def test_profile_required_gates_rejects_each_bypass_shape(self) -> None:
+        # REL-190: the gates job must stay a named, unskippable, read-only,
+        # fail-closed prerequisite of the environment-protected release job.
+        # Each mutant names the error it must raise, so a mutant that merely
+        # breaks parsing or trips an unrelated check cannot pass for detection.
+        release_header = "  release:\n    needs: [prepare, profile-required-gates, build-windows,"
+        gates_header = "  profile-required-gates:\n    needs: [prepare]\n"
+        gates_permissions = "    permissions:\n      actions: read\n      contents: read\n      statuses: read\n"
+        readiness = named_step(self.release, PROFILE_GATES_READINESS_STEP)
+        checkout = named_step(self.release, PROFILE_GATES_CHECKOUT_STEP)
+        required_ci = named_step(self.release, PROFILE_GATES_REQUIRED_CI_STEP)
+        fuzz = named_step(self.release, PROFILE_GATES_FUZZ_STEP)
+        tag_binding = named_step(self.release, "Bind stable release tag to workflow commit")
+        for fixture in (release_header, gates_header, gates_permissions):
+            self.assertEqual(self.release.count(fixture), 1, fixture)
+
+        def release_if(condition: str) -> str:
+            return self.release.replace(release_header, release_header.replace(
+                "  release:\n", f"  release:\n    {condition}\n", 1
+            ), 1)
+
+        def gates_key(line: str) -> str:
+            return self.release.replace(gates_header, f"{gates_header}    {line}\n", 1)
+
+        def gates_permissions_as(line: str) -> str:
+            return self.release.replace(gates_permissions, f"    {line}\n", 1)
+
+        def replace_in(step: str, old: str, new: str) -> str:
+            self.assertEqual(step.count(old), 1, old)
+            return self.release.replace(step, step.replace(old, new, 1), 1)
+
+        def move_into_release(step: str) -> str:
+            return self.release.replace(step, "", 1).replace(tag_binding, f"{tag_binding}\n{step}", 1)
+
+        mutations = {
+            "release no longer needs gates": (
+                self.release.replace(release_header, release_header.replace(" profile-required-gates,", "", 1), 1),
+                "release job must need profile-required-gates",
+            ),
+            "release needs a misspelled gates job": (
+                self.release.replace(release_header, release_header.replace(
+                    "profile-required-gates,", "profile-required-gate,", 1
+                ), 1),
+                "needs unknown job 'profile-required-gate'",
+            ),
+            "release runs always": (release_if("if: ${{ always() }}"), "release job must not declare a job-level if"),
+            "release runs unless cancelled": (
+                release_if("\"if\": \"!cancelled()\""),
+                "release job must not declare a job-level if",
+            ),
+            "release needs redeclared without gates": (
+                release_if("needs: [prepare, build-windows, build-linux, build-macos, build-installer]"),
+                "duplicate mapping key 'needs'",
+            ),
+            "gates job skipped": (gates_key("if: false"), "disallowed job-level keys ['if']"),
+            "gates job skipped by quoted key": (gates_key("'if': false"), "disallowed job-level keys ['if']"),
+            "gates job tolerated": (
+                gates_key("continue-on-error: true"),
+                "disallowed job-level keys ['continue-on-error']",
+            ),
+            "gates job granted environment": (
+                gates_key("environment: stable-release"),
+                "disallowed job-level keys ['environment']",
+            ),
+            "gates job handed a secret": (
+                gates_key("env:\n      TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}"),
+                "profile-required-gates must not reference a secret",
+            ),
+            "gates job granted write": (
+                gates_permissions_as("permissions:\n      contents: write"),
+                "permissions must be an explicit read-only mapping",
+            ),
+            "gates job granted write-all": (
+                gates_permissions_as("permissions: write-all"),
+                "permissions must be an explicit read-only mapping",
+            ),
+            "gates job granted write by flow mapping": (
+                gates_permissions_as("permissions: {contents: write}"),
+                "permissions must be an explicit read-only mapping",
+            ),
+            "gates checkout retargeted": (
+                replace_in(checkout, "ref: ${{ github.sha }}", "ref: Working"),
+                "must check out the exact candidate commit",
+            ),
+            "gates Required CI dropped": (self.release.replace(required_ci, "", 1), "must run exactly the steps"),
+            "gates Required CI suppressed by || true": (
+                self.release.replace(
+                    required_ci, suppress_run_command(required_ci).replace(" || echo ignored", " || true"), 1
+                ),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI suppressed by || :": (
+                self.release.replace(
+                    required_ci, suppress_run_command(required_ci).replace(" || echo ignored", " || :"), 1
+                ),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI suppressed by echo": (
+                self.release.replace(required_ci, suppress_run_command(required_ci), 1),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI without errexit": (
+                replace_in(required_ci, "set -euo pipefail", "set +e"),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI tolerated": (
+                self.release.replace(required_ci, inject_before_run(required_ci, "      continue-on-error: true"), 1),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI made conditional": (
+                self.release.replace(required_ci, inject_before_run(required_ci, "      if: false"), 1),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI checks another commit": (
+                replace_in(required_ci, "TARGET_SHA: ${{ github.sha }}", "TARGET_SHA: ${{ github.event.before }}"),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "readiness gate reads an undeclared output": (
+                replace_in(readiness, "needs.prepare.outputs.version", "needs.prepare.outputs.release_version"),
+                "references undeclared needs.prepare.outputs.release_version",
+            ),
+            "readiness gate tolerated": (
+                self.release.replace(readiness, inject_before_run(readiness, "      continue-on-error: true"), 1),
+                "readiness gate must be the exact versioned-only bash step",
+            ),
+            "fuzz closure dropped": (self.release.replace(fuzz, "", 1), "must run exactly the steps"),
+            "fuzz closure suppressed": (
+                self.release.replace(fuzz, suppress_run_command(fuzz).replace(" || echo ignored", " || true"), 1),
+                "must run the unconditional SEC-120 closure check",
+            ),
+            "fuzz closure made conditional": (
+                self.release.replace(
+                    fuzz, inject_before_run(fuzz, "      if: needs.prepare.outputs.is_versioned == 'true'"), 1
+                ),
+                "must run the unconditional SEC-120 closure check",
+            ),
+            "readiness gate moved back into release": (
+                move_into_release(readiness),
+                f"{PROFILE_GATES_READINESS_STEP!r} belongs to profile-required-gates, not release",
+            ),
+            "fuzz closure moved back into release": (
+                move_into_release(fuzz),
+                f"{PROFILE_GATES_FUZZ_STEP!r} belongs to profile-required-gates, not release",
+            ),
+        }
+        for label, (mutated, expected) in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.release, "mutation fixture did not alter YAML")
+                errors = versioned_publication_gate_errors(mutated)
+                self.assertTrue(any(expected in error for error in errors), f"{label}: {errors}")
 
     def test_installer_pipeline_mutations_are_detected_at_nested_indent(self) -> None:
         for path, workflow in ((BUILD_WORKFLOW, self.build), (RELEASE_WORKFLOW, self.release)):

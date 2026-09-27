@@ -269,6 +269,12 @@ jobs:
     - name: Verify DI singleton guardrails
       run: bash tools/check-di-singletons.sh
 
+    - name: Test module asset reference checker
+      run: python3 Tests/Tools/test_check_module_asset_refs.py
+
+    - name: Verify module asset references
+      run: python3 tools/check-module-asset-refs.py
+
     - name: Test asset integrity verifier
       run: python3 -m unittest Tests.Tools.test_asset_integrity Tests.Tools.test_asset_package_profile -v
 
@@ -955,10 +961,15 @@ jobs:
         set -o pipefail
         cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log
 
+    # SparkTests pulls in SparkServer, SparkGateway and SparkCrashReporter via
+    # add_dependencies; the crash-reporter unit executables selected by the
+    # crash-security label are standalone targets and are named explicitly.
     - name: Build security runtime targets
       run: |
         set -o pipefail
-        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee security-build.log
+        cmake --build --preset linux-shipping --parallel $(nproc) --target \
+          SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \
+          SparkCrashReporterFakeGh 2>&1 | tee security-build.log
 
     - name: Run RemoteAdmin selectors
       run: |
