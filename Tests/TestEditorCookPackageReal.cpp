@@ -26,7 +26,9 @@
  * scenario (installer or staged install); that remains open.
  *
  * SPARK_ENGINE_EXECUTABLE is set by the EditorCookPackageRoundTrip ctest registration;
- * without it the tests fail rather than skip.
+ * without it the tests fail rather than skip. That lane is Windows-only, so the tests are
+ * compiled only under _WIN32: other hosts' whole-binary runs (sanitizers, coverage) never
+ * see a family they cannot satisfy.
  */
 
 #include "TestFramework.h"
@@ -54,6 +56,8 @@
 #include <system_error>
 #include <thread>
 #include <vector>
+
+#if defined(_WIN32)
 
 namespace
 {
@@ -364,3 +368,5 @@ TEST(EditorCookPackage_MissingCookedAssetIsReportedByPackagedRun)
     ASSERT_TRUE(fs::remove(scenario.Package() / "Assets" / "Meshes" / "crate.obj"));
     ExpectSceneRecords(scenario.RunPackagedScene(), 1);
 }
+
+#endif // defined(_WIN32)

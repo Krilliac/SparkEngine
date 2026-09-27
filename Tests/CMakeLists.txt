@@ -2656,13 +2656,17 @@ endif()
 # SparkCooker, packaged around the real SparkEngine host by AssembleNativePackage, and
 # the packaged ScenePreview host must load the scene and resolve (or, with the cooked
 # mesh removed, report missing) its Assets/... reference. Windows until the Linux host's
-# packaged-scene asset record is covered. EditorCookPackage_ needs this lane's
-# SPARK_ENGINE_EXECUTABLE and fails without it, so the main suite excludes the family.
-get_test_property(SparkEngineTests ENVIRONMENT _spark_main_suite_environment)
-string(REGEX REPLACE "(^|;)SPARK_TEST_EXCLUDE=([^;]*)" "\\1SPARK_TEST_EXCLUDE=\\2,EditorCookPackage_"
-    _spark_main_suite_environment "${_spark_main_suite_environment}")
-set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_spark_main_suite_environment}")
-unset(_spark_main_suite_environment)
+# packaged-scene asset record is covered; the source compiles its TESTs only under _WIN32,
+# so no other host's whole-binary run (sanitizers, coverage) contains the family.
+# EditorCookPackage_ needs this lane's SPARK_ENGINE_EXECUTABLE and fails without it, so
+# the Windows main suite excludes the family.
+if(WIN32)
+    get_test_property(SparkEngineTests ENVIRONMENT _spark_main_suite_environment)
+    string(REGEX REPLACE "(^|;)SPARK_TEST_EXCLUDE=([^;]*)" "\\1SPARK_TEST_EXCLUDE=\\2,EditorCookPackage_"
+        _spark_main_suite_environment "${_spark_main_suite_environment}")
+    set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_spark_main_suite_environment}")
+    unset(_spark_main_suite_environment)
+endif()
 if(WIN32 AND TARGET SparkEngine AND TARGET SparkCooker AND SPARK_HEADLESS_SUPPORT)
     add_dependencies(SparkTests SparkEngine SparkCooker)
     add_test(NAME EditorCookPackageRoundTrip COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
