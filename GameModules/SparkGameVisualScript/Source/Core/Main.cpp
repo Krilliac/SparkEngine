@@ -84,15 +84,8 @@ bool SparkGameVisualScriptModule::OnLoad(Spark::IEngineContext* context)
     // Step 2: spawn entities, bind each generated script to its real entity ID,
     // and call Start(). A partial demo is rolled back and treated as a load failure.
     std::error_code cwdError;
-    const std::filesystem::path executableDirectory = Spark::RuntimePackage::GetExecutableDirectory();
-    const std::filesystem::path workingDirectory = std::filesystem::current_path(cwdError);
-    std::vector<std::filesystem::path> searchPaths =
-        Spark::RuntimePackage::ResolveContentRoots("Assets/Scripts/Generated", executableDirectory, workingDirectory);
-    for (auto& devRoot : Spark::RuntimePackage::ResolveContentRoots(
-             "GameModules/SparkGameVisualScript/Assets/Scripts/Generated", executableDirectory, workingDirectory))
-    {
-        searchPaths.push_back(std::move(devRoot));
-    }
+    const std::vector<std::filesystem::path> searchPaths = Spark::VisualScriptDemo::ScriptSearchPaths(
+        Spark::RuntimePackage::GetExecutableDirectory(), std::filesystem::current_path(cwdError));
     auto demo =
         std::make_unique<Spark::VisualScriptDemo::DemoWorld>(*m_context->GetWorld(), *m_context->GetScriptEngine());
     if (!demo->LoadScripts(searchPaths) || !demo->Spawn())

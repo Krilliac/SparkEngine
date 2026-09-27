@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "Core/RuntimePackage.h"
+
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -14,6 +16,8 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace Spark::VisualScriptDemo
 {
@@ -93,6 +97,26 @@ namespace Spark::VisualScriptDemo
     }
 
     inline constexpr std::string_view SelfEntityDeclaration = "uint selfEntity = 0;";
+
+    /**
+     * Script roots OnLoad searches, in priority order. Staged or packaged content beside the executable wins, so a
+     * launch from another working directory still finds it; the working directory and the module's source tree
+     * under either are development fallbacks.
+     * @param executableDirectory RuntimePackage::GetExecutableDirectory(), or empty when unknown
+     * @param workingDirectory    std::filesystem::current_path(), or empty when unknown
+     */
+    inline std::vector<std::filesystem::path> ScriptSearchPaths(const std::filesystem::path& executableDirectory,
+                                                                const std::filesystem::path& workingDirectory)
+    {
+        std::vector<std::filesystem::path> searchPaths =
+            RuntimePackage::ResolveContentRoots("Assets/Scripts/Generated", executableDirectory, workingDirectory);
+        for (auto& devRoot : RuntimePackage::ResolveContentRoots(
+                 "GameModules/SparkGameVisualScript/Assets/Scripts/Generated", executableDirectory, workingDirectory))
+        {
+            searchPaths.push_back(std::move(devRoot));
+        }
+        return searchPaths;
+    }
 
     using IsRegularFile = std::function<bool(const std::filesystem::path&)>;
 

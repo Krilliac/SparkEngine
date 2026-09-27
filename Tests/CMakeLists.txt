@@ -397,6 +397,9 @@ add_executable(SparkTests
     # MOD-390: engine-owned .vscript graph I/O, and the module's checked-in graphs
     # regenerate its shipped scripts byte for byte.
     TestMOD390VisualScriptGraphsReal.cpp
+    # ENG-200: the module's graphs compiled, packaged by GamePackager and played to
+    # the win through RuntimePackage root resolution (shares VisualScriptGameplayHarness.h).
+    TestENG200VisualScriptRuntimeReal.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp"
     TestEntityPresetManager.cpp
     TestGamePackager.cpp
@@ -1388,6 +1391,14 @@ if(SPARK_ANGELSCRIPT_AVAILABLE)
         ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptHotReload_ENG200_;SPARK_TEST_EXPECT_COUNT=9"
         LABELS "scripting;scripting-integration;integration"
         TIMEOUT 120)
+    # ENG-200: visual-script graphs -> compiled scripts -> GamePackager layout ->
+    # RuntimePackage anchoring from a foreign working directory -> gameplay to the win
+    # (TestENG200VisualScriptRuntimeReal.cpp).
+    add_test(NAME VisualScriptRuntimePackagedLoop COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(VisualScriptRuntimePackagedLoop PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=VisualScriptRuntime_;SPARK_TEST_EXPECT_COUNT=3"
+        LABELS "scripting;scripting-integration;visual-script;integration"
+        TIMEOUT 180)
 endif()
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_VULKAN)

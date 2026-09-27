@@ -2,14 +2,12 @@
  * @file TestMOD390VisualScriptGameplayReal.cpp
  * @brief MOD-390: the shipped SparkGameVisualScript scripts play headless to the win objective.
  *
- * Builds the module's real demo world (VisualScriptDemoWorld.cpp, the code
- * OnLoad and vs_restart run) from the shipped Generated .as scripts against a
- * real World, the production AngelScriptEngine and a real InputManager
- * installed in an injected EngineContext, exactly where the script getKey /
- * getKeyDown bindings read it. The test only plays the role of the human at
- * the keyboard: each frame it presses W/A/S/D towards a target, then ticks
- * every demo script through CallUpdate at the module's sanitized frame delta,
- * in spawn order, as SparkGameVisualScriptModule::OnUpdate does.
+ * Plays the shipped Generated .as scripts from the module's source tree through
+ * the shared headless harness (VisualScriptGameplayHarness.h): the module's real
+ * DemoWorld on a real World, the production AngelScriptEngine and a real
+ * InputManager in the injected EngineContext. The test only plays the role of
+ * the human at the keyboard and ticks every demo script as
+ * SparkGameVisualScriptModule::OnUpdate does.
  *
  * All gameplay (movement, pickup, scoring, enemy damage, healing, the win) is
  * decided by the scripts. It is observed only through script-visible state:
@@ -22,160 +20,17 @@
 
 #ifdef SPARK_ANGELSCRIPT_SUPPORT
 
-#include "../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h"
-#include "../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.h"
-#include "Core/EngineContext.h"
-#include "Engine/ECS/Components.h"
-#include "Engine/ECS/Components/GameplayComponents.h"
+#include "VisualScriptGameplayHarness.h"
 #include "Engine/ECS/Systems/ECSystems.h"
-#include "Engine/Scripting/AngelScriptEngine.h"
-#include "Input/InputManager.h"
-#include "ScopedLoggerBaseline.h"
-#include "Utils/Logger.h"
 
-#include <array>
-#include <cmath>
-#include <filesystem>
-#include <initializer_list>
-#include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
 namespace
 {
-    namespace fs = std::filesystem;
-    using Spark::VisualScriptDemo::DemoWorld;
-
-    constexpr float kFrameDelta = 1.0f / 60.0f;
-
-    /// Horizontal distance at which the scripted "player" stops pressing keys towards a target.
-    constexpr float kArrivalTolerance = 0.2f;
-
-    /// Script print() output is logged as "[Script] <message>"; this is the exact prefix.
-    constexpr std::string_view kScriptPrintPrefix = "[Script] ";
-
-    /// Restores the process-wide injected EngineContext on every exit path.
-    struct ScopedInjectedContext
-    {
-        explicit ScopedInjectedContext(EngineContext* context) { EngineContext::SetInjected(context); }
-        ~ScopedInjectedContext() { EngineContext::SetInjected(nullptr); }
-        ScopedInjectedContext(const ScopedInjectedContext&) = delete;
-        ScopedInjectedContext& operator=(const ScopedInjectedContext&) = delete;
-    };
-
-    /// The shipped demo, running on a real World / AngelScriptEngine / InputManager.
-    struct GameplayFixture
-    {
-        ScopedLoggerBaseline loggerBaseline; // restored last, after the capture sink is gone
-        std::vector<std::string> scriptOutput;
-        World world;
-        InputManager input;
-        EngineContext context;
-        std::optional<ScopedInjectedContext> injected;
-        AngelScriptEngine engine;
-        std::optional<DemoWorld> demo; // destroyed first (declared last)
-        bool ready = false;
-
-        GameplayFixture()
-        {
-            Spark::Logger::Get().AddSink(std::make_unique<Spark::CallbackSink>(
-                [this](const Spark::LogMessage& message)
-                {
-                    if (message.message.starts_with(kScriptPrintPrefix))
-                        scriptOutput.push_back(message.message.substr(kScriptPrintPrefix.size()));
-                }));
-
-            context.SetWorld(&world);
-            context.SetInput(&input);
-            injected.emplace(&context);
-
-            const std::array<fs::path, 1> searchPaths = {fs::path(SPARK_TEST_SOURCE_DIR) /
-                                                         "GameModules/SparkGameVisualScript/Assets/Scripts/Generated"};
-            demo.emplace(world, engine);
-            ready = engine.Initialize() && demo->LoadScripts(searchPaths) && demo->Spawn();
-        }
-
-        ~GameplayFixture()
-        {
-            demo.reset();
-            if (AngelScriptEngine::GetBoundWorld() == &world)
-                AngelScriptEngine::BindWorld(nullptr);
-            engine.Shutdown();
-            injected.reset();
-            Spark::Logger::Get().ClearSinks(); // drop the sink capturing `this` before it dangles
-        }
-
-        EntityID Find(const std::string& name)
-        {
-            for (auto entity : world.GetEntitiesWith<NameComponent>())
-            {
-                const auto* component = world.GetComponent<NameComponent>(entity);
-                if (component && component->name == name)
-                    return entity;
-            }
-            return entt::null;
-        }
-
-        DirectX::XMFLOAT3 Position(EntityID entity) { return world.GetComponent<Transform>(entity)->position; }
-        float Health(EntityID entity) { return world.GetComponent<HealthComponent>(entity)->health; }
-
-        /// Hold or release one key through the same message path the platform hosts use.
-        void SetKey(int virtualKey, bool down) { input.HandleMessage(down ? WM_KEYDOWN : WM_KEYUP, virtualKey, 0); }
-
-        /// Press the WASD keys that move the player towards (x, z); release all of them once there.
-        void SteerTowards(float x, float z)
-        {
-            const auto player = Position(Find("VS_Player"));
-            const float dx = x - player.x;
-            const float dz = z - player.z;
-            SetKey('D', dx > kArrivalTolerance);
-            SetKey('A', dx < -kArrivalTolerance);
-            SetKey('W', dz > kArrivalTolerance);
-            SetKey('S', dz < -kArrivalTolerance);
-        }
-
-        void ReleaseAllKeys() { SteerTowards(Position(Find("VS_Player")).x, Position(Find("VS_Player")).z); }
-
-        /// One host frame: input edge update, then every demo script's Update() in spawn order.
-        void Tick()
-        {
-#ifndef _WIN32
-            // The Windows Update() requires the HWND from Initialize() and aborts without one. getKey reads
-            // IsKeyDown, which the injected WM_KEYDOWN/WM_KEYUP messages drive on every platform, so the
-            // Windows frame skips the edge update; none of these scenarios uses the edge-triggered getKeyDown.
-            input.Update();
-#endif
-            const float scriptDelta = Spark::VisualScriptDemo::SanitizeDeltaTime(kFrameDelta);
-            for (EntityID entity : demo->GetEntities())
-            {
-                const auto* script = world.GetComponent<Script>(entity);
-                if (script && script->enabled)
-                    engine.CallUpdate(entity, scriptDelta);
-            }
-        }
-
-        size_t CountOutput(std::string_view text) const
-        {
-            size_t count = 0;
-            for (const auto& line : scriptOutput)
-            {
-                if (line == text)
-                    ++count;
-            }
-            return count;
-        }
-
-        bool AnyScriptFaulted()
-        {
-            for (EntityID entity : demo->GetEntities())
-            {
-                if (engine.IsScriptFaulted(entity))
-                    return true;
-            }
-            return false;
-        }
-    };
+    using VisualScriptGameplayHarness::GameplayFixture;
+    using VisualScriptGameplayHarness::kCoinRoute;
+    using VisualScriptGameplayHarness::kFrameDelta;
 } // namespace
 
 TEST(VisualScriptGameplay_ScriptedPlayerCollectsAllPickupsAndWins)
@@ -196,11 +51,10 @@ TEST(VisualScriptGameplay_ScriptedPlayerCollectsAllPickupsAndWins)
         coins.push_back(fx.Find("VS_Coin_" + std::to_string(i)));
         ASSERT_TRUE(coins.back() != entt::null);
     }
-    const std::array<int, 5> route = {2, 1, 0, 3, 4};
 
     constexpr int kFrameBudget = 60 * 60; // one minute of game time
     int frame = 0;
-    for (int coinIndex : route)
+    for (int coinIndex : kCoinRoute)
     {
         const EntityID coin = coins[static_cast<size_t>(coinIndex)];
         const float targetX = fx.Position(coin).x;
@@ -381,7 +235,7 @@ TEST(VisualScriptGameplay_ScriptCuesReachAudioQueueAndAnimationControllers)
         previousPatrolTime = patrol->currentTime;
     };
 
-    for (int coinIndex : {2, 1, 0, 3, 4})
+    for (int coinIndex : kCoinRoute)
     {
         const EntityID coin = coins[static_cast<size_t>(coinIndex)];
         const auto spawn = fx.Position(coin);
