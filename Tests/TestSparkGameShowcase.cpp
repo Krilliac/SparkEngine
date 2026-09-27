@@ -129,12 +129,26 @@ namespace
     /// Loads the real SparkGame image and guarantees shutdown-then-unload on every exit path.
     struct LoadedShowcase final
     {
-        ModuleManager manager;
-        ~LoadedShowcase()
+        LoadedShowcase(World& hostWorld, Spark::EventBus& hostEventBus) : world(hostWorld), eventBus(hostEventBus) {}
+        ~LoadedShowcase() { Unload(); }
+
+        LoadedShowcase(const LoadedShowcase&) = delete;
+        LoadedShowcase& operator=(const LoadedShowcase&) = delete;
+
+        /// The engine host's teardown order (ShutdownEngine): shut the module down, then release the
+        /// EventBus channels and ECS pools it created while the image is still mapped (their vtables and
+        /// deleters are module code, which GCC LTO keeps local to the image), and only then unload it.
+        void Unload()
         {
             manager.ShutdownAllAfterPreflight();
+            eventBus.ClearAll();
+            world.GetRegistry() = entt::registry{};
             manager.UnloadAll();
         }
+
+        ModuleManager manager;
+        World& world;
+        Spark::EventBus& eventBus;
     };
 
     /// Starts from an empty scheduler: other tests share the engine singleton.
@@ -305,7 +319,7 @@ TEST(SparkGameShowcase_CoroutineSequence)
         [&damageEvents](const Spark::EntityDamagedEvent& e) { damageEvents.push_back(e); });
     ShowcaseHostContext context(&world, &eventBus, &scheduler);
 
-    LoadedShowcase showcase;
+    LoadedShowcase showcase(world, eventBus);
     ASSERT_TRUE(showcase.manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
     showcase.manager.InitializeAll(&context);
     ASSERT_TRUE(showcase.manager.GetModule(MODULE_NAME) != nullptr);
@@ -369,7 +383,7 @@ TEST(SparkGameShowcase_CoroutineStoppedBeforeUnload)
     ShowcaseHostContext context(&world, &eventBus, &scheduler);
 
     {
-        LoadedShowcase showcase;
+        LoadedShowcase showcase(world, eventBus);
         ASSERT_TRUE(showcase.manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
         showcase.manager.InitializeAll(&context);
         for (int update = 1; update <= DAMAGE_UPDATE; ++update)
@@ -384,9 +398,14 @@ TEST(SparkGameShowcase_CoroutineStoppedBeforeUnload)
         EXPECT_EQ(scheduler.ActiveCount(), size_t{0});
         EXPECT_FALSE(FindNamedEntity(world, "CoroutineTarget").has_value());
 
-        showcase.manager.UnloadAll();
+        showcase.Unload();
         EXPECT_EQ(showcase.manager.GetModuleCount(), size_t{0});
     }
+
+    // Unload() released every EventBus channel, the host's damage listener included. Listen again so a
+    // showcase step that still ran after the unload would be counted below.
+    damageSubscription = eventBus.Subscribe<Spark::EntityDamagedEvent>([&damageEvents](const Spark::EntityDamagedEvent&)
+                                                                       { ++damageEvents; });
 
     // The host keeps ticking after the image is gone; nothing of the showcase remains to run.
     for (int update = 0; update < 256; ++update)
@@ -406,7 +425,7 @@ TEST(SparkGameShowcase_CoroutineAbortsOnLostTargetAndKeepsRootCause)
         [&damageEvents](const Spark::EntityDamagedEvent&) { ++damageEvents; });
     ShowcaseHostContext context(&world, &eventBus, &scheduler);
 
-    LoadedShowcase showcase;
+    LoadedShowcase showcase(world, eventBus);
     ASSERT_TRUE(showcase.manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
     showcase.manager.InitializeAll(&context);
 
@@ -440,7 +459,7 @@ TEST(SparkGameShowcase_CoroutineWithoutSchedulerFailsVisibly)
     Spark::EventBus eventBus;
     ShowcaseHostContext context(&world, &eventBus, nullptr);
 
-    LoadedShowcase showcase;
+    LoadedShowcase showcase(world, eventBus);
     ASSERT_TRUE(showcase.manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
     showcase.manager.InitializeAll(&context);
     ASSERT_TRUE(showcase.manager.GetModule(MODULE_NAME) != nullptr);
@@ -466,7 +485,7 @@ TEST(SparkGameShowcase_QuickLoadRestoresExactState)
         [&damageEvents](const Spark::EntityDamagedEvent&) { ++damageEvents; });
     ShowcaseHostContext context(&world, &eventBus, &scheduler, &saveDirectory.System());
 
-    LoadedShowcase showcase;
+    LoadedShowcase showcase(world, eventBus);
     ASSERT_TRUE(showcase.manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
     showcase.manager.InitializeAll(&context);
     ASSERT_TRUE(showcase.manager.GetModule(MODULE_NAME) != nullptr);
@@ -537,7 +556,7 @@ TEST(SparkGameShowcase_StatusIsLocalized)
     Spark::EventBus eventBus;
     ShowcaseHostContext context(&world, &eventBus, &scheduler, nullptr, &localization);
     {
-        LoadedShowcase showcase;
+        LoadedShowcase showcase(world, eventBus);
         ASSERT_TRUE(showcase.manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
         showcase.manager.InitializeAll(&context);
         ASSERT_TRUE(showcase.manager.GetModule(MODULE_NAME) != nullptr);

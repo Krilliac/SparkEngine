@@ -1889,6 +1889,22 @@ if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
             message(FATAL_ERROR "Shaders/GLSL/${_spark_glsl_source} has no SPIR-V stage entry in CMakeLists.txt")
         endif()
     endforeach()
+    # glslang 15+ moved GLSL combined image samplers (sampler2D) out of the "texture"
+    # resource class into their own, shifted only by --shift-combined-sampler-binding;
+    # --shift-texture-binding alone then leaves them at binding N, colliding with the
+    # uniform-buffer range. glslang 14 (Ubuntu 24.04) has no such option and shifts
+    # them with --shift-texture-binding, so pass the new flag only when it exists.
+    execute_process(
+        COMMAND "${SPARK_GLSLANG_VALIDATOR}" --help
+        OUTPUT_VARIABLE _spark_glslang_help
+        ERROR_VARIABLE _spark_glslang_help
+        RESULT_VARIABLE _spark_glslang_help_result)
+    set(_SPARK_SPIRV_SAMPLER_SHIFT --shift-texture-binding 14)
+    if(_spark_glslang_help MATCHES "shift-combined-sampler-binding")
+        list(APPEND _SPARK_SPIRV_SAMPLER_SHIFT --shift-combined-sampler-binding 14)
+    endif()
+    unset(_spark_glslang_help)
+    unset(_spark_glslang_help_result)
     set(_SPARK_SPIRV_DIR "${CMAKE_BINARY_DIR}/Shaders/SPIRV")
     foreach(_spark_spirv_stage IN LISTS _SPARK_SPIRV_STAGES)
         string(REPLACE ":" ";" _spark_spirv_parts "${_spark_spirv_stage}")
@@ -1905,7 +1921,7 @@ if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
             OUTPUT "${_spark_spirv_output}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_SPARK_SPIRV_DIR}"
             COMMAND "${SPARK_GLSLANG_VALIDATOR}" --quiet -V -S ${_spark_spirv_kind} -D${_spark_spirv_macro}
-                --shift-texture-binding 14 -o "${_spark_spirv_output}" "${_spark_spirv_source}"
+                ${_SPARK_SPIRV_SAMPLER_SHIFT} -o "${_spark_spirv_output}" "${_spark_spirv_source}"
             DEPENDS "${_spark_spirv_source}"
             COMMENT "Compiling SPIR-V ${_spark_spirv_name}.${_spark_spirv_kind}.spv"
             VERBATIM)
