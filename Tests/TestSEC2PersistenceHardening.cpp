@@ -101,6 +101,14 @@ namespace
         return !error;
     }
 
+    std::string GetValue(SQLiteConnection& connection, const std::string& key)
+    {
+        const auto result = connection.ExecuteRaw("GET " + key);
+        if (!result.success || !result.HasRows())
+            return "<absent>";
+        return result.rows[0].GetString(0);
+    }
+
     EntityID FindNamedEntity(World& world, const std::string& name)
     {
         auto&& entities = world.GetRegistry().storage<entt::entity>();
@@ -209,6 +217,169 @@ TEST(SEC2Persist_SaveStagingIgnoresPlantedHardLinks)
 }
 
 // ============================================================================
+// Finding 44: AsyncDatabase staging never follows a planted link
+// ============================================================================
+
+TEST(SEC2Persist_AsyncDatabaseStagingIgnoresPlantedHardLink)
+{
+    Scratch scratch("kv_links");
+    const fs::path store = scratch / "store.kv";
+    const fs::path canary = scratch / "canary.kv";
+    WriteBytes(canary, kCanaryBytes);
+
+    SQLiteConnection connection;
+    ASSERT_TRUE(connection.Open(store.string()));
+    if (!PlantHardLink(canary, WithSuffix(store, ".tmp")))
+        SKIP_TEST("filesystem does not support hard links");
+
+    EXPECT_TRUE(connection.ExecuteRaw("SET alpha one").success);
+    EXPECT_EQ(ReadBytes(canary), std::string(kCanaryBytes));
+    EXPECT_FALSE(fs::exists(WithSuffix(store, ".tmp")));
+    connection.Close();
+
+    SQLiteConnection reopened;
+    ASSERT_TRUE(reopened.Open(store.string()));
+    EXPECT_EQ(GetValue(reopened, "alpha"), std::string("one"));
+    reopened.Close();
+}
+
+// ============================================================================
+// Finding 46: plain SET/DELETE report and roll back a failed publication
+// ============================================================================
+
+TEST(SEC2Persist_AsyncDatabaseFailedWritesRollBack)
+{
+    Scratch scratch("kv_rollback");
+    const fs::path store = scratch / "store.kv";
+
+    {
+        SQLiteConnection connection;
+        ASSERT_TRUE(connection.Open(store.string()));
+        ASSERT_TRUE(connection.ExecuteRaw("SET kept original").success);
+
+        // A non-empty directory on the staging name makes every publication fail.
+        const fs::path blocker = WithSuffix(store, ".tmp") / "occupant";
+        fs::create_directories(blocker);
+
+        const auto overwrite = connection.ExecuteRaw("SET kept replaced");
+        EXPECT_FALSE(overwrite.success);
+        EXPECT_STR_CONTAINS(overwrite.errorMessage, "not persisted");
+        EXPECT_EQ(GetValue(connection, "kept"), std::string("original"));
+
+        const auto insert = connection.ExecuteRaw("SET fresh value");
+        EXPECT_FALSE(insert.success);
+        EXPECT_EQ(GetValue(connection, "fresh"), std::string("<absent>"));
+
+        const auto erase = connection.ExecuteRaw("DELETE kept");
+        EXPECT_FALSE(erase.success);
+        EXPECT_EQ(erase.affectedRows, 0);
+        EXPECT_EQ(GetValue(connection, "kept"), std::string("original"));
+
+        fs::remove_all(WithSuffix(store, ".tmp"));
+        connection.Close();
+    }
+
+    SQLiteConnection reopened;
+    ASSERT_TRUE(reopened.Open(store.string()));
+    EXPECT_EQ(GetValue(reopened, "kept"), std::string("original"));
+    EXPECT_EQ(GetValue(reopened, "fresh"), std::string("<absent>"));
+    reopened.Close();
+}
+
+// ============================================================================
+// Finding 47: an existing store that cannot be loaded completely fails Open
+// ============================================================================
+
+TEST(SEC2Persist_AsyncDatabaseRefusesDamagedStore)
+{
+    Scratch scratch("kv_damaged");
+
+    // A missing file is a new, empty store.
+    {
+        SQLiteConnection fresh;
+        EXPECT_TRUE(fresh.Open((scratch / "new.kv").string()));
+        fresh.Close();
+    }
+
+    struct DamagedStore
+    {
+        const char* name;
+        std::string bytes;
+    };
+    const DamagedStore damaged[] = {
+        {"no_separator.kv", "#!spark-kv-v2\nalpha\tone\nbroken-record\n"},
+        {"truncated.kv", "#!spark-kv-v2\nalpha\tone\nbeta\ttw"},
+        {"bad_escape.kv", "#!spark-kv-v2\nalpha\tone\\q\n"},
+        {"trailing_backslash.kv", "#!spark-kv-v2\nalpha\tone\\\n"},
+        {"duplicate.kv", "#!spark-kv-v2\nalpha\tone\nalpha\ttwo\n"},
+        {"legacy_no_separator.kv", "alpha\tone\nsecond line of a multi-line legacy value\n"},
+    };
+    for (const DamagedStore& store : damaged)
+    {
+        const fs::path path = scratch / store.name;
+        WriteBytes(path, store.bytes);
+
+        SQLiteConnection connection;
+        EXPECT_FALSE(connection.Open(path.string()));
+        EXPECT_FALSE(connection.IsOpen());
+        // Refused, never rewritten: a partial store flushed over it would erase records.
+        EXPECT_EQ(ReadBytes(path), store.bytes);
+
+        AsyncDatabasePool pool;
+        EXPECT_FALSE(pool.Open(path.string(), 1));
+        EXPECT_EQ(ReadBytes(path), store.bytes);
+    }
+
+    // Something that exists but is not a readable regular file is not "missing".
+    const fs::path directory = scratch / "directory.kv";
+    fs::create_directories(directory / "occupant");
+    SQLiteConnection onDirectory;
+    EXPECT_FALSE(onDirectory.Open(directory.string()));
+    EXPECT_TRUE(fs::is_directory(directory / "occupant"));
+
+    // A well-formed store, including legacy and escaped CR/tab/newline values, still loads.
+    const fs::path valid = scratch / "valid.kv";
+    WriteBytes(valid, "#!spark-kv-v2\nalpha\tline1\\nline2\\ttabbed\\rcr\\\\slash\n");
+    SQLiteConnection connection;
+    ASSERT_TRUE(connection.Open(valid.string()));
+    EXPECT_EQ(GetValue(connection, "alpha"), std::string("line1\nline2\ttabbed\rcr\\slash"));
+    ASSERT_TRUE(connection.ExecuteRaw("SET carriage 'ends-with-cr\r'").success);
+    connection.Close();
+    SQLiteConnection reopened;
+    ASSERT_TRUE(reopened.Open(valid.string()));
+    EXPECT_EQ(GetValue(reopened, "carriage"), std::string("ends-with-cr\r"));
+    reopened.Close();
+}
+
+// ============================================================================
+// Finding 53: one authority per store file
+// ============================================================================
+
+TEST(SEC2Persist_AsyncDatabaseRejectsSecondAuthority)
+{
+    Scratch scratch("kv_authority");
+    const std::string store = (scratch / "store.kv").string();
+
+    SQLiteConnection first;
+    ASSERT_TRUE(first.Open(store));
+    ASSERT_TRUE(first.ExecuteRaw("SET owner first").success);
+
+    // A second holder would keep its own snapshot and its flushes would erase the first's.
+    SQLiteConnection second;
+    EXPECT_FALSE(second.Open(store));
+    AsyncDatabasePool pool;
+    EXPECT_FALSE(pool.Open(store, 1));
+
+    first.Close();
+    ASSERT_TRUE(second.Open(store));
+    EXPECT_EQ(GetValue(second, "owner"), std::string("first"));
+    second.Close();
+
+    ASSERT_TRUE(pool.Open(store, 1));
+    pool.Close();
+}
+
+// ============================================================================
 // Findings 51 and 54: commit reporting and the POSIX directory sync
 // ============================================================================
 
@@ -243,5 +414,40 @@ TEST(SEC2Persist_ReplaceNeverReportsUncommittedAfterRename)
     EXPECT_TRUE(SaveFileDurability::ReplaceFileAtomically(staged, document, replaceError) ==
                 SaveFileDurability::ReplaceOutcome::NotCommitted);
     EXPECT_EQ(ReadBytes(document), std::string("old\n"));
+#endif
+}
+
+TEST(SEC2Persist_AsyncDatabaseAcksOnlyAfterDirectorySync)
+{
+#if defined(_WIN32)
+    SKIP_TEST("POSIX directory-sync path; Windows replaces with MoveFileExW write-through");
+#else
+    if (::geteuid() == 0)
+        SKIP_TEST("root bypasses directory permissions");
+
+    Scratch scratch("kv_dirsync");
+    const fs::path directory = scratch / "store";
+    fs::create_directories(directory);
+    const fs::path store = directory / "store.kv";
+
+    SQLiteConnection connection;
+    ASSERT_TRUE(connection.Open(store.string()));
+    ASSERT_TRUE(connection.ExecuteRaw("SET durable yes").success);
+
+    // Without a directory sync the rename can be lost on power failure, so the write must
+    // not be acknowledged. The old flush never synced the directory and reported success.
+    ASSERT_TRUE(MakeDirectoryUnsyncable(directory));
+    EXPECT_FALSE(connection.ExecuteRaw("SET unsynced no").success);
+    EXPECT_EQ(GetValue(connection, "unsynced"), std::string("<absent>"));
+
+    std::error_code ignored;
+    fs::permissions(directory, fs::perms::owner_all, fs::perm_options::replace, ignored);
+    connection.Close();
+
+    SQLiteConnection reopened;
+    ASSERT_TRUE(reopened.Open(store.string()));
+    EXPECT_EQ(GetValue(reopened, "durable"), std::string("yes"));
+    EXPECT_EQ(GetValue(reopened, "unsynced"), std::string("<absent>"));
+    reopened.Close();
 #endif
 }

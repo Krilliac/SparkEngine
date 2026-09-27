@@ -4,6 +4,7 @@
  */
 
 #include "AsyncDatabase.h"
+#include "Engine/SaveSystem/SaveFileDurability.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
@@ -14,6 +15,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
@@ -28,6 +30,7 @@
 #include <Windows.h>
 #else
 #include <fcntl.h>
+#include <sys/file.h>
 #include <unistd.h>
 #endif
 
@@ -181,6 +184,10 @@ namespace Spark::Persistence
                 case '\n':
                     escaped += "\\n";
                     break;
+                case '\r':
+                    // Escaped so a CR can never be mistaken for a legacy CRLF line ending.
+                    escaped += "\\r";
+                    break;
                 default:
                     escaped += c;
                     break;
@@ -194,40 +201,41 @@ namespace Spark::Persistence
         // legacy value like "C:\temp" would decode its "\t" into a tab.
         constexpr const char* kKVFormatMarker = "#!spark-kv-v2";
 
-        std::string UnescapeKVField(const std::string& field)
+        /// Reverse EscapeKVField. Only the sequences the writer produces are accepted: any
+        /// other escape, or a trailing lone backslash, means the record is damaged.
+        bool UnescapeKVField(const std::string& field, std::string& out)
         {
-            std::string unescaped;
-            unescaped.reserve(field.size());
+            out.clear();
+            out.reserve(field.size());
             for (size_t i = 0; i < field.size(); ++i)
             {
-                if (field[i] == '\\' && i + 1 < field.size())
+                if (field[i] != '\\')
                 {
-                    ++i;
-                    switch (field[i])
-                    {
-                    case 't':
-                        unescaped += '\t';
-                        break;
-                    case 'n':
-                        unescaped += '\n';
-                        break;
-                    case '\\':
-                        unescaped += '\\';
-                        break;
-                    default:
-                        // Not a sequence our writer produces — keep the
-                        // backslash rather than silently dropping it.
-                        unescaped += '\\';
-                        unescaped += field[i];
-                        break;
-                    }
+                    out += field[i];
+                    continue;
                 }
-                else
+                if (i + 1 >= field.size())
+                    return false;
+                ++i;
+                switch (field[i])
                 {
-                    unescaped += field[i];
+                case 't':
+                    out += '\t';
+                    break;
+                case 'n':
+                    out += '\n';
+                    break;
+                case 'r':
+                    out += '\r';
+                    break;
+                case '\\':
+                    out += '\\';
+                    break;
+                default:
+                    return false;
                 }
             }
-            return unescaped;
+            return true;
         }
     } // namespace
 
@@ -262,9 +270,93 @@ namespace Spark::Persistence
             }
         }
 
-        LoadFromDisk();
+        // One authority per store: a second holder would keep its own snapshot and each
+        // whole-store flush would silently erase the other's commits.
+        if (!AcquireAuthorityLock())
+        {
+            return false;
+        }
+
+        if (!LoadFromDisk())
+        {
+            // Never run with an empty or partial store over a file that exists: the next
+            // flush would atomically replace every record that was not loaded.
+            m_kvStore.clear();
+            ReleaseAuthorityLock();
+            return false;
+        }
+
         m_open = true;
         return true;
+    }
+
+    bool SQLiteConnection::AcquireAuthorityLock()
+    {
+        const std::filesystem::path lockPath(m_dbPath + ".lock");
+#ifdef _WIN32
+        // No sharing: while this handle is open, any other open of the lock file fails.
+        HANDLE handle = ::CreateFileW(lockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
+                                      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        if (handle == INVALID_HANDLE_VALUE)
+        {
+            const DWORD error = ::GetLastError();
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: '%s' is already open by another connection or process (lock '%s': %s)",
+                            m_dbPath.c_str(), lockPath.string().c_str(),
+                            std::system_category().message(static_cast<int>(error)).c_str());
+            return false;
+        }
+        m_lockHandle = handle;
+#else
+        int flags = O_RDWR | O_CREAT;
+#ifdef O_NOFOLLOW
+        flags |= O_NOFOLLOW;
+#endif
+#ifdef O_CLOEXEC
+        flags |= O_CLOEXEC;
+#endif
+        const int fd = ::open(lockPath.c_str(), flags, 0600);
+        if (fd < 0)
+        {
+            const int error = errno;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: cannot open lock '%s': %s",
+                            lockPath.string().c_str(), std::strerror(error));
+            return false;
+        }
+        // flock locks belong to the open file description, so a second open of the same
+        // store fails here even inside one process.
+        if (::flock(fd, LOCK_EX | LOCK_NB) != 0)
+        {
+            const int error = errno;
+            ::close(fd);
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: '%s' is already open by another connection or process (lock '%s': %s)",
+                            m_dbPath.c_str(), lockPath.string().c_str(), std::strerror(error));
+            return false;
+        }
+        m_lockFd = fd;
+#endif
+        return true;
+    }
+
+    void SQLiteConnection::ReleaseAuthorityLock() noexcept
+    {
+#ifdef _WIN32
+        if (m_lockHandle != nullptr)
+        {
+            ::CloseHandle(static_cast<HANDLE>(m_lockHandle));
+            m_lockHandle = nullptr;
+        }
+#else
+        if (m_lockFd >= 0)
+        {
+            // Closing the descriptor releases the flock. The lock file is deliberately not
+            // unlinked: unlinking would let a new opener lock a fresh inode while an older
+            // opener still holds the unlinked one.
+            ::close(m_lockFd);
+            m_lockFd = -1;
+        }
+#endif
     }
 
     void SQLiteConnection::Close()
@@ -274,10 +366,17 @@ namespace Spark::Persistence
             return;
         }
 
-        FlushToDisk();
+        if (!FlushToDisk())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: final flush of '%s' failed on close; the file keeps its last "
+                            "successfully published revision",
+                            m_dbPath.c_str());
+        }
         m_kvStore.clear();
         m_preparedSQL.clear();
         m_open = false;
+        ReleaseAuthorityLock();
     }
 
     bool SQLiteConnection::PrepareStatement(PreparedStatementID id, const std::string& sql)
@@ -460,17 +559,34 @@ namespace Spark::Persistence
                 }
             }
 
+            std::optional<std::string> previous;
+            if (const auto existing = m_kvStore.find(key); existing != m_kvStore.end())
+            {
+                previous = existing->second;
+            }
             m_kvStore[key] = value;
-            result.success = true;
-            result.affectedRows = 1;
 
             // Persist non-transactional writes immediately so data survives a crash and
             // is visible on the next reopen. Writes issued inside a transaction are
             // deferred to CommitTransaction so RollbackTransaction can discard them.
-            if (!m_inTransaction)
+            // A write that was not published is undone and reported as failed: callers
+            // such as character-ID allocation rely on success meaning durable.
+            if (!m_inTransaction && !FlushToDisk())
             {
-                FlushToDisk();
+                if (previous)
+                {
+                    m_kvStore[key] = std::move(*previous);
+                }
+                else
+                {
+                    m_kvStore.erase(key);
+                }
+                result.success = false;
+                result.errorMessage = "SET was not persisted: publishing '" + m_dbPath + "' failed";
+                return result;
             }
+            result.success = true;
+            result.affectedRows = 1;
         }
         else if (upperCmd == "GET")
         {
@@ -491,15 +607,19 @@ namespace Spark::Persistence
             std::string key;
             stream >> key;
 
-            auto erased = m_kvStore.erase(key);
-            result.success = true;
-            result.affectedRows = static_cast<int>(erased);
+            auto erased = m_kvStore.extract(key);
+            const bool removed = !erased.empty();
 
             // Persist the deletion immediately (see the SET branch for rationale).
-            if (!m_inTransaction && erased > 0)
+            if (!m_inTransaction && removed && !FlushToDisk())
             {
-                FlushToDisk();
+                m_kvStore.insert(std::move(erased));
+                result.success = false;
+                result.errorMessage = "DELETE was not persisted: publishing '" + m_dbPath + "' failed";
+                return result;
             }
+            result.success = true;
+            result.affectedRows = removed ? 1 : 0;
         }
         else if (upperCmd == "KEYS")
         {
@@ -574,178 +694,152 @@ namespace Spark::Persistence
     bool SQLiteConnection::FlushToDisk()
     {
         // Never truncate the live store: a crash or a write error midway through would
-        // destroy every key. Build the new revision in a sibling temp file and replace
-        // the destination only after the content is complete (DATA-120).
-        const std::filesystem::path destination(m_dbPath);
-        const std::filesystem::path temporary(m_dbPath + ".tmp");
-
+        // destroy every key. The complete revision is built in memory, staged in a sibling
+        // temp file created exclusively (never through a link planted at that name),
+        // flushed, and published by atomic replace plus, on POSIX, a directory sync
+        // (DATA-120).
+        std::string revision;
+        revision += kKVFormatMarker;
+        revision += '\n';
+        for (const auto& [key, value] : m_kvStore)
         {
-            std::ofstream file(temporary, std::ios::trunc);
-            if (!file.is_open())
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to open '%s' for writing",
-                                temporary.string().c_str());
-                return false;
-            }
-
-            file << kKVFormatMarker << '\n';
-            for (const auto& [key, value] : m_kvStore)
-            {
-                file << EscapeKVField(key) << '\t' << EscapeKVField(value) << '\n';
-            }
-
-            file.flush();
-            if (!file)
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: flush error writing '%s' (%zu entries)",
-                                temporary.string().c_str(), m_kvStore.size());
-                std::error_code removeError;
-                std::filesystem::remove(temporary, removeError);
-                return false;
-            }
-
-            file.close();
-            if (file.fail())
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: write error flushing '%s' (%zu entries)",
-                                m_dbPath.c_str(), m_kvStore.size());
-                std::error_code removeError;
-                std::filesystem::remove(temporary, removeError);
-                return false;
-            }
+            revision += EscapeKVField(key);
+            revision += '\t';
+            revision += EscapeKVField(value);
+            revision += '\n';
         }
 
-        // Seal the complete temporary revision before the atomic name swap. The
-        // Windows replace flag below covers the rename itself; explicitly flushing
-        // the file here also makes the durability boundary clear and gives POSIX
-        // the equivalent data-write ordering before rename.
-#ifdef _WIN32
-        HANDLE temporaryHandle = ::CreateFileW(temporary.c_str(), GENERIC_READ | GENERIC_WRITE,
-                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (temporaryHandle == INVALID_HANDLE_VALUE)
+        std::error_code error;
+        if (!Spark::SaveFileDurability::WriteFileAtomically(std::filesystem::path(m_dbPath), revision,
+                                                            /*retainBackup*/ false, error))
         {
-            const DWORD error = ::GetLastError();
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
-                            temporary.string().c_str(),
-                            std::system_category().message(static_cast<int>(error)).c_str());
-            std::error_code removeError;
-            std::filesystem::remove(temporary, removeError);
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to publish '%s' (%zu entries): %s",
+                            m_dbPath.c_str(), m_kvStore.size(), error.message().c_str());
             return false;
         }
-        const BOOL flushed = ::FlushFileBuffers(temporaryHandle);
-        const DWORD flushError = flushed ? ERROR_SUCCESS : ::GetLastError();
-        ::CloseHandle(temporaryHandle);
-        if (!flushed)
+        if (error)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: durable flush failed for '%s': %s",
-                            temporary.string().c_str(),
-                            std::system_category().message(static_cast<int>(flushError)).c_str());
-            std::error_code removeError;
-            std::filesystem::remove(temporary, removeError);
-            return false;
+            // Published: the destination names the new revision. Only the directory sync
+            // that makes the rename survive a power loss failed.
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "AsyncDatabase: '%s' was published but the directory sync failed (%s); the revision may "
+                           "not survive a power loss",
+                           m_dbPath.c_str(), error.message().c_str());
         }
-#else
-        int temporaryOpenFlags = O_RDONLY;
-#ifdef O_CLOEXEC
-        temporaryOpenFlags |= O_CLOEXEC;
-#endif
-        int temporaryFd = ::open(temporary.c_str(), temporaryOpenFlags);
-        if (temporaryFd < 0)
-        {
-            const int error = errno;
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
-                            temporary.string().c_str(), std::strerror(error));
-            std::error_code removeError;
-            std::filesystem::remove(temporary, removeError);
-            return false;
-        }
-        const int flushResult = ::fsync(temporaryFd);
-        const int flushError = flushResult == 0 ? 0 : errno;
-        ::close(temporaryFd);
-        if (flushResult != 0)
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: durable flush failed for '%s': %s",
-                            temporary.string().c_str(), std::strerror(flushError));
-            std::error_code removeError;
-            std::filesystem::remove(temporary, removeError);
-            return false;
-        }
-#endif
-
-        // Replace in one step so the destination is never missing: std::filesystem::rename
-        // does not overwrite on Windows, where MoveFileEx does.
-        std::error_code replaceError;
-#ifdef _WIN32
-        if (!::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-        {
-            replaceError = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
-        }
-#else
-        std::filesystem::rename(temporary, destination, replaceError);
-#endif
-        if (replaceError)
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to replace '%s' with '%s': %s",
-                            m_dbPath.c_str(), temporary.string().c_str(), replaceError.message().c_str());
-            std::error_code removeError;
-            std::filesystem::remove(temporary, removeError);
-            return false;
-        }
-
         return true;
     }
 
-    void SQLiteConnection::LoadFromDisk()
+    bool SQLiteConnection::LoadFromDisk()
     {
         m_kvStore.clear();
 
-        std::ifstream file(m_dbPath);
-        if (!file.is_open())
+        const std::filesystem::path path(m_dbPath);
+        std::error_code statusError;
+        const std::filesystem::file_status status = std::filesystem::status(path, statusError);
+        if (status.type() == std::filesystem::file_type::not_found)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "AsyncDatabase: '%s' not found — starting with empty store",
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "AsyncDatabase: '%s' not found; starting with an empty store",
                            m_dbPath.c_str());
-            return;
+            return true;
+        }
+        if (statusError || status.type() != std::filesystem::file_type::regular)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: '%s' exists but is not a readable regular file%s%s", m_dbPath.c_str(),
+                            statusError ? ": " : "", statusError ? statusError.message().c_str() : "");
+            return false;
         }
 
-        std::string line;
-        bool escapedFormat = false;
-        if (std::getline(file, line))
+        std::error_code sizeError;
+        const std::uintmax_t size = std::filesystem::file_size(path, sizeError);
+        if (sizeError || size > kMaxStoreFileBytes)
         {
-            if (line == kKVFormatMarker)
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: refusing to load '%s': size %ju exceeds the %ju-byte store budget%s%s",
+                            m_dbPath.c_str(), static_cast<std::uintmax_t>(sizeError ? 0 : size),
+                            static_cast<std::uintmax_t>(kMaxStoreFileBytes), sizeError ? ": " : "",
+                            sizeError ? sizeError.message().c_str() : "");
+            return false;
+        }
+
+        // Binary: a text-mode read on Windows stops at a 0x1A byte inside a value.
+        std::ifstream file(path, std::ios::binary);
+        if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: '%s' exists but cannot be opened for reading",
+                            m_dbPath.c_str());
+            return false;
+        }
+
+        const auto reject = [this](size_t lineNumber, const char* reason)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: refusing to load '%s': line %zu %s; the file is left untouched",
+                            m_dbPath.c_str(), lineNumber, reason);
+            return false;
+        };
+
+        std::unordered_map<std::string, std::string> loaded;
+        std::string line;
+        std::string key;
+        std::string value;
+        bool escapedFormat = false;
+        size_t lineNumber = 0;
+        while (std::getline(file, line))
+        {
+            ++lineNumber;
+            // Every record the writer emits ends with a newline, so a final line without
+            // one is a truncated file.
+            if (file.eof())
+            {
+                return reject(lineNumber, "is not newline-terminated (truncated store)");
+            }
+#ifdef _WIN32
+            // Earlier Windows builds wrote in text mode ("\r\n"). The writer now escapes
+            // every CR inside a field, so a trailing CR is only ever that line ending.
+            if (!line.empty() && line.back() == '\r')
+            {
+                line.pop_back();
+            }
+#endif
+            if (lineNumber == 1 && line == kKVFormatMarker)
             {
                 escapedFormat = true;
+                continue;
+            }
+
+            // Files without the marker predate escaping and store raw bytes: they must load
+            // verbatim, or a legacy value like "C:\temp" would decode its "\t" into a tab.
+            const size_t tabPos = line.find('\t');
+            if (tabPos == std::string::npos)
+            {
+                return reject(lineNumber, "has no key/value separator");
+            }
+            if (escapedFormat)
+            {
+                if (!UnescapeKVField(line.substr(0, tabPos), key) || !UnescapeKVField(line.substr(tabPos + 1), value))
+                {
+                    return reject(lineNumber, "contains an escape sequence the writer never produces");
+                }
             }
             else
             {
-                // Legacy file (no marker): the first line is data, stored raw.
-                auto tabPos = line.find('\t');
-                if (tabPos != std::string::npos)
-                {
-                    m_kvStore[line.substr(0, tabPos)] = line.substr(tabPos + 1);
-                }
+                key = line.substr(0, tabPos);
+                value = line.substr(tabPos + 1);
             }
-        }
-        while (std::getline(file, line))
-        {
-            auto tabPos = line.find('\t');
-            if (tabPos != std::string::npos)
+            if (!loaded.emplace(std::move(key), std::move(value)).second)
             {
-                if (escapedFormat)
-                {
-                    m_kvStore[UnescapeKVField(line.substr(0, tabPos))] = UnescapeKVField(line.substr(tabPos + 1));
-                }
-                else
-                {
-                    m_kvStore[line.substr(0, tabPos)] = line.substr(tabPos + 1);
-                }
+                return reject(lineNumber, "repeats a key");
             }
         }
 
         if (file.bad())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: read error loading '%s'", m_dbPath.c_str());
+            return reject(lineNumber + 1, "could not be read (I/O error)");
         }
+
+        m_kvStore = std::move(loaded);
+        return true;
     }
 
     // ============================================================================

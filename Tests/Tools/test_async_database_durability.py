@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "SparkEngine" / "Source" / "Engine" / "Persistence" / "AsyncDatabase.cpp"
+DURABILITY_SOURCE = ROOT / "SparkEngine" / "Source" / "Engine" / "SaveSystem" / "SaveFileDurability.cpp"
 TF_SOURCE = ROOT / "GameModules" / "SparkGameMMOFPS" / "Source"
 TF_SAVE_PATHS = TF_SOURCE / "Persistence" / "TFSavePaths.h"
 # Every TERRAFRONT store writer and the SavePaths call it must commit through.
@@ -21,17 +22,40 @@ TF_BYPASS_TOKENS = ("std::ofstream", "fopen", "AtomicReplace", "filesystem::rena
 
 
 class AsyncDatabaseDurabilityContractTests(unittest.TestCase):
-    def test_temp_revision_is_durably_flushed_before_atomic_replace(self) -> None:
-        source = SOURCE.read_text(encoding="utf-8")
-        start = source.index("bool SQLiteConnection::FlushToDisk()")
-        end = source.index("void SQLiteConnection::LoadFromDisk()", start)
-        flush = source[start:end]
+    @staticmethod
+    def section(source: str, start_token: str, end_token: str) -> str:
+        start = source.index(start_token)
+        return source[start : source.index(end_token, start)]
 
-        self.assertIn("FlushFileBuffers", flush)
-        self.assertIn("fsync", flush)
-        self.assertIn("MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH", flush)
-        self.assertLess(flush.index("FlushFileBuffers"), flush.index("MoveFileExW"))
-        self.assertLess(flush.index("fsync"), flush.index("std::filesystem::rename"))
+    def test_flush_publishes_through_the_shared_durable_writer(self) -> None:
+        source = SOURCE.read_text(encoding="utf-8")
+        flush = self.section(source, "bool SQLiteConnection::FlushToDisk()", "bool SQLiteConnection::LoadFromDisk()")
+        self.assertIn("SaveFileDurability::WriteFileAtomically(", flush)
+        # SEC2: the store must never be staged through a path-based, link-following open.
+        for token in ("std::ofstream", "MoveFileEx", "filesystem::rename", '".tmp"'):
+            self.assertNotIn(token, flush)
+
+    def test_staging_is_exclusive_and_flushed_before_atomic_replace(self) -> None:
+        durability = DURABILITY_SOURCE.read_text(encoding="utf-8")
+        create = self.section(durability, "bool TryCreate(", "bool VerifyFreshRegularFile(")
+        self.assertIn("CREATE_NEW", create)
+        self.assertIn("FILE_FLAG_OPEN_REPARSE_POINT", create)
+        self.assertIn("O_EXCL", create)
+        self.assertIn("O_NOFOLLOW", create)
+
+        write = self.section(durability, "bool WriteStagingFile(", "ReplaceOutcome ReplaceFileAtomically(")
+        self.assertLess(write.index("CreateStaging("), write.index("FlushAndClose("))
+
+        replace = self.section(durability, "ReplaceOutcome ReplaceFileAtomically(", "bool CopyFileAtomically(")
+        self.assertIn("MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH", replace)
+        posix = replace[replace.index("#else") :]
+        directory_open = posix.index("O_DIRECTORY")
+        rename = posix.index("std::filesystem::rename(temporary, destination")
+        directory_sync = posix.index("::fsync(directoryFile)")
+        self.assertLess(directory_open, rename)
+        self.assertLess(rename, directory_sync)
+        # Once the rename lands the commit is visible, so it must never be reported as uncommitted.
+        self.assertNotIn("ReplaceOutcome::NotCommitted", posix[directory_sync:])
 
 
 class TerrafrontDurabilityContractTests(unittest.TestCase):
