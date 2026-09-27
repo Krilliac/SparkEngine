@@ -110,7 +110,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestAssetPipelineCache.cpp",
         "Tests/TestAssetStallDetector.cpp",
         "Tests/TestAsyncComputeScheduler.cpp",
-        "Tests/TestAsyncDatabase.cpp",
         "Tests/TestAtomicSharedPtr.cpp",
         "Tests/TestAudioEngine.cpp",
         "Tests/TestBitUtils.cpp",
