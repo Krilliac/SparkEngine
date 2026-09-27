@@ -53,7 +53,9 @@ namespace RTS
     {
         // Same bound RestoreState enforces; WorldToGrid's saturation relies on it.
         if (mapWidth <= 0 || mapHeight <= 0 || mapWidth > MAX_MAP_DIMENSION || mapHeight > MAX_MAP_DIMENSION)
+        {
             return false;
+        }
 
         m_context = context;
         m_mapWidth = mapWidth;
@@ -122,7 +124,9 @@ namespace RTS
     RTSFogOfWarSystem::CellRect RTSFogOfWarSystem::ClipDisc(const FogGrid& grid, int centerX, int centerY, float radius)
     {
         if (!std::isfinite(radius) || radius < 0.0f || grid.width <= 0 || grid.height <= 0)
+        {
             return {};
+        }
 
         // Any radius past the grid's width + height already covers every cell. Clamping in float first keeps
         // the int conversion defined and the loop bounded regardless of what a save file supplied.
@@ -159,7 +163,9 @@ namespace RTS
                 const int64_t dx = static_cast<int64_t>(x) - centerX;
                 const float dist = std::sqrt(static_cast<float>(dx * dx + dy * dy)) * CELL_SIZE;
                 if (dist <= visionRange)
+                {
                     grid.SetCell(x, y, RTSVisibility::Visible);
+                }
             }
         }
     }
@@ -249,7 +255,9 @@ namespace RTS
                     auto& cell =
                         grid.cells[static_cast<size_t>(y) * static_cast<size_t>(grid.width) + static_cast<size_t>(x)];
                     if (cell == RTSVisibility::Visible)
+                    {
                         cell = RTSVisibility::Fog;
+                    }
                 }
             }
         }
@@ -308,12 +316,16 @@ namespace RTS
         // Saturate before the cast: converting an out-of-range float to int is undefined behaviour, and every
         // position beyond +/-2 * MAX_MAP_DIMENSION is off the grid anyway. The negated comparison sends NaN to
         // the low bound.
-        constexpr float limit = static_cast<float>(2 * MAX_MAP_DIMENSION);
+        constexpr auto limit = static_cast<float>(2 * MAX_MAP_DIMENSION);
         const float cell = std::floor(worldPos / CELL_SIZE);
         if (!(cell > -limit))
+        {
             return -2 * MAX_MAP_DIMENSION;
+        }
         if (cell > limit)
+        {
             return 2 * MAX_MAP_DIMENSION;
+        }
         return static_cast<int>(cell);
     }
 

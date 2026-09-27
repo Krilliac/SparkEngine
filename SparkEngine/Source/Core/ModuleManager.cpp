@@ -72,7 +72,7 @@ namespace
     }
 
     /// Whether a registration scope wraps a module's OnLoad or its OnUnload.
-    enum class ModuleRegistrationPhase
+    enum class ModuleRegistrationPhase : uint8_t
     {
         Load,
         Teardown,

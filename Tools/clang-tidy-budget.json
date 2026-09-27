@@ -3,7 +3,7 @@
   "description": "CI-110 clang-tidy diagnostic budget: distinct diagnostics per file and check across every shipped-product translation unit, measured with the clang-tidy CI lane configuration. The checks and total fields summarize the files map. Lower entries as diagnostics are fixed; raising one is a reviewed exception. Regenerate with Tools/clang_tidy_budget.py update.",
   "clangTidyMajorVersion": 18,
   "measuredAt": "Local clang-tidy 18.1.3 (Ubuntu 24.04) with the clang-tidy lane's libc++ Debug configure, over all 955 shipped-product translation units of the shared working tree while HEAD moved from 1ea8275 to e82fe3a (2026-09-26). Not a hosted measurement: refresh from the first hosted clang-tidy-output artifact if counts differ.",
-  "total": 16664,
+  "total": 16656,
   "checks": {
     "bugprone-assignment-in-if-condition": 6,
     "bugprone-branch-clone": 62,
@@ -15,7 +15,7 @@
     "bugprone-incorrect-roundings": 9,
     "bugprone-integer-division": 4,
     "bugprone-macro-parentheses": 13,
-    "bugprone-misplaced-widening-cast": 16,
+    "bugprone-misplaced-widening-cast": 15,
     "bugprone-multi-level-implicit-pointer-conversion": 4,
     "bugprone-not-null-terminated-result": 1,
     "bugprone-optional-value-conversion": 1,
@@ -41,7 +41,7 @@
     "modernize-raw-string-literal": 78,
     "modernize-redundant-void-arg": 1,
     "modernize-return-braced-init-list": 184,
-    "modernize-use-auto": 406,
+    "modernize-use-auto": 404,
     "modernize-use-default-member-init": 112,
     "modernize-use-emplace": 97,
     "modernize-use-equals-default": 20,
@@ -62,7 +62,7 @@
     "performance-trivially-destructible": 1,
     "performance-unnecessary-copy-initialization": 7,
     "performance-unnecessary-value-param": 110,
-    "readability-braces-around-statements": 13955,
+    "readability-braces-around-statements": 13950,
     "readability-inconsistent-declaration-parameter-name": 24
   },
   "files": {
@@ -263,7 +263,7 @@
       "readability-braces-around-statements": 11
     },
     "GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp": {
-      "readability-braces-around-statements": 13
+      "readability-braces-around-statements": 11
     },
     "GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp": {
       "modernize-use-auto": 1,
@@ -1076,8 +1076,8 @@
       "readability-braces-around-statements": 24
     },
     "GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.cpp": {
-      "bugprone-misplaced-widening-cast": 4,
-      "readability-braces-around-statements": 15
+      "bugprone-misplaced-widening-cast": 3,
+      "readability-braces-around-statements": 14
     },
     "GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.cpp": {
       "readability-braces-around-statements": 13
@@ -1090,7 +1090,7 @@
       "readability-braces-around-statements": 23
     },
     "GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp": {
-      "readability-braces-around-statements": 24
+      "readability-braces-around-statements": 23
     },
     "GameModules/SparkGameRTS/Source/Unit/RTSUnitSystem.cpp": {
       "readability-braces-around-statements": 7
@@ -2723,9 +2723,8 @@
     "SparkEngine/Source/Engine/Networking/NetworkConnection.cpp": {
       "bugprone-switch-missing-default-case": 1,
       "google-build-using-namespace": 1,
-      "modernize-use-auto": 2,
       "performance-unnecessary-value-param": 1,
-      "readability-braces-around-statements": 42
+      "readability-braces-around-statements": 41
     },
     "SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp": {
       "modernize-use-auto": 1,

@@ -118,7 +118,7 @@ namespace MMO
         buf.WriteUint8(static_cast<uint8_t>(channel));
         buf.WriteString(senderName);
         buf.WriteString(text);
-        return std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
+        return {buf.GetData().begin(), buf.GetData().end()};
     }
 
     std::string MMOChatSystem::ServerAttributedSenderName(std::string_view connectionName, uint32_t clientId)

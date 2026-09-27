@@ -841,7 +841,9 @@ namespace Spark::Net
     {
         // Host/engine code outside any scope keeps the historical unrestricted behavior.
         if (m_registrationOwner.empty() || slotOwner.empty() || slotOwner == m_registrationOwner)
+        {
             return true;
+        }
         // An initializing owner may take over another owner's slot (a hot-reload replacement installs its
         // handlers before the outgoing image is torn down). Nobody may remove another owner's slot, and a
         // tearing-down owner may not overwrite one either.
@@ -855,7 +857,7 @@ namespace Spark::Net
         MessageHandler displaced;
         {
             std::lock_guard<std::mutex> lock(m_handlerMutex);
-            const uint16_t value = static_cast<uint16_t>(type);
+            const auto value = static_cast<uint16_t>(type);
             const auto ownerIt = m_handlerOwners.find(value);
             const std::string& slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
             if (!MayWriteOwnedSlot(slotOwner, true))
@@ -871,9 +873,13 @@ namespace Spark::Net
             // classification; allocation failure must leave the old pair intact.
             MessageHandler& slot = m_handlers[value];
             if (!m_registrationOwner.empty())
+            {
                 m_handlerOwners[value] = m_registrationOwner;
+            }
             else
+            {
                 m_handlerOwners.erase(value);
+            }
             displaced = std::exchange(slot, std::move(handler));
             m_sensitiveMessageTypes.erase(value);
         }
@@ -887,7 +893,7 @@ namespace Spark::Net
         MessageHandler displaced;
         {
             std::lock_guard<std::mutex> lock(m_handlerMutex);
-            const uint16_t value = static_cast<uint16_t>(type);
+            const auto value = static_cast<uint16_t>(type);
             const auto ownerIt = m_handlerOwners.find(value);
             const std::string& slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
             if (!MayWriteOwnedSlot(slotOwner, true))
@@ -903,15 +909,21 @@ namespace Spark::Net
             {
                 MessageHandler& slot = m_handlers[value];
                 if (!m_registrationOwner.empty())
+                {
                     m_handlerOwners[value] = m_registrationOwner;
+                }
                 else
+                {
                     m_handlerOwners.erase(value);
+                }
                 displaced = std::exchange(slot, std::move(handler));
             }
             catch (...)
             {
                 if (inserted)
+                {
                     m_sensitiveMessageTypes.erase(sensitiveIt);
+                }
                 throw;
             }
         }
@@ -923,11 +935,13 @@ namespace Spark::Net
         MessageHandler removed;
         {
             std::lock_guard<std::mutex> lock(m_handlerMutex);
-            const uint16_t value = static_cast<uint16_t>(type);
+            const auto value = static_cast<uint16_t>(type);
             const auto ownerIt = m_handlerOwners.find(value);
             const std::string slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
             if (!MayWriteOwnedSlot(slotOwner, false))
+            {
                 return;
+            }
             const auto handlerIt = m_handlers.find(value);
             if (handlerIt != m_handlers.end())
             {
@@ -965,7 +979,9 @@ namespace Spark::Net
     size_t NetworkManager::UnregisterHandlersByOwner(const std::string& ownerId)
     {
         if (ownerId.empty())
+        {
             return 0;
+        }
 
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         const std::vector<MessageHandler> removed = TakeHandlersOwnedBy(ownerId);

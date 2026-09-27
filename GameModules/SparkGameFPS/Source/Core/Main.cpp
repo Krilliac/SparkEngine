@@ -1071,7 +1071,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 }
             }
             if (wave < 1 || wave > ws->GetTotalWaves())
+            {
                 return "Wave number must be between 1 and " + std::to_string(ws->GetTotalWaves());
+            }
             wave = ws->SkipToWave(wave);
             return "Skipping to wave " + std::to_string(wave);
         },
@@ -1092,7 +1094,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
             if (!scale)
                 return "Invalid scale value: " + args[0];
             if (!Spark::WaveComposition::IsValidDifficultyScale(*scale))
+            {
                 return "Difficulty scale must be between 1.0 and 3.0";
+            }
             ws->SetDifficultyScale(*scale);
             return "Difficulty scale set to " + std::to_string(*scale);
         },
@@ -1134,7 +1138,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Invalid XP amount: " + args[0];
             }
             if (amount < 1 || amount > Spark::ProgressionSystem::MAX_SINGLE_AWARD)
+            {
                 return "XP amount must be between 1 and " + std::to_string(Spark::ProgressionSystem::MAX_SINGLE_AWARD);
+            }
             prog->AwardXP(amount, "console");
             return "Awarded " + std::to_string(amount) + " XP (level " + std::to_string(prog->GetLevel()) + ")";
         },

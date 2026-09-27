@@ -63,14 +63,18 @@ namespace Spark
         const int baseAmount = std::min(amount, MAX_SINGLE_AWARD);
         const double scaled = static_cast<double>(baseAmount) * static_cast<double>(m_currentBonuses.xpMultiplier);
         if (!std::isfinite(scaled) || scaled < 1.0)
+        {
             return;
+        }
         constexpr int64_t kMaxXP = std::numeric_limits<int>::max();
         const int64_t current = std::max<int64_t>(m_currentXP, 0);
         const int64_t headroom = kMaxXP - current;
         const int64_t wanted = static_cast<int64_t>(std::min(scaled, static_cast<double>(kMaxXP)));
         const int modified = static_cast<int>(std::min(wanted, headroom));
         if (modified <= 0)
+        {
             return;
+        }
 
         if (m_callbacks.onXPAwarded)
             m_callbacks.onXPAwarded(baseAmount, source, modified);
