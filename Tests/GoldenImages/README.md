@@ -33,13 +33,15 @@ Committed baselines:
   They are software-row shader evidence, not engine-pass goldens or
   hardware driver certification.
 
-Both Linux rows are compared in `.github/workflows/build.yml` CI only by the
-`golden-linux` job. It is advisory (not a `required-ci-gate` dependency) until
-its first hosted pass, and becomes required after that pass is recorded. It
-fails first if the runner's `libgl1-mesa-dri` or `mesa-vulkan-drivers` is not
-`25.2.8-0ubuntu0.24.04.2`, and then runs
-`ctest -L '^(opengl-golden|vulkan-golden)$'`. `build-linux-gcc` and
-`build-linux-clang` exclude both golden CTest entries. If Ubuntu moves Mesa,
+Both Linux rows are compared in `.github/workflows/build.yml` CI by the
+Mesa-pinned `golden-linux` job. It is advisory (not a `required-ci-gate`
+dependency) until its first hosted pass, and becomes required after that pass is
+recorded. It fails first if the runner's `libgl1-mesa-dri` or
+`mesa-vulkan-drivers` is not `25.2.8-0ubuntu0.24.04.2`, and then runs
+`ctest -L '^(opengl-golden|vulkan-golden)$'`. Until that promotion,
+`build-linux-gcc` and `build-linux-clang` also keep running both golden CTest
+entries, so a required job still compares the baselines; promotion excludes them
+there and makes `golden-linux` the single comparison. If Ubuntu moves Mesa,
 re-render and re-review the baselines as described below.
 
 The `d3d11-warp` and `d3d11-hw` rows have no entries, so their comparisons

@@ -2088,8 +2088,15 @@ def golden_linux_errors(document: dict, tests_cmake: str, manifest: dict) -> lis
             for step in (job or {}).get("steps") or []
             if isinstance(step, dict) and step.get("name") == "Run Tests" and "ctest" in str(step.get("run"))
         ]
-        if not full_runs or any(GOLDEN_LINUX_EXCLUDE not in run for run in full_runs):
+        if not full_runs:
+            errors.append(f"{job_key} has no full ctest run")
+        elif GOLDEN_LINUX_REQUIRED and any(GOLDEN_LINUX_EXCLUDE not in run for run in full_runs):
             errors.append(f"{job_key} full ctest run does not exclude the golden CTest entries")
+        elif not GOLDEN_LINUX_REQUIRED and any(GOLDEN_LINUX_EXCLUDE in run for run in full_runs):
+            # Until golden-linux is required, the required lanes keep the only required comparison.
+            errors.append(
+                f"{job_key} full ctest run excludes the golden CTest entries while {GOLDEN_LINUX_JOB} is advisory"
+            )
 
     names, policies = parse_cmake(tests_cmake)
     for name, label in GOLDEN_LINUX_TESTS.items():
@@ -3661,10 +3668,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 if isinstance(step.get("run"), str):
                     step["run"] = step["run"].replace(old, new)
 
-        def strip_exclusion(document, job_key):
+        def add_exclusion(document, job_key):
             for step in document["jobs"][job_key]["steps"]:
-                if isinstance(step.get("run"), str):
-                    step["run"] = step["run"].replace(GOLDEN_LINUX_EXCLUDE, "")
+                if step.get("name") == "Run Tests" and isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(
+                        "--output-on-failure", GOLDEN_LINUX_EXCLUDE + " --output-on-failure"
+                    )
 
         cases = (
             (lambda d: d["jobs"].pop(GOLDEN_LINUX_JOB), "job is missing"),
@@ -3711,8 +3720,8 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 "EXPECTED_REQUIRED_JOBS_JSON before its first hosted pass",
             ),
             (lambda d: d["jobs"]["module-evidence"].update({"needs": [GOLDEN_LINUX_JOB]}), "depends on the advisory"),
-            (lambda d: strip_exclusion(d, "build-linux-gcc"), "build-linux-gcc full ctest"),
-            (lambda d: strip_exclusion(d, "build-linux-clang"), "build-linux-clang full ctest"),
+            (lambda d: add_exclusion(d, "build-linux-gcc"), "build-linux-gcc full ctest run excludes"),
+            (lambda d: add_exclusion(d, "build-linux-clang"), "build-linux-clang full ctest run excludes"),
         )
         for change, message in cases:
             with self.subTest(message=message):
