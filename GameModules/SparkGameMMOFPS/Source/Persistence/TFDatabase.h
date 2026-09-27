@@ -222,6 +222,8 @@ namespace Terrafront
                            TFAccountRecord& out);                                      // false if username taken
         bool FindAccountByUsername(const std::string& username, TFAccountRecord& out); // false if none
         bool TouchLogin(uint64_t accountId, int64_t nowMs);
+        /// Replace an account's stored credential (NET-100 migration of legacy rows).
+        bool UpdateAccountPasswordHash(uint64_t accountId, const std::string& hash);
 
         // Characters
         bool CreateCharacter(uint64_t accountId, const std::string& name, FactionId faction,

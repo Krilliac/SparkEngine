@@ -479,9 +479,9 @@ TEST(TFAccountSystem_PBKDF2Scheme_StoredHashAndVerify)
     TFAccountRecord rec;
     EXPECT_TRUE(db.FindAccountByUsername("kdftest", rec));
 
-    // Stored hash uses the new self-describing scheme, not the old bare-hex
-    // std::hash output.
-    EXPECT_TRUE(rec.passwordHash.rfind("pbkdf2-sha256$", 0) == 0);
+    // Stored row is a self-describing SCRAM-SHA-256 verifier (NET-100), not the
+    // old bare-hex std::hash output or a password-equivalent PBKDF2 key.
+    EXPECT_TRUE(rec.passwordHash.rfind("scram-sha256$", 0) == 0);
     {
         size_t p1 = rec.passwordHash.find('$');
         size_t p2 = rec.passwordHash.find('$', p1 + 1);

@@ -754,6 +754,26 @@ namespace Terrafront
                         });
     }
 
+    bool TFDatabase::UpdateAccountPasswordHash(uint64_t accountId, const std::string& hash)
+    {
+        if (hash.empty())
+        {
+            return false;
+        }
+        return Transact("UpdateAccountPasswordHash",
+                        [&](Snapshot& fresh, uint64_t)
+                        {
+                            auto it = std::find_if(fresh.accounts.begin(), fresh.accounts.end(),
+                                                   [&](const TFAccountRecord& a) { return a.id == accountId; });
+                            if (it == fresh.accounts.end())
+                            {
+                                return false;
+                            }
+                            it->passwordHash = hash;
+                            return true;
+                        });
+    }
+
     bool TFDatabase::CreateCharacter(uint64_t accountId, const std::string& name, FactionId faction,
                                      TFCharacterRecord& out)
     {

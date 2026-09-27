@@ -4,7 +4,7 @@
  *        credential may reach persistent storage.
  *
  * OD-22 policy (docs/readiness/OWNER-DECISIONS.md): password material is
- * stored only as salted PBKDF2 hashes, session tokens are never persisted in
+ * stored only as salted SCRAM-SHA-256 verifiers (PBKDF2-derived), session tokens are never persisted in
  * plaintext, and no database secret is committed or written to shipped
  * config. Encryption at rest is the operator's host full-disk encryption.
  *
@@ -95,11 +95,13 @@ namespace
         return parts;
     }
 
-    /// OD-22 stored form: "pbkdf2-sha256$<iterations>$<saltHex>$<derivedKeyHex>".
+    /// OD-22 / NET-100 stored form:
+    /// "scram-sha256$<iterations>$<saltHex>$<storedKeyHex>$<serverKeyHex>". Neither key is
+    /// password-equivalent (the PBKDF2 output itself is never stored).
     bool IsSaltedPbkdf2Hash(const std::string& stored, const std::string& salt)
     {
         const std::vector<std::string> parts = SplitOnDollar(stored);
-        if (parts.size() != 4 || parts[0] != "pbkdf2-sha256")
+        if (parts.size() != 5 || parts[0] != "scram-sha256" || parts[4].size() != 64 || !IsLowerHex(parts[4]))
             return false;
         if (parts[1].empty() ||
             !std::all_of(parts[1].begin(), parts[1].end(), [](char c) { return c >= '0' && c <= '9'; }))

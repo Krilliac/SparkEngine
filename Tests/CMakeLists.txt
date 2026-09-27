@@ -668,6 +668,8 @@ add_executable(SparkTests
     # DATA-120 / OD-22: no plaintext password, session token, or DB credential
     # at rest (TF account store above + MMO KV store + shipped config scan).
     TestDATA120SecretsAtRest.cpp
+    # NET-100: SCRAM-SHA-256 login over the TF account store above
+    TestTFScramAuth.cpp
     # MOD-320: MMO character IDs and per-character state across a cold restart
     # (MMOPersistenceSystem below; the character-system case needs the ImGui block).
     TestMOD320MMOPersistenceReal.cpp
@@ -1911,6 +1913,15 @@ set_tests_properties(PersistenceSecretsAtRest PROPERTIES
     LABELS "persistence;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 60)
+
+# NET-100: TERRAFRONT login proves the password with SCRAM-SHA-256 (RFC 7677 vector, replay,
+# truncation, legacy PBKDF2 row migration, unknown-user salts, weak verifier rejection).
+add_test(NAME TFScramAuth COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(TFScramAuth PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TFScram_;SPARK_TEST_EXPECT_COUNT=8"
+    LABELS "network-security;persistence;security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
 
 # DATA-120: TFDatabase multi-row transactions, schema migration, the TERRAFRONT
 # durable-commit primitive (SavePaths::WriteDurableReplace), and the real

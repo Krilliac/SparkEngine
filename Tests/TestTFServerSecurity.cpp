@@ -10,6 +10,7 @@
  */
 #include "TestFramework.h"
 #include "Account/TFAccountSystem.h"
+#include "Account/TFCrypto.h"
 #include "Net/TFClientMsgRouting.h"
 #include "Net/TFClientSessionEnd.h"
 #include "Net/TFClientSessionState.h"
@@ -20,6 +21,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <string>
 #include <unordered_map>
@@ -111,45 +113,55 @@ TEST(TFSec_EveryGatedClientMsgIsSocketRouted)
 // embedded cost (any nonzero uint32 iteration count, any derived-key length),
 // so a tampered or corrupt row such as "pbkdf2-sha256$4294967295$00$00" made
 // every login attempt for that username run ~4.3e9 HMAC rounds before the
-// password was even compared. Without the bounds this test hangs until the
-// CTest timeout.
+// password was even compared. The same bounds hold for the scram-sha256 rows
+// NET-100 stores now and for the legacy pbkdf2-sha256 rows it migrates.
+// Without the bounds this test hangs until the CTest timeout.
 TEST(TFSec_StoredHashParametersAreBoundedBeforeDerivation)
 {
-    const std::string good = TFAccountSystem::HashPassword("correcthorse1", TFAccountSystem::GenerateSalt());
-    EXPECT_TRUE(TFAccountSystem::VerifyPassword("correcthorse1", good));
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("wrongpassword", good));
+    // A legacy row exactly as the pre-NET-100 HashPassword wrote it.
+    const std::string saltHex = TFAccountSystem::GenerateSalt();
+    ASSERT_EQ(saltHex.size(), size_t{32});
+    const std::string dk =
+        Crypto::ToHex(Crypto::Pbkdf2HmacSha256("correcthorse1", Crypto::FromHex(saltHex), 150000, 32));
+    ASSERT_EQ(dk.size(), size_t{64});
+    const auto legacyWithIters = [&](const std::string& iters)
+    { return std::string("pbkdf2-sha256$") + iters + "$" + saltHex + "$" + dk; };
+    EXPECT_TRUE(TFAccountSystem::VerifyPassword("correcthorse1", legacyWithIters("150000")));
+    EXPECT_FALSE(TFAccountSystem::VerifyPassword("wrongpassword", legacyWithIters("150000")));
 
-    // good == "pbkdf2-sha256$150000$<32 hex salt>$<64 hex dk>"
-    const size_t p1 = good.find('$');
-    const size_t p2 = good.find('$', p1 + 1);
-    const size_t p3 = good.find('$', p2 + 1);
-    ASSERT_TRUE(p1 != std::string::npos && p2 != std::string::npos && p3 != std::string::npos);
-    const std::string salt = good.substr(p2 + 1, p3 - p2 - 1);
-    const std::string dk = good.substr(p3 + 1);
-    EXPECT_EQ(salt.size(), size_t{32});
-    EXPECT_EQ(dk.size(), size_t{64});
-    const auto withIters = [&](const std::string& iters)
-    { return std::string("pbkdf2-sha256$") + iters + "$" + salt + "$" + dk; };
+    // The current row: "scram-sha256$150000$<salt>$<storedKey>$<serverKey>".
+    const std::string scram = TFAccountSystem::HashPassword("correcthorse1", saltHex);
+    EXPECT_TRUE(TFAccountSystem::VerifyPassword("correcthorse1", scram));
+    const std::string scramPrefix = "scram-sha256$150000$";
+    ASSERT_TRUE(scram.rfind(scramPrefix, 0) == 0);
+    const std::string scramTail = scram.substr(scramPrefix.size()); // salt$storedKey$serverKey
+    const auto scramWithIters = [&](const std::string& iters)
+    { return std::string("scram-sha256$") + iters + "$" + scramTail; };
 
-    // Unbounded cost: rejected without deriving.
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("4294967295")));
+    for (const auto& withIters : {std::function<std::string(const std::string&)>(legacyWithIters),
+                                  std::function<std::string(const std::string&)>(scramWithIters)})
+    {
+        // Unbounded cost: rejected without deriving.
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("4294967295")));
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("600001")));
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("99999")));
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("0")));
+
+        // The iteration field must be a fully consumed decimal number.
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("+150000")));
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters(" 150000")));
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("150000abc")));
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("")));
+        EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("4294967296150000")));
+    }
     EXPECT_FALSE(TFAccountSystem::VerifyPassword("anything", "pbkdf2-sha256$4294967295$00$00"));
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("600001")));
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("99999")));
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("0")));
+    EXPECT_FALSE(TFAccountSystem::VerifyPassword("anything", "scram-sha256$4294967295$00$00$00"));
 
-    // The iteration field must be a fully consumed decimal number.
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("+150000")));
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters(" 150000")));
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("150000abc")));
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("")));
-    EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", withIters("4294967296150000")));
-
-    // Salt and derived key must be exactly the sizes HashPassword writes (a
-    // longer derived key multiplies the PBKDF2 block count).
-    const std::string longDk = std::string("pbkdf2-sha256$150000$") + salt + "$" + dk + dk + dk + dk;
+    // A legacy salt and derived key must be exactly the sizes the old
+    // HashPassword wrote (a longer derived key multiplies the PBKDF2 block count).
+    const std::string longDk = std::string("pbkdf2-sha256$150000$") + saltHex + "$" + dk + dk + dk + dk;
     EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", longDk));
-    const std::string shortSalt = std::string("pbkdf2-sha256$150000$") + salt.substr(0, 16) + "$" + dk;
+    const std::string shortSalt = std::string("pbkdf2-sha256$150000$") + saltHex.substr(0, 16) + "$" + dk;
     EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", shortSalt));
     const std::string badHexSalt = std::string("pbkdf2-sha256$150000$") + std::string(32, 'z') + "$" + dk;
     EXPECT_FALSE(TFAccountSystem::VerifyPassword("correcthorse1", badHexSalt));

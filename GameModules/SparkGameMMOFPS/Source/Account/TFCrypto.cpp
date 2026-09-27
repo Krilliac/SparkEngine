@@ -356,4 +356,85 @@ namespace Terrafront::Crypto
         return diff == 0;
     }
 
+    Sha256Digest XorBytes(const Sha256Digest& a, const Sha256Digest& b)
+    {
+        Sha256Digest out{};
+        for (size_t i = 0; i < out.size(); ++i)
+        {
+            out[i] = static_cast<uint8_t>(a[i] ^ b[i]);
+        }
+        return out;
+    }
+
+    bool ConstantTimeEquals(const Sha256Digest& a, const Sha256Digest& b)
+    {
+        uint8_t diff = 0;
+        for (size_t i = 0; i < a.size(); ++i)
+        {
+            diff |= static_cast<uint8_t>(a[i] ^ b[i]);
+        }
+        return diff == 0;
+    }
+
+    std::string Base64Encode(const std::vector<uint8_t>& data)
+    {
+        static const char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        std::string out;
+        out.reserve((data.size() + 2) / 3 * 4);
+        for (size_t i = 0; i < data.size(); i += 3)
+        {
+            const size_t remaining = data.size() - i;
+            uint32_t group = static_cast<uint32_t>(data[i]) << 16;
+            if (remaining > 1)
+            {
+                group |= static_cast<uint32_t>(data[i + 1]) << 8;
+            }
+            if (remaining > 2)
+            {
+                group |= data[i + 2];
+            }
+            out.push_back(kAlphabet[(group >> 18) & 0x3F]);
+            out.push_back(kAlphabet[(group >> 12) & 0x3F]);
+            out.push_back(remaining > 1 ? kAlphabet[(group >> 6) & 0x3F] : '=');
+            out.push_back(remaining > 2 ? kAlphabet[group & 0x3F] : '=');
+        }
+        return out;
+    }
+
+    ScramKeys::~ScramKeys()
+    {
+        SecureErase(clientKey.data(), clientKey.size());
+        SecureErase(storedKey.data(), storedKey.size());
+        SecureErase(serverKey.data(), serverKey.size());
+    }
+
+    ScramKeys DeriveScramKeysFromSaltedPassword(const std::vector<uint8_t>& saltedPassword)
+    {
+        static const std::string kClientKeyLabel = "Client Key";
+        static const std::string kServerKeyLabel = "Server Key";
+        ScramKeys keys;
+        keys.clientKey = HmacSha256(saltedPassword.data(), saltedPassword.size(),
+                                    reinterpret_cast<const uint8_t*>(kClientKeyLabel.data()), kClientKeyLabel.size());
+        keys.storedKey = Sha256(keys.clientKey.data(), keys.clientKey.size());
+        keys.serverKey = HmacSha256(saltedPassword.data(), saltedPassword.size(),
+                                    reinterpret_cast<const uint8_t*>(kServerKeyLabel.data()), kServerKeyLabel.size());
+        return keys;
+    }
+
+    ScramKeys DeriveScramKeys(const std::string& password, const std::vector<uint8_t>& salt, uint32_t iterations)
+    {
+        std::vector<uint8_t> saltedPassword = Pbkdf2HmacSha256(password, salt, iterations, 32);
+        const EraseOnExit clearSaltedPassword(saltedPassword.data(), saltedPassword.size());
+        return DeriveScramKeysFromSaltedPassword(saltedPassword);
+    }
+
+    Sha256Digest ScramClientProof(const ScramKeys& keys, const std::string& authMessage)
+    {
+        Sha256Digest clientSignature =
+            HmacSha256(keys.storedKey.data(), keys.storedKey.size(),
+                       reinterpret_cast<const uint8_t*>(authMessage.data()), authMessage.size());
+        const EraseOnExit clearSignature(clientSignature.data(), clientSignature.size());
+        return XorBytes(keys.clientKey, clientSignature);
+    }
+
 } // namespace Terrafront::Crypto
