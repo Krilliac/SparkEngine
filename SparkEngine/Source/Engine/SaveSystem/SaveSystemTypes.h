@@ -174,7 +174,8 @@ namespace Spark
     struct SerializedEntity
     {
         /// EnTT entity ID at save time (informational only; IDs may be recycled on load).
-        uint32_t entityID;
+        /// The disk format does not store it, so entities read from a file report 0.
+        uint32_t entityID = 0;
 
         /// Human-readable entity name from NameComponent (empty if none).
         std::string name;

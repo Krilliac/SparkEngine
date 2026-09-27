@@ -626,11 +626,14 @@ namespace Spark
      * Removes `<saveDirectory>/<slotName>.spark_save` and its retained last-good copy
      * from the file system, so a deleted slot cannot be recovered by a later Load().
      * The `.tmp` staging copies an interrupted save can leave behind are removed too
-     * (best effort). A no-op if the file does not exist (returns `true`). Returns `false` only if the
-     * file exists but could not be deleted (e.g. permission denied).
+     * (best effort). A no-op if the file does not exist (returns `true`). Returns `false` if the
+     * primary or the retained copy exists but could not be deleted (e.g. permission denied, a
+     * sharing lock). When only the retained copy survives, the slot is still recoverable by
+     * Load() and listed by SaveExists()/GetSaveSlots(), so that partial delete is a failure
+     * the caller can retry, never a success.
      *
      * @param slotName  Slot to delete.
-     * @return          `true` if the file was deleted (or didn't exist); `false` on error.
+     * @return          `true` if neither file remains; `false` on error.
      */
         bool DeleteSave(const std::string& slotName);
 

@@ -813,6 +813,22 @@ namespace Spark
         throw std::runtime_error("save property '" + key + "' is not encoded as 0 or 1");
     }
 
+    // Fields added to a hand-written serializer after saves already existed are read
+    // optionally: a save that predates the key loads with the component default, while a
+    // present but malformed value still invalidates the snapshot.
+    static float OptionalFloat(const std::unordered_map<std::string, std::string>& props, const std::string& key,
+                               float fallback)
+    {
+        return props.contains(key) ? RequireFloat(props, key) : fallback;
+    }
+
+    template <typename Integer>
+    static Integer OptionalInteger(const std::unordered_map<std::string, std::string>& props, const std::string& key,
+                                   Integer fallback)
+    {
+        return props.contains(key) ? RequireInteger<Integer>(props, key) : fallback;
+    }
+
     // ============================================================================
     // Domain-specific serializer registration (called from RegisterBuiltins)
     // ============================================================================
@@ -928,6 +944,8 @@ namespace Spark
                 sc.properties["linearDamping"] = std::to_string(rb->linearDamping);
                 sc.properties["angularDamping"] = std::to_string(rb->angularDamping);
                 sc.properties["isTrigger"] = rb->isTrigger ? "1" : "0";
+                sc.properties["gravityFactor"] = std::to_string(rb->gravityFactor);
+                sc.properties["motionQuality"] = std::to_string(static_cast<int>(rb->motionQuality));
                 sc.properties["lvx"] = std::to_string(rb->linearVelocity.x);
                 sc.properties["lvy"] = std::to_string(rb->linearVelocity.y);
                 sc.properties["lvz"] = std::to_string(rb->linearVelocity.z);
@@ -947,6 +965,13 @@ namespace Spark
                 rb.linearDamping = RequireFloat(p, "linearDamping");
                 rb.angularDamping = RequireFloat(p, "angularDamping");
                 rb.isTrigger = RequireBool(p, "isTrigger");
+                rb.gravityFactor = OptionalFloat(p, "gravityFactor", RigidBodyComponent{}.gravityFactor);
+                const int motionQuality = OptionalInteger<int>(
+                    p, "motionQuality", static_cast<int>(RigidBodyComponent::MotionQuality::Discrete));
+                if (motionQuality != static_cast<int>(RigidBodyComponent::MotionQuality::Discrete) &&
+                    motionQuality != static_cast<int>(RigidBodyComponent::MotionQuality::LinearCast))
+                    throw std::runtime_error("save property 'motionQuality' is not a known motion quality");
+                rb.motionQuality = static_cast<RigidBodyComponent::MotionQuality>(motionQuality);
                 rb.linearVelocity = {RequireFloat(p, "lvx"), RequireFloat(p, "lvy"), RequireFloat(p, "lvz")};
                 rb.angularVelocity = {RequireFloat(p, "avx"), RequireFloat(p, "avy"), RequireFloat(p, "avz")};
                 rb.physicsBodyHandle = nullptr;
@@ -1019,6 +1044,9 @@ namespace Spark
                 sc.properties["intensity"] = std::to_string(l->intensity);
                 sc.properties["range"] = std::to_string(l->range);
                 sc.properties["castShadows"] = l->castShadows ? "1" : "0";
+                sc.properties["spotAngle"] = std::to_string(l->spotAngle);
+                sc.properties["spotInnerAngle"] = std::to_string(l->spotInnerAngle);
+                sc.properties["shadowMapResolution"] = std::to_string(l->shadowMapResolution);
                 return sc;
             },
             [](World& world, EntityID entity, const SerializedComponent& data)
@@ -1030,6 +1058,10 @@ namespace Spark
                 l.intensity = RequireFloat(p, "intensity");
                 l.range = RequireFloat(p, "range");
                 l.castShadows = RequireBool(p, "castShadows");
+                const LightComponent defaults{};
+                l.spotAngle = OptionalFloat(p, "spotAngle", defaults.spotAngle);
+                l.spotInnerAngle = OptionalFloat(p, "spotInnerAngle", defaults.spotInnerAngle);
+                l.shadowMapResolution = OptionalInteger<int>(p, "shadowMapResolution", defaults.shadowMapResolution);
             });
 
         // AudioSourceComponent — handled by RegisterReflectedSerializers()
@@ -1434,9 +1466,33 @@ namespace Spark
                 return false;
 
             // The primary is gone, so the retained copy must go too: Load() would
-            // otherwise recover a slot the player just deleted.
+            // otherwise recover a slot the player just deleted. If it survives, the slot
+            // is still listed and loadable, so the delete did not happen and must not be
+            // reported as one.
+            const std::string backupPath = path + kSaveBackupSuffix;
             std::error_code backupError;
-            fs::remove(path + kSaveBackupSuffix, backupError);
+            fs::remove(backupPath, backupError);
+            // libstdc++ reports ENOENT through the error code as well as not_found, so only
+            // the file type decides whether the copy is gone.
+            std::error_code backupStatusError;
+            const bool backupGone =
+                fs::symlink_status(backupPath, backupStatusError).type() == fs::file_type::not_found;
+            if (backupError || !backupGone)
+            {
+                const std::string reason = backupError         ? backupError.message()
+                                           : backupStatusError ? backupStatusError.message()
+                                                               : std::string("it is still present");
+                SPARK_LOG_WARN(Spark::LogCategory::Save,
+                               "DeleteSave: slot '%s' primary removed but the retained copy '%s' could not be "
+                               "removed (%s); the slot is still recoverable",
+                               slotName.c_str(), backupPath.c_str(), reason.c_str());
+                if (m_fileCache)
+                {
+                    m_fileCache->Invalidate(path);
+                    m_fileCache->Invalidate(backupPath);
+                }
+                return false;
+            }
 
             // A writer killed mid-save can leave full-size staging copies of the slot
             // (`<slot>.spark_save.tmp`, `<slot>.spark_save.bak.tmp`). Nothing reads them,
@@ -2303,7 +2359,7 @@ namespace Spark
 
             for (uint32_t i = 0; i < entityCount; ++i)
             {
-                SerializedEntity entity;
+                SerializedEntity entity{};
 
                 uint16_t nameLen;
                 if (!readUint16(nameLen))
@@ -2391,7 +2447,7 @@ namespace Spark
                     entity.components.push_back(std::move(comp));
                 }
 
-                parsedData.entities.push_back(entity);
+                parsedData.entities.push_back(std::move(entity));
             }
 
             // Every supported version ends with a custom-state count, even when zero.

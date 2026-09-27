@@ -451,3 +451,120 @@ TEST(SEC2Persist_AsyncDatabaseAcksOnlyAfterDirectorySync)
     reopened.Close();
 #endif
 }
+
+// ============================================================================
+// Finding 48: disk-loaded entities never carry an indeterminate entityID
+// ============================================================================
+
+TEST(SEC2Persist_SerializedEntityIdIsDeterministic)
+{
+    // Default-initialize over poisoned storage: without a member initializer the field
+    // keeps the poison bytes, which ReadFromFile then copied into every loaded entity.
+    alignas(SerializedEntity) unsigned char storage[sizeof(SerializedEntity)];
+    std::memset(storage, 0xA5, sizeof(storage));
+    SerializedEntity* entity = ::new (static_cast<void*>(storage)) SerializedEntity;
+    EXPECT_EQ(entity->entityID, 0u);
+    std::destroy_at(entity);
+}
+
+// ============================================================================
+// Finding 50: hand-written serializers keep every authored field
+// ============================================================================
+
+TEST(SEC2Persist_RigidBodyAndLightFieldsRoundTrip)
+{
+    Scratch scratch("component_fields");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(scratch.Path().string()));
+
+    World source;
+    const EntityID entity = source.CreateEntity("authored");
+    auto& body = source.AddComponent<RigidBodyComponent>(entity);
+    body.gravityFactor = 0.25f;
+    body.motionQuality = RigidBodyComponent::MotionQuality::LinearCast;
+    auto& light = source.AddComponent<LightComponent>(entity);
+    light.type = LightComponent::Type::Spot;
+    light.spotAngle = 60.0f;
+    light.spotInnerAngle = 20.0f;
+    light.shadowMapResolution = 2048;
+
+    SaveMetadata metadata;
+    metadata.saveName = "fields";
+    ASSERT_TRUE(saveSystem.Save("fields", source, metadata));
+
+    World loaded;
+    ASSERT_TRUE(saveSystem.Load("fields", loaded));
+    const EntityID loadedEntity = FindNamedEntity(loaded, "authored");
+    ASSERT_TRUE(loadedEntity != entt::null);
+    const RigidBodyComponent* loadedBody = loaded.GetComponent<RigidBodyComponent>(loadedEntity);
+    const LightComponent* loadedLight = loaded.GetComponent<LightComponent>(loadedEntity);
+    ASSERT_TRUE(loadedBody != nullptr);
+    ASSERT_TRUE(loadedLight != nullptr);
+    EXPECT_NEAR(loadedBody->gravityFactor, 0.25f, 0.0001f);
+    EXPECT_TRUE(loadedBody->motionQuality == RigidBodyComponent::MotionQuality::LinearCast);
+    EXPECT_NEAR(loadedLight->spotAngle, 60.0f, 0.0001f);
+    EXPECT_NEAR(loadedLight->spotInnerAngle, 20.0f, 0.0001f);
+    EXPECT_EQ(loadedLight->shadowMapResolution, 2048);
+
+    // A save written before these keys existed still loads, with the component defaults.
+    SaveData legacy = saveSystem.SerializeWorld(source, metadata);
+    for (SerializedEntity& serialized : legacy.entities)
+    {
+        for (SerializedComponent& component : serialized.components)
+        {
+            for (const char* key :
+                 {"gravityFactor", "motionQuality", "spotAngle", "spotInnerAngle", "shadowMapResolution"})
+                component.properties.erase(key);
+        }
+    }
+    World legacyWorld;
+    ASSERT_TRUE(saveSystem.DeserializeWorld(legacy, legacyWorld));
+    const EntityID legacyEntity = FindNamedEntity(legacyWorld, "authored");
+    ASSERT_TRUE(legacyEntity != entt::null);
+    EXPECT_NEAR(legacyWorld.GetComponent<RigidBodyComponent>(legacyEntity)->gravityFactor, 1.0f, 0.0001f);
+    EXPECT_EQ(legacyWorld.GetComponent<LightComponent>(legacyEntity)->shadowMapResolution, 1024);
+
+    // An unknown motion quality invalidates the snapshot rather than casting garbage.
+    SaveData malformed = saveSystem.SerializeWorld(source, metadata);
+    for (SerializedEntity& serialized : malformed.entities)
+    {
+        for (SerializedComponent& component : serialized.components)
+        {
+            if (component.typeName == "RigidBodyComponent")
+                component.properties["motionQuality"] = "7";
+        }
+    }
+    World rejected;
+    EXPECT_FALSE(saveSystem.DeserializeWorld(malformed, rejected));
+}
+
+// ============================================================================
+// Finding 52: DeleteSave reports a retained copy it could not remove
+// ============================================================================
+
+TEST(SEC2Persist_DeleteSaveReportsSurvivingRetainedCopy)
+{
+    Scratch scratch("delete_partial");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(scratch.Path().string()));
+
+    World world;
+    world.CreateEntity("slot");
+    SaveMetadata metadata;
+    ASSERT_TRUE(saveSystem.Save("partial", world, metadata));
+
+    // A retained copy that cannot be removed (a non-empty directory stands in for a
+    // locked file or a different ACL).
+    const fs::path backup = scratch / "partial.spark_save.bak";
+    fs::create_directories(backup / "occupant");
+
+    EXPECT_FALSE(saveSystem.DeleteSave("partial"));
+    EXPECT_FALSE(fs::exists(scratch / "partial.spark_save"));
+    EXPECT_TRUE(fs::exists(backup));
+
+    fs::remove_all(backup);
+    EXPECT_TRUE(saveSystem.DeleteSave("partial"));
+    EXPECT_FALSE(saveSystem.SaveExists("partial"));
+}
