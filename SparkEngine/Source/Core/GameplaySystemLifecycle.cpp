@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <exception>
 #include <format>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -75,6 +76,28 @@ namespace Spark::Core::Lifecycle
             }
             return false;
         }
+
+        /// Runs the host's pre-rollback action with exceptions contained, so a
+        /// throwing client release never skips the stage rollback after it.
+        void RunRollbackPreludeContained(const std::function<void()>& prelude)
+        {
+            if (!prelude)
+                return;
+
+            auto& console = Spark::SimpleConsole::GetInstance();
+            try
+            {
+                prelude();
+            }
+            catch (const std::exception& exception)
+            {
+                console.LogError(std::format("[Lifecycle] Rollback prelude threw: {}", exception.what()));
+            }
+            catch (...)
+            {
+                console.LogError("[Lifecycle] Rollback prelude threw an unknown exception");
+            }
+        }
     } // namespace
 
     LifecycleCompositionRoot& LifecycleCompositionRoot::Get()
@@ -139,6 +162,7 @@ namespace Spark::Core::Lifecycle
 
             console.LogError(std::format(
                 "[Lifecycle] Stage '{}' failed to initialize; rolling back initialized stages.", stage.Name()));
+            RunRollbackPreludeContained(m_initializeRollbackPrelude);
             if (!RunTeardown())
                 console.LogError("[Lifecycle] Rollback after failed initialization was not clean.");
             m_state = LifecycleRootState::Failed;
@@ -186,6 +210,11 @@ namespace Spark::Core::Lifecycle
         const bool clean = RunTeardown();
         m_state = clean ? LifecycleRootState::ShutDown : LifecycleRootState::Failed;
         return clean;
+    }
+
+    void LifecycleCompositionRoot::SetInitializeRollbackPrelude(std::function<void()> prelude)
+    {
+        m_initializeRollbackPrelude = std::move(prelude);
     }
 
     bool LifecycleCompositionRoot::InitializeStage(LifecycleStage& stage)

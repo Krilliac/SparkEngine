@@ -9,6 +9,8 @@
  * stages back in reverse order (including the partially initialized one), and
  * latches a Failed state that later update/shutdown/initialize calls respect.
  * A throwing Shutdown is contained so the remaining stages still tear down.
+ * A host's rollback prelude (windowed hosts unload game modules there) runs
+ * after the failure and before any stage teardown, and a throw from it is contained.
  * The last test composes the real production stages with one injected failure
  * and checks the real gameplay services are unpublished by the rollback.
  */
@@ -268,6 +270,59 @@ TEST(PartialInit_CompositionRootRollbackThrowStillUnwindsEarlierStages)
 
     EXPECT_FALSE(root.RunInitialize());
     ExpectRollbackAfterStageCFailed(events);
+    ExpectLatchedFailure(root, events);
+}
+
+TEST(PartialInit_CompositionRootRollbackPreludeRunsBeforeStageTeardown)
+{
+    // A host with clients started ahead of the lifecycle (game modules loaded
+    // before InitConsole) releases them before any stage service is torn down.
+    std::vector<std::string> events;
+    LifecycleCompositionRoot root(MakeStages(events, InitBehavior::ReturnFalse), kTestRequiredStages);
+    ASSERT_TRUE(root.IsConfigurationValid());
+    root.SetInitializeRollbackPrelude([&events] { events.push_back("prelude"); });
+
+    EXPECT_FALSE(root.RunInitialize());
+    ExpectEvents(events, {"init A", "init B", "init C", "prelude", "shutdown Teardown", "shutdown C", "shutdown B",
+                          "shutdown A"});
+    ExpectLatchedFailure(root, events);
+
+    // A startup that succeeds never runs it, and neither does its later shutdown.
+    std::vector<std::string> cleanEvents;
+    LifecycleCompositionRoot clean(MakeStages(cleanEvents), kTestRequiredStages);
+    clean.SetInitializeRollbackPrelude([&cleanEvents] { cleanEvents.push_back("prelude"); });
+    ASSERT_TRUE(clean.RunInitialize());
+    EXPECT_TRUE(clean.RunShutdown());
+    ExpectEvents(cleanEvents, {"init A", "init B", "init C", "init D", "shutdown Teardown", "shutdown D",
+                               "shutdown C", "shutdown B", "shutdown A"});
+}
+
+TEST(PartialInit_CompositionRootRollbackPreludeThrowStillRollsBack)
+{
+    std::vector<std::string> events;
+    LifecycleCompositionRoot root(MakeStages(events, InitBehavior::ReturnFalse), kTestRequiredStages);
+    ASSERT_TRUE(root.IsConfigurationValid());
+    root.SetInitializeRollbackPrelude(
+        [&events]
+        {
+            events.push_back("prelude");
+            throw std::runtime_error("injected prelude failure");
+        });
+
+    bool escaped = false;
+    bool initialized = true;
+    try
+    {
+        initialized = root.RunInitialize();
+    }
+    catch (...)
+    {
+        escaped = true;
+    }
+    EXPECT_FALSE(escaped);
+    EXPECT_FALSE(initialized);
+    ExpectEvents(events, {"init A", "init B", "init C", "prelude", "shutdown Teardown", "shutdown C", "shutdown B",
+                          "shutdown A"});
     ExpectLatchedFailure(root, events);
 }
 

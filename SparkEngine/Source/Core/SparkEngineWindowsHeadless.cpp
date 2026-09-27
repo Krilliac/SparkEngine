@@ -194,7 +194,10 @@ static bool InitHeadlessEngineContext()
     ctx->SetWorld(g_engineEcsWorld.get());
 
     // Game modules compile and attach scripts in OnLoad, which runs before the
-    // gameplay lifecycle stage, so the script engine is a core service.
+    // gameplay lifecycle stage, so the script engine is a core service. Prime the
+    // console command registry first: the script sandbox registers sandbox.*
+    // commands during engine init, and registration is dropped until then.
+    Spark::SimpleConsole::GetInstance().Initialize();
     Spark::Core::Lifecycle::InitializeScriptingServiceImpl();
 
     return true;

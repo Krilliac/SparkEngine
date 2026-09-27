@@ -14,6 +14,7 @@
 #include "Core/Lifecycle/LifecycleStage.h"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -100,6 +101,19 @@ namespace Spark::Core::Lifecycle
          */
         bool RunShutdown();
 
+        /**
+         * @brief Set the action RunInitialize runs before rolling the stages back.
+         *
+         * A host that starts clients of the stage services before the lifecycle
+         * (game modules loaded ahead of InitConsole) releases them here, so a
+         * failed startup tears down in the reverse of startup order instead of
+         * clearing services under still-loaded clients. An exception from the
+         * action is contained and the rollback still runs. An empty function
+         * clears it.
+         * @param prelude Action to run once per rolled-back RunInitialize.
+         */
+        void SetInitializeRollbackPrelude(std::function<void()> prelude);
+
         /// @return Current lifecycle state.
         LifecycleRootState GetState() const { return m_state; }
 
@@ -113,6 +127,7 @@ namespace Spark::Core::Lifecycle
 
         std::vector<std::unique_ptr<LifecycleStage>> m_stages;
         std::vector<bool> m_initializeAttempted;
+        std::function<void()> m_initializeRollbackPrelude;
         LifecycleRootState m_state = LifecycleRootState::Idle;
         bool m_isValid = false;
     };

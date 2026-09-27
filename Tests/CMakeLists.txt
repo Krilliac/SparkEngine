@@ -1804,7 +1804,7 @@ set_tests_properties(OnlineServicesDegraded PROPERTIES
 # stage failures (false return, std::exception, unknown throw, throwing shutdown).
 add_test(NAME LifecycleCompositionRootFailure COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(LifecycleCompositionRootFailure PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=PartialInit_CompositionRoot;SPARK_TEST_EXPECT_COUNT=8"
+    ENVIRONMENT "SPARK_TEST_NAME=PartialInit_CompositionRoot;SPARK_TEST_EXPECT_COUNT=10"
     LABELS "lifecycle;unit"
     TIMEOUT 30)
 

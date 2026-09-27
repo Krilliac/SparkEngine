@@ -34,6 +34,7 @@
 #include "GameImGuiLayer.h"
 #include "GameplaySystemLifecycle.h"
 #include "Core/Lifecycle/GameplayLifecycleShared.h"
+#include "Core/Lifecycle/LifecycleCompositionRoot.h"
 #include "Graphics/GraphicsConsoleCommands.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Neural/NeuralInference.h"
@@ -209,18 +210,18 @@ static void LoadAndInitModules(LPWSTR lpCmdLine)
 
 bool InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 {
+    // Command registration is intentionally a no-op until SimpleConsole is
+    // initialized. Prime only the command registry here, before InitEngineContext
+    // starts the script engine (its sandbox registers sandbox.* commands): the
+    // rest of InitConsole publishes EngineStartEvent and builds gameplay/debug
+    // phases, which must remain after audio and module initialization below.
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.Initialize();
+
     InitEngineContext();
     SPARK_HEARTBEAT();
     InitGameplaySubsystems();
     SPARK_HEARTBEAT();
-
-    // Command registration is intentionally a no-op until SimpleConsole is
-    // initialized. Prime only the command registry here: the rest of
-    // InitConsole publishes EngineStartEvent and builds gameplay/debug phases,
-    // which must remain after audio and module initialization below.
-    Spark::SimpleConsole::GetInstance().Initialize();
-
-    auto& console = Spark::SimpleConsole::GetInstance();
 
     // Saves live in the per-user data directory: an install under Program Files
     // cannot write beside its binaries, and an upgrade would delete saves there.
@@ -316,7 +317,19 @@ bool InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         g_weatherSystem->SetEventBus(GetEngineRuntime().eventBus.get());
     }
 
-    return InitConsole();
+    // Modules were loaded above, ahead of the lifecycle, so a failed lifecycle
+    // must unload them before its rollback shuts down the script engine and the
+    // gameplay singletons they registered with: teardown is the reverse of startup.
+    auto& lifecycle = Spark::Core::Lifecycle::LifecycleCompositionRoot::Get();
+    lifecycle.SetInitializeRollbackPrelude(
+        []
+        {
+            if (auto& moduleManager = GetEngineRuntime().moduleManager)
+                moduleManager->RollbackStartup();
+        });
+    const bool lifecycleInitialized = InitConsole();
+    lifecycle.SetInitializeRollbackPrelude({});
+    return lifecycleInitialized;
 }
 
 #endif // SPARK_PLATFORM_WINDOWS
