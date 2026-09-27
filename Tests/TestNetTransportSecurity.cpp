@@ -474,6 +474,58 @@ TEST(NetTransportSec_ClientDetectsSilentServerAndAutoReconnects)
     nm.Shutdown();
 }
 
+// A server-sent Disconnect is authoritative. If it left auto-reconnect armed, a
+// server that kicks (or bans) a client from its Connect observer would loop
+// forever: every ConnectAccepted resets the attempt counter, so maxAttempts
+// never runs out and each cycle costs the server a full admission.
+TEST(NetTransportSec_ServerDisconnectDisarmsAutoReconnect)
+{
+    auto& nm = FreshManager();
+    RawPeer fakeServer(0);
+    ASSERT_TRUE(fakeServer.IsReady());
+
+    NetworkManager::AutoReconnectConfig reconnect;
+    reconnect.enabled = true;
+    reconnect.baseDelay = 0.1f;
+    reconnect.maxDelay = 0.2f;
+    reconnect.maxAttempts = 0; // unlimited: the loop the fix must prevent
+    nm.SetAutoReconnect(reconnect);
+
+    sockaddr_in clientEndpoint{};
+    ASSERT_TRUE(ConnectClientToFakeServer(nm, fakeServer, clientEndpoint));
+    (void)fakeServer.DrainFrom();
+
+    NetBuffer reason;
+    reason.WriteString("banned");
+    ASSERT_TRUE(fakeServer.SendTo(clientEndpoint,
+                                  BuildWire(MessageType::Disconnect, ChannelType::Reliable, 2, reason.GetData())));
+    EXPECT_TRUE(PumpUntil(nm, [&] { return nm.GetConnectionState() == ConnectionState::Disconnected; }));
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+    (void)fakeServer.DrainFrom(); // traffic from the ended session is not a reconnect
+
+    // Several backoff periods of simulated time: no new Connect may reach the server.
+    bool reconnectSeen = false;
+    (void)PumpUntil(
+        nm,
+        [&]
+        {
+            for (const auto& datagram : fakeServer.DrainFrom())
+            {
+                if (WireType(datagram.bytes) == static_cast<uint16_t>(MessageType::Connect))
+                    reconnectSeen = true;
+            }
+            return reconnectSeen;
+        },
+        40, 0.1f);
+    EXPECT_FALSE(reconnectSeen);
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+
+    nm.SetAutoReconnect(NetworkManager::AutoReconnectConfig{});
+    nm.Disconnect();
+    fakeServer.Close();
+    nm.Shutdown();
+}
+
 // ============================================================================
 // Finding 38: every admission synchronously ran an O(entity-count) full sync,
 // so a burst of unauthenticated connects (or connect/disconnect churn) made one

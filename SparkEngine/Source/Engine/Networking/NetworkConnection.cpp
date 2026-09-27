@@ -958,7 +958,7 @@ namespace Spark::Net
         SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", text.c_str());
     }
 
-    void NetworkManager::TerminateClientSession(const std::string& reason)
+    void NetworkManager::TerminateClientSession(const std::string& reason, bool keepReconnectArmed)
     {
         uint64_t endedLifecycleEpoch = 0;
         {
@@ -973,8 +973,17 @@ namespace Spark::Net
             m_connectionState = ConnectionState::Disconnected;
             m_role = NetworkRole::None;
             m_localClientID = INVALID_CLIENT;
-            // m_wasConnected is left as-is: a session that was established keeps
-            // auto-reconnect armed, a handshake that never completed does not.
+            if (!keepReconnectArmed)
+            {
+                // The server ended the session on purpose (kick, ban, shutdown). Its
+                // decision is authoritative: reconnecting would loop admit -> kick
+                // forever, because every ConnectAccepted resets the attempt counter.
+                m_wasConnected = false;
+                m_reconnectAttempts = 0;
+            }
+            // Otherwise m_wasConnected is left as-is: a lost session that was
+            // established keeps auto-reconnect armed, a handshake that never
+            // completed does not.
         }
         // The epoch bump stops the rest of the Update batch that delivered the
         // terminal packet, exactly like an application-initiated Disconnect().
@@ -1092,7 +1101,7 @@ namespace Spark::Net
                     reason += ": " + supplied;
                 }
             }
-            TerminateClientSession(reason);
+            TerminateClientSession(reason, /*keepReconnectArmed=*/false);
             return;
         }
 
@@ -1214,7 +1223,8 @@ namespace Spark::Net
                 m_serverTime - m_lastServerPacketTime > m_connectionTimeout)
             {
                 TerminateClientSession(
-                    std::format("Server timed out (no traffic for {:.1f}s)", m_serverTime - m_lastServerPacketTime));
+                    std::format("Server timed out (no traffic for {:.1f}s)", m_serverTime - m_lastServerPacketTime),
+                    /*keepReconnectArmed=*/true);
             }
         }
 #endif // ENABLE_NETWORKING

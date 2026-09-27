@@ -779,10 +779,11 @@ namespace Spark::Net
         /// Client-side: fail a Connecting handshake closed (state, socket, and queued lifecycle traffic).
         void AbandonClientHandshake(ConnectRejectReason reason, std::string text);
         /// Client-side: end a Connecting/Connected session the server closed (Disconnect) or
-        /// that went silent past m_connectionTimeout. Closes the socket, discards the
-        /// lifecycle's queued traffic and replicated state, and leaves m_wasConnected set so
-        /// auto-reconnect can run. Requires m_apiMutex.
-        void TerminateClientSession(const std::string& reason);
+        /// that went silent past m_connectionTimeout. Closes the socket and discards the
+        /// lifecycle's queued traffic and replicated state. @p keepReconnectArmed is true only
+        /// for the silence timeout (m_wasConnected stays set so auto-reconnect can run); a
+        /// server-sent Disconnect is authoritative and disarms auto-reconnect. Requires m_apiMutex.
+        void TerminateClientSession(const std::string& reason, bool keepReconnectArmed);
         void HandleDisconnect(const NetworkMessage& msg);
         /// Server-side: forget one client everywhere it is tracked (client/address tables,
         /// reliability state, delta baselines, interest scope, owned entities). The single
