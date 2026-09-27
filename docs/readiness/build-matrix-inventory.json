@@ -598,7 +598,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2692,
+      "line": 2703,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -625,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3614,
+      "line": 3625,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1378,7 +1378,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2692,
+      "line": 2703,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3317,
+      "line": 3459,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1396,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3355,
+      "line": 3497,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1405,10 +1405,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2889,
+      "line": 3013,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2834",
+          "id": "Tests/CMakeLists.txt:2958",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1422,7 +1422,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3574,
+      "line": 3730,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1473,7 +1473,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3614,
+      "line": 3625,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1500,7 +1500,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1581,
+      "line": 1591,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2173,10 +2173,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1753,
+      "line": 1764,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1739",
+          "id": "CMakeLists.txt:1750",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2211,24 +2211,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1724,
+      "line": 1735,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1627",
+          "id": "CMakeLists.txt:1638",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1722",
+          "id": "CMakeLists.txt:1733",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1723",
+          "id": "CMakeLists.txt:1734",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2322,10 +2322,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1741,
+      "line": 1752,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1739",
+          "id": "CMakeLists.txt:1750",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2522,7 +2522,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 807,
+      "line": 814,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2690,10 +2690,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 4029,
+      "line": 4213,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:4027",
+          "id": "Tests/CMakeLists.txt:4211",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2736,7 +2736,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 769,
+      "line": 776,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2795,10 +2795,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1493,
+      "line": 1499,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1492",
+          "id": "CMakeLists.txt:1498",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2813,10 +2813,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1495,
+      "line": 1501,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1492",
+          "id": "CMakeLists.txt:1498",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2832,10 +2832,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1476,
+      "line": 1482,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1475",
+          "id": "CMakeLists.txt:1481",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2850,7 +2850,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1449,
+      "line": 1455,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2860,10 +2860,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1373,
+      "line": 1383,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1361",
+          "id": "Tests/CMakeLists.txt:1371",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -2878,7 +2878,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 923,
+      "line": 930,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3098,10 +3098,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 791,
+      "line": 798,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:790",
+          "id": "Tests/CMakeLists.txt:797",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3229,7 +3229,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 811,
+      "line": 818,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3239,7 +3239,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 802,
+      "line": 809,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3249,7 +3249,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 813,
+      "line": 820,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3279,10 +3279,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 782,
+      "line": 789,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:781",
+          "id": "Tests/CMakeLists.txt:788",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3319,7 +3319,7 @@
       "target": "SparkPreviousSdkModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 805,
+      "line": 812,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3329,7 +3329,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 809,
+      "line": 816,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3339,7 +3339,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 928,
+      "line": 935,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3349,7 +3349,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1858,
+      "line": 1869,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3399,7 +3399,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 815,
+      "line": 822,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3409,10 +3409,10 @@
       "target": "SparkSpirvShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1933,
+      "line": 1944,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1874",
+          "id": "CMakeLists.txt:1885",
           "branch": 0,
           "branches": [
             "SPARK_VULKAN_AVAILABLE AND NOT WIN32"
@@ -3449,7 +3449,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 918,
+      "line": 925,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3459,7 +3459,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 758,
+      "line": 765,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3499,10 +3499,10 @@
       "target": "VulkanMemoryAllocator",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 784,
+      "line": 790,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:783",
+          "id": "CMakeLists.txt:789",
           "branch": 0,
           "branches": [
             "NOT TARGET VulkanMemoryAllocator AND EXISTS \"${VMA_ROOT}/vk_mem_alloc.h\""
@@ -3517,10 +3517,10 @@
       "target": "angelscript",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1045,
+      "line": 1051,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:987",
+          "id": "CMakeLists.txt:993",
           "branch": 0,
           "branches": [
             "ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"
@@ -3535,10 +3535,10 @@
       "target": "cgltf",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 853,
+      "line": 859,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:852",
+          "id": "CMakeLists.txt:858",
           "branch": 0,
           "branches": [
             "NOT TARGET cgltf AND EXISTS \"${CGLTF_DIR}/cgltf.h\""
@@ -3573,17 +3573,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2409,
+      "line": 2420,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2404",
+          "id": "CMakeLists.txt:2415",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2408",
+          "id": "CMakeLists.txt:2419",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -3663,10 +3663,10 @@
       "target": "miniaudio",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 872,
+      "line": 878,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:871",
+          "id": "CMakeLists.txt:877",
           "branch": 0,
           "branches": [
             "NOT TARGET miniaudio AND EXISTS \"${MINIAUDIO_DIR}/miniaudio.h\""
@@ -3699,10 +3699,10 @@
       "target": "nlohmann_json",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 898,
+      "line": 904,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:897",
+          "id": "CMakeLists.txt:903",
           "branch": 0,
           "branches": [
             "NOT TARGET nlohmann_json AND EXISTS \"${NLOHMANN_JSON_DIR}/nlohmann_json.h\""
@@ -3804,13 +3804,23 @@
       "resolved": true
     },
     {
+      "target": "spark_sodium",
+      "kind": "static_library",
+      "file": "cmake/SparkLibsodium.cmake",
+      "line": 60,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "stb_image",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 834,
+      "line": 840,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:833",
+          "id": "CMakeLists.txt:839",
           "branch": 0,
           "branches": [
             "NOT TARGET stb_image AND EXISTS \"${STB_DIR}/stb_image.h\""
@@ -3825,10 +3835,10 @@
       "target": "tinyexr",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 911,
+      "line": 917,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:910",
+          "id": "CMakeLists.txt:916",
           "branch": 0,
           "branches": [
             "NOT TARGET tinyexr AND EXISTS \"${TINYEXR_DIR}/tinyexr.h\""
@@ -3843,10 +3853,10 @@
       "target": "tinyobjloader",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 807,
+      "line": 813,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:804",
+          "id": "CMakeLists.txt:810",
           "branch": 0,
           "branches": [
             "TINYOBJLOADER_INCLUDE_DIR"
@@ -3861,7 +3871,7 @@
       "target": "uninstall",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 2748,
+      "line": 2759,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3871,10 +3881,10 @@
       "target": "zstd",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 763,
+      "line": 769,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:762",
+          "id": "CMakeLists.txt:768",
           "branch": 0,
           "branches": [
             "NOT TARGET zstd AND EXISTS \"${ZSTD_ROOT}/zstd.h\""
@@ -3965,7 +3975,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1753,
+          "line": 1764,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4019,7 +4029,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1724,
+          "line": 1735,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -4127,7 +4137,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1741,
+          "line": 1752,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4367,7 +4377,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 807,
+          "line": 814,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4531,7 +4541,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 4029,
+          "line": 4213,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4585,7 +4595,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 769,
+          "line": 776,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4649,7 +4659,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1493,
+          "line": 1499,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4657,7 +4667,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1495,
+          "line": 1501,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4675,7 +4685,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1476,
+          "line": 1482,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4693,7 +4703,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1449,
+          "line": 1455,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4711,7 +4721,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1373,
+          "line": 1383,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4729,7 +4739,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 923,
+          "line": 930,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5125,7 +5135,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 791,
+          "line": 798,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5261,7 +5271,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 811,
+          "line": 818,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5279,7 +5289,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 802,
+          "line": 809,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5297,7 +5307,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 813,
+          "line": 820,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5335,7 +5345,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 782,
+          "line": 789,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5391,7 +5401,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 805,
+          "line": 812,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5409,7 +5419,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 809,
+          "line": 816,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5427,7 +5437,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 928,
+          "line": 935,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5445,7 +5455,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1858,
+          "line": 1869,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -5535,7 +5545,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 815,
+          "line": 822,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5553,7 +5563,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1933,
+          "line": 1944,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -5609,7 +5619,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 918,
+          "line": 925,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5627,7 +5637,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 758,
+          "line": 765,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5699,7 +5709,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 784,
+          "line": 790,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5717,7 +5727,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1045,
+          "line": 1051,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -5735,7 +5745,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 853,
+          "line": 859,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5773,7 +5783,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2409,
+          "line": 2420,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5817,7 +5827,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 872,
+          "line": 878,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5853,7 +5863,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 898,
+          "line": 904,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6024,6 +6034,24 @@
       ]
     },
     {
+      "target": "spark_sodium",
+      "kind": "static_library",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "cmake/SparkLibsodium.cmake",
+          "line": 60,
+          "kind": "static_library",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "stb_image",
       "kind": "static_library",
       "buildable": true,
@@ -6033,7 +6061,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 834,
+          "line": 840,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6051,7 +6079,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 911,
+          "line": 917,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6069,7 +6097,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 807,
+          "line": 813,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6087,7 +6115,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2748,
+          "line": 2759,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -6105,7 +6133,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 763,
+          "line": 769,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6481,7 +6509,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 39,
+    "jobCount": 40,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -8637,6 +8665,117 @@
         "gating": "blocking"
       },
       {
+        "id": "network-security",
+        "name": "Network Security",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": 60,
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {},
+        "stepCount": 7,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Install dependencies",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "7108498ff428e4f1"
+          },
+          {
+            "index": 2,
+            "name": "Configure Linux Shipping network security tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "e0dd09ca895c689f"
+          },
+          {
+            "index": 3,
+            "name": "Build network security target",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "8d273dda260922e6"
+          },
+          {
+            "index": 4,
+            "name": "Run network-security label",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "45b6be674800831b"
+          },
+          {
+            "index": 5,
+            "name": "Extract network security error summary",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "failure()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "c7c7cef1480e0bec"
+          },
+          {
+            "index": 6,
+            "name": "Upload network security error summary",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "failure()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
         "id": "network-integration",
         "name": "Network Integration",
         "runsOn": "ubuntu-24.04",
@@ -10260,7 +10399,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "6e60b4ca0255751e"
+            "runDigest": "579e1945c3f11982"
           },
           {
             "index": 10,
@@ -10500,7 +10639,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "6e60b4ca0255751e"
+            "runDigest": "579e1945c3f11982"
           },
           {
             "index": 9,
@@ -11814,6 +11953,7 @@
           "build-installer",
           "aggregate-test-stats",
           "service-contract",
+          "network-security",
           "security-runtime",
           "network-integration"
         ],
@@ -12618,7 +12758,8 @@
           "todo-count",
           "build-installer",
           "aggregate-test-stats",
-          "module-evidence"
+          "module-evidence",
+          "network-security"
         ],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -13128,6 +13269,79 @@
         "tool": "ctest",
         "kind": "test",
         "command": "ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error  -L \"^${label}\\$\" 2>&1 | tee \"security-${label}.log\"",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "testDir": "build/linux-shipping",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "network-security",
+        "step": "Configure Linux Shipping network security tests",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee network-security-configure.log",
+        "commandProvenance": "literal",
+        "options": {
+          "BUILD_TESTS": "ON"
+        },
+        "preset": "linux-shipping",
+        "commandIndex": 0
+      },
+      {
+        "job": "network-security",
+        "step": "Build network security target",
+        "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee network-security-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkTests"
+        ],
+        "configuration": "",
+        "buildDir": "",
+        "preset": "linux-shipping",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "network-security",
+        "step": "Run network-security label",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error  -L '^network-security$' 2>&1 | tee network-security-tests.log",
         "commandProvenance": "literal",
         "configuration": "",
         "testDir": "build/linux-shipping",
@@ -14501,7 +14715,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
@@ -14611,7 +14825,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
@@ -14700,7 +14914,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
@@ -14789,7 +15003,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
@@ -15884,6 +16098,29 @@
         "commandIndex": 0
       },
       {
+        "job": "network-security",
+        "step": "Configure Linux Shipping network security tests",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee network-security-configure.log",
+        "commandProvenance": "literal",
+        "options": {
+          "BUILD_TESTS": "ON"
+        },
+        "preset": "linux-shipping",
+        "commandIndex": 0
+      },
+      {
         "job": "network-integration",
         "step": "Configure Linux Shipping network integration",
         "stepIndex": 2,
@@ -16906,6 +17143,33 @@
         "commandIndex": 0
       },
       {
+        "job": "network-security",
+        "step": "Build network security target",
+        "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee network-security-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkTests"
+        ],
+        "configuration": "",
+        "buildDir": "",
+        "preset": "linux-shipping",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
         "job": "network-integration",
         "step": "Build network integration processes",
         "stepIndex": 3,
@@ -17876,6 +18140,29 @@
         "commandIndex": 0
       },
       {
+        "job": "network-security",
+        "step": "Run network-security label",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error  -L '^network-security$' 2>&1 | tee network-security-tests.log",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "testDir": "build/linux-shipping",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
         "job": "network-integration",
         "step": "Run server/gateway process smoke",
         "stepIndex": 4,
@@ -18209,7 +18496,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
@@ -18259,7 +18546,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
@@ -18284,7 +18571,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
@@ -18309,7 +18596,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
@@ -18803,16 +19090,16 @@
       }
     ],
     "summary": {
-      "jobCount": 39,
-      "matrixLegCount": 47,
+      "jobCount": 40,
+      "matrixLegCount": 48,
       "pathFilteredEventCount": 0,
-      "configureCount": 33,
-      "buildCount": 35,
-      "testCount": 33,
+      "configureCount": 34,
+      "buildCount": 36,
+      "testCount": 34,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 20,
-      "blockingJobCount": 29,
+      "blockingJobCount": 30,
       "advisoryJobCount": 6,
       "conditionalJobCount": 4,
       "builtOsConfigurationPairs": [
@@ -18969,6 +19256,29 @@
       "tool": "cmake",
       "kind": "configure",
       "command": "cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log",
+      "commandProvenance": "literal",
+      "options": {
+        "BUILD_TESTS": "ON"
+      },
+      "preset": "linux-shipping",
+      "commandIndex": 0
+    },
+    {
+      "job": "network-security",
+      "step": "Configure Linux Shipping network security tests",
+      "stepIndex": 2,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "linux",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": "absent",
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "blocking",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee network-security-configure.log",
       "commandProvenance": "literal",
       "options": {
         "BUILD_TESTS": "ON"

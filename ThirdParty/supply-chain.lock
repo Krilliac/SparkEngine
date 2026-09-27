@@ -623,9 +623,12 @@
       "class": "ci_packages",
       "license_spdx": "NOASSERTION",
       "owner": "Krilliac",
-      "justification": "Headers, shader tools, Lavapipe, and the Khronos validation layer that the Linux build and GPU test jobs compile and run against; build and test time only.",
+      "justification": "Headers, shader tools, Lavapipe, the Mesa EGL/GL drivers (llvmpipe) the golden-linux lane renders the golden baselines with, and the Khronos validation layer that the Linux build and GPU test jobs compile and run against; build and test time only.",
       "identifiers": [
         "apt:libgl-dev",
+        "apt:libegl-dev",
+        "apt:libegl-mesa0",
+        "apt:libgl1-mesa-dri",
         "apt:libvulkan-dev",
         "apt:glslang-tools",
         "apt:libsdl2-dev",
