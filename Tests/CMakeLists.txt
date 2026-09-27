@@ -1631,6 +1631,70 @@ set_tests_properties(SparkEngineTests PROPERTIES
     LABELS "sparktests;unit;integration"
     TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
 
+# Takes one test family out of the main suite because another CTest entry in this
+# file runs it. Callers must sit under the same condition as that entry, so the
+# family is never dropped from a build that does not register its own lane; the
+# heavy families moved this way keep the main suite inside its wall-clock budget
+# instead of running twice. set_tests_properties replaces ENVIRONMENT, so this
+# extends the SPARK_TEST_EXCLUDE list already present rather than restating it.
+function(spark_exclude_from_main_suite family_prefix)
+    get_test_property(SparkEngineTests ENVIRONMENT _environment)
+    if(NOT _environment MATCHES "(^|;)SPARK_TEST_EXCLUDE=")
+        message(FATAL_ERROR "SparkEngineTests has no SPARK_TEST_EXCLUDE to extend with ${family_prefix}")
+    endif()
+    string(REGEX REPLACE "(^|;)SPARK_TEST_EXCLUDE=([^;]*)" "\\1SPARK_TEST_EXCLUDE=\\2,${family_prefix}"
+        _environment "${_environment}")
+    set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_environment}")
+    set_property(DIRECTORY APPEND PROPERTY SPARK_MAIN_SUITE_EXCLUDED_FAMILIES "${family_prefix}")
+endfunction()
+
+# TestMain matches SPARK_TEST_EXCLUDE anywhere in a name, while the dedicated
+# lanes select by name prefix. A test that contains an excluded family prefix
+# without starting with it would therefore run in neither lane, so configure
+# fails on one. Deferred to the end of this file so every SparkTests source added
+# after this point is scanned too.
+function(_spark_check_main_suite_exclusions)
+    get_property(_families DIRECTORY PROPERTY SPARK_MAIN_SUITE_EXCLUDED_FAMILIES)
+    if(NOT _families)
+        return()
+    endif()
+    get_target_property(_sources SparkTests SOURCES)
+    foreach(_source IN LISTS _sources)
+        if(_source MATCHES "\\$<" OR NOT _source MATCHES "\\.(cpp|mm)$")
+            continue()
+        endif()
+        cmake_path(ABSOLUTE_PATH _source BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" NORMALIZE
+            OUTPUT_VARIABLE _path)
+        file(STRINGS "${_path}" _lines REGEX "^[ \t]*TEST(_F)?[ \t]*\\(")
+        foreach(_line IN LISTS _lines)
+            # TEST(Name) registers "Name"; TEST_F(Fixture, Name) registers "Fixture.Name".
+            if(NOT _line MATCHES "^[ \t]*TEST(_F)?[ \t]*\\([ \t]*([A-Za-z0-9_]+)([ \t]*,[ \t]*([A-Za-z0-9_]+))?")
+                continue()
+            endif()
+            set(_name "${CMAKE_MATCH_2}")
+            if(CMAKE_MATCH_4)
+                set(_name "${CMAKE_MATCH_2}.${CMAKE_MATCH_4}")
+            endif()
+            foreach(_family IN LISTS _families)
+                string(FIND "${_name}" "${_family}" _at)
+                if(_at GREATER 0)
+                    message(FATAL_ERROR
+                        "${_path}: TEST ${_name} contains the main-suite exclusion '${_family}' without starting "
+                        "with it, so neither SparkEngineTests nor the ${_family} prefix lane would run it.")
+                endif()
+            endforeach()
+        endforeach()
+    endforeach()
+endfunction()
+cmake_language(DEFER CALL _spark_check_main_suite_exclusions)
+
+# MOD-315: FPSLAN_ launches three processes and converges a full round over
+# loopback (the slowest single SparkTests case); FPSLANTwoClientConvergence runs
+# it under exactly the condition that creates the peer target.
+if(TARGET SparkFPSLANLoopbackPeer)
+    spark_exclude_from_main_suite(FPSLAN_)
+endif()
+
 add_test(
     NAME SparkEngineLoadTests
     COMMAND ${CMAKE_COMMAND}
@@ -1697,8 +1761,7 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # compares them: the main suite would otherwise repeat the comparison in
     # every Linux build, sanitizer and coverage run. The tests are compiled only
     # with SPARK_OPENGL_SUPPORT, so the registration floor does not count them.
-    set_tests_properties(SparkEngineTests PROPERTIES
-        ENVIRONMENT "SPARK_TEST_EXCLUDE=${SPARK_TEST_LOAD_EXCLUDE},OpenGLGolden_")
+    spark_exclude_from_main_suite(OpenGLGolden_)
 
     # RHI-240: the production SDL2 host must honor SPARK_RHI_BACKEND=opengl
     # (initialize OpenGL, never NullRHI) and must exit non-zero when that
@@ -2284,16 +2347,10 @@ if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET Spar
 
     # The baselines belong to one Mesa build, so exactly one lane compares them;
     # the main suite would otherwise repeat the comparison in every Linux build,
-    # sanitizer and coverage lane that has Lavapipe. set_tests_properties
-    # replaces ENVIRONMENT, so extend whatever SPARK_TEST_EXCLUDE the main suite
-    # already carries (the OpenGL golden lane adds its own prefix above). The
-    # tests are compiled only with SPARK_VULKAN_SUPPORT and the SPIR-V build, so
-    # the registration floor does not count them.
-    get_test_property(SparkEngineTests ENVIRONMENT _spark_main_suite_environment)
-    string(REGEX REPLACE "(^|;)SPARK_TEST_EXCLUDE=([^;]*)" "\\1SPARK_TEST_EXCLUDE=\\2,VulkanGolden_RHI230_"
-        _spark_main_suite_environment "${_spark_main_suite_environment}")
-    set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_spark_main_suite_environment}")
-    unset(_spark_main_suite_environment)
+    # sanitizer and coverage lane that has Lavapipe. The tests are compiled only
+    # with SPARK_VULKAN_SUPPORT and the SPIR-V build, so the registration floor
+    # does not count them.
+    spark_exclude_from_main_suite(VulkanGolden_RHI230_)
 endif()
 
 foreach(_remote_admin_selector IN ITEMS
@@ -3925,7 +3982,13 @@ set_tests_properties(FPSPublicSDK_PrivateIncludeRatchet PROPERTIES
 # something. A selector that names a missing, renamed or emptied test family
 # therefore fails ctest. The module sources these tests exercise compile into
 # SparkTests only when ImGui is available (see the feature-gated block above).
+#
+# Selectors listed here run only in their ModuleManifest_ lane, not also in
+# SparkEngineTests: RacingCompleteRace_ drives twelve full Jolt races (about 130 s
+# of the main suite on Linux GCC Release). The exclusion is added only once the
+# lane is registered, so a build without it still runs the family in the suite.
 if(TARGET imgui)
+    set(_spark_module_kit_main_suite_moves RacingCompleteRace_)
     file(GLOB _spark_module_kit_cmake_files "${CMAKE_SOURCE_DIR}/GameModules/*/CMakeLists.txt")
     foreach(_spark_module_kit_cmake IN LISTS _spark_module_kit_cmake_files)
         get_filename_component(_spark_module_kit_dir "${_spark_module_kit_cmake}" DIRECTORY)
@@ -3997,6 +4060,8 @@ if(TARGET imgui)
             if(_spark_module_kit_missing_feature)
                 message(STATUS "${_spark_module_kit_test}: not registered (requires "
                     "${_spark_module_kit_missing_feature}, which this build disables)")
+                # Its TESTs are not compiled either, so the main suite has nothing to hand over.
+                list(REMOVE_ITEM _spark_module_kit_main_suite_moves ${_spark_module_kit_prefix})
                 continue()
             endif()
             add_test(NAME ${_spark_module_kit_test} COMMAND $<TARGET_FILE:SparkTests> --quiet --empty-is-error)
@@ -4007,8 +4072,16 @@ if(TARGET imgui)
                 LABELS "module;module-kit;unit"
                 RUN_SERIAL TRUE
                 TIMEOUT 300)
+            if(_spark_module_kit_prefix IN_LIST _spark_module_kit_main_suite_moves)
+                spark_exclude_from_main_suite(${_spark_module_kit_prefix})
+                list(REMOVE_ITEM _spark_module_kit_main_suite_moves ${_spark_module_kit_prefix})
+            endif()
         endforeach()
     endforeach()
+    if(_spark_module_kit_main_suite_moves)
+        message(FATAL_ERROR "No module.json registers the selector(s) ${_spark_module_kit_main_suite_moves} "
+            "that the main suite hands to their ModuleManifest_ lane; update the list above.")
+    endif()
 endif()
 
 # OPS-100: the isolated production crash-capture producer runs on every native

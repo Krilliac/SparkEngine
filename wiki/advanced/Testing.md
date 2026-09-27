@@ -186,6 +186,13 @@ cmake --build build --config Release
 #   SparkEngineTests      -- everything except LoadTest_ / DeepStress_
 #   SparkEngineLoadTests  -- labels "load;slow", SPARK_TEST_EXPECT_COUNT=22
 # Budgets are configuration-dependent (Debug 900 s; optimized 240 s / 300 s for the load lane).
+# A heavy family that already has its own pinned prefix lane is also excluded from
+# SparkEngineTests via spark_exclude_from_main_suite() in Tests/CMakeLists.txt, and
+# only under the condition that registers that lane: FPSLAN_ (FPSLANTwoClientConvergence),
+# RacingCompleteRace_ (ModuleManifest_SparkGameRacing_RacingCompleteRace), and on Linux
+# OpenGLGolden_ / VulkanGolden_RHI230_. Configure fails if a TEST name contains an
+# excluded prefix without starting with it, since no lane would run that test.
+# Run the full ctest set (not just -R SparkEngineTests) to execute every family.
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
 
 # Via direct binary execution
