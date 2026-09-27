@@ -1519,9 +1519,14 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:c546f1e4dabe",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Needs passing exact-SHA hosted evidence for every required gate and dependency. Many dependencies are still open."
+          "state": "implemented",
+          "evidence": [
+            "tools/release_qualification.py",
+            "Tests/Tools/test_release_qualification.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/release.yml"
+          ],
+          "note": "The check exists and runs in profile-required-gates, and it refuses the current contract. There is still no passing exact-SHA evidence, so the criterion cannot be evidenced. If the dispatcher needs a stricter reading, leave it unmet."
         },
         {
           "criterionDigest": "sha256:22e8be2baa83",

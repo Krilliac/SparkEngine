@@ -401,7 +401,7 @@
       "id": "PLT-230",
       "title": "Decide and implement the mobile release profile",
       "priority": "P2",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "platform",
@@ -443,13 +443,16 @@
         },
         {
           "criterionDigest": "sha256:bf1959f18749",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "tools/site-data/validate.py",
             "Tests/Tools/test_site_data_contract.py",
-            "docs/site/readiness.json"
+            "docs/site/readiness.json",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt",
+            "wiki/platform/Mobile-Platform.md"
           ],
-          "note": "Partial: Android/iOS profile claims are rejected. Mobile-supported wording outside a profile, or a flip to 'supported', is not blocked."
+          "note": "deferred_platform_support_errors keeps platform.mobile unsupported and blocked while PLT-230 is open. deferred_platform_claim_errors scans the global public surfaces plus the capability's documentation pages, and is wired into Validator.validate(). Covered by the registered CTest PublicWording_DeferredPlatforms. The qualifier check is per sentence and loose; see nonblocking."
         }
       ],
       "commands": [
@@ -499,7 +502,7 @@
       "id": "PLT-240",
       "title": "Decide and implement the OpenXR release profile",
       "priority": "P2",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "platform",
@@ -541,12 +544,14 @@
         },
         {
           "criterionDigest": "sha256:e6a6acf179e6",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "tools/site-data/validate.py",
-            "docs/site/readiness.json"
+            "docs/site/readiness.json",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "The data marks VR as stub/unsupported, but no validator rule enforces framework/planned wording in public text."
+          "note": "platform.vr stays unsupported/blocked, and OpenXR/SteamVR/Meta Quest/VR-headset support claims without a framework/planned qualifier are rejected. The live pass includes wiki/platform/VR-Support.md."
         }
       ],
       "commands": [
@@ -633,13 +638,15 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:df3e3df35bc9",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "tools/site-data/validate.py",
             "Tests/Tools/test_site_data_contract.py",
-            "docs/site/readiness.json"
+            "docs/site/readiness.json",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Only the generic check exists: a 'ready' capability needs closed blockers and passing gates. Setting support to 'supported' is not blocked, and authority is not modelled."
+          "note": "platform.console must stay unsupported/blocked, and any platformAuthority field is rejected by name, pointing to OWNER-DECISIONS.md. PlayStation/Xbox/Switch/console-platform claims are rejected in public surfaces. 'No public source or CI implies certification' is still unmet: source and CI are not scanned."
         },
         {
           "criterionDigest": "sha256:d496fb3ab4b9",
@@ -1438,7 +1445,7 @@
       "id": "HEAD-220",
       "title": "Certify packaged Windows 11 NullRHI execution",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "runtime",
@@ -1481,11 +1488,13 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:cd2b72fd5268",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "cmake/ValidateStagedPackageExecutables.cmake"
+            "cmake/ValidateStagedPackageExecutables.cmake",
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Needs a clean Windows 11 host without GPU or display, plus a hosted headless package job. The staged run was local, with a display."
+          "note": "The test runs from the staged package's bin directory with an isolated LOCALAPPDATA. The local host still has a GPU and display. Clean-host evidence and the headless-windows-package job still need hosted CI."
         },
         {
           "criterionDigest": "sha256:dda52a09803d",
@@ -1497,7 +1506,7 @@
         },
         {
           "criterionDigest": "sha256:113da975258b",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "docs/platform/LINUX-SUPPORT-EVIDENCE.md",
             "Tests/Tools/test_run_nullrhi_soak.py",
@@ -1505,9 +1514,10 @@
             "cmake/RunSparkHeadlessFPSSaveReload.cmake",
             "Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake",
             "Tests/CMakeLists.txt",
-            "wiki/subsystems/Dedicated-Server.md"
+            "wiki/subsystems/Dedicated-Server.md",
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake"
           ],
-          "note": "Linux precursor (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; 600 s Soak_FPSHeadlessNullRHI meets its RSS slope ceiling. live=0 guards only bridge/device teardown; LSan misses ModuleManager-held heap. HeadlessSaveReload_FPSNullRHI now covers save/reload across two fresh processes. Missing: Windows runs of registered FPSHeadlessPackage_*, sanitizer, soak."
+          "note": "FPSHeadlessPackage_NullRHISaveReload runs a NullRHI save/reload against the staged MinSizeRel package. It is now in testSelectors only; plannedTestSelectors is []. There is no Windows CTest run or sanitizer/soak evidence yet, so the criterion is not evidenced. The ledger JSON still records this criterion as 'unmet' because this lane did not change the state field."
         },
         {
           "criterionDigest": "sha256:e6a39adf789f",
@@ -1783,9 +1793,10 @@
             "Tests/CMakeLists.txt",
             "SparkEditor/Source/Panels/InspectorWorldAssetDrop.h",
             "SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp",
-            "Tests/TestEditorAssetDropWorldReal.cpp"
+            "Tests/TestEditorAssetDropWorldReal.cpp",
+            "Tests/TestEditorCookPackageReal.cpp"
           ],
-          "note": "EditorAssetDrag (5 tests) covers browse, drag and assign. EditorAssetDrag_WorldDrop* (EXPECT_COUNT 10) drops a typed payload into the World-backed Inspector's MeshRenderer mesh/material paths as one undo step and round-trips it through SaveWorld/LoadWorld. Cook and run of the assigned asset are untested. No exact-commit MSVC or CI run."
+          "note": "EditorCookPackageRoundTrip (Windows): the asset drag payload and Inspector drop core, SaveWorld, the real SparkCooker, AssembleNativePackage, and a packaged headless ScenePreview run that resolves the mesh, plus a missing-asset negative case."
         },
         {
           "criterionDigest": "sha256:4c9b9b22f00d",
@@ -1859,7 +1870,6 @@
         "editor-package-roundtrip"
       ],
       "plannedTestSelectors": [
-        "EditorCookPackage_*"
       ]
     },
     {
@@ -1921,9 +1931,13 @@
         },
         {
           "criterionDigest": "sha256:0ec10cc244b9",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Installed runtime tests are WIN32-gated. The Linux consumer lane does not load runtime modules or assets."
+          "state": "implemented",
+          "evidence": [
+            "cmake/ValidateStagedPackageExecutables.cmake",
+            "cmake/RunSparkFPSHeadlessArena.cmake",
+            "wiki/gameplay-tools/Asset-Pipeline.md"
+          ],
+          "note": "The staged package validator runs the FPS arena check against the staged bin/Assets/Scenes/level1.scene. It runs from a working directory outside both the package and the source tree. Evidence is local only."
         },
         {
           "criterionDigest": "sha256:037f80907fc4",
@@ -2092,9 +2106,11 @@
             "Tests/TestEditorStateCompatibility.cpp",
             "SparkEditor/Source/Core/EditorLayoutManager.cpp",
             "Tests/TestEditorLayoutManager.cpp",
-            "SparkEditor/Source/Prefabs/PrefabManager.cpp"
+            "SparkEditor/Source/Prefabs/PrefabManager.cpp",
+            "Tests/TestDocumentInterruptionReal.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Prefab and .sparkproject saves stage, flush and rename; a failed save leaves the prior file byte-identical and .bak recovery keeps the good .bak (DocumentWrite_*, PrefabPersistence_*, EditorStateMigration_*). Layouts: EditorLayoutMgr_FailedSaveKeepsPreviousLayoutFile, EditorLayoutMgr_MalformedLayoutLeavesPanelsUntouchedAndReportsError. Open: Windows TerminateProcess rehearsal, hosted run."
+          "note": "SparkDocumentInterruptionTests: killed scene/prefab/project writers (Spark::Process::Kill, SIGKILL/TerminateProcess) must leave generation D or D+1 loadable. Linux evidence needs hosted CI."
         },
         {
           "criterionDigest": "sha256:333b592702f6",

@@ -64,9 +64,11 @@
             "SparkInstaller/src/Installer.h",
             "SparkInstaller/src/InstallerContext.h",
             "SparkInstaller/src/InstallState.h",
-            "SparkInstaller/README.md"
+            "SparkInstaller/README.md",
+            ".github/workflows/release.yml",
+            ".github/scripts/test-workflow-failure-propagation.py"
           ],
-          "note": "Update-marker cleanliness and preflight refusal before any mutation (exit 10); Windows junction fixture fixed in 23de6d006. Added: rollback rebuild and verify (exit 9 repair-required), the interrupted-update rollback target, a staged fresh-install clone with pending marker and Resume install mode, and the trailing-separator destination fix. No build or test result recorded for the additions."
+          "note": "Already 'implemented' in the ledger; no state change. Add the registered selectors (Installer_Tamper, Installer_AtomicUpdate, Installer_Interrupted) and the release.yml build fix as evidence. These are local fixtures, not native Windows evidence."
         },
         {
           "criterionDigest": "sha256:b2d639655345",
@@ -80,9 +82,13 @@
           "evidence": [
             "SparkInstaller/README.md",
             "SparkInstaller/src/InstallerPreflight.cpp",
-            "SparkInstaller/tests/InstallerTransactionTests.cpp"
+            "SparkInstaller/tests/InstallerTransactionTests.cpp",
+            "tools/installer/check_installer_claims.py",
+            "Tests/Tools/test_installer_claims.py",
+            "SparkInstaller/src/main.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "No checker ties installer capabilities to documentation claims."
+          "note": "Already 'implemented' in the ledger, but its note still says 'No checker ties installer capabilities to documentation claims'. The dispatcher should replace that note: the Installer_DocClaims CTest runs check_installer_claims.py against the README and the installer's literal flags and exit codes."
         },
         {
           "criterionDigest": "sha256:637a4f03b8d7",

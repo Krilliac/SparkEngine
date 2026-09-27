@@ -1786,7 +1786,7 @@
         },
         {
           "criterionDigest": "sha256:4c73ad5bea74",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp",
             "GameModules/SparkGameVisualScript/Source/Core/Main.cpp",
@@ -1803,9 +1803,15 @@
             "tools/audio/compose_visualscript_cues.py",
             "Tests/TestMOD390VisualScriptGameplayReal.cpp",
             "Tests/TestVisualScriptCompiler.cpp",
-            "wiki/subsystems/Visual-Scripting.md"
+            "wiki/subsystems/Visual-Scripting.md",
+            "GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.h",
+            "GameModules/SparkGameVisualScript/README.md",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngineHotReload.cpp",
+            "Tests/TestMOD390VisualScriptHotReloadReal.cpp",
+            "Tests/TestENG200ScriptHotReloadReal.cpp"
           ],
-          "note": "Bindings are real: the demo spawns coins and enemies with AnimationControllers, and playSound cues reach ScriptAudioCues backed by five shipped, hash-recorded WAVs that OnLoad registers with the AudioEngine (VisualScriptGameplay_ScriptCuesReachAudioQueueAndAnimationControllers, VisualScriptDemo_EverySoundCueShipsItsAudio). Unmet until a module hot-reload test lands (MOD-390/vs-hot-reload)."
+          "note": "vs_reload hot-reloads each entity's script module via AngelScriptEngine::HotReloadModuleFromSource, carrying fields by the ENG-200 R1-R8 rules. Pinned by VisualScriptHotReload_* (4, module.json selector) and ScriptHotReload_ENG200_FromSourceReloadsInMemoryModule (ScriptHotReloadReal, 10). Bindings evidence (audio cues, AnimationControllers) kept. Local only; no exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",
@@ -1911,9 +1917,10 @@
             "Tools/Terrafront/multiclient.py",
             "Tests/Tools/test_terrafront_multiclient.py",
             "Tests/CMakeLists.txt",
-            "wiki/advanced/Testing.md"
+            "wiki/advanced/Testing.md",
+            "GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp"
           ],
-          "note": "TerrafrontMultiClient_Harness (python unit, always registered) and TerrafrontMultiClient_OnboardSpawnMove (live 3-process run, opt-in via -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON, label terrafront-multiclient). Only scenario: onboard_spawn_move. Local live runs on a prebuilt Release: 3 of 4 converged; one failed on a server-side disconnect. No exact-commit CI run."
+          "note": "Scenarios: OnboardSpawnMove, CombatKillRespawn, ForgedStateRejectedAndAudited, ReconnectRestoresAllowedState, TerritoryReplicates, VehicleLifecycle; client-vs-server compare covers pawns, regions, vehicles. Python harness tests pass locally (57/57); the three-process CTest runs need SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON and were not run here."
         },
         {
           "criterionDigest": "sha256:885e584f6fb7",
@@ -1927,15 +1934,23 @@
             "GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServer.cpp",
             "GameModules/SparkGameMMOFPS/Source/Console/TFCommands.cpp",
             "Tests/TestTFServerValidation.cpp",
-            "Tests/TestTFLoadoutWire.cpp"
+            "Tests/TestTFLoadoutWire.cpp",
+            "Tools/Terrafront/multiclient.py",
+            "Tests/Tools/test_terrafront_multiclient.py",
+            "Tests/CMakeLists.txt",
+            "GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp"
           ],
-          "note": "Unit-level evidence only. The live multi-process proof (a forged packet produces [TF-AUDIT] and the client loadout is unchanged) belongs to TF-110/harness-combat-forged-reconnect."
+          "note": "The forged_verdict requires the [TF-AUDIT] forged-state lines, a forged count of at least 2 in tf_cheat_stats, and an unchanged saved loadout on the server's player line. The live process run (TerrafrontMultiClient_ForgedStateRejectedAndAudited) has not been run here."
         },
         {
           "criterionDigest": "sha256:b9afc7b58a80",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No committed test shows a reconnect restores allowed state in a real multi-client harness."
+          "state": "implemented",
+          "evidence": [
+            "Tools/Terrafront/multiclient.py",
+            "Tests/Tools/test_terrafront_multiclient.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "The reconnect_verdict compares the server's before and after player lines and rejects a pre-disconnect snapshot that is still default kit. The live process run (TerrafrontMultiClient_ReconnectRestoresAllowedState) has not been run here."
         },
         {
           "criterionDigest": "sha256:a993c17ebdcf",
