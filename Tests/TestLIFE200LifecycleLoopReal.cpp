@@ -36,6 +36,7 @@
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Systems/PhaseSystemManager.h"
 #include "Engine/Events/EventSystem.h"
+#include "Utils/DebugOverlay.h"
 #include "Utils/SparkConsole.h"
 
 #include "LifecycleLoopGuards.h"
@@ -245,6 +246,9 @@ TEST(LifecycleLoop_ProductionStagesRepeatedBootShutdownLeavesNoStaleServices)
         EXPECT_TRUE(root->GetState() == LifecycleRootState::ShutDown);
         EXPECT_TRUE(ServicesWithdrawn(*ctx));
         EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
+        // The debug stage enabled and ticked the overlay singleton; shutdown undoes both.
+        EXPECT_FALSE(Spark::DebugOverlay::GetInstance().IsEnabled());
+        EXPECT_EQ(Spark::DebugOverlay::GetInstance().GetFrameCount(), std::uint64_t{0});
         root.reset();
         watchdog.Disarm();
 

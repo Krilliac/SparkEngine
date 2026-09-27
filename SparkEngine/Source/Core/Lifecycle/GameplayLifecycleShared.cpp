@@ -1662,6 +1662,10 @@ namespace Spark::Core::Lifecycle
 
         Spark::TweenManager::GetInstance().KillAll();
         Spark::DebugDrawManager::GetInstance().Clear();
+        // InitializeDebugSystemsImpl enabled the overlay; undo that and drop its frame
+        // stats so the next boot in this process starts from a clean overlay.
+        Spark::DebugOverlay::GetInstance().SetEnabled(false);
+        Spark::DebugOverlay::GetInstance().ResetStats();
         Spark::MemoryMonitor::GetInstance().Shutdown();
         Spark::HitchDetector::GetInstance().Shutdown();
         Spark::BenchmarkFramework::GetInstance().Shutdown();
