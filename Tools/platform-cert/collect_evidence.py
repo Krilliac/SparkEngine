@@ -451,7 +451,12 @@ def measure_compiler(command: list[str], *, repo_root: Path) -> dict[str, str]:
             raise CollectionError(
                 "cannot measure the MSVC toolset: VCToolsVersion is not set"
             )
-        toolset = "v143" if raw_toolset.startswith("14.4") else raw_toolset
+        if match is None:
+            raise CollectionError("the compiler banner carries no version number")
+        try:
+            toolset = vc.derive_msvc_toolset(match.group(1), raw_toolset)
+        except ValueError as exc:
+            raise CollectionError(f"cannot measure the MSVC toolset: {exc}") from exc
     elif "clang" in lowered:
         match = _VERSION_RE.search(banner)
         compiler_id = "apple-clang" if "apple" in lowered else "clang"

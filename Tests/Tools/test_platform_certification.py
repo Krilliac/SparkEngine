@@ -1256,6 +1256,12 @@ class TestHostBinding(BundleTestCase):
             "Compiler toolset mismatch",
         )
 
+    def test_host_toolset_inconsistent_with_its_compiler_is_rejected(self) -> None:
+        self.rejectRecord(
+            lambda r: r["host"]["compiler"].__setitem__("toolset", "v145"),
+            "Evidence host: compiler 19.42.34435 is toolset v143, but 'v145' is declared",
+        )
+
     def test_windows_sdk_mismatch_is_rejected(self) -> None:
         self.rejectRecord(
             lambda r: r["host"]["compiler"].__setitem__(
@@ -1367,6 +1373,12 @@ class TestCanonicalProfileFreeze(BundleTestCase):
         self.rejectMatrix(
             lambda m: m["rows"][0]["compiler"].update(toolset="v142"),
             "compiler.toolset must be",
+        )
+
+    def test_compiler_version_from_another_toolset_family_is_rejected(self) -> None:
+        self.rejectMatrix(
+            lambda m: m["rows"][0]["compiler"].update(version="19.50.35717"),
+            "compiler 19.50.35717 is toolset v145, but 'v143' is declared",
         )
 
     def test_out_of_family_compiler_version_is_rejected(self) -> None:
@@ -3133,6 +3145,53 @@ class TestCollectorHostMeasurement(unittest.TestCase):
                 collector.measure_compiler(command, repo_root=REPO_ROOT)
 
         self.assertIn("VCToolsVersion", str(raised.exception))
+
+    def _measure_msvc(self, cl_version: str, vctools_version: str) -> dict[str, str]:
+        banner = f"Microsoft (R) C/C++ Optimizing Compiler Version {cl_version} for x64"
+        command = [sys.executable, "-c", f"print({banner!r})"]
+        with patch.dict(os.environ, {"VCToolsVersion": vctools_version}):
+            return collector.measure_compiler(command, repo_root=REPO_ROOT)
+
+    def test_msvc_toolset_is_derived_from_banner_and_vctools(self) -> None:
+        for cl_version, vctools_version, toolset in (
+            ("19.30.30705", "14.30.30705", "v143"),
+            ("19.39.33523", "14.39.33519", "v143"),
+            ("19.44.35207", "14.44.35207", "v143"),
+            ("19.50.35717", "14.50.35717", "v145"),
+        ):
+            with self.subTest(cl=cl_version):
+                measured = self._measure_msvc(cl_version, vctools_version)
+                self.assertEqual(
+                    {"id": "msvc", "version": cl_version, "toolset": toolset}, measured
+                )
+
+    def test_msvc_toolset_disagreeing_with_the_invoked_compiler_is_refused(self) -> None:
+        for cl_version, vctools_version, needle in (
+            ("19.44.35207", "14.42.34433", "expected VC tools 14.44"),
+            ("19.44.35207", "14.50.35717", "different MSVC toolset families"),
+            ("19.60.10000", "14.60.10000", "no known MSVC toolset family"),
+            ("19.29.30159", "14.29.30133", "no known MSVC toolset family"),
+            ("19.44.35207", "garbage", "not a dotted version"),
+            ("19.44.35207", "15.44.35207", "major version 14"),
+        ):
+            with self.subTest(cl=cl_version, vctools=vctools_version):
+                with self.assertRaises(collector.CollectionError) as raised:
+                    self._measure_msvc(cl_version, vctools_version)
+                self.assertIn(needle, str(raised.exception))
+
+    def test_matrix_only_validation_checks_the_declared_toolset(self) -> None:
+        matrix = json.loads(
+            (REPO_ROOT / "docs" / "certification" / "support-matrix.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual([], vc.msvc_toolset_consistency(matrix["rows"][0]["compiler"], "row"))
+        matrix["rows"][0]["compiler"]["version"] = "19.50.35717"
+        errors = vc.validate_matrix(matrix)
+        self.assertTrue(
+            any("compiler 19.50.35717 is toolset v145, but 'v143' is declared" in e for e in errors),
+            errors,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════

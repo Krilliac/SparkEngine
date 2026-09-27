@@ -154,6 +154,81 @@ for _name, _left, _right in [
     if _left != _right:
         raise RuntimeError(f"Schema enum mismatch: {_name}")
 
+# ── MSVC toolset families ──────────────────────────────────────────────────
+# cl.exe 19.MM ships in the VC tools directory 14.MM; the toolset name is a
+# function of MM alone. collect_evidence derives the toolset from this table
+# and the validator checks declared rows and measured hosts against it, so the
+# two cannot drift. (first MM, last MM, toolset).
+MSVC_TOOLSET_FAMILIES: tuple[tuple[int, int, str], ...] = (
+    (30, 49, "v143"),
+    (50, 59, "v145"),
+)
+_MSVC_CL_MAJOR = 19
+_MSVC_VCTOOLS_MAJOR = 14
+
+
+def _msvc_version_parts(version: str, major: int, what: str) -> tuple[int, ...]:
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}", version) is None:
+        raise ValueError(f"{what} {version!r} is not a dotted version")
+    parts = tuple(int(part) for part in version.split("."))
+    if parts[0] != major:
+        raise ValueError(f"{what} {version!r} must have major version {major}")
+    return parts
+
+
+def _msvc_family(minor: int) -> str | None:
+    for first, last, toolset in MSVC_TOOLSET_FAMILIES:
+        if first <= minor <= last:
+            return toolset
+    return None
+
+
+def msvc_toolset_for_compiler(cl_version: str) -> str:
+    """Return the toolset a cl.exe banner version belongs to, or raise ValueError."""
+    minor = _msvc_version_parts(cl_version, _MSVC_CL_MAJOR, "cl version")[1]
+    toolset = _msvc_family(minor)
+    if toolset is None:
+        raise ValueError(f"cl version {cl_version!r} belongs to no known MSVC toolset family")
+    return toolset
+
+
+def derive_msvc_toolset(cl_version: str, vctools_version: str) -> str:
+    """Derive the toolset from the cl banner and VCToolsVersion, which must agree.
+
+    ``cl`` 19.MM must run from VC tools 14.MM: a VCToolsVersion naming another
+    minor means the environment does not describe the compiler that was invoked.
+    """
+    toolset = msvc_toolset_for_compiler(cl_version)
+    cl_minor = _msvc_version_parts(cl_version, _MSVC_CL_MAJOR, "cl version")[1]
+    tools_minor = _msvc_version_parts(vctools_version, _MSVC_VCTOOLS_MAJOR, "VCToolsVersion")[1]
+    if _msvc_family(tools_minor) != toolset:
+        raise ValueError(
+            f"cl {cl_version} ({toolset}) and VCToolsVersion {vctools_version} belong to "
+            "different MSVC toolset families"
+        )
+    if tools_minor != cl_minor:
+        raise ValueError(
+            f"cl {cl_version} does not ship with VCToolsVersion {vctools_version}: "
+            f"expected VC tools 14.{cl_minor}"
+        )
+    return toolset
+
+
+def msvc_toolset_consistency(compiler: Any, context: str) -> list[str]:
+    """An msvc compiler section must declare the toolset its version belongs to."""
+    if not isinstance(compiler, dict) or compiler.get("id") != "msvc":
+        return []
+    version = str(compiler.get("version", ""))
+    try:
+        derived = msvc_toolset_for_compiler(version)
+    except ValueError as exc:
+        return [f"{context}: {exc}"]
+    declared = compiler.get("toolset")
+    if declared != derived:
+        return [f"{context}: compiler {version} is toolset {derived}, but {declared!r} is declared"]
+    return []
+
+
 # ── Canonical profiles ─────────────────────────────────────────────────────
 # What stable-v1 *means*, independent of any matrix file.  Hardware-specific
 # strings stay editable; the invariants that decide how much evidence a row
@@ -623,6 +698,7 @@ def validate_matrix(
             for key in spec:
                 if not str(row[field].get(key, "")).strip():
                     errors.append(f"row[{row_id}]: {field}.{key} must be non-empty")
+        errors.extend(msvc_toolset_consistency(row["compiler"], f"row[{row_id}]"))
 
     errors.extend(
         _check_canonical_profile(
@@ -1136,6 +1212,7 @@ def _cross_validate_host(row: dict[str, Any], evidence: dict[str, Any]) -> list[
             actual = host_compiler.get(field)
             if expected and actual != expected:
                 errors.append(f"Compiler {field} mismatch: row={expected!r} host={actual!r}")
+        errors.extend(msvc_toolset_consistency(host_compiler, "Evidence host"))
 
     for field in ("api", "device", "vendor", "driverVersion", "featureLevel"):
         expected = row.get("gpu", {}).get(field)
