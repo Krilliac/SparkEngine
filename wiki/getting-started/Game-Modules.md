@@ -80,6 +80,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 - **Source:** `GameModules/SparkGameOpenWorld/Source/`
 - **Wires:** [Large World Support](../subsystems/Large-World-Support.md) (origin rebasing + seamless streaming), [Day/Night Cycle and Weather](../gameplay-tools/Day-Night-Cycle-and-Weather.md), [Terrain and Procedural Generation](../gameplay-tools/Terrain-and-Procedural-Generation.md), [HLOD and World Partition](../gameplay-tools/HLOD-And-World-Partition.md).
 - **Playable loop:** entering a point of interest records discovery; fast-travel POIs unlock immediately, and teleports/travel synchronize the active biome used by wildlife and dynamic events.
+- **Player controller:** `Player/OWPlayerController` walks (W/S/A/D, 6 m/s), sprints (Shift, 11 m/s while stamina lasts), turns (Q/E) and interacts (F: nearest resource node within 4 m, else an unjoined event within 25 m, else the settlement the player stands in). Moves stay inside the authored regions. `OpenWorldTraversal_*` drives it in-process from Emerald Meadows into Ironwood Forest through a settlement visit, two harvests, a joined event run to completion and a second settlement; there is no rendered or packaged traversal yet, and settlement visits are not saved.
 
 ## SparkGamePlatformer
 
