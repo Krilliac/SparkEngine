@@ -15,6 +15,7 @@
 //
 // Registered as the pinned SEC3Gameplay_ family in Tests/CMakeLists.txt.
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "ScopedLoggerBaseline.h"
 
@@ -28,7 +29,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -493,18 +493,13 @@ TEST(SEC3Gameplay_ModScanRefusesLinkedOrJunctionedModDirectory)
     WriteText(modsRoot / "Plain" / "mod.json", R"({"id":"plain","name":"Plain","version":"1.0"})");
     WriteText(outside / "mod.json", R"({"id":"escaped","name":"Escaped","version":"1.0"})");
 
+    // A real mount-point junction on Windows (no shell, no privilege), a directory symlink
+    // elsewhere; creation failure is a test failure, never a skip.
     const fs::path link = modsRoot / "Evil";
-#if defined(_WIN32)
-    const std::wstring command =
-        L"cmd /c mklink /J \"" + link.wstring() + L"\" \"" + outside.wstring() + L"\" >nul 2>&1";
-    ASSERT_EQ(_wsystem(command.c_str()), 0);
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(outside, link));
+    ASSERT_TRUE(SparkTestLinks::IsDirectoryLink(link));
     std::error_code statusError;
     ASSERT_TRUE(fs::symlink_status(link, statusError).type() != fs::file_type::directory);
-#else
-    std::error_code linkError;
-    fs::create_directory_symlink(outside, link, linkError);
-    ASSERT_FALSE(static_cast<bool>(linkError));
-#endif
     // The link really resolves to a directory holding a valid manifest, so only the
     // link guard can keep it out.
     ASSERT_TRUE(fs::is_regular_file(link / "mod.json"));
@@ -514,8 +509,8 @@ TEST(SEC3Gameplay_ModScanRefusesLinkedOrJunctionedModDirectory)
     EXPECT_TRUE(mods.GetModInfo("plain") != nullptr);
     EXPECT_TRUE(mods.GetModInfo("escaped") == nullptr);
 
-    std::error_code removeError;
-    fs::remove(link, removeError); // remove the link itself before remove_all walks the tree
+    // Remove the link itself before ScratchDir's remove_all walks the tree.
+    EXPECT_TRUE(SparkTestLinks::RemoveDirectoryLink(link));
 }
 
 // SEC4 #4: a mod folder whose name is outside the Windows ANSI code page made
