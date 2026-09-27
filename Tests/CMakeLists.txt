@@ -1135,6 +1135,7 @@ target_sources(SparkTests PRIVATE
     TestD3D11DeviceContractsReal.cpp
     TestRHI210D3D11GoldenReal.cpp
     TestSEC2RenderingHardeningReal.cpp
+    TestSEC4SoundEffectWav.cpp
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
     TestEditorUndoHierarchyReal.cpp
@@ -2569,6 +2570,16 @@ if(WIN32)
         RUN_SERIAL TRUE
         TIMEOUT 60)
 endif()
+
+# SEC4 audio: SoundEffect accepts only PCM / IEEE-float WAV fmt chunks with
+# self-consistent fields and a zero cbSize, so a crafted EXTENSIBLE or ADPCM header
+# cannot make XAudio2 read past the stored 18-byte WAVEFORMATEX (TestSEC4SoundEffectWav.cpp;
+# no audio device needed). Exact count so a filter that selects nothing cannot pass.
+add_test(NAME SEC4SoundEffectWav COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SEC4SoundEffectWav PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4SoundWav_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "security;audio;unit"
+    TIMEOUT 60)
 
 # SEC2 rendering lane (TestSEC2RenderingHardeningReal.cpp): daemon shader-blob length
 # bounds, the shared UpdateBuffer range check, D3D11 UpdateBuffer, D3D12 render-target
