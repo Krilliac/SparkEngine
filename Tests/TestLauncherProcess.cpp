@@ -292,9 +292,134 @@ TEST(LauncherProcess_RequiresServerConfigAndExecutable)
     EXPECT_TRUE(server.has_value());
     EXPECT_EQ(server->arguments.size(), static_cast<size_t>(2));
     EXPECT_EQ(server->arguments[0], std::string("--config"));
-    EXPECT_EQ(server->arguments[1], config.string());
+    EXPECT_EQ(std::filesystem::u8path(server->arguments[1]), config);
 
     std::error_code error;
     std::filesystem::remove_all(root, error);
     EXPECT_FALSE(error);
+}
+
+// SEC4: every LaunchRequest argument is UTF-8. The Editor, DedicatedServer and
+// ServiceTopology targets used path::string(), which on Windows is the active code
+// page: LaunchDetached then threw std::system_error decoding it (for an accented
+// folder), or string() itself threw (for characters outside the code page), and
+// nothing in the launcher UI caught either. U+0915 exists in no ANSI code page, so
+// the round trip below fails on Windows without the fix whatever the host's ACP is.
+TEST(SEC4Launcher_EditorServerAndServiceArgumentsAreUtf8ForNonAsciiProjects)
+{
+    using namespace SparkLauncher;
+    const auto root = MakeLauncherTestRoot();
+    const auto binaries = root / "bin";
+    auto projectRoot = PathFromUtf8("Caf\xC3\xA9 \xE0\xA4\x95 Project");
+    EXPECT_TRUE(projectRoot.has_value());
+    if (!projectRoot)
+        return;
+    const auto project = root / *projectRoot / "Sample.sparkproject";
+    const auto config = project.parent_path() / "Config" / "server.ini";
+    Touch(project);
+    Touch(config);
+    Touch(Executable(binaries, "SparkEditor"));
+    Touch(Executable(binaries, "SparkServer"));
+
+    const auto decodedArgument = [](const std::string& argument)
+    {
+        auto decoded = PathFromUtf8(argument);
+        EXPECT_TRUE(decoded.has_value());
+        return decoded.value_or(std::filesystem::path{});
+    };
+
+    auto editor = BuildLaunchRequest(binaries, project, LaunchTarget::Editor);
+    EXPECT_TRUE(editor.has_value());
+    if (editor)
+    {
+        EXPECT_EQ(editor->arguments.size(), static_cast<size_t>(2));
+        EXPECT_EQ(decodedArgument(editor->arguments[1]), project);
+    }
+
+    auto services = BuildLaunchRequest(binaries, project, LaunchTarget::ServiceTopology);
+    EXPECT_TRUE(services.has_value());
+    if (services)
+    {
+        EXPECT_EQ(services->arguments.size(), static_cast<size_t>(4));
+        EXPECT_EQ(decodedArgument(services->arguments[1]), project);
+    }
+
+    auto server = BuildLaunchRequest(binaries, project, LaunchTarget::DedicatedServer);
+    EXPECT_TRUE(server.has_value());
+    if (server)
+    {
+        EXPECT_EQ(server->arguments.size(), static_cast<size_t>(2));
+        EXPECT_EQ(decodedArgument(server->arguments[1]), config);
+    }
+
+    // Error messages carry the path as UTF-8 too instead of throwing from string().
+    std::error_code removeError;
+    std::filesystem::remove(config, removeError);
+    auto missingConfig = BuildLaunchRequest(binaries, project, LaunchTarget::DedicatedServer);
+    EXPECT_FALSE(missingConfig.has_value());
+    if (!missingConfig)
+    {
+        EXPECT_TRUE(missingConfig.error().find("Caf\xC3\xA9 \xE0\xA4\x95 Project") != std::string::npos);
+    }
+
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    EXPECT_FALSE(error);
+}
+
+// SEC4: text that is not a path fails closed as a value, never as an exception.
+// LaunchDetached used std::filesystem::u8path per argument, which throws on invalid
+// UTF-8; it now refuses the request before starting anything.
+TEST(SEC4Launcher_InvalidUtf8AndEmbeddedNulFailClosedWithoutThrowing)
+{
+    using namespace SparkLauncher;
+    const std::string nul("Sample\0.sparkproject", 20);
+    EXPECT_FALSE(PathFromUtf8(nul).has_value());
+
+    const auto roundTrip = PathFromUtf8(PathToUtf8(std::filesystem::path(u8"Caf\u00e9/\u0915.sparkproject")));
+    EXPECT_TRUE(roundTrip.has_value());
+    if (roundTrip)
+    {
+        EXPECT_EQ(*roundTrip, std::filesystem::path(u8"Caf\u00e9/\u0915.sparkproject"));
+    }
+
+    LaunchRequest request;
+    request.executable = std::filesystem::temp_directory_path() / "spark-sec4-launcher-missing-executable";
+    request.workingDirectory = std::filesystem::temp_directory_path();
+    request.arguments = {"--project", nul};
+    auto launchedWithNul = LaunchDetached(request);
+    EXPECT_FALSE(launchedWithNul.has_value());
+    if (!launchedWithNul)
+    {
+        EXPECT_TRUE(launchedWithNul.error().find("NUL") != std::string::npos);
+    }
+
+#ifdef _WIN32
+    // Windows paths are UTF-16, so malformed UTF-8 has no spelling and is refused.
+    const std::string latin1Bytes = "C:\\Caf\xE9\\Sample.sparkproject";
+    auto decoded = PathFromUtf8(latin1Bytes);
+    EXPECT_FALSE(decoded.has_value());
+    if (!decoded)
+    {
+        EXPECT_TRUE(decoded.error().find("UTF-8") != std::string::npos);
+    }
+
+    request.arguments = {"--project", latin1Bytes};
+    bool threw = false;
+    std::expected<void, std::string> launched;
+    try
+    {
+        launched = LaunchDetached(request);
+    }
+    catch (...)
+    {
+        threw = true;
+    }
+    EXPECT_FALSE(threw);
+    EXPECT_FALSE(launched.has_value());
+    if (!launched)
+    {
+        EXPECT_TRUE(launched.error().find("UTF-8") != std::string::npos);
+    }
+#endif
 }

@@ -1471,6 +1471,15 @@ set_tests_properties(SEC3VisualScriptHardening PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3VisualScript_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "scripting;visual-script;security;unit"
     TIMEOUT 120)
+# SEC4: SparkLauncher passes every child-process argument as UTF-8 (non-ASCII
+# project folders no longer crash the Editor/Server/Services launch), and bad
+# argument text fails closed as an error instead of an uncaught exception
+# (TestLauncherProcess.cpp).
+add_test(NAME SEC4LauncherPaths COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SEC4LauncherPaths PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4Launcher_;SPARK_TEST_EXPECT_COUNT=2"
+    LABELS "launcher;security;unit"
+    TIMEOUT 60)
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_VULKAN)
 endif()

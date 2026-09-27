@@ -10,9 +10,11 @@
 #include <cctype>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <system_error>
 #include <unordered_set>
+#include <utility>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -27,11 +29,28 @@ namespace SparkLauncher
 {
     namespace
     {
-        std::string PathToUtf8(const std::filesystem::path& path)
+#ifdef _WIN32
+        // Strict UTF-8 -> UTF-16 without exceptions: std::filesystem::u8path throws
+        // std::system_error on invalid input, and nothing on the launcher's UI path
+        // catches it, so every conversion of untrusted text goes through here.
+        std::optional<std::wstring> WideFromUtf8(std::string_view text)
         {
-            const std::u8string utf8 = path.generic_u8string();
-            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+            if (text.empty())
+                return std::wstring{};
+            if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+                return std::nullopt;
+            const int sourceLength = static_cast<int>(text.size());
+            const int wideLength =
+                MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), sourceLength, nullptr, 0);
+            if (wideLength <= 0)
+                return std::nullopt;
+            std::wstring wide(static_cast<size_t>(wideLength), L'\0');
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), sourceLength, wide.data(),
+                                    wideLength) != wideLength)
+                return std::nullopt;
+            return wide;
         }
+#endif
 
         std::filesystem::path ExecutablePath(const std::filesystem::path& directory, const char* name)
         {
@@ -396,15 +415,35 @@ namespace SparkLauncher
 #endif
     } // namespace
 
+    std::string PathToUtf8(const std::filesystem::path& path)
+    {
+        const std::u8string utf8 = path.generic_u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    std::expected<std::filesystem::path, std::string> PathFromUtf8(std::string_view text)
+    {
+        if (text.find('\0') != std::string_view::npos)
+            return std::unexpected("Path contains an embedded NUL character");
+#ifdef _WIN32
+        auto wide = WideFromUtf8(text);
+        if (!wide)
+            return std::unexpected("Path is not valid UTF-8");
+        return std::filesystem::path(std::move(*wide));
+#else
+        return std::filesystem::path(std::string(text));
+#endif
+    }
+
     std::expected<LaunchRequest, std::string> BuildLaunchRequest(const std::filesystem::path& binaryDirectory,
                                                                  const std::filesystem::path& projectFile,
                                                                  LaunchTarget target)
     {
         std::error_code error;
         if (!std::filesystem::is_regular_file(projectFile, error))
-            return std::unexpected("Project file not found: " + projectFile.string());
+            return std::unexpected("Project file not found: " + PathToUtf8(projectFile));
         if (projectFile.extension() != ".sparkproject")
-            return std::unexpected("Expected a .sparkproject file: " + projectFile.string());
+            return std::unexpected("Expected a .sparkproject file: " + PathToUtf8(projectFile));
 
         LaunchRequest request;
         request.workingDirectory = projectFile.parent_path();
@@ -412,7 +451,10 @@ namespace SparkLauncher
         {
         case LaunchTarget::Editor:
             request.executable = ExecutablePath(binaryDirectory, "SparkEditor");
-            request.arguments = {"--project", projectFile.string()};
+            // Every argument is UTF-8 (LaunchDetached decodes it as such). A narrow
+            // path::string() is the active code page on Windows, which LaunchDetached
+            // cannot decode for any non-ASCII project folder.
+            request.arguments = {"--project", PathToUtf8(projectFile)};
             break;
         case LaunchTarget::Game:
         {
@@ -429,32 +471,41 @@ namespace SparkLauncher
         {
             const std::filesystem::path config = request.workingDirectory / "Config" / "server.ini";
             if (!std::filesystem::is_regular_file(config, error))
-                return std::unexpected("Dedicated server config not found: " + config.string());
+                return std::unexpected("Dedicated server config not found: " + PathToUtf8(config));
             request.executable = ExecutablePath(binaryDirectory, "SparkServer");
-            request.arguments = {"--config", config.string()};
+            request.arguments = {"--config", PathToUtf8(config)};
             break;
         }
         case LaunchTarget::ServiceTopology:
             request.executable = ExecutablePath(binaryDirectory, "SparkEditor");
-            request.arguments = {"--project", projectFile.string(), "--open-panel", "ServiceTopology"};
+            request.arguments = {"--project", PathToUtf8(projectFile), "--open-panel", "ServiceTopology"};
             break;
         }
 
         if (!std::filesystem::is_regular_file(request.executable, error))
             return std::unexpected(std::string(LaunchTargetName(target)) +
-                                   " executable not found: " + request.executable.string());
+                                   " executable not found: " + PathToUtf8(request.executable));
         return request;
     }
 
     std::expected<void, std::string> LaunchDetached(const LaunchRequest& request)
     {
+        // Arguments are validated before anything is started: an embedded NUL would
+        // silently truncate the child's command line, and invalid UTF-8 is refused
+        // as an error instead of escaping as an exception.
+        for (const auto& argument : request.arguments)
+            if (argument.find('\0') != std::string::npos)
+                return std::unexpected("Launch argument contains an embedded NUL character");
 #ifdef _WIN32
         std::wstring commandLine;
         AppendQuotedArgument(commandLine, request.executable.wstring());
         for (const auto& argument : request.arguments)
         {
+            const auto wideArgument = WideFromUtf8(argument);
+            if (!wideArgument)
+                return std::unexpected("Launch argument is not valid UTF-8");
             commandLine.push_back(L' ');
-            AppendQuotedArgument(commandLine, std::filesystem::u8path(argument).wstring());
+            AppendQuotedArgument(commandLine, *wideArgument);
         }
 
         STARTUPINFOW startup{};
