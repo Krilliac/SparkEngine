@@ -526,7 +526,10 @@ class AngelScriptEngine
      *
      * Hot-reload state rules (wiki: "Hot-reload state rules"):
      * - R1 The new source is compiled into a staging module first; if it fails,
-     *      nothing changes and false is returned.
+     *      nothing changes and false is returned. The file is read only for
+     *      that staging build, and the staged module is what gets committed,
+     *      so a file rewritten or deleted after staging cannot fail the reload
+     *      once live instances are detached.
      * - R2 A field whose name and type declaration match in the old and new
      *      class keeps the old instance's value.
      * - R3 Carried types: primitives, enums, `string`, and registered POD

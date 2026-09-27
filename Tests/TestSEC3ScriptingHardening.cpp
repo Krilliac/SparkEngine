@@ -367,4 +367,108 @@ TEST(SEC3Script_StaleEntityIdAccessorsAreSafe)
     fx.engine.DetachScript(host);
 }
 
+namespace
+{
+    std::string g_reloadState;       ///< Output of the last debugTrace(1, ...) from the reload probe
+    std::string g_reloadPath;        ///< Script file the destructor hook rewrites
+    bool g_rewriteOnDestroy = false; ///< Armed only around the HotReloadModule call
+    int g_rewrites = 0;              ///< Times the hook rewrote the file
+
+    /// debugTrace(99) comes from ~Probe(): the old instance is being released by the reload.
+    void ReloadTrace(uint32_t nodeId, const char* /*nodeName*/, const char* output)
+    {
+        if (nodeId == 1)
+        {
+            g_reloadState = output ? output : "";
+        }
+        else if (nodeId == 99 && g_rewriteOnDestroy)
+        {
+            // An editor mid-save: the file no longer compiles.
+            std::ofstream out(g_reloadPath, std::ios::binary | std::ios::trunc);
+            out << "class Probe {";
+            ++g_rewrites;
+        }
+    }
+
+    const char* ReloadSource(const char* version)
+    {
+        return version[1] == '1' ? "class Probe\n"
+                                   "{\n"
+                                   "    int counter = 0;\n"
+                                   "    ~Probe() { debugTrace(99, \"dtor\", \"\"); }\n"
+                                   "    void Update(float dt) { counter++; debugTrace(1, \"s\", \"v1:\" + counter); }\n"
+                                   "}\n"
+                                 : "class Probe\n"
+                                   "{\n"
+                                   "    int counter = 0;\n"
+                                   "    ~Probe() { debugTrace(99, \"dtor\", \"\"); }\n"
+                                   "    void Update(float dt) { counter++; debugTrace(1, \"s\", \"v2:\" + counter); }\n"
+                                   "}\n";
+    }
+
+    void WriteFile(const std::string& path, const char* text)
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << text;
+    }
+} // namespace
+
+TEST(SEC3Script_HotReloadSurvivesSourceRewrittenDuringCommit)
+{
+    namespace fs = std::filesystem;
+    static std::atomic<uint32_t> sequence{0};
+    const fs::path directory =
+        fs::temp_directory_path() /
+        ("spark_sec3_reload_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "_" +
+         std::to_string(sequence++));
+    std::error_code error;
+    fs::create_directories(directory, error);
+    EXPECT_FALSE(static_cast<bool>(error));
+
+    g_reloadState.clear();
+    g_rewrites = 0;
+    g_rewriteOnDestroy = false;
+    g_reloadPath = (directory / "SEC3Reload.as").string();
+    {
+        AngelScriptEngine engine;
+        ASSetDebugTraceCallback(&ReloadTrace);
+        EXPECT_TRUE(engine.Initialize());
+
+        WriteFile(g_reloadPath, ReloadSource("v1"));
+        EXPECT_TRUE(engine.CompileScriptFile(g_reloadPath));
+        const EntityID entity = static_cast<EntityID>(31);
+        EXPECT_TRUE(engine.AttachScript(entity, "Probe", "SEC3Reload"));
+        engine.CallUpdate(entity, 0.0f);
+        engine.CallUpdate(entity, 0.0f);
+        EXPECT_EQ(g_reloadState, std::string("v1:2"));
+
+        // A valid v2 is on disk when the reload stages it. Releasing the old
+        // instance during the commit then rewrites the file to invalid source:
+        // the previous implementation compiled the file a second time at that
+        // point, failed, and left the entity with no script.
+        WriteFile(g_reloadPath, ReloadSource("v2"));
+        g_rewriteOnDestroy = true;
+        const bool reloaded = engine.HotReloadModule("SEC3Reload");
+        g_rewriteOnDestroy = false;
+        if (!reloaded)
+            std::printf("  reload diagnostic: %s\n", engine.GetLastError().c_str());
+
+        EXPECT_EQ(g_rewrites, 1); // the race window was actually exercised
+        EXPECT_TRUE(reloaded);
+        EXPECT_EQ(engine.GetEntitiesForModule("SEC3Reload").size(), static_cast<size_t>(1));
+        engine.CallUpdate(entity, 0.0f);
+        EXPECT_EQ(g_reloadState, std::string("v2:3")); // new code, carried counter
+
+        // The broken file on disk now fails staging and leaves the live v2 script alone.
+        EXPECT_FALSE(engine.HotReloadModule("SEC3Reload"));
+        engine.CallUpdate(entity, 0.0f);
+        EXPECT_EQ(g_reloadState, std::string("v2:4"));
+
+        engine.DetachScript(entity);
+        engine.Shutdown();
+        ASSetDebugTraceCallback(nullptr);
+    }
+    fs::remove_all(directory, error);
+}
+
 #endif // SPARK_ANGELSCRIPT_SUPPORT

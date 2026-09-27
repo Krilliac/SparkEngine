@@ -3,7 +3,8 @@
  * @brief Module hot reload with state carry-over for attached entity scripts
  *
  * AngelScriptEngine::HotReloadModule() recompiles a module from its source
- * file and re-attaches every entity script of it, applying the hot-reload
+ * file (read once, into a staging module that becomes the module on commit)
+ * and re-attaches every entity script of it, applying the hot-reload
  * state rules R1-R8 documented on the method: same-name, same-type fields of
  * carryable types keep their values, everything else keeps the new
  * constructor's value and is reported. Shared by the real and the stub (no
@@ -179,7 +180,7 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
         SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", m_lastError.c_str());
         return false;
     }
-    // Copied: CompileScriptFile() below rewrites this map entry.
+    // Copied: the map may rehash while this runs.
     const std::string filePath = fileIt->second;
 
     // 1. Snapshot every entity script of this module before anything changes.
@@ -198,45 +199,48 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
         }
     }
 
-    // 2. R1: compile the new source into a throwaway staging module BEFORE
-    //    touching any live instance. The common case is a file saved mid-edit
-    //    with a syntax error; detaching first would wipe every running script
-    //    of the module with no way back.
+    // 2. R1: build the new source into a staging module BEFORE touching any
+    //    live instance. The common case is a file saved mid-edit with a syntax
+    //    error; detaching first would wipe every running script of the module
+    //    with no way back.
+    //
+    //    The source (and its #includes) is read exactly once, here. The staged
+    //    module is the one that gets committed below: compiling the file a
+    //    second time after the detach would re-read a file that an editor may
+    //    be rewriting (truncate-then-write save, watcher firing mid-write), and
+    //    a failure there would leave every entity of the module without a script.
     const std::string stagingModule = moduleName + "$hotreload_stage";
+    m_firstCompileError.clear();
+    CScriptBuilder builder;
+    const bool staged = builder.StartNewModule(m_engine, stagingModule.c_str()) >= 0 &&
+                        builder.AddSectionFromFile(filePath.c_str()) >= 0 && builder.BuildModule() >= 0;
+    asIScriptModule* stage = m_engine->GetModule(stagingModule.c_str());
+    if (!staged || !stage)
     {
-        m_firstCompileError.clear();
-        CScriptBuilder validator;
-        const bool staged = validator.StartNewModule(m_engine, stagingModule.c_str()) >= 0 &&
-                            validator.AddSectionFromFile(filePath.c_str()) >= 0 && validator.BuildModule() >= 0;
-
-        // Discard the staging module either way; the canonical recompile below
-        // rebuilds under the real module name.
-        if (asIScriptModule* stage = m_engine->GetModule(stagingModule.c_str()))
+        if (stage)
         {
             stage->Discard();
         }
-
-        if (!staged)
-        {
-            SetLastError("Hot-reload aborted: recompilation of '" + filePath + "' failed (" + m_firstCompileError +
-                         "); live scripts left intact.");
-            SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", m_lastError.c_str());
-            return false;
-        }
+        SetLastError("Hot-reload aborted: recompilation of '" + filePath + "' failed (" + m_firstCompileError +
+                     "); live scripts left intact.");
+        SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", m_lastError.c_str());
+        return false;
     }
 
-    // 3. The new source is known good. Detach the old instances and recompile
-    //    the module under its canonical name.
+    // 3. Commit. Nothing below reads the file or can fail to compile: detach the
+    //    old instances, discard the old module (Discard() removes its name from
+    //    the engine at once) and rename the staged module to the canonical name.
     for (const auto& binding : bindings)
     {
         DetachScript(binding.entity);
     }
-    if (!CompileScriptFile(filePath))
+    if (asIScriptModule* previous = m_engine->GetModule(moduleName.c_str()))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "Hot-reload failed: recompilation of '%s' failed.",
-                        filePath.c_str());
-        return false;
+        previous->Discard();
     }
+    stage->SetName(moduleName.c_str());
+    m_modules[moduleName] = stage;
+    RecordModuleContexts(builder, moduleName);
 
     // 4. Re-attach (constructor runs, Start() does not: R6) and carry state over (R2-R5, R7).
     HotReloadReport& report = m_lastHotReloadReport;
