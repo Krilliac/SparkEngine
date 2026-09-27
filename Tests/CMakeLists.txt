@@ -400,6 +400,8 @@ add_executable(SparkTests
     # MOD-390: engine-owned .vscript graph I/O, and the module's checked-in graphs
     # regenerate its shipped scripts byte for byte.
     TestMOD390VisualScriptGraphsReal.cpp
+    # MOD-390: vs_reload hot-reloads the running demo's scripts, keeping entity state.
+    TestMOD390VisualScriptHotReloadReal.cpp
     # ENG-200: the module's graphs compiled, packaged by GamePackager and played to
     # the win through RuntimePackage root resolution (shares VisualScriptGameplayHarness.h).
     TestENG200VisualScriptRuntimeReal.cpp

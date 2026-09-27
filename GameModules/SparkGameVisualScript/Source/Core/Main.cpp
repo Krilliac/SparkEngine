@@ -252,11 +252,25 @@ void SparkGameVisualScriptModule::RegisterConsoleCommands()
         },
         "Recreate the complete visual-script demo", "VisualScript");
     console.RegisterCommand(
+        "vs_reload",
+        [this](const std::vector<std::string>&)
+        {
+            if (!m_initialized || !m_context || !m_demo)
+                return std::string{"Visual-script demo is not initialized"};
+
+            // Validates all five scripts before touching the running demo; a rejected reload changes nothing.
+            if (!m_demo->ReloadScripts())
+                return "Visual-script reload failed: " + m_demo->GetLastError();
+            return m_demo->GetReloadSummary();
+        },
+        "Hot-reload the generated visual scripts into the running demo, keeping entity state", "VisualScript");
+    console.RegisterCommand(
         "vs_help",
         [](const std::vector<std::string>&)
         {
-            return std::string{"Controls: WASD move, Left Shift sprint, Space jump. Collect five gold pickups, "
-                               "avoid patrols, and use the green health pickup. Commands: vs_status, vs_restart."};
+            return std::string{
+                "Controls: WASD move, Left Shift sprint, Space jump. Collect five gold pickups, "
+                "avoid patrols, and use the green health pickup. Commands: vs_status, vs_restart, vs_reload."};
         },
         "Show visual-script demo controls", "VisualScript");
 }
@@ -266,6 +280,7 @@ void SparkGameVisualScriptModule::UnregisterConsoleCommands()
     auto& console = Spark::SimpleConsole::GetInstance();
     console.UnregisterCommand("vs_status");
     console.UnregisterCommand("vs_restart");
+    console.UnregisterCommand("vs_reload");
     console.UnregisterCommand("vs_help");
 }
 

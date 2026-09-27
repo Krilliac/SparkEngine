@@ -311,6 +311,8 @@ public:
 
     // Hot reload (see "Hot-reload state rules")
     bool HotReloadModule(const std::string& moduleName);
+    bool HotReloadModuleFromSource(const std::string& moduleName, const std::string& source);
+    bool HasScriptClass(const std::string& moduleName, const std::string& className) const;
     const HotReloadReport& GetLastHotReloadReport() const;
 
     // Error handling
@@ -481,7 +483,9 @@ graph->DeserializeFromJSON(json);
 | R7 | An instance disabled by a runtime fault comes back enabled, with its carried state. |
 | R8 | If the class no longer exists in the new module, or may not attach in the current client/server context, that entity is left without a script. The failure is reported and the call returns false. |
 
-`GetLastHotReloadReport()` returns the counts for the last call: `instances`, `carried`, `defaulted`, `dropped` and `failedAttaches`. It also returns one note per distinct dropped field or failed re-attach, such as `Mod::Keeper.speed: retyped from float to int, constructor value kept`. The engine logs the counts as one info line and each note as a warning. Modules compiled with `CompileScriptFromString()` have no source file and cannot be hot-reloaded.
+`GetLastHotReloadReport()` returns the counts for the last call: `instances`, `carried`, `defaulted`, `dropped` and `failedAttaches`. It also returns one note per distinct dropped field or failed re-attach, such as `Mod::Keeper.speed: retyped from float to int, constructor value kept`. The engine logs the counts as one info line and each note as a warning.
+
+Modules compiled with `CompileScriptFromString()` have no source file, so `HotReloadModule()` refuses them. `HotReloadModuleFromSource(moduleName, source)` reloads such a module from new in-memory source under the same rules and fills the same report; its section is named after the module, so diagnostics read `<module>:<line>` (`ScriptHotReload_ENG200_FromSourceReloadsInMemoryModule`). `HasScriptClass(moduleName, className)` lets a caller check a compiled source for its class before committing a reload that R8 would otherwise fail. The visual-script demo's `vs_reload` uses both ([Visual Scripting](Visual-Scripting.md)).
 
 ### File watcher
 

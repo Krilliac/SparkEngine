@@ -114,9 +114,22 @@ namespace Spark::VisualScriptDemo
         }
 
         std::unordered_map<std::string, std::string> sources;
+        if (!ReadAndValidateScripts(*root, sources))
+            return false;
+
+        m_scriptRoot = *root;
+        m_scriptSources = std::move(sources);
+        console.LogInfo("[VisualScript] Validated 5 visual scripts from " + m_scriptRoot.string());
+        return true;
+    }
+
+    bool DemoWorld::ReadAndValidateScripts(const std::filesystem::path& root,
+                                           std::unordered_map<std::string, std::string>& sources)
+    {
+        auto& console = SimpleConsole::GetInstance();
         for (const auto& asset : ScriptManifest)
         {
-            const auto path = *root / std::filesystem::path(asset.fileName);
+            const auto path = root / std::filesystem::path(asset.fileName);
             std::ifstream stream(path, std::ios::binary);
             std::ostringstream source;
             if (stream)
@@ -131,10 +144,17 @@ namespace Spark::VisualScriptDemo
             // engine diagnostic already reads "<path>:<line>:<column>". The
             // script builder normalizes that path to forward slashes, so every
             // diagnostic here uses generic_string() to name files the same way
-            // on Windows and POSIX.
+            // on Windows and POSIX. The module (named after the file stem) is a
+            // validation build only: entities run per-entity modules.
             if (!m_scriptEngine.CompileScriptFile(path.string()))
             {
                 Fail("Failed to compile: " + path.generic_string() + " — " + m_scriptEngine.GetLastError());
+                return false;
+            }
+            const std::string className(asset.className);
+            if (!m_scriptEngine.HasScriptClass(path.stem().string(), className))
+            {
+                Fail(path.generic_string() + ": does not declare class " + className);
                 return false;
             }
 
@@ -142,26 +162,103 @@ namespace Spark::VisualScriptDemo
             const size_t first = text.find(SelfEntityDeclaration);
             if (first == std::string::npos)
             {
-                Fail(path.generic_string() + ": " + std::string(asset.className) + " must declare '" +
-                     std::string(SelfEntityDeclaration) + "' exactly once (found none)");
+                Fail(path.generic_string() + ": " + className + " must declare '" + std::string(SelfEntityDeclaration) +
+                     "' exactly once (found none)");
                 return false;
             }
             const size_t second = text.find(SelfEntityDeclaration, first + SelfEntityDeclaration.size());
             if (second != std::string::npos)
             {
-                Fail(path.generic_string() + ":" + std::to_string(LineOfOffset(text, second)) + ": " +
-                     std::string(asset.className) + " declares '" + std::string(SelfEntityDeclaration) +
-                     "' again (first at line " + std::to_string(LineOfOffset(text, first)) + ")");
+                Fail(path.generic_string() + ":" + std::to_string(LineOfOffset(text, second)) + ": " + className +
+                     " declares '" + std::string(SelfEntityDeclaration) + "' again (first at line " +
+                     std::to_string(LineOfOffset(text, first)) + ")");
                 return false;
             }
 
-            sources.emplace(std::string(asset.className), text);
-            console.LogSuccess("[VisualScript] Validated: " + std::string(asset.className));
+            sources.emplace(className, text);
+            console.LogSuccess("[VisualScript] Validated: " + className);
+        }
+        return true;
+    }
+
+    bool DemoWorld::ReloadScripts()
+    {
+        m_lastError.clear();
+        m_reloadSummary.clear();
+        if (m_scriptRoot.empty())
+        {
+            Fail("No scripts to reload; LoadScripts() must succeed first");
+            return false;
         }
 
-        m_scriptRoot = *root;
-        m_scriptSources = std::move(sources);
-        console.LogInfo("[VisualScript] Validated 5 visual scripts from " + m_scriptRoot.string());
+        // All five files are re-read and validated before any live module is
+        // touched: a file saved mid-edit with a compile error, a renamed class or
+        // a lost selfEntity placeholder rejects the reload and changes nothing.
+        std::unordered_map<std::string, std::string> sources;
+        if (!ReadAndValidateScripts(m_scriptRoot, sources))
+            return false;
+        m_scriptSources = std::move(sources); // a later Spawn() (vs_restart) binds the new sources too
+
+        struct ClassTotals
+        {
+            size_t instances = 0;
+            size_t carried = 0;
+            size_t defaulted = 0;
+            size_t dropped = 0;
+        };
+        std::unordered_map<std::string, ClassTotals> totals;
+        std::vector<std::string> notes;
+        std::string failures;
+
+        for (EntityID entity : m_entities)
+        {
+            const auto* script = m_world.GetRegistry().valid(entity) ? m_world.GetComponent<Script>(entity) : nullptr;
+            if (!script)
+                continue;
+            // Copied: the reload re-attaches the instance and must not read through the component.
+            const std::string className = script->className;
+            const std::string moduleName = script->moduleName;
+            const std::string diagnosticPath = (m_scriptRoot / (className + ".as")).generic_string();
+
+            // Validation guarantees exactly one placeholder, so binding cannot fail here.
+            const auto bound = BindSelfEntity(m_scriptSources.at(className), static_cast<uint32_t>(entity));
+            const bool reloaded = m_scriptEngine.HotReloadModuleFromSource(moduleName, *bound);
+            const auto& report = m_scriptEngine.GetLastHotReloadReport();
+            auto& classTotals = totals[className];
+            classTotals.instances += report.instances;
+            classTotals.carried += report.carried;
+            classTotals.defaulted += report.defaulted;
+            classTotals.dropped += report.dropped;
+            notes.insert(notes.end(), report.notes.begin(), report.notes.end()); // "<module>::<Class>.<field>: ..."
+            if (!reloaded)
+            {
+                // Only a new constructor that faults can get here (engine rule R8): that entity is left without
+                // a script and the others keep reloading.
+                failures += (failures.empty() ? "" : "; ") + className + " on entity " +
+                            std::to_string(static_cast<uint32_t>(entity)) + " — " +
+                            LocateInFile(m_scriptEngine.GetLastError(), moduleName, diagnosticPath);
+            }
+        }
+
+        std::ostringstream summary;
+        summary << "Reloaded visual scripts from " << m_scriptRoot.generic_string();
+        for (const auto& asset : ScriptManifest)
+        {
+            const auto& classTotals = totals[std::string(asset.className)];
+            summary << "\n  " << asset.className << ": " << classTotals.instances << " instance(s), fields carried "
+                    << classTotals.carried << ", defaulted " << classTotals.defaulted << ", dropped "
+                    << classTotals.dropped;
+        }
+        for (const auto& note : notes)
+            summary << "\n  " << note;
+        m_reloadSummary = summary.str();
+
+        if (!failures.empty())
+        {
+            Fail("Hot reload left entities without a script: " + failures);
+            return false;
+        }
+        SimpleConsole::GetInstance().LogSuccess("[VisualScript] " + m_reloadSummary);
         return true;
     }
 

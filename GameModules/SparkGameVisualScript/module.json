@@ -21,7 +21,8 @@
       "Tests/TestVisualScriptCompiler.cpp",
       "Tests/TestMOD390VisualScriptDiagnosticsReal.cpp",
       "Tests/TestMOD390VisualScriptGameplayReal.cpp",
-      "Tests/TestMOD390VisualScriptGraphsReal.cpp"
+      "Tests/TestMOD390VisualScriptGraphsReal.cpp",
+      "Tests/TestMOD390VisualScriptHotReloadReal.cpp"
     ],
     "prefixes": [
       {
@@ -34,6 +35,13 @@
       {
         "prefix": "VisualScriptDiagnostics_",
         "count": 7,
+        "requires": [
+          "angelscript"
+        ]
+      },
+      {
+        "prefix": "VisualScriptHotReload_",
+        "count": 4,
         "requires": [
           "angelscript"
         ]

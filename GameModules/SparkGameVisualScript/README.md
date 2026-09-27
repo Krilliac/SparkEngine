@@ -26,6 +26,7 @@ Useful console commands:
 
 - `vs_status` — current health, score, remaining pickups, and active-script count
 - `vs_restart` — tear down and recreate the complete demo deterministically
+- `vs_reload` — hot-reload the five scripts into the running demo, keeping its state (see below)
 - `vs_help` — show controls in the console
 
 Module load is intentionally fail-fast. All five scripts must exist and compile, and all eleven script instances must
@@ -36,6 +37,23 @@ File paths use forward slashes on every platform, matching the AngelScript build
 This load, spawn and rollback path lives in `Source/Core/VisualScriptDemoWorld.cpp`, which the module shell calls from
 `OnLoad` and `vs_restart`. `Tests/TestMOD390VisualScriptDiagnosticsReal.cpp` (the `VisualScriptDiagnostics_*` tests)
 runs that file against a real `World` and `AngelScriptEngine`.
+
+## Hot reload
+
+Edit a graph, regenerate its `.as` (above), copy it into the script root the module loaded from (the load log names
+it: `Validated 5 visual scripts from <root>`; a build runs the copy staged beside the executable), then run
+`vs_reload`. `DemoWorld::ReloadScripts()` re-reads all five files and validates them exactly as a load does (compile,
+declared class, one `selfEntity` placeholder) before it touches the running demo. Any failure prints the
+`<file>:<line>` diagnostic and changes nothing, including scripts validated before the broken one. It then recompiles
+each entity's per-entity module from its re-bound source through `AngelScriptEngine::HotReloadModuleFromSource()`.
+Script fields carry over by the engine's hot-reload state rules (same name and type keep their value; see
+`wiki/subsystems/Scripting-with-AngelScript.md`), `Start()` does not run again, and the ECS state the scripts own
+(positions, health, the score kept in the game manager's health) is untouched. The command prints, per class, how
+many instances reloaded and how many fields were carried, defaulted (new) or dropped (removed or retyped). A new
+constructor that faults leaves that one entity without a script and is reported; `vs_restart` recovers.
+A later `vs_restart` uses the reloaded sources. `Tests/TestMOD390VisualScriptHotReloadReal.cpp` (the
+`VisualScriptHotReload_*` tests) reloads mid-game and plays on to the win, applies an edited speed constant, and
+rejects a compile error, a lost placeholder and a renamed class.
 
 `Tests/TestMOD390VisualScriptGameplayReal.cpp` (the `VisualScriptGameplay_*` tests) plays the shipped scripts headless.
 It holds W/A/S/D through a real `InputManager` in the injected `EngineContext`, where the scripts' `getKey` reads it,
@@ -88,4 +106,4 @@ with `-DENABLE_ANGELSCRIPT=OFF`.
 
 If support is disabled or the vendored SDK is incomplete, SparkEngine keeps its scripting stub so non-scripted targets
 can still compile. This module then rejects `OnLoad` with a clear diagnostic and does not register `vs_status`,
-`vs_restart`, or `vs_help`; it never reports a partially working visual-script game.
+`vs_restart`, `vs_reload`, or `vs_help`; it never reports a partially working visual-script game.

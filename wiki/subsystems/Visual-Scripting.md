@@ -470,6 +470,16 @@ cp /tmp/vscript/*.vscript GameModules/SparkGameVisualScript/Assets/Graphs/   # c
 
 Then update the SHA-256 values in `GameModules/SparkGameVisualScript/Assets/manifest.json`.
 
+To try an edit in a running demo without a restart, copy the regenerated `.as` into the script root the module
+loaded from and run `vs_reload`. The demo compiles one module per entity from in-memory source (its `selfEntity`
+placeholder bound to the entity id), so it reloads through `AngelScriptEngine::HotReloadModuleFromSource()`, the
+in-memory counterpart of `HotReloadModule()` with the same state rules R1-R8
+([Scripting with AngelScript](Scripting-with-AngelScript.md), "Hot-reload state rules"). All five files are
+validated first; a compile error, a missing class or a lost placeholder rejects the reload with a `<file>:<line>`
+diagnostic and leaves every script as it was. Score, health and positions live in ECS components and are untouched;
+script fields of the same name and type carry over. `VisualScriptHotReload_*`
+(`Tests/TestMOD390VisualScriptHotReloadReal.cpp`) covers it.
+
 `VisualScriptRuntime_*` (`Tests/TestENG200VisualScriptRuntimeReal.cpp`, CTest `VisualScriptRuntimePackagedLoop`)
 covers the path from graph to packaged game in-process. It compiles the five graphs, has `GamePackager` lay the scripts
 out as a package next to the `manifest.json` and `spark.modules.json` markers, and launches from an unrelated working

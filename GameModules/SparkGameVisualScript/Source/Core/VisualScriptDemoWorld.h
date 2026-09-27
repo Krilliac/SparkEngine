@@ -62,6 +62,25 @@ namespace Spark::VisualScriptDemo
          */
         bool Spawn();
 
+        /**
+         * @brief Hot-reload the five scripts from GetScriptRoot() into the running demo, keeping entity state.
+         *
+         * Re-reads and validates every manifest file exactly as LoadScripts()
+         * does (compile, declared class, one selfEntity placeholder) before any
+         * live module is touched; any failure returns false with a "<file>:<line>"
+         * diagnostic in GetLastError() and changes nothing. Then each spawned
+         * entity's per-entity module is recompiled from its bound new source with
+         * AngelScriptEngine::HotReloadModuleFromSource(): fields carry across by
+         * the engine's hot-reload state rules, Start() is not re-run, and a later
+         * Spawn() uses the new sources. A new constructor that faults leaves that
+         * entity without a script (engine rule R8); the others still reload and
+         * the call returns false naming it. Game thread only.
+         */
+        bool ReloadScripts();
+
+        /// Per-class carried/defaulted/dropped field counts and notes from the last ReloadScripts() that validated.
+        const std::string& GetReloadSummary() const { return m_reloadSummary; }
+
         /// Detach and destroy every entity this builder created (reverse creation order), kit props included.
         void DestroyEntities();
 
@@ -78,6 +97,9 @@ namespace Spark::VisualScriptDemo
         const std::string& GetLastError() const { return m_lastError; }
 
       private:
+        /// Read, compile and check every manifest file under @p root; fills @p sources by class name.
+        bool ReadAndValidateScripts(const std::filesystem::path& root,
+                                    std::unordered_map<std::string, std::string>& sources);
         bool AttachScript(EntityID entity, const std::string& className);
         void PlaceKitProps();
         void Fail(const std::string& message);
@@ -89,5 +111,6 @@ namespace Spark::VisualScriptDemo
         std::vector<EntityID> m_entities;
         std::vector<EntityID> m_kitProps;
         std::string m_lastError;
+        std::string m_reloadSummary;
     };
 } // namespace Spark::VisualScriptDemo
