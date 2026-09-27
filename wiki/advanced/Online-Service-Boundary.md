@@ -200,6 +200,7 @@ surface plus this page, the Online Services page, and `docs/site/readiness.json`
 - [Networking](../subsystems/Networking.md)
 - [Dedicated Server](../subsystems/Dedicated-Server.md)
 - [Daemon Services Architecture](Daemon-Services-Architecture.md)
+- [Server Operations Runbook](Server-Operations-Runbook.md)
 
 ## Source & Freshness
 

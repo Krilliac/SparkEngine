@@ -4165,7 +4165,7 @@ if(Python3_Interpreter_FOUND)
         NAME ServerRecoveryDrill_Harness
         COMMAND ${Python3_EXECUTABLE} -B
             ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_recovery_drill.py
-            ConfigTests SummaryTests HarnessTests)
+            ConfigTests SummaryTests HarnessTests RunbookParityTests)
     set_tests_properties(ServerRecoveryDrill_Harness PROPERTIES
         LABELS "ops;server;unit;python"
         TIMEOUT 120)

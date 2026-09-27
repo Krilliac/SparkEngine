@@ -11,6 +11,12 @@ come back without ticking, keep its health file changing after it was killed,
 skip the draining snapshot, or exit non-zero -- proving each failure mode
 fails the drill and that a well-behaved server passes.
 
+RunbookParityTests keep wiki/advanced/Server-Operations-Runbook.md honest:
+every SparkServer flag it shows must be in ServerApplication.cpp's usage text,
+every tools/ops command must use that script's own flags, every
+SparkOrchestrator command must be in its usage text, and every cited path and
+page link must exist.
+
 ServerRecoveryDrillProcess drills the real SparkServer with the SparkGame
 module when CTest supplies SPARK_SERVER and SPARK_SERVER_MODULE (CTest
 Server_RecoveryDrill, label recovery-drill). SPARK_SERVER_DRILL_SUMMARY keeps
@@ -23,6 +29,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -257,6 +264,93 @@ class HarnessTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
             self.assertEqual(drill_tool.main(["--server", str(server), "--module", str(self.module)]), 1)
         self.assertIn("is not a file", stderr.getvalue())
+
+
+RUNBOOK = REPO_ROOT / "wiki" / "advanced" / "Server-Operations-Runbook.md"
+SERVER_USAGE_SOURCE = REPO_ROOT / "SparkServer" / "src" / "ServerApplication.cpp"
+ORCHESTRATOR_USAGE_SOURCE = REPO_ROOT / "SparkDaemon" / "src" / "OrchestratorMain.cpp"
+FLAG_RE = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]*")
+REPO_PATH_RE = re.compile(r"\b(?:SparkServer|SparkDaemon|GameModules|tools|Tests|docs)/[\w./-]*\w\.(?:py|cpp|h|md|json)\b")
+
+
+def _runbook_commands(text: str) -> list[str]:
+    """Every code-block line and inline code span in the runbook."""
+    commands: list[str] = []
+    in_block = False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            in_block = not in_block
+        elif in_block:
+            commands.append(line.strip())
+        else:
+            commands.extend(span.strip() for span in re.findall(r"`([^`]+)`", line))
+    return [command for command in commands if command]
+
+
+def _script_flags(script: Path) -> set[str]:
+    return set(re.findall(r"add_argument\(\s*\"(--[a-z0-9-]+)\"", script.read_text(encoding="utf-8")))
+
+
+class RunbookParityTests(unittest.TestCase):
+    """wiki/advanced/Server-Operations-Runbook.md may only cite operator surfaces that exist."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = RUNBOOK.read_text(encoding="utf-8")
+        cls.commands = _runbook_commands(cls.text)
+        usage = SERVER_USAGE_SOURCE.read_text(encoding="utf-8")
+        cls.server_flags = set(re.findall(r"^\s*\"\s+(--[a-z][a-z0-9-]*)", usage, re.MULTILINE))
+        orchestrator = ORCHESTRATOR_USAGE_SOURCE.read_text(encoding="utf-8")
+        usage_text = orchestrator[orchestrator.index("void PrintUsage()"):orchestrator.index("} // namespace")]
+        cls.orchestrator_commands = set(re.findall(r"\b[a-z][a-z-]+\b", usage_text))
+
+    def test_server_usage_is_parsed(self) -> None:
+        self.assertTrue({"--module", "--health-file", "--stop-file", "--version"} <= self.server_flags,
+                        self.server_flags)
+
+    def test_sparkserver_flags_exist(self) -> None:
+        server_commands = [command for command in self.commands if command.split()[0] == "SparkServer"]
+        self.assertGreaterEqual(len(server_commands), 3, "runbook no longer shows SparkServer invocations")
+        for command in server_commands:
+            with self.subTest(command=command):
+                self.assertLessEqual(set(FLAG_RE.findall(command)), self.server_flags)
+
+    def test_script_commands_use_existing_flags(self) -> None:
+        checked = 0
+        for command in self.commands:
+            match = re.search(r"\btools/ops/\w+\.py\b", command)
+            if not match or not FLAG_RE.search(command):
+                continue
+            script = REPO_ROOT / match.group(0)
+            with self.subTest(command=command):
+                self.assertTrue(script.is_file(), script)
+                self.assertLessEqual(set(FLAG_RE.findall(command)), _script_flags(script))
+                checked += 1
+        self.assertGreaterEqual(checked, 4, "runbook no longer shows drill commands")
+
+    def test_bare_flags_belong_to_the_server_or_the_drill(self) -> None:
+        known = self.server_flags | _script_flags(TOOL_DIR / "server_recovery_drill.py")
+        for command in self.commands:
+            if FLAG_RE.fullmatch(command.split()[0]):
+                with self.subTest(command=command):
+                    self.assertIn(command.split()[0], known)
+
+    def test_orchestrator_commands_exist(self) -> None:
+        orchestrator_commands = [command for command in self.commands if command.startswith("SparkOrchestrator ")]
+        self.assertGreaterEqual(len(orchestrator_commands), 3, "runbook no longer shows SparkOrchestrator commands")
+        for command in orchestrator_commands:
+            with self.subTest(command=command):
+                self.assertIn(command.split()[1], self.orchestrator_commands)
+
+    def test_cited_paths_and_links_exist(self) -> None:
+        cited = set(REPO_PATH_RE.findall(self.text))
+        self.assertIn("tools/ops/server_recovery_drill.py", cited)
+        for path in sorted(cited):
+            with self.subTest(path=path):
+                self.assertTrue((REPO_ROOT / path).is_file(), path)
+        for link in re.findall(r"\]\(([^)#]+\.md)\)", self.text):
+            with self.subTest(link=link):
+                self.assertTrue((RUNBOOK.parent / link).is_file(), link)
 
 
 class ServerRecoveryDrillProcess(unittest.TestCase):

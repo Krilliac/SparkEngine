@@ -211,6 +211,7 @@
 - [GPU/CPU Separation Plan](advanced/GPU-CPU-Separation-Plan.md)
 - [Daemon Services Architecture](advanced/Daemon-Services-Architecture.md)
 - [Online Service Boundary](advanced/Online-Service-Boundary.md)
+- [Server Operations Runbook](advanced/Server-Operations-Runbook.md)
 - [Reflection & Polymorphism Refactoring Plan](advanced/Reflection-Polymorphism-Refactoring-Plan.md)
 - [SparkBuild In-Tree](advanced/SparkBuild-In-Tree.md)
 - [Wine No-JobSystem Breakthrough](advanced/Wine-No-JobSystem-Breakthrough.md)
