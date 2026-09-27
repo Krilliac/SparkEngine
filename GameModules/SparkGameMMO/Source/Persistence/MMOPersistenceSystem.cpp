@@ -84,7 +84,9 @@ namespace MMO
             const char* last = text.data() + text.size();
             const auto [ptr, ec] = std::from_chars(text.data(), last, value);
             if (text.empty() || ec != std::errc() || ptr != last)
+            {
                 return std::nullopt;
+            }
             return value;
         }
 
@@ -95,7 +97,9 @@ namespace MMO
                 size_t used = 0;
                 const float value = std::stof(text, &used);
                 if (used != text.size() || !std::isfinite(value))
+                {
                     return std::nullopt;
+                }
                 return value;
             }
             catch (const std::exception&)
@@ -110,7 +114,9 @@ namespace MMO
             std::istringstream stream(text);
             std::string part;
             while (std::getline(stream, part, separator))
+            {
                 parts.push_back(part);
+            }
             return parts;
         }
 
@@ -118,7 +124,9 @@ namespace MMO
         const std::string* FirstString(const QueryResult& result)
         {
             if (!result.success || result.rows.empty() || result.rows[0].columns.empty())
+            {
                 return nullptr;
+            }
             return std::get_if<std::string>(&result.rows[0].columns[0]);
         }
 
@@ -129,7 +137,9 @@ namespace MMO
             // InsertCharacter quotes only the leading name token.
             const std::vector<std::string> tokens = Split(UnquoteStoredString(stored), '|');
             if (tokens.size() < 14)
+            {
                 return false;
+            }
             try
             {
                 out.name = UnquoteStoredString(tokens[0]);
@@ -137,7 +147,9 @@ namespace MMO
                 // accept legacy 14-field records written by earlier builds.
                 const size_t valueOffset = tokens.size() >= 15 ? 2 : 1;
                 if (tokens.size() >= 15)
+                {
                     out.accountId = static_cast<uint32_t>(std::stoul(tokens[1]));
+                }
                 out.level = std::stoi(tokens[valueOffset]);
                 out.xp = std::stoi(tokens[valueOffset + 1]);
                 out.areaId = static_cast<uint32_t>(std::stoul(tokens[valueOffset + 2]));
@@ -169,7 +181,9 @@ namespace MMO
             {
                 const ItemStack& slot = inv.slots[i];
                 if (slot.IsEmpty())
+                {
                     continue;
+                }
                 text += std::format("{}{}:{}:{}", first ? "" : ",", i, slot.itemDefId, slot.count);
                 first = false;
             }
@@ -180,33 +194,45 @@ namespace MMO
         {
             const std::vector<std::string> fields = Split(text, '|');
             if ((fields.size() != 4 && fields.size() != 5) || fields[0] != "1")
+            {
                 return false;
+            }
             const auto maxSlots = ParseInteger<int>(fields[1]);
             const auto maxWeight = ParseFiniteFloat(fields[2]);
             const auto slotCount = ParseInteger<int>(fields[3]);
             if (!maxSlots || *maxSlots < 0 || *maxSlots > kMaxInventorySlots || !maxWeight || !slotCount ||
                 *slotCount < 0 || *slotCount > kMaxInventorySlots)
+            {
                 return false;
+            }
 
             out.maxSlots = *maxSlots;
             out.maxWeight = *maxWeight;
             out.slots.assign(static_cast<size_t>(*slotCount), ItemStack{});
             if (fields.size() == 4)
+            {
                 return true;
+            }
             for (const std::string& entry : Split(fields[4], ','))
             {
                 const std::vector<std::string> parts = Split(entry, ':');
                 if (parts.size() != 3)
+                {
                     return false;
+                }
                 const auto index = ParseInteger<int>(parts[0]);
                 const auto itemDefId = ParseInteger<uint32_t>(parts[1]);
                 const auto count = ParseInteger<int>(parts[2]);
                 if (!index || *index < 0 || *index >= *slotCount || !itemDefId || *itemDefId == 0 || !count ||
                     *count <= 0)
+                {
                     return false;
+                }
                 ItemStack& slot = out.slots[static_cast<size_t>(*index)];
                 if (!slot.IsEmpty())
+                {
                     return false; // the same slot listed twice
+                }
                 slot.itemDefId = *itemDefId;
                 slot.count = *count;
             }
@@ -229,11 +255,15 @@ namespace MMO
             {
                 const auto value = ParseInteger<int64_t>(piece);
                 if (!value)
+                {
                     return std::nullopt;
+                }
                 params.push_back(MakeInt(*value));
             }
             if (params.size() == 1)
+            {
                 return std::nullopt;
+            }
             return params;
         }
     } // namespace
@@ -245,7 +275,9 @@ namespace MMO
     bool MMOPersistenceSystem::Initialize(Spark::IEngineContext* context, const std::string& dbPath)
     {
         if (m_initialized || m_db)
+        {
             Shutdown();
+        }
 
         m_context = context;
         m_db = std::make_unique<AsyncDatabasePool>();
@@ -289,14 +321,18 @@ namespace MMO
     void MMOPersistenceSystem::Update(float dt)
     {
         if (!m_initialized || !m_db)
+        {
             return;
+        }
 
         // Process async callback results
         m_db->ProcessCallbacks();
 
         // Auto-save timer (module is responsible for triggering the actual save)
         if (dt > 0.0f)
+        {
             m_autoSaveTimer -= dt;
+        }
     }
 
     void MMOPersistenceSystem::RegisterPreparedStatements()
@@ -392,10 +428,14 @@ namespace MMO
         if (const std::string* stored = FirstString(counter))
         {
             if (const auto value = ParseInteger<uint64_t>(*stored))
+            {
                 next = std::max(next, *value);
+            }
             else
+            {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt character ID counter '%s'",
                                 stored->c_str());
+            }
         }
 
         const QueryResult keys = m_db->SyncQuery(Sid(MMOStmtId::ListCharacters));
@@ -403,9 +443,13 @@ namespace MMO
         {
             const std::string* key = row.columns.empty() ? nullptr : std::get_if<std::string>(&row.columns[0]);
             if (!key || !key->starts_with("character_"))
+            {
                 continue;
+            }
             if (const auto id = ParseInteger<uint32_t>(std::string_view(*key).substr(10)))
+            {
                 next = std::max<uint64_t>(next, uint64_t{*id} + 1);
+            }
         }
         m_nextCharacterId = next;
     }
@@ -417,7 +461,9 @@ namespace MMO
     uint32_t MMOPersistenceSystem::AllocateCharacterId()
     {
         if (!m_initialized)
+        {
             return 0;
+        }
         if (m_nextCharacterId > std::numeric_limits<uint32_t>::max())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: character ID space exhausted");
@@ -444,7 +490,9 @@ namespace MMO
     {
         const uint32_t charId = AllocateCharacterId();
         if (charId == 0)
+        {
             return 0;
+        }
 
         auto result =
             m_db->SyncQuery(Sid(MMOStmtId::InsertCharacter), {MakeInt(charId), MakeString(name), MakeInt(accountId)});
@@ -460,12 +508,16 @@ namespace MMO
     bool MMOPersistenceSystem::LoadCharacter(uint32_t characterId, CharacterSaveData& outData)
     {
         if (!m_initialized)
+        {
             return false;
+        }
 
         const QueryResult row = m_db->SyncQuery(Sid(MMOStmtId::LoadCharacter), {MakeInt(characterId)});
         const std::string* stored = FirstString(row);
         if (!stored)
+        {
             return false;
+        }
 
         outData.characterId = characterId;
         if (!ParseCharacterRecord(*stored, outData))
@@ -478,7 +530,9 @@ namespace MMO
         // A corrupt inventory fails the load: entering the world with an empty
         // bag would let the next save overwrite the stored items.
         if (!LoadInventory(characterId, outData.inventory))
+        {
             return false;
+        }
         LoadReputationState(characterId, outData.reputationState);
         LoadAchievementState(characterId, outData.achievementState);
         LoadCraftingState(characterId, outData.craftingState);
@@ -515,7 +569,9 @@ namespace MMO
     void MMOPersistenceSystem::SaveCharacterAsync(const CharacterSaveData& data)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // One transaction per save: the character row and its subsystem records
         // commit together (one flush), and the single worker applies saves in order.
@@ -530,7 +586,9 @@ namespace MMO
     bool MMOPersistenceSystem::SaveCharacterSync(const CharacterSaveData& data)
     {
         if (!m_initialized)
+        {
             return false;
+        }
 
         // Queued behind any pending auto-save, so this state is the one that lands last.
         const QueryResult result = m_db->AsyncTransaction(BuildCharacterSave(data)).get();
@@ -553,7 +611,9 @@ namespace MMO
         {
             const std::string* key = row.columns.empty() ? nullptr : std::get_if<std::string>(&row.columns[0]);
             if (!key || !key->starts_with(prefix))
+            {
                 continue;
+            }
             auto params = KeySuffixParams(charId, key->substr(prefix.size()));
             if (!params)
             {
@@ -569,7 +629,9 @@ namespace MMO
     {
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Deleting character from persistence: ID %u", characterId);
         if (!m_initialized)
+        {
             return false;
+        }
 
         // A read queued behind every pending save: once it completes, no earlier
         // save can still create keys after the key scan below.
@@ -595,22 +657,30 @@ namespace MMO
     {
         std::vector<std::pair<uint32_t, std::string>> result;
         if (!m_initialized || accountId == 0)
+        {
             return result;
+        }
 
         const QueryResult keys = m_db->SyncQuery(Sid(MMOStmtId::ListCharacters));
         for (const auto& row : keys.rows)
         {
             const std::string* key = row.columns.empty() ? nullptr : std::get_if<std::string>(&row.columns[0]);
             if (!key || !key->starts_with("character_"))
+            {
                 continue;
+            }
             const auto charId = ParseInteger<uint32_t>(std::string_view(*key).substr(10));
             if (!charId)
+            {
                 continue;
+            }
             const QueryResult stored = m_db->SyncQuery(Sid(MMOStmtId::LoadCharacter), {MakeInt(*charId)});
             const std::string* text = FirstString(stored);
             CharacterSaveData record;
             if (text && ParseCharacterRecord(*text, record) && record.accountId == accountId)
+            {
                 result.emplace_back(*charId, record.name);
+            }
         }
         return result;
     }
@@ -629,7 +699,9 @@ namespace MMO
     {
         const QueryResult record = m_db->SyncQuery(Sid(MMOStmtId::LoadInventory), {MakeInt(charId)});
         if (!record.success)
+        {
             return false;
+        }
         if (!record.rows.empty())
         {
             const std::string* text = FirstString(record);
@@ -648,9 +720,13 @@ namespace MMO
         if (const std::string* currency = FirstString(currencyRow))
         {
             if (const auto value = ParseInteger<int>(*currency))
+            {
                 inv.currency = *value;
+            }
             else
+            {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt currency for character %u", charId);
+            }
         }
         return true;
     }
@@ -689,9 +765,13 @@ namespace MMO
                                 standing.factionId = factionId;
                                 const auto& val = valResult.rows[0].columns[0];
                                 if (std::holds_alternative<int64_t>(val))
+                                {
                                     standing.reputation = static_cast<int>(std::get<int64_t>(val));
+                                }
                                 else if (std::holds_alternative<std::string>(val))
+                                {
                                     standing.reputation = std::stoi(std::get<std::string>(val));
+                                }
                                 standing.tier = FactionStanding::GetTierForValue(standing.reputation);
                                 state.standings[factionId] = standing;
                             }
@@ -772,7 +852,9 @@ namespace MMO
                         {
                             const auto& val = valResult.rows[0].columns[0];
                             if (std::holds_alternative<int64_t>(val))
+                            {
                                 state.stats[statKey] = static_cast<int>(std::get<int64_t>(val));
+                            }
                             else if (std::holds_alternative<std::string>(val))
                             {
                                 try
@@ -818,10 +900,14 @@ namespace MMO
             {
                 const std::string* key = row.columns.empty() ? nullptr : std::get_if<std::string>(&row.columns[0]);
                 if (!key || !key->starts_with(prefix))
+                {
                     continue;
+                }
                 const auto discKey = ParseInteger<int>(std::string_view(*key).substr(prefix.size()));
                 if (!discKey)
+                {
                     continue;
+                }
                 const QueryResult value =
                     m_db->SyncQuery(Sid(MMOStmtId::LoadCraftingSkillValue), {MakeInt(charId), MakeInt(*discKey)});
                 const std::string* text = FirstString(value);
@@ -884,7 +970,9 @@ namespace MMO
         // Key "lockout_<charId>_<dungeonDefId>_<difficulty>", value = seconds remaining
         auto result = m_db->SyncQuery(Sid(MMOStmtId::LoadLockouts), {MakeInt(charId)});
         if (!result.success)
+        {
             return;
+        }
 
         state.lockouts.clear();
         const std::string prefix = "lockout_" + std::to_string(charId) + "_";
@@ -892,12 +980,16 @@ namespace MMO
         {
             const std::string* key = row.columns.empty() ? nullptr : std::get_if<std::string>(&row.columns[0]);
             if (!key || !key->starts_with(prefix))
+            {
                 continue;
+            }
             const std::vector<std::string> parts = Split(key->substr(prefix.size()), '_');
             const auto dungeonDefId = parts.size() == 2 ? ParseInteger<uint32_t>(parts[0]) : std::nullopt;
             const auto difficulty = parts.size() == 2 ? ParseInteger<int>(parts[1]) : std::nullopt;
             if (!dungeonDefId || !difficulty)
+            {
                 continue;
+            }
             const QueryResult value = m_db->SyncQuery(Sid(MMOStmtId::LoadLockoutValue),
                                                       {MakeInt(charId), MakeInt(*dungeonDefId), MakeInt(*difficulty)});
             const std::string* text = FirstString(value);
@@ -924,7 +1016,9 @@ namespace MMO
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Saving world data: %zu guilds, %zu boss kills", data.guilds.size(),
                         data.bossKillHistory.size());
         if (!m_initialized)
+        {
             return;
+        }
 
         // Save guilds
         for (const auto& guild : data.guilds)
@@ -956,7 +1050,9 @@ namespace MMO
     bool MMOPersistenceSystem::LoadWorld(WorldSaveData& outData)
     {
         if (!m_initialized)
+        {
             return false;
+        }
 
         // Load guilds
         auto guildResult = m_db->SyncQuery(Sid(MMOStmtId::LoadGuilds));
@@ -1009,7 +1105,9 @@ namespace MMO
             ImGui::Text("Pending Writes: %d", GetPendingWrites());
             ImGui::Text("Auto-save: %.0fs interval (%.0fs until next)", m_autoSaveInterval, m_autoSaveTimer);
             if (m_db)
+            {
                 ImGui::Text("DB Pool Size: %d", m_db->GetPoolSize());
+            }
             ImGui::TreePop();
         }
 #endif
