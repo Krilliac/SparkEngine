@@ -193,6 +193,9 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
 
     console.LogSuccess("Collab server running. Waiting for editors to connect...");
     std::cout << "Server started successfully." << std::endl;
+    // The join code is a secret: it goes to the operator's terminal only, never to the
+    // console log sink. Editors must enter it to join.
+    std::cout << "Join code: " << session.GetJoinCode() << std::endl;
 
     // Headless main loop — just tick the session at 10 Hz
     while (g_collabServerRunning.load(std::memory_order_acquire))

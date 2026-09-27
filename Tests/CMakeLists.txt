@@ -2600,6 +2600,17 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND TARG
     endforeach()
 endif()
 
+# SEC2: legacy peer-hosted collaboration — join-code authentication, frame/queue/
+# connection bounds and handshake deadlines. Hosting is a hard precondition in these
+# tests, so --empty-is-error plus the pinned count keep a hosting regression (or a
+# dropped test) from reading as a pass.
+add_test(NAME CollaborativeEditingSecurity COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(CollaborativeEditingSecurity PROPERTIES
+    ENVIRONMENT "SPARK_TEST_FILE=TestCollaborativeEditing.cpp;SPARK_TEST_EXPECT_COUNT=33"
+    LABELS "editor;collaboration;network;security"
+    RUN_SERIAL TRUE
+    TIMEOUT 180)
+
 # HEAD-220: NullRHIDevice live-resource accounting follows resource lifetime
 # (leak/soak signal for packaged headless runs).
 add_test(NAME NullRHIResourceLifetime COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)

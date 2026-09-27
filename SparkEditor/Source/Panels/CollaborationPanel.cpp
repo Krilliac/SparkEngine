@@ -107,6 +107,14 @@ namespace SparkEditor
             {
                 ImGui::SameLine();
                 ImGui::Text("on port %u", m_collabSession->GetPort());
+
+                // Collaborators need this code to join; share it out of band.
+                ImGui::Text("Join code:");
+                ImGui::SameLine();
+                ImGui::TextUnformatted(m_collabSession->GetJoinCode().c_str());
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Copy"))
+                    ImGui::SetClipboardText(m_collabSession->GetJoinCode().c_str());
             }
             else
             {
@@ -187,11 +195,17 @@ namespace SparkEditor
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(150.0f);
                 ImGui::InputText("##Address", m_hostAddressBuffer, sizeof(m_hostAddressBuffer));
+                ImGui::Text("Join code:");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(420.0f);
+                ImGui::InputText("##JoinCode", m_joinCodeBuffer, sizeof(m_joinCodeBuffer),
+                                 ImGuiInputTextFlags_Password);
                 ImGui::SameLine();
                 if (ImGui::Button("Join Peer Session"))
                 {
                     const auto port = static_cast<uint16_t>(m_portValue);
-                    if (m_collabSession && m_collabSession->Connect(m_hostAddressBuffer, port, m_userNameBuffer))
+                    if (m_collabSession &&
+                        m_collabSession->Connect(m_hostAddressBuffer, port, m_userNameBuffer, m_joinCodeBuffer))
                         m_statusMessage = "Connected to peer at " + std::string(m_hostAddressBuffer) + ".";
                     else
                         m_statusMessage = "Failed to join peer session.";
