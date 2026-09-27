@@ -1994,7 +1994,7 @@ Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
    - The parser rejects D3D11 device records, but repository-content isolation is not asserted. There is no clean-host run.
 3. **[unmet]** FPS lifecycle, save/reload, shutdown, and recovery are bounded and sanitizer-clean
    - Evidence: `docs/platform/LINUX-SUPPORT-EVIDENCE.md`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/TestHEAD220NullRHILifetimeReal.cpp`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`, `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, `Tests/CMakeLists.txt`, `wiki/subsystems/Dedicated-Server.md`
-   - Linux precursor (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; 600 s Soak_FPSHeadlessNullRHI meets its RSS slope ceiling. live=0 guards only bridge/device teardown; LSan misses ModuleManager-held heap. HeadlessSaveReload_FPSNullRHI now covers save/reload across two fresh processes. Missing: Windows FPSHeadlessPackage_* and Windows sanitizer/soak.
+   - Linux precursor (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; 600 s Soak_FPSHeadlessNullRHI meets its RSS slope ceiling. live=0 guards only bridge/device teardown; LSan misses ModuleManager-held heap. HeadlessSaveReload_FPSNullRHI now covers save/reload across two fresh processes. Missing: Windows runs of registered FPSHeadlessPackage_*, sanitizer, soak.
 4. **[unmet]** Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110
    - Evidence: `Tests/Tools/test_site_data_contract.py`
    - The contract checks OPS-110 wording only. Nothing asserts that HEAD-220 excludes these concerns or that G12 owns them.

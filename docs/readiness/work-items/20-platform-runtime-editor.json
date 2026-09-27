@@ -1507,7 +1507,7 @@
             "Tests/CMakeLists.txt",
             "wiki/subsystems/Dedicated-Server.md"
           ],
-          "note": "Linux precursor (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; 600 s Soak_FPSHeadlessNullRHI meets its RSS slope ceiling. live=0 guards only bridge/device teardown; LSan misses ModuleManager-held heap. HeadlessSaveReload_FPSNullRHI now covers save/reload across two fresh processes. Missing: Windows FPSHeadlessPackage_* and Windows sanitizer/soak."
+          "note": "Linux precursor (LINUX-SUPPORT-EVIDENCE.md 6.2): nullrhi-headless passes local ASan/UBSan/LSan and TSan; 600 s Soak_FPSHeadlessNullRHI meets its RSS slope ceiling. live=0 guards only bridge/device teardown; LSan misses ModuleManager-held heap. HeadlessSaveReload_FPSNullRHI now covers save/reload across two fresh processes. Missing: Windows runs of registered FPSHeadlessPackage_*, sanitizer, soak."
         },
         {
           "criterionDigest": "sha256:e6a39adf789f",
@@ -1564,9 +1564,7 @@
         "headless-windows-package",
         "headless-windows-soak"
       ],
-      "plannedTestSelectors": [
-        "FPSHeadlessPackage_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "LIFE-200",
