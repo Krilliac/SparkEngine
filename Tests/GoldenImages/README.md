@@ -30,16 +30,17 @@ Committed baselines:
   `Tests/TestRHI240OpenGLGoldenReal.cpp` (RHI-240). Only CTest
   `SparkOpenGLGoldenTests` compares them (the main `SparkEngineTests` entry
   excludes `OpenGLGolden_`), and a hosted-runner match is not yet recorded.
-
-Both Linux rows are compared in CI only by the required `golden-linux`
-job in `.github/workflows/build.yml`. It fails first if the runner's
-`libgl1-mesa-dri` or `mesa-vulkan-drivers` is not `25.2.8-0ubuntu0.24.04.2`,
-and then runs `ctest -L '^(opengl-golden|vulkan-golden)$'`.
-`build-linux-gcc` and `build-linux-clang` exclude both golden CTest
-entries. If Ubuntu moves Mesa, re-render and re-review the baselines as
-described below.
   They are software-row shader evidence, not engine-pass goldens or
   hardware driver certification.
+
+Both Linux rows are compared in `.github/workflows/build.yml` CI only by the
+`golden-linux` job. It is advisory (not a `required-ci-gate` dependency) until
+its first hosted pass, and becomes required after that pass is recorded. It
+fails first if the runner's `libgl1-mesa-dri` or `mesa-vulkan-drivers` is not
+`25.2.8-0ubuntu0.24.04.2`, and then runs
+`ctest -L '^(opengl-golden|vulkan-golden)$'`. `build-linux-gcc` and
+`build-linux-clang` exclude both golden CTest entries. If Ubuntu moves Mesa,
+re-render and re-review the baselines as described below.
 
 The `d3d11-warp` and `d3d11-hw` rows have no entries, so their comparisons
 fail closed. D3D11 baselines land with the RHI-210 golden slices, each

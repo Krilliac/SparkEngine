@@ -68,7 +68,6 @@ REQUIRED_CI_JOBS = (
     "aggregate-test-stats",
     "module-evidence",
     "network-security",
-    "golden-linux",
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
 MINGW_WINE_JOB = "build-linux-mingw-wine"
@@ -1970,10 +1969,19 @@ GOLDEN_LINUX_TESTS = {"SparkOpenGLGoldenTests": "opengl-golden", "VulkanGoldenTe
 GOLDEN_LINUX_LABEL_SELECTOR = "-L '^(opengl-golden|vulkan-golden)$'"
 GOLDEN_LINUX_EXCLUDE = "--exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'"
 GOLDEN_MANIFEST = REPO_ROOT / "Tests" / "GoldenImages" / "manifest.json"
+# golden-linux stays advisory until its first hosted pass (CI-110 lane spec).
+# Promotion is one deliberate change: flip this to True and add the job to the
+# required-ci-gate needs, EXPECTED_REQUIRED_JOBS_JSON and REQUIRED_CI_JOBS.
+GOLDEN_LINUX_REQUIRED = False
 
 
 def golden_linux_errors(document: dict, tests_cmake: str, manifest: dict) -> list[str]:
-    """CI-110: exactly one required, Mesa-pinned lane compares the Linux golden baselines."""
+    """CI-110: exactly one Mesa-pinned lane compares the Linux golden baselines.
+
+    The lane runs unconditionally on every build.yml trigger. Its gate
+    membership must match GOLDEN_LINUX_REQUIRED, so it cannot become required
+    (or stop being required) by accident.
+    """
 
     jobs = document.get("jobs")
     if not isinstance(jobs, dict):
@@ -2042,8 +2050,36 @@ def golden_linux_errors(document: dict, tests_cmake: str, manifest: dict) -> lis
             errors.append(f"{GOLDEN_LINUX_JOB} does not publish its JUnit and diffs on failure (if: always())")
 
     gate = jobs.get("required-ci-gate")
-    if not isinstance(gate, dict) or GOLDEN_LINUX_JOB not in (gate.get("needs") or []):
-        errors.append(f"{GOLDEN_LINUX_JOB} is not a required-ci-gate dependency")
+    if not isinstance(gate, dict):
+        errors.append("required-ci-gate job is missing")
+    else:
+        in_needs = GOLDEN_LINUX_JOB in (gate.get("needs") or [])
+        inventories = [
+            step["env"]["EXPECTED_REQUIRED_JOBS_JSON"]
+            for step in gate.get("steps") or []
+            if isinstance(step, dict)
+            and isinstance(step.get("env"), dict)
+            and isinstance(step["env"].get("EXPECTED_REQUIRED_JOBS_JSON"), str)
+        ]
+        in_inventory = any(GOLDEN_LINUX_JOB in json.loads(inventory) for inventory in inventories)
+        if GOLDEN_LINUX_REQUIRED:
+            if not in_needs:
+                errors.append(f"{GOLDEN_LINUX_JOB} is not a required-ci-gate dependency")
+            if not in_inventory:
+                errors.append(f"{GOLDEN_LINUX_JOB} is not in EXPECTED_REQUIRED_JOBS_JSON")
+        else:
+            if in_needs:
+                errors.append(
+                    f"{GOLDEN_LINUX_JOB} is a required-ci-gate dependency before its first hosted pass"
+                )
+            if in_inventory:
+                errors.append(f"{GOLDEN_LINUX_JOB} is in EXPECTED_REQUIRED_JOBS_JSON before its first hosted pass")
+    if not GOLDEN_LINUX_REQUIRED:
+        for key, job in jobs.items():
+            if key != GOLDEN_LINUX_JOB and isinstance(job, dict):
+                needs = job.get("needs") or []
+                if GOLDEN_LINUX_JOB in ([needs] if isinstance(needs, str) else needs):
+                    errors.append(f"{key} depends on the advisory {GOLDEN_LINUX_JOB} job")
 
     for job_key in ("build-linux-gcc", "build-linux-clang"):
         job = jobs.get(job_key)
@@ -3607,8 +3643,10 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def _golden_inputs(self) -> tuple[dict, dict]:
         return parse_workflow_yaml(self.build), json.loads(GOLDEN_MANIFEST.read_text(encoding="utf-8"))
 
-    def test_golden_linux_is_the_single_required_mesa_pinned_comparison(self) -> None:
-        self.assertIn(GOLDEN_LINUX_JOB, REQUIRED_CI_JOBS)
+    def test_golden_linux_is_the_single_mesa_pinned_comparison(self) -> None:
+        # Advisory until its first hosted pass; promotion flips GOLDEN_LINUX_REQUIRED.
+        self.assertFalse(GOLDEN_LINUX_REQUIRED)
+        self.assertNotIn(GOLDEN_LINUX_JOB, REQUIRED_CI_JOBS)
         document, manifest = self._golden_inputs()
         self.assertEqual(golden_linux_errors(document, self.tests_cmake, manifest), [])
 
@@ -3653,7 +3691,26 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 lambda d: [s.pop("if", None) for s in lane_steps(d) if str(s.get("uses", "")).startswith("actions/upload")],
                 "on failure (if: always())",
             ),
-            (lambda d: d["jobs"]["required-ci-gate"]["needs"].remove(GOLDEN_LINUX_JOB), "required-ci-gate dependency"),
+            (lambda d: d["jobs"][GOLDEN_LINUX_JOB].update({"if": "github.event_name == 'push'"}), "job-level if"),
+            (
+                lambda d: d["jobs"]["required-ci-gate"]["needs"].append(GOLDEN_LINUX_JOB),
+                "required-ci-gate dependency before its first hosted pass",
+            ),
+            (
+                lambda d: [
+                    step["env"].update(
+                        {
+                            "EXPECTED_REQUIRED_JOBS_JSON": json.dumps(
+                                [*REQUIRED_CI_JOBS, GOLDEN_LINUX_JOB], separators=(",", ":")
+                            )
+                        }
+                    )
+                    for step in d["jobs"]["required-ci-gate"]["steps"]
+                    if "EXPECTED_REQUIRED_JOBS_JSON" in (step.get("env") or {})
+                ],
+                "EXPECTED_REQUIRED_JOBS_JSON before its first hosted pass",
+            ),
+            (lambda d: d["jobs"]["module-evidence"].update({"needs": [GOLDEN_LINUX_JOB]}), "depends on the advisory"),
             (lambda d: strip_exclusion(d, "build-linux-gcc"), "build-linux-gcc full ctest"),
             (lambda d: strip_exclusion(d, "build-linux-clang"), "build-linux-clang full ctest"),
         )

@@ -2898,6 +2898,10 @@ jobs:
   # lane that compares them; build-linux-gcc and build-linux-clang exclude the
   # two golden CTest entries. A runner with a different Mesa fails here instead
   # of comparing against a rasterizer nobody reviewed.
+  # Advisory until its first hosted pass: it is deliberately NOT a
+  # required-ci-gate dependency yet. Promote it by adding it to the gate needs,
+  # EXPECTED_REQUIRED_JOBS_JSON and REQUIRED_CI_JOBS and flipping
+  # GOLDEN_LINUX_REQUIRED in .github/scripts/test-workflow-failure-propagation.py.
   # ===========================================================================
   golden-linux:
     runs-on: ubuntu-24.04
@@ -4551,7 +4555,6 @@ jobs:
       - aggregate-test-stats
       - module-evidence
       - network-security
-      - golden-linux
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -4561,7 +4564,7 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","golden-linux"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
 
