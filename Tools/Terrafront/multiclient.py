@@ -15,6 +15,10 @@ though the processes observe at slightly different wall-clock instants. The
 server observes every SERVER_OBSERVE_INTERVAL_S; each client checkpoint is
 paired with the server observation nearest to it in wall-clock time, anchored
 by when each process's -exec clock started (its audit file's first entry).
+QUIET_MARGIN_S is the widest instant spread the comparator accepts (client skew
+plus server pairing gap); every scenario keeps each checkpoint further than
+that from any spawn or walk, and the harness refuses a schedule that does not,
+so an accepted skew can never catch a pawn mid-move and report it as divergence.
 
 A check that stops checking must not pass: a child that exits non-zero, a
 missing or partial audit file, a scripted command that reports ERR, or fewer
@@ -48,6 +52,12 @@ POSITION_TOLERANCE_M = 1.5
 MIN_MOVE_M = 1.0
 MAX_CLIENT_SKEW_S = 2.0
 MAX_SERVER_PAIRING_GAP_S = 1.0
+# A client observes up to MAX_CLIENT_SKEW_S after the other and the server sample
+# may sit MAX_SERVER_PAIRING_GAP_S further out, so a checkpoint must be quiet for
+# longer than both together on each side. MOVE_SETTLE_S covers replication and
+# interpolation after a scripted walk stops.
+QUIET_MARGIN_S = MAX_CLIENT_SKEW_S + MAX_SERVER_PAIRING_GAP_S
+MOVE_SETTLE_S = 0.5
 SERVER_OBSERVE_INTERVAL_S = 0.5
 SERVER_TAIL_S = 30.0
 SERVER_READY_TIMEOUT_S = 60.0
@@ -120,18 +130,42 @@ SCENARIOS = {
             (9.0, "tf_enter 0"),
             (10.5, "tf_faction {faction}"),
             (11.5, "tf_spawn"),
-            (18.0, "tf_walk 1 0 2"),
-            (28.0, "tf_walk 0 1 2"),
+            (20.5, "tf_walk 1 0 2"),
+            (30.5, "tf_walk 0 1 2"),
         ),
-        checkpoints=(17.0, 25.0, 35.0),
+        checkpoints=(17.0, 27.0, 37.0),
         moves=((0, 1), (1, 2)),
-        client_seconds=38.0,
+        client_seconds=40.0,
     ),
 }
 
 
 class HarnessError(RuntimeError):
     pass
+
+
+def motion_windows(scenario: Scenario) -> list[tuple[float, float]]:
+    """Client-clock intervals in which a pawn appears or moves: each spawn and each walk plus its settle time."""
+    windows = []
+    for at, template in scenario.client_steps:
+        verb, *arguments = template.split()
+        if verb == "tf_spawn":
+            windows.append((at, at + MOVE_SETTLE_S))
+        elif verb == "tf_walk":
+            windows.append((at, at + float(arguments[2]) + MOVE_SETTLE_S))
+    return windows
+
+
+def quiet_window_violations(scenario: Scenario) -> list[str]:
+    """Checkpoints closer than QUIET_MARGIN_S to a spawn or walk, which an accepted skew could split."""
+    violations = []
+    for index, checkpoint in enumerate(scenario.checkpoints):
+        for start, end in motion_windows(scenario):
+            gap = max(start - checkpoint, checkpoint - end, 0.0)
+            if gap <= QUIET_MARGIN_S:
+                violations.append(f"{scenario.name}: checkpoint {index} (t={checkpoint}) is {gap:.1f} s from motion "
+                                  f"{start}-{end}; it must be quiet for more than {QUIET_MARGIN_S} s")
+    return violations
 
 
 # --------------------------------------------------------------------------- parsing
@@ -430,6 +464,9 @@ def wait_for_exit(children: list[Child], deadline: float) -> None:
 
 def run(args: argparse.Namespace) -> dict:
     scenario = SCENARIOS[args.scenario]
+    violations = quiet_window_violations(scenario)
+    if violations:
+        raise HarnessError("; ".join(violations))
     workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
     port = free_udp_port()

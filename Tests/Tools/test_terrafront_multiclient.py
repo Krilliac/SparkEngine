@@ -14,7 +14,9 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "Tools" / "Terrafront"))
@@ -24,6 +26,8 @@ import multiclient  # noqa: E402
 SCENARIO = multiclient.SCENARIOS["onboard_spawn_move"]
 SERVER_ANCHOR = 100.0
 CLIENT_ANCHOR = 104.0
+# The player id each client's pawn has on the server, in client order.
+CLIENT_PLAYERS = (2, 1)
 
 # Server-side truth per checkpoint: player -> (faction, class, health, pos).
 TRUTH = [
@@ -51,29 +55,36 @@ def entry(frame: int, seconds: float, command: str, output: list[str], ok: bool 
     return [header, f"    > [exec] frame {frame} (t={seconds:.1f}s): {command}", *output]
 
 
-def truth_at(server_seconds: float) -> dict:
-    """The world the server holds at a server-clock time (quiet windows around each checkpoint)."""
-    wall = SERVER_ANCHOR + server_seconds
-    index = sum(1 for cp in SCENARIO.checkpoints[1:] if wall >= CLIENT_ANCHOR + cp - 4.0)
-    return TRUTH[index]
+def world_at(wall: float, anchors: tuple[float, ...] = (CLIENT_ANCHOR, CLIENT_ANCHOR),
+             scenario: multiclient.Scenario = SCENARIO) -> dict:
+    """The world at a wall-clock time. Each pawn jumps to its next TRUTH position the
+    instant its own client starts a walk (the worst case for a skewed observer)."""
+    walks = [at for at, command in scenario.client_steps if command.startswith("tf_walk")]
+    world = {}
+    for anchor, player in zip(anchors, CLIENT_PLAYERS):
+        world[player] = TRUTH[sum(1 for at in walks if wall >= anchor + at)][player]
+    return world
 
 
-def server_audit(until: float = 70.0) -> str:
+def server_audit(until: float = 70.0, anchors: tuple[float, ...] = (CLIENT_ANCHOR, CLIENT_ANCHOR),
+                 scenario: multiclient.Scenario = SCENARIO) -> str:
     lines = entry(0, 0.0, "tf_status", ["    > [TF] TERRAFRONT role=standalone"])
     lines += entry(15, 0.5, "tf_dedicated 23000", ["    > [TF] dedicated server started on port 23000"])
     at, frame = 1.0, 30
     while at < until:
-        lines += entry(frame, at, "tf_observe", observation("server", 4294967041, truth_at(at)))
+        world = world_at(SERVER_ANCHOR + at, anchors, scenario)
+        lines += entry(frame, at, "tf_observe", observation("server", 4294967041, world))
         at += multiclient.SERVER_OBSERVE_INTERVAL_S
         frame += 15
     return "\n".join(lines) + "\n"
 
 
-def client_audit(self_id: int, views: list[dict | None], ok: bool = True) -> str:
+def client_audit(self_id: int, views: list[dict | None], ok: bool = True,
+                 scenario: multiclient.Scenario = SCENARIO) -> str:
     lines = entry(0, 0.0, "tf_status", ["    > [TF] TERRAFRONT role=standalone"])
     lines += entry(30, 1.0, "tf_connect 127.0.0.1:23000", ["    > [TF] connecting"], ok=ok)
     lines += entry(90, 3.0, "tf_register <arguments-redacted>", ["    > [TF] registration request sent"])
-    for index, (cp, view) in enumerate(zip(SCENARIO.checkpoints, views)):
+    for index, (cp, view) in enumerate(zip(scenario.checkpoints, views)):
         frame = 500 + 100 * index
         lines += entry(frame, cp, "tf_observe", observation("client", self_id, view) if view is not None else [])
     return "\n".join(lines) + "\n"
@@ -85,11 +96,28 @@ def logs(client_views: tuple[list, list] | None = None, server_text: str | None 
     server = multiclient.RoleLog("server", returncodes[0], SERVER_ANCHOR,
                                  multiclient.parse_audit(server_text if server_text is not None else server_audit()))
     clients = []
-    for index, (self_id, faction) in enumerate(((2, "mra"), (1, "auc"))):
+    for index, (self_id, faction) in enumerate(zip(CLIENT_PLAYERS, ("mra", "auc"))):
         text = client_audit(self_id, views[index], ok=client_ok)
         clients.append(multiclient.RoleLog(f"client{index + 1}", returncodes[index + 1], CLIENT_ANCHOR,
                                            multiclient.parse_audit(text), faction))
     return server, clients
+
+
+def skewed_run(scenario: multiclient.Scenario, skew: float) -> dict:
+    """Evaluate a run whose second client's clock started @p skew seconds after the first's.
+
+    Every view is the true world at the instant it was taken, so any problem the
+    comparator reports is a false failure caused by the schedule, not divergence.
+    """
+    anchors = (CLIENT_ANCHOR, CLIENT_ANCHOR + skew)
+    server = multiclient.RoleLog("server", 0, SERVER_ANCHOR,
+                                 multiclient.parse_audit(server_audit(anchors=anchors, scenario=scenario)))
+    clients = []
+    for index, (anchor, self_id, faction) in enumerate(zip(anchors, CLIENT_PLAYERS, ("mra", "auc"))):
+        views = [world_at(anchor + cp, anchors, scenario) for cp in scenario.checkpoints]
+        text = client_audit(self_id, views, scenario=scenario)
+        clients.append(multiclient.RoleLog(f"client{index + 1}", 0, anchor, multiclient.parse_audit(text), faction))
+    return multiclient.evaluate(scenario, server, clients)
 
 
 def moved(view: dict, player: int, dx: float) -> dict:
@@ -190,7 +218,7 @@ class ComparatorTests(unittest.TestCase):
         self.assertIn("0/3 checkpoints converged", summary["problems"])
 
     def test_server_that_stopped_observing_fails(self) -> None:
-        summary = self.evaluate(server_text=server_audit(until=25.0))
+        summary = self.evaluate(server_text=server_audit(until=35.0))
         self.assertFalse(summary["passed"])
         self.assertIn("server: no observation", " ".join(summary["checkpoints"][2]["problems"]))
 
@@ -221,6 +249,36 @@ class ComparatorTests(unittest.TestCase):
         summary = self.evaluate(client_ok=False)
         self.assertFalse(summary["passed"])
         self.assertTrue(any("reported ERR" in p for p in summary["problems"]))
+
+
+class ScheduleTests(unittest.TestCase):
+    # The schedule this harness first shipped: checkpoint 0 one second before a walk.
+    TIGHT = replace(SCENARIO, name="tight", client_steps=(*SCENARIO.client_steps[:-2], (18.0, "tf_walk 1 0 2"),
+                                                          (28.0, "tf_walk 0 1 2")),
+                    checkpoints=(17.0, 25.0, 35.0), client_seconds=38.0)
+
+    def test_every_scenario_keeps_its_checkpoints_quiet(self) -> None:
+        for scenario in multiclient.SCENARIOS.values():
+            self.assertEqual(multiclient.quiet_window_violations(scenario), [])
+
+    def test_largest_accepted_skew_still_converges(self) -> None:
+        summary = skewed_run(SCENARIO, multiclient.MAX_CLIENT_SKEW_S - 0.05)
+        self.assertTrue(summary["passed"], summary["problems"])
+
+    def test_checkpoint_near_a_walk_is_rejected(self) -> None:
+        # RED proof: an accepted skew catches one pawn mid-walk and a correct run
+        # reads as divergence, so a schedule like this must never reach the processes.
+        self.assertIn("position", " ".join(skewed_run(self.TIGHT, 1.5)["checkpoints"][0]["problems"]))
+        violations = multiclient.quiet_window_violations(self.TIGHT)
+        self.assertTrue(any("checkpoint 0" in v for v in violations), violations)
+        with mock.patch.dict(multiclient.SCENARIOS, {"onboard_spawn_move": self.TIGHT}):
+            out = io.StringIO()
+            with tempfile.TemporaryDirectory() as workdir, redirect_stdout(out), redirect_stderr(io.StringIO()):
+                code = multiclient.main(["--engine", sys.executable, "--module", __file__, "--scenario",
+                                         "onboard_spawn_move", "--workdir", workdir])
+                self.assertEqual(list(Path(workdir).iterdir()), [])  # refused before launching anything
+        self.assertEqual(code, 1)
+        self.assertIn("must be quiet for more than", out.getvalue())
 
 
 class ScriptTests(unittest.TestCase):
