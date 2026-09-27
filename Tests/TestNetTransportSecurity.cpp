@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -440,6 +441,53 @@ TEST(NetTransportSec_ClientDetectsSilentServerAndAutoReconnects)
     nm.SetAutoReconnect(NetworkManager::AutoReconnectConfig{});
     nm.Disconnect();
     fakeServer.Close();
+    nm.Shutdown();
+}
+
+// ============================================================================
+// Finding 38: every admission synchronously ran an O(entity-count) full sync,
+// so a burst of unauthenticated connects (or connect/disconnect churn) made one
+// frame walk the whole replicated world once per datagram.
+// ============================================================================
+
+TEST(NetTransportSec_FullEntitySyncsAreBudgetedPerUpdate)
+{
+    auto& nm = FreshManager();
+    ASSERT_TRUE(nm.StartServer(0, 32, NetworkEndpointPolicy::Loopback()));
+    ReplicatedEntity entity;
+    entity.entityType = "SyncProbe";
+    ASSERT_TRUE(nm.RegisterReplicatedEntity(entity) != 0);
+
+    constexpr size_t kPeers = 10;
+    static_assert(kPeers > NetworkManager::kMaxFullSyncsPerUpdate);
+    std::vector<std::unique_ptr<RawPeer>> peers;
+    for (size_t i = 0; i < kPeers; ++i)
+    {
+        peers.push_back(std::make_unique<RawPeer>(nm.GetBoundPort()));
+        ASSERT_TRUE(peers.back()->IsReady());
+        ASSERT_TRUE(peers.back()->Send(BuildWire(MessageType::Connect, ChannelType::Reliable, 1, ConnectPayload())));
+    }
+    // Let every Connect land so one Update admits the whole burst.
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    nm.Update(0.016f);
+
+    ASSERT_EQ(nm.GetClients().size(), kPeers);
+    EXPECT_EQ(nm.GetStats().fullEntitySyncs, static_cast<uint32_t>(NetworkManager::kMaxFullSyncsPerUpdate));
+
+    // The deferred admissions are synced on later Updates; nobody is skipped.
+    EXPECT_TRUE(PumpUntil(nm, [&] { return nm.GetStats().fullEntitySyncs >= kPeers; }));
+    EXPECT_EQ(nm.GetStats().fullEntitySyncs, static_cast<uint32_t>(kPeers));
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    for (const auto& peer : peers)
+    {
+        bool spawned = false;
+        for (const auto& datagram : peer->Drain())
+            spawned = spawned || WireType(datagram) == static_cast<uint16_t>(MessageType::EntitySpawn);
+        EXPECT_TRUE(spawned);
+    }
+
+    peers.clear();
+    nm.StopServer();
     nm.Shutdown();
 }
 

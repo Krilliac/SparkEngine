@@ -676,14 +676,33 @@ namespace Spark::Net
                 std::lock_guard<std::mutex> lock(m_clientsMutex);
                 remainsAdmitted = m_clients.contains(event.senderID);
             }
-            if (!remainsAdmitted)
-                continue;
+            if (remainsAdmitted)
+                m_pendingFullSyncs.push_back(event.senderID);
+        }
+
+        // An initial sync walks every replicated entity and queues two reliable
+        // messages per entity. Admission needs no credentials, so bound that work
+        // per Update: a burst of connects (or connect/disconnect churn) waits its
+        // turn instead of multiplying the full-world walk within one frame.
+        // Removed clients leave the queue in RemoveClientState, and a client
+        // kicked before its turn is skipped without consuming the budget.
+        size_t fullSyncsStarted = 0;
+        while (fullSyncsStarted < kMaxFullSyncsPerUpdate && !m_pendingFullSyncs.empty())
+        {
+            const ClientID target = m_pendingFullSyncs.front();
+            m_pendingFullSyncs.pop_front();
+            {
+                std::lock_guard<std::mutex> lock(m_clientsMutex);
+                if (!m_clients.contains(target))
+                    continue;
+            }
+            ++fullSyncsStarted;
 
             // SendFullEntitySync owns its lock so its property callbacks can
             // completely release it (recursive unlock would leave this frame's
             // outer acquisition held).
             apiLock.unlock();
-            SendFullEntitySync(event.senderID);
+            SendFullEntitySync(target);
             apiLock.lock();
             if (m_lifecycleEpoch != updateLifecycleEpoch)
                 return;

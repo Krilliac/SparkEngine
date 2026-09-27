@@ -36,6 +36,7 @@
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <deque>
 #include <cstdint>
 #include <chrono>
 #include <atomic>
@@ -508,6 +509,11 @@ namespace Spark::Net
         /// Serialize and send full state for all replicated entities (server only)
         void SendFullEntitySync(ClientID targetClient);
 
+        /// Initial full syncs Update starts per call. Each costs O(replicated entities)
+        /// plus two reliable messages per entity, so admissions beyond this wait for
+        /// later Updates instead of letting a connect flood multiply that work per frame.
+        static constexpr size_t kMaxFullSyncsPerUpdate = 4;
+
         /// Serialize a single entity's replicated properties into a NetBuffer
         void SerializeEntityState(uint32_t networkID, NetBuffer& outBuffer) const;
 
@@ -754,7 +760,8 @@ namespace Spark::Net
         /// m_apiMutex; must not be called with m_clientsMutex held.
         void RemoveClientState(ClientID clientID);
         /// Server-side: release the process-global per-connection state (delta baselines,
-        /// interest scope) of every admitted client before the client table is cleared.
+        /// interest scope) and pending initial syncs of every admitted client before the
+        /// client table is cleared.
         void ReleaseAllClientConnectionState();
         /// Requires m_apiMutex. There is no hidden network worker; Update owns the socket pump.
         [[nodiscard]] bool IsEndpointLifecycleIdle() const;
@@ -822,6 +829,9 @@ namespace Spark::Net
         // Clients (server-side)
         std::unordered_map<ClientID, ClientInfo> m_clients;
         mutable std::mutex m_clientsMutex; ///< Protects m_clients, m_nextClientID
+        /// Admitted clients still owed their initial full sync (at most one entry per
+        /// admitted client; guarded by m_apiMutex, drained kMaxFullSyncsPerUpdate per Update).
+        std::deque<ClientID> m_pendingFullSyncs;
         ClientID m_nextClientID = 1;
         int m_maxClients = 32;
 

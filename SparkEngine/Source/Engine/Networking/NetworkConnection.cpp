@@ -1117,6 +1117,7 @@ namespace Spark::Net
         // Drop the peer's reliability state (sequence streams, unacked maps,
         // dedup window) so a reused ClientID starts fresh.
         m_peers.erase(clientID);
+        std::erase(m_pendingFullSyncs, clientID);
 
         // Remove entities owned by this client
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Cleaning up entities owned by client %u", clientID);
@@ -1151,6 +1152,7 @@ namespace Spark::Net
             for (const auto& [id, info] : m_clients)
                 clientIDs.push_back(id);
         }
+        m_pendingFullSyncs.clear();
         auto& deltaManager = DeltaSnapshotManager::GetInstance();
         auto& scopeFilter = ConnectionScopeFilter::GetInstance();
         for (const ClientID id : clientIDs)
