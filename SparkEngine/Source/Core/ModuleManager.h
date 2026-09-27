@@ -203,7 +203,9 @@ class ModuleManager
      * @brief Initialize all loaded modules (sorted by loadOrder)
      * @param context Engine context passed to each module's OnLoad()
      * @return true when every loaded module initialized successfully; false when
-     *         the context is null or any module could not initialize
+     *         the context is null, any module could not initialize, or the
+     *         declared dependency graph names a module that is not loaded or
+     *         contains a cycle (then no module is initialized)
      */
     bool InitializeAll(Spark::IEngineContext* context);
 
@@ -412,4 +414,6 @@ class ModuleManager
     std::string m_lastLoadError;
     LifecycleEvidence m_lifecycleEvidence;
     bool m_publishTeardownLifecycleEvidence = true;
+    /// False only for ReloadModule's staging manager, which validates the replacement against the live graph.
+    bool m_validateDependencyGraph = true;
 };

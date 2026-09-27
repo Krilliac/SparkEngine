@@ -10,6 +10,8 @@
 #include <Spark/Version.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -236,10 +238,42 @@ namespace
 #endif
     }
 
+    void SetTestEnvironment(const char* name, const std::string& value)
+    {
+#ifdef _WIN32
+        _putenv_s(name, value.c_str());
+#else
+        if (value.empty())
+            unsetenv(name);
+        else
+            setenv(name, value.c_str(), 1);
+#endif
+    }
+
+    /// Sets one fixture switch for a scope and clears it on exit, including an early ASSERT return.
+    struct ScopedTestEnvironment final
+    {
+        ScopedTestEnvironment(const char* variable, const std::string& value) : name(variable)
+        {
+            SetTestEnvironment(name, value);
+        }
+        ~ScopedTestEnvironment() { SetTestEnvironment(name, ""); }
+        ScopedTestEnvironment(const ScopedTestEnvironment&) = delete;
+        ScopedTestEnvironment& operator=(const ScopedTestEnvironment&) = delete;
+
+        const char* name;
+    };
+
     std::string ReadBinaryFile(const std::filesystem::path& path)
     {
         std::ifstream input(path, std::ios::binary);
         return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
+
+    void WriteBinaryFile(const std::filesystem::path& path, const std::string& content)
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << content;
     }
 
 #ifndef _WIN32
@@ -1050,6 +1084,151 @@ TEST(ModuleABI_HotReloadCallbackCanReenterManagerWithoutDeadlock)
     EXPECT_EQ(CountStagedModuleImages(modulePath), size_t{0});
 #endif
     RemoveModuleCopy(modulePath);
+}
+
+TEST(ModuleABI_OversizedSidecarRejectedBeforeOSLoad)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkOversizedSidecarModule");
+    const std::filesystem::path sidecarPath = SidecarPath(modulePath);
+    const std::string sidecar = ReadBinaryFile(sidecarPath);
+    const std::string expectedSdk = "sdk_version=" + std::to_string(SPARK_SDK_VERSION);
+    const size_t sdkField = sidecar.find(expectedSdk);
+    ASSERT_TRUE(sdkField != std::string::npos);
+
+    // Zero padding parses to the same integer, so only the per-field budget
+    // rejects this value; the image itself still matches binary_sha256.
+    std::string paddedValue = sidecar;
+    paddedValue.replace(sdkField, expectedSdk.size(),
+                        "sdk_version=" + std::string(100, '0') + std::to_string(SPARK_SDK_VERSION));
+    WriteBinaryFile(sidecarPath, paddedValue);
+    {
+        ModuleManager manager;
+        EXPECT_FALSE(manager.LoadModule(PathToUtf8(modulePath)));
+        EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "oversized ABI sidecar field");
+        EXPECT_TRUE(manager.GetLoadedModuleInfo().empty());
+    }
+
+    // A file past the byte budget is refused before any line is parsed.
+    WriteBinaryFile(sidecarPath, sidecar + "padding=" + std::string(8192, 'x') + "\n");
+    {
+        ModuleManager manager;
+        EXPECT_FALSE(manager.LoadModule(PathToUtf8(modulePath)));
+        EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "exceeds 4096 bytes");
+        EXPECT_TRUE(manager.GetLoadedModuleInfo().empty());
+    }
+
+    // The real sidecar fits both budgets.
+    WriteBinaryFile(sidecarPath, sidecar);
+    {
+        ModuleManager manager;
+        EXPECT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+        manager.UnloadAll();
+    }
+    RemoveModuleCopy(modulePath);
+}
+
+TEST(ModuleABI_OversizedManifestRejectedBeforeParse)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkOversizedManifestModule");
+    const std::filesystem::path manifestPath = modulePath.parent_path() / "spark.oversized.modules.json";
+    {
+        // Valid JSON naming a loadable module; only the whitespace padding
+        // pushes it past the manifest budget.
+        std::ofstream manifest(manifestPath, std::ios::binary | std::ios::trunc);
+        manifest << "{ \"modules\": [{ \"path\": \"" << PathToUtf8(modulePath.filename()) << "\" }] }"
+                 << std::string(std::size_t{1024} * 1024, ' ') << "\n";
+    }
+
+    {
+        ModuleManager manager;
+        EXPECT_FALSE(manager.LoadModulesFromManifest(PathToUtf8(manifestPath)));
+        EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "exceeds");
+        EXPECT_TRUE(manager.GetLoadedModuleInfo().empty());
+        manager.UnloadAll();
+    }
+
+    RemoveModuleCopy(modulePath);
+    std::error_code ec;
+    std::filesystem::remove(manifestPath, ec);
+}
+
+TEST(ModuleABI_ManifestWithUnusableEntryLoadsNothing)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkManifestAllOrNothingModule");
+    const std::filesystem::path manifestPath = modulePath.parent_path() / "spark.all-or-nothing.modules.json";
+    const std::string goodEntry = "{ \"path\": \"" + PathToUtf8(modulePath.filename()) + "\" }";
+
+    struct Case
+    {
+        const char* label;
+        std::string secondEntry;
+        const char* expectedError;
+    };
+    const Case cases[] = {
+        // Listed after a module that loads, so a partial set would already exist.
+        {"ABI-rejected", "{ \"path\": \"" + PathToUtf8(PathFromUtf8(SPARK_TEST_MISMATCHED_MODULE_PATH)) + "\" }",
+         "rejected"},
+        {"malformed", "{ \"name\": \"NoPath\" }", "no string path"},
+        {"missing", "{ \"path\": \"SparkNoSuchManifestModule.dll\" }", "Module not found"},
+    };
+
+    for (const Case& manifestCase : cases)
+    {
+        {
+            std::ofstream manifest(manifestPath, std::ios::trunc);
+            manifest << "{ \"modules\": [" << goodEntry << ", " << manifestCase.secondEntry << "] }\n";
+        }
+
+        ModuleManager manager;
+        const bool loaded = manager.LoadModulesFromManifest(PathToUtf8(manifestPath));
+        if (loaded)
+            std::cerr << "  manifest case '" << manifestCase.label << "' loaded a partial module set\n";
+        EXPECT_FALSE(loaded);
+        EXPECT_STR_CONTAINS(manager.GetLastLoadError(), manifestCase.expectedError);
+        EXPECT_EQ(manager.GetModuleCount(), size_t{0});
+        manager.UnloadAll();
+    }
+
+    RemoveModuleCopy(modulePath);
+    std::error_code ec;
+    std::filesystem::remove(manifestPath, ec);
+}
+
+TEST(ModuleABI_UnloadedDependencyBlocksInitialization)
+{
+    NullEngineContext context;
+    ModuleManager manager;
+    {
+        ScopedTestEnvironment dependsOn("SPARK_MODULE_ABI_DEPENDS_ON", "Spark Module That Is Not Loaded");
+        ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+        EXPECT_FALSE(manager.InitializeAll(&context));
+        EXPECT_FALSE(manager.HasInitializedModules());
+        EXPECT_EQ(manager.GetInitializedModuleCount(), size_t{0});
+    }
+
+    // Without the declaration the same module initializes, so the refusal
+    // above came from the dependency graph and not from OnLoad.
+    EXPECT_TRUE(manager.InitializeAll(&context));
+    EXPECT_EQ(manager.GetInitializedModuleCount(), size_t{1});
+    EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+}
+
+TEST(ModuleABI_DependencyCycleBlocksInitialization)
+{
+    NullEngineContext context;
+    ModuleManager manager;
+    {
+        // A module that depends on itself is the smallest cycle.
+        ScopedTestEnvironment dependsOn("SPARK_MODULE_ABI_DEPENDS_ON", "Spark Compatible ABI Fixture");
+        ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+        EXPECT_FALSE(manager.InitializeAll(&context));
+        EXPECT_FALSE(manager.HasInitializedModules());
+    }
+
+    EXPECT_TRUE(manager.InitializeAll(&context));
+    EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
 }
 
 TEST(ModuleABI_ModulesOwningIdKeyedStateRefuseHotReload)

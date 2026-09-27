@@ -27,6 +27,7 @@
 #include <charconv>
 #include <chrono>
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <exception>
@@ -35,6 +36,7 @@
 #include <mutex>
 #include <optional>
 #include <sstream>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -398,6 +400,97 @@ namespace
         return true;
     }
 
+    // A well-formed sidecar is 12 short `key=value` lines (a few hundred bytes).
+    // The size budget matches the staged-package validator
+    // (cmake/ValidateStagedPackageExecutables.cmake); the field budgets fit the
+    // longest key and the 64-hex binary_sha256 value.
+    constexpr std::size_t kMaxSidecarBytes = 4096;
+    constexpr std::size_t kSidecarFieldCount = 12;
+    constexpr std::size_t kMaxSidecarKeyBytes = 32;
+    constexpr std::size_t kMaxSidecarValueBytes = 64;
+
+    /// Upper bound for spark.modules.json; real manifests are well under 1 KiB.
+    constexpr std::uintmax_t kMaxManifestBytes = 1024 * 1024;
+
+    /// One module's declared dependencies, as the graph check sees them.
+    struct ModuleDependencyNode
+    {
+        std::string name;
+        std::vector<std::string> dependencies;
+    };
+
+    /**
+     * @brief Describe why a module dependency graph cannot be initialized.
+     *
+     * SortModules orders what it can and appends the rest, so a declared
+     * dependency that is not loaded, or a dependency cycle, would otherwise
+     * start a module before (or without) the modules it said it needs.
+     *
+     * @return An empty string when every dependency names a node and the graph
+     *         is acyclic; otherwise the first problem found.
+     */
+    std::string DescribeDependencyGraphError(const std::vector<ModuleDependencyNode>& nodes)
+    {
+        std::unordered_map<std::string, size_t> nameToIndex;
+        for (size_t i = 0; i < nodes.size(); ++i)
+            nameToIndex.emplace(nodes[i].name, i);
+
+        std::vector<std::vector<size_t>> dependents(nodes.size());
+        std::vector<size_t> unmet(nodes.size(), 0);
+        for (size_t i = 0; i < nodes.size(); ++i)
+        {
+            for (const std::string& dependency : nodes[i].dependencies)
+            {
+                const auto it = nameToIndex.find(dependency);
+                if (it == nameToIndex.end())
+                    return "Module '" + nodes[i].name + "' depends on '" + dependency + "', which is not loaded";
+                dependents[it->second].push_back(i);
+                ++unmet[i];
+            }
+        }
+
+        std::vector<size_t> ready;
+        for (size_t i = 0; i < nodes.size(); ++i)
+        {
+            if (unmet[i] == 0)
+                ready.push_back(i);
+        }
+        size_t resolved = 0;
+        while (!ready.empty())
+        {
+            const size_t node = ready.back();
+            ready.pop_back();
+            ++resolved;
+            for (const size_t dependent : dependents[node])
+            {
+                if (--unmet[dependent] == 0)
+                    ready.push_back(dependent);
+            }
+        }
+        if (resolved == nodes.size())
+            return {};
+
+        std::string cycle;
+        for (size_t i = 0; i < nodes.size(); ++i)
+        {
+            if (unmet[i] != 0)
+                cycle += (cycle.empty() ? "'" : ", '") + nodes[i].name + "'";
+        }
+        return "Circular module dependency involving " + cycle;
+    }
+
+    ModuleDependencyNode MakeDependencyNode(const std::string& name, const Spark::IModule& instance)
+    {
+        ModuleDependencyNode node{name, {}};
+        const Spark::ModuleInfo info = instance.GetModuleInfo();
+        for (int d = 0; d < info.dependencyCount && info.dependencies; ++d)
+        {
+            if (info.dependencies[d])
+                node.dependencies.emplace_back(info.dependencies[d]);
+        }
+        return node;
+    }
+
     bool ValidateModuleSidecar(const std::filesystem::path& modulePath, std::string& error)
     {
         const std::filesystem::path sidecarPath = SidecarPath(modulePath);
@@ -408,19 +501,44 @@ namespace
             return false;
         }
 
-        std::unordered_map<std::string, std::string> values;
-        std::string line;
-        while (std::getline(sidecar, line))
+        // Read at most one byte past the budget, so a file that grows after it
+        // was opened still cannot make the parser allocate without bound.
+        std::string content(kMaxSidecarBytes + 1, '\0');
+        sidecar.read(content.data(), static_cast<std::streamsize>(content.size()));
+        const std::streamsize bytesRead = sidecar.gcount();
+        if (bytesRead < 0 || static_cast<std::size_t>(bytesRead) > kMaxSidecarBytes)
         {
+            error = "ABI sidecar exceeds " + std::to_string(kMaxSidecarBytes) + " bytes";
+            return false;
+        }
+        content.resize(static_cast<std::size_t>(bytesRead));
+
+        std::unordered_map<std::string, std::string> values;
+        std::string_view remaining = content;
+        while (!remaining.empty())
+        {
+            const size_t lineEnd = remaining.find('\n');
+            std::string_view line = remaining.substr(0, lineEnd);
+            remaining = lineEnd == std::string_view::npos ? std::string_view{} : remaining.substr(lineEnd + 1);
             if (!line.empty() && line.back() == '\r')
-                line.pop_back();
+                line.remove_suffix(1);
             const size_t separator = line.find('=');
-            if (separator == std::string::npos || separator == 0 || separator + 1 >= line.size())
+            if (separator == std::string_view::npos || separator == 0 || separator + 1 >= line.size())
             {
                 error = "malformed ABI sidecar line";
                 return false;
             }
-            if (!values.emplace(line.substr(0, separator), line.substr(separator + 1)).second)
+            if (separator > kMaxSidecarKeyBytes || line.size() - separator - 1 > kMaxSidecarValueBytes)
+            {
+                error = "oversized ABI sidecar field";
+                return false;
+            }
+            if (values.size() == kSidecarFieldCount)
+            {
+                error = "unexpected ABI sidecar fields";
+                return false;
+            }
+            if (!values.emplace(std::string(line.substr(0, separator)), std::string(line.substr(separator + 1))).second)
             {
                 error = "duplicate ABI sidecar field";
                 return false;
@@ -449,7 +567,7 @@ namespace
             error = "missing or invalid binary_sha256 field";
             return false;
         }
-        if (values.size() != 12)
+        if (values.size() != kSidecarFieldCount)
         {
             error = "unexpected ABI sidecar fields";
             return false;
@@ -1237,6 +1355,20 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
     const std::filesystem::path manifestFile = PathFromUtf8(manifestPath);
     m_lastLoadError.clear();
 
+    const auto failManifest = [&](std::string message)
+    {
+        m_lastLoadError = std::move(message);
+        console.LogError(m_lastLoadError);
+        return false;
+    };
+
+    // A manifest lists a handful of module paths. Refuse anything past the
+    // budget before reading it, and bound the read itself below.
+    std::error_code sizeError;
+    const std::uintmax_t manifestBytes = std::filesystem::file_size(manifestFile, sizeError);
+    if (!sizeError && manifestBytes > kMaxManifestBytes)
+        return failManifest(std::format("Module manifest exceeds {} bytes: {}", kMaxManifestBytes, manifestPath));
+
     std::string content;
 
 #ifndef _WIN32
@@ -1264,52 +1396,41 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
             console.LogWarning(m_lastLoadError);
             return false;
         }
-        content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        file.close();
+        content.resize(static_cast<std::size_t>(kMaxManifestBytes) + 1);
+        file.read(content.data(), static_cast<std::streamsize>(content.size()));
+        content.resize(static_cast<std::size_t>(std::max<std::streamsize>(file.gcount(), 0)));
     }
+    if (content.size() > kMaxManifestBytes)
+        return failManifest(std::format("Module manifest exceeds {} bytes: {}", kMaxManifestBytes, manifestPath));
 
     const std::filesystem::path manifestDir = manifestFile.parent_path();
-    bool anyLoaded = false;
 
     Spark::Json::Value manifest;
     std::string parseError;
     if (!Spark::Json::ParseStrict(content, &manifest, &parseError) || !manifest.IsObject())
     {
-        m_lastLoadError = "Module manifest is not valid JSON: " + manifestPath +
-                          (parseError.empty() ? std::string{} : " (" + parseError + ")");
-        console.LogError(m_lastLoadError);
-        return false;
+        return failManifest("Module manifest is not valid JSON: " + manifestPath +
+                            (parseError.empty() ? std::string{} : " (" + parseError + ")"));
     }
 
     const Spark::Json::Value& modules = manifest["modules"];
     if (!modules.IsArray() || modules.Size() == 0)
-    {
-        m_lastLoadError = "Module manifest must contain a non-empty modules array: " + manifestPath;
-        console.LogError(m_lastLoadError);
-        return false;
-    }
+        return failManifest("Module manifest must contain a non-empty modules array: " + manifestPath);
 
+    // The manifest names the exact module set this process runs. Resolve every
+    // entry before loading any of them, so a malformed or missing entry fails
+    // the manifest instead of starting a partial module set.
+    std::vector<std::filesystem::path> resolvedPaths;
+    resolvedPaths.reserve(modules.Size());
     for (size_t index = 0; index < modules.Size(); ++index)
     {
         const Spark::Json::Value& module = modules[index];
-        if (!module.IsObject())
-        {
-            console.LogWarning(std::format("Module manifest entry {} has no string path", index));
-            continue;
-        }
-        const Spark::Json::Value& path = module["path"];
-        if (!path.IsString())
-        {
-            console.LogWarning(std::format("Module manifest entry {} has no string path", index));
-            continue;
-        }
+        if (!module.IsObject() || !module["path"].IsString())
+            return failManifest(std::format("Module manifest entry {} has no string path: {}", index, manifestPath));
 
-        const std::string modulePath = path.AsString();
+        const std::string modulePath = module["path"].AsString();
         if (modulePath.empty())
-        {
-            console.LogWarning(std::format("Module manifest entry {} has an empty path", index));
-            continue;
-        }
+            return failManifest(std::format("Module manifest entry {} has an empty path: {}", index, manifestPath));
 
         // Resolve relative paths against manifest directory
         std::filesystem::path fullPath = PathFromUtf8(modulePath);
@@ -1331,23 +1452,43 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
             }
         }
 
-        if (std::filesystem::exists(fullPath))
-        {
-            if (LoadModule(PathToUtf8(fullPath)))
-                anyLoaded = true;
-        }
-        else
-        {
-            m_lastLoadError = "Module not found: " + PathToUtf8(fullPath);
-            console.LogWarning(m_lastLoadError);
-        }
+        if (!std::filesystem::exists(fullPath))
+            return failManifest("Module not found: " + PathToUtf8(fullPath));
+        resolvedPaths.push_back(std::move(fullPath));
     }
 
-    if (anyLoaded)
-        m_lastLoadError.clear();
-    else if (m_lastLoadError.empty())
-        m_lastLoadError = "Module manifest did not contain a loadable module: " + manifestPath;
-    return anyLoaded;
+    // Modules loaded before this call are not part of this manifest's rollback.
+    std::vector<std::string> preexistingOwners;
+    preexistingOwners.reserve(m_modules.size());
+    for (const auto& entry : m_modules)
+        preexistingOwners.push_back(entry.registrationOwner);
+
+    for (const auto& fullPath : resolvedPaths)
+    {
+        if (LoadModule(PathToUtf8(fullPath)))
+            continue;
+
+        // A rejected entry (ABI, hash, identity or policy) fails the manifest.
+        // Every module this call loaded is still uninitialized; unload them so
+        // the host never initializes a partial set.
+        const std::string rejection = m_lastLoadError;
+        for (auto entry = m_modules.begin(); entry != m_modules.end();)
+        {
+            if (std::find(preexistingOwners.begin(), preexistingOwners.end(), entry->registrationOwner) !=
+                preexistingOwners.end())
+            {
+                ++entry;
+                continue;
+            }
+            UnregisterModuleRegistrations(*entry);
+            UnloadEntry(*entry);
+            entry = m_modules.erase(entry);
+        }
+        return failManifest("Module manifest " + manifestPath + " rejected: " + rejection);
+    }
+
+    m_lastLoadError.clear();
+    return true;
 }
 
 bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
@@ -1480,6 +1621,24 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "InitializeAll called with null context");
         return false;
+    }
+
+    if (m_validateDependencyGraph)
+    {
+        std::vector<ModuleDependencyNode> graph;
+        graph.reserve(m_modules.size());
+        for (const auto& entry : m_modules)
+        {
+            if (entry.instance)
+                graph.push_back(MakeDependencyNode(entry.name, *entry.instance));
+        }
+        const std::string graphError = DescribeDependencyGraphError(graph);
+        if (!graphError.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Refusing to initialize modules: %s", graphError.c_str());
+            console.LogError("Refusing to initialize modules: " + graphError);
+            return false;
+        }
     }
 
     bool allInitialized = true;
@@ -1889,9 +2048,28 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
             }
         }
 
+        // The staged manager holds only the replacement, so check its declared
+        // dependencies against the live graph with the replacement swapped in.
+        std::vector<ModuleDependencyNode> graph;
+        graph.reserve(m_modules.size());
+        for (size_t otherIndex = 0; otherIndex < m_modules.size(); ++otherIndex)
+        {
+            if (otherIndex == index)
+                graph.push_back(MakeDependencyNode(name, *stagedManager.m_modules.front().instance));
+            else if (m_modules[otherIndex].instance)
+                graph.push_back(MakeDependencyNode(m_modules[otherIndex].name, *m_modules[otherIndex].instance));
+        }
+        if (std::string graphError = DescribeDependencyGraphError(graph); !graphError.empty())
+        {
+            stagedManager.UnloadAll();
+            removeShadowFiles();
+            return failReload("Staged replacement dependency graph is invalid for '" + name + "': " + graphError);
+        }
+
         // Initialize the replacement before touching the working instance. A
         // failed OnLoad is cleaned up by InitializeAll and leaves the old
         // module, including its in-memory state and registry callbacks, intact.
+        stagedManager.m_validateDependencyGraph = false;
         stagedManager.InitializeAll(context);
         AccumulateLifecycleEvidence(m_lifecycleEvidence, stagedManager.m_lifecycleEvidence);
         stagedManager.m_lifecycleEvidence = {};

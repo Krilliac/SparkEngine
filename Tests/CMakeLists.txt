@@ -2038,7 +2038,7 @@ set_tests_properties(LifecycleCompositionRootFailure PROPERTIES
 # label, so `ctest -L lifecycle` (and the sanitizer presets' build dirs) cover the
 # work item's selectors. Counts are exact per platform: a family that silently
 # loses tests fails its CTest instead of shrinking the evidence.
-#   ModuleABI_: 28 cross-platform, plus 3 Windows-only (wide-path loader, reload
+#   ModuleABI_: 33 cross-platform, plus 3 Windows-only (wide-path loader, reload
 #   parent-directory cleanup, module-directory dependency search) or 3 POSIX-only
 #   (verified shadow, read-only install, private stage), plus 1 POSIX test that
 #   needs the SparkGame module.
@@ -2048,7 +2048,7 @@ set(_spark_life_life200_count 3)
 if(TARGET SparkGame)
     math(EXPR _spark_life_life200_count "${_spark_life_life200_count} + 2")
 endif()
-set(_spark_life_module_abi_count 28)
+set(_spark_life_module_abi_count 33)
 if(WIN32)
     math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 3")
 else()

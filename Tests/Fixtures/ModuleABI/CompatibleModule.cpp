@@ -51,6 +51,16 @@ namespace
             const char* contradictSdk = std::getenv("SPARK_MODULE_ABI_CONTRADICT_INFO_SDK");
             if (contradictSdk && contradictSdk[0] != '\0')
                 info.sdkVersion = SPARK_SDK_VERSION + 1;
+            // Lets tests declare a dependency on a module that is not loaded,
+            // or on this module itself (a one-module cycle).
+            const char* dependsOn = std::getenv("SPARK_MODULE_ABI_DEPENDS_ON");
+            if (dependsOn && dependsOn[0] != '\0')
+            {
+                static const char* dependency[1] = {nullptr};
+                dependency[0] = dependsOn;
+                info.dependencies = dependency;
+                info.dependencyCount = 1;
+            }
             return info;
         }
 
