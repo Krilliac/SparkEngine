@@ -490,14 +490,19 @@ def telemetry_ctest_contract_errors(cmake: str) -> list[str]:
 
 
 def versioned_publication_gate_errors(workflow: str) -> list[str]:
-    """Validate the exact fail-closed gate before versioned publication."""
+    """Validate the exact fail-closed gate before versioned publication.
 
-    errors: list[str] = []
-    step_name = "Verify stable-v1 candidate is qualified for versioned publication"
+    The parsed-YAML contract runs first and unconditionally: the text matcher
+    below reads the file line by line, so a step it cannot find (a flow-mapping
+    step) or a decoy copy it finds instead (text inside a block scalar) must not
+    cut the structural check short.
+    """
+
+    errors = profile_required_gates_job_errors(workflow)
     try:
-        readiness = named_step(workflow, step_name)
+        readiness = named_step(workflow, PROFILE_GATES_READINESS_STEP)
     except AssertionError as error:
-        return [str(error)]
+        return errors + [str(error)]
 
     if not exact_field(
         readiness,
@@ -506,17 +511,7 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
         indent=6,
     ):
         errors.append("stable-v1 publication gate must use the exact versioned-release condition")
-    # The v0.9 bootstrap and ordinary v1 qualification are distinct stages.
-    # Pin both exact validators and the version branch so neither path can be
-    # weakened by a waiver, a swapped selector, or a successful no-op.
-    expected_readiness = " ".join((
-        'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
-        "python3 tools/site-data/validate.py --require-predecessor-candidate",
-        "else",
-        "python3 tools/site-data/validate.py --require-candidate-ready",
-        "fi",
-    ))
-    if run_command(readiness, indent=6) != expected_readiness:
+    if run_command(readiness, indent=6) != " ".join(PROFILE_GATES_READINESS_RUN):
         errors.append("stable-v1 publication gate must run the exact stage-specific readiness validators")
     if not exact_field(readiness, "shell", "bash", indent=6):
         errors.append("stable-v1 publication gate must use the exact bash shell contract")
@@ -525,8 +520,6 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
         readiness,
     ):
         errors.append("stable-v1 publication gate must not continue on error")
-
-    errors.extend(profile_required_gates_job_errors(workflow))
     return errors
 
 
@@ -592,6 +585,21 @@ PROFILE_GATES_CHECKOUT_STEP = "Checkout exact candidate source"
 PROFILE_GATES_REQUIRED_CI_STEP = "Verify candidate commit passed Required CI Gate"
 PROFILE_GATES_READINESS_STEP = "Verify stable-v1 candidate is qualified for versioned publication"
 PROFILE_GATES_FUZZ_STEP = "Verify SEC-120 parser fuzz-policy closure"
+# The v0.9 bootstrap and ordinary v1 qualification are distinct stages. Pin both
+# exact validators and the version branch so neither path can be weakened by a
+# waiver, a swapped selector, or a successful no-op.
+PROFILE_GATES_READINESS_RUN = (
+    'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
+    "python3 tools/site-data/validate.py --require-predecessor-candidate",
+    "else",
+    "python3 tools/site-data/validate.py --require-candidate-ready",
+    "fi",
+)
+# Workflow-level env and defaults reach every step of the gates job just as the
+# job-level keys it may not declare would: env: BASH_ENV sources a candidate file
+# before each bash step, and defaults.run can re-root or re-shell every run.
+# PyYAML (YAML 1.1) loads a bare `on:` key as boolean True, a quoted one as "on".
+PROFILE_GATES_WORKFLOW_KEYS = frozenset({"name", "run-name", "on", True, "permissions", "concurrency", "jobs"})
 # Every other job key -- if, continue-on-error, environment, strategy, uses,
 # secrets, env, concurrency -- could skip, tolerate, re-route, or arm the job,
 # so the gates job is held to an allowlist rather than a list of known bypasses.
@@ -626,6 +634,12 @@ def profile_required_gates_job_errors(workflow: str) -> list[str]:
         return ["release workflow must define both profile-required-gates and release jobs"]
 
     errors: list[str] = []
+    unexpected_workflow_keys = sorted(str(key) for key in document if key not in PROFILE_GATES_WORKFLOW_KEYS)
+    if unexpected_workflow_keys:
+        errors.append(
+            f"release workflow declares workflow-level keys {unexpected_workflow_keys} "
+            "that reach every profile-required-gates step"
+        )
     for job_id, job in jobs.items():
         if not isinstance(job, dict):
             errors.append(f"job {job_id} is not a mapping")
@@ -694,12 +708,12 @@ def profile_required_gates_job_errors(workflow: str) -> list[str]:
     ):
         errors.append("profile-required-gates Required CI check must be the exact unconditional fail-closed verifier")
 
-    # The readiness command itself is pinned by versioned_publication_gate_errors.
     readiness = by_name.get(PROFILE_GATES_READINESS_STEP, {})
     if (
         set(readiness) != {"name", "if", "shell", "run"}
         or readiness.get("if") != "needs.prepare.outputs.is_versioned == 'true'"
         or readiness.get("shell") != "bash"
+        or normalized_run_lines(readiness.get("run")) != list(PROFILE_GATES_READINESS_RUN)
     ):
         errors.append("profile-required-gates readiness gate must be the exact versioned-only bash step")
 
@@ -2904,6 +2918,23 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         def move_into_release(step: str) -> str:
             return self.release.replace(step, "", 1).replace(tag_binding, f"{tag_binding}\n{step}", 1)
 
+        def workflow_key(block: str) -> str:
+            self.assertEqual(self.release.count("\njobs:\n"), 1)
+            return self.release.replace("\njobs:\n", f"\n{block}\njobs:\n", 1)
+
+        # A flow-mapping step is invisible to the line-oriented step matcher, and
+        # a decoy copy of the real step inside a block scalar satisfies it, so
+        # only the parsed-YAML contract can see that the readiness run is a no-op.
+        readiness_no_op = self.release.replace(
+            readiness,
+            f'    - {{name: "{PROFILE_GATES_READINESS_STEP}", '
+            "if: \"needs.prepare.outputs.is_versioned == 'true'\", shell: bash, run: \"true\"}\n",
+            1,
+        )
+        readiness_decoy = readiness_no_op.replace(
+            "\njobs:\n", f"\nenv:\n  DECOY: |\n{readiness}\njobs:\n", 1
+        )
+
         mutations = {
             "release no longer needs gates": (
                 self.release.replace(release_header, release_header.replace(" profile-required-gates,", "", 1), 1),
@@ -2994,6 +3025,26 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "readiness gate tolerated": (
                 self.release.replace(readiness, inject_before_run(readiness, "      continue-on-error: true"), 1),
                 "readiness gate must be the exact versioned-only bash step",
+            ),
+            "readiness run replaced by a flow-mapping no-op": (
+                readiness_no_op,
+                "readiness gate must be the exact versioned-only bash step",
+            ),
+            "readiness run replaced behind a block-scalar decoy": (
+                readiness_decoy,
+                "readiness gate must be the exact versioned-only bash step",
+            ),
+            "readiness run exits 0 before validating": (
+                replace_in(readiness, "        if [[", "        exit 0\n        if [["),
+                "readiness gate must be the exact versioned-only bash step",
+            ),
+            "workflow-level BASH_ENV sourced by every gates step": (
+                workflow_key("env:\n  BASH_ENV: .github/exit0.sh\n"),
+                "workflow-level keys ['env']",
+            ),
+            "workflow-level defaults re-root every gates step": (
+                workflow_key("defaults:\n  run:\n    working-directory: decoy\n"),
+                "workflow-level keys ['defaults']",
             ),
             "fuzz closure dropped": (self.release.replace(fuzz, "", 1), "must run exactly the steps"),
             "fuzz closure suppressed": (
