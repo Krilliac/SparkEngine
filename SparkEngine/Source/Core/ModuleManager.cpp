@@ -1649,6 +1649,38 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
             continue;
         }
 
+        // The graph check above only proves every dependency is loaded. One can
+        // still fail (or throw from) its own OnLoad earlier in this pass, which
+        // destroys its instance; the modules sorted after it must then not start
+        // without it. Require every declared dependency to be initialized right
+        // now. A skipped module stays uninitialized, so its own dependents are
+        // skipped in turn (the order is topological). The reload staging
+        // manager holds only the replacement and checks the live graph instead.
+        if (m_validateDependencyGraph)
+        {
+            const ModuleDependencyNode node = MakeDependencyNode(entry.name, *entry.instance);
+            const auto unmetDependency =
+                std::find_if(node.dependencies.begin(), node.dependencies.end(),
+                             [this](const std::string& dependency)
+                             {
+                                 return std::none_of(m_modules.begin(), m_modules.end(),
+                                                     [&dependency](const LoadedModule& provider) {
+                                                         return provider.name == dependency && provider.initialized &&
+                                                                provider.instance != nullptr;
+                                                     });
+                             });
+            if (unmetDependency != node.dependencies.end())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "Module '%s' not initialized: its dependency '%s' is not initialized",
+                                entry.name.c_str(), unmetDependency->c_str());
+                console.LogError("Module initialization skipped: " + entry.name + " (dependency '" + *unmetDependency +
+                                 "' is not initialized)");
+                allInitialized = false;
+                continue;
+            }
+        }
+
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing module: %s", entry.name.c_str());
         console.LogInfo("Initializing module: " + entry.name);
         ModuleRegistrationScope registrationScope(entry.registrationOwner, ModuleRegistrationPhase::Load);
@@ -2083,13 +2115,16 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
         // The staged manager holds only the replacement, so check its declared
         // dependencies against the live graph with the replacement swapped in.
+        // The replacement's OnLoad runs below, so only initialized modules can
+        // satisfy a dependency: one that is loaded but never started (or was
+        // skipped because its own dependency failed) must not count.
         std::vector<ModuleDependencyNode> graph;
         graph.reserve(m_modules.size());
         for (size_t otherIndex = 0; otherIndex < m_modules.size(); ++otherIndex)
         {
             if (otherIndex == index)
                 graph.push_back(MakeDependencyNode(name, *stagedManager.m_modules.front().instance));
-            else if (m_modules[otherIndex].instance)
+            else if (m_modules[otherIndex].initialized && m_modules[otherIndex].instance)
                 graph.push_back(MakeDependencyNode(m_modules[otherIndex].name, *m_modules[otherIndex].instance));
         }
         if (std::string graphError = DescribeDependencyGraphError(graph); !graphError.empty())

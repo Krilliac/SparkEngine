@@ -1308,6 +1308,65 @@ TEST(ModuleABI_DependencyCycleBlocksInitialization)
     manager.UnloadAll();
 }
 
+TEST(ModuleABI_FailedDependencyInitializationSkipsDependent)
+{
+    // The dependency is loaded, so the up-front graph check passes. Its OnLoad
+    // then throws in the same pass; the dependent, sorted after it, must not
+    // start without it.
+    RegistryFixtureHostGuard host;
+    const std::string dependencyName = "Spark Registry Lifecycle Fixture";
+    const std::string dependentName = "Spark Compatible ABI Fixture";
+    ScopedTestEnvironment dependsOn("SPARK_MODULE_ABI_DEPENDS_ON", dependencyName);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+
+    bool initialized = true;
+    {
+        ScopedTestEnvironment throwOnLoad("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", "1");
+        EXPECT_NO_THROW(initialized = manager.InitializeAll(&context));
+    }
+    EXPECT_FALSE(initialized);
+    EXPECT_TRUE(manager.GetModule(dependencyName) == nullptr);
+    EXPECT_EQ(manager.GetInitializedModuleCount(), size_t{0});
+
+    // The dependent's OnLoad always succeeds, so a recorded OnLoad would mean
+    // it ran. It keeps its (never started) instance.
+    const auto evidence = manager.GetLifecycleEvidence();
+    const auto* dependent = evidence.FindModule(dependentName);
+    EXPECT_TRUE(dependent == nullptr || dependent->onLoad == uint64_t{0});
+    EXPECT_TRUE(manager.GetModule(dependentName) != nullptr);
+
+    manager.UnloadAll();
+    EXPECT_EQ(manager.GetModuleCount(), size_t{0});
+}
+
+TEST(ModuleABI_ReloadRefusesDependentOfUninitializedModule)
+{
+    // A staged replacement's OnLoad runs during the reload, so its dependency
+    // must already be running, not merely loaded.
+    RegistryFixtureHostGuard host;
+    const std::string dependencyName = "Spark Registry Lifecycle Fixture";
+    const std::string dependentName = "Spark Compatible ABI Fixture";
+    ScopedTestEnvironment dependsOn("SPARK_MODULE_ABI_DEPENDS_ON", dependencyName);
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkReloadUninitializedDependency");
+
+    NullEngineContext context;
+    {
+        ModuleManager manager;
+        ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+        ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+
+        EXPECT_FALSE(manager.ReloadModule(dependentName, &context));
+        EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "dependency graph");
+        EXPECT_EQ(manager.GetInitializedModuleCount(), size_t{0});
+        manager.UnloadAll();
+    }
+    RemoveModuleCopy(modulePath);
+}
+
 TEST(ModuleABI_FailedReplacementImageStaysMapped)
 {
     RegistryFixtureHostGuard host;
