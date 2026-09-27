@@ -2768,6 +2768,29 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         RUN_SERIAL TRUE
         TIMEOUT 30)
 
+    # SDK-240: build the sdk component's EmptyProject example from an sdk-only
+    # install, require its ABI sidecar to match a host-built module's, and fail
+    # on any resolved path back into the engine source or build tree.
+    add_test(
+        NAME SDKConsumer_InstalledEmptyProjectTemplate
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/t/$<CONFIG>"
+            "-DSPARK_CONSUMER_GENERATOR=${_spark_mod310_consumer_generator}"
+            "-DSPARK_CONSUMER_PLATFORM=${_spark_mod310_consumer_platform}"
+            "-DSPARK_CONSUMER_TOOLSET=${_spark_mod310_consumer_toolset}"
+            "-DSPARK_CONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+            "-DSPARK_CONSUMER_MAKE_PROGRAM=${_spark_mod310_consumer_make_program}"
+            "-DSPARK_CONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+            "-DSPARK_REFERENCE_SIDECAR=$<TARGET_FILE:SparkGameFPS>.sparkabi"
+            -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledSDKTemplate.cmake)
+    set_tests_properties(SDKConsumer_InstalledEmptyProjectTemplate PROPERTIES
+        LABELS "sdk;package;installed-sdk;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 1800)
+
     if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
         add_test(
             NAME FPSPackage_InstalledRuntime
@@ -2983,6 +3006,18 @@ add_test(
 set_tests_properties(SparkSDKComponentCompleteness PROPERTIES
     LABELS "sdk;package;unit"
     TIMEOUT 660)
+
+# SDK-240: the installed-template runner's sidecar and boundary checks must
+# reject every broken fixture by name (runs everywhere, no install or build).
+add_test(
+    NAME SDKConsumer_TemplateRunnerContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_SDK_TEMPLATE_SELF_TEST=ON
+        "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/sdk-template-contract"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledSDKTemplate.cmake)
+set_tests_properties(SDKConsumer_TemplateRunnerContract PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 60)
 
 # ----------------------------------------------------------------------------
 # Installed-SDK template gate (opt-in)
