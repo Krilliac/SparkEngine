@@ -92,17 +92,30 @@ namespace Terrafront
                                       uint32_t iterations, const Crypto::Sha256Digest& storedKey,
                                       const Crypto::Sha256Digest& serverKey);
 
-        /**
-         * @brief Start a login: salt, iterations and a fresh single-use server nonce.
-         *
-         * Unknown users get a salt that is stable per username and shaped like a real
-         * one, so the reply does not reveal whether the account exists. A legacy
-         * pbkdf2-sha256 row is rewritten as a scram-sha256 row here.
-         */
-        TFScramChallenge BeginLogin(const std::string& username);
+        /// Pending SCRAM challenges: at most one per connection, kMaxPendingLogins in total, each
+        /// valid for kLoginChallengeTtlMs after BeginLogin.
+        static constexpr size_t kMaxPendingLogins = 1024;
+        static constexpr int64_t kLoginChallengeTtlMs = 60000;
+        /// Connection id the in-process Login wrapper uses by default (Spark::Net::INVALID_CLIENT,
+        /// which no transport connection ever has).
+        static constexpr uint32_t kLocalLoginClient = 0;
 
-        /// Verify a client proof against the outstanding challenge, which is consumed either way.
-        TFScramLoginResult CompleteLogin(const std::string& username, const std::string& clientNonce,
+        /**
+         * @brief Start a login on connection @p clientId: salt, iterations and a fresh single-use server nonce.
+         *
+         * The challenge is bound to (clientId, username) and replaces only that
+         * connection's earlier challenge; another peer asking for the same name
+         * cannot replace or consume it. Unknown users get a salt that is stable per
+         * username and shaped like a real one, so the reply does not reveal whether
+         * the account exists. A legacy pbkdf2-sha256 row is rewritten as a
+         * scram-sha256 row here. serverNonce is empty (the login cannot complete)
+         * when the CSPRNG fails or kMaxPendingLogins unexpired challenges are held.
+         */
+        TFScramChallenge BeginLogin(uint32_t clientId, const std::string& username);
+
+        /// Verify a client proof against @p clientId's outstanding challenge, which is consumed
+        /// either way; fails when that challenge was issued for another username or has expired.
+        TFScramLoginResult CompleteLogin(uint32_t clientId, const std::string& username, const std::string& clientNonce,
                                          const std::string& serverNonce, std::span<const uint8_t> clientProof);
 
         /// RFC 5802 AuthMessage (no channel binding) shared by both sides of the exchange.
@@ -112,7 +125,8 @@ namespace Terrafront
 
         /// Local wrappers for tests and offline tools: they derive the verifier or proof in-process.
         TFAuthResult Register(const std::string& username, const std::string& password); // min length 3 / 8
-        TFAuthResult Login(const std::string& username, const std::string& password);
+        TFAuthResult Login(const std::string& username, const std::string& password,
+                           uint32_t clientId = kLocalLoginClient);
 
         /**
          * @brief Bind a connection to an account (session layer, Task 4).
@@ -122,7 +136,7 @@ namespace Terrafront
          */
         bool BindSession(uint32_t clientId, uint64_t accountId);
         uint64_t AccountForClient(uint32_t clientId) const; // 0 if not logged in
-        void ClearSession(uint32_t clientId);
+        void ClearSession(uint32_t clientId);               // also drops the connection's pending login challenge
 
         /// Random-byte source with the Spark::SecureRandom::Fill signature.
         using RandomFillFn = bool (*)(void* buffer, size_t size) noexcept;
@@ -133,6 +147,11 @@ namespace Terrafront
          * Exists so tests can exercise the fail-closed paths; production code never calls it.
          */
         void SetRandomSource(RandomFillFn fill) { m_randomFill = fill; }
+
+        /// Monotonic millisecond clock for challenge expiry; nullptr restores std::chrono::steady_clock.
+        using ClockFn = int64_t (*)() noexcept;
+        /// Test seam for the challenge TTL; production code never calls it.
+        void SetClock(ClockFn now) { m_clock = now; }
 
         /**
          * @brief Generate a 16-byte hex-encoded salt from the OS CSPRNG.
@@ -148,14 +167,25 @@ namespace Terrafront
         static bool VerifyPassword(const std::string& password, const std::string& storedHash);
 
       private:
+        struct PendingLogin
+        {
+            std::string username;
+            std::string serverNonce;
+            int64_t issuedAtMs = 0;
+        };
+
         std::string RandomHex(size_t bytes) const; // empty on CSPRNG failure
+        int64_t NowMs() const;
+        /// True when @p clientId may hold a pending challenge; prunes expired entries when the map is full.
+        bool ReservePendingSlot(uint32_t clientId, int64_t nowMs);
 
         TFDatabase* m_db = nullptr;
-        RandomFillFn m_randomFill = nullptr;                          // nullptr -> Spark::SecureRandom::Fill
-        std::unordered_map<uint32_t, uint64_t> m_sessions;            // clientId -> accountId
-        std::unordered_map<uint64_t, uint32_t> m_accountOwners;       // accountId -> clientId (exclusive)
-        std::unordered_map<std::string, std::string> m_pendingLogins; // username -> outstanding server nonce
-        std::string m_unknownUserKey;                                 // per-process key for unknown-user pseudo salts
+        RandomFillFn m_randomFill = nullptr;                        // nullptr -> Spark::SecureRandom::Fill
+        std::unordered_map<uint32_t, uint64_t> m_sessions;          // clientId -> accountId
+        std::unordered_map<uint64_t, uint32_t> m_accountOwners;     // accountId -> clientId (exclusive)
+        ClockFn m_clock = nullptr;                                  // nullptr -> steady_clock
+        std::unordered_map<uint32_t, PendingLogin> m_pendingLogins; // clientId -> outstanding challenge
+        std::string m_unknownUserKey;                               // per-process key for unknown-user pseudo salts
     };
 
 } // namespace Terrafront

@@ -16,6 +16,7 @@
 #include <chrono>
 #include <sstream>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace Terrafront
@@ -357,7 +358,29 @@ namespace Terrafront
 
     // === SCRAM login ===
 
-    TFScramChallenge TFAccountSystem::BeginLogin(const std::string& username)
+    int64_t TFAccountSystem::NowMs() const
+    {
+        if (m_clock)
+        {
+            return m_clock();
+        }
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    }
+
+    bool TFAccountSystem::ReservePendingSlot(uint32_t clientId, int64_t nowMs)
+    {
+        if (m_pendingLogins.contains(clientId) || m_pendingLogins.size() < kMaxPendingLogins)
+        {
+            return true; // replacing this connection's own challenge never grows the map
+        }
+        std::erase_if(m_pendingLogins,
+                      [nowMs](const auto& entry) { return nowMs - entry.second.issuedAtMs > kLoginChallengeTtlMs; });
+        return m_pendingLogins.size() < kMaxPendingLogins;
+    }
+
+    TFScramChallenge TFAccountSystem::BeginLogin(uint32_t clientId, const std::string& username)
     {
         TFScramChallenge challenge;
         challenge.serverNonce = RandomHex(kNonceBytes);
@@ -375,10 +398,18 @@ namespace Terrafront
             {
                 challenge.salt = verifier.salt;
                 challenge.iterations = verifier.iterations;
-                if (!challenge.serverNonce.empty())
+                // One outstanding challenge per connection, keyed by the transport
+                // id: another peer's BeginLogin or CompleteLogin for the same name
+                // touches only its own entry, never this one. When the global bound
+                // is reached (after expired entries are pruned) the new login fails
+                // closed instead of evicting someone else's in-flight challenge.
+                const int64_t nowMs = NowMs();
+                if (challenge.serverNonce.empty() || !ReservePendingSlot(clientId, nowMs))
                 {
-                    m_pendingLogins[username] = challenge.serverNonce; // single use; replaces any earlier challenge
+                    challenge.serverNonce.clear();
+                    return challenge;
                 }
+                m_pendingLogins[clientId] = PendingLogin{username, challenge.serverNonce, nowMs};
                 return challenge;
             }
         }
@@ -389,14 +420,21 @@ namespace Terrafront
         {
             m_unknownUserKey = RandomHex(32);
         }
+        if (m_unknownUserKey.empty())
+        {
+            // CSPRNG unavailable: HMAC under an empty key would be a public,
+            // computable salt that tells unknown names from real ones. Fail closed.
+            challenge.serverNonce.clear();
+            return challenge;
+        }
         const Crypto::Sha256Digest pseudoSalt = Crypto::HmacSha256(m_unknownUserKey, "unknown-user-salt:" + username);
         challenge.salt.assign(pseudoSalt.begin(), pseudoSalt.begin() + kSaltBytes);
         challenge.iterations = kPbkdf2Iterations;
         return challenge;
     }
 
-    TFScramLoginResult TFAccountSystem::CompleteLogin(const std::string& username, const std::string& clientNonce,
-                                                      const std::string& serverNonce,
+    TFScramLoginResult TFAccountSystem::CompleteLogin(uint32_t clientId, const std::string& username,
+                                                      const std::string& clientNonce, const std::string& serverNonce,
                                                       std::span<const uint8_t> clientProof)
     {
         TFScramLoginResult outcome;
@@ -407,18 +445,23 @@ namespace Terrafront
             return outcome;
         }
 
-        // The challenge is consumed by the first attempt, right or wrong, so a
-        // captured proof can never be presented again.
-        const auto pending = m_pendingLogins.find(username);
+        // This connection's challenge is consumed by its first attempt, right or
+        // wrong, so a captured proof can never be presented again. Only the
+        // caller's own entry is looked up, so no other peer can consume it.
+        const auto pending = m_pendingLogins.find(clientId);
         if (pending == m_pendingLogins.end())
         {
             return outcome;
         }
-        const std::string expectedNonce = pending->second;
+        const PendingLogin issued = std::move(pending->second);
         m_pendingLogins.erase(pending);
 
+        if (NowMs() - issued.issuedAtMs > kLoginChallengeTtlMs || issued.username != username)
+        {
+            return outcome;
+        }
         if (!IsValidNonce(clientNonce) || clientProof.size() != Crypto::Sha256Digest{}.size() ||
-            !Crypto::ConstantTimeEquals(serverNonce, expectedNonce))
+            !Crypto::ConstantTimeEquals(serverNonce, issued.serverNonce))
         {
             return outcome;
         }
@@ -466,7 +509,7 @@ namespace Terrafront
         return outcome;
     }
 
-    TFAuthResult TFAccountSystem::Login(const std::string& username, const std::string& password)
+    TFAuthResult TFAccountSystem::Login(const std::string& username, const std::string& password, uint32_t clientId)
     {
         // Local wrapper: plays both SCRAM roles in-process (tests, offline tools).
         TFAuthResult result;
@@ -475,18 +518,18 @@ namespace Terrafront
             result.err = TFAuthErr::ServerError;
             return result;
         }
-        const TFScramChallenge challenge = BeginLogin(username);
+        const TFScramChallenge challenge = BeginLogin(clientId, username);
         const std::string clientNonce = RandomHex(kNonceBytes);
         if (challenge.serverNonce.empty() || clientNonce.empty())
         {
-            m_pendingLogins.erase(username);
+            m_pendingLogins.erase(clientId);
             result.err = TFAuthErr::ServerError; // CSPRNG unavailable
             return result;
         }
         // Client role: never run PBKDF2 on a challenge outside the verifier policy.
         if (challenge.iterations > kMaxScramIterations || challenge.salt.size() > kMaxScramSaltBytes)
         {
-            m_pendingLogins.erase(username);
+            m_pendingLogins.erase(clientId);
             result.err = TFAuthErr::ServerError;
             return result;
         }
@@ -495,7 +538,7 @@ namespace Terrafront
         const std::string authMessage =
             ScramAuthMessage(username, clientNonce, challenge.serverNonce, challenge.salt, challenge.iterations);
         const Crypto::Sha256Digest proof = Crypto::ScramClientProof(keys, authMessage);
-        const TFScramLoginResult outcome = CompleteLogin(username, clientNonce, challenge.serverNonce, proof);
+        const TFScramLoginResult outcome = CompleteLogin(clientId, username, clientNonce, challenge.serverNonce, proof);
 
         // Mutual authentication: the server proves it holds ServerKey.
         const Crypto::Sha256Digest expectedServerSignature =
@@ -544,6 +587,7 @@ namespace Terrafront
 
     void TFAccountSystem::ClearSession(uint32_t clientId)
     {
+        m_pendingLogins.erase(clientId); // a disconnect drops the connection's in-flight login too
         const auto it = m_sessions.find(clientId);
         if (it == m_sessions.end())
         {

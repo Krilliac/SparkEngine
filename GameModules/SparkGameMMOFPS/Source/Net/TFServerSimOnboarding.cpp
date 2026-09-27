@@ -261,7 +261,8 @@ namespace Terrafront
         }
         else
         {
-            const TFAuthResult r = m_ctx->account->Login(user, pass);
+            // Challenge bound to this connection: no other peer can replace or consume it.
+            const TFAuthResult r = m_ctx->account->Login(user, pass, sender);
             rep.ok = r.ok ? 1 : 0;
             rep.err = static_cast<uint8_t>(r.err);
             rep.accountId = r.accountId;

@@ -41,19 +41,26 @@ namespace
         return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
     }
 
+    /// Transport connection ids for the exchanges below (0 is reserved for the local wrapper).
+    constexpr uint32_t kConn = 7;
+    constexpr uint32_t kAttackerConn = 8;
+
     /// Client side of one SCRAM exchange against `accounts`, with a caller-chosen proof tweak.
     struct ClientAttempt
     {
+        uint32_t clientId = kConn;
         std::string clientNonce = "clientNonce-7f3a";
         TFScramChallenge challenge;
         Crypto::Sha256Digest proof{};
         std::string authMessage;
     };
 
-    ClientAttempt PrepareLogin(TFAccountSystem& accounts, const std::string& user, const std::string& password)
+    ClientAttempt PrepareLogin(TFAccountSystem& accounts, const std::string& user, const std::string& password,
+                               uint32_t clientId = kConn)
     {
         ClientAttempt attempt;
-        attempt.challenge = accounts.BeginLogin(user);
+        attempt.clientId = clientId;
+        attempt.challenge = accounts.BeginLogin(clientId, user);
         const Crypto::ScramKeys keys =
             Crypto::DeriveScramKeys(password, attempt.challenge.salt, attempt.challenge.iterations);
         attempt.authMessage =
@@ -65,7 +72,8 @@ namespace
 
     TFScramLoginResult Complete(TFAccountSystem& accounts, const std::string& user, const ClientAttempt& attempt)
     {
-        return accounts.CompleteLogin(user, attempt.clientNonce, attempt.challenge.serverNonce, attempt.proof);
+        return accounts.CompleteLogin(attempt.clientId, user, attempt.clientNonce, attempt.challenge.serverNonce,
+                                      attempt.proof);
     }
 } // namespace
 
@@ -146,13 +154,14 @@ TEST(TFScram_WrongProofFails)
     flipped.proof[0] ^= 0x01;
     EXPECT_FALSE(Complete(accounts, "scram_wrong", flipped).auth.ok);
 
-    // A proof computed for one user does not log in as another.
+    // A proof computed for one user does not log in as another: the connection's
+    // challenge was issued for scram_wrong, so presenting it as scram_other fails.
     ASSERT_TRUE(accounts.Register("scram_other", "right password").ok);
     ClientAttempt crossUser = PrepareLogin(accounts, "scram_wrong", "right password");
-    accounts.BeginLogin("scram_other");
-    EXPECT_FALSE(
-        accounts.CompleteLogin("scram_other", crossUser.clientNonce, crossUser.challenge.serverNonce, crossUser.proof)
-            .auth.ok);
+    EXPECT_FALSE(accounts
+                     .CompleteLogin(kConn, "scram_other", crossUser.clientNonce, crossUser.challenge.serverNonce,
+                                    crossUser.proof)
+                     .auth.ok);
 
     EXPECT_TRUE(db.Close());
     fs::remove(path);
@@ -174,10 +183,10 @@ TEST(TFScram_ReplayedProofFails)
     EXPECT_FALSE(Complete(accounts, "scram_replay", captured).auth.ok);
 
     // The captured proof against a fresh challenge: the server nonce differs.
-    const TFScramChallenge fresh = accounts.BeginLogin("scram_replay");
+    const TFScramChallenge fresh = accounts.BeginLogin(kConn, "scram_replay");
     EXPECT_TRUE(fresh.serverNonce != captured.challenge.serverNonce);
     EXPECT_FALSE(
-        accounts.CompleteLogin("scram_replay", captured.clientNonce, fresh.serverNonce, captured.proof).auth.ok);
+        accounts.CompleteLogin(kConn, "scram_replay", captured.clientNonce, fresh.serverNonce, captured.proof).auth.ok);
 
     // A wrong attempt also consumes the challenge, so guessing cannot reuse it.
     const ClientAttempt good = PrepareLogin(accounts, "scram_replay", "replay me 123");
@@ -202,13 +211,15 @@ TEST(TFScram_TruncatedOrMalformedMessagesFail)
     ClientAttempt attempt = PrepareLogin(accounts, "scram_trunc", "truncate me 1");
     const std::span<const uint8_t> shortProof(attempt.proof.data(), attempt.proof.size() - 1);
     EXPECT_FALSE(
-        accounts.CompleteLogin("scram_trunc", attempt.clientNonce, attempt.challenge.serverNonce, shortProof).auth.ok);
+        accounts.CompleteLogin(kConn, "scram_trunc", attempt.clientNonce, attempt.challenge.serverNonce, shortProof)
+            .auth.ok);
 
     for (const std::string& badNonce : {std::string(), std::string("has,comma"), std::string(200, 'x')})
     {
         attempt = PrepareLogin(accounts, "scram_trunc", "truncate me 1");
         EXPECT_FALSE(
-            accounts.CompleteLogin("scram_trunc", badNonce, attempt.challenge.serverNonce, attempt.proof).auth.ok);
+            accounts.CompleteLogin(kConn, "scram_trunc", badNonce, attempt.challenge.serverNonce, attempt.proof)
+                .auth.ok);
     }
 
     // No challenge outstanding at all.
@@ -273,10 +284,10 @@ TEST(TFScram_UnknownUserGetsStableSalt)
     accounts.SetDatabase(&db);
     ASSERT_TRUE(accounts.Register("real_pilot", "a real password").ok);
 
-    const TFScramChallenge first = accounts.BeginLogin("ghost_pilot");
-    const TFScramChallenge second = accounts.BeginLogin("ghost_pilot");
-    const TFScramChallenge other = accounts.BeginLogin("ghost_other");
-    const TFScramChallenge real = accounts.BeginLogin("real_pilot");
+    const TFScramChallenge first = accounts.BeginLogin(kConn, "ghost_pilot");
+    const TFScramChallenge second = accounts.BeginLogin(kConn, "ghost_pilot");
+    const TFScramChallenge other = accounts.BeginLogin(kConn, "ghost_other");
+    const TFScramChallenge real = accounts.BeginLogin(kConn, "real_pilot");
 
     // Same shape as a real account, stable per name, distinct across names.
     EXPECT_TRUE(first.salt == second.salt);
@@ -379,12 +390,118 @@ TEST(TFScram_StoredRowOutsidePolicyIsUnusable)
 
     for (const char* user : {"planted_iter", "planted_salt"})
     {
-        const TFScramChallenge challenge = accounts.BeginLogin(user);
+        const TFScramChallenge challenge = accounts.BeginLogin(kConn, user);
         EXPECT_EQ(challenge.iterations, uint32_t{150000}); // pseudo-salt path, not the row's cost
         EXPECT_EQ(challenge.salt.size(), size_t{16});
         EXPECT_FALSE(accounts.Login(user, "any password").ok);
     }
 
+    EXPECT_TRUE(db.Close());
+    fs::remove(path);
+}
+
+// Pending challenges used to be keyed only by username: any unauthenticated peer
+// could replace a victim's in-flight challenge with BeginLogin(victim) or erase
+// it with a failed CompleteLogin(victim, ...), so knowing a name was enough to
+// keep that player from ever logging in. Each challenge now belongs to the
+// connection that asked for it.
+TEST(TFScram_ChallengeIsBoundToItsConnection)
+{
+    const std::string path = FreshDb("test_tfscram_conn.db");
+    TFDatabase db;
+    ASSERT_TRUE(db.Open(path));
+    TFAccountSystem accounts;
+    accounts.SetDatabase(&db);
+    ASSERT_TRUE(accounts.Register("victim_pilot", "victim password 1").ok);
+
+    const ClientAttempt victim = PrepareLogin(accounts, "victim_pilot", "victim password 1", kConn);
+    ASSERT_FALSE(victim.challenge.serverNonce.empty());
+
+    // The attacker asks for a challenge for the same name on its own connection...
+    const TFScramChallenge attackerChallenge = accounts.BeginLogin(kAttackerConn, "victim_pilot");
+    EXPECT_FALSE(attackerChallenge.serverNonce.empty());
+    EXPECT_TRUE(attackerChallenge.serverNonce != victim.challenge.serverNonce);
+    // ...fails a proof on it, and replays the victim's proof and nonce from its connection.
+    const Crypto::Sha256Digest junk{};
+    EXPECT_FALSE(
+        accounts.CompleteLogin(kAttackerConn, "victim_pilot", "attackerNonce", attackerChallenge.serverNonce, junk)
+            .auth.ok);
+    EXPECT_FALSE(accounts
+                     .CompleteLogin(kAttackerConn, "victim_pilot", victim.clientNonce, victim.challenge.serverNonce,
+                                    victim.proof)
+                     .auth.ok);
+    // A connection that never asked for a challenge cannot consume anyone's.
+    EXPECT_FALSE(accounts
+                     .CompleteLogin(kAttackerConn + 1, "victim_pilot", victim.clientNonce, victim.challenge.serverNonce,
+                                    victim.proof)
+                     .auth.ok);
+
+    // The victim's challenge survived all of it.
+    const TFScramLoginResult result = Complete(accounts, "victim_pilot", victim);
+    EXPECT_TRUE(result.auth.ok);
+
+    // A disconnect (ClearSession) drops the connection's in-flight challenge.
+    const ClientAttempt dropped = PrepareLogin(accounts, "victim_pilot", "victim password 1", kAttackerConn);
+    accounts.ClearSession(kAttackerConn);
+    EXPECT_FALSE(Complete(accounts, "victim_pilot", dropped).auth.ok);
+
+    EXPECT_TRUE(db.Close());
+    fs::remove(path);
+}
+
+namespace
+{
+    int64_t g_fakeNowMs = 0;
+    int64_t FakeNow() noexcept
+    {
+        return g_fakeNowMs;
+    }
+} // namespace
+
+// A pending challenge expires, and the pending map is globally bounded: a flood
+// of BeginLogin calls from many connections fails closed for the newcomers
+// instead of growing without limit or evicting an in-flight login.
+TEST(TFScram_PendingChallengesExpireAndAreBounded)
+{
+    const std::string path = FreshDb("test_tfscram_pending.db");
+    TFDatabase db;
+    ASSERT_TRUE(db.Open(path));
+    TFAccountSystem accounts;
+    accounts.SetDatabase(&db);
+    g_fakeNowMs = 1000;
+    accounts.SetClock(&FakeNow);
+    ASSERT_TRUE(accounts.Register("ttl_pilot", "ttl password 12").ok);
+
+    // Expiry: a proof presented after the TTL fails even though it is correct.
+    const ClientAttempt late = PrepareLogin(accounts, "ttl_pilot", "ttl password 12");
+    g_fakeNowMs += TFAccountSystem::kLoginChallengeTtlMs + 1;
+    EXPECT_FALSE(Complete(accounts, "ttl_pilot", late).auth.ok);
+
+    // Bound: the first connection's challenge is in flight, then the map fills.
+    const ClientAttempt inFlight = PrepareLogin(accounts, "ttl_pilot", "ttl password 12", 1);
+    ASSERT_FALSE(inFlight.challenge.serverNonce.empty());
+    for (uint32_t conn = 2; conn <= TFAccountSystem::kMaxPendingLogins; ++conn)
+    {
+        ASSERT_FALSE(accounts.BeginLogin(conn, "ttl_pilot").serverNonce.empty());
+    }
+    const uint32_t newcomer = TFAccountSystem::kMaxPendingLogins + 1;
+    EXPECT_TRUE(accounts.BeginLogin(newcomer, "ttl_pilot").serverNonce.empty()); // fails closed
+    EXPECT_TRUE(!accounts.BeginLogin(2, "ttl_pilot").serverNonce.empty());       // own slot is reusable
+
+    // The in-flight login was not evicted by the flood.
+    EXPECT_TRUE(Complete(accounts, "ttl_pilot", inFlight).auth.ok);
+
+    // Refill the freed slot so the map is full again; only expiry frees room now.
+    ASSERT_FALSE(accounts.BeginLogin(1, "ttl_pilot").serverNonce.empty());
+    EXPECT_TRUE(accounts.BeginLogin(newcomer, "ttl_pilot").serverNonce.empty());
+
+    // Once the flood's challenges expire, newcomers are served again.
+    g_fakeNowMs += TFAccountSystem::kLoginChallengeTtlMs + 1;
+    const ClientAttempt after = PrepareLogin(accounts, "ttl_pilot", "ttl password 12", newcomer + 1);
+    EXPECT_FALSE(after.challenge.serverNonce.empty());
+    EXPECT_TRUE(Complete(accounts, "ttl_pilot", after).auth.ok);
+
+    accounts.SetClock(nullptr);
     EXPECT_TRUE(db.Close());
     fs::remove(path);
 }
