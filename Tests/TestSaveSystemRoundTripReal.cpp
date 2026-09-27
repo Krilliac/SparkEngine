@@ -380,6 +380,66 @@ TEST(SaveSystemRoundTripReal_TransientComponentsAreExcludedFromTheSnapshot)
     std::filesystem::remove_all(dir);
 }
 
+TEST(SaveSystemRoundTripReal_MetadataCustomStateAndFieldValuesSurviveTheFile)
+{
+    const std::string dir = MakeTempDir("field_values");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    Transform& transform = source.AddComponent<Transform>(source.CreateEntity("value-carrier"));
+    transform.position.x = -1.5f;
+    transform.position.y = 0.0f;
+    transform.position.z = 3.25f;
+
+    SaveMetadata metadata;
+    metadata.saveName = "Field values";
+    metadata.sceneName = ""; // an empty string is a value, not a missing field
+    metadata.playerClass = "Engineer";
+    metadata.playTime = 3.14f;
+    metadata.playerHealth = -1.0f;
+    metadata.playerArmor = 0.5f;
+    metadata.playerPosition = {4.0f, -2.0f, 0.25f};
+    metadata.playerKills = 7;
+    metadata.playerDeaths = 0;
+    const std::unordered_map<std::string, std::string> customState = {{"cursor", "encounter-3"}, {"empty", ""}};
+    ASSERT_TRUE(saveSystem.Save("field-values", source, metadata, customState));
+
+    SaveMetadata read;
+    ASSERT_TRUE(saveSystem.GetSaveMetadata("field-values", read));
+    EXPECT_EQ(read.saveName, std::string("Field values"));
+    EXPECT_TRUE(read.sceneName.empty());
+    EXPECT_EQ(read.playerClass, std::string("Engineer"));
+    EXPECT_EQ(read.version, kCurrentSaveVersion);
+    EXPECT_NE(read.timestamp, 0u); // the writer stamps the save time
+    EXPECT_NEAR(read.playTime, 3.14f, 0.0001f);
+    EXPECT_NEAR(read.playerHealth, -1.0f, 0.0001f);
+    EXPECT_NEAR(read.playerArmor, 0.5f, 0.0001f);
+    EXPECT_NEAR(read.playerPosition.x, 4.0f, 0.0001f);
+    EXPECT_NEAR(read.playerPosition.y, -2.0f, 0.0001f);
+    EXPECT_NEAR(read.playerPosition.z, 0.25f, 0.0001f);
+    EXPECT_EQ(read.playerKills, 7);
+    EXPECT_EQ(read.playerDeaths, 0);
+
+    World loaded;
+    std::unordered_map<std::string, std::string> loadedState;
+    ASSERT_TRUE(saveSystem.Load("field-values", loaded, loadedState));
+    EXPECT_EQ(loadedState.size(), 2u);
+    EXPECT_EQ(loadedState["cursor"], std::string("encounter-3"));
+    ASSERT_TRUE(loadedState.count("empty") == 1u);
+    EXPECT_TRUE(loadedState["empty"].empty());
+
+    const EntityID carrier = FindNamed(loaded, "value-carrier");
+    ASSERT_TRUE(carrier != entt::null);
+    const Transform* loadedTransform = loaded.GetComponent<Transform>(carrier);
+    ASSERT_TRUE(loadedTransform != nullptr);
+    EXPECT_NEAR(loadedTransform->position.x, -1.5f, 0.0001f);
+    EXPECT_NEAR(loadedTransform->position.y, 0.0f, 0.0001f);
+    EXPECT_NEAR(loadedTransform->position.z, 3.25f, 0.0001f);
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SaveMigration_VersionTwoSnapshotIsOutsideTheCompatibilityWindow)
 {
     // OD-03: this build reads N (v4) and N-1 (v3) only. A v2 snapshot is refused

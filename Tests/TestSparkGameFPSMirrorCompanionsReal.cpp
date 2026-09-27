@@ -2,22 +2,21 @@
  * @file TestSparkGameFPSMirrorCompanionsReal.cpp
  * @brief Production-source companions for the stable-v1 single-player mirrors.
  *
- * TestEngineContext.cpp says in its own header that it is a standalone
- * reimplementation, so it cannot detect a regression in the shipped code it
- * claims to cover. This file includes the real headers and exercises the
- * shipped classes:
+ * These tests replace the stable-v1 single-player mirrors RDY-010 retired
+ * (TestInputManagerState.cpp and TestEngineContext.cpp, both standalone
+ * reimplementations that could not detect a regression in the shipped code).
+ * This file includes the real headers and exercises the shipped classes:
  *
  *   InputManager   (SparkEngine/Source/Input/InputManager.cpp) - sensitivity and
  *                  dead-zone validation, key bindings, state clearing, and the
  *                  windowless message path: HandleMessage + Update drive key and
  *                  button state, press/active metrics and per-frame mouse deltas
  *   EngineContext  (SparkEngine/Source/Core/EngineContext.cpp) - the TypeId
- *                  service locator that TestEngineContext.cpp reimplements
+ *                  service locator (more cases in harden/Test_tests_enginecontext_real.cpp)
  *
  * Both .cpp files are already part of SparkEngineLib, so no additional
- * production source has to be added to the SparkTests target. RDY-010 retired
- * the TestInputManagerState.cpp mirror; its edge-detection cases live in
- * TestInputFrameEdgesReal.cpp.
+ * production source has to be added to the SparkTests target. The input
+ * edge-detection cases live in TestInputFrameEdgesReal.cpp.
  *
  * Deliberately NOT exercised here: InputManager::Initialize/CaptureMouse,
  * WM_LBUTTONDOWN (which captures the mouse) and the global EngineContext

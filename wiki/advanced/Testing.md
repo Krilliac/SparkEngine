@@ -491,7 +491,7 @@ The test files cover all major engine subsystems:
 | `TestWeaponMechanicsReal` | 22 | Shipped WeaponSystem fire, cooldown, reload, recoil, spread, ADS, switching |
 | `TestInventorySystem` | 11 | Item add/remove, stacking, weight |
 | `TestQuestSystem` | 10 | Quest stages, objectives, completion |
-| `TestGameMode` | 5 | Game mode switching and score tracking |
+| `TestGameModeReal` | 11 | Shipped PlayerScore K/D, rules, spawn points, presets |
 | `TestAchievementSystem` | 5 | Achievement tracking and unlocking |
 | `TestDestructionSystem` | 5 | Object destruction and debris |
 | `TestCooldown` | 14 | Cooldown timer management |
@@ -508,7 +508,7 @@ The test files cover all major engine subsystems:
 
 | Test File | Cases | Description |
 |-----------|-------|-------------|
-| `TestEngineContext` | 18 | Service locator, subsystem registration |
+| `harden/Test_tests_enginecontext_real` | 2 | Shipped EngineContext registry: unregister, re-register |
 | `TestCommandHistory` | 10 | Console command history and recall |
 | `TestDebugTools` | 31 | Debug visualization, imgui panels |
 | `TestPlayModeManager` | 33 | Play/pause/stop mode transitions |
@@ -536,7 +536,7 @@ The test files cover all major engine subsystems:
 | Test File | Cases | Description |
 |-----------|-------|-------------|
 | `TestSceneSnapshotSerializer` | 19 | Scene snapshot save/load round-trip |
-| `TestSaveSystem` | 7 | Serialization, compression, file I/O |
+| `TestSaveSystemRoundTripReal` | 17 | Shipped SaveSystem round trips, metadata, slots, recovery |
 | `TestLoadingScreen` | 4 | Loading screen state management |
 
 ### World Systems

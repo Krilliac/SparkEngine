@@ -50,9 +50,7 @@ add_executable(SparkTests
     TestReflectedScene.cpp
     TestReflectedSceneEmissiveHierarchy.cpp
     TestReflectedSceneCompatibility.cpp
-    TestGameMode.cpp
     TestNoiseGenerator.cpp
-    TestSaveSystem.cpp
     TestTFFixedStep.cpp
     TestAIBehaviorTree.cpp
     TestAIStress.cpp
@@ -93,7 +91,6 @@ add_executable(SparkTests
     TestFrameAllocator.cpp
     TestChromeTracing.cpp
     TestLocalFileCache.cpp
-    TestEngineContext.cpp
     TestNetBuffer.cpp
     TestNetQuantize.cpp
     TestSprite2DComponents.cpp
