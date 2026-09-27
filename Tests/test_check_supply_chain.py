@@ -952,13 +952,35 @@ class TestActionPinning(FakeRepoCase):
         self._workflow(self.HEADER + f"      - uses: actions/checkout@{'c' * 40}\n")
         self.assert_violation("not a recorded pin")
 
+    def test_dormant_sha_under_used_owner_is_rejected(self) -> None:
+        # Pre-recording an unused SHA would let a later repin to it land
+        # without a lockfile diff; the lock must equal the in-use pairs.
+        data = self.lock()
+        data["action_pins"]["actions/checkout"] = sorted(
+            [*data["action_pins"]["actions/checkout"], "c" * 40]
+        )
+        self.set_lock(data)
+        self.commit()
+        self.assert_violation("dormant SHA", "c" * 40)
+
+    def test_unreferenced_owner_is_rejected(self) -> None:
+        data = self.lock()
+        data["action_pins"]["attacker/backdoor"] = ["b" * 40]
+        self.set_lock(data)
+        self.commit()
+        self.assert_violation("'attacker/backdoor' is not referenced by any workflow")
+
     def test_docker_tag_reference_is_rejected(self) -> None:
         self._workflow(self.HEADER + "      - uses: docker://alpine:latest\n")
         self.assert_violation("digest-pinned")
 
     def test_docker_digest_reference_is_accepted(self) -> None:
+        # Keep the recorded checkout pin in use: an unused lock entry is itself
+        # a violation, and this case is about the docker reference only.
         self._workflow(
-            self.HEADER + f"      - uses: docker://alpine@sha256:{'d' * 64}\n"
+            self.HEADER
+            + f"      - uses: actions/checkout@{CHECKOUT_SHA}\n"
+            + f"      - uses: docker://alpine@sha256:{'d' * 64}\n"
         )
         self.assert_baseline_passes()
 

@@ -1835,7 +1835,10 @@ def check_action_pins(
         return
 
     pins: dict[str, list[str]] = lockfile["action_pins"]
-    observed: set[str] = set()
+    # (owner/repo, sha) pairs actually used.  The lockfile must equal this set
+    # exactly: a dormant recorded SHA would let a later repin land without the
+    # lockfile diff that forces a reviewer to look at the new identity.
+    observed: set[tuple[str, str]] = set()
 
     for rel in files:
         filepath = root / rel
@@ -1859,11 +1862,22 @@ def check_action_pins(
             for trail, value in _iter_uses(document):
                 _check_one_use(root, rel, trail, value, pins, observed, result)
 
-    for repo in sorted(set(pins) - observed):
-        result.warn(
-            "actions", LOCKFILE_REL,
-            f"action_pins entry {repo!r} is not referenced by any workflow",
-        )
+    observed_repos = {repo for repo, _ in observed}
+    for repo in sorted(pins):
+        if repo not in observed_repos:
+            result.error(
+                "actions", LOCKFILE_REL,
+                f"action_pins entry {repo!r} is not referenced by any workflow — "
+                "remove it (run --update) so a later adoption shows up as a lockfile diff",
+            )
+            continue
+        for sha in sorted(set(pins[repo])):
+            if (repo, sha) not in observed:
+                result.error(
+                    "actions", LOCKFILE_REL,
+                    f"action_pins entry {repo!r} records dormant SHA {sha} that no workflow uses — "
+                    "remove it (run --update) so a later repin shows up as a lockfile diff",
+                )
 
 
 def _check_one_use(
@@ -1872,7 +1886,7 @@ def _check_one_use(
     trail: str,
     value: Any,
     pins: dict[str, list[str]],
-    observed: set[str],
+    observed: set[tuple[str, str]],
     result: CheckResult,
 ) -> None:
     where = f"{rel}:{trail}"
@@ -1913,7 +1927,7 @@ def _check_one_use(
 
     repo = match.group("repo")
     sha = match.group("sha")
-    observed.add(repo)
+    observed.add((repo, sha))
     allowed = pins.get(repo)
     if allowed is None:
         result.error(
