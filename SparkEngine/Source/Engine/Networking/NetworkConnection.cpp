@@ -338,8 +338,14 @@ namespace Spark::Net
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         // Port 0 requests an OS-assigned ephemeral port and is the only
         // conflict-free choice for parallel tests/tools.
-        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, maxClients > 0 && maxClients <= 256,
-                          "maxClients must be in [1, 256]");
+        // maxClients comes from operator configuration, so an out-of-range value is a
+        // recoverable startup error rather than an always-on assertion that aborts.
+        if (maxClients < 1 || maxClients > MAX_SERVER_CLIENTS)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing server startup: maxClients %d outside [1, %d]",
+                            maxClients, MAX_SERVER_CLIENTS);
+            return false;
+        }
         if (!IsEndpointLifecycleIdle())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network,

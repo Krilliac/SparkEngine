@@ -96,6 +96,15 @@ namespace Spark::Net
             return false;
         }
 
+        if (m_config.maxClients < 1 || m_config.maxClients > MAX_SERVER_CLIENTS)
+        {
+            const std::string reason = "maxClients " + std::to_string(m_config.maxClients) + " outside [1, " +
+                                       std::to_string(MAX_SERVER_CLIENTS) + "]";
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing dedicated-server startup: %s", reason.c_str());
+            Log("ERROR: Refusing dedicated-server startup: " + reason);
+            return false;
+        }
+
         if (!m_networkRuntime->Initialize())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to initialize NetworkManager");

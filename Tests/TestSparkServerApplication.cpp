@@ -380,6 +380,37 @@ TEST(SparkServerOptions_RejectsOutOfRangePort)
     EXPECT_TRUE(result.error.find("65535") != std::string::npos);
 }
 
+TEST(SparkServerOptions_MaxClientsBoundedByNetworkLimit)
+{
+    // Values the network layer cannot host must be a configuration error at parse
+    // time, not an always-on assertion that aborts the process at startup.
+    const std::array accepted = {std::string_view{"--module"}, std::string_view{"Game.dll"},
+                                 std::string_view{"--max-clients"}, std::string_view{"256"}};
+    const ParseResult atLimit = ParseServerOptions(accepted);
+    ASSERT_TRUE(atLimit.options.has_value());
+    EXPECT_EQ(atLimit.options->server.maxClients, Spark::Net::MAX_SERVER_CLIENTS);
+
+    const std::array rejected = {std::string_view{"--module"}, std::string_view{"Game.dll"},
+                                 std::string_view{"--max-clients"}, std::string_view{"257"}};
+    const ParseResult overLimit = ParseServerOptions(rejected);
+    EXPECT_FALSE(overLimit.options.has_value());
+    EXPECT_TRUE(overLimit.error.find("256") != std::string::npos);
+
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-sec-max-clients.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nmax_clients = 257\n[Modules]\nmodule = Game.dll\n";
+    }
+    const std::string configPathText = configPath.string();
+    const std::array fromConfig = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult configResult = ParseServerOptions(fromConfig);
+    EXPECT_FALSE(configResult.options.has_value());
+    EXPECT_TRUE(configResult.error.find("max_clients") != std::string::npos);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
 TEST(SparkServerOptions_ParsesEditorStopSentinel)
 {
     const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"},

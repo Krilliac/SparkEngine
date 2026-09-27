@@ -116,6 +116,11 @@ namespace Spark::Net
 
     constexpr uint16_t DEFAULT_PORT = 27015;
 
+    /// Largest client count one server endpoint accepts. Configuration surfaces (SparkServer
+    /// CLI and INI, DedicatedServer) validate against this so an operator value outside
+    /// [1, MAX_SERVER_CLIENTS] is a configuration error, never a runtime abort.
+    constexpr int MAX_SERVER_CLIENTS = 256;
+
     /// Magic that opens every Connect payload ("SPNH", Spark network handshake). A Connect
     /// without it predates protocol negotiation and is rejected as ProtocolMissing.
     constexpr uint32_t NETWORK_HANDSHAKE_MAGIC = 0x484E5053;

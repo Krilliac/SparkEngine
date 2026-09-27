@@ -188,8 +188,8 @@ namespace Spark::Server
             const int port = config.GetInt("Network", "port", options.server.port);
             const int maxClients = config.GetInt("Network", "max_clients", options.server.maxClients);
             const float tickRate = config.GetFloat("Network", "tick_rate", options.server.tickRate);
-            if (port < 1 || port > 65535 || maxClients < 1 || maxClients > 100000 || !std::isfinite(tickRate) ||
-                tickRate < 1.0f || tickRate > 1000.0f)
+            if (port < 1 || port > 65535 || maxClients < 1 || maxClients > Net::MAX_SERVER_CLIENTS ||
+                !std::isfinite(tickRate) || tickRate < 1.0f || tickRate > 1000.0f)
             {
                 error = "Server config contains an out-of-range port, max_clients, or tick_rate";
                 return false;
@@ -281,7 +281,7 @@ namespace Spark::Server
                "  --module <game-library>     Load one dynamic game module\n"
                "  --manifest <modules.json>   Load a module manifest\n"
                "  --port <1..65535>            Override the game port\n"
-               "  --max-clients <count>        Override the player limit\n"
+               "  --max-clients <1..256>       Override the player limit\n"
                "  --tick-rate <hz>             Override the simulation tick rate\n"
                "  --map <name[,name...]>       Override the map rotation\n"
                "  --name <display-name>        Override the server name\n"
@@ -393,8 +393,8 @@ namespace Spark::Server
             {
                 const auto value = requireValue(index);
                 int parsed = 0;
-                if (!value || !ParseInteger(*value, 1, 100000, parsed))
-                    return {{}, "--max-clients must be between 1 and 100000"};
+                if (!value || !ParseInteger(*value, 1, Net::MAX_SERVER_CLIENTS, parsed))
+                    return {{}, "--max-clients must be between 1 and " + std::to_string(Net::MAX_SERVER_CLIENTS)};
                 options.server.maxClients = parsed;
             }
             else if (argument == "--tick-rate")

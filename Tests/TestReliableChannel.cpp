@@ -958,4 +958,16 @@ TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
     nm.Shutdown();
 }
 
+TEST(NetworkWire_StartServerRejectsOutOfRangeMaxClientsWithoutAborting)
+{
+    // maxClients comes from operator configuration: out of range is a startup
+    // failure the caller can report, not an always-on assertion that aborts.
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_FALSE(nm.StartServer(0, 0));
+    EXPECT_FALSE(nm.StartServer(0, Net::MAX_SERVER_CLIENTS + 1));
+    EXPECT_FALSE(nm.StartServer(0, 100000));
+    nm.Shutdown();
+}
+
 #endif // SPARK_TEST_HAS_NETWORKING && ENABLE_NETWORKING

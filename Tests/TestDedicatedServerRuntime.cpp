@@ -226,6 +226,30 @@ TEST(DedicatedServerRuntime_InvalidEndpointPolicyFailsBeforeRuntimeInitializatio
     EXPECT_FALSE(runtime.startServerCalled);
 }
 
+TEST(DedicatedServerRuntime_OutOfRangeMaxClientsFailsBeforeRuntimeInitialization)
+{
+    for (const int maxClients : {0, MAX_SERVER_CLIENTS + 1, 100000})
+    {
+        MockNetworkRuntime runtime;
+        DedicatedServer server(runtime);
+        ServerConfig config;
+        config.endpointPolicy = NetworkEndpointPolicy::Loopback();
+        config.maxClients = maxClients;
+        EXPECT_FALSE(server.InitializeOnly(config));
+        EXPECT_FALSE(runtime.initializeCalled);
+        EXPECT_FALSE(runtime.startServerCalled);
+    }
+
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime, []() { return INVALID_SOCKET; });
+    ServerConfig config;
+    config.endpointPolicy = NetworkEndpointPolicy::Loopback();
+    config.maxClients = MAX_SERVER_CLIENTS;
+    ASSERT_TRUE(server.InitializeOnly(config));
+    EXPECT_EQ(runtime.startedMaxClients, MAX_SERVER_CLIENTS);
+    server.Stop();
+}
+
 TEST(DedicatedServerRuntime_ChatCannotInvokeRcon)
 {
     MockNetworkRuntime runtime;
