@@ -35,6 +35,7 @@
 #include "Net/TFClientSessionState.h"
 #include "Net/TFNetProtocol.h"
 #include "Net/TFRepProtocol.h"
+#include "Net/TFScramWire.h"
 
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/InterpolationBuffer.h"
@@ -131,6 +132,22 @@ namespace Terrafront
         // server reply so console commands (tf_login/tf_char_list/...) and Task
         // 5/6 can consume it. Once `m_ctx->loginFlow` is wired (Task 6), the
         // On*Reply handlers below should forward to it directly instead.
+        /**
+         * @brief NET-100: start a SCRAM login (LoginRequest -> LoginChallenge -> LoginProof -> LoginReply)
+         *
+         * The password stays in this process: it is held only until the server's
+         * challenge arrives, turned into a proof, and wiped. The reply is accepted
+         * only if the server's signature proves it holds this account's ServerKey.
+         * On a listen host the whole exchange completes before this returns.
+         */
+        void BeginLogin(const std::string& user, const std::string& password);
+
+        /**
+         * @brief NET-100: register by sending a verifier derived here (never the password)
+         * @return false when the registration was refused locally (see LastAuthError)
+         */
+        bool Register(const std::string& user, const std::string& password);
+
         bool IsLoggedIn() const { return m_session.loggedIn; }
         uint64_t AccountId() const { return m_session.accountId; }
         uint8_t LastAuthError() const { return static_cast<uint8_t>(m_session.lastAuthError); }
@@ -201,6 +218,7 @@ namespace Terrafront
         // parse + stash the reply so Task 5/6 can read it via a getter, or replace
         // this stash entirely once `m_ctx->loginFlow` exists (Task 6). Logged at
         // INFO so the loopback flow is observable before the UI lands.
+        void OnLoginChallenge(const void* data, size_t size);
         void OnLoginReply(const void* data, size_t size);
         void OnRegisterReply(const void* data, size_t size);
         void OnCharListReply(const void* data, size_t size);
@@ -251,6 +269,9 @@ namespace Terrafront
 
         // W5 onboarding (Task 4) reply stash (see the getters above).
         TFClientSessionState m_session;
+
+        // NET-100: the SCRAM login in flight (owns and wipes the password and derived keys).
+        TFScramClient m_scram;
     };
 
 } // namespace Terrafront

@@ -32,8 +32,9 @@ namespace Terrafront
     inline constexpr std::array<TFMsg, 4> kTFOnboardingMsgs = {TFMsg::CharListRequest, TFMsg::CharCreateReq,
                                                                TFMsg::CharDeleteReq, TFMsg::EnterWorldReq};
 
-    /// Credential ids: registered as sensitive (credential-bearing) handlers.
-    inline constexpr std::array<TFMsg, 2> kTFCredentialMsgs = {TFMsg::LoginRequest, TFMsg::RegisterRequest};
+    /// Login and registration ids: registered as sensitive handlers (SCRAM messages, NET-100).
+    inline constexpr std::array<TFMsg, 3> kTFCredentialMsgs = {TFMsg::LoginRequest, TFMsg::LoginProof,
+                                                               TFMsg::RegisterRequest};
 
     /// True when RouteClientMessage must reject `id` from a sender that has not entered the world.
     constexpr bool IsEnteredWorldGatedMsg(TFMsg id) noexcept

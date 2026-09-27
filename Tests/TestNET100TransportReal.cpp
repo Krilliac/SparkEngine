@@ -50,11 +50,6 @@ namespace
         return key;
     }
 
-    bool Contains(const std::vector<uint8_t>& haystack, const std::vector<uint8_t>& needle)
-    {
-        return std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end()) != haystack.end();
-    }
-
     constexpr std::string_view kSunscreen = "Ladies and Gentlemen of the class of '99: If I could offer you only one "
                                             "tip for the future, sunscreen would be it.";
 } // namespace
@@ -403,27 +398,10 @@ TEST(Transport_FuzzPacket_RandomMutationsNeverAuthenticate)
     EXPECT_EQ(accepted, 0);
 }
 
-TEST(Transport_Capture_CredentialBytesNeverAppearOnTheWire)
-{
-    SecureChannel client(TestSecret(14), ChannelRole::Client);
-    SecureChannel server(TestSecret(14), ChannelRole::Server);
-
-    // Same shape as TF_AuthRequest: 32-byte user + 64-byte password.
-    std::vector<uint8_t> authRequest(96, 0);
-    const std::string user = "pilot_one";
-    const std::string pass = "correct horse battery staple";
-    std::copy(user.begin(), user.end(), authRequest.begin());
-    std::copy(pass.begin(), pass.end(), authRequest.begin() + 32);
-
-    std::vector<uint8_t> packet;
-    EXPECT_TRUE(client.Seal(authRequest, packet));
-    EXPECT_FALSE(Contains(packet, Bytes(pass)));
-    EXPECT_FALSE(Contains(packet, Bytes(user)));
-
-    std::vector<uint8_t> out;
-    EXPECT_EQ(static_cast<int>(server.Open(packet, out)), static_cast<int>(OpenResult::Ok));
-    EXPECT_TRUE(out == authRequest);
-}
+// The credential capture test moved to Tests/TestSecureTransportWired.cpp
+// (SecureTransport_TFLogin_CaptureHasNoPasswordOrSaltedPassword): it now captures a
+// real TERRAFRONT SCRAM login through the production NetworkManager instead of
+// sealing a password-shaped buffer, which no message carries any more.
 
 TEST(Transport_KeyGeneration_CsprngKeysAndTokens)
 {

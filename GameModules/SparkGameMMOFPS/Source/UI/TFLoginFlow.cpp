@@ -279,13 +279,12 @@ namespace Terrafront
     {
         if (!m_ctx || !m_ctx->clientNet)
             return;
-        TF_AuthRequest req{};
-        const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
-        std::strncpy(req.user, m_username, sizeof(req.user) - 1);
-        std::strncpy(req.pass, m_password, sizeof(req.pass) - 1);
+        const std::string user(m_username, strnlen(m_username, sizeof(m_username)));
+        std::string password(m_password, strnlen(m_password, sizeof(m_password)));
+        const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(password); });
         m_error.clear();
         DispatchAfterArmingOnboardingState([&] { m_pending = PendingOp::Login; },
-                                           [&] { m_ctx->clientNet->SendMsg(TFMsg::LoginRequest, &req, sizeof(req)); });
+                                           [&] { m_ctx->clientNet->BeginLogin(user, password); });
         Spark::SecureErase(m_password, sizeof(m_password));
     }
 
@@ -293,13 +292,12 @@ namespace Terrafront
     {
         if (!m_ctx || !m_ctx->clientNet)
             return;
-        TF_AuthRequest req{};
-        const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
-        std::strncpy(req.user, m_username, sizeof(req.user) - 1);
-        std::strncpy(req.pass, m_password, sizeof(req.pass) - 1);
+        const std::string user(m_username, strnlen(m_username, sizeof(m_username)));
+        std::string password(m_password, strnlen(m_password, sizeof(m_password)));
+        const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(password); });
         m_error.clear();
-        DispatchAfterArmingOnboardingState([&] { m_pending = PendingOp::Register; }, [&]
-                                           { m_ctx->clientNet->SendMsg(TFMsg::RegisterRequest, &req, sizeof(req)); });
+        DispatchAfterArmingOnboardingState([&] { m_pending = PendingOp::Register; },
+                                           [&] { (void)m_ctx->clientNet->Register(user, password); });
         Spark::SecureErase(m_password, sizeof(m_password));
     }
 

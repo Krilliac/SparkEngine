@@ -160,7 +160,8 @@ namespace Terrafront
         TFFlowState m_state{TFFlowState::Login};
         std::string m_error;
 
-        // Login / Register form (sizes mirror TF_AuthRequest's wire fields).
+        // Login / Register form. The username fits TF_LoginStart::user; the password never
+        // goes on the wire (NET-100 SCRAM, Net/TFScramWire.h) and is wiped after each send.
         char m_username[32]{};
         char m_password[64]{};
 

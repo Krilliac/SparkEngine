@@ -673,6 +673,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Net/TFScramWire.cpp"
     # DATA-120 / OD-22: no plaintext password, session token, or DB credential
     # at rest (TF account store above + MMO KV store + shipped config scan).
     TestDATA120SecretsAtRest.cpp
@@ -2111,7 +2112,6 @@ set(_spark_net100_transport_selectors
     "Transport_Downgrade_=2"
     "Transport_KeyRotation_=3"
     "Transport_FuzzPacket_=1"
-    "Transport_Capture_=1"
     "Transport_KeyGeneration_=1"
     "Transport_Libsodium_=1"
     "Transport_Handshake_=9"
@@ -2144,7 +2144,7 @@ if(ENABLE_NETWORKING)
     # contain no player name, chat text or credential bytes.
     add_test(NAME NetworkSecureTransportWired COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(NetworkSecureTransportWired PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestSecureTransportWired.cpp;SPARK_TEST_EXPECT_COUNT=15"
+        ENVIRONMENT "SPARK_TEST_FILE=TestSecureTransportWired.cpp;SPARK_TEST_EXPECT_COUNT=16"
         LABELS "network-security;network;security"
         TIMEOUT 120)
 endif()

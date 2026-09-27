@@ -6,17 +6,26 @@
  * (Tests/Fixtures/SecureTestPeer.h) that builds, seals, tampers with, replays, reorders and
  * truncates datagrams by hand. The singleton must authenticate the server before it admits a
  * session, deliver only frames its SecureChannel authenticates, and never put a player name,
- * chat text or credential-shaped payload on the wire in plaintext.
+ * chat text or credential-shaped payload on the wire in plaintext, and a TERRAFRONT SCRAM
+ * login through it must leave no password, SaltedPassword or ClientKey in the capture.
  */
 
 #include "TestFramework.h"
 #include "Fixtures/NetworkTestSecurity.h"
 #include "Fixtures/SecureTestPeer.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Account/TFAccountSystem.h"
+#include "Account/TFCrypto.h"
+#include "Net/TFNetProtocol.h"
+#include "Net/TFScramWire.h"
+#include "Persistence/TFDatabase.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -477,6 +486,191 @@ TEST(SecureTransport_Wired_SendKeyRotatesAfterSessionTime)
     ASSERT_TRUE(peer.Channel() != nullptr);
     EXPECT_TRUE(peer.Channel()->GetReceiveEpoch() >= 1); // the client followed the rotation
     EXPECT_TRUE(opened > 0);
+    server.Shutdown();
+}
+
+// ============================================================================
+// TERRAFRONT login on the production encrypted path
+// ============================================================================
+
+namespace
+{
+    constexpr MessageType TFType(Terrafront::TFMsg id)
+    {
+        return static_cast<MessageType>(static_cast<uint16_t>(id));
+    }
+
+    template <typename T> std::vector<uint8_t> PodBytes(const T& value)
+    {
+        std::vector<uint8_t> bytes(sizeof(T));
+        std::memcpy(bytes.data(), &value, sizeof(T));
+        return bytes;
+    }
+
+    template <typename T> std::optional<T> PodFrom(const WireMessage& message)
+    {
+        if (message.payload.size() != sizeof(T))
+            return std::nullopt;
+        T value{};
+        std::memcpy(&value, message.payload.data(), sizeof(T));
+        return value;
+    }
+
+    /// Server side of the TERRAFRONT onboarding ids, installed as NetworkManager observers the
+    /// way TFServerSim::RegisterNetHandlers does, answering through the same TFScramWire helpers
+    /// TFServerSim's HandleLogin / HandleLoginProof / HandleRegister call.
+    struct TFLoginServer
+    {
+        explicit TFLoginServer(NetworkManager& manager) : m_manager(manager)
+        {
+            std::filesystem::remove(m_path);
+            opened = m_db.Open(m_path);
+            m_accounts.SetDatabase(&m_db);
+            m_manager.RegisterSensitiveHandler(TFType(Terrafront::TFMsg::RegisterRequest),
+                                               [this](const NetworkMessage& m) { OnRegister(m); });
+            m_manager.RegisterSensitiveHandler(TFType(Terrafront::TFMsg::LoginRequest),
+                                               [this](const NetworkMessage& m) { OnLoginStart(m); });
+            m_manager.RegisterSensitiveHandler(TFType(Terrafront::TFMsg::LoginProof),
+                                               [this](const NetworkMessage& m) { OnLoginProof(m); });
+        }
+        ~TFLoginServer()
+        {
+            for (const auto id :
+                 {Terrafront::TFMsg::RegisterRequest, Terrafront::TFMsg::LoginRequest, Terrafront::TFMsg::LoginProof})
+                m_manager.UnregisterHandler(TFType(id));
+            m_db.Close();
+            std::filesystem::remove(m_path);
+        }
+        TFLoginServer(const TFLoginServer&) = delete;
+        TFLoginServer& operator=(const TFLoginServer&) = delete;
+
+        template <typename T> void Reply(ClientID client, Terrafront::TFMsg id, const T& body)
+        {
+            NetworkMessage message;
+            message.type = TFType(id);
+            message.channel = ChannelType::Reliable;
+            message.payload = PodBytes(body);
+            m_manager.SendToClient(client, message);
+        }
+
+        void OnRegister(const NetworkMessage& m)
+        {
+            Terrafront::TF_RegisterRequest request{};
+            if (m.payload.size() != sizeof(request))
+                return;
+            std::memcpy(&request, m.payload.data(), sizeof(request));
+            const Terrafront::TFAuthResult result = Terrafront::RegisterFromRequest(m_accounts, request);
+            Terrafront::TF_AuthReply reply{};
+            reply.ok = result.ok ? 1 : 0;
+            reply.err = static_cast<uint8_t>(result.err);
+            reply.accountId = result.accountId;
+            Reply(m.senderID, Terrafront::TFMsg::RegisterReply, reply);
+        }
+
+        void OnLoginStart(const NetworkMessage& m)
+        {
+            Terrafront::TF_LoginStart start{};
+            if (m.payload.size() != sizeof(start))
+                return;
+            std::memcpy(&start, m.payload.data(), sizeof(start));
+            Terrafront::TF_LoginChallenge challenge{};
+            if (Terrafront::MakeLoginChallenge(
+                    m_accounts.BeginLogin(m.senderID, Terrafront::TFWireUsername(start.user)), challenge))
+                Reply(m.senderID, Terrafront::TFMsg::LoginChallenge, challenge);
+        }
+
+        void OnLoginProof(const NetworkMessage& m)
+        {
+            Terrafront::TF_LoginProof proof{};
+            if (m.payload.size() != sizeof(proof))
+                return;
+            std::memcpy(&proof, m.payload.data(), sizeof(proof));
+            const Terrafront::TFScramLoginResult result =
+                Terrafront::CompleteLoginFromProof(m_accounts, m.senderID, proof);
+            Terrafront::TF_AuthReply reply{};
+            reply.ok = result.auth.ok ? 1 : 0;
+            reply.err = static_cast<uint8_t>(result.auth.err);
+            reply.accountId = result.auth.accountId;
+            if (result.auth.ok)
+                std::memcpy(reply.serverSignature, result.serverSignature.data(), sizeof(reply.serverSignature));
+            Reply(m.senderID, Terrafront::TFMsg::LoginReply, reply);
+        }
+
+        bool opened = false;
+
+      private:
+        NetworkManager& m_manager;
+        std::string m_path = "Saves/test_net100_tflogin_capture.db";
+        Terrafront::TFDatabase m_db;
+        Terrafront::TFAccountSystem m_accounts;
+    };
+} // namespace
+
+TEST(SecureTransport_TFLogin_CaptureHasNoPasswordOrSaltedPassword)
+{
+    auto& server = NetworkManager::GetInstance();
+    ASSERT_TRUE(StartLoopbackServer(server));
+    TFLoginServer tfServer(server);
+    ASSERT_TRUE(tfServer.opened);
+    SecureRawClient peer;
+    ASSERT_TRUE(peer.Connect(server, "TerrafrontPlayer"));
+
+    const std::string user = "capturepilot";
+    const std::string password = "tf-capture-canary-password";
+    std::vector<std::vector<uint8_t>> sent; // every datagram the client put on the wire
+    const auto sendSealed = [&](Terrafront::TFMsg id, const std::vector<uint8_t>& body)
+    {
+        const auto frame = peer.Seal(BuildWire(TFType(id), body, ChannelType::Reliable, 0, peer.Id()));
+        sent.push_back(frame);
+        return peer.Socket().SendTo(server.GetBoundPort(), frame);
+    };
+
+    // Registration: a client-derived verifier.
+    Terrafront::TFAuthErr error = Terrafront::TFAuthErr::ServerError;
+    const auto registration = Terrafront::MakeScramRegistration(user, password, error);
+    ASSERT_TRUE(registration.has_value());
+    ASSERT_TRUE(sendSealed(Terrafront::TFMsg::RegisterRequest, PodBytes(*registration)));
+    const auto registered = peer.AwaitType(server, TFType(Terrafront::TFMsg::RegisterReply));
+    ASSERT_TRUE(registered.has_value());
+    const auto registerReply = PodFrom<Terrafront::TF_AuthReply>(*registered);
+    ASSERT_TRUE(registerReply.has_value());
+    EXPECT_EQ(static_cast<int>(registerReply->ok), 1);
+
+    // Login: LoginRequest -> LoginChallenge -> LoginProof -> LoginReply, all sealed.
+    Terrafront::TFScramClient scram;
+    ASSERT_TRUE(sendSealed(Terrafront::TFMsg::LoginRequest, PodBytes(scram.Start(user, password))));
+    const auto challengeMessage = peer.AwaitType(server, TFType(Terrafront::TFMsg::LoginChallenge));
+    ASSERT_TRUE(challengeMessage.has_value());
+    const auto challenge = PodFrom<Terrafront::TF_LoginChallenge>(*challengeMessage);
+    ASSERT_TRUE(challenge.has_value());
+    const auto proof = scram.Answer(*challenge, error);
+    ASSERT_TRUE(proof.has_value());
+    ASSERT_TRUE(sendSealed(Terrafront::TFMsg::LoginProof, PodBytes(*proof)));
+    const auto replyMessage = peer.AwaitType(server, TFType(Terrafront::TFMsg::LoginReply));
+    ASSERT_TRUE(replyMessage.has_value());
+    const auto reply = PodFrom<Terrafront::TF_AuthReply>(*replyMessage);
+    ASSERT_TRUE(reply.has_value());
+    EXPECT_EQ(static_cast<int>(reply->ok), 1);
+    EXPECT_TRUE(reply->accountId != 0);
+    EXPECT_TRUE(scram.VerifyServer(*reply)); // the server proved it holds this account's ServerKey
+
+    // Neither the password, nor SaltedPassword (PBKDF2), nor ClientKey appears in any datagram
+    // either direction carried; and nothing the transport sent was plaintext after the handshake.
+    const std::vector<uint8_t> salt(registration->salt, registration->salt + registration->saltLen);
+    const auto salted = Terrafront::Crypto::Pbkdf2HmacSha256(password, salt, registration->iterations, 32);
+    const Terrafront::Crypto::ScramKeys keys =
+        Terrafront::Crypto::DeriveScramKeys(password, salt, registration->iterations);
+    const std::vector<uint8_t> clientKey(keys.clientKey.begin(), keys.clientKey.end());
+    std::vector<std::vector<uint8_t>> capture = sent;
+    capture.insert(capture.end(), peer.Socket().Captured().begin(), peer.Socket().Captured().end());
+    ASSERT_TRUE(capture.size() >= 6u);
+    for (const auto& datagram : capture)
+    {
+        EXPECT_FALSE(ContainsBytes(datagram, Bytes(password)));
+        EXPECT_FALSE(ContainsBytes(datagram, salted));
+        EXPECT_FALSE(ContainsBytes(datagram, clientKey));
+        EXPECT_FALSE(ContainsBytes(datagram, Bytes(user))); // the username is inside the channel too
+    }
     server.Shutdown();
 }
 

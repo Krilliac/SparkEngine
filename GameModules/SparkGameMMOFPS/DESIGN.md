@@ -262,11 +262,18 @@ customization (non-goal).
 New `TFMsg` ids after `WorldWelcome = 0x5411`: `LoginRequest/LoginReply`,
 `RegisterRequest/RegisterReply`, `CharListRequest/CharListReply`,
 `CharCreateReq/CharCreateReply`, `CharDeleteReq/CharDeleteReply`,
-`EnterWorldReq` (reply is the now-gated `TF_WorldWelcome`). Packed PODs with
+`EnterWorldReq` (reply is the now-gated `TF_WorldWelcome`), plus (NET-100)
+`LoginChallenge = 0x548E` and `LoginProof = 0x548F`. Packed PODs with
 frozen `static_assert` sizes in `Net/TFNetProtocol.h`
-(`TF_AuthRequest/TF_AuthReply/TF_CharBrief/TF_CharListReply/
-TF_CharCreateRequest/TF_CharOpReply/TF_CharDeleteRequest/
-TF_EnterWorldRequest`).
+(`TF_LoginStart/TF_LoginChallenge/TF_LoginProof/TF_AuthReply/
+TF_RegisterRequest/TF_CharBrief/TF_CharListReply/TF_CharCreateRequest/
+TF_CharOpReply/TF_CharDeleteRequest/TF_EnterWorldRequest`).
+
+NET-100: login is SCRAM-SHA-256 and registration sends a client-derived
+verifier (`Net/TFScramWire.h`), so no TERRAFRONT message carries a password;
+`TFClientNet::BeginLogin` / `TFClientNet::Register` are the client entry
+points, and the server answers through `TFServerSim::HandleLogin`,
+`HandleLoginProof` and `HandleRegister`.
 
 `TF_WorldWelcome` no longer fires from `PollClientJoinsLeaves` on connect; it
 is sent ONLY from `TFServerSim::HandleEnterWorld` after

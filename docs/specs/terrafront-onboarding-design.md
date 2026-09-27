@@ -67,8 +67,15 @@ Operations: `CreateAccount`, `FindAccountByUsername`, `TouchLogin`; `CreateChara
 
 ### Unit 4 — Net protocol + gating
 New `TFMsg` ids appended after `WorldWelcome 0x5411` in `Net/TFNetProtocol.h` (packed PODs + `static_assert` sizes, matching the file's convention). Strings (username/password/char name) are fixed-size `char[N]` fields (e.g. 32/64/24) to keep PODs:
-- `TF_LoginRequest{char user[32]; char pass[64];}` / `TF_LoginReply{uint8 ok; uint8 errCode; uint64 accountId;}`
-- `TF_RegisterRequest{...same...}` / `TF_RegisterReply{ok,errCode,accountId}`
+- Login is SCRAM-SHA-256 since NET-100; no message carries a password. `LoginRequest` carries
+  `TF_LoginStart{char user[32];}`, the server answers `LoginChallenge` `TF_LoginChallenge{salt, iterations,
+  serverNonce}`, the client sends `LoginProof` `TF_LoginProof{user, clientNonce, serverNonce, proof[32]}`,
+  and `LoginReply` is `TF_AuthReply{uint8 ok; uint8 errCode; uint64 accountId; uint8 serverSignature[32];}`,
+  which the client verifies (the server proves it holds the account's ServerKey).
+- `RegisterRequest` carries `TF_RegisterRequest{user, salt, iterations, storedKey[32], serverKey[32]}`, a
+  verifier the client derived from a fresh salt; `RegisterReply` is a `TF_AuthReply`. The historical
+  `char pass[64]` field was removed (`Tests/Tools/test_network_security_csprng.py` fails if it returns).
+  Wire helpers: `Source/Net/TFScramWire.h`.
 - `TF_CharListRequest{}` / `TF_CharListReply{uint8 count; TF_CharBrief chars[5];}` where `TF_CharBrief{uint64 id; char name[24]; uint8 faction; uint16 rank;}`
 - `TF_CharCreateRequest{char name[24]; uint8 faction;}` / `TF_CharCreateReply{ok,errCode,uint64 charId}`
 - `TF_CharDeleteRequest{uint64 charId;}` / `TF_CharDeleteReply{ok,errCode,uint64 charId}`
@@ -90,8 +97,10 @@ New `TFMsg` ids appended after `WorldWelcome 0x5411` in `Net/TFNetProtocol.h` (p
 ## Data flow (the round-trip)
 
 ```
-Client TFLoginFlow(Login)  --TF_LoginRequest-->      TFAccountSystem.Login
-                           <--TF_LoginReply(ok,acct)--
+Client TFLoginFlow(Login)  --TF_LoginStart-->        TFAccountSystem.BeginLogin
+                           <--TF_LoginChallenge--      (salt, iterations, single-use nonce)
+                           --TF_LoginProof-->         TFAccountSystem.CompleteLogin
+                           <--TF_AuthReply(ok,acct,serverSignature)--
   --TF_CharListRequest-->  TFCharacterSystem.List --TF_CharListReply(chars)-->  CharSelect
   --TF_CharCreateRequest-> TFCharacterSystem.Create --TF_CharCreateReply(id)->  (refresh list)
   --TF_EnterWorldRequest-> TFCharacterSystem.EnterWorld -> sets faction+active char

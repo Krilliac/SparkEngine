@@ -8,6 +8,7 @@
 #include "Net/TFServerSim.h"
 #include "Net/TFOnboardingSessionRules.h"
 #include "Net/TFClientMsgRouting.h"
+#include "Net/TFScramWire.h"
 
 #include "Account/TFAccountSystem.h"   // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 4)
@@ -92,6 +93,9 @@ namespace Terrafront
         {
         case TFMsg::LoginRequest:
             HandleLogin(sender, data, size);
+            break;
+        case TFMsg::LoginProof:
+            HandleLoginProof(sender, data, size);
             break;
         case TFMsg::RegisterRequest:
             HandleRegister(sender, data, size);
@@ -224,9 +228,12 @@ namespace Terrafront
         }
     }
 
+    // NET-100: login is SCRAM. HandleLogin answers a TF_LoginStart with a challenge bound to
+    // this connection; HandleLoginProof checks the proof and returns the server signature.
+    // Neither message (nor registration) carries a password (Net/TFScramWire.h).
     void TFServerSim::HandleLogin(PlayerId sender, const void* data, size_t size)
     {
-        if (size != sizeof(TF_AuthRequest) || sender == Spark::Net::INVALID_CLIENT)
+        if (size != sizeof(TF_LoginStart) || sender == Spark::Net::INVALID_CLIENT)
         {
             ++m_badPackets;
             return;
@@ -248,25 +255,60 @@ namespace Terrafront
             return;
         }
 
-        TF_AuthRequest req;
-        std::memcpy(&req, data, sizeof(req));
-        const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
-        const std::string user(req.user, strnlen(req.user, sizeof(req.user)));
-        std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
-        const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
+        TF_LoginStart start;
+        std::memcpy(&start, data, sizeof(start));
+        const std::string user = TFWireUsername(start.user);
 
+        TF_LoginChallenge challenge{};
+        if (!m_ctx->account || !EnsureAuthorityDatabaseOpen() ||
+            !MakeLoginChallenge(m_ctx->account->BeginLogin(sender, user), challenge))
+        {
+            // CSPRNG failure, too many pending logins, or no database: the login cannot complete.
+            rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
+            return;
+        }
+        SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginChallenge), &challenge, sizeof(challenge), true);
+    }
+
+    void TFServerSim::HandleLoginProof(PlayerId sender, const void* data, size_t size)
+    {
+        if (size != sizeof(TF_LoginProof) || sender == Spark::Net::INVALID_CLIENT)
+        {
+            ++m_badPackets;
+            return;
+        }
+
+        TF_AuthReply rep{};
+        if (!IsCredentialOnboardingOriginAllowed(sender))
+        {
+            rep.err = static_cast<uint8_t>(TFAuthErr::RemoteOnboardingDisabled);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
+            return;
+        }
+        const bool authenticated = m_ctx->account && m_ctx->account->AccountForClient(sender) != 0;
+        if (!CanBeginAuthentication(authenticated, m_enteredWorld.contains(sender)))
+        {
+            rep.err = static_cast<uint8_t>(TFAuthErr::SessionActive);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
+            return;
+        }
+
+        TF_LoginProof proof;
+        std::memcpy(&proof, data, sizeof(proof));
+        const auto clearProof = Spark::MakeScopeExit([&] { Spark::SecureErase(&proof, sizeof(proof)); });
         if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
         {
             rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
         }
         else
         {
-            // Challenge bound to this connection: no other peer can replace or consume it.
-            const TFAuthResult r = m_ctx->account->Login(user, pass, sender);
-            rep.ok = r.ok ? 1 : 0;
-            rep.err = static_cast<uint8_t>(r.err);
-            rep.accountId = r.accountId;
-            if (r.ok && !m_ctx->account->BindSession(sender, r.accountId))
+            // Consumes this connection's challenge: a replayed or cross-connection proof fails.
+            const TFScramLoginResult outcome = CompleteLoginFromProof(*m_ctx->account, sender, proof);
+            rep.ok = outcome.auth.ok ? 1 : 0;
+            rep.err = static_cast<uint8_t>(outcome.auth.err);
+            rep.accountId = outcome.auth.accountId;
+            if (outcome.auth.ok && !m_ctx->account->BindSession(sender, outcome.auth.accountId))
             {
                 // Valid credentials, but the account already has a live
                 // connection: refuse a second, independent session of it.
@@ -276,13 +318,17 @@ namespace Terrafront
                 SPARK_LOG_WARN(Spark::LogCategory::Game,
                                "[TF] login from client %u refused: account already bound to another session", sender);
             }
+            if (rep.ok != 0)
+            {
+                std::memcpy(rep.serverSignature, outcome.serverSignature.data(), sizeof(rep.serverSignature));
+            }
         }
         SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
     }
 
     void TFServerSim::HandleRegister(PlayerId sender, const void* data, size_t size)
     {
-        if (size != sizeof(TF_AuthRequest) || sender == Spark::Net::INVALID_CLIENT)
+        if (size != sizeof(TF_RegisterRequest) || sender == Spark::Net::INVALID_CLIENT)
         {
             ++m_badPackets;
             return;
@@ -305,12 +351,9 @@ namespace Terrafront
             return;
         }
 
-        TF_AuthRequest req;
+        TF_RegisterRequest req;
         std::memcpy(&req, data, sizeof(req));
         const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
-        const std::string user(req.user, strnlen(req.user, sizeof(req.user)));
-        std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
-        const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
 
         if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
         {
@@ -318,7 +361,8 @@ namespace Terrafront
         }
         else
         {
-            const TFAuthResult r = m_ctx->account->Register(user, pass);
+            // The client derived StoredKey/ServerKey itself; the password never arrives.
+            const TFAuthResult r = RegisterFromRequest(*m_ctx->account, req);
             rep.ok = r.ok ? 1 : 0;
             rep.err = static_cast<uint8_t>(r.err);
             rep.accountId = r.accountId;

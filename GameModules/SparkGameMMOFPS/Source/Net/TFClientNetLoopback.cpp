@@ -77,6 +77,7 @@ namespace Terrafront
         case TFMsg::SquadMsg:
         case TFMsg::ChatMsg:
         case TFMsg::LoginRequest:
+        case TFMsg::LoginProof:
         case TFMsg::RegisterRequest:
         case TFMsg::CharListRequest:
         case TFMsg::CharCreateReq:

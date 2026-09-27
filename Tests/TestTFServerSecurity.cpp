@@ -106,7 +106,7 @@ TEST(TFSec_EveryGatedClientMsgIsSocketRouted)
     all.insert(all.end(), kTFCredentialMsgs.begin(), kTFCredentialMsgs.end());
     std::sort(all.begin(), all.end());
     EXPECT_TRUE(std::adjacent_find(all.begin(), all.end()) == all.end());
-    EXPECT_EQ(all.size(), size_t{24});
+    EXPECT_EQ(all.size(), size_t{25}); // NET-100 added LoginProof to the credential ids
 }
 
 // The stored hash is database-controlled. VerifyPassword used to trust its

@@ -20,6 +20,7 @@
 #include "Net/TFClientSessionEnd.h"
 #include "Net/TFNetworkLifecycle.h"
 #include "Net/TFOnboardingSessionRules.h"
+#include "Net/TFScramWire.h"
 #include "Console/TFQuickplay.h"
 #include "UI/TFLoginFlow.h"
 #include <algorithm>
@@ -177,14 +178,19 @@ TEST(TFOnboardingSessionRules_RejectReauthAndMidWorldProfileMutation)
 static_assert(static_cast<uint8_t>(TFAuthErr::RemoteOnboardingDisabled) == 8,
               "append-only onboarding error wire contract");
 
-TEST(TFOnboarding_ProductionSenderMetadataKeepsCredentialsLoopbackOnly)
+TEST(TFOnboarding_ProductionSenderMetadataMarksScramMessagesSensitive)
 {
-    const TFMessageSecurityMetadata login = GetTFMessageSecurityMetadata(TFMsg::LoginRequest);
+    // NET-100: the SCRAM proof and the registration verifier are sensitive (every copy is
+    // wiped, and NetworkManager refuses them without a sealed channel). They carry no
+    // reusable secret, so they are no longer confined to loopback by the sender.
+    const TFMessageSecurityMetadata start = GetTFMessageSecurityMetadata(TFMsg::LoginRequest);
+    const TFMessageSecurityMetadata proof = GetTFMessageSecurityMetadata(TFMsg::LoginProof);
     const TFMessageSecurityMetadata registration = GetTFMessageSecurityMetadata(TFMsg::RegisterRequest);
     const TFMessageSecurityMetadata characterList = GetTFMessageSecurityMetadata(TFMsg::CharListRequest);
     const TFMessageSecurityMetadata enterWorld = GetTFMessageSecurityMetadata(TFMsg::EnterWorldReq);
-    EXPECT_TRUE(login.sensitive && login.localOnly);
-    EXPECT_TRUE(registration.sensitive && registration.localOnly);
+    EXPECT_FALSE(start.sensitive || start.localOnly);
+    EXPECT_TRUE(proof.sensitive && !proof.localOnly);
+    EXPECT_TRUE(registration.sensitive && !registration.localOnly);
     EXPECT_FALSE(characterList.sensitive || characterList.localOnly);
     EXPECT_FALSE(enterWorld.sensitive || enterWorld.localOnly);
 }
@@ -1185,11 +1191,16 @@ static_assert(static_cast<uint16_t>(TFMsg::CharCreateReply) == 0x5419);
 static_assert(static_cast<uint16_t>(TFMsg::CharDeleteReq) == 0x541A);
 static_assert(static_cast<uint16_t>(TFMsg::CharDeleteReply) == 0x541B);
 static_assert(static_cast<uint16_t>(TFMsg::EnterWorldReq) == 0x541C);
+static_assert(static_cast<uint16_t>(TFMsg::LoginChallenge) == 0x548E);
+static_assert(static_cast<uint16_t>(TFMsg::LoginProof) == 0x548F);
 
 // Compiler-verified sizes (Task 4 explicitly forbids guessing these — every
 // number below was read back from an actual build, not hand-computed).
-static_assert(sizeof(TF_AuthRequest) == 96, "wire layout frozen");
-static_assert(sizeof(TF_AuthReply) == 12, "wire layout frozen");
+static_assert(sizeof(TF_LoginStart) == 32, "wire layout frozen");
+static_assert(sizeof(TF_LoginChallenge) == 136, "wire layout frozen");
+static_assert(sizeof(TF_LoginProof) == 192, "wire layout frozen");
+static_assert(sizeof(TF_AuthReply) == 44, "wire layout frozen");
+static_assert(sizeof(TF_RegisterRequest) == 168, "wire layout frozen");
 static_assert(sizeof(TF_CharBrief) == 36, "wire layout frozen");
 static_assert(sizeof(TF_CharListReply) == 4 + 5 * 36, "wire layout frozen");
 static_assert(sizeof(TF_CharCreateRequest) == 28, "wire layout frozen");
@@ -1211,20 +1222,20 @@ namespace
 
 TEST(TFNetProtocol_Onboarding_AuthMessages_RoundTrip)
 {
-    TF_AuthRequest req{};
-    std::strncpy(req.user, "commander", sizeof(req.user) - 1);
-    std::strncpy(req.pass, "sekret1", sizeof(req.pass) - 1);
-    const TF_AuthRequest req2 = OnboardingWireRoundTrip(req);
-    EXPECT_TRUE(std::string(req2.user) == "commander");
-    EXPECT_TRUE(std::string(req2.pass) == "sekret1");
+    TF_LoginStart start{};
+    std::strncpy(start.user, "commander", sizeof(start.user) - 1);
+    const TF_LoginStart start2 = OnboardingWireRoundTrip(start);
+    EXPECT_TRUE(std::string(start2.user) == "commander");
 
     TF_AuthReply rep{};
     rep.ok = 1;
     rep.err = static_cast<uint8_t>(TFAuthErr::Ok);
     rep.accountId = 4242;
+    rep.serverSignature[31] = 0x5A;
     const TF_AuthReply rep2 = OnboardingWireRoundTrip(rep);
     EXPECT_EQ(static_cast<int>(rep2.ok), 1);
     EXPECT_EQ(rep2.accountId, (uint64_t)4242);
+    EXPECT_EQ(static_cast<int>(rep2.serverSignature[31]), 0x5A);
 }
 
 TEST(TFNetProtocol_Onboarding_CharMessages_RoundTrip)
@@ -1265,4 +1276,275 @@ TEST(TFNetProtocol_Onboarding_CharMessages_RoundTrip)
     TF_EnterWorldRequest ew{};
     ew.charId = 77;
     EXPECT_EQ(OnboardingWireRoundTrip(ew).charId, (uint64_t)77);
+}
+
+// ============================================================================
+// NET-100: SCRAM login and registration on the wire (Net/TFScramWire.h). The
+// client half and the server half exchange the exact wire structs TFClientNet
+// and TFServerSim send; no struct may carry the password, SaltedPassword or
+// ClientKey.
+// ============================================================================
+
+namespace
+{
+    template <typename T> std::vector<uint8_t> WireBytes(const T& message)
+    {
+        std::vector<uint8_t> bytes(sizeof(T));
+        std::memcpy(bytes.data(), &message, sizeof(T));
+        return bytes;
+    }
+
+    bool WireContains(const std::vector<uint8_t>& wire, const std::vector<uint8_t>& needle)
+    {
+        return !needle.empty() && std::search(wire.begin(), wire.end(), needle.begin(), needle.end()) != wire.end();
+    }
+
+    /// Fresh account database plus TFAccountSystem, removed when the test ends.
+    struct ScramFixture
+    {
+        explicit ScramFixture(const std::string& name) : path("Saves/test_tfscram_" + name + ".db")
+        {
+            std::filesystem::remove(path);
+            opened = db.Open(path);
+            accounts.SetDatabase(&db);
+        }
+        ~ScramFixture()
+        {
+            db.Close();
+            std::filesystem::remove(path);
+        }
+        ScramFixture(const ScramFixture&) = delete;
+        ScramFixture& operator=(const ScramFixture&) = delete;
+
+        std::string path;
+        TFDatabase db;
+        TFAccountSystem accounts;
+        bool opened = false;
+    };
+
+    /// Register over the wire structs; returns the registration bytes that crossed the wire.
+    std::vector<uint8_t> RegisterOverWire(TFAccountSystem& accounts, const std::string& user,
+                                          const std::string& password)
+    {
+        TFAuthErr error = TFAuthErr::ServerError;
+        const auto request = MakeScramRegistration(user, password, error);
+        EXPECT_TRUE(request.has_value());
+        if (!request)
+            return {};
+        EXPECT_TRUE(RegisterFromRequest(accounts, *request).ok);
+        return WireBytes(*request);
+    }
+
+    struct LoginTranscript
+    {
+        std::vector<uint8_t> wire; ///< every byte both directions carried
+        TFScramLoginResult result;
+        bool serverVerified = false;
+    };
+
+    /// One full SCRAM login between a TFScramClient and the server helpers.
+    LoginTranscript LoginOverWire(TFAccountSystem& accounts, uint32_t clientId, const std::string& user,
+                                  const std::string& password)
+    {
+        LoginTranscript transcript;
+        TFScramClient client;
+        const TF_LoginStart start = client.Start(user, password);
+        auto bytes = WireBytes(start);
+        transcript.wire.insert(transcript.wire.end(), bytes.begin(), bytes.end());
+
+        TF_LoginChallenge challenge{};
+        EXPECT_TRUE(MakeLoginChallenge(accounts.BeginLogin(clientId, TFWireUsername(start.user)), challenge));
+        bytes = WireBytes(challenge);
+        transcript.wire.insert(transcript.wire.end(), bytes.begin(), bytes.end());
+
+        TFAuthErr error = TFAuthErr::ServerError;
+        const auto proof = client.Answer(challenge, error);
+        EXPECT_TRUE(proof.has_value());
+        EXPECT_FALSE(client.AwaitingChallenge()); // the password is gone from the client state
+        if (!proof)
+            return transcript;
+        bytes = WireBytes(*proof);
+        transcript.wire.insert(transcript.wire.end(), bytes.begin(), bytes.end());
+
+        transcript.result = CompleteLoginFromProof(accounts, clientId, *proof);
+        TF_AuthReply reply{};
+        reply.ok = transcript.result.auth.ok ? 1 : 0;
+        reply.err = static_cast<uint8_t>(transcript.result.auth.err);
+        reply.accountId = transcript.result.auth.accountId;
+        if (reply.ok != 0)
+            std::memcpy(reply.serverSignature, transcript.result.serverSignature.data(), 32);
+        bytes = WireBytes(reply);
+        transcript.wire.insert(transcript.wire.end(), bytes.begin(), bytes.end());
+        transcript.serverVerified = client.VerifyServer(reply);
+        return transcript;
+    }
+} // namespace
+
+TEST(TFLoginFlow_ScramRoundTripOverLoopback)
+{
+    ScramFixture fixture("roundtrip");
+    ASSERT_TRUE(fixture.opened);
+    const std::string user = "scrampilot";
+    const std::string password = "correct horse battery";
+    const auto registration = RegisterOverWire(fixture.accounts, user, password);
+
+    const LoginTranscript login = LoginOverWire(fixture.accounts, 41, user, password);
+    EXPECT_TRUE(login.result.auth.ok);
+    EXPECT_TRUE(login.result.auth.accountId != 0);
+    EXPECT_TRUE(login.serverVerified); // mutual authentication
+
+    // Nothing reusable crossed the wire in either exchange.
+    TFAccountRecord record;
+    ASSERT_TRUE(fixture.db.FindAccountByUsername(user, record));
+    const std::vector<uint8_t> salt(registration.begin() + 40, registration.begin() + 40 + registration[32]);
+    const auto salted = Crypto::Pbkdf2HmacSha256(password, salt, TFAccountSystem::kMinScramIterations, 32);
+    const Crypto::ScramKeys keys = Crypto::DeriveScramKeys(password, salt, TFAccountSystem::kMinScramIterations);
+    const std::vector<uint8_t> passwordBytes(password.begin(), password.end());
+    const std::vector<uint8_t> clientKey(keys.clientKey.begin(), keys.clientKey.end());
+    for (const auto* wire : {&registration, &login.wire})
+    {
+        EXPECT_FALSE(WireContains(*wire, passwordBytes));
+        EXPECT_FALSE(WireContains(*wire, salted));
+        EXPECT_FALSE(WireContains(*wire, clientKey));
+    }
+}
+
+TEST(TFLoginFlow_WrongPasswordRejected)
+{
+    ScramFixture fixture("wrongpw");
+    ASSERT_TRUE(fixture.opened);
+    RegisterOverWire(fixture.accounts, "scramwrong", "the-right-password");
+
+    const LoginTranscript wrong = LoginOverWire(fixture.accounts, 7, "scramwrong", "the-wrong-password");
+    EXPECT_FALSE(wrong.result.auth.ok);
+    EXPECT_TRUE(wrong.result.auth.err == TFAuthErr::BadCredentials);
+    EXPECT_FALSE(wrong.serverVerified);
+
+    // An unknown user fails the same way (the challenge does not reveal existence).
+    const LoginTranscript ghost = LoginOverWire(fixture.accounts, 8, "nosuchpilot", "the-right-password");
+    EXPECT_FALSE(ghost.result.auth.ok);
+    EXPECT_TRUE(ghost.result.auth.err == TFAuthErr::BadCredentials);
+
+    // A server that answers "ok" without the right signature is refused by the client.
+    TFScramClient client;
+    (void)client.Start("scramwrong", "the-right-password");
+    TF_LoginChallenge challenge{};
+    ASSERT_TRUE(MakeLoginChallenge(fixture.accounts.BeginLogin(9, "scramwrong"), challenge));
+    TFAuthErr error = TFAuthErr::ServerError;
+    ASSERT_TRUE(client.Answer(challenge, error).has_value());
+    TF_AuthReply forged{};
+    forged.ok = 1;
+    forged.accountId = 1;
+    EXPECT_FALSE(client.VerifyServer(forged));
+}
+
+TEST(TFLoginFlow_ChallengeExpiresAndIsSingleUse)
+{
+    ScramFixture fixture("single_use");
+    ASSERT_TRUE(fixture.opened);
+    RegisterOverWire(fixture.accounts, "scramonce", "once-only-password");
+
+    TFScramClient client;
+    (void)client.Start("scramonce", "once-only-password");
+    TF_LoginChallenge challenge{};
+    ASSERT_TRUE(MakeLoginChallenge(fixture.accounts.BeginLogin(11, "scramonce"), challenge));
+    TFAuthErr error = TFAuthErr::ServerError;
+    const auto proof = client.Answer(challenge, error);
+    ASSERT_TRUE(proof.has_value());
+
+    // Another connection cannot spend this connection's challenge...
+    EXPECT_FALSE(CompleteLoginFromProof(fixture.accounts, 12, *proof).auth.ok);
+    // ...the owner can, exactly once; a captured proof cannot be replayed.
+    EXPECT_TRUE(CompleteLoginFromProof(fixture.accounts, 11, *proof).auth.ok);
+    EXPECT_FALSE(CompleteLoginFromProof(fixture.accounts, 11, *proof).auth.ok);
+
+    // An expired challenge fails even with a correct proof.
+    static int64_t fakeNow = 0;
+    fakeNow = 1'000'000;
+    fixture.accounts.SetClock([]() noexcept { return fakeNow; });
+    TFScramClient late;
+    (void)late.Start("scramonce", "once-only-password");
+    TF_LoginChallenge lateChallenge{};
+    ASSERT_TRUE(MakeLoginChallenge(fixture.accounts.BeginLogin(13, "scramonce"), lateChallenge));
+    const auto lateProof = late.Answer(lateChallenge, error);
+    ASSERT_TRUE(lateProof.has_value());
+    fakeNow += TFAccountSystem::kLoginChallengeTtlMs + 1;
+    EXPECT_FALSE(CompleteLoginFromProof(fixture.accounts, 13, *lateProof).auth.ok);
+    fixture.accounts.SetClock(nullptr);
+}
+
+TEST(TFLoginFlow_RegisterSendsVerifierNotPassword)
+{
+    ScramFixture fixture("register");
+    ASSERT_TRUE(fixture.opened);
+    const std::string password = "registration-secret";
+    TFAuthErr error = TFAuthErr::ServerError;
+    const auto request = MakeScramRegistration("scramnew", password, error);
+    ASSERT_TRUE(request.has_value());
+    EXPECT_TRUE(error == TFAuthErr::Ok);
+    EXPECT_EQ(request->iterations, TFAccountSystem::kMinScramIterations);
+    EXPECT_EQ(static_cast<size_t>(request->saltLen), TFAccountSystem::kMinScramSaltBytes);
+    const auto wire = WireBytes(*request);
+    EXPECT_FALSE(WireContains(wire, std::vector<uint8_t>(password.begin(), password.end())));
+    const std::vector<uint8_t> salt(request->salt, request->salt + request->saltLen);
+    EXPECT_FALSE(WireContains(wire, Crypto::Pbkdf2HmacSha256(password, salt, request->iterations, 32)));
+    EXPECT_TRUE(RegisterFromRequest(fixture.accounts, *request).ok);
+    EXPECT_TRUE(fixture.accounts.Login("scramnew", password).ok); // the stored verifier works
+
+    // Refused locally: short password, short username, no CSPRNG.
+    EXPECT_FALSE(MakeScramRegistration("scramshort", "short", error).has_value());
+    EXPECT_TRUE(error == TFAuthErr::PasswordTooShort);
+    EXPECT_FALSE(MakeScramRegistration("ab", password, error).has_value());
+    EXPECT_TRUE(error == TFAuthErr::UsernameTooShort);
+    const TFAccountSystem::RandomFillFn failingFill = [](void*, size_t) noexcept { return false; };
+    EXPECT_FALSE(MakeScramRegistration("scramnorng", password, error, failingFill).has_value());
+
+    // The server refuses a weak client-supplied verifier.
+    TF_RegisterRequest weak = *request;
+    std::strncpy(weak.user, "scramweak", sizeof(weak.user) - 1);
+    weak.iterations = 1000;
+    EXPECT_TRUE(RegisterFromRequest(fixture.accounts, weak).err == TFAuthErr::WeakVerifier);
+    weak.iterations = TFAccountSystem::kMinScramIterations;
+    weak.saltLen = 200;
+    EXPECT_TRUE(RegisterFromRequest(fixture.accounts, weak).err == TFAuthErr::WeakVerifier);
+}
+
+TEST(TFLoginFlow_ClientRefusesHostileChallenge)
+{
+    // A hostile server must not be able to make the client run an unbounded PBKDF2,
+    // and a refused challenge still wipes the password.
+    const auto answer = [](TF_LoginChallenge challenge)
+    {
+        TFScramClient client;
+        (void)client.Start("victim", "victim-password");
+        TFAuthErr error = TFAuthErr::Ok;
+        const bool answered = client.Answer(challenge, error).has_value();
+        EXPECT_FALSE(client.AwaitingChallenge());
+        return answered;
+    };
+    TF_LoginChallenge base{};
+    base.saltLen = 16;
+    base.iterations = TFAccountSystem::kMinScramIterations;
+    std::strncpy(base.serverNonce, "00112233445566778899aabbccddeeff", sizeof(base.serverNonce) - 1);
+
+    TF_LoginChallenge costly = base;
+    costly.iterations = TFAccountSystem::kMaxScramIterations + 1;
+    EXPECT_FALSE(answer(costly));
+    TF_LoginChallenge cheap = base;
+    cheap.iterations = kTFScramClientMinIterations - 1;
+    EXPECT_FALSE(answer(cheap));
+    TF_LoginChallenge shortSalt = base;
+    shortSalt.saltLen = 8;
+    EXPECT_FALSE(answer(shortSalt));
+    TF_LoginChallenge longSalt = base;
+    longSalt.saltLen = 65;
+    EXPECT_FALSE(answer(longSalt));
+    TF_LoginChallenge badNonce = base;
+    std::memset(badNonce.serverNonce, 'Z', sizeof(badNonce.serverNonce));
+    EXPECT_FALSE(answer(badNonce));
+
+    // A challenge nobody asked for is ignored.
+    TFScramClient idle;
+    TFAuthErr error = TFAuthErr::Ok;
+    EXPECT_FALSE(idle.Answer(base, error).has_value());
 }

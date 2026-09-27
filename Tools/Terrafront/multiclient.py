@@ -1524,7 +1524,11 @@ def launch(role: str, args: argparse.Namespace, workdir: Path, script: str, seco
     cfg = role_dir / f"{role}.cfg"
     cfg.write_text(script, encoding="utf-8", newline="\n")
     audit = role_dir / "exec_audit.log"
-    env = dict(os.environ, TF_SAVE_ROOT=str(save_root or role_dir / "saves"), SPARK_RHI_BACKEND="null")
+    # NET-100: the server's identity file and each client's trust-on-first-use known_hosts live
+    # under the per-user data directory; give every role its own so a run never touches the real one.
+    user_data = str(role_dir / "userdata")
+    env = dict(os.environ, TF_SAVE_ROOT=str(save_root or role_dir / "saves"), SPARK_RHI_BACKEND="null",
+               LOCALAPPDATA=user_data, XDG_DATA_HOME=user_data)
     command = [str(args.engine), "-headless", "-no-subprocess", "-require-game", "-threads", "2", "-game",
                str(args.module), "-exec", str(cfg), "-exec-audit", str(audit), "-test-seconds",
                format_seconds(seconds)]

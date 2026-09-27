@@ -196,8 +196,9 @@ namespace Terrafront
         // Task 6's boot wiring constructs and publishes the real systems — until
         // then the messages are accepted (no "unknown message" warning) but
         // answered with TFAuthErr::ServerError / TFCharErr::ServerError.
-        void HandleLogin(PlayerId sender, const void* data, size_t size);
-        void HandleRegister(PlayerId sender, const void* data, size_t size);
+        void HandleLogin(PlayerId sender, const void* data, size_t size);      // TF_LoginStart -> LoginChallenge
+        void HandleLoginProof(PlayerId sender, const void* data, size_t size); // TF_LoginProof -> LoginReply
+        void HandleRegister(PlayerId sender, const void* data, size_t size);   // TF_RegisterRequest (verifier)
         bool EnsureAuthorityDatabaseOpen();
         void HandleCharList(PlayerId sender, const void* data, size_t size);
         void HandleCharCreate(PlayerId sender, const void* data, size_t size);

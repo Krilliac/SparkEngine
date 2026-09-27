@@ -20,6 +20,7 @@
 #include "UI/TFScoreboard.h"
 
 #include "Utils/LogMacros.h"
+#include "Utils/SecureMemory.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -27,6 +28,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <optional>
 
 namespace Terrafront
 {
@@ -74,6 +76,8 @@ namespace Terrafront
 
         // W5 onboarding (Task 4): login/register/char-CRUD replies. TF_WorldWelcome
         // (already routed above) is the enter-world reply — no separate message id.
+        route(TFMsg::LoginChallenge,
+              [this](const NetworkMessage& m) { OnLoginChallenge(m.payload.data(), m.payload.size()); });
         route(TFMsg::LoginReply, [this](const NetworkMessage& m) { OnLoginReply(m.payload.data(), m.payload.size()); });
         route(TFMsg::RegisterReply,
               [this](const NetworkMessage& m) { OnRegisterReply(m.payload.data(), m.payload.size()); });
@@ -99,8 +103,8 @@ namespace Terrafront
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         for (TFMsg id : {TFMsg::WorldWelcome, TFMsg::SpawnReply, TFMsg::HitConfirm, TFMsg::DamageEvent,
                          TFMsg::KillEvent, TFMsg::XPEvent, TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg,
-                         TFMsg::SquadMsg, TFMsg::LoginReply, TFMsg::RegisterReply, TFMsg::CharListReply,
-                         TFMsg::CharCreateReply, TFMsg::CharDeleteReply, TFMsg::RedeployReply})
+                         TFMsg::SquadMsg, TFMsg::LoginChallenge, TFMsg::LoginReply, TFMsg::RegisterReply,
+                         TFMsg::CharListReply, TFMsg::CharCreateReply, TFMsg::CharDeleteReply, TFMsg::RedeployReply})
         {
             nm.UnregisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)));
         }
@@ -139,6 +143,9 @@ namespace Terrafront
             break;
         case TFMsg::ChatMsg:
             OnChatMsg(data, size);
+            break;
+        case TFMsg::LoginChallenge:
+            OnLoginChallenge(data, size);
             break;
         case TFMsg::LoginReply:
             OnLoginReply(data, size);
@@ -314,12 +321,48 @@ namespace Terrafront
     // loginFlow`. Task 5/6 should replace the stash-and-log body with a direct
     // forward once that pointer is wired.
 
+    void TFClientNet::OnLoginChallenge(const void* data, size_t size)
+    {
+        if (size != sizeof(TF_LoginChallenge))
+        {
+            return;
+        }
+        TF_LoginChallenge challenge;
+        std::memcpy(&challenge, data, sizeof(challenge));
+        TFAuthErr error = TFAuthErr::ServerError;
+        std::optional<TF_LoginProof> proof = m_scram.Answer(challenge, error);
+        if (!proof)
+        {
+            // An out-of-policy challenge (or one nobody asked for) fails this login locally.
+            m_scram.Clear();
+            m_session.ApplyLoginReply(false, 0, error);
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] login challenge refused by the client policy");
+            if (m_ctx->loginFlow)
+            {
+                m_ctx->loginFlow->OnLoginReply(false, static_cast<uint8_t>(error), 0);
+            }
+            return;
+        }
+        SendMsg(TFMsg::LoginProof, &*proof, sizeof(*proof));
+        Spark::SecureErase(&*proof, sizeof(*proof));
+    }
+
     void TFClientNet::OnLoginReply(const void* data, size_t size)
     {
         if (size != sizeof(TF_AuthReply))
             return;
         TF_AuthReply rep;
         std::memcpy(&rep, data, sizeof(rep));
+        // Mutual authentication: a success only counts if the server proved it holds this
+        // account's ServerKey. A server that skipped or forged the check is refused.
+        if (rep.ok != 0 && !m_scram.VerifyServer(rep))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] login reply failed server-signature verification");
+            rep.ok = 0;
+            rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
+            rep.accountId = 0;
+        }
+        m_scram.Clear();
         m_session.ApplyLoginReply(rep.ok != 0, rep.accountId, static_cast<TFAuthErr>(rep.err));
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] login reply: ok=%d err=%u account=%llu", rep.ok,
                        static_cast<unsigned>(rep.err), static_cast<unsigned long long>(rep.accountId));

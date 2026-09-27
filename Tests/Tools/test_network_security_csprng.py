@@ -111,6 +111,14 @@ def submodule_paths_ps1(text: str) -> set[str]:
     return {path.replace("\\", "/") for path in paths}
 
 
+TERRAFRONT_NET = ROOT / "GameModules" / "SparkGameMMOFPS" / "Source" / "Net"
+
+
+def password_field_findings(source: str) -> list[str]:
+    """Fixed-size password fields (char pass[N] / char password[N]) declared in C++ code."""
+    return re.findall(r"\bchar\s+(pass(?:word)?)\s*\[", strip_comments(source))
+
+
 def networking_sources() -> list[Path]:
     return sorted(p for p in NETWORKING.rglob("*") if p.suffix in {".h", ".hpp", ".cpp"})
 
@@ -202,6 +210,22 @@ class NetworkSecurityCsprngContractTests(unittest.TestCase):
                 self.assertNotIn("^=", source)
                 self.assertNotRegex(source, r"\bEncrypt\s*\(")
                 self.assertNotRegex(source, r"\bDecrypt\s*\(")
+
+    def test_terrafront_wire_carries_no_password_field(self) -> None:
+        # NET-100: TERRAFRONT login is SCRAM; no onboarding struct may carry a password again.
+        net_sources = sorted(
+            p for p in TERRAFRONT_NET.rglob("*") if p.suffix in {".h", ".hpp", ".cpp"}
+        )
+        self.assertTrue(net_sources, f"no sources under {TERRAFRONT_NET}")
+        for path in net_sources:
+            with self.subTest(path=path.name):
+                self.assertEqual(password_field_findings(path.read_text(encoding="utf-8")), [])
+
+    def test_password_field_scanner_flags_a_reintroduced_field(self) -> None:
+        self.assertEqual(password_field_findings("struct TF_LoginStart { char user[32]; };"), [])
+        self.assertTrue(password_field_findings("struct TF_AuthRequest { char user[32]; char pass[64]; };"))
+        self.assertTrue(password_field_findings("struct X {\n    char   pass [ 64 ];\n};"))
+        self.assertTrue(password_field_findings("struct X { char password[128]; };"))
 
 
 if __name__ == "__main__":

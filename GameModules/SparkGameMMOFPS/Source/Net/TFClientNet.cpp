@@ -9,6 +9,8 @@
  *        TFClientNetView.cpp (same class, split per repo file-size rules).
  */
 #include "Net/TFClientNet.h"
+
+#include <optional>
 #include "Net/TFClientSessionEnd.h"
 #include "Net/TFChatRules.h"
 
@@ -25,6 +27,7 @@
 #include "Input/InputManager.h"
 #include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
+#include "Utils/SecureMemory.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -252,6 +255,7 @@ namespace Terrafront
     void TFClientNet::ResetSessionState()
     {
         m_session.Reset();
+        m_scram.Clear();
         if (m_ctx)
         {
             const bool loginFlowAtLogin = !m_ctx->loginFlow || m_ctx->loginFlow->State() == TFFlowState::Login;
@@ -271,6 +275,33 @@ namespace Terrafront
     // ---------------------------------------------------------------------------
     // Sends (network path; loopback routing lives in TFClientNetHandlers.cpp)
     // ---------------------------------------------------------------------------
+
+    void TFClientNet::BeginLogin(const std::string& user, const std::string& password)
+    {
+        // Arm the SCRAM state first: on a listen host the challenge, proof and reply
+        // all arrive synchronously inside SendMsg.
+        TF_LoginStart start = m_scram.Start(user, password);
+        SendMsg(TFMsg::LoginRequest, &start, sizeof(start));
+    }
+
+    bool TFClientNet::Register(const std::string& user, const std::string& password)
+    {
+        TFAuthErr error = TFAuthErr::ServerError;
+        std::optional<TF_RegisterRequest> request = MakeScramRegistration(user, password, error);
+        if (!request)
+        {
+            m_session.lastAuthError = error;
+            if (m_ctx && m_ctx->loginFlow)
+            {
+                m_ctx->loginFlow->OnRegisterReply(false, static_cast<uint8_t>(error));
+            }
+            return false;
+        }
+        SendMsg(TFMsg::RegisterRequest, &*request, sizeof(*request));
+        Spark::SecureErase(&*request, sizeof(*request));
+        return true;
+    }
+
 
     void TFClientNet::SendInput(const TF_ClientInput& input)
     {
