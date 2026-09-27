@@ -8,7 +8,13 @@
 
 namespace Terrafront
 {
-    /** Credential onboarding is local-only until the gameplay transport is cryptographically authenticated. */
+    /**
+     * Credential onboarding (login and registration) is accepted only from the local host or a loopback client.
+     *
+     * The original reason, an unauthenticated plaintext transport, is gone: NET-100 seals the transport and
+     * SCRAM keeps passwords off the wire. The gate stays as policy until remote account onboarding is an
+     * explicit product decision (it also enables remote registration).
+     */
     inline bool CanUseCredentialOnboarding(bool localHostSentinel, bool loopbackNetworkClient) noexcept
     {
         return localHostSentinel || loopbackNetworkClient;
