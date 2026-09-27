@@ -1918,9 +1918,10 @@
             "Tests/Tools/test_terrafront_multiclient.py",
             "Tests/CMakeLists.txt",
             "wiki/advanced/Testing.md",
-            "GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp"
+            "GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp",
+            "GameModules/SparkGameMMOFPS/DESIGN.md"
           ],
-          "note": "Scenarios: OnboardSpawnMove, CombatKillRespawn, ForgedStateRejectedAndAudited, ReconnectRestoresAllowedState, TerritoryReplicates, VehicleLifecycle; client-vs-server compare covers pawns, regions, vehicles. Python harness tests pass locally (57/57); the three-process CTest runs need SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON and were not run here."
+          "note": "Adds the impaired matrix (TerrafrontMultiClient_ImpairedConvergence) to the existing unimpaired scenarios. The process run has not been executed locally."
         },
         {
           "criterionDigest": "sha256:885e584f6fb7",
@@ -1954,9 +1955,15 @@
         },
         {
           "criterionDigest": "sha256:a993c17ebdcf",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No budget or soak evidence exists. This needs long soak runs."
+          "state": "implemented",
+          "evidence": [
+            "Tools/Terrafront/multiclient.py",
+            "Tools/Terrafront/soak_budgets.json",
+            "Tests/Tools/test_terrafront_multiclient.py",
+            "Tests/CMakeLists.txt",
+            "GameModules/SparkGameMMOFPS/DESIGN.md"
+          ],
+          "note": "Provisional budgets; 34 actors because of the kTFMaxBots cap. TerrafrontSoak_Short has not been executed locally, and the 30-minute run needs a hosted job."
         }
       ],
       "commands": [
@@ -2064,9 +2071,15 @@
         },
         {
           "criterionDigest": "sha256:5058dc638b97",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No committed cold-restart test of authoritative state."
+          "state": "implemented",
+          "evidence": [
+            "Tools/Terrafront/multiclient.py",
+            "Tests/Tools/test_terrafront_multiclient.py",
+            "Tests/CMakeLists.txt",
+            "GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp",
+            "GameModules/SparkGameMMOFPS/DESIGN.md"
+          ],
+          "note": "Registered as TerrafrontRestart_ColdRestartRestoresAuthoritativeState and TerrafrontRestart_UngracefulKillRestoresLastCommit; neither process run has been executed locally. Vehicles are excluded, per the design."
         },
         {
           "criterionDigest": "sha256:b48043c84cca",
@@ -2123,8 +2136,7 @@
         "terrafront-soak"
       ],
       "plannedTestSelectors": [
-        "TerrafrontMigration_*",
-        "TerrafrontRestart_*"
+        "TerrafrontMigration_*"
       ]
     }
   ]

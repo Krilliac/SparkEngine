@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **56 in progress**, **5 blocked**, **3 open**
-- Acceptance criteria: **259 total**, **92 implemented** (36%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **95 implemented** (37%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -295,8 +295,8 @@ Close transport, true multi-client, persistence, migration, load, and operations
 | [`NET-100`](#net-100--replace-placeholder-transport-security-with-audited-authenticated-encryption) Replace placeholder transport security with audited authenticated encryption | P0 | **in-progress** | 2/4 · 0/4 | `SEC-100`, `SEC-110`, `SEC-120`, `CI-110` | `NET-110`, `DATA-120` |
 | [`NET-110`](#net-110--define-and-implement-the-production-online-service-boundary) Define and implement the production online-service boundary | P1 | **in-progress** | 4/4 · 0/4 | `NET-100`, `SEC-100` | `DATA-120`, `TF-110`, `OPS-110` |
 | [`DATA-120`](#data-120--make-multiplayer-persistence-transactional-migratable-backed-up-and-recoverable) Make multiplayer persistence transactional, migratable, backed up, and recoverable | P1 | **in-progress** | 0/4 · 0/4 | `SAVE-230`, `NET-100` | `NET-110`, `TF-110`, `OPS-110` |
-| [`TF-110`](#tf-110--prove-mmofps-with-a-true-independent-multi-client-release-gate) Prove MMOFPS with a true independent multi-client release gate | P0 | **in-progress** | 3/4 · 0/4 | `NET-100`, `RDY-020`, `HEAD-220`, `RDY-010` | `TF-120`, `OPS-110` |
-| [`TF-120`](#tf-120--close-mmofps-restart-multimap-migration-topology-and-performance) Close MMOFPS restart, multimap migration, topology, and performance | P1 | **in-progress** | 0/5 · 0/5 | `TF-110`, `DATA-120`, `OPS-110` | — |
+| [`TF-110`](#tf-110--prove-mmofps-with-a-true-independent-multi-client-release-gate) Prove MMOFPS with a true independent multi-client release gate | P0 | **in-progress** | 4/4 · 0/4 | `NET-100`, `RDY-020`, `HEAD-220`, `RDY-010` | `TF-120`, `OPS-110` |
+| [`TF-120`](#tf-120--close-mmofps-restart-multimap-migration-topology-and-performance) Close MMOFPS restart, multimap migration, topology, and performance | P1 | **in-progress** | 1/5 · 0/5 | `TF-110`, `DATA-120`, `OPS-110` | — |
 | [`OPS-110`](#ops-110--add-production-server-observability-load-soak-backup-and-incident-gates) Add production server observability, load, soak, backup, and incident gates | P1 | **in-progress** | 2/4 · 0/4 | `OPS-100`, `HEAD-220`, `NET-100`, `DATA-120` | `TF-110`, `TF-120`, `NET-110` |
 
 ### Wave 4 — Module completion factory
@@ -330,7 +330,7 @@ Certify or explicitly bound Linux, macOS, D3D12, Vulkan, OpenGL, Metal, mobile, 
 | [`PLT-220`](#plt-220--complete-and-certify-the-macos-product-path) Complete and certify the macOS product path | P1 | **in-progress** | 1/3 · 0/3 | `BLD-100`, `RHI-220`, `RDY-020`, `REL-110` | `PLT-210`, `RHI-225` |
 | [`PLT-230`](#plt-230--decide-and-implement-the-mobile-release-profile) Decide and implement the mobile release profile | P2 | **in-progress** | 1/2 · 0/2 | `RDY-000`, `ENG-220` | `PLT-240`, `PLT-250` |
 | [`PLT-240`](#plt-240--decide-and-implement-the-openxr-release-profile) Decide and implement the OpenXR release profile | P2 | **in-progress** | 1/2 · 0/2 | `RDY-000`, `ENG-220` | `PLT-230`, `PLT-250` |
-| [`PLT-250`](#plt-250--keep-console-support-gated-behind-platform-authority-and-certification) Keep console support gated behind platform authority and certification | P3 | **blocked** | 1/3 · 0/3 | `RDY-000` | `PLT-230`, `PLT-240` |
+| [`PLT-250`](#plt-250--keep-console-support-gated-behind-platform-authority-and-certification) Keep console support gated behind platform authority and certification | P3 | **blocked** | 2/3 · 0/3 | `RDY-000` | `PLT-230`, `PLT-240` |
 | [`RHI-220`](#rhi-220--complete-metal-backend-implementation-and-parity) Complete Metal backend implementation and parity | P1 | **open** | 0/4 · 0/4 | `RHI-210`, `ENG-220`, `BLD-100` | `RHI-225`, `RHI-230`, `RHI-240` |
 | [`RHI-225`](#rhi-225--close-d3d12-synchronization-pass-shader-and-driver-parity) Close D3D12 synchronization, pass, shader, and driver parity | P1 | **open** | 0/4 · 0/4 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-230`, `RHI-240` |
 | [`RHI-230`](#rhi-230--close-vulkan-gpu-backed-parity-and-shader-toolchain-gates) Close Vulkan GPU-backed parity and shader-toolchain gates | P1 | **in-progress** | 0/5 · 0/5 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-225`, `RHI-240` |
@@ -3077,19 +3077,20 @@ Current chaos/listen-host/screenshot paths do not prove two independent client p
 
 **Acceptance criteria**
 
-Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Both clients converge on authoritative outcomes for every listed scenario
-   - Evidence: `Tools/Terrafront/multiclient.py`, `Tests/Tools/test_terrafront_multiclient.py`, `Tests/CMakeLists.txt`, `wiki/advanced/Testing.md`, `GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp`
-   - Scenarios: OnboardSpawnMove, CombatKillRespawn, ForgedStateRejectedAndAudited, ReconnectRestoresAllowedState, TerritoryReplicates, VehicleLifecycle; client-vs-server compare covers pawns, regions, vehicles. Python harness tests pass locally (57/57); the three-process CTest runs need SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON and were not run here.
+   - Evidence: `Tools/Terrafront/multiclient.py`, `Tests/Tools/test_terrafront_multiclient.py`, `Tests/CMakeLists.txt`, `wiki/advanced/Testing.md`, `GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp`, `GameModules/SparkGameMMOFPS/DESIGN.md`
+   - Adds the impaired matrix (TerrafrontMultiClient_ImpairedConvergence) to the existing unimpaired scenarios. The process run has not been executed locally.
 2. **[implemented]** Forged state is rejected and audited
    - Evidence: `GameModules/SparkGameMMOFPS/Source/Net/TFLoadoutWire.h`, `GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.h`, `GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.cpp`, `GameModules/SparkGameMMOFPS/Source/Net/TFServerSimOnboarding.cpp`, `GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp`, `GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServer.cpp`, `GameModules/SparkGameMMOFPS/Source/Console/TFCommands.cpp`, `Tests/TestTFServerValidation.cpp`, `Tests/TestTFLoadoutWire.cpp`, `Tools/Terrafront/multiclient.py`, `Tests/Tools/test_terrafront_multiclient.py`, `Tests/CMakeLists.txt`, `GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp`
    - The forged_verdict requires the [TF-AUDIT] forged-state lines, a forged count of at least 2 in tf_cheat_stats, and an unchanged saved loadout on the server's player line. The live process run (TerrafrontMultiClient_ForgedStateRejectedAndAudited) has not been run here.
 3. **[implemented]** Reconnect restores allowed state
    - Evidence: `Tools/Terrafront/multiclient.py`, `Tests/Tools/test_terrafront_multiclient.py`, `Tests/CMakeLists.txt`
    - The reconnect_verdict compares the server's before and after player lines and rejects a pre-disconnect snapshot that is still default kit. The live process run (TerrafrontMultiClient_ReconnectRestoresAllowedState) has not been run here.
-4. **[unmet]** Network/tick/memory budgets pass with no crash or unbounded growth
-   - No budget or soak evidence exists. This needs long soak runs.
+4. **[implemented]** Network/tick/memory budgets pass with no crash or unbounded growth
+   - Evidence: `Tools/Terrafront/multiclient.py`, `Tools/Terrafront/soak_budgets.json`, `Tests/Tools/test_terrafront_multiclient.py`, `Tests/CMakeLists.txt`, `GameModules/SparkGameMMOFPS/DESIGN.md`
+   - Provisional budgets; 34 actors because of the kTFMaxBots cap. TerrafrontSoak_Short has not been executed locally, and the 30-minute run needs a hosted job.
 
 **Required commands**
 
@@ -3162,7 +3163,7 @@ Shared save storage, client scene/collision reload, topology-driven migration, t
 
 **Acceptance criteria**
 
-Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Cross-continent travel is visually/physically correct
    - No committed test proves cross-continent travel is visually and physically correct.
@@ -3170,8 +3171,9 @@ Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
    - No committed test shows duplicate or lost migration messages keep every entity.
 3. **[unmet]** Forced source/destination crashes recover
    - No committed forced source or destination crash-recovery tests.
-4. **[unmet]** Cold restart restores authoritative state
-   - No committed cold-restart test of authoritative state.
+4. **[implemented]** Cold restart restores authoritative state
+   - Evidence: `Tools/Terrafront/multiclient.py`, `Tests/Tools/test_terrafront_multiclient.py`, `Tests/CMakeLists.txt`, `GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp`, `GameModules/SparkGameMMOFPS/DESIGN.md`
+   - Registered as TerrafrontRestart_ColdRestartRestoresAuthoritativeState and TerrafrontRestart_UngracefulKillRestoresLastCommit; neither process run has been executed locally. Vehicles are excluded, per the design.
 5. **[unmet]** Budgets pass
    - No budget, soak or capacity evidence.
 
@@ -4807,13 +4809,14 @@ Console support is planned and cannot be implemented or claimed without agreemen
 
 **Acceptance criteria**
 
-Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Console remains planned/unsupported without authority
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `docs/site/readiness.json`, `Tests/Tools/test_public_wording.py`, `Tests/CMakeLists.txt`
    - platform.console must stay unsupported/blocked, and any platformAuthority field is rejected by name, pointing to OWNER-DECISIONS.md. PlayStation/Xbox/Switch/console-platform claims are rejected in public surfaces. 'No public source or CI implies certification' is still unmet: source and CI are not scanned.
-2. **[unmet]** No public source or CI implies certification
-   - No checker scans source or CI for console SDK or certification implications.
+2. **[implemented]** No public source or CI implies certification
+   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_public_wording.py`, `Tests/CMakeLists.txt`, `wiki/platform/Accessibility.md`
+   - console_certification_implication_errors() (tools/site-data/validate.py, run by Validator.validate) rejects console runner/job/matrix/option/preset identifiers in workflows and CMake, and unqualified console-plus-certification wording in public docs, wiki and engine source. CTest PublicWording_ConsoleCertification covers unit cases and the live tree. A dead console enum header remains.
 3. **[unmet]** Authorized work has separate confidential controls
    - There are no confidential controls. This needs platform agreements and owner action.
 
@@ -4825,7 +4828,7 @@ python3 tools/site-data/validate.py --capability platform.console
 
 **Automated evidence**
 
-- Test selectors: none declared
+- Test selectors: `PublicWording_ConsoleCertification`
 - Required CI jobs: none declared
 - Performance / reliability budgets:
 

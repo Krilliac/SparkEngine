@@ -247,6 +247,7 @@
         "Engine/Networking/AreaServer.h",
         "Engine/Networking/ClientPrediction.h",
         "Engine/Networking/IAreaSimulation.h",
+        "Engine/Networking/InstabilitySimulator.h",
         "Engine/Networking/InterpolationBuffer.h",
         "Engine/Networking/LagCompensation.h",
         "Engine/Networking/NetworkBindPolicy.h",
@@ -272,7 +273,7 @@
         "Utils/SecureRandom.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 31,
+      "privateEngineHeaderCount": 32,
       "copiedInfrastructureFiles": []
     },
     {

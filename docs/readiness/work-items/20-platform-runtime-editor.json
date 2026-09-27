@@ -650,9 +650,14 @@
         },
         {
           "criterionDigest": "sha256:d496fb3ab4b9",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No checker scans source or CI for console SDK or certification implications."
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt",
+            "wiki/platform/Accessibility.md"
+          ],
+          "note": "console_certification_implication_errors() (tools/site-data/validate.py, run by Validator.validate) rejects console runner/job/matrix/option/preset identifiers in workflows and CMake, and unqualified console-plus-certification wording in public docs, wiki and engine source. CTest PublicWording_ConsoleCertification covers unit cases and the live tree. A dead console enum header remains."
         },
         {
           "criterionDigest": "sha256:0f1ac5c1b8e3",
@@ -664,7 +669,7 @@
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.console"
       ],
-      "testSelectors": [],
+      "testSelectors": ["PublicWording_ConsoleCertification"],
       "requiredCiJobs": [],
       "performanceBudgets": [],
       "documentationUpdates": [
