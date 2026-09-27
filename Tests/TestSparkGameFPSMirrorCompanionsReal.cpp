@@ -2,22 +2,27 @@
  * @file TestSparkGameFPSMirrorCompanionsReal.cpp
  * @brief Production-source companions for the stable-v1 single-player mirrors.
  *
- * TestInputManagerState.cpp and TestEngineContext.cpp both say in their own
- * headers that they are standalone reimplementations, so neither can detect a
- * regression in the shipped code they claim to cover. This file includes the
- * real headers and exercises the shipped classes:
+ * TestEngineContext.cpp says in its own header that it is a standalone
+ * reimplementation, so it cannot detect a regression in the shipped code it
+ * claims to cover. This file includes the real headers and exercises the
+ * shipped classes:
  *
  *   InputManager   (SparkEngine/Source/Input/InputManager.cpp) - sensitivity and
- *                  dead-zone validation, key bindings, state clearing
+ *                  dead-zone validation, key bindings, state clearing, and the
+ *                  windowless message path: HandleMessage + Update drive key and
+ *                  button state, press/active metrics and per-frame mouse deltas
  *   EngineContext  (SparkEngine/Source/Core/EngineContext.cpp) - the TypeId
  *                  service locator that TestEngineContext.cpp reimplements
  *
  * Both .cpp files are already part of SparkEngineLib, so no additional
- * production source has to be added to the SparkTests target.
+ * production source has to be added to the SparkTests target. RDY-010 retired
+ * the TestInputManagerState.cpp mirror; its edge-detection cases live in
+ * TestInputFrameEdgesReal.cpp.
  *
- * Deliberately NOT exercised here: InputManager::Initialize/Update/CaptureMouse
- * and the global EngineContext singleton. Those need a real window, and
- * CaptureMouse(true) hides the desktop cursor for the whole session.
+ * Deliberately NOT exercised here: InputManager::Initialize/CaptureMouse,
+ * WM_LBUTTONDOWN (which captures the mouse) and the global EngineContext
+ * singleton. Capture needs a real window, and CaptureMouse(true) hides the
+ * desktop cursor for the whole session.
  */
 
 #include "TestFramework.h"
@@ -152,16 +157,137 @@ TEST(InputManagerReal_SettingsRoundTripThroughApply)
     EXPECT_TRUE(metrics.invertMouseY);
 }
 
+namespace
+{
+    /// WM_MOUSEMOVE packs client x/y into the low/high words of lParam.
+    LPARAM MouseMoveLParam(int x, int y)
+    {
+        return static_cast<LPARAM>((static_cast<unsigned>(y) << 16) | (static_cast<unsigned>(x) & 0xFFFFu));
+    }
+
+    /// Deliver a mouse move, then run the frame's input step that turns it into a delta.
+    MousePoint MoveMouseAndTick(InputManager& input, int x, int y)
+    {
+        input.HandleMessage(WM_MOUSEMOVE, 0, MouseMoveLParam(x, y));
+        input.Update();
+        return input.GetMouseDelta();
+    }
+} // namespace
+
 TEST(InputManagerReal_ClearInputStatesLeavesNoKeyDown)
 {
     InputManager input;
+    input.HandleMessage(WM_KEYDOWN, 'A', 0);
+    input.HandleMessage(WM_RBUTTONDOWN, 0, 0);
+    input.Update();
+    ASSERT_TRUE(input.IsKeyDown('A'));
+    ASSERT_TRUE(input.IsMouseButtonDown(1));
+
     input.Console_ClearInputStates();
-    // Key codes here are ordinary VK values; no key can be down after a clear.
-    EXPECT_FALSE(input.IsKeyDown(65));
-    EXPECT_TRUE(input.IsKeyUp(65));
-    EXPECT_FALSE(input.WasKeyPressed(65));
-    EXPECT_FALSE(input.IsMouseButtonDown(0));
+    EXPECT_FALSE(input.IsKeyDown('A'));
+    EXPECT_TRUE(input.IsKeyUp('A'));
+    EXPECT_FALSE(input.WasKeyPressed('A'));
+    EXPECT_FALSE(input.IsMouseButtonDown(1));
+    EXPECT_FALSE(input.WasMouseButtonPressed(1));
+    EXPECT_EQ(input.Console_GetMetrics().activeKeys, static_cast<size_t>(0));
 }
+
+TEST(InputManagerReal_KeyMessagesTrackSimultaneousKeysAndMetrics)
+{
+    InputManager input;
+    input.HandleMessage(WM_KEYDOWN, 'W', 0);
+    input.HandleMessage(WM_KEYDOWN, 'A', 0);
+    input.HandleMessage(WM_KEYDOWN, VK_SPACE, 0);
+
+    EXPECT_TRUE(input.IsKeyDown('W'));
+    EXPECT_TRUE(input.IsKeyDown('A'));
+    EXPECT_TRUE(input.IsKeyDown(VK_SPACE));
+    EXPECT_FALSE(input.IsKeyDown('D'));
+    EXPECT_TRUE(input.IsKeyUp('D'));
+    InputManager::InputMetrics metrics = input.Console_GetMetrics();
+    EXPECT_EQ(metrics.activeKeys, static_cast<size_t>(3));
+    EXPECT_EQ(metrics.keyPressCount, static_cast<size_t>(3));
+
+    input.HandleMessage(WM_KEYUP, 'A', 0);
+    EXPECT_TRUE(input.IsKeyUp('A'));
+    EXPECT_TRUE(input.IsKeyDown('W'));
+    metrics = input.Console_GetMetrics();
+    EXPECT_EQ(metrics.activeKeys, static_cast<size_t>(2));
+    EXPECT_EQ(metrics.keyPressCount, static_cast<size_t>(3)); // a release is not a press
+}
+
+TEST(InputManagerReal_MouseButtonMessagesTrackRightAndMiddle)
+{
+    InputManager input;
+    input.HandleMessage(WM_RBUTTONDOWN, 0, 0);
+    input.HandleMessage(WM_MBUTTONDOWN, 0, 0);
+    EXPECT_FALSE(input.IsMouseButtonDown(0));
+    EXPECT_TRUE(input.IsMouseButtonDown(1));
+    EXPECT_TRUE(input.IsMouseButtonDown(2));
+    EXPECT_EQ(input.Console_GetMetrics().activeMouseButtons, static_cast<size_t>(2));
+
+    input.HandleMessage(WM_RBUTTONUP, 0, 0);
+    input.HandleMessage(WM_MBUTTONUP, 0, 0);
+    EXPECT_FALSE(input.IsMouseButtonDown(1));
+    EXPECT_FALSE(input.IsMouseButtonDown(2));
+    EXPECT_EQ(input.Console_GetMetrics().activeMouseButtons, static_cast<size_t>(0));
+}
+
+TEST(InputManagerReal_MouseDeltaIsMeasuredPerFrame)
+{
+    InputManager input;
+    MoveMouseAndTick(input, 100, 50); // seeds the position from the construction origin
+    EXPECT_EQ(input.GetMousePosition().x, 100);
+    EXPECT_EQ(input.GetMousePosition().y, 50);
+
+    const MousePoint moved = MoveMouseAndTick(input, 110, 45);
+    EXPECT_EQ(moved.x, 10);
+    EXPECT_EQ(moved.y, -5);
+
+    // No movement delivered this frame: the delta must not repeat the last one.
+    input.Update();
+    EXPECT_EQ(input.GetMouseDelta().x, 0);
+    EXPECT_EQ(input.GetMouseDelta().y, 0);
+}
+
+#ifdef _WIN32
+// The Windows Update() runs the uncaptured delta through ProcessMouseDelta and
+// the Windows HandleMessage counts button presses. The POSIX Update() reports
+// the raw delta and its HandleMessage does not count button presses.
+TEST(InputManagerReal_MouseDeltaAppliesSensitivityInvertAndDeadZone)
+{
+    InputManager input;
+    MoveMouseAndTick(input, 100, 100);
+
+    input.Console_SetMouseSensitivity(2.0f);
+    MousePoint delta = MoveMouseAndTick(input, 105, 103);
+    EXPECT_EQ(delta.x, 10);
+    EXPECT_EQ(delta.y, 6);
+
+    input.Console_SetMouseSensitivity(1.0f);
+    input.Console_SetInvertMouseY(true);
+    delta = MoveMouseAndTick(input, 110, 106);
+    EXPECT_EQ(delta.x, 5);
+    EXPECT_EQ(delta.y, -3);
+
+    input.Console_SetMouseDeadZone(5.0f);
+    delta = MoveMouseAndTick(input, 111, 107); // |(1, 1)| is inside the dead zone
+    EXPECT_EQ(delta.x, 0);
+    EXPECT_EQ(delta.y, 0);
+    delta = MoveMouseAndTick(input, 121, 117); // |(10, 10)| is outside it
+    EXPECT_EQ(delta.x, 10);
+    EXPECT_EQ(delta.y, -10);
+}
+
+TEST(InputManagerReal_MousePressCountCountsButtonDowns)
+{
+    InputManager input;
+    input.HandleMessage(WM_RBUTTONDOWN, 0, 0);
+    input.HandleMessage(WM_RBUTTONUP, 0, 0);
+    input.HandleMessage(WM_MBUTTONDOWN, 0, 0);
+    EXPECT_EQ(input.Console_GetMetrics().mousePressCount, static_cast<size_t>(2));
+}
+#endif
 
 // ============================================================================
 // EngineContext — the real TypeId service locator

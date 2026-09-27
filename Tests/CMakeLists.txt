@@ -362,7 +362,6 @@ add_executable(SparkTests
     TestSceneConfigDatabaseReal.cpp
     TestSpringArmReal.cpp
     TestPerceptionSystemMath.cpp
-    TestInputManagerState.cpp
     TestGamepadInputProcessing.cpp
     TestCameraTransforms.cpp
     TestSparkEngineCameraOwnership.cpp
