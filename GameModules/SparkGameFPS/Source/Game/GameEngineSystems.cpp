@@ -20,6 +20,7 @@
 #include "Game.h"
 #include "Player.h"
 #include "FPSAssetPaths.h"
+#include "FPSQuickLoad.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -423,18 +424,19 @@ bool Game::QuickLoadProfile(std::string& outMessage)
         return false;
     }
 
-    std::unordered_map<std::string, std::string> customState;
-    if (!saveSystem->Load(kQuickSaveSlot, *world, customState))
-    {
-        outMessage = std::string("Quick load FAILED for slot '") + kQuickSaveSlot + "'";
-        return false;
-    }
-
+    // The profile is validated before the world is replaced, so a rejected profile block
+    // leaves both the world and the current profile as they were.
     Spark::FPSLocalProfile profile;
     std::string profileError;
-    if (!profile.ReadFrom(customState, profileError))
+    switch (Spark::LoadSlotWithProfile(*saveSystem, kQuickSaveSlot, *world, profile, profileError))
     {
-        outMessage = "Quick load restored the world but the local profile was rejected: " + profileError;
+    case Spark::FPSQuickLoadStatus::Loaded:
+        break;
+    case Spark::FPSQuickLoadStatus::ProfileRejected:
+        outMessage = "Quick load rejected the local profile; the world is unchanged: " + profileError;
+        return false;
+    case Spark::FPSQuickLoadStatus::LoadFailed:
+        outMessage = std::string("Quick load FAILED for slot '") + kQuickSaveSlot + "'";
         return false;
     }
 

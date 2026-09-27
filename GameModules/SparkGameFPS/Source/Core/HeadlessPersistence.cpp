@@ -18,6 +18,7 @@
 #include "SparkGameFPS.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Game/FPSLocalProfile.h"
+#include "Game/FPSQuickLoad.h"
 #include "Game/GameMode.h"
 #include "Game/ProgressionSystem.h"
 #include "Utils/SparkConsole.h"
@@ -134,14 +135,19 @@ std::string SparkGameModule::HeadlessQuickLoad()
     if (!saveSystem->SaveExists(kQuickSaveSlot))
         return std::string("No quicksave found in slot '") + kQuickSaveSlot + "'";
 
-    std::unordered_map<std::string, std::string> customState;
-    if (!saveSystem->Load(kQuickSaveSlot, *world, customState))
-        return std::string("Quick load FAILED for slot '") + kQuickSaveSlot + "'";
-
+    // The profile is validated before the world is replaced, so a rejected profile block
+    // leaves both the world and this host's progression and scoreboard as they were.
     Spark::FPSLocalProfile profile;
     std::string profileError;
-    if (!profile.ReadFrom(customState, profileError))
-        return "Quick load restored the world but the local profile was rejected: " + profileError;
+    switch (Spark::LoadSlotWithProfile(*saveSystem, kQuickSaveSlot, *world, profile, profileError))
+    {
+    case Spark::FPSQuickLoadStatus::Loaded:
+        break;
+    case Spark::FPSQuickLoadStatus::ProfileRejected:
+        return "Quick load rejected the local profile; the world is unchanged: " + profileError;
+    case Spark::FPSQuickLoadStatus::LoadFailed:
+        return std::string("Quick load FAILED for slot '") + kQuickSaveSlot + "'";
+    }
 
     // The headless arena has no Player, so class, weapon, health and armor stay
     // in the file for the windowed host; progression, play time and the

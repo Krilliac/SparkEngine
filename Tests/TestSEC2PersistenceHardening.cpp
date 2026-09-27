@@ -22,6 +22,8 @@
 #include "Engine/Persistence/AsyncDatabase.h"
 #include "Engine/SaveSystem/SaveFileDurability.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Game/FPSLocalProfile.h"
+#include "Game/FPSQuickLoad.h"
 
 #include <cstring>
 #include <filesystem>
@@ -567,4 +569,51 @@ TEST(SEC2Persist_DeleteSaveReportsSurvivingRetainedCopy)
     fs::remove_all(backup);
     EXPECT_TRUE(saveSystem.DeleteSave("partial"));
     EXPECT_FALSE(saveSystem.SaveExists("partial"));
+}
+
+// ============================================================================
+// Finding 49: the FPS quick-load validates the profile before replacing the world
+// ============================================================================
+
+TEST(SEC2Persist_FPSQuickLoadRejectsProfileBeforeWorldCommit)
+{
+    Scratch scratch("fps_quickload");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(scratch.Path().string()));
+
+    World saved;
+    saved.CreateEntity("saved-world");
+    SaveMetadata metadata;
+
+    FPSLocalProfile savedProfile;
+    savedProfile.progressionXP = 250;
+    std::unordered_map<std::string, std::string> goodState;
+    savedProfile.WriteTo(goodState);
+    std::unordered_map<std::string, std::string> futureState = goodState;
+    futureState["fps.profile.version"] = std::to_string(FPSLocalProfile::kVersion + 1);
+    ASSERT_TRUE(saveSystem.Save("future", saved, metadata, futureState));
+    ASSERT_TRUE(saveSystem.Save("good", saved, metadata, goodState));
+
+    World live;
+    live.CreateEntity("live-world");
+    FPSLocalProfile liveProfile;
+    liveProfile.progressionXP = 7;
+    std::string profileError;
+
+    EXPECT_TRUE(LoadSlotWithProfile(saveSystem, "future", live, liveProfile, profileError) ==
+                FPSQuickLoadStatus::ProfileRejected);
+    EXPECT_FALSE(profileError.empty());
+    EXPECT_TRUE(FindNamedEntity(live, "live-world") != entt::null);
+    EXPECT_TRUE(FindNamedEntity(live, "saved-world") == entt::null);
+    EXPECT_EQ(liveProfile.progressionXP, 7);
+
+    EXPECT_TRUE(LoadSlotWithProfile(saveSystem, "missing", live, liveProfile, profileError) ==
+                FPSQuickLoadStatus::LoadFailed);
+    EXPECT_TRUE(FindNamedEntity(live, "live-world") != entt::null);
+
+    EXPECT_TRUE(LoadSlotWithProfile(saveSystem, "good", live, liveProfile, profileError) == FPSQuickLoadStatus::Loaded);
+    EXPECT_TRUE(FindNamedEntity(live, "saved-world") != entt::null);
+    EXPECT_TRUE(FindNamedEntity(live, "live-world") == entt::null);
+    EXPECT_EQ(liveProfile.progressionXP, 250);
 }

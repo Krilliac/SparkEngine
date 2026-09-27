@@ -693,6 +693,8 @@ add_executable(SparkTests
     # so they link into the headless test binary.
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/GameMechanicsRespawn.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSLocalProfile.cpp"
+    # SEC2: the transactional quick-load both FPS hosts share (SEC2Persist_ tests).
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSQuickLoad.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Core/EngineWeatherAdapter.cpp"
@@ -1769,7 +1771,7 @@ set_tests_properties(SparkUtf8PathTests PROPERTIES
 # directory-sync cases SKIP on Windows.
 add_test(NAME SparkSEC2PersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkSEC2PersistenceTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=11"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=12"
     LABELS "persistence;save;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 60)
