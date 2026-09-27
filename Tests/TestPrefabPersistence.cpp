@@ -162,7 +162,7 @@ TEST(PrefabPersistence_FutureVersionFailsClosedNamingVersionAndWindow)
     EXPECT_TRUE(IsUntouchedSentinel(out));
     EXPECT_STR_CONTAINS(error, "Future.sparkprefab");
     EXPECT_STR_CONTAINS(error, "format version 3");
-    EXPECT_STR_CONTAINS(error, "reads version 1 only");
+    EXPECT_STR_CONTAINS(error, "reads versions 1 to 2");
     EXPECT_STR_CONTAINS(error, "newer SparkEditor");
     EXPECT_TRUE(error.find(".bak") == std::string::npos);
 }
@@ -263,7 +263,7 @@ TEST(PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons)
 
     // Damage the primary the way a torn external copy would: cut before the second component.
     const std::string primary = ReadBytes(scratch.Native("Crate.sparkprefab"));
-    const size_t cut = primary.find("component RigidBody");
+    const size_t cut = primary.find("component \"RigidBody\"");
     ASSERT_TRUE(cut != std::string::npos);
     WriteBytes(scratch.Native("Crate.sparkprefab"), primary.substr(0, cut));
 
@@ -300,7 +300,7 @@ TEST(PrefabPersistence_SaveAfterBackupRecoveryKeepsGoodBackup)
     const std::string goodBackup = ReadBytes(backupFile);
 
     const std::string primary = ReadBytes(primaryFile);
-    const std::string damaged = primary.substr(0, primary.find("component RigidBody"));
+    const std::string damaged = primary.substr(0, primary.find("component \"RigidBody\""));
     WriteBytes(primaryFile, damaged);
 
     SparkEditor::PrefabAsset recovered;

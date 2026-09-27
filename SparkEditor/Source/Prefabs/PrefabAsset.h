@@ -132,10 +132,15 @@ namespace SparkEditor
         const SerializedComponent* GetComponent(const std::string& typeName) const;
 
         /// Newest `SPARKPREFAB <version>` this build reads, and the only one it writes.
-        static constexpr int kPrefabFormatVersion = 1;
+        static constexpr int kPrefabFormatVersion = 2;
+        /// Oldest version TryLoad reads (N-1, the same window as saves); it is migrated in memory only.
+        static constexpr int kOldestSupportedPrefabVersion = kPrefabFormatVersion - 1;
 
         /**
          * @brief Save the prefab to a file
+         *
+         * Always writes kPrefabFormatVersion, so a prefab loaded from a version 1 file is migrated
+         * on disk by its next save and never before. Every name must be non-empty.
          *
          * The text is written through SaveFileDurability::WriteFileAtomically: the previous file
          * is kept as `<path>.bak`, and a failed or interrupted save leaves @p path unchanged.
@@ -150,9 +155,11 @@ namespace SparkEditor
         /**
          * @brief Load a prefab from a file, falling back to its retained `<path>.bak`
          *
-         * The header must be exactly `SPARKPREFAB <version>` with a version this build reads.
-         * Counts are bounded, every property type must be known, and the file must end after the
-         * declared components. A primary that fails any of those checks is replaced by the
+         * The header must be exactly `SPARKPREFAB <version>` with a version from
+         * kOldestSupportedPrefabVersion to kPrefabFormatVersion; an older version is converted in
+         * memory and the file is never rewritten by a load. Counts are bounded, every property type
+         * must be known, and the file must end after the declared components (version 2: after its
+         * closing `end` line). A primary that fails any of those checks is replaced by the
          * retained backup when that loads; a primary written by a newer format version fails
          * closed without consulting the backup, because loading an older copy and saving over
          * the newer file would discard its data.

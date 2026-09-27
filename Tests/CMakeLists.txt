@@ -416,6 +416,7 @@ add_executable(SparkTests
     TestShaderHotReload.cpp
     TestRuntimePrefab.cpp
     TestPrefabPersistence.cpp
+    TestPrefabCompatibility.cpp
     TestEditorStateCompatibility.cpp
     TestTutorialSystem.cpp
     TestGoldenImageTest.cpp
@@ -730,6 +731,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"
     # SAVE-230: prefab I/O needs only SceneFile and SceneComponentCodec (above), no ImGui.
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabAsset.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabTextFormat.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManagerInstances.cpp"
     # Editor sources needed by tests
@@ -1706,6 +1708,16 @@ set_tests_properties(SparkDocumentWriteTests PROPERTIES
 add_test(NAME SparkPrefabPersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkPrefabPersistenceTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=6"
+    LABELS "compatibility;prefab;unit"
+    TIMEOUT 30)
+
+# SAVE-230: editor prefabs read SPARKPREFAB 1 (N-1) and 2 (N) and write 2 only. The
+# committed v1 fixture loads in place with its declared values and is never rewritten,
+# re-saves as v2 bit-exactly, and the v3 fixture fails closed
+# (Tests/Fixtures/Compatibility/Prefab).
+add_test(NAME SparkPrefabCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkPrefabCompatibilityTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabMigration_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "compatibility;prefab;unit"
     TIMEOUT 30)
 

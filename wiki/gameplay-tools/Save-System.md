@@ -415,6 +415,24 @@ The compatibility-labeled coverage includes:
 The same production-linked SaveSystem test file also retains the malformed-tail,
 oversize-file, custom-state, and atomic slot-replacement regressions.
 
+### Editor prefabs (`.sparkprefab`)
+
+`SparkEditor::PrefabAsset` reads `SPARKPREFAB` 1 (N-1) and 2 (N) and writes 2
+only (`kOldestSupportedPrefabVersion`, `kPrefabFormatVersion`); the grammar lives
+in `SparkEditor/Source/Prefabs/PrefabTextFormat.cpp`. Version 1 stored names and
+string values as bare text, so it could not hold whitespace in a component or
+property name or a line break in a string, and a file cut inside its last value
+still parsed. Version 2 quotes and escapes every name and string value, writes
+numbers in shortest round-trip form, sorts properties by name and ends with an
+`end` line. A version 1 prefab is converted in memory. The load never rewrites the
+file; the next save writes version 2 and keeps the version 1 bytes as `.bak`.
+A newer version fails closed with an error naming the file version and the
+supported window. The `.bak` is not consulted for a newer version, because
+loading an older copy and saving over the newer file would discard its data.
+Fixtures are under `Tests/Fixtures/Compatibility/Prefab/`, and the tests are
+`PrefabMigration_*` (CTest `SparkPrefabCompatibilityTests`, labels
+`compatibility;prefab;unit`) and `PrefabPersistence_*` (`SparkPrefabPersistenceTests`).
+
 SAVE-230 remains broader than this save-format slice. Local production-linked
 tests now cover the v4 CRC envelope, the OD-03 N/N-1 window (v3 migrates; v1/v2
 fixtures fail closed), SceneFile v1-to-v2 migration from real v1 fixtures, the

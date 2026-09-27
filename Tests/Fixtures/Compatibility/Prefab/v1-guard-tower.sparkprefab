@@ -1,0 +1,14 @@
+SPARKPREFAB 1
+name Guard Tower
+components 2
+component Transform
+properties 3
+  position float3 1.25 -3.5 12.0625
+  rotation float4 0 0.38268342614173889 0 0.92387950420379639
+  scale float3 1 1 1
+component GuardTower
+properties 4
+  health int 250
+  garrisoned bool true
+  fireInterval double 1.3500000000000001
+  banner string Crimson Keep
