@@ -30,6 +30,7 @@ from common import (
     load_json,
     criterion_digest,
     read_bytes_stable,
+    tracked_paths,
 )
 from contract_selectors import (cmake_preset_index, preset_references, required_gate_jobs, resolve_ci_job,
                                 resolve_test_selector)
@@ -360,6 +361,182 @@ def hosted_online_service_claim_errors(surfaces: dict[str, str]) -> list[str]:
                     f"{location}:{number}: claims hosted online services ({match.group(0)!r}); "
                     "the engine ships none (OD-08, wiki/advanced/Online-Service-Boundary.md)"
                 )
+    return errors
+
+
+# NET-110: the boundary specification must keep naming every trust/ownership
+# boundary and every adapter the code actually contains, not just exist.
+ONLINE_SERVICE_SPEC = "docs/specs/online-services.md"
+ONLINE_SERVICE_INTERFACES = ("IOnlinePlatform", "IGatewayAuthenticator", "IAreaControlPlane", "ITransport")
+ONLINE_SERVICE_ADAPTER_CLASS = re.compile(
+    r"^[ \t]*(?:class|struct)\s+(\w+)\b[^;{]*?:[^;{]*?\bpublic\s+(" + "|".join(ONLINE_SERVICE_INTERFACES) + r")\b",
+    re.MULTILINE,
+)
+# The only descriptions spec section 6 permits; "production" is deliberately absent.
+ONLINE_SERVICE_ADAPTER_LABELS = frozenset(
+    {"local, deterministic", "local reference", "stub", "local/LAN, experimental", "engine guard"}
+)
+_SOURCE_SUFFIXES = (".h", ".hpp", ".cpp")
+
+
+@functools.lru_cache(maxsize=8192)
+def _cached_source_text(path: Path) -> str | None:
+    """File text read once per validation run; the contract suite has a tight time budget."""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _markdown_section(text: str, heading: str) -> str | None:
+    """Body of the Markdown heading that starts with ``heading``, up to the next heading of its level or higher."""
+    level = len(heading) - len(heading.lstrip("#"))
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith(heading):
+            continue
+        body: list[str] = []
+        for following in lines[index + 1:]:
+            stripped = following.lstrip("#")
+            following_level = len(following) - len(stripped)
+            if 0 < following_level <= level and stripped.startswith(" "):
+                break
+            body.append(following)
+        return "\n".join(body)
+    return None
+
+
+def _markdown_table_rows(section: str) -> list[list[str]]:
+    """Data rows of the first Markdown table in ``section`` (header and separator dropped)."""
+    rows: list[list[str]] = []
+    started = False
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            if started:
+                break
+            continue
+        started = True
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        rows.append(cells)
+    return [row for row in rows[1:] if not all(re.fullmatch(r":?-+:?", cell) for cell in row)]
+
+
+def _backticked(cell: str) -> list[str]:
+    return re.findall(r"`([^`]+)`", cell)
+
+
+def online_service_adapter_classes(
+    repo_root: Path, source_paths: Iterable[str] | None = None
+) -> dict[str, tuple[str, str]]:
+    """Map every class implementing an online-service seam to (source path, interface).
+
+    ``source_paths`` are repository-relative; by default every tracked C++ source
+    outside Tests/, whose fakes are test doubles rather than shipped adapters.
+    """
+    if source_paths is None:
+        source_paths = sorted(
+            path for path in tracked_paths() if path.endswith(_SOURCE_SUFFIXES) and not path.startswith("Tests/")
+        )
+    adapters: dict[str, tuple[str, str]] = {}
+    for relative in source_paths:
+        text = _cached_source_text(repo_root / relative)
+        if text is None or not any(interface in text for interface in ONLINE_SERVICE_INTERFACES):
+            continue
+        for match in ONLINE_SERVICE_ADAPTER_CLASS.finditer(text):
+            if match.group(1) not in ONLINE_SERVICE_INTERFACES:
+                adapters.setdefault(match.group(1), (relative, match.group(2)))
+    return adapters
+
+
+def _symbol_defined_under(repo_root: Path, relative: str, symbol: str) -> bool | None:
+    """Whether ``symbol`` occurs as a word in the file, or in any C++ source under the directory.
+
+    Returns None when the path does not exist.
+    """
+    path = repo_root / relative
+    if path.is_file():
+        candidates = [path]
+    elif path.is_dir():
+        candidates = sorted(candidate for candidate in path.rglob("*") if candidate.suffix in _SOURCE_SUFFIXES)
+    else:
+        return None
+    pattern = re.compile(r"\b" + re.escape(symbol) + r"\b")
+    return any(pattern.search(_cached_source_text(candidate) or "") for candidate in candidates)
+
+
+def online_service_spec_contract_errors(
+    spec_text: str, repo_root: Path, source_paths: Iterable[str] | None = None
+) -> list[str]:
+    """Content contract for the online-service boundary specification (NET-110).
+
+    The deployment diagram and the trust-boundary table must name the same
+    boundaries, every boundary names who is trusted and how it is enforced,
+    every engine interface the spec cites still exists where it says, and every
+    class implementing an online-service seam is in the adapter register with a
+    permitted, non-production label.
+    """
+    location = ONLINE_SERVICE_SPEC
+    errors: list[str] = []
+
+    diagram = _markdown_section(spec_text, "## 3. Deployment diagram")
+    mermaid = re.search(r"```mermaid\n(.*?)```", diagram or "", re.DOTALL)
+    if mermaid is None:
+        errors.append(f"{location}: section 3 must contain a ```mermaid deployment diagram")
+    diagram_ids = {int(value) for value in re.findall(r'"B(\d+):', mermaid.group(1))} if mermaid else set()
+
+    boundaries = _markdown_section(spec_text, "## 4. Trust boundaries")
+    table_ids: list[int] = []
+    for row in _markdown_table_rows(boundaries or ""):
+        identifier = re.fullmatch(r"B(\d+)", row[0])
+        if identifier is None:
+            errors.append(f"{location}: trust-boundary row {row[0]!r} is not a B<n> id")
+            continue
+        table_ids.append(int(identifier.group(1)))
+        if len(row) < 5 or not row[3] or not row[4]:
+            errors.append(f"{location}: trust boundary {row[0]} must name who is trusted and the enforcing mechanism")
+    if not table_ids:
+        errors.append(f"{location}: section 4 must contain the trust-boundary table")
+    if table_ids != list(range(1, len(table_ids) + 1)):
+        errors.append(f"{location}: trust-boundary ids must run contiguously from B1 (found {table_ids})")
+    for missing in sorted(diagram_ids - set(table_ids)):
+        errors.append(f"{location}: diagram boundary B{missing} has no row in the trust-boundary table")
+    for undrawn in sorted(set(table_ids) - diagram_ids):
+        errors.append(f"{location}: trust boundary B{undrawn} is not drawn on the deployment diagram")
+
+    interfaces = _markdown_section(spec_text, "### 2.1 Engine SDK interfaces")
+    interface_rows = _markdown_table_rows(interfaces or "")
+    if not interface_rows:
+        errors.append(f"{location}: section 2.1 must contain the engine-interface table")
+    for row in interface_rows:
+        paths = _backticked(row[1]) if len(row) > 1 else []
+        symbols = [symbol.split("::")[-1] for symbol in _backticked(row[0])]
+        if not paths or not symbols:
+            errors.append(f"{location}: engine-interface row {row[0]!r} must name a symbol and a source path")
+            continue
+        for relative in paths:
+            for symbol in symbols:
+                found = _symbol_defined_under(repo_root, relative.rstrip("/"), symbol)
+                if found is None:
+                    errors.append(f"{location}: engine-interface source {relative!r} does not exist")
+                    break
+                if not found:
+                    errors.append(f"{location}: engine interface {symbol!r} is not found in {relative!r}")
+
+    register = _markdown_section(spec_text, "## 6. Adapter status register")
+    labels: dict[str, str] = {}
+    for row in _markdown_table_rows(register or ""):
+        label = row[2].replace("*", "").strip() if len(row) > 2 else ""
+        for name in _backticked(row[0]):
+            labels[name] = label
+    for name, label in sorted(labels.items()):
+        if label not in ONLINE_SERVICE_ADAPTER_LABELS:
+            errors.append(f"{location}: adapter {name} has label {label!r}; permitted labels are "
+                          f"{sorted(ONLINE_SERVICE_ADAPTER_LABELS)}")
+    for name, (relative, interface) in sorted(online_service_adapter_classes(repo_root, source_paths).items()):
+        if name not in labels:
+            errors.append(f"{location}: {name} ({relative}) implements {interface} but is not in the "
+                          "section 6 adapter register")
     return errors
 
 
@@ -2603,6 +2780,9 @@ class Validator:
                 texts[surface] = path.read_text(encoding="utf-8", errors="replace")
         for violation in hosted_online_service_claim_errors(texts):
             self.error("onlineServiceBoundary", violation)
+        if ONLINE_SERVICE_SPEC in texts:
+            for violation in online_service_spec_contract_errors(texts[ONLINE_SERVICE_SPEC], REPO_ROOT):
+                self.error("onlineServiceBoundary", violation)
 
     def validate_build_matrix_evidence(self) -> None:
         """The build-matrix configuration evidence is part of the contract, not beside it.

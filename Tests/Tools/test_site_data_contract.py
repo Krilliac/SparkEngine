@@ -758,6 +758,100 @@ class OnlineServiceBoundaryTests(unittest.TestCase):
             self.assertIn(surface, surfaces)
         self.assertEqual([], site_data_validate.hosted_online_service_claim_errors(surfaces))
 
+    # -- Specification content contract (NET-110 criterion 1) -----------------
+
+    SPEC_TEXT = (REPO_ROOT / "docs" / "specs" / "online-services.md").read_text(encoding="utf-8")
+
+    def spec_errors(self, text: str, source_paths: list[str] | None = None) -> list[str]:
+        # An empty source list keeps the adapter scan out of cases about the text.
+        return site_data_validate.online_service_spec_contract_errors(
+            text, REPO_ROOT, [] if source_paths is None else source_paths
+        )
+
+    def mutated_spec(self, old: str, new: str) -> str:
+        self.assertIn(old, self.SPEC_TEXT)
+        return self.SPEC_TEXT.replace(old, new, 1)
+
+    def test_spec_contract_passes_on_the_live_repository(self) -> None:
+        self.assertEqual(
+            [], site_data_validate.online_service_spec_contract_errors(self.SPEC_TEXT, REPO_ROOT)
+        )
+
+    def test_spec_diagram_boundary_missing_from_table_is_rejected(self) -> None:
+        row = next(line for line in self.SPEC_TEXT.splitlines() if line.startswith("| B9 |"))
+        errors = self.spec_errors(self.mutated_spec(row + "\n", ""))
+        self.assertIn(
+            "docs/specs/online-services.md: diagram boundary B9 has no row in the trust-boundary table", errors
+        )
+
+    def test_spec_table_boundary_missing_from_diagram_is_rejected(self) -> None:
+        errors = self.spec_errors(self.mutated_spec('Match -- "B9: placement" --> Gateway', "Match --> Gateway"))
+        self.assertIn(
+            "docs/specs/online-services.md: trust boundary B9 is not drawn on the deployment diagram", errors
+        )
+
+    def test_spec_boundary_with_empty_trust_owner_is_rejected(self) -> None:
+        errors = self.spec_errors(
+            self.mutated_spec("| Device → product | Product identity service |", "| Device → product |  |")
+        )
+        self.assertIn(
+            "docs/specs/online-services.md: trust boundary B2 must name who is trusted and the enforcing mechanism",
+            errors,
+        )
+
+    def test_spec_non_contiguous_boundary_ids_are_rejected(self) -> None:
+        errors = self.spec_errors(self.mutated_spec("| B7 | Supervisor", "| B17 | Supervisor"))
+        self.assertTrue(any("must run contiguously from B1" in error for error in errors), errors)
+
+    def test_spec_without_mermaid_diagram_is_rejected(self) -> None:
+        errors = self.spec_errors(self.mutated_spec("```mermaid", "```text"))
+        self.assertIn("docs/specs/online-services.md: section 3 must contain a ```mermaid deployment diagram", errors)
+
+    def test_spec_stale_interface_path_is_rejected(self) -> None:
+        errors = self.spec_errors(
+            self.mutated_spec("`SparkEngine/Source/Utils/PasswordHash.h`", "`SparkEngine/Source/Utils/Removed.h`")
+        )
+        self.assertIn(
+            "docs/specs/online-services.md: engine-interface source 'SparkEngine/Source/Utils/Removed.h' "
+            "does not exist",
+            errors,
+        )
+
+    def test_spec_interface_symbol_missing_from_its_source_is_rejected(self) -> None:
+        errors = self.spec_errors(self.mutated_spec("`Spark::PasswordHash`", "`Spark::PasswordVault`"))
+        self.assertIn(
+            "docs/specs/online-services.md: engine interface 'PasswordVault' is not found in "
+            "'SparkEngine/Source/Utils/PasswordHash.h'",
+            errors,
+        )
+
+    def test_spec_production_adapter_label_is_rejected(self) -> None:
+        errors = self.spec_errors(
+            self.mutated_spec("| `SteamPlatform` | B1 | **stub** |", "| `SteamPlatform` | B1 | **production** |")
+        )
+        self.assertTrue(any("adapter SteamPlatform has label 'production'" in error for error in errors), errors)
+
+    def test_spec_unregistered_adapter_class_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "Engine").mkdir()
+            (root / "Engine" / "LanMatchmaker.h").write_text(
+                "// class Mentioned : public ITransport in a comment is not a declaration\n"
+                "namespace Spark\n{\n    class LanMatchmaker final\n        : public IOnlinePlatform\n    {\n    };\n}\n",
+                encoding="utf-8",
+            )
+            errors = site_data_validate.online_service_spec_contract_errors(
+                self.SPEC_TEXT, root, ["Engine/LanMatchmaker.h"]
+            )
+        adapter_errors = [error for error in errors if "adapter register" in error]
+        self.assertEqual(
+            [
+                "docs/specs/online-services.md: LanMatchmaker (Engine/LanMatchmaker.h) implements IOnlinePlatform "
+                "but is not in the section 6 adapter register"
+            ],
+            adapter_errors,
+        )
+
 
 class TransitiveDependencyTests(ContractTestCase):
     """Frozen case 4: profile dependency closure is transitive and diagnostic."""
