@@ -7,9 +7,11 @@
 #include "../Core/EditorIcons.h"
 #include "Core/EngineContext.h"
 #include "Engine/Replay/ReplaySystem.h"
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 #include <algorithm>
 #include <filesystem>
+#include <optional>
 #include <imgui.h>
 
 namespace SparkEditor
@@ -107,9 +109,18 @@ namespace SparkEditor
             if (!entry.is_regular_file() || entry.path().extension() != ".replay")
                 continue;
 
+            // The path is reopened through the replay system's narrow std::string file
+            // API; the name is ImGui (UTF-8) text. path::string() throws on Windows for
+            // a name the ANSI code page cannot spell, which ended the refresh; such a
+            // replay has no narrow path that could load it, so it is not listed.
+            std::optional<std::string> narrowPath = Spark::FileUtils::TryPathToNarrow(entry.path());
+            std::optional<std::string> name = Spark::FileUtils::TryPathToUtf8(entry.path().filename());
+            if (!narrowPath || !name)
+                continue;
+
             ReplayFileInfo info;
-            info.path = entry.path().string();
-            info.name = entry.path().filename().string();
+            info.path = std::move(*narrowPath);
+            info.name = std::move(*name);
             std::error_code sizeEc;
             info.fileSizeBytes = fs::file_size(entry.path(), sizeEc);
             if (sizeEc)

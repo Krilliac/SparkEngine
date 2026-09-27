@@ -26,6 +26,7 @@
 #include "../CommandHistory.h"
 #include "../Core/EditorUI.h"
 #include "Engine/ECS/Components.h"
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
@@ -34,6 +35,7 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <optional>
 
 namespace fs = std::filesystem;
 
@@ -123,13 +125,23 @@ namespace SparkEditor
             std::error_code fec;
             if (!it->is_regular_file(fec))
                 continue;
-            if (it->path().extension().string() != ".scene")
+            if (it->path().extension() != ".scene")
+                continue;
+
+            // diskPath is reopened through a narrow std::ifstream, so a scene whose name
+            // the Windows ANSI code page cannot spell has no usable diskPath (and
+            // path::string() throws for it, which ended the scan): leave it out. Once
+            // the narrow spelling exists, generic_string() on it cannot throw.
+            if (!Spark::FileUtils::TryPathToNarrow(it->path()))
                 continue;
 
             SceneFileEntry entry;
             entry.diskPath = it->path().generic_string();
             const fs::path rel = fs::relative(it->path(), sceneRoot, fec);
-            entry.displayPath = fec ? it->path().filename().generic_string() : rel.generic_string();
+            // displayPath is ImGui text, so UTF-8 with '/' separators.
+            entry.displayPath =
+                Spark::FileUtils::TryPathToUtf8(fec ? it->path().filename() : rel).value_or(entry.diskPath);
+            std::replace(entry.displayPath.begin(), entry.displayPath.end(), '\\', '/');
             m_sceneFiles.push_back(std::move(entry));
         }
 

@@ -42,6 +42,7 @@
 
 #include "EditorLayoutManager.h"
 #include "Engine/SaveSystem/SaveFileDurability.h"
+#include "Utils/FileUtils.h"
 
 #include <algorithm>
 #include <cctype>
@@ -53,6 +54,7 @@
 #include <iomanip>
 #include <limits>
 #include <locale>
+#include <optional>
 #include <sstream>
 #include <system_error>
 #include <utility>
@@ -709,9 +711,17 @@ namespace SparkEditor
             if (p.extension() != ".json")
                 continue;
 
+            // Layouts are reloaded by name through narrow std::string paths. A file
+            // name the Windows ANSI code page cannot spell has none, and
+            // path::string() throws for it, which ended the listing: skip it. Once
+            // the full path has a narrow spelling, its stem does too.
+            std::optional<std::string> narrowPath = Spark::FileUtils::TryPathToNarrow(p);
+            if (!narrowPath)
+                continue;
+
             LayoutInfo info;
             info.name = p.stem().string();
-            info.filePath = p.string();
+            info.filePath = std::move(*narrowPath);
 
             // Peek at the description field — a failed read is fine, just
             // means no description for this entry.

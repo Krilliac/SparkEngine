@@ -16,6 +16,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
@@ -23,6 +24,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 
 namespace SparkEditor
 {
@@ -75,10 +77,17 @@ namespace SparkEditor
                 if (it->path().extension() != ".hlsl")
                     continue;
 
+                // info.path is handed to narrow std::string shader loading. A name the
+                // Windows ANSI code page cannot spell has no such path, and
+                // path::string() throws for it (which ended the scan): skip it. Name and
+                // description are ImGui text, so UTF-8.
+                if (!Spark::FileUtils::TryPathToNarrow(it->path()))
+                    continue;
+
                 ShaderInfo info;
-                info.name = it->path().stem().string();
+                info.name = Spark::FileUtils::TryPathToUtf8(it->path().stem()).value_or("?");
                 info.path = it->path().generic_string();
-                info.description = it->path().parent_path().generic_string();
+                info.description = Spark::FileUtils::TryPathToUtf8(it->path().parent_path()).value_or(info.path);
                 m_availableShaders.push_back(std::move(info));
             }
 
