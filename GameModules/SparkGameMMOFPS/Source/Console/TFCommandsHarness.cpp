@@ -20,9 +20,19 @@
  * tf_observe prints this process's view of the world (Game/TFObservation.h)
  * on every role so the harness can diff the server against each client; on the
  * authority it appends one "[TF-OBSERVE] player" line per live pawn with the
- * server-held saved loadout, flux, rank and kill tally the scenario verdicts
- * are checked against. A pure client holds no progression (TFProgressionSystem
- * is filled on the authority only), so its self line reads flux=0 rank=1.
+ * server-held saved loadout, flux, rank, xp, unlock set and kill tally that
+ * the scenario verdicts and the TF-120 cold-restart comparison check. A pure
+ * client holds no progression (TFProgressionSystem is filled on the authority
+ * only), so its self line reads flux=0 rank=1.
+ *
+ * Every role with a live NetworkManager also prints one "[TF-OBSERVE] net" line:
+ * the transport counters the TF-110 soak budgets are computed from, and the
+ * impairment settings of the InstabilitySimulator compiled into THIS module
+ * image. The module links the engine statically, so that simulator is a
+ * separate object from the one the engine's net_* commands configure, and
+ * module-side sends (TFServerSim -> NetworkManager::SendToClient) are impaired
+ * by this one. The impaired-convergence run requires both to report the
+ * requested values.
  */
 
 #include "Console/TFCommandsInternal.h"
@@ -37,12 +47,18 @@
 #include "Net/TFRepProtocol.h"
 #include "Net/TFServerSim.h"
 #include "Persistence/TFPlayerMeta.h"
+#include "Persistence/TFUnlockTree.h"
 #include "World/TFRegionSystem.h"
 #include "World/TFSanctuaryZone.h"
 #include "World/TFWorldSetup.h"
 
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
+
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/InstabilitySimulator.h"
+#include "Engine/Networking/NetworkManager.h"
+#endif
 
 #include <algorithm>
 #include <cerrno>
@@ -188,10 +204,45 @@ namespace Terrafront::CommandDetail
                     for (const auto& entry : *stats)
                         kills += entry.second.kills;
                 }
-                out += std::format("\n[TF-OBSERVE] player id={} loadout={} flux={} rank={} kills={}", id, primary,
-                                   ctx.progression->FluxOf(id), ctx.progression->RankOf(id), kills);
+                // Unlock keys in TFUnlockTree order ("-" when none), so a
+                // restart comparison sees the whole durable unlock set.
+                std::string unlocks;
+                for (const TFUnlockDef& def : TFUnlockTree::All())
+                {
+                    if (!ctx.progression->IsUnlocked(id, def.key))
+                        continue;
+                    if (!unlocks.empty())
+                        unlocks += ',';
+                    unlocks += def.key;
+                }
+                out += std::format("\n[TF-OBSERVE] player id={} loadout={} flux={} rank={} xp={} unlocks={} kills={}",
+                                   id, primary, ctx.progression->FluxOf(id), ctx.progression->RankOf(id),
+                                   ctx.progression->XPOf(id), unlocks.empty() ? std::string("-") : unlocks, kills);
             }
             return out;
+        }
+
+        /// "[TF-OBSERVE] net" line (file comment): cumulative transport counters
+        /// plus this module image's impairment settings. Empty without a live
+        /// NetworkManager.
+        std::string FormatNetView()
+        {
+#ifdef ENABLE_NETWORKING
+            auto& network = Spark::Net::NetworkManager::GetInstance();
+            if (!network.IsInitialized())
+                return {};
+            const Spark::Net::NetworkStats stats = network.GetStats();
+            const Spark::Net::InstabilitySettings impair =
+                Spark::Net::InstabilitySimulator::GetInstance().GetSettings();
+            return std::format("\n[TF-OBSERVE] net bytesSent={} bytesReceived={} packetsSent={} packetsReceived={} "
+                               "packetsDropped={} impair={} lagMs={:.1f} jitterMs={:.1f} lossPct={:.1f} dupPct={:.1f} "
+                               "reorderPct={:.1f} seed={}",
+                               stats.bytesSent, stats.bytesReceived, stats.packetsSent, stats.packetsReceived,
+                               stats.packetsDropped, impair.enabled ? 1 : 0, impair.latencyMs, impair.jitterMs,
+                               impair.packetLossPercent, impair.duplicatePercent, impair.reorderPercent, impair.seed);
+#else
+            return {};
+#endif
         }
 
         /// The local player's eye position: predicted on a pure client, the
@@ -270,8 +321,8 @@ namespace Terrafront::CommandDetail
                 "tf_observe",
                 [context](const std::vector<std::string>&) -> std::string
                 {
-                    const std::string text =
-                        FormatObservation(BuildObservation(*context)) + FormatPlayerProgress(*context);
+                    const std::string text = FormatObservation(BuildObservation(*context)) +
+                                             FormatPlayerProgress(*context) + FormatNetView();
                     SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", text.c_str());
                     return text;
                 },
