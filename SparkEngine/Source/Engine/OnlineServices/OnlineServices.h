@@ -46,7 +46,9 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -652,11 +654,16 @@ namespace Spark::OnlineServices
         return "unknown";
     }
 
-    /** @brief Circuit-breaker budget from the spec: 5 consecutive failures open the circuit for 30 s */
+    /**
+     * @brief Budgets from the spec: 5 consecutive failures open the circuit for 30 s, and every
+     * capability call must return within 5 ms of game-thread time
+     */
     struct OnlineCircuitPolicy
     {
-        uint32_t failureThreshold = 5; ///< Consecutive failures that open a capability's circuit
-        double cooldownSeconds = 30.0; ///< Time an open circuit rejects calls before one probe is allowed
+        uint32_t failureThreshold = 5;              ///< Consecutive failures that open a capability's circuit
+        double cooldownSeconds = 30.0;              ///< Time an open circuit rejects calls before one probe is allowed
+        std::chrono::microseconds callBudget{5000}; ///< Game-thread time one capability call may take
+        bool tripOnBudgetOverrun = false;           ///< Count an over-budget call as a failure of its capability
     };
 
     /** @brief Failure accounting for one capability of the active adapter */
@@ -667,6 +674,8 @@ namespace Spark::OnlineServices
         uint64_t rejectedCalls = 0;       ///< Calls failed immediately because the circuit was open
         bool circuitOpen = false;         ///< True while calls fail fast (a probe is allowed after the cooldown)
         double retryAtSeconds = 0.0;      ///< Manager clock time at which a probe call is allowed
+        uint64_t budgetOverruns = 0;      ///< Calls that took longer than OnlineCircuitPolicy::callBudget
+        uint64_t maxCallMicroseconds = 0; ///< Slowest call that reached the adapter
     };
 
     /**
@@ -681,6 +690,10 @@ namespace Spark::OnlineServices
      *   the cooldown has elapsed on the manager clock. The next call is then a probe: success
      *   closes the circuit, failure reopens it for another cooldown.
      * - Logout() and LeaveSession() always reach the adapter so local cleanup is never blocked.
+     * - Every capability call that reaches the adapter is timed against OnlineCircuitPolicy::callBudget
+     *   (5 ms). Over-budget calls are counted, one warning per capability is logged at most every
+     *   10 s, and with tripOnBudgetOverrun an over-budget call also counts as a capability failure
+     *   and feeds the circuit (its result is still returned to the caller).
      *
      * A mutation fails when it returns false. A query fails when it throws, or when it returns
      * nothing and the adapter reports a GetLastError() reason for that call.
@@ -698,6 +711,7 @@ namespace Spark::OnlineServices
             m_target = target;
             m_circuitEnabled = circuitEnabled;
             m_health = {};
+            m_lastBudgetWarning = {};
             m_guardError.clear();
         }
 
@@ -884,6 +898,34 @@ namespace Spark::OnlineServices
             return true;
         }
 
+        // Times one adapter call; returns true when it exceeded the budget.
+        bool RecordCallDuration(const OnlineCapability capability, const char* operation,
+                                const std::chrono::steady_clock::duration elapsed)
+        {
+            OnlineCapabilityHealth& health = Health(capability);
+            const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(elapsed);
+            health.maxCallMicroseconds = std::max(health.maxCallMicroseconds, static_cast<uint64_t>(micros.count()));
+            if (micros <= m_policy.callBudget)
+            {
+                return false;
+            }
+            ++health.budgetOverruns;
+            // One warning per capability per interval: a stalling adapter must not flood the log every frame.
+            constexpr auto warningInterval = std::chrono::seconds(10);
+            const auto now = std::chrono::steady_clock::now();
+            auto& lastWarning = m_lastBudgetWarning[static_cast<size_t>(capability)];
+            if (!lastWarning || now - *lastWarning >= warningInterval)
+            {
+                lastWarning = now;
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "Online: %s took %.1f ms, over the %.1f ms game-thread budget (%llu overruns)",
+                               operation, static_cast<double>(micros.count()) / 1000.0,
+                               static_cast<double>(m_policy.callBudget.count()) / 1000.0,
+                               static_cast<unsigned long long>(health.budgetOverruns));
+            }
+            return true;
+        }
+
         void RecordOutcome(const OnlineCapability capability, const bool succeeded)
         {
             OnlineCapabilityHealth& health = Health(capability);
@@ -920,8 +962,10 @@ namespace Spark::OnlineServices
                 return false;
             }
             bool succeeded = false;
+            const auto started = std::chrono::steady_clock::now();
             InvokeAdapter(operation, [&] { succeeded = call(); });
-            RecordOutcome(capability, succeeded);
+            const bool overran = RecordCallDuration(capability, operation, std::chrono::steady_clock::now() - started);
+            RecordOutcome(capability, succeeded && !(overran && m_policy.tripOnBudgetOverrun));
             return succeeded;
         }
 
@@ -934,10 +978,12 @@ namespace Spark::OnlineServices
             {
                 return result;
             }
+            const auto started = std::chrono::steady_clock::now();
             const bool completed = InvokeAdapter(operation, [&] { result = call(); });
+            const bool overran = RecordCallDuration(capability, operation, std::chrono::steady_clock::now() - started);
             // An empty result is a legitimate answer (an empty board) unless the adapter gave a reason.
             const bool succeeded = completed && (!result.empty() || GetLastError().empty());
-            RecordOutcome(capability, succeeded);
+            RecordOutcome(capability, succeeded && !(overran && m_policy.tripOnBudgetOverrun));
             if (!completed)
             {
                 result = {};
@@ -969,13 +1015,16 @@ namespace Spark::OnlineServices
         // A throwing Login adapter may put the token in its exception text; never surface it.
         void RedactFromGuardError(const std::string& secret)
         {
+            static constexpr std::string_view Redacted = "<redacted>";
             if (secret.empty())
             {
                 return;
             }
-            for (size_t pos = m_guardError.find(secret); pos != std::string::npos; pos = m_guardError.find(secret, pos))
+            // Resume after the replacement: a token that occurs inside "<redacted>" must not loop forever.
+            for (size_t pos = m_guardError.find(secret); pos != std::string::npos;
+                 pos = m_guardError.find(secret, pos + Redacted.size()))
             {
-                m_guardError.replace(pos, secret.size(), "<redacted>");
+                m_guardError.replace(pos, secret.size(), Redacted);
             }
         }
 
@@ -984,6 +1033,9 @@ namespace Spark::OnlineServices
         OnlineCircuitPolicy m_policy;
         double m_nowSeconds = 0.0;
         std::array<OnlineCapabilityHealth, static_cast<size_t>(OnlineCapability::Count)> m_health{};
+        // Steady-clock time of the last budget warning per capability (the manager clock may not advance).
+        std::array<std::optional<std::chrono::steady_clock::time_point>, static_cast<size_t>(OnlineCapability::Count)>
+            m_lastBudgetWarning{};
         // Failure raised by this front (exception or open circuit) for the most recent call;
         // mutable because const getters convert adapter exceptions too.
         mutable std::string m_guardError;
@@ -1099,6 +1151,7 @@ namespace Spark::OnlineServices
                     status += " | LastError: " + error;
                 }
                 status += " | Health: " + FormatHealth();
+                status += " | Budget: " + FormatBudget();
             }
             if (m_activePlatform && m_guard.IsLoggedIn())
             {
@@ -1139,6 +1192,27 @@ namespace Spark::OnlineServices
                     health.empty() ? "ok (circuit disabled: local adapter)" : " (circuit disabled: local adapter)";
             }
             return health.empty() ? "ok" : health;
+        }
+
+        // "ok", or one entry per capability that has exceeded the per-call budget.
+        std::string FormatBudget() const
+        {
+            std::string budget;
+            for (size_t i = 0; i < static_cast<size_t>(OnlineCapability::Count); ++i)
+            {
+                const auto capability = static_cast<OnlineCapability>(i);
+                const OnlineCapabilityHealth& entry = m_guard.GetHealth(capability);
+                if (entry.budgetOverruns == 0)
+                {
+                    continue;
+                }
+                budget += budget.empty() ? "" : ", ";
+                budget += std::format("{} {} calls over {:.1f} ms (max {:.1f} ms)", OnlineCapabilityName(capability),
+                                      entry.budgetOverruns,
+                                      static_cast<double>(m_guard.GetPolicy().callBudget.count()) / 1000.0,
+                                      static_cast<double>(entry.maxCallMicroseconds) / 1000.0);
+            }
+            return budget.empty() ? "ok" : budget;
         }
 
         bool m_initialized = false;

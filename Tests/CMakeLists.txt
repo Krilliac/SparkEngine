@@ -1820,10 +1820,11 @@ set_tests_properties(OnlineServicesContract PROPERTIES
 
 # NET-110: degraded-dependency semantics in OnlineServiceManager (docs/specs/online-services.md
 # 5.1): adapter exceptions become failures, per-capability circuit breaker (5 failures, 30 s,
-# one probe), state reported by Console_GetStatus. Exact count: a dropped test fails.
+# one probe), 5 ms per-call budget accounting (optionally tripping the circuit), state reported
+# by Console_GetStatus. Exact count: a dropped test fails.
 add_test(NAME OnlineServicesDegraded COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(OnlineServicesDegraded PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Degraded_;SPARK_TEST_EXPECT_COUNT=7"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Degraded_;SPARK_TEST_EXPECT_COUNT=10"
     LABELS "online-services;unit"
     TIMEOUT 30)
 
@@ -2048,6 +2049,15 @@ if(TARGET SparkGatewayCore)
             RUN_SERIAL TRUE
             TIMEOUT 30)
     endforeach()
+
+    # NET-110: the GuardedGatewayAuthenticator GatewayCoordinator installs around every
+    # authenticator (docs/specs/online-services.md 5.2): exceptions contained without the
+    # credential, 2 s call budget, consecutive-fault circuit. Exact count: a dropped test fails.
+    add_test(NAME GatewayGuardedAuthenticator COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(GatewayGuardedAuthenticator PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SparkGateway_GuardedAuthenticator_;SPARK_TEST_EXPECT_COUNT=6"
+        LABELS "online-services;gateway;unit"
+        TIMEOUT 30)
 endif()
 
 # RHI-210: D3D11 golden-frame and render-target resource contracts. Exact

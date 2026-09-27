@@ -126,9 +126,13 @@ profile ships no online services and no multiplayer support claim.
 Section 5 of [`docs/specs/online-services.md`](../../docs/specs/online-services.md)
 sets the timeout, retry, and circuit-breaker budgets that apply at each engine
 boundary, such as a 5 ms game-thread limit per `IOnlinePlatform` call and 2 s
-local I/O deadlines on gateway admission and area control. It also says which
-budgets the code does not enforce yet. The internal budgets of a product
-service belong to the product that runs it.
+local I/O deadlines on gateway admission and area control. The engine guards
+enforce them for any adapter: `GuardedOnlinePlatform` measures every
+`IOnlinePlatform` call against the 5 ms budget and runs a per-capability circuit
+breaker, and `GuardedGatewayAuthenticator` rejects authenticator exceptions and
+answers slower than 2 s and opens a circuit after 5 consecutive faults. The spec
+also says which budgets remain adapter responsibilities. The internal budgets of
+a product service belong to the product that runs it.
 
 ## Troubleshooting
 

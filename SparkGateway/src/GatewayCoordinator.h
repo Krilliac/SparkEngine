@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -144,16 +145,26 @@ namespace Spark::Gateway
         InvalidState
     };
 
+    class GuardedGatewayAuthenticator;
+    struct GatewayAuthenticatorHealth;
+
     /**
      * Gateway-only session coordinator. It never owns ECS/gameplay state.
      * The source area remains authoritative until commit acknowledgement;
      * failures resolve through an explicit abort before another epoch begins.
+     * Every admission goes through a GuardedGatewayAuthenticator around the
+     * given authenticator, so a throwing, stalling or failing adapter fails
+     * closed and is counted (GetAuthenticationHealth()).
      */
     class GatewayCoordinator
     {
       public:
         GatewayCoordinator(Net::WorldServer& worldServer, IGatewayAuthenticator& authenticator,
                            IAreaControlPlane& controlPlane);
+        ~GatewayCoordinator();
+
+        GatewayCoordinator(const GatewayCoordinator&) = delete;
+        GatewayCoordinator& operator=(const GatewayCoordinator&) = delete;
 
         /** [startup thread] Register routable server endpoints with WorldServer. */
         [[nodiscard]] bool RegisterAreas(const std::vector<AreaEndpoint>& endpoints);
@@ -173,6 +184,8 @@ namespace Spark::Gateway
         [[nodiscard]] std::optional<SessionSnapshot> GetSession(std::string_view sessionId) const;
         [[nodiscard]] size_t GetSessionCount() const;
         [[nodiscard]] bool IsReady() const;
+        /** [any thread] Fault, budget and circuit counters of the guarded authenticator. */
+        [[nodiscard]] GatewayAuthenticatorHealth GetAuthenticationHealth() const;
 
       private:
         struct SessionRecord
@@ -183,7 +196,8 @@ namespace Spark::Gateway
         [[nodiscard]] const AreaEndpoint* FindEndpoint(Net::AreaID areaId) const;
 
         Net::WorldServer* m_worldServer = nullptr;
-        IGatewayAuthenticator* m_authenticator = nullptr;
+        // Owned front over the caller's (non-owned) authenticator; set once in the constructor.
+        std::unique_ptr<GuardedGatewayAuthenticator> m_authenticator;
         IAreaControlPlane* m_controlPlane = nullptr;
         std::vector<std::pair<Net::AreaID, AreaEndpoint>> m_endpoints;
         std::unordered_map<std::string, SessionRecord> m_sessions;

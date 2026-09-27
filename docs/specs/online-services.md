@@ -140,7 +140,7 @@ The interface is synchronous and is called from the game thread. The contract fo
 
 | Budget | Requirement | Enforced today |
 |---|---|---|
-| Per-call time on the game thread | A call MUST return within **5 ms**. An adapter that talks to a remote backend MUST do the network work off the game thread, and it MUST return cached state or queue the request. It drains completions in `OnlineServiceManager::Update` | No. There is no watchdog, and a blocking adapter stalls the frame |
+| Per-call time on the game thread | A call MUST return within **5 ms**. An adapter that talks to a remote backend MUST do the network work off the game thread, and it MUST return cached state or queue the request. It drains completions in `OnlineServiceManager::Update` | Measured, not preempted. `GuardedOnlinePlatform` times every capability call that reaches the adapter against `OnlineCircuitPolicy::callBudget` (5 ms). It counts over-budget calls per capability with the slowest call time, logs one warning per capability at most every 10 s, and reports them in `Console_GetStatus()` (`Budget: ...`). With `tripOnBudgetOverrun` set, an over-budget call also counts as a failure of its capability and feeds the circuit breaker, so a stalling backend is cut off after 5 slow calls. The slow call itself cannot be interrupted, and its result is still returned. Tested by `OnlineServices_Degraded_*` |
 | Remote request timeout (adapter-internal) | **10 s** per remote request, then the operation fails | Adapter responsibility. None exists in the tree |
 | Retries | Idempotent reads (`FindSessions`, `QueryScores`, `QueryAchievements`, `ListCloudSaves`, `LoadFromCloud`, `GetFriendsList`) MAY retry at most **2** times with exponential backoff starting at **500 ms** and capped at **4 s**. Mutations (`Login`, `CreateSession`, `JoinSession`, `SubmitScore`, `UnlockAchievement`, `SetAchievementProgress`, `SaveToCloud`, `DeleteCloudSave`, `SetPresence`, `InviteToSession`) MUST NOT retry automatically unless the backend deduplicates them | Adapter responsibility |
 | Circuit breaker | After **5** consecutive failures of one capability, calls to that capability fail immediately for **30 s**, then one probe call is allowed | Yes, for every adapter installed with `SetPlatform()`. `OnlineServiceManager::GetPlatform()` returns `GuardedOnlinePlatform`, which counts failures per capability and runs the cooldown on the `Update()` clock. A probe that fails reopens the circuit. `Logout()` and `LeaveSession()` always reach the adapter. The circuit is disabled for the in-process `NullOnlinePlatform`: it has no remote dependency, so its failures are caller errors, and they are only counted. Tested by `OnlineServices_Degraded_*` |
@@ -169,14 +169,17 @@ each capability that has failed since its last success, with its consecutive-fai
 `leaderboards 5 consecutive failures (circuit open, retry in 30.0s)`). `GetCapabilityHealth()` returns the consecutive,
 total and rejected-call counters for one capability. A mutation counts as failed when it returns `false`. A query counts as
 failed when it throws, or when it returns nothing and the adapter reports a `GetLastError()` reason for that call. An empty
-result with no reason, such as an empty leaderboard, is a success. Opening and closing a circuit is logged.
+result with no reason, such as an empty leaderboard, is a success. Opening and closing a circuit is logged. The budget
+field is `ok`, or it lists each capability with over-budget calls (for example
+`leaderboards 2 calls over 5.0 ms (max 31.4 ms)`); `GetCapabilityHealth()` also returns `budgetOverruns` and
+`maxCallMicroseconds`.
 
 ### 5.2 Gateway admission and authentication (boundaries B3, B4)
 
 | Call | Budget | Failure semantics |
 |---|---|---|
 | `GatewayCoordinator::Admit` | Bounded input: body ≤ 4096 bytes, credential ≤ 512 bytes. Local ingress I/O deadline **2 s** per frame | Fails closed with a `RouteFailure` (`NotReady`, `InvalidRequest`, `AuthenticationFailed`, `DuplicateSession`, `CapacityReached`, `NoAreaAvailable`). Rejected requests create no session. `BeginDrain` rejects new admissions |
-| `IGatewayAuthenticator::Authenticate` | MUST be thread-safe and MUST complete within **2 s**, the ingress deadline. A product authenticator that calls a remote identity service MUST NOT retry inside that window, and it SHOULD open a circuit (reject immediately with a reason) after **5** consecutive backend failures for **30 s** | Any failure returns `accepted = false` with a `reason`. An unready authenticator (`IsReady() == false`) makes the coordinator not ready, so every admission is rejected |
+| `IGatewayAuthenticator::Authenticate` | MUST be thread-safe and MUST complete within **2 s**, the ingress deadline. A product authenticator that calls a remote identity service MUST NOT retry inside that window, and it SHOULD open a circuit (reject immediately with a reason) after **5** consecutive backend failures for **30 s** | Any failure returns `accepted = false` with a `reason`. An unready authenticator (`IsReady() == false`) makes the coordinator not ready, so every admission is rejected. `GatewayCoordinator` wraps every authenticator in `GuardedGatewayAuthenticator`, which enforces these budgets for any adapter: an exception becomes the rejection `Authentication backend fault` (the exception text, which may hold the credential, is never surfaced or logged); a call over the 2 s budget is rejected even if the adapter accepted it; exceptions and overruns are faults, and 5 consecutive faults open a 30 s circuit that rejects with `Authentication backend unavailable (circuit open)` without calling the adapter, followed by one probe. A rejection is a healthy answer and resets the fault streak. A reason that echoes the credential is redacted. `GatewayCoordinator::GetAuthenticationHealth()` returns the accepted, rejected, fault, overrun and fail-fast counters, and opening or closing the circuit is logged. Tested by `SparkGateway_GuardedAuthenticator_*` |
 | `KeyFileAuthenticator` | Timestamp within the 60 s replay window. Replay ledger bounded at 4096 entries | Wrong MAC, a stale or future timestamp, or a replayed nonce is rejected. A full ledger fails closed |
 
 ### 5.3 Area control plane (boundary B6)
@@ -213,6 +216,7 @@ No adapter in this repository is production. The labels below are the only permi
 | `LocalAreaControlPlane` / `LocalAreaControlService` | B6 | **local reference** | Same host, same OS user |
 | `LocalGatewayIngressService` | B3 | **local reference** | Owner-local named pipe, not internet-facing |
 | `SparkDaemon` orchestration | B7 | **local reference** | Single host |
+| `GuardedGatewayAuthenticator` | B4 | **engine guard** | Not an adapter. `GatewayCoordinator` installs it around whichever authenticator it is given, to enforce the section 5.2 budgets |
 | `GuardedOnlinePlatform` | B1 | **engine guard** | Not an adapter. `OnlineServiceManager::GetPlatform()` returns it in front of whichever adapter is active, to enforce the section 5.1 failure semantics |
 
 A new adapter is labeled **production** only when all of these hold:
@@ -221,6 +225,20 @@ A new adapter is labeled **production** only when all of these hold:
 2. It passes the `OnlineServices_Contract_*` conformance suite.
 3. Its degraded-dependency behaviour is covered by `OnlineServices_Degraded` tests.
 4. Its budgets in section 5 are measured against the real backend.
+
+Production adapter admission checklist. The engine guards, not the adapter, make a failing adapter safe and observable,
+so a product adapter is admitted only through them:
+
+- An `IOnlinePlatform` adapter is installed with `OnlineServiceManager::SetPlatform()` and called only through
+  `GetPlatform()`, so `GuardedOnlinePlatform` contains its exceptions, runs its circuit breaker and measures its
+  5 ms budget. The product sets `tripOnBudgetOverrun` when a stalling backend must be cut off rather than only reported.
+- An `IGatewayAuthenticator` adapter is passed to `GatewayCoordinator` (directly or through `GatewayApplication`), so
+  `GuardedGatewayAuthenticator` contains its exceptions, rejects over-budget answers and runs its circuit breaker.
+- The adapter passes `OnlineServices_Contract_*` (added as one more `RunOnlinePlatformContract<Adapter>()` case) and
+  the product runs the `OnlineServices_Degraded_*` and `SparkGateway_GuardedAuthenticator_*` scenarios against it
+  with its real backend stopped, stalled and throwing.
+- `Console_GetStatus()` (Health and Budget fields) and `GetAuthenticationHealth()` are wired into the product's
+  telemetry before the adapter takes production traffic.
 
 ## 7. Versioning
 
@@ -237,7 +255,7 @@ same change.
 | No local store, demo service or reference process marketed as production | `local_store_production_claim_errors` rejects any non-negated sentence or table row that pairs a production term (production-ready/grade/infrastructure/database/backend/service/server, scalable backend, enterprise-grade, battle-tested) with a local store or reference process (`TFDatabase`, `TFWorldSave`, `TFOutfitStore`, JSON stores, MMO persistence, `AsyncDatabase`, `NullOnlinePlatform`, `KeyFileAuthenticator`, `SparkGateway`, `SparkDaemon`, demo servers). It scans tracked Markdown under `wiki/` and `docs/` (except the readiness ledger and handoff, which quote the criterion), `README.md`, module READMEs and DESIGN documents, `module.json` descriptions and `docs/site/*.json`. `adapter_name_production_errors` rejects an adapter whose `GetPlatformName()` or `GetLastError()` literal says production | none |
 | This document names every boundary and adapter | `validate_online_service_boundary` also runs `online_service_spec_contract_errors`: section 3 must hold a Mermaid diagram whose `B<n>` edge labels equal the section 4 rows, which run contiguously from B1 and each name who is trusted and the enforcing mechanism. Every section 2.1 symbol must still occur in the source path the row names, and every tracked class outside `Tests/` that implements `IOnlinePlatform`, `IGatewayAuthenticator`, `IAreaControlPlane` or `ITransport` must be in the section 6 register with a permitted label. `OnlineServiceBoundaryTests` covers each rejection | none |
 | Null adapter deterministic, stubs fail closed | `Tests/TestOnlineServices.cpp` `OnlineServices_Null*` and stub tests. The `OnlineServices_Contract_*` conformance suite (ctest `OnlineServicesContract`, label `online-services`, exact count 5) runs the section 5.1 failure semantics and the section 6 labels against `NullOnlinePlatform`, `SteamPlatform`, `EpicPlatform` and `ConsolePlatform`, checks `Console_GetStatus()` for each, and compares two fresh runs of the Null adapter against one fixed expected transcript. Friends and presence are checked for success and failure only: the Null adapter has no friends to read back and `SetPresence()` has no getter | A new adapter must be added to the suite before it is shipped |
-| Degraded-dependency budgets (section 5.1 circuit breaker) | `Tests/TestOnlineServices.cpp` `OnlineServices_Degraded_*` (ctest `OnlineServicesDegraded`, label `online-services`, exact count 7) drives a fault-injecting adapter through `SetPlatform()` / `GetPlatform()`. It covers exception containment and token redaction, opening after 5 consecutive failures, fail-fast without reaching the adapter, per-capability isolation, the probe after the cooldown, reset on success and on platform change, the Logout bypass, the Null-adapter exemption, and the `Console_GetStatus()` health field | The 5 ms game-thread budget has no watchdog, and the 10 s remote timeout and retry budgets remain adapter responsibilities with no production adapter to measure |
+| Degraded-dependency budgets (section 5.1 circuit breaker) | `Tests/TestOnlineServices.cpp` `OnlineServices_Degraded_*` (ctest `OnlineServicesDegraded`, label `online-services`, exact count 10) drives a fault-injecting adapter through `SetPlatform()` / `GetPlatform()`. It covers exception containment and token redaction (including a one-character token), opening after 5 consecutive failures, fail-fast without reaching the adapter, per-capability isolation, the probe after the cooldown, reset on success and on platform change, the Logout bypass, the Null-adapter exemption, budget-overrun counting with a rate-limited warning, the trip-on-overrun circuit, and the `Console_GetStatus()` health and budget fields. `Tests/TestSparkGatewayCoordinator.cpp` `SparkGateway_GuardedAuthenticator_*` (ctest `GatewayGuardedAuthenticator`, labels `online-services;gateway`, exact count 6) covers the admission-side guard | A slow call is measured, not preempted. The 10 s remote timeout and retry budgets remain adapter responsibilities with no production adapter to measure. The gateway health JSON does not yet include `GetAuthenticationHealth()` |
 | Versioned client/server compatibility | Gateway protocol constants only | `SessionCompatibility_*` tests after `NET-100` protocol negotiation |
 | Hosted CI | none | `service-contract` and `network-integration` jobs (planned) |
 

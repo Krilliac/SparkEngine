@@ -94,9 +94,9 @@ public:
 | `GetPlatform()` | Get the active platform through the `GuardedOnlinePlatform` front (see Degraded Dependencies) |
 | `SetPlatform(unique_ptr)` | Switch to a custom platform (takes ownership) |
 | `ResetToNullPlatform()` | Revert to the offline platform |
-| `GetCapabilityHealth(capability)` | Consecutive, total and rejected-call counters and circuit state for one capability |
-| `SetCircuitPolicy(policy)` | Replace the circuit budget (default: 5 consecutive failures, 30 s cooldown) |
-| `Console_GetStatus()` | Adapter, capabilities, last error, per-capability health, and player |
+| `GetCapabilityHealth(capability)` | Consecutive, total and rejected-call counters, circuit state, budget overruns and slowest call for one capability |
+| `SetCircuitPolicy(policy)` | Replace the budgets (default: 5 consecutive failures, 30 s cooldown, 5 ms per call, overruns not tripping the circuit) |
+| `Console_GetStatus()` | Adapter, capabilities, last error, per-capability health and budget, and player |
 
 ### IOnlinePlatform
 
@@ -126,8 +126,11 @@ ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure 
 - `Logout()` and `LeaveSession()` always reach the adapter, so local cleanup is never blocked.
 - The circuit is disabled for the in-process Null platform, because it has no remote dependency. Its failures, such as joining an unknown session, are caller errors and are only counted.
 - `Console_GetStatus()` adds `Health: ok`, or each failing capability with its count and circuit state, such as `leaderboards 5 consecutive failures (circuit open, retry in 30.0s)`.
+- Every capability call that reaches the adapter is timed against the 5 ms game-thread budget (`OnlineCircuitPolicy::callBudget`). Over-budget calls are counted with the slowest call time, logged at most once per capability every 10 s, and reported as `Budget: ok` or, for example, `Budget: leaderboards 2 calls over 5.0 ms (max 31.4 ms)`. The slow call is measured, not interrupted. Set `tripOnBudgetOverrun` in the policy to count each over-budget call as a failure of its capability too, so a stalling backend opens the circuit after 5 slow calls.
 
 The `OnlineServices_Degraded_*` tests (ctest `OnlineServicesDegraded`, label `online-services`) drive a fault-injecting adapter through the manager to cover these rules.
+
+On the server side, `GatewayCoordinator` wraps every `IGatewayAuthenticator` in `GuardedGatewayAuthenticator` (section 5.2 of the spec). An authenticator exception becomes the rejection `Authentication backend fault` without the exception text, an answer slower than 2 s is rejected, and 5 consecutive faults open a 30 s circuit. A rejected credential is a normal answer and never opens it. `GatewayCoordinator::GetAuthenticationHealth()` returns the counters, covered by `SparkGateway_GuardedAuthenticator_*` (ctest `GatewayGuardedAuthenticator`).
 
 ## Configuration
 

@@ -5,6 +5,8 @@
 
 #include "GatewayCoordinator.h"
 
+#include "GuardedGatewayAuthenticator.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -21,8 +23,16 @@ namespace Spark::Gateway
 
     GatewayCoordinator::GatewayCoordinator(Net::WorldServer& worldServer, IGatewayAuthenticator& authenticator,
                                            IAreaControlPlane& controlPlane)
-        : m_worldServer(&worldServer), m_authenticator(&authenticator), m_controlPlane(&controlPlane)
+        : m_worldServer(&worldServer), m_authenticator(std::make_unique<GuardedGatewayAuthenticator>(authenticator)),
+          m_controlPlane(&controlPlane)
     {
+    }
+
+    GatewayCoordinator::~GatewayCoordinator() = default;
+
+    GatewayAuthenticatorHealth GatewayCoordinator::GetAuthenticationHealth() const
+    {
+        return m_authenticator->GetHealth();
     }
 
     bool GatewayCoordinator::RegisterAreas(const std::vector<AreaEndpoint>& endpoints)
@@ -285,13 +295,11 @@ namespace Spark::Gateway
     {
         std::vector<Net::AreaID> areas;
         Net::WorldServer* world = nullptr;
-        IGatewayAuthenticator* authenticator = nullptr;
         IAreaControlPlane* control = nullptr;
         bool accepting = false;
         {
             std::lock_guard lock(m_mutex);
             world = m_worldServer;
-            authenticator = m_authenticator;
             control = m_controlPlane;
             accepting = m_accepting;
             areas.reserve(m_endpoints.size());
@@ -301,8 +309,7 @@ namespace Spark::Gateway
                 areas.push_back(id);
             }
         }
-        if (!world || !world->IsRunning() || !authenticator || !authenticator->IsReady() || !control || areas.empty() ||
-            !accepting)
+        if (!world || !world->IsRunning() || !m_authenticator->IsReady() || !control || areas.empty() || !accepting)
             return false;
 
         bool allReady = true;

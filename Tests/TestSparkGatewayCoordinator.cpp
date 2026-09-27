@@ -5,8 +5,13 @@
 
 #include "TestFramework.h"
 #include "GatewayCoordinator.h"
+#include "GuardedGatewayAuthenticator.h"
 
+#include <chrono>
 #include <deque>
+#include <stdexcept>
+#include <string>
+#include <thread>
 #include <unordered_set>
 
 using namespace Spark::Gateway;
@@ -19,14 +24,23 @@ namespace
       public:
         AuthenticationResult Authenticate(const AdmissionRequest& request) override
         {
+            ++calls;
+            if (delay.count() > 0)
+                std::this_thread::sleep_for(delay);
+            if (throwWithCredential)
+                throw std::runtime_error("identity backend down while checking " + request.credential);
             if (!accept)
-                return {false, {}, "denied"};
+                return {false, {}, echoCredential ? "denied credential " + request.credential : "denied"};
             return {true, "principal:" + request.playerName, {}};
         }
         bool IsReady() const override { return ready; }
 
         bool ready = true;
         bool accept = true;
+        bool throwWithCredential = false;
+        bool echoCredential = false;
+        std::chrono::milliseconds delay{0};
+        int calls = 0;
     };
 
     class ScriptedControlPlane final : public IAreaControlPlane
@@ -240,4 +254,155 @@ TEST(SparkGateway_EndpointHealthUpdatesRoutingMirror)
     fixture.control.offline.clear();
     EXPECT_TRUE(fixture.coordinator.IsReady());
     EXPECT_EQ(fixture.world.GetStats().activeAreas, 2u);
+}
+
+// ============================================================================
+// SparkGateway_GuardedAuthenticator — the front GatewayCoordinator installs around
+// every authenticator (docs/specs/online-services.md section 5.2, NET-110).
+// ============================================================================
+
+TEST(SparkGateway_GuardedAuthenticator_ThrowIsContainedWithoutCredential)
+{
+    GatewayFixture fixture;
+    ASSERT_TRUE(fixture.registered);
+    fixture.authenticator.throwWithCredential = true;
+    const AdmissionRequest request = BuildAdmission();
+
+    RouteResult result;
+    try
+    {
+        result = fixture.coordinator.Admit(request);
+    }
+    catch (...)
+    {
+        EXPECT_TRUE(false); // An authenticator exception must never reach the transport thread.
+    }
+    EXPECT_FALSE(result.accepted);
+    EXPECT_TRUE(result.failure == RouteFailure::AuthenticationFailed);
+    EXPECT_EQ(result.reason, std::string("Authentication backend fault"));
+    EXPECT_TRUE(result.reason.find(request.credential) == std::string::npos);
+    EXPECT_EQ(fixture.coordinator.GetSessionCount(), static_cast<size_t>(0));
+    const GatewayAuthenticatorHealth health = fixture.coordinator.GetAuthenticationHealth();
+    EXPECT_EQ(health.faults, 1u);
+    EXPECT_EQ(health.consecutiveFaults, 1u);
+    EXPECT_FALSE(health.circuitOpen);
+}
+
+TEST(SparkGateway_GuardedAuthenticator_CircuitOpensAfterConsecutiveFaults)
+{
+    GatewayFixture fixture;
+    ASSERT_TRUE(fixture.registered);
+    fixture.authenticator.throwWithCredential = true;
+    for (Net::ClientID client = 10; client < 15; ++client)
+        EXPECT_FALSE(fixture.coordinator.Admit(BuildAdmission(client)).accepted);
+    GatewayAuthenticatorHealth health = fixture.coordinator.GetAuthenticationHealth();
+    EXPECT_EQ(health.consecutiveFaults, 5u);
+    EXPECT_TRUE(health.circuitOpen);
+
+    // Open: even a recovered backend is not called until the 30 s cooldown has elapsed.
+    fixture.authenticator.throwWithCredential = false;
+    const RouteResult rejected = fixture.coordinator.Admit(BuildAdmission(15));
+    EXPECT_FALSE(rejected.accepted);
+    EXPECT_TRUE(rejected.failure == RouteFailure::AuthenticationFailed);
+    EXPECT_EQ(rejected.reason, std::string("Authentication backend unavailable (circuit open)"));
+    EXPECT_EQ(fixture.authenticator.calls, 5);
+    health = fixture.coordinator.GetAuthenticationHealth();
+    EXPECT_EQ(health.rejectedWhileOpen, 1u);
+    EXPECT_EQ(health.faults, 5u);
+}
+
+TEST(SparkGateway_GuardedAuthenticator_RejectionsDoNotOpenCircuit)
+{
+    GatewayFixture fixture;
+    ASSERT_TRUE(fixture.registered);
+    // Denying a credential is a healthy answer: any number of them keeps the circuit closed.
+    fixture.authenticator.accept = false;
+    for (Net::ClientID client = 20; client < 27; ++client)
+        EXPECT_EQ(fixture.coordinator.Admit(BuildAdmission(client)).reason, std::string("denied"));
+    GatewayAuthenticatorHealth health = fixture.coordinator.GetAuthenticationHealth();
+    EXPECT_EQ(health.rejected, 7u);
+    EXPECT_EQ(health.faults, 0u);
+    EXPECT_FALSE(health.circuitOpen);
+
+    // Faults must be consecutive: a healthy answer in between resets the streak.
+    fixture.authenticator.throwWithCredential = true;
+    for (Net::ClientID client = 30; client < 34; ++client)
+        EXPECT_FALSE(fixture.coordinator.Admit(BuildAdmission(client)).accepted);
+    fixture.authenticator.throwWithCredential = false;
+    EXPECT_FALSE(fixture.coordinator.Admit(BuildAdmission(34)).accepted);
+    fixture.authenticator.throwWithCredential = true;
+    for (Net::ClientID client = 35; client < 39; ++client)
+        EXPECT_FALSE(fixture.coordinator.Admit(BuildAdmission(client)).accepted);
+    health = fixture.coordinator.GetAuthenticationHealth();
+    EXPECT_EQ(health.faults, 8u);
+    EXPECT_EQ(health.consecutiveFaults, 4u);
+    EXPECT_FALSE(health.circuitOpen);
+
+    fixture.authenticator.throwWithCredential = false;
+    fixture.authenticator.accept = true;
+    EXPECT_TRUE(fixture.coordinator.Admit(BuildAdmission(39)).accepted);
+    EXPECT_EQ(fixture.coordinator.GetAuthenticationHealth().accepted, 1u);
+}
+
+TEST(SparkGateway_GuardedAuthenticator_OverBudgetAcceptanceFailsClosed)
+{
+    TestAuthenticator slow;
+    slow.delay = std::chrono::milliseconds(50);
+    GuardedGatewayAuthenticator guard(slow);
+    GatewayAuthenticatorPolicy policy;
+    policy.callBudget = std::chrono::milliseconds(10);
+    guard.SetPolicy(policy);
+
+    // The ingress client stops waiting at the budget, so a late acceptance must not admit.
+    const AuthenticationResult result = guard.Authenticate(BuildAdmission());
+    EXPECT_FALSE(result.accepted);
+    EXPECT_TRUE(result.principalId.empty());
+    EXPECT_EQ(result.reason, std::string("Authentication exceeded its time budget"));
+    const GatewayAuthenticatorHealth health = guard.GetHealth();
+    EXPECT_EQ(health.budgetOverruns, 1u);
+    EXPECT_EQ(health.faults, 1u);
+    EXPECT_EQ(health.accepted, 0u);
+    EXPECT_TRUE(health.maxCallMicroseconds >= 50000u);
+}
+
+TEST(SparkGateway_GuardedAuthenticator_ProbeAfterCooldownClosesCircuit)
+{
+    TestAuthenticator backend;
+    backend.throwWithCredential = true;
+    GuardedGatewayAuthenticator guard(backend);
+    GatewayAuthenticatorPolicy policy;
+    policy.failureThreshold = 2;
+    policy.cooldown = std::chrono::steady_clock::duration::zero();
+    guard.SetPolicy(policy);
+
+    EXPECT_FALSE(guard.Authenticate(BuildAdmission()).accepted);
+    EXPECT_FALSE(guard.Authenticate(BuildAdmission()).accepted);
+    EXPECT_TRUE(guard.GetHealth().circuitOpen);
+
+    // Cooldown elapsed: a failing probe reaches the adapter and reopens the circuit.
+    EXPECT_FALSE(guard.Authenticate(BuildAdmission()).accepted);
+    EXPECT_EQ(backend.calls, 3);
+    EXPECT_TRUE(guard.GetHealth().circuitOpen);
+
+    // A successful probe closes it.
+    backend.throwWithCredential = false;
+    EXPECT_TRUE(guard.Authenticate(BuildAdmission()).accepted);
+    EXPECT_EQ(backend.calls, 4);
+    const GatewayAuthenticatorHealth health = guard.GetHealth();
+    EXPECT_FALSE(health.circuitOpen);
+    EXPECT_EQ(health.consecutiveFaults, 0u);
+    EXPECT_EQ(health.rejectedWhileOpen, 0u);
+}
+
+TEST(SparkGateway_GuardedAuthenticator_RedactsEchoedCredential)
+{
+    GatewayFixture fixture;
+    ASSERT_TRUE(fixture.registered);
+    fixture.authenticator.accept = false;
+    fixture.authenticator.echoCredential = true;
+    const AdmissionRequest request = BuildAdmission();
+    const RouteResult result = fixture.coordinator.Admit(request);
+    EXPECT_FALSE(result.accepted);
+    EXPECT_EQ(result.reason, std::string("denied credential <redacted>"));
+    EXPECT_TRUE(result.reason.find(request.credential) == std::string::npos);
 }

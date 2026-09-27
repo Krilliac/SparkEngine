@@ -2,12 +2,18 @@
 #include "TestFramework.h"
 #include "Engine/OnlineServices/OnlineServices.h"
 
+#include "ScopedLoggerBaseline.h"
+#include "Utils/Logger.h"
+
 #include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 // ============================================================================
@@ -655,6 +661,10 @@ namespace
         bool SubmitScore(const std::string& boardName, int64_t score) override
         {
             ++submitCalls;
+            if (submitDelay.count() > 0)
+            {
+                std::this_thread::sleep_for(submitDelay); // a backend call made on the game thread
+            }
             return Inject() && NullOnlinePlatform::SubmitScore(boardName, score);
         }
         std::vector<Spark::OnlineServices::LeaderboardEntry> QueryScores(const std::string& boardName,
@@ -670,6 +680,7 @@ namespace
 
         Fault fault = Fault::None;
         bool throwOnLogout = false;
+        std::chrono::milliseconds submitDelay{0};
         int loginCalls = 0;
         int logoutCalls = 0;
         int submitCalls = 0;
@@ -700,6 +711,19 @@ namespace
         manager.SetPlatform(std::move(adapter));
         return raw;
     }
+
+    // The manager is a process-wide singleton and Initialize() keeps its policy, so a test that
+    // changes the policy restores the spec defaults on every exit path.
+    struct ScopedCircuitPolicy
+    {
+        explicit ScopedCircuitPolicy(const Spark::OnlineServices::OnlineCircuitPolicy& policy)
+        {
+            OnlineServiceManager::GetInstance().SetCircuitPolicy(policy);
+        }
+        ScopedCircuitPolicy(const ScopedCircuitPolicy&) = delete;
+        ScopedCircuitPolicy& operator=(const ScopedCircuitPolicy&) = delete;
+        ~ScopedCircuitPolicy() { OnlineServiceManager::GetInstance().SetCircuitPolicy({}); }
+    };
 
     // Drives SubmitScore failures until the leaderboards circuit is open.
     void OpenLeaderboardCircuit(Spark::OnlineServices::IOnlinePlatform& platform, FaultInjectingPlatform& adapter)
@@ -922,5 +946,110 @@ TEST(OnlineServices_Degraded_NullAdapterNeverOpensCircuit)
     EXPECT_TRUE(platform->JoinSession(platform->GetCurrentSession().sessionId));
     EXPECT_EQ(sessions.consecutiveFailures, 0u);
     EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: ok (circuit disabled: local adapter)"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_BudgetOverrunsAreCountedAndReported)
+{
+    // Spec section 5.1: a capability call must return within 5 ms of game-thread time.
+    ScopedLoggerBaseline loggerBaseline;
+    struct CapturedWarnings
+    {
+        std::mutex mutex;
+        std::vector<std::string> messages;
+    };
+    const auto captured = std::make_shared<CapturedWarnings>();
+    Spark::Logger::Get().AddSink(std::make_unique<Spark::CallbackSink>(
+        [captured](const Spark::LogMessage& message)
+        {
+            if (message.message.find("game-thread budget") == std::string::npos)
+                return;
+            std::lock_guard lock(captured->mutex);
+            captured->messages.push_back(message.message);
+        }));
+
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+    const auto& board = manager.GetCapabilityHealth(OnlineCapability::Leaderboards);
+
+    // A call inside a generous budget is not an overrun, whatever the machine load.
+    {
+        Spark::OnlineServices::OnlineCircuitPolicy generous;
+        generous.callBudget = std::chrono::seconds(10);
+        ScopedCircuitPolicy policy(generous);
+        EXPECT_TRUE(platform->SubmitScore("Board", 1));
+        EXPECT_EQ(board.budgetOverruns, 0u);
+        EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Budget: ok"));
+    }
+
+    // Under the default 5 ms budget, two 30 ms calls are counted; the result still reaches the
+    // caller and, without tripOnBudgetOverrun, nothing counts toward the circuit.
+    adapter->submitDelay = std::chrono::milliseconds(30);
+    EXPECT_TRUE(platform->SubmitScore("Board", 2));
+    EXPECT_TRUE(platform->SubmitScore("Board", 3));
+    EXPECT_EQ(board.budgetOverruns, 2u);
+    EXPECT_TRUE(board.maxCallMicroseconds >= 30000u);
+    EXPECT_EQ(board.consecutiveFailures, 0u);
+    EXPECT_FALSE(board.circuitOpen);
+    EXPECT_EQ(manager.GetCapabilityHealth(OnlineCapability::Authentication).budgetOverruns, 0u);
+    const std::string status = manager.Console_GetStatus();
+    EXPECT_STR_CONTAINS(status, std::string("Health: ok"));
+    EXPECT_STR_CONTAINS(status, std::string("Budget: leaderboards 2 calls over 5.0 ms (max "));
+
+    // The warning is rate-limited per capability: two overruns inside 10 s log once.
+    Spark::Logger::Get().FlushAll();
+    {
+        std::lock_guard lock(captured->mutex);
+        ASSERT_EQ(captured->messages.size(), static_cast<size_t>(1));
+        EXPECT_STR_CONTAINS(captured->messages.front(), std::string("Online: SubmitScore took "));
+    }
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_TripOnBudgetOverrunOpensCircuit)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+    const auto& board = manager.GetCapabilityHealth(OnlineCapability::Leaderboards);
+
+    Spark::OnlineServices::OnlineCircuitPolicy strict;
+    strict.tripOnBudgetOverrun = true;
+    ScopedCircuitPolicy policy(strict);
+
+    // Each slow call succeeds for its caller but counts as a failure of the capability, so a
+    // stalling backend opens the circuit after the usual 5 consecutive failures.
+    adapter->submitDelay = std::chrono::milliseconds(30);
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_TRUE(platform->SubmitScore("Board", i));
+    }
+    EXPECT_EQ(board.budgetOverruns, 5u);
+    EXPECT_EQ(board.consecutiveFailures, 5u);
+    EXPECT_TRUE(board.circuitOpen);
+
+    // Open: the next call fails fast without paying the adapter's stall again.
+    EXPECT_FALSE(platform->SubmitScore("Board", 99));
+    EXPECT_EQ(adapter->submitCalls, 5);
+    EXPECT_EQ(board.rejectedCalls, 1u);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(),
+                        std::string("Health: leaderboards 5 consecutive failures (circuit open, retry in 30.0s)"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_ShortTokenRedactionTerminates)
+{
+    // A one-character token also occurs inside "<redacted>"; redaction must resume after each
+    // replacement instead of rescanning its own output forever.
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+    adapter->fault = Fault::ThrowStd;
+    EXPECT_FALSE(platform->Login("Erin", "e"));
+    // Every "e" in the whole message is replaced exactly once.
+    EXPECT_EQ(platform->GetLastError(), std::string("Login fail<redacted>d: adapt<redacted>r thr<redacted>w: auth "
+                                                    "back<redacted>nd r<redacted>j<redacted>ct<redacted>d "
+                                                    "tok<redacted>n <redacted>"));
     manager.Shutdown();
 }
