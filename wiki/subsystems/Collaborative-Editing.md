@@ -207,7 +207,9 @@ The **Collaboration** panel (View → Collaboration) provides:
 - **Connection controls**: Host or join a session with username and port
 - **Peer list**: Shows all connected editors with their colors and current selections
 - **Lock list**: Active locks with owner names, durations, and release buttons
-- **Edit log**: Recent edit activity across all peers
+- **Edit log**: Recent edit activity across all peers. This is an activity log only: a received
+  `EditMessage` carries the edit type and the sender's local node ID, and nothing applies it to the
+  receiving editor's scene, so peers' scenes are not kept in sync. Save from one editor at a time.
 - **Session stats**: Peer count, lock count, edit counts, session duration
 
 ## Viewport Peer Visualization

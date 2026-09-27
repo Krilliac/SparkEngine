@@ -305,6 +305,9 @@ namespace SparkEditor
     {
         if (ImGui::CollapsingHeader("Recent Edits"))
         {
+            // Received edits carry only a type and a peer-local node id, and nothing
+            // applies them yet: say so rather than implying scenes stay in sync.
+            ImGui::TextDisabled("Activity log only: peers' edits are not applied to your scene.");
             if (m_editLog.empty())
             {
                 ImGui::TextDisabled("No edits recorded.");
