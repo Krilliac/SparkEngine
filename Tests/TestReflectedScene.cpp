@@ -476,6 +476,60 @@ TEST(ReflectedScene_LoadFallbackDoesNotAppendPartiallyReadPrimary)
     EXPECT_EQ(names.get<NameComponent>(*names.begin()).name, std::string("First"));
 }
 
+// A torn or truncated scene write used to parse as a valid (empty) document:
+// the vendored JSON parser returned whatever it had read so far, so
+// `{"version": 1, "entities": [` loaded as a scene with zero entities.
+TEST(ReflectedScene_RejectsTruncatedAndTrailingGarbageDocumentsWithoutMutation)
+{
+    World world;
+    world.CreateEntity("KeepMe");
+
+    EXPECT_FALSE(DeserializeInto(world, "{\"version\": 1, \"entities\": [\n"));
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version": 1, "entities": [{"id": 1, "name": "Cut)json"));
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version": 1, "entities": [{"id": 1, "name": "A", )json"));
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version": 1, "entities": []}garbage)json"));
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version": 1, "entities": [], })json"));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+
+    // The same document, complete, still loads.
+    World complete;
+    EXPECT_TRUE(DeserializeInto(complete, "{\"version\": 1, \"entities\": []}\n"));
+}
+
+TEST(ReflectedScene_LoadRecoversPreviousGoodBackupFromTruncatedPrimary)
+{
+    TemporaryReflectedScene file;
+
+    World first;
+    first.CreateEntity("First");
+    ASSERT_TRUE(SaveWorld(first, file.Path().string()));
+
+    World replacement;
+    replacement.CreateEntity("Replacement");
+    ASSERT_TRUE(SaveWorld(replacement, file.Path().string()));
+    ASSERT_TRUE(std::filesystem::exists(file.Path().string() + ".bak"));
+
+    {
+        std::ofstream truncated(file.Path(), std::ios::binary | std::ios::trunc);
+        truncated << "{\"version\": 1, \"entities\": [\n";
+    }
+
+    World recovered;
+    ASSERT_TRUE(LoadWorld(recovered, file.Path().string()));
+    EXPECT_EQ(recovered.GetEntityCount(), static_cast<size_t>(1));
+    const auto names = recovered.GetEntitiesWith<NameComponent>();
+    ASSERT_TRUE(names.begin() != names.end());
+    EXPECT_EQ(names.get<NameComponent>(*names.begin()).name, std::string("First"));
+
+    // With no previous-good backup the truncated primary must fail the load
+    // and leave the caller's world untouched.
+    std::filesystem::remove(file.Path().string() + ".bak");
+    World untouched;
+    untouched.CreateEntity("Existing");
+    EXPECT_FALSE(LoadWorld(untouched, file.Path().string()));
+    EXPECT_EQ(untouched.GetEntityCount(), static_cast<size_t>(1));
+}
+
 TEST(World_DestroyEntityRepairsHierarchyLinks)
 {
     World world;

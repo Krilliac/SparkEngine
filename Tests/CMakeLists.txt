@@ -154,6 +154,8 @@ add_executable(SparkTests
     TestModuleABIDiagnostics.cpp
     TestModuleVersion.cpp
     TestSparkGameShowcase.cpp
+    TestLIFE200ModuleReloadReal.cpp
+    TestSDK240ModuleDiagnostics.cpp
     TestPluginABI.cpp
     TestReflection.cpp
     TestPathCache.cpp
@@ -1106,6 +1108,7 @@ target_sources(SparkTests PRIVATE
     TestUserDataPathsReal.cpp
     TestHEAD220NullRHILifetimeReal.cpp
     TestHeadlessTickStats.cpp
+    TestInputFrameEdgesReal.cpp
     TestSceneManagerUnicodeReal.cpp
     TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
@@ -2598,6 +2601,34 @@ set_tests_properties(SparkSDKRejectsAmbiguousVersionHeader PROPERTIES
     LABELS "sdk;module;unit"
     TIMEOUT 30)
 
+# SDK-240: the .sparkabi sidecar's descriptor format/size/runtime ABI version
+# are derived from Spark/ModuleABI.h, not passed as literals.
+add_test(
+    NAME SparkModuleABISidecarDerivation
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+        "-DSPARK_SDK_INCLUDE=${CMAKE_SOURCE_DIR}/SparkSDK/Include"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/sdk240-sidecar-derivation/$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P ${CMAKE_SOURCE_DIR}/Tests/SDK/TestSparkModuleABISidecarDerivation.cmake)
+set_tests_properties(SparkModuleABISidecarDerivation PROPERTIES
+    LABELS "sdk;module;abi;unit"
+    TIMEOUT 300)
+
+# SDK-240: incompatible-module rejection names both sides' values and reaches the Logger.
+add_test(NAME SDK240ModuleCompatibilityDiagnostics
+    COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(SDK240ModuleCompatibilityDiagnostics PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=SDK240_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "sdk;module;abi;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 60)
+
 add_test(
     NAME SparkInstalledPackageRejectsMissingVersionDiagnostics
     COMMAND ${CMAKE_COMMAND}
@@ -3007,6 +3038,20 @@ exec "$5" -B "$6" --images "$1/runtime" --symbols "$1/private/symbols" --output 
         LABELS "build;shipping;integration"
         TIMEOUT 600)
 endif()
+# SDK-240: the SDK vtable/struct surface is pinned in SparkSDK/ABI/sdk-abi-surface.json;
+# an ABI change without a re-pinned SPARK_SDK_VERSION bump fails here.
+add_test(
+    NAME SparkSDKABISurface
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/SparkSDK/Tools/sdk_abi_surface.py check)
+set_tests_properties(SparkSDKABISurface PROPERTIES
+    LABELS "sdk;module;abi;unit;python"
+    TIMEOUT 60)
+add_test(
+    NAME SparkSDKABISurfaceChecker
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_sdk240_abi_surface.py)
+set_tests_properties(SparkSDKABISurfaceChecker PROPERTIES
+    LABELS "sdk;module;abi;unit;python"
+    TIMEOUT 120)
 
 # RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
 # fixture DLL. The exact count fails closed if the family stops being compiled

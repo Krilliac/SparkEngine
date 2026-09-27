@@ -214,6 +214,53 @@ TEST(NlohmannJson_RoundTrip)
     EXPECT_EQ(parsed, original);
 }
 
+// The vendored stub used to return the partial value read so far, so a
+// truncated file parsed as a valid-looking document (see ReflectedScene_*).
+TEST(NlohmannJson_MalformedInputThrows)
+{
+    EXPECT_THROW(nlohmann::json::parse("{\"version\": 1, \"entities\": [\n"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse(R"({"a": 1)"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse(R"({"a": "unterminated)"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse(R"({"a": 1}garbage)"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse("{} {}"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse("[1, 2,]"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse("[1 2]"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse(R"({"a" 1})"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse("{ this is garbage"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse("nul"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse("[12.]"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse("[1e]"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse(R"("\q")"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse(R"("\uZZZZ")"), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse(""), std::runtime_error);
+    EXPECT_THROW(nlohmann::json::parse(" \n "), std::runtime_error);
+}
+
+TEST(NlohmannJson_UnicodeEscapesAndControlCharactersRoundTrip)
+{
+    // Build each JSON string escape as backslash + "uXXXX" so the test text
+    // really contains the escape rather than an already-decoded character.
+    const auto quotedEscapes = [](std::initializer_list<const char*> hexUnits)
+    {
+        std::string text = "\"";
+        for (const char* hex : hexUnits)
+            text += std::string(1, '\\') + 'u' + hex;
+        return text + "\"";
+    };
+    EXPECT_EQ(nlohmann::json::parse(quotedEscapes({"0041"})).get<std::string>(), std::string("A"));
+    EXPECT_EQ(nlohmann::json::parse(quotedEscapes({"00e9"})).get<std::string>(), std::string("\xC3\xA9"));
+    EXPECT_EQ(nlohmann::json::parse(quotedEscapes({"d83d", "de00"})).get<std::string>(),
+              std::string("\xF0\x9F\x98\x80"));
+    EXPECT_THROW(nlohmann::json::parse(quotedEscapes({"de00"})), std::runtime_error); // unpaired low surrogate
+
+    nlohmann::json original;
+    original["s"] = nlohmann::json(std::string("a\x01"
+                                               "b"));
+    const auto parsed = nlohmann::json::parse(original.dump());
+    EXPECT_EQ(parsed, original);
+    EXPECT_NO_THROW(nlohmann::json::parse("  {\"a\": [1, -2.5e3, true, null]} \r\n"));
+}
+
 #endif // SPARK_HAS_NLOHMANN_JSON
 
 // ============================================================================

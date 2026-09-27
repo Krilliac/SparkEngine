@@ -1059,9 +1059,8 @@ namespace Spark::Json
     /**
      * @brief Strictly parse a JSON string into a Value. Returns false on ANY malformed input.
      *
-     * Parse() above is deliberately lenient — it yields Null (or, depending on the
-     * active backend, a PARTIAL value: the vendored nlohmann stub returns a
-     * '{'-prefixed truncated/garbage document as a valid-looking object) and gives
+     * Parse() above is deliberately lenient — it yields Null on malformed input
+     * (or, on the built-in fallback backend, possibly a PARTIAL value) and gives
      * the caller no way to distinguish "corrupt file" from "legitimately empty".
      * Persistence stores that quarantine-and-refuse on corrupt files (TFDatabase,
      * TFOutfitStore, TFSocialSystem's store, ...) must use this entry point instead,

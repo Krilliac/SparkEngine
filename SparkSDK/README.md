@@ -46,6 +46,22 @@ module factory, so an incompatible module is rejected before module code runs.
 Use `SPARK_IMPLEMENT_MODULE` in exactly one source file to provide the exported
 `CreateModule`, `DestroyModule`, and compatibility entry points.
 
+### Changing the SDK ABI (maintainers)
+
+The binary surface a module compiles against — every SDK interface's virtuals
+in vtable order, the `ModuleInfo` and compatibility-descriptor layouts, the
+module-ABI macros and factory typedefs — is pinned in
+`SparkSDK/ABI/sdk-abi-surface.json` and checked by
+`python3 SparkSDK/Tools/sdk_abi_surface.py check` (ctest `SparkSDKABISurface`).
+It fails when that surface changes without a `SPARK_SDK_VERSION` bump, when a
+bump was not re-pinned, when `EngineContextVirtualCount` is stale, or when
+`Spark/Version.h` lacks a `// vN:` note for the current version. To make an ABI
+change: bump `SPARK_SDK_VERSION`, add the `// vN:` note, re-pin the
+`static_assert` layout blocks in `Spark/IModule.h` and `Spark/ModuleABI.h`, then
+run `python3 SparkSDK/Tools/sdk_abi_surface.py update`. The `.sparkabi` sidecar
+values are derived from `Spark/Version.h` and `Spark/ModuleABI.h` by
+`cmake/SparkGameModule.cmake`, so no CMake edit is needed.
+
 ## Package contents
 
 The SDK component is self-contained and includes:
