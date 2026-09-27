@@ -334,11 +334,20 @@ namespace
                           name + ": failed rollback rebuild did not write the repair-required marker");
         failures += Check(log.find("Done. Engine built at:") == std::string::npos,
                           name + ": installer reported completion after update build failure");
+        // SEC finding 20: the build tree still holds failed-update outputs (the
+        // rebuild at the previous commit fails too), so rollback must not
+        // claim completion.
+        failures += Check(log.find("the install requires repair") != std::string::npos,
+                          name + ": rollback did not report that the build tree still needs repair");
+        failures += Check(log.find("Update rollback complete") == std::string::npos,
+                          name + ": rollback reported completion while the build tree held failed-update outputs");
 
         std::error_code error;
         fs::remove_all(root, error);
         return failures;
     }
+
+    std::vector<std::string> ReadToolLog(const fs::path& logPath);
 
     // Only the new ref fails to build: rollback restores and rebuilds the
     // previous commit, so the install is working again and the original
@@ -353,14 +362,31 @@ namespace
         failures += Check(WriteTextFile(destination / "force-build-failure-on-new-ref", "fail"),
                           name + ": could not create new-ref build failure fixture");
 
+        const fs::path toolLog = root / "tool-invocations.log";
+        SetEnvironment("SPARK_FAKE_TOOL_LOG", toolLog.string());
         ScopedPathPrefix pathPrefix(root / "tools");
         failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
 
         std::string log;
         SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
         const int result = SparkInstaller::Installer::Run(context);
+        SetEnvironment("SPARK_FAKE_TOOL_LOG", "");
         failures += Check(result == 7, name + ": expected the original build failure exit 7, got " +
                                            std::to_string(result) + "\n" + log);
+        // SEC finding 20: the build tree is rolled back too, so the restored
+        // commit is reconfigured as well as rebuilt (one of each per commit).
+        size_t configures = 0;
+        size_t builds = 0;
+        for (const std::string& command : ReadToolLog(toolLog))
+        {
+            if (command == "-S")
+                ++configures;
+            else if (command == "--build")
+                ++builds;
+        }
+        failures +=
+            Check(configures == 2, name + ": rollback did not reconfigure the build tree at the previous commit");
+        failures += Check(builds == 2, name + ": rollback did not rebuild the build tree at the previous commit");
         failures += Check(ReadFirstLine(destination / "fake-git-last-checkout") == kFakeHeadCommit,
                           name + ": rollback did not restore the previous commit");
         failures += Check(ReadFirstLine(destination / "fake-cmake-build-count") == "2",
