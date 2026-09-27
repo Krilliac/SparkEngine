@@ -102,6 +102,12 @@ namespace MMO
          * entity this server owns for message.senderID (created on first request), and
          * normal server replication republishes it; nothing is relayed verbatim.
          *
+         * Accepted state: position within 1000 km of the origin, rotation within one turn
+         * (Euler degrees), speed at most 100 m/s, all finite. Movement stays client-authored:
+         * the client also performs its own teleports (travel, respawn), so there is no
+         * per-request displacement bound. Volume needs no extra limit here: each request is
+         * O(1), the latest one per sender wins, and the transport bounds the queued datagrams.
+         *
          * Thread affinity: game thread (NetworkManager handler dispatch).
          *
          * @return The sender's authoritative network ID, or 0 when the request is rejected

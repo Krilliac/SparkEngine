@@ -479,12 +479,13 @@ namespace
 {
     Spark::Net::NetworkMessage MMOStateRequest(Spark::Net::ClientID sender, uint32_t claimedNetworkId,
                                                const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity,
-                                               uint16_t propertyCount = 0, bool trailingByte = false)
+                                               uint16_t propertyCount = 0, bool trailingByte = false,
+                                               const DirectX::XMFLOAT3& rotation = DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f})
     {
         Spark::Net::NetBuffer buffer;
         buffer.WriteUint32(claimedNetworkId);
         buffer.WriteVector3(position);
-        buffer.WriteVector3(DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f});
+        buffer.WriteVector3(rotation);
         buffer.WriteVector3(velocity);
         buffer.WriteUint16(propertyCount);
         if (trailingByte)
@@ -569,11 +570,24 @@ TEST(MMO_StateRequest_RejectsMalformedAndImplausibleState)
     EXPECT_EQ(world.ApplyClientStateRequest(network,
                                             MMOStateRequest(Spark::Net::INVALID_CLIENT, 0, {2.0f, 1.0f, 1.0f}, still)),
               0u);
+    // Rotation is Euler degrees republished to every client: finite but absurd values are rejected,
+    // while a full turn in either direction is still a valid orientation.
+    EXPECT_EQ(world.ApplyClientStateRequest(
+                  network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, still, 0, false, {3.0e38f, 0.0f, 0.0f})),
+              0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(
+                  network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, still, 0, false, {0.0f, 0.0f, -361.0f})),
+              0u);
 
     // None of the rejected requests moved the sender's entity.
     const auto entity = network.GetReplicatedEntitySnapshot(owned);
     ASSERT_TRUE(entity.has_value());
     EXPECT_NEAR(entity->position.x, 1.0f, 1e-6f);
+
+    EXPECT_EQ(world.ApplyClientStateRequest(
+                  network, MMOStateRequest(3, 0, {4.0f, 1.0f, 1.0f}, still, 0, false, {-360.0f, 90.0f, 360.0f})),
+              owned);
+    EXPECT_NEAR(network.GetReplicatedEntitySnapshot(owned)->rotation.x, -360.0f, 1e-6f);
 }
 #endif // ENABLE_NETWORKING
 

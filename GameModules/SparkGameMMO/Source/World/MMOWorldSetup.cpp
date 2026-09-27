@@ -35,6 +35,11 @@ namespace MMO
         constexpr float kMaxClientCoordinate = 1.0e6f;
         /// Sprinting players move at 10.5 m/s; this leaves headroom for knockback and lag.
         constexpr float kMaxClientSpeed = 100.0f;
+        /// ReplicatedEntity rotation is Euler degrees, republished to every other client. Any
+        /// finite value used to pass, so a peer could push values near FLT_MAX that overflow to
+        /// inf/NaN in the first lerp or matrix built from them. One full turn either way covers
+        /// every orientation a client can mean.
+        constexpr float kMaxClientRotationDegrees = 360.0f;
 
         bool IsFiniteVector(const DirectX::XMFLOAT3& value)
         {
@@ -45,6 +50,12 @@ namespace MMO
         {
             return IsFiniteVector(value) && std::abs(value.x) <= kMaxClientCoordinate &&
                    std::abs(value.y) <= kMaxClientCoordinate && std::abs(value.z) <= kMaxClientCoordinate;
+        }
+
+        bool IsPlausibleRotation(const DirectX::XMFLOAT3& value)
+        {
+            return IsFiniteVector(value) && std::abs(value.x) <= kMaxClientRotationDegrees &&
+                   std::abs(value.y) <= kMaxClientRotationDegrees && std::abs(value.z) <= kMaxClientRotationDegrees;
         }
 
         bool IsPlausibleVelocity(const DirectX::XMFLOAT3& value)
@@ -361,7 +372,7 @@ namespace MMO
         {
             return 0;
         }
-        if (!IsPlausibleCoordinate(position) || !IsFiniteVector(rotation) || !IsPlausibleVelocity(velocity))
+        if (!IsPlausibleCoordinate(position) || !IsPlausibleRotation(rotation) || !IsPlausibleVelocity(velocity))
         {
             return 0;
         }
