@@ -199,7 +199,9 @@ void SparkGameVisualScriptModule::LoadSoundCues()
     // that cue: AudioUpdateSystem counts its requests as dropped.
     auto* audio = m_context ? m_context->GetAudio() : nullptr;
     if (!audio || !m_demo)
+    {
         return;
+    }
 
     auto& console = Spark::SimpleConsole::GetInstance();
     for (const auto cue : Spark::VisualScriptDemo::SoundCues)
@@ -223,7 +225,9 @@ void SparkGameVisualScriptModule::UnloadSoundCues()
     if (auto* audio = m_context ? m_context->GetAudio() : nullptr)
     {
         for (const auto& name : m_loadedSoundCues)
+        {
             audio->UnloadSound(name);
+        }
     }
     m_loadedSoundCues.clear();
 }
