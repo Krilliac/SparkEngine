@@ -11,27 +11,27 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 331692 |
-| **SparkEditor/Source** | 104075 |
-| **GameModules** | 152091 |
-| **External services** | 11770 |
+| **SparkEngine/Source** | 332779 |
+| **SparkEditor/Source** | 104717 |
+| **GameModules** | 153776 |
+| **External services** | 12036 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 217455 |
+| **Tests** | 223201 |
 | **SparkConsole/src** | 1800 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~837921** |
+| **Total C++ (excl. ThirdParty)** | **~847959** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1101 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1705 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1111 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1729 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 670 |
-| Wiki pages (.md) | 204 |
+| Test-bearing implementation files (.cpp/.mm) | 685 |
+| Wiki pages (.md) | 205 |
 
 ### Largest Top-Level Source Section
 
@@ -43,10 +43,10 @@ Graphics contains 124789 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 124789 | 37.6% |
-| Engine (all subsystems) | 92962 | 28.0% |
+| Graphics | 124789 | 37.4% |
+| Engine (all subsystems) | 93735 | 28.1% |
 | Utils | 46288 | 13.9% |
-| Core | 31935 | 9.6% |
+| Core | 32249 | 9.6% |
 | Physics | 11077 | 3.3% |
 | Audio | 6884 | 2.0% |
 | Input | 4046 | 1.2% |
@@ -59,13 +59,13 @@ Graphics contains 124789 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 15715 |
+| Networking | 15876 |
 | AI | 13490 |
-| ECS | 8497 |
+| ECS | 8618 |
 | Gameplay | 7925 |
-| Scripting | 6954 |
+| Scripting | 7273 |
 | Animation | 6850 |
-| SaveSystem | 4197 |
+| SaveSystem | 4295 |
 | UI | 2522 |
 | Streaming | 2137 |
 | Editor | 1737 |
@@ -91,7 +91,7 @@ Graphics contains 124789 lines, or 37% of `SparkEngine/Source`. This is a source
 | Metric | Count |
 |--------|------:|
 | Concrete component-group headers (`Engine/ECS/Components/*Components.h`) | 17 |
-| Struct declarations in those headers | 79 |
+| Struct declarations in those headers | 81 |
 | ECS systems | 25 |
 | Execution order | Physics → Animation → AI → Audio → Lifecycle → Render |
 
@@ -104,14 +104,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 104075 |
+| Total editor lines | 104717 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 670 |
-| TEST() definitions | 7897 |
+| Test files | 685 |
+| TEST() definitions | 8005 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -163,10 +163,10 @@ inventory is implementation evidence, not support certification.
 | `ModuleManager.cpp` | 2242 |
 | `D3D11Device.cpp` | 2079 |
 | `VulkanDevice.cpp` | 1982 |
-| `EngineSettings.cpp` | 1872 |
+| `EngineSettings.cpp` | 1875 |
+| `NetworkConnection.cpp` | 1776 |
 | `SceneManager.cpp` | 1756 |
-| `NetworkConnection.cpp` | 1740 |
-| `AngelScriptEngine.cpp` | 1720 |
+| `AngelScriptEngine.cpp` | 1685 |
 
 ### SparkEngine .h Files (by line count)
 
@@ -176,23 +176,23 @@ inventory is implementation evidence, not support certification.
 | `Telemetry.h` | 1419 |
 | `JsonUtils.h` | 1321 |
 | `GraphicsEngine.h` | 1293 |
-| `OnlineServices.h` | 1151 |
-| `EngineSettings.h` | 1144 |
-| `NetworkManager.h` | 988 |
+| `OnlineServices.h` | 1225 |
+| `EngineSettings.h` | 1149 |
+| `NetworkManager.h` | 998 |
 | `SaveSystem.h` | 936 |
 | `PlatformDirectXMathStubs.h` | 892 |
-| `ECSystems.h` | 846 |
+| `ECSystems.h` | 864 |
 
 ### SparkEditor .cpp Files (by line count)
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2845 |
-| `ProjectManager.cpp` | 2601 |
+| `EditorUI.cpp` | 2854 |
+| `ProjectManager.cpp` | 2734 |
 | `JSONSceneSerializer.cpp` | 2020 |
+| `BuildPipeline.cpp` | 1729 |
 | `CollaborativeEditSession.cpp` | 1696 |
 | `EditorTheme.cpp` | 1669 |
-| `BuildPipeline.cpp` | 1659 |
 | `VisualScriptPanel.cpp` | 1652 |
 | `HierarchyPanel.cpp` | 1651 |
 | `PerformanceProfiler.cpp` | 1606 |

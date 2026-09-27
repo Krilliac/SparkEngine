@@ -484,6 +484,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `Config` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
 | `ConstantForceComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
 | `CoverPointComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
+| `Cue` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
 | `DecalComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `DestructibleComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `DialogueTriggerComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
@@ -517,6 +518,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `ReflectionProbeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `RigidBody2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `RigidBodyComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
+| `ScriptAudioCues` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
 | `Script` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `SkyboxComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
 | `SoftBodyComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
