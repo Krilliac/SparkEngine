@@ -31,11 +31,11 @@
       },
       {
         "path": "SparkEngine/Source/Engine/Scripting",
-        "reason": "AngelScript campaigns are owned by ENG-200 behind readiness gate G11. This subtree does ingest untrusted .as files from disk (AngelScriptEngine::CompileScriptFile -> AddSectionFromFile); that file surface is explicitly ENG-200's, not unowned.",
+        "reason": "AngelScript campaigns are owned by ENG-200 behind readiness gate G11. This subtree does ingest untrusted .as files from disk (AngelScriptEngine::CompileScriptFile -> AddSectionFromFile); that file surface is explicitly ENG-200's, not unowned. Re-reviewed 2026-09-27 for MOD-390: VisualScriptGraphIO::Parse/LoadFile (VisualScriptGraphIO.cpp/.h) decodes untrusted .vscript graph JSON from disk; it compiles to AngelScript and is the same ENG-200-owned script-ingest surface.",
         "ticket": "ENG-200",
         "owner": "eng-200-scripting-campaign",
         "expires": "2027-08-23",
-        "hidden_candidate_count": 3
+        "hidden_candidate_count": 5
       }
     ],
     "excluded_files": [],
@@ -1961,9 +1961,10 @@
     },
     {
       "id": "fps-multiplayer-player-state",
-      "description": "SparkGameFPS NetworkPlayerState/PlayerInput wire decoders over peer-supplied packet bytes.",
+      "description": "SparkGameFPS NetworkPlayerState/PlayerInput wire decoders and the snapshot-batch framing (header, record count, per-record score fields) over peer-supplied packet bytes.",
       "trust_boundary": "untrusted-network",
       "source_files": [
+        "GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp",
         "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h"
       ],
       "formats": [
@@ -2094,6 +2095,23 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "GameModules/SparkGameRacing/Source/Core/RacingPersistence.h"
+      ],
+      "formats": [
+        "save-custom-state"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "platformer-progress-save",
+      "description": "SparkGamePlatformer progress text decoder and validator for the SparkGamePlatformer.progress.v1 custom-state entry of a save slot read from disk.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGamePlatformer/Source/Core/PlatformerProgress.cpp",
+        "GameModules/SparkGamePlatformer/Source/Core/PlatformerProgress.h"
       ],
       "formats": [
         "save-custom-state"
@@ -2619,11 +2637,13 @@
     {
       "source_file": "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp",
       "classification": "delegating-call-site",
-      "justification": "Loads Replays/platformer_best.replay through ReplaySystem::LoadFromFile; replay decoding is the inventoried replay-system parser.",
+      "justification": "Loads Replays/platformer_best.replay through ReplaySystem::LoadFromFile and passes the save custom-state progress entry to PlatformerProgress::Deserialize; replay decoding and progress decoding are the inventoried replay-system and platformer-progress-save parsers.",
       "detected_by": [
+        "deserialize",
         "parse-entry"
       ],
       "delegates_to": [
+        "platformer-progress-save",
         "replay-system"
       ]
     },
