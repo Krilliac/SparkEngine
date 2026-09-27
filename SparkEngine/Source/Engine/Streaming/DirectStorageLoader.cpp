@@ -8,6 +8,7 @@
 #include "DirectStorageLoader.h"
 #include "../../Utils/LogMacros.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <format>
@@ -23,14 +24,7 @@ namespace Spark::Streaming
 
     DirectStorageLoader::~DirectStorageLoader()
     {
-        Shutdown();
-        std::lock_guard lock(m_threadsMutex);
-        for (auto& t : m_backgroundThreads)
-        {
-            if (t.joinable())
-                t.join();
-        }
-        m_backgroundThreads.clear();
+        Shutdown(); // also stops and joins the I/O worker pool
     }
 
     bool DirectStorageLoader::Initialize(void* graphicsDevice)
@@ -71,17 +65,24 @@ namespace Spark::Streaming
 
     void DirectStorageLoader::Shutdown()
     {
-        std::lock_guard lock(m_mutex);
-        // Idempotent: Shutdown is called from both the engine teardown path and
-        // static-destructor cleanup, producing duplicate log lines otherwise.
-        if (!m_initialized)
-            return;
-        SPARK_LOG_INFO(Spark::LogCategory::Scene, "DirectStorageLoader shutting down (%zu active, %llu total bytes)",
-                       m_activeRequests.size(), static_cast<unsigned long long>(m_stats.totalBytesLoaded));
-        m_activeRequests.clear();
-        while (!m_pendingQueue.empty())
-            m_pendingQueue.pop();
-        m_initialized = false;
+        {
+            std::lock_guard lock(m_mutex);
+            // Idempotent: Shutdown is called from both the engine teardown path and
+            // static-destructor cleanup, producing duplicate log lines otherwise.
+            if (m_initialized)
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Scene,
+                               "DirectStorageLoader shutting down (%zu active, %llu total bytes)",
+                               m_activeRequests.size(), static_cast<unsigned long long>(m_stats.totalBytesLoaded));
+                m_activeRequests.clear();
+                while (!m_pendingQueue.empty())
+                    m_pendingQueue.pop();
+                m_initialized = false;
+            }
+        }
+        // Workers take m_mutex to publish stats, so they are joined after it is released.
+        // Flush may have started workers without Initialize, so this runs unconditionally.
+        StopIoWorkers();
     }
 
     LoadRequestHandle DirectStorageLoader::Submit(const LoadRequest& request)
@@ -120,7 +121,7 @@ namespace Spark::Streaming
             m_activeRequests.push_back(req);
 
             // DirectStorage path would submit to IDStorageQueue here.
-            // Fallback: launch async I/O on a background thread.
+            // Fallback: hand the request to the bounded I/O worker pool.
             FallbackAsyncLoad(req);
         }
     }
@@ -233,95 +234,161 @@ namespace Spark::Streaming
 
     void DirectStorageLoader::FallbackAsyncLoad(std::shared_ptr<InternalRequest> req)
     {
-        std::thread worker(
-            [this, req]()
-            {
-                auto startTime = std::chrono::high_resolution_clock::now();
-
-                std::ifstream file(req->request.filePath, std::ios::binary | std::ios::ate);
-                if (!file.is_open())
-                {
-                    // A missing asset is an *expected* failure mode for an
-                    // async streaming loader — callers (e.g. AreaAssetLoader)
-                    // aggregate the per-area success/failure counts and log a
-                    // single WARN. Logging an ERROR here with a stack trace
-                    // spams the console whenever a manifest lists optional or
-                    // not-yet-shipped files (see OpenWorld showcase).
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Failed to open file for async load: %s",
-                                    req->request.filePath.c_str());
-                    req->status.store(LoadStatus::Failed, std::memory_order_release);
-                    return;
-                }
-
-                const std::streamsize rawSize = file.tellg();
-                if (rawSize < 0)
-                {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "tellg() failed for async load: %s",
-                                    req->request.filePath.c_str());
-                    req->status.store(LoadStatus::Failed, std::memory_order_release);
-                    return;
-                }
-                uint64_t fileSize = static_cast<uint64_t>(rawSize);
-                uint64_t readOffset = req->request.fileOffset;
-                uint64_t readSize = req->request.loadSize;
-
-                // Validate offset is within file bounds
-                if (readOffset >= fileSize)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Scene,
-                                   "DirectStorageLoader: offset %llu past end of '%s' (size=%llu)",
-                                   static_cast<unsigned long long>(readOffset), req->request.filePath.c_str(),
-                                   static_cast<unsigned long long>(fileSize));
-                    req->status.store(LoadStatus::Failed, std::memory_order_release);
-                    return;
-                }
-
-                if (readSize == 0)
-                    readSize = fileSize - readOffset;
-
-                // Check for arithmetic overflow before bounds check
-                if (readSize > fileSize || readOffset > fileSize - readSize)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Scene,
-                                   "DirectStorageLoader: read range out of bounds for '%s' "
-                                   "(offset=%llu, size=%llu, fileSize=%llu)",
-                                   req->request.filePath.c_str(), static_cast<unsigned long long>(readOffset),
-                                   static_cast<unsigned long long>(readSize),
-                                   static_cast<unsigned long long>(fileSize));
-                    req->status.store(LoadStatus::Failed, std::memory_order_release);
-                    return;
-                }
-
-                file.seekg(static_cast<std::streamoff>(readOffset));
-
-                req->cpuData.resize(readSize);
-                file.read(reinterpret_cast<char*>(req->cpuData.data()), static_cast<std::streamsize>(readSize));
-
-                if (!file.good() && !file.eof())
-                {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Read error on file: %s", req->request.filePath.c_str());
-                    req->status.store(LoadStatus::Failed, std::memory_order_release);
-                    return;
-                }
-
-                auto endTime = std::chrono::high_resolution_clock::now();
-                float durationMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
-
-                {
-                    std::lock_guard lock(m_mutex);
-                    m_stats.totalBytesLoaded += readSize;
-                    if (durationMs > 0.0f)
-                    {
-                        float mbps = (static_cast<float>(readSize) / (1024.0f * 1024.0f)) / (durationMs / 1000.0f);
-                        // Exponential moving average
-                        m_stats.averageBandwidthMBps = m_stats.averageBandwidthMBps * 0.9f + mbps * 0.1f;
-                    }
-                }
-
-                req->status.store(LoadStatus::Completed, std::memory_order_release);
-            });
+        // A fixed pool bounds the thread count no matter how many requests one Flush
+        // carries, and the same workers serve every later area load. The previous
+        // thread-per-request design kept each finished, unjoined thread (its handle and
+        // stack reservation) until process exit, so every area transition leaked N threads.
         std::lock_guard threadLock(m_threadsMutex);
-        m_backgroundThreads.push_back(std::move(worker));
+        if (m_stopIoWorkers)
+        {
+            // The pool is being torn down; fail the request instead of queueing it for a
+            // worker that is about to exit.
+            req->status.store(LoadStatus::Failed, std::memory_order_release);
+            return;
+        }
+        m_ioQueue.push_back(std::move(req));
+        const size_t hardwareThreads = std::max<size_t>(1, std::thread::hardware_concurrency());
+        const size_t workerCap = std::min(kMaxIoWorkers, hardwareThreads);
+        if (m_ioWorkers.size() < workerCap && m_ioWorkers.size() < m_ioQueue.size())
+        {
+            m_ioWorkers.emplace_back([this]() { IoWorkerLoop(); });
+        }
+        m_ioCv.notify_one();
+    }
+
+    void DirectStorageLoader::IoWorkerLoop()
+    {
+        for (;;)
+        {
+            std::shared_ptr<InternalRequest> req;
+            {
+                std::unique_lock threadLock(m_threadsMutex);
+                m_ioCv.wait(threadLock, [this]() { return m_stopIoWorkers || !m_ioQueue.empty(); });
+                if (m_stopIoWorkers)
+                    return;
+                req = std::move(m_ioQueue.front());
+                m_ioQueue.pop_front();
+            }
+
+            if (req->cancelled.load())
+            {
+                req->status.store(LoadStatus::Failed, std::memory_order_release);
+                continue;
+            }
+            ExecuteLoad(*req);
+        }
+    }
+
+    void DirectStorageLoader::StopIoWorkers()
+    {
+        std::vector<std::thread> workers;
+        {
+            std::lock_guard threadLock(m_threadsMutex);
+            m_stopIoWorkers = true;
+            // Requests still queued were dropped from m_activeRequests by Shutdown (or the
+            // loader is being destroyed); nobody polls them, so they are simply released.
+            m_ioQueue.clear();
+            workers.swap(m_ioWorkers);
+        }
+        m_ioCv.notify_all();
+        for (auto& worker : workers)
+        {
+            if (worker.joinable())
+                worker.join();
+        }
+        std::lock_guard threadLock(m_threadsMutex);
+        m_stopIoWorkers = false; // a later Initialize/Flush may start a fresh pool
+    }
+
+    size_t DirectStorageLoader::GetIoWorkerCount() const
+    {
+        std::lock_guard threadLock(m_threadsMutex);
+        return m_ioWorkers.size();
+    }
+
+    void DirectStorageLoader::ExecuteLoad(InternalRequest& req)
+    {
+        auto startTime = std::chrono::high_resolution_clock::now();
+
+        std::ifstream file(req.request.filePath, std::ios::binary | std::ios::ate);
+        if (!file.is_open())
+        {
+            // A missing asset is an *expected* failure mode for an
+            // async streaming loader — callers (e.g. AreaAssetLoader)
+            // aggregate the per-area success/failure counts and log a
+            // single WARN. Logging an ERROR here with a stack trace
+            // spams the console whenever a manifest lists optional or
+            // not-yet-shipped files (see OpenWorld showcase).
+            SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Failed to open file for async load: %s",
+                            req.request.filePath.c_str());
+            req.status.store(LoadStatus::Failed, std::memory_order_release);
+            return;
+        }
+
+        const std::streamsize rawSize = file.tellg();
+        if (rawSize < 0)
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "tellg() failed for async load: %s",
+                            req.request.filePath.c_str());
+            req.status.store(LoadStatus::Failed, std::memory_order_release);
+            return;
+        }
+        uint64_t fileSize = static_cast<uint64_t>(rawSize);
+        uint64_t readOffset = req.request.fileOffset;
+        uint64_t readSize = req.request.loadSize;
+
+        // Validate offset is within file bounds
+        if (readOffset >= fileSize)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Scene, "DirectStorageLoader: offset %llu past end of '%s' (size=%llu)",
+                           static_cast<unsigned long long>(readOffset), req.request.filePath.c_str(),
+                           static_cast<unsigned long long>(fileSize));
+            req.status.store(LoadStatus::Failed, std::memory_order_release);
+            return;
+        }
+
+        if (readSize == 0)
+            readSize = fileSize - readOffset;
+
+        // Check for arithmetic overflow before bounds check
+        if (readSize > fileSize || readOffset > fileSize - readSize)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                           "DirectStorageLoader: read range out of bounds for '%s' "
+                           "(offset=%llu, size=%llu, fileSize=%llu)",
+                           req.request.filePath.c_str(), static_cast<unsigned long long>(readOffset),
+                           static_cast<unsigned long long>(readSize), static_cast<unsigned long long>(fileSize));
+            req.status.store(LoadStatus::Failed, std::memory_order_release);
+            return;
+        }
+
+        file.seekg(static_cast<std::streamoff>(readOffset));
+
+        req.cpuData.resize(readSize);
+        file.read(reinterpret_cast<char*>(req.cpuData.data()), static_cast<std::streamsize>(readSize));
+
+        if (!file.good() && !file.eof())
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Read error on file: %s", req.request.filePath.c_str());
+            req.status.store(LoadStatus::Failed, std::memory_order_release);
+            return;
+        }
+
+        auto endTime = std::chrono::high_resolution_clock::now();
+        float durationMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+        {
+            std::lock_guard lock(m_mutex);
+            m_stats.totalBytesLoaded += readSize;
+            if (durationMs > 0.0f)
+            {
+                float mbps = (static_cast<float>(readSize) / (1024.0f * 1024.0f)) / (durationMs / 1000.0f);
+                // Exponential moving average
+                m_stats.averageBandwidthMBps = m_stats.averageBandwidthMBps * 0.9f + mbps * 0.1f;
+            }
+        }
+
+        req.status.store(LoadStatus::Completed, std::memory_order_release);
     }
 
     std::string DirectStorageLoader::Console_GetStatus() const

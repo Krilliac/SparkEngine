@@ -335,6 +335,7 @@ add_executable(SparkTests
     TestGPUDrivenRenderer.cpp
     TestGPUClusterCulling.cpp
     TestDirectStorageLoader.cpp
+    TestSEC3GameplayHardening.cpp
     TestMeshShaderPipeline.cpp
     TestSparkPak.cpp
     TestAssetParserHardening.cpp
@@ -1862,6 +1863,17 @@ set_tests_properties(TelemetrySpool PROPERTIES
     LABELS "telemetry-integration"
     RUN_SERIAL TRUE
     TIMEOUT 30)
+
+# SEC3 gameplay-systems hardening: bounded DirectStorage fallback worker pool, navmesh and
+# replay counts checked against the bytes left in the file before any allocation, a
+# linear size-capped localization parser, script-bearing mods refused instead of reported
+# Active, and symlinked or oversized mod manifests refused with a bounded read.
+add_test(NAME SparkSEC3GameplayHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkSEC3GameplayHardening PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
 
 # OPS-100: retired crash-transport credentials are dropped on settings load and never saved.
 add_test(NAME CrashSettingsCredentials COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
