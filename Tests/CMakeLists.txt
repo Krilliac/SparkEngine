@@ -1935,7 +1935,7 @@ endforeach()
 # lane if the family silently stops being compiled in.
 add_test(NAME SecDaemonCacheHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SecDaemonCacheHardening PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SecDaemonCache_;SPARK_TEST_EXPECT_COUNT=5"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SecDaemonCache_;SPARK_TEST_EXPECT_COUNT=8"
     LABELS "daemon;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)

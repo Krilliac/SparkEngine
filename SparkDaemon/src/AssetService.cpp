@@ -63,6 +63,7 @@ namespace Spark::Daemon
 
     void AssetService::SetMaxBytes(uint64_t maxBytes)
     {
+        std::lock_guard persistLock(m_persistMutex); // eviction deletes disk files
         std::lock_guard lock(m_mutex);
         m_maxBytes = maxBytes;
         EvictUntilUnderBudget();
@@ -132,6 +133,7 @@ namespace Spark::Daemon
         Key key{req.key.path, req.key.platform};
         std::vector<uint8_t> blobCopyForDisk;
         bool entrySurvived = false;
+        std::lock_guard persistLock(m_persistMutex);
         {
             std::lock_guard lock(m_mutex);
             InsertOrReplace(key, std::move(req.blob));
@@ -144,10 +146,24 @@ namespace Spark::Daemon
 
         if (m_diskBacked)
         {
-            if (entrySurvived)
-                WriteBlobFile(key, blobCopyForDisk);
-            else
+            if (!entrySurvived)
+            {
                 DeleteBlobFile(key);
+            }
+            else if (!WriteBlobFile(key, blobCopyForDisk))
+            {
+                // Fail closed: never report success for a value that did not
+                // reach disk. Drop it from memory and remove any older file so
+                // a restart cannot resurrect a value the client replaced.
+                {
+                    std::lock_guard lock(m_mutex);
+                    auto it = m_index.find(key);
+                    if (it != m_index.end())
+                        EraseByIterator(it->second);
+                }
+                DeleteBlobFile(key);
+                return MakeError("asset cache write failed");
+            }
         }
 
         ServiceResponse out;
@@ -162,6 +178,7 @@ namespace Spark::Daemon
             return MakeError("malformed InvalidateAsset request");
 
         std::vector<Key> removedKeys;
+        std::lock_guard persistLock(m_persistMutex);
         {
             std::lock_guard lock(m_mutex);
             for (auto it = m_lruList.begin(); it != m_lruList.end();)
@@ -216,6 +233,7 @@ namespace Spark::Daemon
     ServiceResponse AssetService::HandleClearCache()
     {
         bool deleteFromDisk = false;
+        std::lock_guard persistLock(m_persistMutex);
         {
             std::lock_guard lock(m_mutex);
             m_lruList.clear();
