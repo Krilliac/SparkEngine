@@ -222,11 +222,46 @@ class ReleaseQualificationTests(unittest.TestCase):
 
     def test_blocking_jobs_cover_the_gate_the_exact_verifier_and_the_release_chain(self) -> None:
         blocking = rq.publication_blocking_jobs()
-        self.assertTrue(contract_selectors.required_gate_jobs() <= blocking)
-        for job in ("profile-required-gates", "build-installer", "prepare", "analyze", "verify"):
+        definitions = rq.workflow_job_definitions()
+        # Every required-ci-gate need that no other workflow redefines.
+        unshared = {job for job in contract_selectors.required_gate_jobs() if definitions[job] == {"build.yml"}}
+        self.assertTrue(unshared <= blocking)
+        # build-installer blocks in both build.yml and release.yml, so it stays.
+        for job in ("profile-required-gates", "build-installer", "prepare", "verify"):
             self.assertIn(job, blocking)
         self.assertNotIn("release", blocking)
         self.assertNotIn("verify-stable-publication", blocking)
+
+    def test_a_name_with_a_non_blocking_definition_elsewhere_is_not_blocking(self) -> None:
+        # release.yml's build-macos is on the release needs chain, but build.yml's
+        # build-macos is continue-on-error and not needed by required-ci-gate;
+        # analyze (codeql.yml vs msvc.yml) and report (codeql-report.yml vs
+        # codacy-report.yml) pair a certified job with an unrelated one.
+        definitions = rq.workflow_job_definitions()
+        self.assertEqual({"build.yml", "release.yml"}, set(definitions["build-macos"]))
+        self.assertNotIn("build-macos", contract_selectors.required_gate_jobs())
+        blocking = rq.publication_blocking_jobs()
+        for job in ("build-macos", "analyze", "report"):
+            with self.subTest(job=job):
+                self.assertGreater(len(definitions[job]), 1)
+                self.assertNotIn(job, blocking)
+
+    def test_blocking_names_are_decided_per_workflow_definition(self) -> None:
+        pairs = frozenset({("release.yml", "shared"), ("build.yml", "both"), ("release.yml", "both"),
+                           ("release.yml", "only")})
+        definitions = {
+            "shared": frozenset({"release.yml", "build.yml"}),
+            "both": frozenset({"release.yml", "build.yml"}),
+            "only": frozenset({"release.yml"}),
+        }
+        self.assertEqual({"both", "only"}, set(rq.blocking_job_names(pairs, definitions)))
+
+    def test_work_item_requiring_build_macos_is_refused(self) -> None:
+        contract = qualifying_contract()
+        contract["workItems"][0]["requiredCiJobs"] = ["build-macos"]
+        report = rq.qualify(contract, "stable-v1", CANDIDATE, self.exact_ci, REPOSITORY,
+                            rq.publication_blocking_jobs())
+        self.assert_refused(report, "build: required CI job build-macos can be skipped without blocking publication")
 
     def test_needs_parser_reads_inline_scalar_and_block_forms(self) -> None:
         workflow = self.root / "workflow.yml"

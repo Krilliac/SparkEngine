@@ -14,7 +14,8 @@ makes no network request. The candidate qualifies only when:
    the build.yml ``required-ci-gate`` aggregate needs, a job the exact-SHA
    verifier certifies, or a job on the release.yml ``release`` job's ``needs``
    chain. Any other job can be skipped without stopping the release, so it
-   cannot be qualification evidence;
+   cannot be qualification evidence. Blocking is decided per (workflow, job):
+   a name that another workflow also defines as a non-blocking job is refused;
 3. the exact-CI record is complete and well formed (closed key set, no empty,
    duplicate or line-broken field) and yields a valid exact-evidence manifest
    for the candidate commit (``exact_evidence.build_manifest``).
@@ -71,24 +72,57 @@ def release_needs_chain(needs: dict[str, frozenset[str]]) -> frozenset[str]:
                                    set(needs[RELEASE_JOB])))
 
 
-def exact_gate_certified_jobs() -> frozenset[str]:
-    """Jobs whose success verify-exact-required-gate.py certifies for the candidate SHA."""
-    certified: set[str] = set()
+def exact_gate_certified_jobs() -> frozenset[tuple[str, str]]:
+    """(workflow, job) pairs whose success verify-exact-required-gate.py certifies for the candidate SHA."""
+    certified: set[tuple[str, str]] = set()
     for workflow, jobs in EXACT_GATE_CERTIFIED_JOBS.items():
         defined = contract_selectors.workflow_job_needs(contract_selectors.WORKFLOW_ROOT / workflow)
         for job in jobs:
             if job not in defined:
                 raise SiteDataError(f"{workflow} defines no {job} job for the exact-SHA gate to certify")
-            certified.add(job)
+            certified.add((workflow, job))
     return frozenset(certified)
 
 
-def publication_blocking_jobs() -> frozenset[str]:
-    return (
-        contract_selectors.required_gate_jobs()
-        | exact_gate_certified_jobs()
-        | release_needs_chain(contract_selectors.workflow_job_needs(RELEASE_WORKFLOW))
+def workflow_job_definitions() -> dict[str, frozenset[str]]:
+    """Every job name across .github/workflows mapped to the workflow files defining it."""
+    definitions: dict[str, set[str]] = {}
+    for path in sorted(contract_selectors.WORKFLOW_ROOT.iterdir()):
+        if path.is_file() and not path.is_symlink() and path.suffix in {".yml", ".yaml"}:
+            for job in contract_selectors.workflow_job_needs(path):
+                definitions.setdefault(job, set()).add(path.name)
+    return {job: frozenset(workflows) for job, workflows in definitions.items()}
+
+
+def blocking_job_names(
+    blocking_pairs: frozenset[tuple[str, str]], definitions: dict[str, frozenset[str]]
+) -> frozenset[str]:
+    """Job names whose every definition blocks publication.
+
+    ``requiredCiJobs`` entries are bare names, and ``resolve_ci_job`` accepts a
+    name defined in any workflow. A name that one workflow defines as a blocking
+    job and another defines as an advisory one (build-macos in release.yml and
+    build.yml, analyze in codeql.yml and msvc.yml) cannot say which job the
+    contract means, so it counts as blocking only when no definition can be
+    skipped.
+    """
+    blocking = {job for _, job in blocking_pairs}
+    return frozenset(
+        job
+        for job in blocking
+        if all((workflow, job) in blocking_pairs for workflow in definitions.get(job, frozenset()))
     )
+
+
+def publication_blocking_jobs() -> frozenset[str]:
+    gate_workflow = contract_selectors.REQUIRED_GATE_WORKFLOW.name
+    release_chain = release_needs_chain(contract_selectors.workflow_job_needs(RELEASE_WORKFLOW))
+    pairs = (
+        {(gate_workflow, job) for job in contract_selectors.required_gate_jobs()}
+        | exact_gate_certified_jobs()
+        | {(RELEASE_WORKFLOW.name, job) for job in release_chain}
+    )
+    return blocking_job_names(frozenset(pairs), workflow_job_definitions())
 
 
 def qualification_items(contract: dict[str, Any], stage: str) -> set[str]:
@@ -129,7 +163,8 @@ def ci_job_errors(contract: dict[str, Any], checked: set[str], blocking: frozens
             if job not in blocking:
                 errors.append(
                     f"{item_id}: required CI job {job} can be skipped without blocking publication "
-                    "(not needed by required-ci-gate or by the release job)"
+                    "(not needed by required-ci-gate or by the release job, or also defined as a "
+                    "non-blocking job in another workflow)"
                 )
     return errors
 
