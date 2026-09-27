@@ -81,7 +81,7 @@
       "directory": "GameModules/SparkGameFPS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameFPS/Source",
-      "sourceFileCount": 71,
+      "sourceFileCount": 74,
       "moduleLocalContentState": "root-dependent",
       "releaseClassification": "shipping",
       "cmakeDeclarationParseError": false,
@@ -395,9 +395,6 @@
       "sharedRootDependencies": [],
       "privateEngineHeaders": [
         "Audio/MusicManager.h",
-        "Engine/AI/AISystem.h",
-        "Engine/AI/BehaviorTree.h",
-        "Engine/AI/NavMesh.h",
         "Engine/Destruction/DestructionSystem.h",
         "Engine/ECS/Components.h",
         "Engine/ECS/Components/AIComponents.h",
@@ -412,7 +409,7 @@
         "Utils/LogMacros.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 17,
+      "privateEngineHeaderCount": 14,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
       ]
@@ -428,7 +425,7 @@
       "cmakeDeclarationParseError": false,
       "assetsDirectory": "GameModules/SparkGameVisualScript/Assets",
       "assetManifest": "GameModules/SparkGameVisualScript/Assets/manifest.json",
-      "assetFileCount": 5,
+      "assetFileCount": 10,
       "profileApplicability": {
         "stable-v1": "outside"
       },

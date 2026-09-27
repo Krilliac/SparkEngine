@@ -2587,7 +2587,7 @@
     },
     {
       "surface": "README.md",
-      "text": "64 node palette entries",
+      "text": "69 node palette entries",
       "classification": "metric",
       "owner": "unassigned",
       "metricId": "visualScript.nodes"
@@ -2629,7 +2629,7 @@
     },
     {
       "surface": "docs/plans/FEATURE_ROADMAP.md",
-      "text": "64 node palette entries",
+      "text": "69 node palette entries",
       "classification": "metric",
       "owner": "unassigned",
       "metricId": "visualScript.nodes"

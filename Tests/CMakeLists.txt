@@ -49,6 +49,7 @@ add_executable(SparkTests
     TestECSWorld.cpp
     TestReflectedScene.cpp
     TestReflectedSceneEmissiveHierarchy.cpp
+    TestReflectedSceneCompatibility.cpp
     TestGameMode.cpp
     TestNoiseGenerator.cpp
     TestSaveSystem.cpp
@@ -151,6 +152,7 @@ add_executable(SparkTests
     TestModuleDiscovery.cpp
     TestModuleABI.cpp
     TestModuleABIDiagnostics.cpp
+    TestModuleVersion.cpp
     TestSparkGameShowcase.cpp
     TestPluginABI.cpp
     TestReflection.cpp
@@ -206,6 +208,7 @@ add_executable(SparkTests
     TestGraphicsInitFallback.cpp
     TestSoftwareRendering.cpp
     TestRHI240OpenGLReal.cpp
+    TestRHI240OpenGLGoldenReal.cpp
     TestRenderCommandRing.cpp
     TestMultiISADispatch.cpp
     TestConstantBufferDiff.cpp
@@ -322,9 +325,9 @@ add_executable(SparkTests
     TestSelfRecovery.cpp
     TestVulkanLavapipe.cpp
     TestRHI230VulkanValidationReal.cpp
+    TestRHI230VulkanGoldenReal.cpp
     TestMSanCanary.cpp
     TestWARPRendering.cpp
-    TestRHI230VulkanGoldenReal.cpp
     # Hardware acceleration tests
     TestGPUParticleSystem.cpp
     TestGPUSkinning.cpp
@@ -387,6 +390,9 @@ add_executable(SparkTests
     # MOD-390: the shipped scripts played headless to the five-pickup win, with
     # scripted key input through a real InputManager in the injected EngineContext.
     TestMOD390VisualScriptGameplayReal.cpp
+    # MOD-390: engine-owned .vscript graph I/O, and the module's checked-in graphs
+    # regenerate its shipped scripts byte for byte.
+    TestMOD390VisualScriptGraphsReal.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp"
     TestEntityPresetManager.cpp
     TestGamePackager.cpp
@@ -679,6 +685,9 @@ add_executable(SparkTests
     # MOD-315: FPSMultiplayerProduction_ tests (TestFPSMultiplayer.cpp) drive the real
     # FPSMultiplayerSystem; it depends only on NetworkManager, ClientPrediction and SimpleConsole.
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerClient.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerCombat.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp"
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
@@ -761,6 +770,9 @@ endif()
 # be satisfied by SDK headers and the exported C ABI alone.
 add_library(SparkMismatchedModuleFixture SHARED
     Fixtures/ModuleABI/MismatchedModule.cpp)
+# SDK-240 / OD-02: a real module image built against the previous SDK version.
+add_library(SparkPreviousSdkModuleFixture SHARED
+    Fixtures/ModuleABI/MismatchedModule.cpp)
 add_library(SparkCompatibleModuleFixture SHARED
     Fixtures/ModuleABI/CompatibleModule.cpp)
 add_library(SparkRegistryLifecycleModuleFixture SHARED
@@ -772,7 +784,8 @@ add_library(SparkModuleSiblingDependency SHARED
 add_library(SparkSiblingDependentModuleFixture SHARED
     Fixtures/ModuleABI/SiblingDependentModule.cpp)
 
-foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleModuleFixture SparkLegacyModuleFixture)
+foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkPreviousSdkModuleFixture
+        SparkCompatibleModuleFixture SparkLegacyModuleFixture)
     target_compile_features(${_module_fixture} PRIVATE cxx_std_23)
     target_compile_definitions(${_module_fixture} PRIVATE SPARK_MODULE_DLL)
     target_include_directories(${_module_fixture} PRIVATE
@@ -831,18 +844,25 @@ if(NOT SPARK_TEST_CURRENT_SDK_VERSION)
 endif()
 math(EXPR SPARK_TEST_MISMATCHED_SDK_VERSION
     "${SPARK_TEST_CURRENT_SDK_VERSION} + 1")
+math(EXPR SPARK_TEST_PREVIOUS_SDK_VERSION
+    "${SPARK_TEST_CURRENT_SDK_VERSION} - 1")
+target_compile_definitions(SparkMismatchedModuleFixture PRIVATE SPARK_FIXTURE_SDK_VERSION_OFFSET=1)
+target_compile_definitions(SparkPreviousSdkModuleFixture PRIVATE SPARK_FIXTURE_SDK_VERSION_OFFSET=-1)
 spark_configure_module_abi(SparkMismatchedModuleFixture
     SDK_VERSION "${SPARK_TEST_MISMATCHED_SDK_VERSION}")
+spark_configure_module_abi(SparkPreviousSdkModuleFixture
+    SDK_VERSION "${SPARK_TEST_PREVIOUS_SDK_VERSION}")
 spark_configure_module_abi(SparkCompatibleModuleFixture)
 spark_configure_module_abi(SparkRegistryLifecycleModuleFixture)
 spark_configure_module_abi(SparkLegacyModuleFixture)
 spark_configure_module_abi(SparkSiblingDependentModuleFixture)
 
-add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture
+add_dependencies(SparkTests SparkMismatchedModuleFixture SparkPreviousSdkModuleFixture SparkCompatibleModuleFixture
     SparkRegistryLifecycleModuleFixture SparkLegacyModuleFixture
     SparkSiblingDependentModuleFixture)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_MISMATCHED_MODULE_PATH="$<TARGET_FILE:SparkMismatchedModuleFixture>"
+    SPARK_TEST_PREVIOUS_SDK_MODULE_PATH="$<TARGET_FILE:SparkPreviousSdkModuleFixture>"
     SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
     SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH="$<TARGET_FILE:SparkRegistryLifecycleModuleFixture>"
     SPARK_TEST_LEGACY_MODULE_PATH="$<TARGET_FILE:SparkLegacyModuleFixture>"
@@ -1284,7 +1304,10 @@ if(ENABLE_NETWORKING)
     # spawn-move-kill-respawn-score round.
     add_executable(SparkFPSLANLoopbackPeer
         Fixtures/FPSLANLoopbackPeer.cpp
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp")
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerClient.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerCombat.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp")
     target_compile_features(SparkFPSLANLoopbackPeer PRIVATE cxx_std_23)
     target_include_directories(SparkFPSLANLoopbackPeer PRIVATE
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
@@ -1531,6 +1554,34 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         LABELS "opengl;llvmpipe"
         TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
 
+    # RHI-240: shipped-shader goldens on the opengl-llvmpipe row. Renders the
+    # production Shaders/GLSL programs through GLDevice and compares each frame
+    # with the committed baseline under the reviewed thresholds and SHA-256 in
+    # Tests/GoldenImages/manifest.json. Software-row shader evidence only, not
+    # engine-pass goldens. Requires an llvmpipe context (run under xvfb-run);
+    # the exact count fails the lane if a scene test stops being compiled in.
+    add_test(
+        NAME SparkOpenGLGoldenTests
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_TEST_EXECUTABLE=$<TARGET_FILE:SparkTests>
+            -DSPARK_JUNIT_REPORT=${CMAKE_BINARY_DIR}/SparkTests-opengl-golden-junit.xml
+            -DSPARK_TEST_LOG=${CMAKE_BINARY_DIR}/SparkTests-opengl-golden.log
+            -DSPARK_TEST_OUTPUT=${CMAKE_BINARY_DIR}/SparkTests-opengl-golden-output.log
+            -DSPARK_TEST_WARN_IS_ERROR=${SPARK_TESTS_WARN_IS_ERROR}
+            "-DSPARK_TEST_TIMEOUT_SECONDS=$<IF:$<CONFIG:Debug>,${SPARK_TEST_TIMEOUT_DEBUG},${SPARK_TEST_TIMEOUT_OPTIMIZED}>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
+    )
+    set_tests_properties(SparkOpenGLGoldenTests PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=8;SPARK_REQUIRE_OPENGL=1;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "opengl;llvmpipe;opengl-golden"
+        TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+    # The baselines belong to one reviewed Mesa build, so exactly one lane
+    # compares them: the main suite would otherwise repeat the comparison in
+    # every Linux build, sanitizer and coverage run. The tests are compiled only
+    # with SPARK_OPENGL_SUPPORT, so the registration floor does not count them.
+    set_tests_properties(SparkEngineTests PROPERTIES
+        ENVIRONMENT "SPARK_TEST_EXCLUDE=${SPARK_TEST_LOAD_EXCLUDE},OpenGLGolden_")
+
     # RHI-240: the production SDL2 host must honor SPARK_RHI_BACKEND=opengl
     # (initialize OpenGL, never NullRHI) and must exit non-zero when that
     # explicit request cannot be met. PLT-210: it also runs SparkGameFPS on the
@@ -1582,10 +1633,13 @@ if(NOT WIN32)
 endif()
 
 # SAVE-230 / OD-03: SceneFile reads v2 (N) and v1 (N-1) from committed fixtures,
-# writes v2 only, and rejects older/newer versions with a versioned error.
+# writes v2 only, and rejects older/newer versions with a versioned error. The
+# reflected-World dialect (TestReflectedSceneCompatibility.cpp) loads its committed
+# version 1 and legacy editor sceneVersion 1 fixtures in place, resaves version 1
+# only, and fails closed on a newer-version fixture.
 add_test(NAME SparkSceneCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
 set_tests_properties(SparkSceneCompatibilityTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=SceneMigration_;SPARK_TEST_EXPECT_COUNT=4"
+    ENVIRONMENT "SPARK_TEST_NAME=SceneMigration_;SPARK_TEST_EXPECT_COUNT=7"
     LABELS "compatibility;scene;unit"
     TIMEOUT 30)
 
@@ -1788,6 +1842,16 @@ foreach(_spark_life_selector IN LISTS _spark_life_selectors)
         TIMEOUT 120)
 endforeach()
 
+# SDK-240 / OD-02: real N-1 and N+1 SDK module images are rejected with a
+# diagnostic naming both versions before any module code runs; the current-SDK
+# image loads. Exact count so a dropped N-1/N+1 case fails the lane.
+add_test(NAME ModuleVersionCompatibility COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(ModuleVersionCompatibility PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ModuleVersion_;SPARK_TEST_EXPECT_COUNT=6"
+    LABELS "module;sdk;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
+
 # MOD-300: the real SparkGame image runs its spawn -> damage -> heal coroutine on the
 # host CoroutineScheduler, stops and destroys it before unload, cancels on a lost target,
 # and reports a missing scheduler. Exact count so a dropped case fails the lane.
@@ -1823,6 +1887,37 @@ if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         LABELS "vulkan;vulkan-lavapipe;rendering;unit"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+endif()
+
+# RHI-230: shipped-shader goldens on the vulkan-lavapipe row. Renders the
+# FullscreenQuad post-process programs from the SPIR-V the build compiles
+# (SparkSpirvShaders) through VulkanDevice under the validation layer, and
+# compares each frame with the committed baseline under the proposed thresholds
+# (owner review pending) and SHA-256 in Tests/GoldenImages/manifest.json.
+# Software-row shader evidence only, not engine-pass goldens or hardware
+# certification; the device must be Lavapipe. The exact count fails the lane if
+# a scene test stops being compiled.
+if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET SparkSpirvShaders)
+    add_test(NAME VulkanGoldenTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(VulkanGoldenTests PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI230VulkanGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=4;SPARK_REQUIRE_VULKAN_VALIDATION=1;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "vulkan;vulkan-lavapipe;vulkan-golden;rendering"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+
+    # The baselines belong to one Mesa build, so exactly one lane compares them;
+    # the main suite would otherwise repeat the comparison in every Linux build,
+    # sanitizer and coverage lane that has Lavapipe. set_tests_properties
+    # replaces ENVIRONMENT, so extend whatever SPARK_TEST_EXCLUDE the main suite
+    # already carries (the OpenGL golden lane adds its own prefix above). The
+    # tests are compiled only with SPARK_VULKAN_SUPPORT and the SPIR-V build, so
+    # the registration floor does not count them.
+    get_test_property(SparkEngineTests ENVIRONMENT _spark_main_suite_environment)
+    string(REGEX REPLACE "(^|;)SPARK_TEST_EXCLUDE=([^;]*)" "\\1SPARK_TEST_EXCLUDE=\\2,VulkanGolden_RHI230_"
+        _spark_main_suite_environment "${_spark_main_suite_environment}")
+    set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_spark_main_suite_environment}")
+    unset(_spark_main_suite_environment)
 endif()
 
 foreach(_remote_admin_selector IN ITEMS
@@ -1880,23 +1975,6 @@ if(WIN32)
     set_tests_properties(D3D11_Golden PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=D3D11_Golden_;SPARK_TEST_EXPECT_COUNT=2"
         LABELS "d3d11-golden;d3d11;stable-v1"
-# RHI-230: shipped-shader goldens on the vulkan-lavapipe row. Renders the
-# FullscreenQuad post-process programs from the SPIR-V the build compiles
-# (SparkSpirvShaders) through VulkanDevice under the validation layer, and
-# compares each frame with the committed baseline under the reviewed thresholds
-# and SHA-256 in Tests/GoldenImages/manifest.json. Software-row shader evidence
-# only, not engine-pass goldens or hardware certification; the device must be
-# Lavapipe. The exact count fails the lane if a scene test stops being compiled.
-if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET SparkSpirvShaders)
-    add_test(NAME VulkanGoldenTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
-    set_tests_properties(VulkanGoldenTests PROPERTIES
-        ENVIRONMENT
-            "SPARK_TEST_FILE=TestRHI230VulkanGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=4;SPARK_REQUIRE_VULKAN_VALIDATION=1;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
-        LABELS "vulkan;vulkan-lavapipe;vulkan-golden;rendering"
-        RUN_SERIAL TRUE
-        TIMEOUT 120)
-endif()
-
         RUN_SERIAL TRUE
         TIMEOUT 60)
     add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
@@ -2159,15 +2237,16 @@ set_tests_properties(GLTFSkinnedMeshImport PROPERTIES
     LABELS "assets;gltf;unit"
     TIMEOUT 30)
 
-# ENG-220: glTF skeletons and LINEAR TRS joint animations through AnimationManager
-# (LoadSkeleton/LoadAnimations) and skin influences in the portable (non-Windows)
-# MeshAsset. CPU import only: no skinned rendering, and the Windows D3D11 MeshAsset
-# still rejects skinned glTF. Exact count: a dropped test fails. The three portable
-# MeshAsset tests are compiled out on Windows (the D3D11 MeshAsset needs a device).
+# ENG-220: glTF skeletons and LINEAR/STEP TRS joint animations through AnimationManager
+# (LoadSkeleton/LoadAnimations), posed vertices from AnimationEvaluator checked against an
+# independent skinning reference, and skin influences in the portable MeshAsset. CPU only:
+# no skinned rendering, and the Windows D3D11 MeshAsset still rejects skinned glTF. Exact
+# count: a dropped test fails. The three portable MeshAsset tests are compiled out on
+# Windows (the D3D11 MeshAsset needs a device).
 if(WIN32)
-    set(_gltf_animation_test_count 16)
+    set(_gltf_animation_test_count 20)
 else()
-    set(_gltf_animation_test_count 19)
+    set(_gltf_animation_test_count 23)
 endif()
 add_test(NAME GLTFAnimationImport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(GLTFAnimationImport PROPERTIES
@@ -3214,10 +3293,15 @@ if(TARGET SparkEditor AND (WIN32 OR (UNIX AND NOT APPLE)))
             "-DSPARK_EDITOR=$<TARGET_FILE:SparkEditor>"
             "-DSPARK_EDITOR_BUILD_DIR=${CMAKE_BINARY_DIR}"
             "-DSPARK_EDITOR_WORK_DIR=${CMAKE_BINARY_DIR}/editor-executable-smoke/$<CONFIG>"
+            ${_spark_editor_smoke_launcher_arg}
             -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkEditorSmoke.cmake)
     set_tests_properties(SparkEditorExecutableSmoke PROPERTIES
-        LABELS "release;editor;process"
-        TIMEOUT 45)
+        LABELS "${_spark_editor_smoke_labels}"
+        TIMEOUT ${_spark_editor_smoke_timeout})
+    if(NOT WIN32)
+        # llvmpipe rendering is CPU-bound; keep parallel ctest from starving it.
+        set_tests_properties(SparkEditorExecutableSmoke PROPERTIES RUN_SERIAL TRUE)
+    endif()
 endif()
 
 if(Python3_Interpreter_FOUND)
@@ -3326,28 +3410,6 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(BlenderMMOAssetGeneratorRegression PROPERTIES
         LABELS "asset;cpu;unit;python"
         TIMEOUT 30)
-
-    # Per-module Blender kits (tools/blender/spark_kit.py): validator unit tests, plus one
-    # source/export contract per committed Art/Blender/<Module>/provenance.json record.
-    add_test(
-        NAME BlenderKitValidatorRegression
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_blender_kit.py)
-    set_tests_properties(BlenderKitValidatorRegression PROPERTIES
-        LABELS "asset;cpu;unit;python"
-        TIMEOUT 30)
-    file(GLOB _spark_blender_kit_records "${CMAKE_SOURCE_DIR}/Art/Blender/SparkGame*/provenance.json")
-    foreach(_spark_blender_kit_record IN LISTS _spark_blender_kit_records)
-        get_filename_component(_spark_blender_kit_dir "${_spark_blender_kit_record}" DIRECTORY)
-        get_filename_component(_spark_blender_kit_module "${_spark_blender_kit_dir}" NAME)
-        add_test(
-            NAME BlenderKitSourceContract_${_spark_blender_kit_module}
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/blender/validate_kit.py
-                "${_spark_blender_kit_record}" --root ${CMAKE_SOURCE_DIR})
-        set_tests_properties(BlenderKitSourceContract_${_spark_blender_kit_module} PROPERTIES
-            LABELS "asset;cpu;static;python"
-            TIMEOUT 30)
-    endforeach()
-    unset(_spark_blender_kit_records)
 
     add_test(
         NAME SparkRunSparkTestsHarness

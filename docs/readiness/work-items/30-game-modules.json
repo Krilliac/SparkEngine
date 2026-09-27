@@ -775,7 +775,7 @@
             "Tests/Fixtures/FPSLANLoopbackScenario.h",
             "Tests/CMakeLists.txt"
           ],
-          "note": "FPSLAN_ThreeProcessLoopbackConvergence runs one server and two independent client processes over loopback UDP through a scripted spawn-move-kill-respawn-score round; spawns, respawn, positions, health and scores converge with the server, and quitting clients leave the server. Local pass only; constrained LAN and the encrypted transport are not covered."
+          "note": "FPSLAN_ThreeProcessLoopbackConvergence runs one server and two client processes over loopback UDP through a spawn-move-kill-respawn-score round; spawns, respawn, positions, health and scores converge with server, and quitting clients leave. Converged state is FPSMultiplayerSystem's; the rendered game reads none of it back (see risks). Local pass only; no constrained LAN or encrypted transport."
         },
         {
           "criterionDigest": "sha256:5bc1ee8cc5b7",
@@ -791,7 +791,7 @@
           "evidence": [
             "Tests/TestNET100TransportReal.cpp"
           ],
-          "note": "The FPS LAN path is not bound to the production secure transport and has no hostile-input tests of its own."
+          "note": "FPS-level hostile-input datagram tests exist (FPSMultiplayerProduction_NetworkPath*: replayed, non-finite, zero-sequence, truncated and flooded PlayerInput on the server; malformed, non-finite, stale and oversized snapshot batches on the client). The criterion stays unmet because the FPS LAN path is not bound to the production secure transport."
         },
         {
           "criterionDigest": "sha256:17033c17c6d7",
@@ -827,7 +827,8 @@
         "FPS LAN remains experimental until this evidence passes"
       ],
       "risks": [
-        "Duplicating MMOFPS networking instead of shared primitives"
+        "Duplicating MMOFPS networking instead of shared primitives",
+        "The FPS Game does not consume FPSMultiplayerSystem state: the local Player is not driven or reconciled from the predicted state, remote players have no rendered proxies, and server health, death and respawn are not applied to the local Player"
       ],
       "outOfScope": [
         "Public service hosting",
@@ -1517,7 +1518,7 @@
             "GameModules/SparkGameRTS/Source/Navigation/RTSGridPathfinder.cpp",
             "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
           ],
-          "note": "The real skirmish simulation runs commands, economy, fog and AI waves to victory. Move and attack-move orders route around structures via deterministic grid A*; routes are hashed and saved. RTSSave tests use SaveMatch/LoadMatch on the real SaveSystem with per-tick hash equality."
+          "note": "The real skirmish simulation runs commands, economy, fog and AI waves to victory. Move and attack-move orders route around structures via deterministic grid A*; routes are hashed and saved. RTSSave tests use SaveMatch/LoadMatch on the real SaveSystem with per-tick hash equality. The engine bridge registers no unattached behavior trees; the opponent runs only in the fixed-step tick."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",
@@ -1549,7 +1550,7 @@
         "Until done: RTS prototype/reference module"
       ],
       "risks": [
-        "AI tree registered but not attached to world entities"
+        "The Swarm opponent is decided inside the fixed-step tick, not by engine AIComponent entities; RTSEngineSystems registers no behavior trees (RTSSkirmish_EngineBridgeRegistersNoUnattachedBehaviorTrees)"
       ],
       "outOfScope": [
         "Online multiplayer unless explicitly declared"
@@ -1635,11 +1636,14 @@
         },
         {
           "criterionDigest": "sha256:6a35b45838fc",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestMOD380RacingCompleteRaceReal.cpp"
+            "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp",
+            "GameModules/SparkGameRacing/Source/Race/RacingRaceManager.cpp",
+            "Tests/TestMOD380RacingCompleteRaceReal.cpp",
+            "GameModules/SparkGameRacing/README.md"
           ],
-          "note": "Restart after results is tested in memory only. No results or ghost persistence test exists."
+          "note": "A finished race saved via race_save on the real SaveSystem loads bit-identical (placings, finish, lap and best-lap times) into a restarted module, holds while it runs, and restarts into a completable race. race_load validates racing state before the World restore; edited best laps, placings or finishes are refused unchanged. Ghost state not declared (OD-15). Local runs only; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",
@@ -1697,7 +1701,7 @@
       "wave": 4,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. Open: the shipped scripts have no checked-in .vscript graph sources, applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, and collision dispatch has no caller. VisualScriptGameplay_* (TestMOD390VisualScriptGameplayReal.cpp) plays the shipped generated scripts headless to the five-pickup win, and covers enemy damage and the health pickup, with scripted keys read through the real InputManager (script getKey/getKeyDown returned false off Windows until the key-name mapping was made platform-independent).",
+      "rationale": "Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. The five shipped scripts are compiled from graphs checked in under Assets/Graphs (*.vscript, read and written by the engine's VisualScriptGraphIO), and VisualScriptGraphs_* (TestMOD390VisualScriptGraphsReal.cpp) fails unless each graph regenerates its shipped .as byte for byte. Open: applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, and collision dispatch has no caller. VisualScriptGameplay_* (TestMOD390VisualScriptGameplayReal.cpp) plays the shipped generated scripts headless to the five-pickup win, and covers enemy damage and the health pickup, with scripted keys read through the real InputManager (script getKey/getKeyDown returned false off Windows until the key-name mapping was made platform-independent).",
       "dependencies": [
         "MOD-290",
         "ENG-200"
@@ -1748,9 +1752,16 @@
         },
         {
           "criterionDigest": "sha256:78498996b11b",
-          "state": "unmet",
-          "evidence": [],
-          "note": "VisualScriptGameplay_ScriptedPlayerCollectsAllPickupsAndWins runs the shipped scripts headless to the win, but they are hand-maintained .as files: no .vscript graph sources exist, so no graph-authored player has done it."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Engine/Scripting/VisualScriptGraphIO.cpp",
+            "SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp",
+            "GameModules/SparkGameVisualScript/Assets/Graphs/PlayerController.vscript",
+            "GameModules/SparkGameVisualScript/Assets/Graphs/GameManager.vscript",
+            "Tests/TestMOD390VisualScriptGraphsReal.cpp",
+            "Tests/TestMOD390VisualScriptGameplayReal.cpp"
+          ],
+          "note": "The shipped scripts are now compiled from the checked-in Assets/Graphs/*.vscript graphs: VisualScriptGraphs_CheckedInGraphsRegenerateShippedScripts requires each compiled graph to equal its shipped .as byte for byte, and VisualScriptGameplay_ScriptedPlayerCollectsAllPickupsAndWins plays those scripts headless to the five-pickup win. Local runs only; no exact-commit module-VisualScript CI run yet."
         },
         {
           "criterionDigest": "sha256:4c73ad5bea74",
@@ -1770,7 +1781,8 @@
       ],
       "testSelectors": [
         "VisualScriptGameplay_*",
-        "VisualScriptDiagnostics_*"
+        "VisualScriptDiagnostics_*",
+        "VisualScriptGraphs_*"
       ],
       "requiredCiJobs": [
         "module-VisualScript"
