@@ -77,7 +77,9 @@ namespace
             if (!invocationLog)
                 return 94;
         }
-        if (command == "--version" || command == "fetch" || command == "-S" || command == "status")
+        if (command == "fetch")
+            return EnvironmentFlagSet("SPARK_FAKE_FETCH_FAIL") ? 44 : 0;
+        if (command == "--version" || command == "-S" || command == "status")
             return 0;
         if (command == "clone")
         {
@@ -406,6 +408,44 @@ namespace
                           name + ": the interrupted update was not reported");
         failures += Check(log.find("rebuilt verified-old") != std::string::npos,
                           name + ": rollback did not rebuild the recorded commit\n" + log);
+
+        std::error_code error;
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    // A failed fetch leaves HEAD where it was; rollback still restores and
+    // rebuilds the verified commit so the reported install is that build.
+    int RunUpdateFetchFailureRollbackTest(const fs::path& executable)
+    {
+        const std::string name = "update fetch failure";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / "install";
+        failures += CreateFakeCheckout(destination, name);
+        failures += SaveInstallState(destination, kFakeHeadCommit, name);
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+        SetEnvironment("SPARK_FAKE_FETCH_FAIL", "1");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+        const int result = SparkInstaller::Installer::Run(context);
+        SetEnvironment("SPARK_FAKE_FETCH_FAIL", "");
+
+        failures +=
+            Check(result == 5, name + ": expected fetch failure exit 5, got " + std::to_string(result) + "\n" + log);
+        failures += Check(ReadFirstLine(destination / "fake-git-last-checkout") == kFakeHeadCommit,
+                          name + ": rollback did not restore the verified commit");
+        failures += Check(ReadFirstLine(destination / "fake-cmake-build-count") == "1",
+                          name + ": rollback did not rebuild the verified commit exactly once");
+        SparkInstaller::InstallState loaded;
+        failures +=
+            Check(SparkInstaller::InstallState::Load(destination.string(), loaded) && loaded.commit == kFakeHeadCommit,
+                  name + ": a failed fetch changed the recorded install");
+        failures += Check(log.find("Done. Engine built at:") == std::string::npos,
+                          name + ": installer reported completion after a failed fetch");
 
         std::error_code error;
         fs::remove_all(root, error);
@@ -766,6 +806,7 @@ int main(int argc, char* argv[])
     failures += RunUpdateRollbackRebuildFailureTest(executable);
     failures += RunUpdateRollbackRebuildTest(executable);
     failures += RunInterruptedUpdateRollbackTargetTest(executable);
+    failures += RunUpdateFetchFailureRollbackTest(executable);
     failures += RunUpdateClearsRepairMarkerTest(executable);
     failures += RunPostBuildHeadCommitFailureTest(executable);
     failures += RunPreflightTests(executable);
