@@ -3247,6 +3247,15 @@ set_tests_properties(TestSourceCensus_ProfileSelectors PROPERTIES
     LABELS "module;readiness;unit;python"
     TIMEOUT 180)
 
+# RDY-010: the census mirror ratchet (--check) runs locally, not only in hosted CI.
+add_test(
+    NAME TestSourceCensus_MirrorBaseline
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_source_census_baseline.py)
+set_tests_properties(TestSourceCensus_MirrorBaseline PROPERTIES
+    LABELS "readiness;unit;python"
+    TIMEOUT 120)
+
 # MOD-290: every discovered module's GameModules/<Name>/module.json must name
 # existing source, assets, registered tests with live TEST prefixes, a README,
 # and the parity N/A cells it declares; the mutations must each fail by name.

@@ -128,7 +128,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestConsoleVariables.cpp",
         "Tests/TestConstantBufferDiff.cpp",
         "Tests/TestContainerUtils.cpp",
-        "Tests/TestCoroutineScheduler.cpp",
         "Tests/TestCoverSystem.cpp",
         "Tests/TestCrossSystemIntegration.cpp",
         "Tests/TestDayNightCycle.cpp",
