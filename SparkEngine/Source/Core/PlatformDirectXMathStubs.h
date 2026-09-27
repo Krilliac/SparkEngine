@@ -662,9 +662,28 @@ namespace DirectX
         return {q.x * inv, q.y * inv, q.z * inv, q.w * inv};
     }
 
+    /// Spherical interpolation with DirectXMath's XMQuaternionSlerp semantics: it takes the shorter
+    /// arc (negating b's weight when the dot product is negative) and falls back to linear weights
+    /// only when the quaternions are nearly parallel, so unit inputs give (nearly) unit results.
     inline XMVECTOR XMQuaternionSlerp(XMVECTOR a, XMVECTOR b, float t)
     {
-        return XMVectorLerp(a, b, t); // Simplified linear interpolation
+        constexpr float kOneMinusEpsilon = 1.0f - 0.00001f;
+        float cosOmega = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+        const float sign = cosOmega < 0.0f ? -1.0f : 1.0f;
+        cosOmega *= sign;
+
+        float weightA = 1.0f - t;
+        float weightB = t;
+        if (cosOmega < kOneMinusEpsilon)
+        {
+            const float sinOmega = sqrtf(1.0f - cosOmega * cosOmega);
+            const float omega = atan2f(sinOmega, cosOmega);
+            weightA = sinf((1.0f - t) * omega) / sinOmega;
+            weightB = sinf(t * omega) / sinOmega;
+        }
+        weightB *= sign;
+        return {a.x * weightA + b.x * weightB, a.y * weightA + b.y * weightB, a.z * weightA + b.z * weightB,
+                a.w * weightA + b.w * weightB};
     }
 
     inline XMMATRIX XMMatrixRotationQuaternion(XMVECTOR q)

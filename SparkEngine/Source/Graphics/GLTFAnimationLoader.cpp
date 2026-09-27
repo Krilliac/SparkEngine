@@ -1,6 +1,6 @@
 /**
  * @file GLTFAnimationLoader.cpp
- * @brief Validated glTF 2.0 skin animation import (LINEAR TRS channels on skin joints) via cgltf.
+ * @brief Validated glTF 2.0 skin animation import (LINEAR and STEP TRS channels on skin joints) via cgltf.
  */
 
 #include "GLTFAnimationLoader.h"
@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <new>
 #include <unordered_map>
 #include <unordered_set>
@@ -111,6 +112,39 @@ namespace Spark::Graphics::Detail
                 return false;
             }
             return true;
+        }
+
+        /**
+         * Rewrite STEP keys as equivalent LINEAR keys: each value is held by an extra key one float
+         * step before the next key time, so linear sampling between two equal keys returns the held
+         * value (to rounding) at every representable time before the next key, and the next value from
+         * that key on. No float lies between the hold key and the next key, so a value blended between
+         * two different keys can never be sampled.
+         */
+        void ExpandStepKeys(std::vector<float>& times, std::vector<float>& values, size_t components)
+        {
+            std::vector<float> expandedTimes;
+            std::vector<float> expandedValues;
+            expandedTimes.reserve(times.size() * 2);
+            expandedValues.reserve(values.size() * 2);
+            for (size_t k = 0; k < times.size(); ++k)
+            {
+                if (k > 0)
+                {
+                    const float holdTime = std::nextafter(times[k], -std::numeric_limits<float>::infinity());
+                    if (holdTime > expandedTimes.back())
+                    {
+                        expandedTimes.push_back(holdTime);
+                        expandedValues.insert(expandedValues.end(), values.begin() + (k - 1) * components,
+                                              values.begin() + k * components);
+                    }
+                }
+                expandedTimes.push_back(times[k]);
+                expandedValues.insert(expandedValues.end(), values.begin() + k * components,
+                                      values.begin() + (k + 1) * components);
+            }
+            times = std::move(expandedTimes);
+            values = std::move(expandedValues);
         }
 
         bool AppendTrack(const std::vector<float>& times, const std::vector<float>& values,
@@ -215,9 +249,10 @@ namespace Spark::Graphics::Detail
                 error = "has no sampler input/output";
                 return false;
             }
-            if (sampler->interpolation != cgltf_interpolation_type_linear)
+            if (sampler->interpolation != cgltf_interpolation_type_linear &&
+                sampler->interpolation != cgltf_interpolation_type_step)
             {
-                error = "uses STEP or CUBICSPLINE interpolation; only LINEAR is supported";
+                error = "uses CUBICSPLINE interpolation; only LINEAR and STEP are supported";
                 return false;
             }
 
@@ -227,6 +262,10 @@ namespace Spark::Graphics::Detail
                 !ReadKeyValues(*sampler->output, source.target_path, times.size(), values, error))
             {
                 return false;
+            }
+            if (sampler->interpolation == cgltf_interpolation_type_step)
+            {
+                ExpandStepKeys(times, values, source.target_path == cgltf_animation_path_type_rotation ? 4 : 3);
             }
 
             auto [slot, inserted] = channelOfBone.try_emplace(boneIndex, clip.channels.size());

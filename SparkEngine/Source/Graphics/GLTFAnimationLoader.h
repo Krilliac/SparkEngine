@@ -31,8 +31,16 @@ namespace Spark::Graphics::Detail
      * or scale path that the file does not animate is filled with the joint node's rest value.
      * Rotation keys are renormalized.
      *
+     * LINEAR samplers become keys sampled with lerp (translation, scale) and shortest-arc slerp
+     * (rotation). STEP samplers are stored as LINEAR keys with an extra hold key one float step
+     * before each following key, so the engine evaluator returns the previous key's value until the
+     * next key time, as glTF STEP requires. Values keep glTF's right-handed, Y-up coordinates and
+     * (x, y, z, w) quaternion order unchanged, in the same row-vector matrix layout the skinned
+     * mesh importer documents on GLTFSkinnedMeshData::skeleton, so imported clips, bind poses and
+     * inverse bind matrices compose without any axis conversion.
+     *
      * Rejected with a diagnostic: channels that target a non-joint node or the morph "weights"
-     * path; STEP and CUBICSPLINE samplers (only LINEAR is supported); animated joints that use a
+     * path; CUBICSPLINE samplers (only LINEAR and STEP are supported); animated joints that use a
      * matrix instead of TRS; an animated root joint whose non-joint ancestors are not the identity
      * (the root's bind pose folds those ancestors in); input times that are not finite,
      * non-negative and strictly increasing; output counts that differ from the input count;

@@ -354,7 +354,7 @@ namespace Spark::Animation
      *       `GetClip()` / `GetSkeleton()` on demand each frame to drive
      *       per-entity playback. Callers provide engine `.skel` / `.sanim`
      *       files, or a skinned `.gltf` / `.glb` (its one skin and its LINEAR
-     *       TRS joint animations), through `LoadSkeleton()` /
+     *       or STEP TRS joint animations), through `LoadSkeleton()` /
      *       `LoadAnimations()` and explicitly `RegisterClip()` as needed; mesh
      *       importers (MeshAsset) do not populate this registry themselves,
      *       and FBX skeletons and clips are not loaded here. The
