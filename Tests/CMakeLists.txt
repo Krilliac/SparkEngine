@@ -2729,9 +2729,15 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         get_filename_component(_spark_mod310_cmake_dist "${_spark_mod310_cmake_bin}" DIRECTORY)
         get_filename_component(_spark_mod310_cmake_bundle "${_spark_mod310_cmake_dist}" DIRECTORY)
         set(_spark_mod310_bundled_ninja "${_spark_mod310_cmake_bundle}/Ninja/ninja.exe")
+        # The Visual Studio generator's instance always ships a Ninja next to its CMake.
+        set(_spark_mod310_vs_ninja
+            "${CMAKE_GENERATOR_INSTANCE}/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe")
         if(EXISTS "${_spark_mod310_bundled_ninja}" AND
            NOT IS_DIRECTORY "${_spark_mod310_bundled_ninja}")
             set(_spark_mod310_ninja "${_spark_mod310_bundled_ninja}")
+        elseif(CMAKE_GENERATOR MATCHES "Visual Studio" AND CMAKE_GENERATOR_INSTANCE AND
+               EXISTS "${_spark_mod310_vs_ninja}" AND NOT IS_DIRECTORY "${_spark_mod310_vs_ninja}")
+            set(_spark_mod310_ninja "${_spark_mod310_vs_ninja}")
         else()
             find_program(_spark_mod310_ninja NAMES ninja ninja.exe NO_CACHE)
             if(_spark_mod310_ninja AND

@@ -2536,17 +2536,6 @@
       ]
     },
     {
-      "source_file": "GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp",
-      "classification": "delegating-call-site",
-      "justification": "The EntityStateUpdate handler copies the packet payload into a NetBuffer and calls NetworkManager::DeserializeEntityState, which lives in the NET-100 networking subtree.",
-      "detected_by": [
-        "deserialize"
-      ],
-      "delegates_to": [
-        "SparkEngine/Source/Engine/Networking"
-      ]
-    },
-    {
       "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.cpp",
       "classification": "not-a-parser",
       "justification": "Beacon sender only: fills and sends the TF_LanBeacon struct (out.magic = kTFLanBeaconMagic). Received beacons are decoded in the inventoried TFLanDiscoveryScan.cpp.",
