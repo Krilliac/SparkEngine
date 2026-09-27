@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""GOV-400: public project wording stays inside the declared license classification.
+"""Public wording guards from tools/site-data/validate.py.
 
-This suite exercises ``legal_public_wording_errors`` from tools/site-data/validate.py
-directly against the live tree. It never constructs the full contract Validator, so
+GOV-400 (PublicWording_LegalSurfaces): project wording stays inside the declared
+license classification (``legal_public_wording_errors``).
+OD-12 (PublicWording_DeferredPlatforms, PLT-230/240/250): mobile, OpenXR and
+console stay unsupported in the contract and in public wording
+(``deferred_platform_support_errors``, ``deferred_platform_claim_errors``).
+
+Each CTest selects its classes by name and checks the live tree directly. It never constructs the full contract Validator, so
 it needs neither git nor a POSIX host and runs on every CTest platform.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import unittest
@@ -17,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
 import validate as site_data_validate  # noqa: E402
+from common import load_contract  # noqa: E402
 
 CONTENT_PATH = REPO_ROOT / "docs" / "site" / "content.json"
 
@@ -102,6 +109,111 @@ class LegalPublicWordingRuleTests(unittest.TestCase):
         self.assertEqual([], site_data_validate.legal_public_wording_errors({"osiApproved": True}, text))
         self.assertEqual([], site_data_validate.legal_public_wording_errors({}, text))
         self.assertEqual([], site_data_validate.legal_public_wording_errors(None, text))
+
+
+class DeferredPlatformWordingTests(unittest.TestCase):
+    """OD-12 (PLT-230/240/250): public wording never claims mobile, OpenXR or console support."""
+
+    def errors(self, text: str, location: str = "README.md") -> list[str]:
+        return site_data_validate.deferred_platform_claim_errors({location: text})
+
+    def test_unqualified_support_claims_are_rejected_with_their_location(self) -> None:
+        for text in (
+            "SparkEngine supports iOS and Android.",
+            "The engine runs on Xbox and PlayStation.",
+            "Games deploy to Meta Quest headsets.",
+            "SparkEngine provides a mobile platform abstraction for iOS and Android.",
+            "| Platform | Status |\n| Nintendo Switch | Supported on the current release |",
+        ):
+            with self.subTest(text=text):
+                errors = self.errors("intro\n" + text)
+                self.assertEqual(1, len(errors), errors)
+                self.assertRegex(errors[0], r"^README\.md:[23]: ")
+                self.assertIn("OD-12", errors[0])
+
+    def test_qualified_boundary_wording_is_allowed(self) -> None:
+        for text in (
+            "Console support is planned (PLT-250).",
+            "SparkEngine does not support iOS or Android.",
+            "Mobile platforms are unsupported and deferred from stable-v1 (OD-12, PLT-230).",
+            "VR is a framework stub designed for OpenXR runtimes such as SteamVR.",
+            "| iOS | Supported on the roadmap only |",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual([], self.errors(text))
+
+    def test_rule_is_per_sentence_not_per_line(self) -> None:
+        errors = self.errors("Console support is planned. SparkEngine ships on Xbox today.")
+        self.assertEqual(1, len(errors), errors)
+
+    def test_developer_console_and_fenced_code_are_not_platform_claims(self) -> None:
+        self.assertEqual([], self.errors("The engine provides console commands for module inspection."))
+        self.assertEqual([], self.errors("```cmake\nset(X ON CACHE BOOL \"Enable Android platform support\")\n```"))
+
+    def test_non_text_surface_is_an_error(self) -> None:
+        self.assertEqual(
+            ["a.md: deferred-platform wording source must be text"],
+            site_data_validate.deferred_platform_claim_errors({"a.md": None}),
+        )
+
+    def test_live_governed_surfaces_carry_no_deferred_platform_claim(self) -> None:
+        contract = load_contract()
+        surfaces, missing = site_data_validate.deferred_platform_claim_surfaces(REPO_ROOT, contract)
+        self.assertEqual([], missing, "every governed surface must exist; a missing file is never a pass")
+        for page in ("wiki/platform/Mobile-Platform.md", "wiki/platform/VR-Support.md", "docs/plans/FEATURE_ROADMAP.md"):
+            self.assertIn(page, surfaces)
+        self.assertTrue(site_data_validate.REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES <= surfaces.keys())
+        errors = site_data_validate.deferred_platform_claim_errors(surfaces)
+        self.assertEqual([], errors, "\n".join(errors))
+
+
+def capability_of(contract: dict, identifier: str) -> dict:
+    return next(c for c in contract["readiness"]["capabilities"] if c["id"] == identifier)
+
+
+class DeferredPlatformSupportTests(unittest.TestCase):
+    """The readiness contract keeps deferred platforms unsupported and blocked while their item is open."""
+
+    def setUp(self) -> None:
+        self.contract = load_contract()
+
+    def test_live_contract_passes(self) -> None:
+        self.assertEqual(3, len(site_data_validate.DEFERRED_PLATFORMS))
+        self.assertEqual([], site_data_validate.deferred_platform_support_errors(self.contract))
+
+    def test_flipping_support_or_release_is_rejected_while_the_item_is_open(self) -> None:
+        cases = (
+            ("platform.mobile", "support", "supported"),
+            ("platform.vr", "support", "experimental"),
+            ("platform.console", "support", "experimental"),
+            ("platform.console", "release", "candidate"),
+        )
+        for identifier, field, value in cases:
+            with self.subTest(capability=identifier, field=field):
+                contract = copy.deepcopy(self.contract)
+                capability_of(contract, identifier)[field] = value
+                errors = site_data_validate.deferred_platform_support_errors(contract)
+                self.assertEqual(1, len(errors), errors)
+                self.assertIn(f"capabilities.{identifier}: {field} is {value!r}", errors[0])
+
+    def test_console_platform_authority_record_is_rejected(self) -> None:
+        capability_of(self.contract, "platform.console")["platformAuthority"] = {"owner": "someone"}
+        errors = site_data_validate.deferred_platform_support_errors(self.contract)
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("OWNER-DECISIONS.md", errors[0])
+
+    def test_done_item_lifts_the_deferral(self) -> None:
+        capability_of(self.contract, "platform.mobile")["support"] = "supported"
+        next(i for i in self.contract["workItems"] if i["id"] == "PLT-230")["status"] = "done"
+        self.assertEqual([], site_data_validate.deferred_platform_support_errors(self.contract))
+
+    def test_missing_capability_or_item_is_an_error(self) -> None:
+        self.contract["readiness"]["capabilities"] = [
+            c for c in self.contract["readiness"]["capabilities"] if c["id"] != "platform.vr"
+        ]
+        self.contract["workItems"] = [i for i in self.contract["workItems"] if i["id"] != "PLT-250"]
+        errors = site_data_validate.deferred_platform_support_errors(self.contract)
+        self.assertEqual(2, len(errors), errors)
 
 
 if __name__ == "__main__":

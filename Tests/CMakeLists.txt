@@ -3594,9 +3594,20 @@ set_tests_properties(LicenseInventory_ThirdPartyNotices PROPERTIES
 add_test(
     NAME PublicWording_LegalSurfaces
     COMMAND ${Python3_EXECUTABLE} -B
-        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_public_wording.py -v)
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_public_wording.py -v
+        LegalPublicWordingLiveTests LegalPublicWordingRuleTests)
 set_tests_properties(PublicWording_LegalSurfaces PROPERTIES
     LABELS "governance;unit;python"
+    TIMEOUT 60)
+# OD-12 (PLT-230/240/250): mobile, OpenXR and console stay unsupported/blocked in
+# the readiness contract, and no public surface claims support for them.
+add_test(
+    NAME PublicWording_DeferredPlatforms
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_public_wording.py -v
+        DeferredPlatformWordingTests DeferredPlatformSupportTests)
+set_tests_properties(PublicWording_DeferredPlatforms PROPERTIES
+    LABELS "governance;platform;unit;python"
     TIMEOUT 60)
 # PLT-220: SPARK_MACOS_MIN_VERSION, every workflow deployment target, the
 # documented macOS floor/runner, and the Mach-O minimum-version parser.

@@ -661,6 +661,137 @@ def adapter_name_production_errors(repo_root: Path, source_paths: Iterable[str] 
     return errors
 
 
+# OD-12 (docs/readiness/OWNER-DECISIONS.md): mobile, OpenXR and console support
+# are deferred from stable-v1. Until the owning item is done the capability stays
+# unsupported and blocked, and public wording names these platforms only with a
+# planned/unsupported/framework qualifier. Console additionally needs platform
+# authority (agreements, SDK access, dev kits) that no record in this repository
+# may assert.
+DEFERRED_PLATFORMS = {
+    "platform.mobile": ("PLT-230", "OD-12"),
+    "platform.vr": ("PLT-240", "OD-12"),
+    "platform.console": ("PLT-250", "OD-12"),
+}
+CONSOLE_AUTHORITY_CAPABILITY = "platform.console"
+DEFERRED_PLATFORM_CLAIM = re.compile(
+    r"\b(?:supports?|supported\s+on|ships?\s+(?:on|for|to)|runs?\s+on|deploys?\s+to|targets?|available\s+on"
+    r"|provides\s+(?:an?\s+)?(?:\w+\s+){0,3}(?:for|on))\b",
+    re.IGNORECASE,
+)
+# "console" alone is the developer console; only the platform senses count.
+DEFERRED_PLATFORM_TOKEN = re.compile(
+    r"\b(?:iOS|Android|mobile\s+(?:devices?|platforms?)|OpenXR|VR\s+headsets?|Meta\s+Quest|SteamVR"
+    r"|PlayStation|PS[45]|Xbox|Nintendo\s+Switch|(?:game\s+)?consoles|game\s+console"
+    r"|console\s+(?:platforms?|hardware|targets?|SDKs?|certification))\b",
+    re.IGNORECASE,
+)
+_DEFERRED_PLATFORM_QUALIFIER = re.compile(
+    r"\b(?:not|no|never|unsupported|planned|deferred|stub|framework|experimental|roadmap|future"
+    r"|OD-12|PLT-2[345]0)\b",
+    re.IGNORECASE,
+)
+
+
+def deferred_platform_support_errors(contract: dict[str, Any]) -> list[str]:
+    """A deferred platform capability stays unsupported and blocked until its owning item is done (OD-12)."""
+
+    errors: list[str] = []
+    readiness = contract.get("readiness", {})
+    capabilities = {
+        capability.get("id"): capability
+        for capability in readiness.get("capabilities", [])
+        if isinstance(capability, dict)
+    }
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    for capability_id, (item_id, decision) in sorted(DEFERRED_PLATFORMS.items()):
+        location = f"capabilities.{capability_id}"
+        capability = capabilities.get(capability_id)
+        if capability is None:
+            errors.append(f"{location}: deferred platform capability is missing ({decision}, {item_id})")
+            continue
+        item = items.get(item_id)
+        if item is None:
+            errors.append(f"{location}: owning work item {item_id} is missing")
+            continue
+        if item.get("status") == "done":
+            continue
+        if capability.get("support") != "unsupported":
+            errors.append(
+                f"{location}: support is {capability.get('support')!r} but {item_id} is not done; the platform "
+                f"is deferred from stable-v1 ({decision}, docs/readiness/OWNER-DECISIONS.md) and must stay "
+                "'unsupported'"
+            )
+        if capability.get("release") != "blocked":
+            errors.append(
+                f"{location}: release is {capability.get('release')!r} but {item_id} is not done; a deferred "
+                f"platform ({decision}) must stay 'blocked'"
+            )
+        if capability_id == CONSOLE_AUTHORITY_CAPABILITY and "platformAuthority" in capability:
+            errors.append(
+                f"{location}: platformAuthority is not accepted while {item_id} is open; console authority "
+                "(agreements, SDK access, dev kits) needs an owner-signed decision in "
+                "docs/readiness/OWNER-DECISIONS.md and a separately controlled workstream"
+            )
+    return errors
+
+
+def deferred_platform_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject public wording that claims support for a deferred platform (OD-12).
+
+    The check is per sentence, or per row for a Markdown table row, outside
+    fenced code blocks. A unit that also carries a planned/unsupported/framework
+    qualifier (or names OD-12 or the owning PLT item) states the boundary and
+    is allowed.
+    """
+
+    errors: list[str] = []
+    for location, text in sorted(surfaces.items()):
+        if not isinstance(text, str):
+            errors.append(f"{location}: deferred-platform wording source must be text")
+            continue
+        in_fence = False
+        for number, line in enumerate(text.splitlines(), start=1):
+            if line.lstrip().startswith(("```", "~~~")):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            is_table_row = line.lstrip().startswith("|")
+            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+                claim = DEFERRED_PLATFORM_CLAIM.search(unit)
+                platform = DEFERRED_PLATFORM_TOKEN.search(unit)
+                if claim is None or platform is None or _DEFERRED_PLATFORM_QUALIFIER.search(unit):
+                    continue
+                errors.append(
+                    f"{location}:{number}: {claim.group(0)!r} {platform.group(0)!r} reads as a support claim; "
+                    "mobile, OpenXR and console are deferred from stable-v1 (OD-12, PLT-230/PLT-240/PLT-250) "
+                    "and public wording must say planned, unsupported or framework"
+                )
+    return errors
+
+
+def deferred_platform_claim_surfaces(repo_root: Path, contract: dict[str, Any]) -> tuple[dict[str, str], list[str]]:
+    """Texts the deferred-platform wording rule governs, and the governed paths that are missing.
+
+    Every global public claim surface plus each deferred capability's
+    documentation pages from the readiness contract.
+    """
+
+    paths = set(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES)
+    for capability in contract.get("readiness", {}).get("capabilities", []):
+        if isinstance(capability, dict) and capability.get("id") in DEFERRED_PLATFORMS:
+            paths.update(page for page in capability.get("documentation", []) if isinstance(page, str))
+    surfaces: dict[str, str] = {}
+    missing: list[str] = []
+    for relative in sorted(paths):
+        path = repo_root / relative
+        if path.is_file():
+            surfaces[relative] = path.read_text(encoding="utf-8", errors="replace")
+        else:
+            missing.append(relative)
+    return surfaces, missing
+
+
 # INST-130: the nightly also publishes SparkInstaller-Linux-x64 and
 # SparkInstaller-macOS-arm64 (release.yml build-installer). Those installers are
 # experimental and owned by their platform capability and PLT-* work, never by
@@ -2986,6 +3117,17 @@ class Validator:
         for violation in adapter_name_production_errors(REPO_ROOT):
             self.error("onlineServiceBoundary", violation)
 
+    def validate_deferred_platforms(self) -> None:
+        """OD-12 (PLT-230/PLT-240/PLT-250): deferred platforms stay unsupported and blocked, console carries
+        no platform authority, and no public surface claims support for them."""
+        for message in deferred_platform_support_errors(self.contract):
+            self.error("deferredPlatforms", message)
+        surfaces, missing = deferred_platform_claim_surfaces(REPO_ROOT, self.contract)
+        for relative in missing:
+            self.error(f"deferredPlatforms.{relative}", "governed wording surface must exist")
+        for violation in deferred_platform_claim_errors(surfaces):
+            self.error("deferredPlatforms", violation)
+
     def validate_build_matrix_evidence(self) -> None:
         """The build-matrix configuration evidence is part of the contract, not beside it.
 
@@ -3521,6 +3663,7 @@ class Validator:
         self.validate_online_service_boundary()
         for message in installer_platform_ownership_errors(self.contract):
             self.error("installerPlatformOwnership", message)
+        self.validate_deferred_platforms()
         self.validate_legal(strict_public_wording=legal)
         if assets:
             self.validate_asset_surface()
