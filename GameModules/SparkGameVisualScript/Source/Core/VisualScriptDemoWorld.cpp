@@ -14,11 +14,29 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace Spark::VisualScriptDemo
 {
     namespace
     {
+        /**
+         * The clip list a script entity is authored with. The playAnimation() binding switches an
+         * existing AnimationController to a listed clip and never creates one, so an entity whose
+         * script requests a clip must be spawned with its controller.
+         */
+        AnimationController MakeAnimationController(std::vector<std::string> clips)
+        {
+            AnimationController controller;
+            controller.defaultAnimation = clips.front();
+            controller.currentAnimation = clips.front();
+            controller.loop = true;
+            controller.availableAnimations = std::move(clips);
+            return controller;
+        }
+
         /// 1-based line number of a byte offset inside a script source.
         size_t LineOfOffset(std::string_view source, size_t offset)
         {
@@ -185,6 +203,7 @@ namespace Spark::VisualScriptDemo
             auto& coinMesh = m_world.AddComponent<MeshRenderer>(coin);
             coinMesh.meshPath = "Assets/Models/Sphere.obj";
             coinMesh.emissive = 1.0f;
+            m_world.AddComponent<AnimationController>(coin, MakeAnimationController({"idle", "collect_burst"}));
             if (!AttachScript(coin, "Collectible"))
                 return rollBack();
         }
@@ -199,6 +218,7 @@ namespace Spark::VisualScriptDemo
             m_world.AddComponent<Transform>(enemy, Transform{{x, 0.0f, 5.0f}, {0, 0, 0}, {1, 1, 1}});
             m_world.AddComponent<HealthComponent>(enemy, HealthComponent{50.0f, 50.0f});
             m_world.AddComponent<MeshRenderer>(enemy).meshPath = "Assets/Models/Pyramid.obj";
+            m_world.AddComponent<AnimationController>(enemy, MakeAnimationController({"idle", "walk", "attack_swing"}));
             if (!AttachScript(enemy, "EnemyPatrol"))
                 return rollBack();
         }

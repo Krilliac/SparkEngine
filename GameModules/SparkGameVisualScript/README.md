@@ -44,6 +44,23 @@ announces the win with a score of 500. Enemy contact costs 10 HP per strike, and
 and respawns after 10 seconds. The test reads outcomes only from state the scripts write: positions, health, and
 their `print` output.
 
+## Sound and animation cues
+
+The scripts request media by name; the engine systems act on the request, so the C++ shell holds no cue logic.
+
+- `playSound(entity, name)` queues a `ScriptAudioCues` cue on the entity (positioned at the entity's `Transform` when
+  it has one). The engine's `AudioUpdateSystem` starts each queued cue through `AudioEngine` in the Audio phase and
+  clears the queue; a cue whose sound is not loaded is counted as dropped. Collectible plays `coin_pickup`,
+  EnemyPatrol `enemy_attack`, GameManager `victory_fanfare`, and HealthPickup `health_pickup` and `pickup_respawn`.
+- `playAnimation(entity, clip)` switches the entity's `AnimationController` to a clip it lists and never creates a
+  controller, so `DemoWorld::Spawn` gives every entity whose script requests a clip its controller: coins list
+  `idle` and `collect_burst`, enemies `idle`, `walk` and `attack_swing`. Re-requesting the playing clip (EnemyPatrol
+  asks for `walk` every patrol frame) does not restart it, and `AnimationUpdateSystem` advances it.
+
+`VisualScriptGameplay_ScriptCuesReachAudioQueueAndAnimationControllers` plays the coin route to the win and checks
+each collected coin's `coin_pickup` cue and `collect_burst` clip, the GameManager's `victory_fanfare` cue, and that a
+patrolling enemy's `walk` clip keeps advancing under `AnimationUpdateSystem`.
+
 ## Blueprint-lab kit
 
 After a successful spawn, `DemoWorld::PlaceKitProps` dresses the demo with the Blender-authored kit in

@@ -40,7 +40,7 @@
       },
       {
         "prefix": "VisualScriptGameplay_",
-        "count": 3,
+        "count": 4,
         "requires": [
           "angelscript"
         ]

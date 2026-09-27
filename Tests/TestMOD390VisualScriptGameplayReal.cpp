@@ -13,8 +13,9 @@
  *
  * All gameplay (movement, pickup, scoring, enemy damage, healing, the win) is
  * decided by the scripts. It is observed only through script-visible state:
- * Transform and HealthComponent values the scripts write, and the messages
- * the scripts print().
+ * Transform and HealthComponent values the scripts write, the messages the
+ * scripts print(), and the sound cues and animation clips they request through
+ * playSound()/playAnimation() on the components DemoWorld spawns them with.
  */
 
 #include "TestFramework.h"
@@ -26,6 +27,7 @@
 #include "Core/EngineContext.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Systems/ECSystems.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
 #include "Input/InputManager.h"
 #include "ScopedLoggerBaseline.h"
@@ -34,6 +36,7 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -331,6 +334,93 @@ TEST(VisualScriptGameplay_EnemyContactDamagesAndHealthPickupHeals)
     EXPECT_NEAR(respawnSeconds, 10.0f, 2.0f * kFrameDelta);
     EXPECT_EQ(fx.CountOutput("Player healed for 30 HP!"), static_cast<size_t>(1));
     EXPECT_NEAR(fx.Position(healthPack).y, packSpawnHeight, 1e-4f);
+    EXPECT_FALSE(fx.AnyScriptFaulted());
+}
+
+TEST(VisualScriptGameplay_ScriptCuesReachAudioQueueAndAnimationControllers)
+{
+    // playSound() queues ScriptAudioCues for AudioUpdateSystem and playAnimation() switches the
+    // AnimationController DemoWorld spawns on coins and enemies. Nothing drains the cue queues here,
+    // so every cue a script requested during the run is still pending when the route ends.
+    GameplayFixture fx;
+    ASSERT_TRUE(fx.ready);
+    Spark::ECS::AnimationUpdateSystem animation;
+    auto& registry = fx.world.GetRegistry();
+
+    std::vector<EntityID> coins;
+    for (int i = 0; i < 5; ++i)
+    {
+        coins.push_back(fx.Find("VS_Coin_" + std::to_string(i)));
+        ASSERT_TRUE(coins.back() != entt::null);
+        const auto* controller = registry.try_get<AnimationController>(coins.back());
+        ASSERT_TRUE(controller != nullptr);
+        EXPECT_EQ(controller->currentAnimation, std::string("idle"));
+        EXPECT_TRUE(registry.try_get<ScriptAudioCues>(coins.back()) == nullptr);
+    }
+    const EntityID manager = fx.Find("VS_GameManager");
+    ASSERT_TRUE(manager != entt::null);
+
+    // VS_Enemy_2 patrols x=35, beyond detection range of the whole coin route, so it only ever walks.
+    const EntityID patroller = fx.Find("VS_Enemy_2");
+    ASSERT_TRUE(patroller != entt::null);
+    const auto* patrol = registry.try_get<AnimationController>(patroller);
+    ASSERT_TRUE(patrol != nullptr);
+    EXPECT_EQ(patrol->currentAnimation, std::string("idle"));
+
+    constexpr int kFrameBudget = 60 * 60;
+    int frame = 0;
+    float previousPatrolTime = -1.0f;
+    const auto tickWithAnimation = [&]()
+    {
+        fx.Tick();
+        animation.Update(fx.world, kFrameDelta);
+        ++frame;
+        // The per-frame playAnimation("walk") must not restart the clip the system is advancing.
+        EXPECT_EQ(patrol->currentAnimation, std::string("walk"));
+        EXPECT_GT(patrol->currentTime, previousPatrolTime);
+        previousPatrolTime = patrol->currentTime;
+    };
+
+    for (int coinIndex : {2, 1, 0, 3, 4})
+    {
+        const EntityID coin = coins[static_cast<size_t>(coinIndex)];
+        const auto spawn = fx.Position(coin);
+        while (fx.Position(coin).y > -50.0f && frame < kFrameBudget)
+        {
+            fx.SteerTowards(spawn.x, spawn.z);
+            tickWithAnimation();
+        }
+        ASSERT_TRUE(fx.Position(coin).y == -100.0f);
+
+        // The pickup cue is queued once, positioned where the coin was collected: at its spawn X/Z
+        // (the coin only bobs vertically), not at the hidden y = -100 it moves itself to afterwards.
+        const auto* cues = registry.try_get<ScriptAudioCues>(coin);
+        ASSERT_TRUE(cues != nullptr);
+        EXPECT_EQ(cues->requested, 1u);
+        ASSERT_EQ(cues->pending.size(), static_cast<size_t>(1));
+        EXPECT_EQ(cues->pending[0].soundName, std::string("coin_pickup"));
+        EXPECT_TRUE(cues->pending[0].positional);
+        EXPECT_NEAR(cues->pending[0].position.x, spawn.x, 1e-4f);
+        EXPECT_NEAR(cues->pending[0].position.z, spawn.z, 1e-4f);
+        EXPECT_GT(cues->pending[0].position.y, -50.0f);
+        EXPECT_EQ(registry.get<AnimationController>(coin).currentAnimation, std::string("collect_burst"));
+        EXPECT_TRUE(registry.get<AnimationController>(coin).playing);
+    }
+    fx.ReleaseAllKeys();
+    tickWithAnimation(); // GameManager evaluates the win on its next Update()
+    ASSERT_TRUE(frame < kFrameBudget);
+    EXPECT_EQ(fx.CountOutput("*** YOU WIN! ***"), static_cast<size_t>(1));
+
+    // The win fanfare is queued once on the (Transform-less, so non-positional) GameManager.
+    const auto* fanfare = registry.try_get<ScriptAudioCues>(manager);
+    ASSERT_TRUE(fanfare != nullptr);
+    EXPECT_EQ(fanfare->requested, 1u);
+    ASSERT_EQ(fanfare->pending.size(), static_cast<size_t>(1));
+    EXPECT_EQ(fanfare->pending[0].soundName, std::string("victory_fanfare"));
+    EXPECT_FALSE(fanfare->pending[0].positional);
+
+    // The patrol clip advanced by the system's delta every frame of the run.
+    EXPECT_NEAR(patrol->currentTime, static_cast<float>(frame) * kFrameDelta, 0.01f);
     EXPECT_FALSE(fx.AnyScriptFaulted());
 }
 
