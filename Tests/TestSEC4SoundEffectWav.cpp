@@ -11,7 +11,9 @@
  * 0, and leaves the object unloaded when a file is rejected.
  *
  * These tests drive SoundEffect::LoadFromMemory directly; no audio device is
- * needed, so they run on every platform.
+ * needed, so they run on every platform. The positive cases are what keep the
+ * chunk walker honest off Windows: DWORD is 8 bytes on LP64 Linux/macOS, and a
+ * DWORD-typed read of a RIFF id or size would never match 'fmt ' there.
  */
 
 #include "TestFramework.h"
@@ -19,6 +21,7 @@
 #include "Audio/SoundEffect.h"
 
 #include <cstdint>
+#include <initializer_list>
 #include <vector>
 
 namespace
@@ -31,9 +34,10 @@ namespace
         uint16_t bitsPerSample = 16;
         uint16_t blockAlign = 2;
         uint32_t byteRate = 88200;
-        uint32_t fmtChunkSize = 16;   ///< Declared 'fmt ' size; bytes past 16 hold cbSize + extension
-        uint16_t cbSize = 0;          ///< Present in the file only when fmtChunkSize >= 18
-        uint32_t dataSize = 4410 * 2; ///< 100 ms of mono 16-bit
+        uint32_t fmtChunkSize = 16;    ///< Declared 'fmt ' size; bytes past 16 hold cbSize + extension
+        uint16_t cbSize = 0;           ///< Present in the file only when fmtChunkSize >= 18
+        uint32_t dataSize = 4410 * 2;  ///< 100 ms of mono 16-bit
+        uint32_t leadingChunkSize = 0; ///< Nonzero: emit a 'LIST' chunk of this size before 'fmt '
     };
 
     void PushU16(std::vector<BYTE>& out, uint16_t value)
@@ -75,11 +79,19 @@ namespace
 
         const uint32_t fmtPad = spec.fmtChunkSize & 1u;
         const uint32_t dataPad = spec.dataSize & 1u;
+        const uint32_t leadingPad = spec.leadingChunkSize & 1u;
+        const uint32_t leadingBytes = spec.leadingChunkSize == 0 ? 0u : 8u + spec.leadingChunkSize + leadingPad;
 
         std::vector<BYTE> wav;
         PushTag(wav, "RIFF");
-        PushU32(wav, 4u + (8u + spec.fmtChunkSize + fmtPad) + (8u + spec.dataSize + dataPad));
+        PushU32(wav, 4u + leadingBytes + (8u + spec.fmtChunkSize + fmtPad) + (8u + spec.dataSize + dataPad));
         PushTag(wav, "WAVE");
+        if (spec.leadingChunkSize != 0)
+        {
+            PushTag(wav, "LIST");
+            PushU32(wav, spec.leadingChunkSize);
+            wav.insert(wav.end(), spec.leadingChunkSize + leadingPad, static_cast<BYTE>(0x5A));
+        }
         PushTag(wav, "fmt ");
         PushU32(wav, spec.fmtChunkSize);
         wav.insert(wav.end(), fmt.begin(), fmt.end());
@@ -206,6 +218,39 @@ TEST(SEC4SoundWav_RejectsInconsistentPcmHeaders)
         spec.dataSize = 4411; // half a 16-bit frame at the end
         ASSERT_TRUE(FAILED(Load(sound, MakeWav(spec))));
     }
+}
+
+// Chunk ids and sizes are 32-bit fields at 2-byte aligned offsets. A 1-byte
+// chunk plus its pad byte puts 'fmt ' at offset 22 and 'data' at offset 46,
+// neither 4-aligned; the walker must still find both (and must not rely on a
+// DWORD-typed load, which is 8 bytes wide on LP64 and misaligned here).
+TEST(SEC4SoundWav_FindsChunksAtTwoByteAlignedOffsets)
+{
+    SoundEffect sound;
+    WavSpec spec;
+    spec.leadingChunkSize = 1;
+    const std::vector<BYTE> wav = MakeWav(spec);
+    ASSERT_EQ(static_cast<int>(wav[22]), static_cast<int>('f'));
+    ASSERT_TRUE(SUCCEEDED(Load(sound, wav)));
+    ASSERT_TRUE(sound.IsLoaded());
+    ASSERT_EQ(static_cast<unsigned long>(sound.GetFormat().nSamplesPerSec), 44100ul);
+    ASSERT_EQ(static_cast<unsigned long>(sound.GetDataSize()), static_cast<unsigned long>(spec.dataSize));
+
+    // A final odd-sized chunk whose pad byte is missing ends the walk one byte
+    // past the buffer; a search for an absent chunk must fail cleanly.
+    SoundEffect truncated;
+    std::vector<BYTE> noData = MakeWav(WavSpec{});
+    noData.resize(12u + 8u + 16u); // RIFF header + 'fmt ' only
+    noData.push_back('J');
+    noData.push_back('U');
+    noData.push_back('N');
+    noData.push_back('K');
+    for (BYTE b : {BYTE{1}, BYTE{0}, BYTE{0}, BYTE{0}, BYTE{0x77}})
+    {
+        noData.push_back(b);
+    }
+    ASSERT_TRUE(FAILED(Load(truncated, noData)));
+    ASSERT_FALSE(truncated.IsLoaded());
 }
 
 // A rejected reload must not leave the previous (or a half-parsed) format behind.

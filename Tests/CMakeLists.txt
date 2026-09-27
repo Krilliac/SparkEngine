@@ -2574,10 +2574,11 @@ endif()
 # SEC4 audio: SoundEffect accepts only PCM / IEEE-float WAV fmt chunks with
 # self-consistent fields and a zero cbSize, so a crafted EXTENSIBLE or ADPCM header
 # cannot make XAudio2 read past the stored 18-byte WAVEFORMATEX (TestSEC4SoundEffectWav.cpp;
-# no audio device needed). Exact count so a filter that selects nothing cannot pass.
+# no audio device needed). Chunk ids and sizes are read as 32-bit fields, so LP64 hosts
+# (8-byte DWORD) load WAVs too. Exact count so a filter that selects nothing cannot pass.
 add_test(NAME SEC4SoundEffectWav COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SEC4SoundEffectWav PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4SoundWav_;SPARK_TEST_EXPECT_COUNT=5"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4SoundWav_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "security;audio;unit"
     TIMEOUT 60)
 

@@ -6,6 +6,8 @@
 #include "../Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -260,10 +262,18 @@ HRESULT SoundEffect::FindChunk(const BYTE* data, DWORD dataSize, DWORD fourCC, D
     }
     DWORD offset = 12; // skip RIFF + WAVE ids
 
-    while (offset + 8 <= dataSize)
+    // offset can end one past dataSize (a final odd chunk without its pad
+    // byte), so compare by subtraction instead of letting offset + 8 wrap.
+    while (offset < dataSize && dataSize - offset >= 8)
     {
-        DWORD type = *reinterpret_cast<const DWORD*>(data + offset);
-        DWORD size = *reinterpret_cast<const DWORD*>(data + offset + 4);
+        // RIFF chunk ids and sizes are 32-bit little-endian fields at 2-byte
+        // aligned offsets. Read them as std::uint32_t through memcpy: DWORD is
+        // 8 bytes on LP64 (Core/PlatformTypes.h), and a typed load would also
+        // be misaligned.
+        std::uint32_t type = 0;
+        std::uint32_t size = 0;
+        std::memcpy(&type, data + offset, sizeof(type));
+        std::memcpy(&size, data + offset + 4, sizeof(size));
 
         // Validate that the chunk body fits entirely in the buffer. Without
         // this check a corrupted size field would let us read past the end
