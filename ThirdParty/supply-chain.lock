@@ -63,7 +63,7 @@
       "file_count": 3
     },
     "ThirdParty/Utils/json": {
-      "digest": "7bc68b23d925d095706abad9a272e9f2b9417fcdd12dd1aaa3bb6ff2d5fb49e0",
+      "digest": "02b2493bffe9eb331b88048adab48fc80827ebd9c7a813a9e853c89fa0eb9af4",
       "file_count": 2
     },
     "ThirdParty/Utils/stb": {
@@ -201,9 +201,9 @@
       "type": "license"
     },
     "ThirdParty/Utils/json/nlohmann_json.h": {
-      "sha256": "3bff60873f4e6955e3c1161f5a7d77550c4f913c224783d040928ad19a120727",
-      "git_blob": "cc4e7750116cd1b701ef6e73d1d7cd9f9ee617a0",
-      "size": 29863,
+      "sha256": "1a11778c4c9a20fed8ad61c11c306346cc28476319f53d3797f7e152ab431e04",
+      "git_blob": "6c2f494c72415e0e3f6230ea21e21b7d0366ecfb",
+      "size": 31932,
       "type": "source"
     },
     "ThirdParty/Utils/stb/LICENSE": {

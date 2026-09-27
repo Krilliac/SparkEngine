@@ -6,7 +6,10 @@
 
 #include <nlohmann_json.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <exception>
 #include <format>
 #include <limits>
 #include <optional>
@@ -52,8 +55,65 @@ namespace Spark
             return static_cast<entt::entity>(id) != entt::null;
         }
 
-        // Emit one component's fields via reflection.
-        json SerializeComponentFields(const std::string& typeName, const void* comp)
+        /// True when @p f's stored value is one SetFieldFromString will accept back.
+        /// GetFieldAsString prints NaN and infinity ("nan", "inf"), but the reader
+        /// accepts only finite Float, Double and Vector components.
+        bool FieldValueIsReadable(const void* comp, const FieldInfo& f)
+        {
+            const auto* src = static_cast<const char*>(comp) + f.offset;
+            const auto finiteFloats = [src](size_t count)
+            {
+                for (size_t i = 0; i < count; ++i)
+                {
+                    float value = 0.0f;
+                    std::memcpy(&value, src + i * sizeof(float), sizeof(float));
+                    if (!std::isfinite(value))
+                        return false;
+                }
+                return true;
+            };
+            switch (f.type)
+            {
+            case FieldType::Float:
+                return finiteFloats(1);
+            case FieldType::Vector2:
+                return finiteFloats(2);
+            case FieldType::Vector3:
+                return finiteFloats(3);
+            case FieldType::Vector4:
+                return finiteFloats(4);
+            case FieldType::Double:
+            {
+                double value = 0.0;
+                std::memcpy(&value, src, sizeof(double));
+                return std::isfinite(value);
+            }
+            default:
+                return true;
+            }
+        }
+
+        /// The first field the writer emitted that the reader would refuse.
+        struct UnreadableField
+        {
+            uint32_t entity = 0;
+            std::string entityName;
+            std::string type;
+            std::string field;
+            std::string value;
+        };
+
+        /// Where SerializeComponentFields reports an unreadable field, if anywhere.
+        struct FieldReportContext
+        {
+            std::optional<UnreadableField>* unreadable = nullptr;
+            uint32_t entity = 0;
+            const std::string* entityName = nullptr;
+        };
+
+        // Emit one component's fields via reflection, recording in @p report the
+        // first field (if any) whose value the reader would reject.
+        json SerializeComponentFields(const std::string& typeName, const void* comp, const FieldReportContext& report)
         {
             json fields = json::object();
             const TypeInfo* ti = TypeRegistry::Get().FindTypeByName(typeName);
@@ -75,6 +135,11 @@ namespace Spark
                 case FieldType::Vector4:
                 case FieldType::Enum:
                     fields[f.fieldName] = GetFieldAsString(comp, f);
+                    if (report.unreadable && !report.unreadable->has_value() && !FieldValueIsReadable(comp, f))
+                    {
+                        *report.unreadable = UnreadableField{report.entity, *report.entityName, typeName, f.fieldName,
+                                                             fields[f.fieldName].get<std::string>()};
+                    }
                     break;
                 default:
                     SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] skip unsupported field %s.%s (type %d)",
@@ -117,7 +182,9 @@ namespace Spark
         }
     } // namespace
 
-    std::string SerializeWorld(const World& world)
+    /// Build the scene document. When @p unreadable is non-null it receives the
+    /// first field whose written value the reader would refuse.
+    static json BuildSceneDocument(const World& world, std::optional<UnreadableField>* unreadable)
     {
         json root;
         root["version"] = kCurrentSceneVersion;
@@ -138,10 +205,9 @@ namespace Spark
         {
             json ent;
             ent["id"] = EntityIdToJson(entity);
-            if (const NameComponent* nc = world.GetComponent<NameComponent>(entity))
-                ent["name"] = nc->name;
-            else
-                ent["name"] = "";
+            const NameComponent* nameComponent = world.GetComponent<NameComponent>(entity);
+            const std::string entityName = nameComponent ? nameComponent->name : std::string();
+            ent["name"] = entityName;
             ent["parent"] = -1;
             if (const Transform* t = world.GetComponent<Transform>(entity))
                 if (t->parent != entt::null)
@@ -159,7 +225,8 @@ namespace Spark
                     continue;
                 json c;
                 c["type"] = type;
-                c["fields"] = SerializeComponentFields(type, comp);
+                c["fields"] = SerializeComponentFields(
+                    type, comp, FieldReportContext{unreadable, static_cast<uint32_t>(entity), &entityName});
                 comps.push_back(std::move(c));
             }
             ent["components"] = std::move(comps);
@@ -167,14 +234,57 @@ namespace Spark
         }
 
         root["entities"] = std::move(entities);
-        return root.dump(2);
+        return root;
+    }
+
+    std::string SerializeWorld(const World& world)
+    {
+        return BuildSceneDocument(world, nullptr).dump(2);
+    }
+
+    bool TrySerializeWorld(const World& world, std::string& out, std::string* error)
+    {
+        if (error)
+            error->clear();
+        try
+        {
+            std::optional<UnreadableField> unreadable;
+            std::string text = BuildSceneDocument(world, &unreadable).dump(2);
+            if (unreadable)
+            {
+                return Reject(error, std::format("entity {} ('{}') field '{}.{}' is {}; scenes store only finite "
+                                                 "numbers, so this world would not load back",
+                                                 unreadable->entity, unreadable->entityName, unreadable->type,
+                                                 unreadable->field, unreadable->value));
+            }
+            if (static_cast<uint64_t>(text.size()) > kMaxSceneDocumentBytes)
+            {
+                return Reject(error, std::format("scene document is {} bytes; the limit is {} bytes", text.size(),
+                                                 kMaxSceneDocumentBytes));
+            }
+            const size_t values = json::count_values_upper_bound(text);
+            if (static_cast<uint64_t>(values) > kMaxSceneDocumentValues)
+            {
+                return Reject(error, std::format("scene document holds {} JSON values; the limit is {}", values,
+                                                 kMaxSceneDocumentValues));
+            }
+            out = std::move(text);
+            return true;
+        }
+        catch (const std::exception& ex)
+        {
+            return Reject(error, std::format("scene could not be serialized: {}", ex.what()));
+        }
     }
 
     bool DeserializeInto(World& world, const std::string& jsonText, SceneDeserializeMode mode, std::string* error)
     {
         if (error)
             error->clear();
-        if (static_cast<uint64_t>(jsonText.size()) > kMaxSceneDocumentBytes)
+        // In-process snapshots are this process's own SerializeWorld output, so
+        // only untrusted text (files, recovery records) is held to the caps.
+        const bool trustedSnapshot = mode == SceneDeserializeMode::TrustedSnapshot;
+        if (!trustedSnapshot && static_cast<uint64_t>(jsonText.size()) > kMaxSceneDocumentBytes)
         {
             return Reject(error, std::format("scene document is {} bytes; the limit is {} bytes", jsonText.size(),
                                              kMaxSceneDocumentBytes));
@@ -184,7 +294,10 @@ namespace Spark
             json root;
             // Nesting depth is bounded inside json::parse (max_parse_depth), so a
             // deeply nested document throws here instead of overflowing the stack.
-            root = json::parse(jsonText);
+            // The value budget bounds breadth before any node is allocated.
+            const size_t valueBudget =
+                trustedSnapshot ? std::numeric_limits<size_t>::max() : static_cast<size_t>(kMaxSceneDocumentValues);
+            root = json::parse(jsonText, valueBudget);
             if (!root.is_object())
                 return Reject(error, std::format("scene root must be a JSON object, found {}", JsonTypeName(root)));
 
@@ -360,7 +473,10 @@ namespace Spark
                             // .bak image instead of installing a default that the
                             // next save would make permanent. Only legacy inline
                             // values keep lenient conversion.
-                            const bool rejectBadField = strictRecovery || (!legacyScene && IsRoundTrippableField(f));
+                            // A trusted snapshot keeps the default for a value it
+                            // cannot apply (a NaN the live world held), as before.
+                            const bool rejectBadField =
+                                strictRecovery || (!legacyScene && !trustedSnapshot && IsRoundTrippableField(f));
                             if (!legacyScene && !fieldValue->is_string())
                             {
                                 if (rejectBadField)

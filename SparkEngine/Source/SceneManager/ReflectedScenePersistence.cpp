@@ -195,8 +195,26 @@ namespace Spark
         }
     } // namespace
 
-    bool SaveWorld(const World& world, const std::string& path)
+    bool SaveWorld(const World& world, const std::string& path, std::string* error)
     {
+        if (error)
+            error->clear();
+
+        // Serialize before touching any file. A world the reader would refuse (a
+        // NaN/Inf field, or a document over the size or value caps) must fail here:
+        // writing it would make LoadWorld reject the new primary and silently fall
+        // back to the older .bak, discarding everything since that save.
+        std::string serialized;
+        std::string serializeReason;
+        if (!TrySerializeWorld(world, serialized, &serializeReason))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "[ReflectedScene] refusing to save %s: %s", path.c_str(),
+                            serializeReason.c_str());
+            if (error)
+                *error = "Scene '" + path + "' was not saved: " + serializeReason + ".";
+            return false;
+        }
+
         const std::filesystem::path destination = std::filesystem::u8path(path);
         std::filesystem::path temporary = destination;
         temporary += ".tmp";
@@ -208,14 +226,20 @@ namespace Spark
         RemoveFileNoThrow(temporary);
         RemoveFileNoThrow(backupTemporary);
 
-        const std::string serialized = SerializeWorld(world);
-        std::error_code error;
-        if (!WriteDurableText(temporary, serialized, error))
+        const auto fail = [&](const char* stage, const std::error_code& ioError)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] durable staging write failed for %s: %s",
-                           path.c_str(), error.message().c_str());
-            RemoveFileNoThrow(temporary);
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] %s failed for %s: %s", stage, path.c_str(),
+                           ioError.message().c_str());
+            if (error)
+                *error = "Scene '" + path + "' was not saved: " + stage + " failed: " + ioError.message() + ".";
             return false;
+        };
+
+        std::error_code ioError;
+        if (!WriteDurableText(temporary, serialized, ioError))
+        {
+            RemoveFileNoThrow(temporary);
+            return fail("durable staging write", ioError);
         }
 
         // Preserve the previous image only when it is a loadable scene. A
@@ -229,24 +253,20 @@ namespace Spark
             World validationWorld(World::EntityEventCleanupMode::Suppressed);
             if (DeserializeInto(validationWorld, previous))
             {
-                if (!WriteDurableText(backupTemporary, previous, error) ||
-                    !ReplaceFileAtomically(backupTemporary, backup, error))
+                if (!WriteDurableText(backupTemporary, previous, ioError) ||
+                    !ReplaceFileAtomically(backupTemporary, backup, ioError))
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] previous-good backup failed for %s: %s",
-                                   path.c_str(), error.message().c_str());
                     RemoveFileNoThrow(temporary);
                     RemoveFileNoThrow(backupTemporary);
-                    return false;
+                    return fail("previous-good backup", ioError);
                 }
             }
         }
 
-        if (!ReplaceFileAtomically(temporary, destination, error))
+        if (!ReplaceFileAtomically(temporary, destination, ioError))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] atomic replace failed for %s: %s", path.c_str(),
-                           error.message().c_str());
             RemoveFileNoThrow(temporary);
-            return false;
+            return fail("atomic replace", ioError);
         }
         return true;
     }

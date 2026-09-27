@@ -95,6 +95,47 @@ namespace nlohmann
         /// glTF, manifests) nest well under a dozen levels.
         static constexpr size_t max_parse_depth = 256;
 
+        /// Default value budget for parse(), matching Spark::Json::JsonLimits::maxNodes.
+        /// Every parsed value is a full json object (several standard containers
+        /// wide), so a small document of "[0,0,0,..." expands a hundredfold or more
+        /// in memory; the budget bounds that breadth the way max_parse_depth bounds
+        /// nesting.
+        static constexpr size_t max_parse_values = 4000000;
+
+        /**
+         * Conservative upper bound on the number of values parse() would build from
+         * @p input: one for the root plus one per '[', '{' and ',' outside string
+         * literals. Every value after the root is either a container's first element
+         * (paired with its opening bracket) or follows a comma, so the true count
+         * never exceeds this; an empty container is the only overcount. The scan
+         * allocates nothing, so an over-budget document is refused before any tree
+         * is built.
+         */
+        [[nodiscard]] static size_t count_values_upper_bound(std::string_view input) noexcept
+        {
+            size_t count = 1;
+            bool inString = false;
+            bool escaped = false;
+            for (const char c : input)
+            {
+                if (inString)
+                {
+                    if (escaped)
+                        escaped = false;
+                    else if (c == '\\')
+                        escaped = true;
+                    else if (c == '"')
+                        inString = false;
+                    continue;
+                }
+                if (c == '"')
+                    inString = true;
+                else if (c == '[' || c == '{' || c == ',')
+                    ++count;
+            }
+            return count;
+        }
+
         // Named constructors
         static json array() { return json(value_t::array); }
         static json object() { return json(value_t::object); }
@@ -109,9 +150,14 @@ namespace nlohmann
          * Nesting deeper than max_parse_depth arrays/objects throws as well. The
          * parser is recursive, so an unbounded depth turns a few kilobytes of '['
          * into a native stack overflow, which no C++ catch handler can recover.
+         *
+         * A document whose count_values_upper_bound() exceeds @p max_values throws
+         * "too many values" before anything is allocated.
          */
-        static json parse(std::string_view input)
+        static json parse(std::string_view input, size_t max_values = max_parse_values)
         {
+            if (count_values_upper_bound(input) > max_values)
+                parse_fail("too many values", 0);
             size_t pos = 0;
             json result = parse_value(input, pos, 0);
             skip_ws(input, pos);

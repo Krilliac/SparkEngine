@@ -181,7 +181,8 @@ namespace SparkEditor
                 {
                     auto restored = std::make_unique<::World>();
                     const std::string json(data.begin(), data.end());
-                    if (!Spark::DeserializeInto(*restored, json))
+                    // The snapshot callback above produced this text in-process.
+                    if (!Spark::DeserializeInto(*restored, json, Spark::SceneDeserializeMode::TrustedSnapshot))
                     {
                         Spark::Editor::CommandHistory::GetInstance().RollbackTransientSession();
                         return false;
@@ -2383,7 +2384,8 @@ namespace SparkEditor
         if (!m_world)
             return false;
         auto restored = std::make_unique<::World>();
-        if (!Spark::DeserializeInto(*restored, json))
+        // Undo/redo snapshots are SerializeWorld output captured in this process.
+        if (!Spark::DeserializeInto(*restored, json, Spark::SceneDeserializeMode::TrustedSnapshot))
             return false;
 
         m_world->GetRegistry() = std::move(restored->GetRegistry());
@@ -2595,10 +2597,11 @@ namespace SparkEditor
             // Full-fidelity save via the reflection-driven scene serializer
             // (replaces the old lossy names-only JSON writer). The live ECS
             // World is the single source of truth for scene content.
-            if (!Spark::SaveWorld(*m_world, resolvedPath))
+            std::string saveError;
+            if (!Spark::SaveWorld(*m_world, resolvedPath, &saveError))
             {
                 auto& console = Spark::SimpleConsole::GetInstance();
-                console.LogError("Failed to save scene (Spark::SaveWorld): " + resolvedPath);
+                console.LogError("Failed to save scene (Spark::SaveWorld): " + saveError);
                 return false;
             }
 

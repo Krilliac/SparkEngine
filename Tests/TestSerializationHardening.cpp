@@ -8,7 +8,11 @@
 //    recovers the .bak) instead of loading defaults the next save would keep;
 //  - Json::Value::AsInt never performs an out-of-range double->int conversion,
 //    and mod manifests/configs validate loadOrder with TryAsInt;
-//  - Json::ParseStrict rejects undefined escapes and raw control bytes.
+//  - Json::ParseStrict rejects undefined escapes and raw control bytes;
+//  - the stub parser bounds breadth (value count) as well as depth;
+//  - SaveWorld refuses a world the reader would reject (NaN/Inf field, over the
+//    byte cap) instead of writing a primary that LoadWorld rolls back to .bak,
+//    while in-process undo/PIE snapshots still restore.
 
 #include "TestFramework.h"
 #include "Engine/ECS/Components.h"
@@ -21,9 +25,11 @@
 
 #include <chrono>
 #include <climits>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -294,4 +300,147 @@ TEST(SerializationHardening_JsonStrictRejectsUndefinedEscapesAndControlBytes)
 
     // Bounded parsing shares the rule.
     EXPECT_FALSE(Json::ParseBounded(R"(["\q"])", Json::JsonLimits{}, &value, &error));
+}
+
+// Finding 66 (breadth): the byte cap alone admits ~33M values ("[0,0,..." is two
+// bytes each), and every value is a full JSON node, so a file under the cap could
+// expand to gigabytes. parse() now refuses a document over its value budget with
+// an allocation-free pre-scan.
+TEST(SerializationHardening_JsonStubBoundsValueCountBeforeAllocating)
+{
+    using nlohmann::json;
+    EXPECT_EQ(json::count_values_upper_bound("[0,0,0]"), static_cast<size_t>(4));
+    // Brackets and commas inside strings (including after an escaped quote) do not count.
+    EXPECT_EQ(json::count_values_upper_bound(R"(["a,[{b\",c"])"), static_cast<size_t>(2));
+
+    EXPECT_NO_THROW((void)json::parse("[0,0,0]", 4));
+    EXPECT_THROW((void)json::parse("[0,0,0]", 3), std::runtime_error);
+
+    // A wide flat array one value over the default budget is rejected by the scan.
+    std::string wide;
+    wide.reserve(json::max_parse_values * 2 + 2);
+    wide += '[';
+    for (size_t i = 0; i < json::max_parse_values; ++i)
+        wide += "0,";
+    wide.back() = ']';
+    EXPECT_EQ(json::count_values_upper_bound(wide), json::max_parse_values + 1);
+    std::string parseError;
+    try
+    {
+        (void)json::parse(wide);
+    }
+    catch (const std::runtime_error& ex)
+    {
+        parseError = ex.what();
+    }
+    EXPECT_STR_CONTAINS(parseError, "too many values");
+
+    // The scene loader applies its own budget to a document well under the byte cap.
+    std::string hostileScene = "{\"version\":1,\"entities\":[";
+    hostileScene.reserve(static_cast<size_t>(kMaxSceneDocumentValues) * 2 + 64);
+    for (uint64_t i = 0; i < kMaxSceneDocumentValues; ++i)
+        hostileScene += "0,";
+    hostileScene += "0]}";
+    ASSERT_TRUE(static_cast<uint64_t>(hostileScene.size()) < kMaxSceneDocumentBytes);
+    World world;
+    world.CreateEntity("KeepMe");
+    std::string error;
+    EXPECT_FALSE(DeserializeInto(world, hostileScene, SceneDeserializeMode::Permissive, &error));
+    EXPECT_STR_CONTAINS(error, "too many values");
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+}
+
+// Finding 72 (writer side): GetFieldAsString prints NaN/Inf as "nan"/"inf", which
+// the reader refuses. SaveWorld used to write such a world, and the next LoadWorld
+// rejected it and silently recovered the older .bak. SaveWorld now fails closed;
+// in-process undo/PIE snapshots of the same world still restore.
+TEST(SerializationHardening_SaveWorldRefusesNonFiniteFields)
+{
+    ScratchDirectory scratch("nonfinite");
+    const std::filesystem::path scene = scratch.Path() / "Level.sparkscene";
+
+    World world;
+    const EntityID mover = world.CreateEntity("Mover");
+    Transform& transform = world.AddComponent<Transform>(mover);
+    transform.position = DirectX::XMFLOAT3(1.0f, 2.0f, 3.0f);
+    transform.rotation = DirectX::XMFLOAT3(0.0f, 45.0f, 0.0f);
+    std::string error;
+    ASSERT_TRUE(SaveWorld(world, PathToUtf8(scene), &error));
+
+    // Physics blew up: the position is now NaN.
+    world.GetComponent<Transform>(mover)->position.x = std::numeric_limits<float>::quiet_NaN();
+    EXPECT_FALSE(SaveWorld(world, PathToUtf8(scene), &error));
+    EXPECT_STR_CONTAINS(error, "'Transform.position'");
+    EXPECT_STR_CONTAINS(error, "finite");
+
+    // The previous save is untouched and loads as the primary (no .bak exists).
+    std::filesystem::path backup = scene;
+    backup += ".bak";
+    EXPECT_FALSE(std::filesystem::exists(backup));
+    World reopened;
+    ASSERT_TRUE(LoadWorld(reopened, PathToUtf8(scene), &error));
+    EXPECT_EQ(FirstEntityName(reopened), std::string("Mover"));
+    const auto transforms = reopened.GetEntitiesWith<Transform>();
+    ASSERT_TRUE(transforms.begin() != transforms.end());
+    EXPECT_NEAR(transforms.get<Transform>(*transforms.begin()).position.x, 1.0f, 0.001f);
+
+    // Infinity in a scalar Float field is refused the same way.
+    World infinite;
+    const EntityID camera = infinite.CreateEntity("Cam");
+    infinite.AddComponent<Camera>(camera).fov = std::numeric_limits<float>::infinity();
+    std::string text;
+    EXPECT_FALSE(TrySerializeWorld(infinite, text, &error));
+    EXPECT_STR_CONTAINS(error, "'Camera.fov'");
+    EXPECT_TRUE(text.empty());
+
+    // Undo/redo and play-in-editor restore their own in-process snapshot: the
+    // unreadable field keeps its default instead of failing the whole restore,
+    // and every other field is restored.
+    const std::string snapshot = SerializeWorld(world);
+    World restored;
+    ASSERT_TRUE(DeserializeInto(restored, snapshot, SceneDeserializeMode::TrustedSnapshot, &error));
+    const auto restoredTransforms = restored.GetEntitiesWith<Transform>();
+    ASSERT_TRUE(restoredTransforms.begin() != restoredTransforms.end());
+    const Transform& restoredTransform = restoredTransforms.get<Transform>(*restoredTransforms.begin());
+    EXPECT_TRUE(std::isfinite(restoredTransform.position.x));
+    EXPECT_NEAR(restoredTransform.rotation.y, 45.0f, 0.001f);
+    // The same text read as a file is still damage.
+    World fromDisk;
+    EXPECT_FALSE(DeserializeInto(fromDisk, snapshot, SceneDeserializeMode::Permissive, &error));
+}
+
+// Finding 67 (writer side): LoadWorld caps a scene at kMaxSceneDocumentBytes but
+// SaveWorld wrote any size, so an over-cap world saved "successfully" and the next
+// load silently rolled back to the .bak. SaveWorld now refuses it; in-process
+// snapshots of the same world are exempt from the cap.
+TEST(SerializationHardening_SaveWorldRefusesOverCapDocument)
+{
+    ScratchDirectory scratch("overcapsave");
+    const std::filesystem::path scene = scratch.Path() / "Big.sparkscene";
+
+    World world;
+    world.CreateEntity("Small");
+    std::string error;
+    ASSERT_TRUE(SaveWorld(world, PathToUtf8(scene), &error));
+
+    // One entity whose name alone exceeds the byte cap.
+    const size_t hugeNameBytes = static_cast<size_t>(kMaxSceneDocumentBytes) + 1u;
+    World huge;
+    huge.CreateEntity(std::string(hugeNameBytes, 'n'));
+    EXPECT_FALSE(SaveWorld(huge, PathToUtf8(scene), &error));
+    EXPECT_STR_CONTAINS(error, "bytes; the limit is");
+
+    // The earlier image is still the primary; nothing rolled back to a .bak.
+    std::filesystem::path backup = scene;
+    backup += ".bak";
+    EXPECT_FALSE(std::filesystem::exists(backup));
+    World reopened;
+    ASSERT_TRUE(LoadWorld(reopened, PathToUtf8(scene), &error));
+    EXPECT_EQ(FirstEntityName(reopened), std::string("Small"));
+
+    // An undo or PIE snapshot of the big world still restores in-process.
+    const std::string snapshot = SerializeWorld(huge);
+    World restored;
+    ASSERT_TRUE(DeserializeInto(restored, snapshot, SceneDeserializeMode::TrustedSnapshot, &error));
+    EXPECT_EQ(FirstEntityName(restored).size(), hugeNameBytes);
 }

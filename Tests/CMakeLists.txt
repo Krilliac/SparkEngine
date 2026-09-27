@@ -1825,9 +1825,11 @@ set_tests_properties(SparkSceneCompatibilityTests PROPERTIES
 # scene loads cap file size and reject damaged current-version fields (recovering
 # the .bak), Json AsInt/TryAsInt never convert an out-of-range double, mod
 # loadOrder is validated, and ParseStrict rejects undefined escapes/control bytes.
+# The stub also bounds value count (breadth), and SaveWorld refuses a world the
+# reader would reject (NaN/Inf field, over the byte cap) instead of writing it.
 add_test(NAME SparkSerializationHardeningTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
 set_tests_properties(SparkSerializationHardeningTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SerializationHardening_;SPARK_TEST_EXPECT_COUNT=6"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SerializationHardening_;SPARK_TEST_EXPECT_COUNT=9"
     LABELS "security;scene;unit"
     TIMEOUT 60)
 
