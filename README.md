@@ -180,7 +180,7 @@ The active backend selection is XAudio2 on Windows or OpenAL on non-Windows host
 ### Scripting
 
 - **AngelScript** — hot-reload via file watcher, bindings for selected engine APIs, per-file module isolation, client/server context separation
-- **Visual scripting** — 64 node palette entries across 9 categories, compiles to AngelScript and uses the existing script runtime
+- **Visual scripting** — 69 node palette entries across 10 categories, compiles to AngelScript and uses the existing script runtime
 - **Shader Graph** — 34 node types, HLSL generation, live preview
 
 ### AI and Navigation
@@ -221,7 +221,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 7,680 test definitions across 650 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and the other engine subsystems.
+**Tests:** 7,852 test definitions across 666 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and the other engine subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -366,7 +366,7 @@ uncertified.
 | [Versioned Plugin ABI](docs/guides/plugin-abi.md) | Versioned C plugin boundary, sidecar integrity, tasks, and hot reload |
 | [Game Module Guide](Templates/README.md) | Building standalone games with the SDK |
 | [Networking Config](wiki/subsystems/Networking.md) | UDP, replication, MMO server setup |
-| [Wiki](wiki/) | 203 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
+| [Wiki](wiki/) | 204 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
 
 ---
 
@@ -390,8 +390,8 @@ SparkEngine/
 ├── SparkEditor/Source/    64 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 7,680 test definitions, 650 files
-├── wiki/                  203 Markdown pages excluding _Sidebar.md (inventory only)
+├── Tests/                 7,852 test definitions, 666 files
+├── wiki/                  204 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```
 

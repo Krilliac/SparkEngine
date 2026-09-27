@@ -163,7 +163,7 @@ SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
 FuzzerTests/                             — libFuzzer harnesses, corpora, fuzz policy (separate from Tests/)
-Tests/                                   — 7716 test definitions across 652 files, CTest
+Tests/                                   — 7852 test definitions across 666 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -354,12 +354,12 @@ To reproduce CI failures locally, see `wiki/development/CI-Reproducible-Builds.m
 | `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error`, experimental |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov, per-subsystem thresholds |
-| `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job; individual diagnostics advisory |
+| `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job; per-check diagnostic budget ratchet |
 | `todo-count` | ubuntu-24.04 | — | — | fails above 20 (required) |
 | `build-windows-shipping` | windows-2022 | MSVC v143 | MinSizeRel | `windows-shipping` preset (Visual Studio generator, no compiler cache), module-profile lifecycle |
 | `reproducibility-windows` | windows-2022 | MSVC v143 | MinSizeRel | two `windows-shipping` checkouts built and installed, compared by `tools/compare_build_outputs.py`, `continue-on-error` |
 
-`build-linux-msan`, `build-windows-vs2026`, `build-linux-mingw-wine` (manual `workflow_dispatch` only), `reproducibility-windows` (until a hosted run shows equivalent trees), and `build-macos` are job-level `continue-on-error` — failures are warnings, not blockers. `clang-tidy` is a blocking dependency of `required-ci-gate` (its configure/compile failures block; individual diagnostics are advisory).
+`build-linux-msan`, `build-windows-vs2026`, `build-linux-mingw-wine` (manual `workflow_dispatch` only), `reproducibility-windows` (until a hosted run shows equivalent trees), and `build-macos` are job-level `continue-on-error` — failures are warnings, not blockers. `clang-tidy` is a blocking dependency of `required-ci-gate` (its configure/compile failures block, and `Tools/clang_tidy_budget.py` fails on any per-check diagnostic count that differs from `Tools/clang-tidy-budget.json`).
 
 Legacy branch protection is not configured on `Working` (`branches/Working/protection` is 404). The repository's `Working integrity` ruleset (21968740) is active, protects against deletion and non-fast-forward updates, and requires the GitHub Actions `Required CI Gate` check with no bypass actors. Re-verify with `python3 .github/scripts/verify-working-ruleset.py --live` (last run 2026-09-24). Exact-SHA evidence and controlled-failure behavior remain release gates tracked as `CI-100`; do not present a green check list alone as release proof.
 

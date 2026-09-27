@@ -297,6 +297,13 @@ ctest --test-dir build -L installed-sdk --no-tests=error
 cmake -B build -DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON
 ctest --test-dir build -L package-consumer-linux --no-tests=error --output-on-failure
 
+# Ten-minute headless FPS/NullRHI soak (HEAD-220; Linux, local evidence). Samples VmRSS,
+# applies the provisional leak-slope ceiling and requires zero NullRHI resources live at
+# device shutdown (a bridge/device teardown guard: modules cannot reach that device).
+# Anchor the label: a bare -L soak also selects nullrhi-soak/server-soak.
+cmake -B build -DSPARK_ENABLE_SOAK_TESTS=ON
+ctest --test-dir build -L '^soak$' --no-tests=error --output-on-failure
+
 # Verbose output
 ctest --test-dir build -C Release -V --no-tests=error
 
@@ -621,7 +628,7 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error`, experimental |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
-| `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job (individual diagnostics advisory) |
+| `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job; per-check diagnostic budget ratchet (`Tools/clang-tidy-budget.json`) |
 | `todo-count` | ubuntu-24.04 | -- | -- | fails above 20 (required) |
 
 **Enforcement truth (verified 2026-09-12):** legacy branch protection is not
@@ -819,7 +826,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*650 test-bearing `.cpp`/`.mm` files, 7680 source-level test definitions*
+*666 test-bearing `.cpp`/`.mm` files, 7852 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -940,7 +947,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCrashSymbolication` | 5 |
 | `TestCrossSystemIntegration` | 4 |
 | `TestD3D11DeviceContractsReal` | 14 |
-| `TestDATA120PersistenceReal` | 5 |
+| `TestDATA120BackupRestore` | 11 |
+| `TestDATA120PersistenceReal` | 9 |
 | `TestDATA120SecretsAtRest` | 5 |
 | `TestDXRSupport` | 13 |
 | `TestDaemonCodexFixes` | 4 |
@@ -989,6 +997,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestECSystemSpecialized` | 27 |
 | `TestECSystemsReal` | 12 |
 | `TestEDT210InspectorEditCommitReal` | 8 |
+| `TestENG200ScriptBindingsReal` | 10 |
 | `TestENG200ScriptFaultsReal` | 7 |
 | `TestENG220ObjImportReal` | 5 |
 | `TestEcsCameraConsole` | 1 |
@@ -1016,7 +1025,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEngineSettingsEdgeCases` | 45 |
 | `TestEngineSettingsParser` | 28 |
 | `TestEngineSettingsReal` | 14 |
-| `TestEngineWiringReal` | 9 |
+| `TestEngineWiringReal` | 10 |
 | `TestEntityArchetype` | 5 |
 | `TestEntityEventBus` | 11 |
 | `TestEntityEventBusReal` | 6 |
@@ -1028,14 +1037,15 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEventResponseSystem` | 15 |
 | `TestEventResponseSystemPhaseEE` | 8 |
 | `TestEventSystem` | 10 |
-| `TestExecScript` | 9 |
+| `TestExecScript` | 10 |
 | `TestExtendedSystems` | 38 |
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 17 |
 | `TestFPSComponents` | 23 |
 | `TestFPSComponentsReal` | 11 |
 | `TestFPSGameplayIntegration` | 17 |
-| `TestFPSMultiplayer` | 11 |
+| `TestFPSLANLoopback` | 1 |
+| `TestFPSMultiplayer` | 15 |
 | `TestFPSWeatherPort` | 6 |
 | `TestFastNoise2SIMD` | 32 |
 | `TestFaultIsolation` | 14 |
@@ -1056,7 +1066,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 9 |
 | `TestGLSLPipelineIntegration` | 19 |
-| `TestGLTFAnimationImport` | 19 |
+| `TestGLTFAnimationImport` | 23 |
 | `TestGLTFSkinnedMeshLoader` | 19 |
 | `TestGLTFStaticMeshLoader` | 10 |
 | `TestGPUClusterCulling` | 11 |
@@ -1072,11 +1082,11 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGTAOEffect` | 8 |
 | `TestGameMode` | 5 |
 | `TestGameModeReal` | 11 |
-| `TestGameModuleMMO` | 36 |
+| `TestGameModuleMMO` | 38 |
 | `TestGameModulePlatformerARPG` | 37 |
 | `TestGameModuleRPG` | 35 |
 | `TestGameModuleRTS` | 39 |
-| `TestGameModuleRacing` | 28 |
+| `TestGameModuleRacing` | 29 |
 | `TestGameObjectTransforms` | 24 |
 | `TestGamePackager` | 14 |
 | `TestGameViewPanel` | 3 |
@@ -1099,7 +1109,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGraphicsStress` | 15 |
 | `TestGraphicsSubsystems` | 45 |
 | `TestGroupAI` | 5 |
-| `TestHEAD220NullRHILifetimeReal` | 6 |
+| `TestHEAD220NullRHILifetimeReal` | 8 |
 | `TestHLODBuilderPhaseII` | 8 |
 | `TestHLODSystem` | 9 |
 | `TestHRTFProcessor` | 8 |
@@ -1144,14 +1154,19 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMMOCredentialSecurity` | 3 |
 | `TestMOD310FPSSceneReloadRespawnReal` | 6 |
 | `TestMOD330ARPGDungeonReal` | 6 |
-| `TestMOD340PlatformerCompletionReal` | 9 |
-| `TestMOD350RPGQuestSliceReal` | 2 |
-| `TestMOD360OpenWorldPersistenceReal` | 2 |
+| `TestMOD330ARPGWorldActors` | 4 |
+| `TestMOD340PlatformerCompletionReal` | 12 |
+| `TestMOD340PlatformerProgressReal` | 2 |
+| `TestMOD350RPGNPCNavigationReal` | 5 |
+| `TestMOD350RPGQuestSliceReal` | 6 |
+| `TestMOD360OpenWorldPersistenceReal` | 3 |
 | `TestMOD370RTSSaveReal` | 3 |
-| `TestMOD370SkirmishDeterminismReal` | 7 |
-| `TestMOD380RacingCompleteRaceReal` | 5 |
+| `TestMOD370SkirmishDeterminismReal` | 11 |
+| `TestMOD380RacingCompleteRaceReal` | 12 |
 | `TestMOD380VehiclePhysicsReal` | 5 |
 | `TestMOD390VisualScriptDiagnosticsReal` | 5 |
+| `TestMOD390VisualScriptGameplayReal` | 3 |
+| `TestMOD390VisualScriptGraphsReal` | 10 |
 | `TestMSanCanary` | 2 |
 | `TestMacOSPlatform` | 6 |
 | `TestMain` | 1 |
@@ -1178,7 +1193,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 7 |
 | `TestModuleHotReload` | 12 |
-| `TestModuleLifecycleReal` | 11 |
+| `TestModuleLifecycleReal` | 16 |
+| `TestModuleVersion` | 6 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
 | `TestMultiISADispatch` | 14 |
@@ -1235,7 +1251,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestPhysicsInterpolation` | 8 |
 | `TestPhysicsStress` | 16 |
 | `TestPhysicsSystem` | 29 |
-| `TestPhysicsTeardownGuard` | 5 |
+| `TestPhysicsTeardownGuard` | 7 |
 | `TestPlatformInput` | 11 |
 | `TestPlayModeManager` | 34 |
 | `TestPluginABI` | 17 |
@@ -1253,7 +1269,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 11 |
 | `TestRHI210D3D11GoldenReal` | 4 |
-| `TestRHI230VulkanValidationReal` | 16 |
+| `TestRHI230VulkanGoldenReal` | 4 |
+| `TestRHI230VulkanValidationReal` | 18 |
+| `TestRHI240OpenGLGoldenReal` | 8 |
 | `TestRHI240OpenGLReal` | 13 |
 | `TestRHIBridgeIntegration` | 19 |
 | `TestRHICapabilityParity` | 4 |
@@ -1262,7 +1280,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRTHandleSystem` | 15 |
 | `TestRandomEngine` | 11 |
 | `TestRecastIntegration` | 6 |
-| `TestReflectedScene` | 10 |
+| `TestReflectedScene` | 13 |
+| `TestReflectedSceneCompatibility` | 3 |
 | `TestReflectedSceneEmissiveHierarchy` | 6 |
 | `TestReflection` | 18 |
 | `TestReflectionProbeCache` | 16 |
@@ -1321,6 +1340,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestServerLiveMockClient` | 10 |
 | `TestServerMockClient` | 31 |
 | `TestServiceTopologyController` | 10 |
+| `TestSessionCompatibilityReal` | 10 |
 | `TestShaderCompilerReal` | 15 |
 | `TestShaderCrossCompilerPhaseW` | 21 |
 | `TestShaderDiskCache` | 6 |
@@ -1347,9 +1367,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkGameRPG` | 5 |
 | `TestSparkGameRTS` | 5 |
 | `TestSparkGameRacing` | 5 |
-| `TestSparkGameShowcase` | 4 |
+| `TestSparkGameShowcase` | 5 |
 | `TestSparkGatewayCoordinator` | 7 |
-| `TestSparkPak` | 19 |
+| `TestSparkPak` | 20 |
 | `TestSparkServerApplication` | 27 |
 | `TestSparkServerHealth` | 6 |
 | `TestSpatialGrid` | 16 |

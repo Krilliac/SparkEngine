@@ -172,6 +172,7 @@
 - [Build Optimizations](development/Build-Optimizations.md)
 - [CI Reproducible Builds](development/CI-Reproducible-Builds.md)
 - [Release Publication Stages](development/Release-Publication-Stages.md)
+- [Session Handoff 2026-09-27](development/Session-Handoff-2026-09-27.md)
 - [GitHub API and PR Checks](development/GitHub-API-and-PR-Checks.md)
 - [Git Rebase Conflicts](development/Git-Rebase-Conflicts.md)
 - [Clang-Format](development/Clang-Format.md)

@@ -58,7 +58,7 @@ were not shipped as v1.0.0 and do not establish stable-v1 support or certificati
 - Virtual Texturing (feedback-driven page streaming)
 - DXR 1.1 Ray Tracing (reflections, shadows, AO, GI, denoising)
 - Shader Graph (34 node types, HLSL generation)
-- Visual Scripting (64 node palette entries across 9 categories, compiles to AngelScript)
+- Visual Scripting (69 node palette entries across 10 categories, compiles to AngelScript)
 - HeroEngine-inspired MMO networking (AreaServers, WorldServer, seamless migration)
 - 64 `*Panel.h` editor-class inventory; registration, operation coverage, and collaborative editing remain separately gated
 - Jolt Physics (vehicles, ragdoll, cloth, destruction)
