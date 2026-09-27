@@ -102,7 +102,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                                   logs, runner, previous_signer_thumbprint=PREVIOUS_SIGNER_THUMBPRINT,
                                   powershell="powershell.exe", bootstrap=False, previous_receipt=None,
                                   previous_version="1.2.2", reviewed_baseline_commit=REVIEWED_BASELINE_SHA,
-                                  git_runner=None):
+                                  git_runner=None, drills=frozenset()):
         """Exercise the old->new contract with generated native-process fixtures."""
         def copy_private_verified_file(source, private_directory, destination_name):
             destination = private_directory / destination_name
@@ -152,6 +152,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     cmake="cmake",
                     source_sha=SOURCE_SHA,
                     package_manifest=new_manifest,
+                    drills=drills,
                     **kwargs,
                 )
         except TypeError as exc:
@@ -165,10 +166,33 @@ class WindowsMSILifecycleTests(unittest.TestCase):
     def _identity_runner(self, calls, state, *, fail_new_runtime=False,
                          mismatch_upgrade_code=False, same_product_code=False,
                          fail_upgrade_command=False, foreign_related_product=False,
-                         fail_previous_install_command=False, signature_changes=None):
+                         fail_previous_install_command=False, signature_changes=None,
+                         interrupt_outcome="rollback"):
         """Deterministic native fixture for the frozen transaction semantics."""
         def runner(argv, log, *, timeout, env=None, cwd=None):
             calls.append(list(argv))
+            state.setdefault("logs", []).append(log.name)
+            if "-File" in argv:
+                self.assertEqual(Path(argv[argv.index("-File") + 1]).name, "new-msi-failure-transform.ps1")
+                transform = Path(argv[argv.index("-Out") + 1])
+                self.assertFalse(transform.exists())
+                transform.write_bytes(b"fixture failure transform")
+                return 0
+            transforms = [arg for arg in argv if str(arg).startswith("TRANSFORMS=")]
+            if transforms and interrupt_outcome != "not-fired":
+                # Windows Installer ran the forced failure and its rollback script.
+                self.assertTrue(Path(transforms[0].split("=", 1)[1]).is_file())
+                install_root = Path(next(arg.split("=", 1)[1] for arg in argv if arg.startswith("INSTALL_ROOT=")))
+                version = re.search(r"SparkEngine-([0-9]+\.[0-9]+\.[0-9]+)-Windows-", " ".join(map(str, argv))).group(1)
+                if interrupt_outcome == "leave-registered":
+                    state.update(installed=True, version=version, install_root=str(install_root))
+                    install_root.mkdir(parents=True, exist_ok=True)
+                elif interrupt_outcome == "leave-residue":
+                    state["install_root"] = str(install_root)
+                    install_root.mkdir(parents=True, exist_ok=True)
+                elif interrupt_outcome == "tamper-tree":
+                    (install_root / "bin" / "SparkEngine.exe").write_bytes(b"half-written new binary")
+                return MODULE.MSI_INSTALL_FAILURE_EXIT
             if env and "SPARK_SIGNATURE_PATH" in env:
                 selected = Path(env["SPARK_SIGNATURE_PATH"])
                 self.assertEqual(selected.parent.name, ".private-previous-package")
@@ -238,7 +262,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                         state["installed"] = False
                         Path(install_root).mkdir(parents=True, exist_ok=True)
                     return 9
-                Path(install_root).mkdir(parents=True, exist_ok=True)
+                (Path(install_root) / "bin").mkdir(parents=True, exist_ok=True)
+                (Path(install_root) / "bin" / "SparkEngine.exe").write_bytes(f"SparkEngine {state['version']}".encode())
                 return 0
             if any(arg.lower().startswith("/f") for arg in argv):
                 state["repaired"] = True
@@ -704,6 +729,129 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
             self.assertTrue(any("Uninstall residue remains" in error for error in report["errors"]))
             self.assertTrue(Path(state["install_root"]).exists())
+
+    def _run_interrupt_drill(self, root, *, interrupt_outcome="rollback", bootstrap=False, log_name="interrupt-logs"):
+        old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+        calls = []
+        state = {"installed": False, "version": None, "repaired": False, "install_root": str(root / "install")}
+        logs = root / log_name
+        result = self._run_transaction_contract(
+            root=root, old_packages=old_packages, new_packages=new_packages,
+            old_manifest=old_manifest, new_manifest=new_manifest,
+            module_manifest=module_manifest, logs=logs, bootstrap=bootstrap,
+            runner=self._identity_runner(calls, state, interrupt_outcome=interrupt_outcome),
+            drills=frozenset({"interrupt"}),
+        )
+        return result, calls, state, logs
+
+    def test_interrupted_upgrade_reverifies_previous_install_before_real_upgrade(self):
+        """Installer_Interrupted: a forced mid-upgrade failure leaves the predecessor exactly in place."""
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(Path(raw))
+            self.assertEqual(result, 0, (logs / "result.json").read_text(encoding="utf-8") if result else "")
+            order = state["logs"]
+            for expected in ("install-previous.log", "interrupt-transform.log", "upgrade-interrupted.log",
+                             "identity-interrupt-previous-after.log", "identity-interrupt-current-after.log",
+                             "upgrade.log"):
+                self.assertIn(expected, order)
+            self.assertLess(order.index("install-previous.log"), order.index("interrupt-transform.log"))
+            self.assertLess(order.index("interrupt-transform.log"), order.index("upgrade-interrupted.log"))
+            self.assertLess(order.index("upgrade-interrupted.log"), order.index("identity-interrupt-previous-after.log"))
+            self.assertLess(order.index("identity-interrupt-current-after.log"), order.index("upgrade.log"))
+            interrupted = calls[order.index("upgrade-interrupted.log")]
+            self.assertIn("/i", interrupted)
+            self.assertTrue(any(str(arg).startswith("TRANSFORMS=") for arg in interrupted))
+            self.assertIn("SparkEngine-1.2.3-", " ".join(map(str, interrupted)))
+            real_upgrade = calls[order.index("upgrade.log")]
+            self.assertFalse(any(str(arg).startswith("TRANSFORMS=") for arg in real_upgrade))
+            drill = json.loads((logs / "interrupt-drill.json").read_text(encoding="utf-8"))
+            self.assertEqual(drill["mode"], "upgrade")
+            self.assertEqual(drill["exit_code"], 1603)
+            self.assertEqual(drill["previous_version"], "1.2.2")
+            self.assertEqual(drill["protected_files"], 1)
+            self.assertTrue(drill["passed"])
+
+    def test_interrupted_upgrade_that_does_not_fail_is_rejected_and_rolled_back(self):
+        """Installer_Rollback: a transform that never fired is a failed drill, and the upgrade is undone."""
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(Path(raw), interrupt_outcome="not-fired")
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("upgrade-interrupted exited 0, expected 1603", " ".join(report["errors"]))
+            self.assertIn("identity-upgrade-failure.log", state["logs"])
+            self.assertIn("rollback-uninstall-new.log", state["logs"])
+            self.assertIn("rollback-install-previous.log", state["logs"])
+            self.assertNotIn("upgrade.log", state["logs"])
+            self.assertFalse((logs / "interrupt-drill.json").exists())
+            self.assertFalse(state["installed"])
+
+    def test_interrupted_upgrade_that_changes_installed_files_fails(self):
+        """Installer_Interrupted: rollback that leaves a different binary behind is not a recovery."""
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(Path(raw), interrupt_outcome="tamper-tree")
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("interrupted upgrade changed the previous installed files", " ".join(report["errors"]))
+            self.assertNotIn("upgrade.log", state["logs"])
+            self.assertIn("uninstall.log", state["logs"])
+
+    def test_interrupted_bootstrap_install_leaves_nothing_behind(self):
+        """Installer_Interrupted: an interrupted fresh install registers nothing and leaves no files."""
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(Path(raw), bootstrap=True)
+            self.assertEqual(result, 0, (logs / "result.json").read_text(encoding="utf-8") if result else "")
+            order = state["logs"]
+            self.assertLess(order.index("install-interrupted.log"), order.index("identity-interrupt-after.log"))
+            self.assertLess(order.index("identity-interrupt-after.log"), order.index("install.log"))
+            drill = json.loads((logs / "interrupt-drill.json").read_text(encoding="utf-8"))
+            self.assertEqual(drill["mode"], "install")
+            self.assertTrue(drill["passed"])
+
+    def test_interrupted_install_leaving_registration_or_residue_fails_and_is_cleaned(self):
+        """Installer_Interrupted: partial activation fails closed and still reaches uninstall."""
+        for outcome, message in (("leave-registered", "interrupted install left a registered product"),
+                                 ("leave-residue", "interrupted install left residue")):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as raw:
+                result, calls, state, logs = self._run_interrupt_drill(
+                    Path(raw), interrupt_outcome=outcome, bootstrap=True)
+                self.assertNotEqual(result, 0)
+                report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+                self.assertIn(message, " ".join(report["errors"]))
+                self.assertNotIn("install.log", state["logs"])
+                self.assertIn("uninstall.log", state["logs"])
+                if outcome == "leave-registered":
+                    self.assertFalse(state["installed"])
+
+    def test_unknown_drill_is_rejected(self):
+        with self.assertRaises(MODULE.argparse.ArgumentTypeError):
+            MODULE.parse_drills("interrupt,teleport")
+        self.assertEqual(MODULE.parse_drills("interrupt"), frozenset({"interrupt"}))
+        argv = [
+            "qualify-windows-msi.py", "--packages", "packages", "--version", "1.2.3",
+            "--manifest", "modules.cmake", "--package-manifest", "package.json",
+            "--runner-temp", "runner-temp", "--logs", "logs", "--source-sha", SOURCE_SHA,
+            "--drills", "interrupt,repair",
+        ]
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                MODULE.main()
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("unknown drill(s) 'repair'", stderr.getvalue())
+        with tempfile.TemporaryDirectory() as raw, self.assertRaises(ValueError):
+            MODULE._qualify_impl(Path(raw), "1.2.3", Path(raw), Path(raw), Path(raw) / "logs",
+                                 msiexec="msiexec.exe", powershell="powershell.exe", cmake="cmake",
+                                 drills=frozenset({"teleport"}))
+
+    def test_release_qualifications_run_the_interrupt_drill(self):
+        """Both versioned release qualification steps (v1 N-1 and v0.9.0 bootstrap) run the drill."""
+        release = (Path(__file__).resolve().parents[1] / "workflows" / "release.yml").read_text(encoding="utf-8")
+        invocations = release.split("python .github/scripts/qualify-windows-msi.py")[1:]
+        self.assertEqual(len(invocations), 2)
+        for invocation in invocations:
+            command = invocation.split("if ($LASTEXITCODE -ne 0)", 1)[0]
+            self.assertIn("--drills interrupt", command)
+        self.assertTrue(MODULE.FAILURE_TRANSFORM_SCRIPT.is_file())
 
     def test_main_requires_all_previous_artifact_arguments_together(self):
         """CLI transaction inputs are an all-or-none contract."""

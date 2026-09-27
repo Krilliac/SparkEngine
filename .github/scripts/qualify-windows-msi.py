@@ -20,6 +20,17 @@ instead requires --reviewed-baseline-commit: before any Windows Installer
 command the source SHA must be a single-parent child of that reviewed baseline,
 using the same parent rule as verify_v090_source_seal.py. Both SHAs are
 recorded in bootstrap-baseline.json and the qualification report.
+
+--drills interrupt adds the interrupted-activation drill. The verified MSI is
+never modified: new-msi-failure-transform.ps1 derives a transform that adds a
+deferred cmd.exe /c exit 1 custom action right after InstallFiles, so applying
+it with TRANSFORMS= writes files and then forces Windows Installer rollback
+(exit 1603). In transaction mode the drill runs after the predecessor install
+and requires the predecessor registration, every installed file digest and the
+external user data to survive, with the candidate unregistered, before the real
+upgrade. In plain and bootstrap mode it runs before the real install and
+requires no registration, no install-root residue and intact user data. The
+result is recorded in interrupt-drill.json and the qualification report.
 """
 from __future__ import annotations
 
@@ -112,6 +123,41 @@ $stream = [System.IO.File]::Open(
 try { $stream.Write($bytes, 0, $bytes.Length) }
 finally { $stream.Dispose() }
 """
+
+
+FAILURE_TRANSFORM_SCRIPT = Path(__file__).with_name("new-msi-failure-transform.ps1")
+DRILLS = frozenset({"interrupt"})
+# ERROR_INSTALL_FAILURE: the forced custom-action failure ran and Windows
+# Installer completed its rollback script.
+MSI_INSTALL_FAILURE_EXIT = 1603
+
+
+def parse_drills(value):
+    tokens = [token.strip() for token in str(value).split(",")]
+    unknown = sorted(token for token in tokens if token not in DRILLS)
+    if unknown:
+        raise argparse.ArgumentTypeError(
+            f"unknown drill(s) {', '.join(repr(token) for token in unknown)}; supported: {', '.join(sorted(DRILLS))}"
+        )
+    return frozenset(tokens)
+
+
+def _install_tree_digests(root):
+    """SHA-256 of every installed file, keyed by relative path; links are refused."""
+    root = Path(root)
+    if not root.exists():
+        return {}
+    digests = {}
+    for directory, directory_names, file_names in os.walk(root):
+        for name in (*directory_names, *file_names):
+            entry = Path(directory) / name
+            if entry.is_symlink() or getattr(entry.lstat(), "st_file_attributes", 0) & getattr(
+                    stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0):
+                raise ValueError(f"installed tree contains a link: {entry}")
+        for name in file_names:
+            entry = Path(directory) / name
+            digests[entry.relative_to(root).as_posix()] = hashlib.sha256(entry.read_bytes()).hexdigest()
+    return digests
 
 
 def run_command(argv, log, *, timeout, env=None, cwd=None):
@@ -368,8 +414,11 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                   msiexec, powershell, cmake, source_sha=None, package_manifest=None,
                   previous_packages=None, previous_version=None, previous_package_manifest=None,
                   previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False,
-                  reviewed_baseline_commit=None, git_runner=subprocess.run):
+                  reviewed_baseline_commit=None, git_runner=subprocess.run, drills=frozenset()):
     logs = Path(logs)
+    drills = frozenset(drills)
+    if not drills <= DRILLS:
+        raise ValueError(f"unknown qualification drill(s): {', '.join(sorted(drills - DRILLS))}")
     if os.path.lexists(logs):
         raise ValueError("package-evidence log directory must be fresh")
     logs.mkdir(parents=True, exist_ok=False)
@@ -385,7 +434,8 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                          if transaction else ("hosted-windows-msi-bootstrap-repair-uninstall"
                                               if bootstrap_repair else "hosted-windows-msi-install-uninstall")),
               "source_sha": source_sha,
-              "version": version, "errors": errors, "certifies_windows11": False}
+              "version": version, "errors": errors, "certifies_windows11": False,
+              "drills": sorted(drills)}
     attempted = False
     validated = False
     package = None
@@ -581,6 +631,35 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                 raise ValueError(f"{label} could not read external user data sentinel: {error}") from error
             if actual != user_data_sentinel_bytes:
                 raise ValueError(f"{label} changed external user data sentinel")
+
+        def build_failure_transform():
+            """Derive the qualification-only failure transform; the private MSI stays byte-identical."""
+            transform = scratch / "interrupt-failure.mst"
+            execute("interrupt-transform", [powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                                            str(FAILURE_TRANSFORM_SCRIPT), "-Msi", str(package),
+                                            "-Out", str(transform)], timeout=300)
+            if package_digest(package) != digest:
+                raise ValueError("private MSI changed while building the interruption transform")
+            if transform.is_symlink() or not transform.is_file() or transform.stat().st_size == 0:
+                raise ValueError("interruption transform was not written")
+            return transform, hashlib.sha256(transform.read_bytes()).hexdigest()
+
+        def run_interrupted_activation(label, transform):
+            code = runner([msiexec, "/i", str(package), f"TRANSFORMS={transform}", "/qn", "/norestart", "/L*V",
+                           str(logs / f"msi-{label}.log"), f"INSTALL_ROOT={install_root}"],
+                          logs / f"{label}.log", timeout=900)
+            if code != MSI_INSTALL_FAILURE_EXIT:
+                raise ValueError(f"{label} exited {code}, expected {MSI_INSTALL_FAILURE_EXIT}: "
+                                 "the failure transform did not interrupt activation")
+
+        def record_interrupt_drill(mode, transform_digest, **details):
+            result = {"scope": f"windows-msi-interrupted-{mode}", "mode": mode,
+                      "transform_sha256": transform_digest, "exit_code": MSI_INSTALL_FAILURE_EXIT,
+                      **details, "passed": True}
+            report["interrupt"] = result
+            _write_result_report(logs / "interrupt-drill.json", {"source_sha": source_sha, "msi": package.name,
+                                                                  "sha256": digest, **result})
+
         with _hold_private_msi_identity(package):
             if package_digest(package) != digest:
                 raise ValueError("private MSI changed during identity validation")
@@ -625,12 +704,58 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
             report["product_code"] = info["ProductCode"]
             report["upgrade_code"] = info["UpgradeCode"]
             if transaction:
+                if "interrupt" in drills:
+                    transform, transform_digest = build_failure_transform()
+                    with _hold_private_msi_identity(old_package):
+                        if package_digest(old_package) != old_digest:
+                            raise ValueError("private previous MSI changed before the interrupted upgrade")
+                        previous_before = identity("identity-interrupt-previous-before", old_package)
+                    if (previous_before["ProductState"] != 5
+                            or previous_before["ProductVersion"] != previous_version):
+                        raise ValueError("previous product is not installed before the interrupted upgrade")
+                    protected_tree = _install_tree_digests(install_root)
+                    if not protected_tree:
+                        raise ValueError("previous install has no files for the interrupted upgrade to protect")
+                    # A transform that fails to fire leaves a real upgrade
+                    # behind; the failure path must inspect and roll it back.
+                    upgrade_attempted = True
+                    run_interrupted_activation("upgrade-interrupted", transform)
+                    with _hold_private_msi_identity(old_package):
+                        if package_digest(old_package) != old_digest:
+                            raise ValueError("private previous MSI changed during the interrupted upgrade")
+                        previous_after = identity("identity-interrupt-previous-after", old_package)
+                    current_after = identity("identity-interrupt-current-after", package)
+                    if (previous_after["ProductState"] != 5
+                            or previous_after["ProductVersion"] != previous_version):
+                        raise ValueError("interrupted upgrade replaced the previous installed product")
+                    if current_after["ProductState"] != -1:
+                        raise ValueError("interrupted upgrade left the new product registered")
+                    if _install_tree_digests(install_root) != protected_tree:
+                        raise ValueError("interrupted upgrade changed the previous installed files")
+                    verify_user_data("interrupted upgrade")
+                    upgrade_attempted = False
+                    record_interrupt_drill("upgrade", transform_digest, previous_version=previous_version,
+                                           protected_files=len(protected_tree))
                 upgrade_attempted = True
                 execute("upgrade", [msiexec, "/i", str(package), "/qn", "/norestart", "/L*V",
                                      str(logs / "msi-upgrade.log"), f"INSTALL_ROOT={install_root}"])
                 attempted = True
                 cleanup_package, cleanup_digest = package, digest
             else:
+                if "interrupt" in drills:
+                    transform, transform_digest = build_failure_transform()
+                    # A partial activation must still reach the uninstall and
+                    # residue checks in the finally block.
+                    attempted = True
+                    run_interrupted_activation("install-interrupted", transform)
+                    after_interrupt = identity("identity-interrupt-after")
+                    if after_interrupt["ProductState"] != -1 or after_interrupt["RelatedProducts"]:
+                        raise ValueError("interrupted install left a registered product")
+                    if install_root.exists() or install_root.is_symlink():
+                        raise ValueError(f"interrupted install left residue at {install_root}")
+                    verify_user_data("interrupted install")
+                    attempted = False
+                    record_interrupt_drill("install", transform_digest)
                 attempted = True
                 execute("install", [msiexec, "/i", str(package), "/qn", "/norestart", "/L*V",
                                     str(logs / "msi-install.log"), f"INSTALL_ROOT={install_root}"])
@@ -795,7 +920,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
             msiexec, powershell, cmake, source_sha=None, package_manifest=None,
             previous_packages=None, previous_version=None, previous_package_manifest=None,
             previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False,
-            reviewed_baseline_commit=None):
+            reviewed_baseline_commit=None, drills=frozenset()):
     """Run native MSI qualification on Windows.
 
     The platform-independent transaction state machine lives in the private
@@ -814,6 +939,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         previous_receipt=previous_receipt,
         bootstrap_repair=bootstrap_repair,
         reviewed_baseline_commit=reviewed_baseline_commit,
+        drills=drills,
     )
 
 
@@ -836,6 +962,8 @@ def main():
                         help="run repair after a fresh install without an N-1 predecessor")
     parser.add_argument("--reviewed-baseline-commit",
                         help="reviewed v0.9.0 baselineCommit; required with --bootstrap-repair")
+    parser.add_argument("--drills", type=parse_drills, default=frozenset(),
+                        help="comma-separated extra drills: interrupt (forced-rollback activation)")
     args = parser.parse_args()
     previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest,
                        args.previous_signer_thumbprint, args.previous_receipt)
@@ -858,7 +986,8 @@ def main():
                    previous_signer_thumbprint=args.previous_signer_thumbprint,
                    previous_receipt=args.previous_receipt,
                    bootstrap_repair=args.bootstrap_repair,
-                   reviewed_baseline_commit=args.reviewed_baseline_commit)
+                   reviewed_baseline_commit=args.reviewed_baseline_commit,
+                   drills=args.drills)
 
 
 if __name__ == "__main__":
