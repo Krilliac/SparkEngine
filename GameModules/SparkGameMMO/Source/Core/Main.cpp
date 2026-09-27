@@ -391,7 +391,9 @@ void SparkGameMMOModule::OnUnload()
                 m_persistenceSystem->SaveCharacterSync(save);
         }
         if (m_guildSystem)
+        {
             m_persistenceSystem->SaveWorldSync(CaptureWorld(*m_guildSystem));
+        }
     }
 
     UnregisterConsoleCommands();
