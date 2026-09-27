@@ -21,6 +21,7 @@ namespace OpenWorld
 {
     class OWWorldSetup;
     class OWPlayerSystem;
+    class OWPlayerController;
     class OWExplorationSystem;
     class OWWildlifeSystem;
     class OWSettlementSystem;
@@ -69,6 +70,7 @@ class SparkGameOpenWorldModule : public Spark::IModule
     std::unique_ptr<OpenWorld::OWGatheringSystem> m_gatheringSystem;
     std::unique_ptr<OpenWorld::OWDynamicEventSystem> m_eventSystem;
     std::unique_ptr<OpenWorld::OWEngineSystems> m_engineSystems;
+    std::unique_ptr<OpenWorld::OWPlayerController> m_playerController;
 };
 
 // Module exports

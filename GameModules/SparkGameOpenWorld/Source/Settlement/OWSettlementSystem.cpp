@@ -241,6 +241,7 @@ namespace OpenWorld
 
         m_settlements.clear();
         m_camps.clear();
+        m_visitedSettlements.clear();
         m_initialized = false;
     }
 
@@ -279,6 +280,26 @@ namespace OpenWorld
             }
         }
         return nearest;
+    }
+
+    const Settlement* OWSettlementSystem::FindSettlementAt(float x, float z) const
+    {
+        const Settlement* nearest = GetNearestSettlement(x, z);
+        if (!nearest)
+            return nullptr;
+        const float dx = x - nearest->centerX;
+        const float dz = z - nearest->centerZ;
+        return dx * dx + dz * dz <= nearest->radius * nearest->radius ? nearest : nullptr;
+    }
+
+    bool OWSettlementSystem::VisitSettlement(uint32_t settlementId)
+    {
+        const Settlement* settlement = GetSettlement(settlementId);
+        if (!settlement)
+            return false;
+        if (m_visitedSettlements.insert(settlementId).second)
+            Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Visited settlement: " + settlement->name);
+        return true;
     }
 
     uint32_t OWSettlementSystem::PlaceCamp(const std::string& name, float x, float y, float z, uint32_t regionId)
@@ -390,6 +411,8 @@ namespace OpenWorld
                 ss << " | Blacksmith";
             if (s.hasInn)
                 ss << " | Inn";
+            if (IsSettlementVisited(s.settlementId))
+                ss << " | Visited";
             ss << "\n";
         }
         return ss.str();

@@ -307,6 +307,26 @@ namespace OpenWorld
         }
     }
 
+    uint32_t OWGatheringSystem::FindNearestHarvestableNode(float x, float z, float maxDistance) const
+    {
+        uint32_t bestId = 0;
+        float bestDistSq = maxDistance * maxDistance;
+        for (const auto& [id, node] : m_nodes)
+        {
+            if (node.isDepleted)
+                continue;
+            const float dx = node.posX - x;
+            const float dz = node.posZ - z;
+            const float distSq = dx * dx + dz * dz;
+            if (distSq < bestDistSq || (distSq == bestDistSq && bestId != 0 && id < bestId))
+            {
+                bestDistSq = distSq;
+                bestId = id;
+            }
+        }
+        return bestId;
+    }
+
     uint32_t OWGatheringSystem::HarvestNode(uint32_t nodeId)
     {
         auto it = m_nodes.find(nodeId);

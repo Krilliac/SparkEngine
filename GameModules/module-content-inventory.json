@@ -219,7 +219,7 @@
       "directory": "GameModules/SparkGameOpenWorld",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameOpenWorld/Source",
-      "sourceFileCount": 21,
+      "sourceFileCount": 23,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,
@@ -245,12 +245,13 @@
         "Engine/World/TimeOfDaySystem.h",
         "Engine/World/WorldOriginSystem.h",
         "Graphics/WeatherSystem.h",
+        "Input/InputManager.h",
         "Utils/EventBus.h",
         "Utils/InvalidStateDetector.h",
         "Utils/LogMacros.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 18,
+      "privateEngineHeaderCount": 19,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.cpp"
       ]

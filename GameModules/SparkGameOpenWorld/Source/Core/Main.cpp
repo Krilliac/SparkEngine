@@ -9,6 +9,7 @@
 #include "SparkGameOpenWorld.h"
 #include "OWEngineSystems.h"
 #include "World/OWWorldSetup.h"
+#include "Player/OWPlayerController.h"
 #include "Player/OWPlayerSystem.h"
 #include "Exploration/OWExplorationSystem.h"
 #include "Wildlife/OWWildlifeSystem.h"
@@ -135,6 +136,11 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
         console.LogWarning("[OpenWorld] Engine systems integration partially failed (non-fatal)");
     }
 
+    // Player input drives movement across the regions and interaction with nodes, events and settlements.
+    m_playerController = std::make_unique<OpenWorld::OWPlayerController>();
+    m_playerController->Initialize(context, *m_playerSystem, *m_worldSetup, *m_gatheringSystem, *m_eventSystem,
+                                   *m_settlementSystem);
+
     RegisterConsoleCommands();
 
     // Register OpenWorld-specific state validation rules
@@ -198,7 +204,8 @@ void SparkGameOpenWorldModule::OnUnload()
     console.LogInfo("[OpenWorld] Unloading Spark Open World module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Open World module shutting down");
 
-    // Shutdown in reverse initialization order
+    // Shutdown in reverse initialization order; the controller references the systems below.
+    m_playerController.reset();
     if (m_engineSystems)
     {
         m_engineSystems->Shutdown();
@@ -251,6 +258,7 @@ void SparkGameOpenWorldModule::OnUpdate(float deltaTime)
     if (!m_initialized || m_paused)
         return;
 
+    m_playerController->Update(deltaTime);
     m_worldSetup->Update(deltaTime);
     m_playerSystem->Update(deltaTime);
     const auto& position = m_playerSystem->GetWorldState();
@@ -271,6 +279,7 @@ void SparkGameOpenWorldModule::OnFixedUpdate(float fixedDeltaTime)
     if (!m_initialized || m_paused)
         return;
 
+    m_playerController->FixedUpdate(fixedDeltaTime);
     m_playerSystem->FixedUpdate(fixedDeltaTime);
 }
 

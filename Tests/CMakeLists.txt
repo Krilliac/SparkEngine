@@ -1105,6 +1105,7 @@ target_sources(SparkTests PRIVATE
     TestSAVE230NewerFormatSlotReal.cpp
     TestSaveInterruptionReal.cpp
     TestMOD360OpenWorldPersistenceReal.cpp
+    TestMOD360OpenWorldTraversalReal.cpp
     TestSecurityParsersReal.cpp
     TestTextureStexBoundsReal.cpp
     TestShaderCompilerReal.cpp
@@ -1143,6 +1144,7 @@ if(TARGET imgui)
 
     # OpenWorld module sources (all use ImGui for RenderDebugUI)
     target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Player/OWPlayerController.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Player/OWPlayerSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Exploration/OWExplorationSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Gathering/OWGatheringSystem.cpp"

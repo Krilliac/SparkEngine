@@ -166,6 +166,12 @@ namespace OpenWorld
             m_worldState.yaw += 360.0f;
     }
 
+    void OWPlayerSystem::SetLocomotion(float speed, bool sprinting)
+    {
+        m_worldState.speed = std::max(0.0f, speed);
+        m_worldState.isSprinting = sprinting;
+    }
+
     std::string OWPlayerSystem::GetCompassDirection() const
     {
         float y = m_worldState.yaw;

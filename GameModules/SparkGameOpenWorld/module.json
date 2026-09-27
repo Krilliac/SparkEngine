@@ -18,7 +18,8 @@
   },
   "tests": {
     "files": [
-      "Tests/TestOpenWorldModule.cpp"
+      "Tests/TestOpenWorldModule.cpp",
+      "Tests/TestMOD360OpenWorldTraversalReal.cpp"
     ],
     "prefixes": [
       {
@@ -28,6 +29,10 @@
       {
         "prefix": "Gated_OW",
         "count": 46
+      },
+      {
+        "prefix": "OpenWorldTraversal_",
+        "count": 5
       }
     ]
   },
