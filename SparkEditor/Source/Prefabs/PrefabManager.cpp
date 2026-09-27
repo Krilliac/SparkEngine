@@ -191,12 +191,17 @@ namespace SparkEditor
         return it->second.Save(path);
     }
 
-    PrefabAsset* PrefabManager::LoadPrefab(const std::string& filePath)
+    PrefabAsset* PrefabManager::LoadPrefab(const std::string& filePath, std::string* error)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        PrefabAsset prefab = PrefabAsset::Load(filePath);
-        if (prefab.GetName().empty())
+        PrefabAsset prefab;
+        std::string loadError;
+        const bool loaded = PrefabAsset::TryLoad(filePath, prefab, loadError);
+        if (error)
+            *error = loadError;
+        if (!loaded)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "%s", loadError.c_str());
             return nullptr;
         }
 

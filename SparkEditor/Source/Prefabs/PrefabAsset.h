@@ -131,19 +131,38 @@ namespace SparkEditor
          */
         const SerializedComponent* GetComponent(const std::string& typeName) const;
 
+        /// Newest `SPARKPREFAB <version>` this build reads, and the only one it writes.
+        static constexpr int kPrefabFormatVersion = 1;
+
         /**
          * @brief Save the prefab to a file
-         * @param path File path to save to (.sparkprefab)
+         *
+         * The text is written through SaveFileDurability::WriteFileAtomically: the previous file
+         * is kept as `<path>.bak`, and a failed or interrupted save leaves both files unchanged.
+         *
+         * @param path UTF-8 file path to save to (.sparkprefab)
          * @return true if save succeeded
          */
         bool Save(const std::string& path);
 
         /**
-         * @brief Load a prefab from a file
-         * @param path File path to load from
-         * @return Loaded prefab asset, or empty prefab on failure
+         * @brief Load a prefab from a file, falling back to its retained `<path>.bak`
+         *
+         * The header must be exactly `SPARKPREFAB <version>` with a version this build reads.
+         * Counts are bounded, every property type must be known, and the file must end after the
+         * declared components. A primary that fails any of those checks is replaced by the
+         * retained backup when that loads; a primary written by a newer format version fails
+         * closed without consulting the backup, because loading an older copy and saving over
+         * the newer file would discard its data.
+         *
+         * @param path  UTF-8 path of the .sparkprefab file
+         * @param out   Receives the prefab only on success; untouched on failure
+         * @param error On failure, an actionable reason naming the file and location (both
+         *              reasons when the backup was tried too). On a recovery from the backup,
+         *              why the primary was rejected. Cleared on a clean load.
+         * @return true if @p out now holds a complete prefab
          */
-        static PrefabAsset Load(const std::string& path);
+        static bool TryLoad(const std::string& path, PrefabAsset& out, std::string& error);
 
         /**
          * @brief Check if this prefab has been modified since last save

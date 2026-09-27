@@ -412,6 +412,7 @@ add_executable(SparkTests
     TestAchievementSystem.cpp
     TestShaderHotReload.cpp
     TestRuntimePrefab.cpp
+    TestPrefabPersistence.cpp
     TestTutorialSystem.cpp
     TestGoldenImageTest.cpp
     TestAnimNotify.cpp
@@ -721,6 +722,10 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"
+    # SAVE-230: prefab I/O needs only SceneFile and SceneComponentCodec (above), no ImGui.
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabAsset.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManagerInstances.cpp"
     # Editor sources needed by tests
     TestEngineInterfaceProtocol.cpp
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/EngineInterface.cpp"
@@ -1301,9 +1306,6 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Terrain/TerrainEditorUI.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Terrain/TerrainEditorProperties.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Terrain/TerrainData.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManager.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManagerInstances.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabAsset.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Profiler/PerformanceProfiler.cpp"
     )
 
@@ -1679,6 +1681,15 @@ add_test(NAME SparkDocumentWriteTests COMMAND $<TARGET_FILE:SparkTests> --warn-i
 set_tests_properties(SparkDocumentWriteTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=DocumentWrite_;SPARK_TEST_EXPECT_COUNT=4"
     LABELS "compatibility;save;unit"
+    TIMEOUT 30)
+
+# SAVE-230: editor prefabs fail closed on a newer SPARKPREFAB version, name the
+# component and line of damage, recover from the retained .bak, and a failed save
+# leaves the previous prefab byte-identical.
+add_test(NAME SparkPrefabPersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkPrefabPersistenceTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrefabPersistence_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "compatibility;prefab;unit"
     TIMEOUT 30)
 
 # SAVE-230 / OD-03: SceneFile reads v2 (N) and v1 (N-1) from committed fixtures,

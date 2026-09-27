@@ -186,9 +186,14 @@ namespace Spark::ECS
 
         /**
          * @brief Read a prefab from a binary stream, validating the header.
+         *
+         * Rejects a wrong magic, any version other than PrefabFileHeader::kVersion (a newer
+         * writer's layout cannot be read by this build) and a truncated stream.
+         *
          * @param reader BinaryReader to read from.
+         * @return true when the prefab was replaced; false leaves this prefab untouched.
          */
-        void Deserialize(BinaryReader& reader);
+        [[nodiscard]] bool Deserialize(BinaryReader& reader);
 
       private:
         std::string m_name;                            ///< Unique prefab name.
@@ -228,31 +233,37 @@ namespace Spark::ECS
         }
     }
 
-    inline void RuntimePrefab::Deserialize(BinaryReader& reader)
+    inline bool RuntimePrefab::Deserialize(BinaryReader& reader)
     {
-        uint32_t magic = reader.Read<uint32_t>();
-        uint32_t version = reader.Read<uint32_t>();
-        (void)magic;
-        (void)version;
+        const uint32_t magic = reader.Read<uint32_t>();
+        const uint32_t version = reader.Read<uint32_t>();
+        if (reader.HasError() || magic != PrefabFileHeader::kMagic || version != PrefabFileHeader::kVersion)
+            return false;
 
-        m_name = reader.ReadString();
-        uint32_t compCount = reader.Read<uint32_t>();
-        m_components.clear();
-        m_components.reserve(compCount);
-
-        for (uint32_t i = 0; i < compCount; ++i)
+        std::string name = reader.ReadString();
+        const uint32_t compCount = reader.Read<uint32_t>();
+        std::vector<PrefabComponentData> components;
+        // The count is untrusted: stop at the first failed read instead of reserving or
+        // looping over a corrupt value.
+        for (uint32_t i = 0; i < compCount && !reader.HasError(); ++i)
         {
             PrefabComponentData comp;
             comp.typeName = reader.ReadString();
-            uint32_t propCount = reader.Read<uint32_t>();
-            for (uint32_t j = 0; j < propCount; ++j)
+            const uint32_t propCount = reader.Read<uint32_t>();
+            for (uint32_t j = 0; j < propCount && !reader.HasError(); ++j)
             {
                 std::string key = reader.ReadString();
                 std::string value = reader.ReadString();
                 comp.properties[std::move(key)] = std::move(value);
             }
-            m_components.push_back(std::move(comp));
+            components.push_back(std::move(comp));
         }
+        if (reader.HasError())
+            return false;
+
+        m_name = std::move(name);
+        m_components = std::move(components);
+        return true;
     }
 
     // =========================================================================

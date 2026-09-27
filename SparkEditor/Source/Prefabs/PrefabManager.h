@@ -89,11 +89,13 @@ namespace SparkEditor
         bool SavePrefab(const std::string& name, const std::string& directory = "");
 
         /**
-         * @brief Load a prefab from disk
-         * @param filePath Path to the .sparkprefab file
-         * @return Pointer to the loaded prefab, or nullptr on failure
+         * @brief Load a prefab from disk (see PrefabAsset::TryLoad for validation and recovery)
+         * @param filePath UTF-8 path to the .sparkprefab file
+         * @param error When non-null, receives the actionable reason on failure, or why the
+         *              primary was rejected when the retained `.bak` was loaded instead
+         * @return Pointer to the loaded prefab, or nullptr on failure (the registry is unchanged)
          */
-        PrefabAsset* LoadPrefab(const std::string& filePath);
+        PrefabAsset* LoadPrefab(const std::string& filePath, std::string* error = nullptr);
 
         /**
          * @brief Delete a prefab by name

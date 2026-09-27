@@ -3,8 +3,10 @@
 #include "Utils/Serializer.h"
 #include "Engine/ECS/RuntimePrefab.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 // ============================================================================
 // RuntimePrefab — construction and name
@@ -132,6 +134,50 @@ TEST(RuntimePrefab_Clone_PreservesParent)
 
     auto clone = child.Clone();
     EXPECT_TRUE(clone->GetParent() == &parent);
+}
+
+// ============================================================================
+// Serialize / Deserialize header gate
+// ============================================================================
+
+TEST(RuntimePrefab_DeserializeRejectsWrongMagicAndFutureVersion)
+{
+    Spark::ECS::RuntimePrefab source("Guard");
+    source.AddComponent("Transform", {{"posX", "3"}});
+    Spark::BinaryWriter writer;
+    source.Serialize(writer);
+    const std::vector<uint8_t> good = writer.GetBuffer();
+
+    // The unmodified stream round-trips.
+    Spark::ECS::RuntimePrefab roundTrip("Placeholder");
+    Spark::BinaryReader goodReader(good);
+    ASSERT_TRUE(roundTrip.Deserialize(goodReader));
+    EXPECT_TRUE(roundTrip.GetName() == "Guard");
+    ASSERT_EQ(roundTrip.GetComponents().size(), 1u);
+    EXPECT_TRUE(roundTrip.GetComponents()[0].properties.at("posX") == "3");
+
+    const auto expectRejectedAndUntouched = [](const std::vector<uint8_t>& bytes)
+    {
+        Spark::ECS::RuntimePrefab target("Kept");
+        target.AddComponent("Marker", {{"k", "v"}});
+        Spark::BinaryReader reader(bytes);
+        EXPECT_FALSE(target.Deserialize(reader));
+        EXPECT_TRUE(target.GetName() == "Kept");
+        EXPECT_EQ(target.GetComponents().size(), 1u);
+        EXPECT_TRUE(target.HasComponent("Marker"));
+    };
+
+    // Byte 0 is the low byte of the little-endian magic; bytes 4..7 are the version.
+    std::vector<uint8_t> wrongMagic = good;
+    wrongMagic[0] ^= 0xFFu;
+    expectRejectedAndUntouched(wrongMagic);
+
+    std::vector<uint8_t> futureVersion = good;
+    futureVersion[4] = static_cast<uint8_t>(Spark::ECS::PrefabFileHeader::kVersion + 1);
+    expectRejectedAndUntouched(futureVersion);
+
+    std::vector<uint8_t> truncated(good.begin(), good.end() - 2);
+    expectRejectedAndUntouched(truncated);
 }
 
 // ============================================================================
