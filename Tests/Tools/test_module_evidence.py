@@ -4888,7 +4888,7 @@ class TestCIWiring(unittest.TestCase):
         block = self._job_block("module-evidence")
         self.assertIn("build-linux-asan", block[:block.index("runs-on:")])
         self.assertIn("name: test-results-linux-asan", block)
-        evidence_dir = str(Path(EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]).parent)
+        evidence_dir = Path(EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]).parent.as_posix()
         self.assertIn(f"path: {evidence_dir}", block)
         verify = block.index("verify-sanitizer-evidence.py verify-published")
         self.assertLess(block.index("name: test-results-linux-asan"), verify)
