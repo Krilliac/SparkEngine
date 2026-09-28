@@ -22,6 +22,9 @@ cmake_minimum_required(VERSION 3.25)
 #      A soname the package ships in <prefix>/lib must resolve to that copy.
 #      Every symlink must stay inside the prefix; every .sparkabi sidecar must
 #      hash its installed module image (ModuleManager rejects a mismatch).
+#      Every ELF's symbol-version needs (readelf -V) on glibc, libstdc++ and
+#      libgcc_s must stay within the Ubuntu 24.04 (OD-10) ceilings below: ldd
+#      only proves the build host can load the image, not the support row.
 #   4. Launch the installed SparkEngine -headless with the installed
 #      SparkGameFPS from cwd=/ with an empty environment and fresh HOME/XDG
 #      directories, parse its lifecycle records with the shared NullRHI parser,
@@ -172,6 +175,77 @@ function(_spark_parse_ldd text out_sonames out_paths)
     endforeach()
     set(${out_sonames} "${_sonames}" PARENT_SCOPE)
     set(${out_paths} "${_paths}" PARENT_SCOPE)
+endfunction()
+
+# Symbol-version ceilings of the OD-10 support row, Ubuntu 24.04 LTS x86-64
+# ("noble"). ldd resolves against the build host, so an image built against a
+# newer glibc or a newer GCC's libstdc++/libgcc_s still passes ldd there and
+# then fails to load on a stock noble install ("version `GLIBCXX_3.4.34' not
+# found"). Each entry is "<library regex>|<tag prefix>|<highest tag noble
+# defines>", from the noble package versions:
+#   libc6 2.39-0ubuntu8.x                       -> GLIBC_2.39 (every glibc library)
+#   libstdc++6 14-20240412 / 14.2.0 (updates)   -> GLIBCXX_3.4.33, CXXABI_1.3.15
+#   libgcc-s1 14-20240412 / 14.2.0 (updates)    -> GCC_14.0.0
+# The GLIBCXX/CXXABI values follow the libstdc++ ABI history (GCC 14.1 added
+# GLIBCXX_3.4.33 and CXXABI_1.3.15; GCC 15 adds GLIBCXX_3.4.34). Raise them only
+# with the OD-10 row. Non-numeric tags must appear in the named list.
+set(_SPARK_LINUX_ABI_CEILINGS
+    "^(libc|libm|libmvec|libpthread|libdl|librt|libresolv|libutil|libanl|ld-linux-x86-64)\\.so\\.[0-9]+$|GLIBC_|2.39"
+    "^libstdc\\+\\+\\.so\\.6$|GLIBCXX_|3.4.33"
+    "^libstdc\\+\\+\\.so\\.6$|CXXABI_|1.3.15"
+    "^libgcc_s\\.so\\.1$|GCC_|14.0.0")
+set(_SPARK_LINUX_ABI_NAMED_TAGS GLIBC_ABI_DT_RELR CXXABI_TM_1 CXXABI_FLOAT128)
+
+# Parses `readelf -V --wide` output into "<file>|<tag>" entries, one per
+# version need (.gnu.version_r) only; version definitions are ignored.
+function(_spark_parse_version_needs text out_var)
+    set(_needs)
+    set(_in_needs FALSE)
+    set(_file "")
+    string(REPLACE ";" "\\;" text "${text}")
+    string(REPLACE "\n" ";" _lines "${text}")
+    foreach(_line IN LISTS _lines)
+        if(_line MATCHES "^Version needs section")
+            set(_in_needs TRUE)
+        elseif(_line MATCHES "^Version [a-z]+ section")
+            set(_in_needs FALSE)
+        elseif(_in_needs AND _line MATCHES "File: ([^ ]+)")
+            set(_file "${CMAKE_MATCH_1}")
+        elseif(_in_needs AND _line MATCHES "Name: ([^ ]+)")
+            list(APPEND _needs "${_file}|${CMAKE_MATCH_1}")
+        endif()
+    endforeach()
+    set(${out_var} "${_needs}" PARENT_SCOPE)
+endfunction()
+
+# Sets OUT_VAR to a violation message when FILE's version need TAG exceeds the
+# OD-10 ceiling, or to "" when TAG is within it or the library is not checked.
+function(_spark_version_need_violation file tag out_var)
+    set(_violation "")
+    foreach(_ceiling IN LISTS _SPARK_LINUX_ABI_CEILINGS)
+        string(REPLACE "|" ";" _fields "${_ceiling}")
+        list(GET _fields 0 _library)
+        list(GET _fields 1 _family)
+        list(GET _fields 2 _max)
+        if(NOT file MATCHES "${_library}")
+            continue()
+        endif()
+        string(LENGTH "${_family}" _family_length)
+        string(SUBSTRING "${tag}" 0 ${_family_length} _head)
+        if(NOT _head STREQUAL _family)
+            continue()
+        endif()
+        string(SUBSTRING "${tag}" ${_family_length} -1 _version)
+        # VERSION_GREATER compares each dotted component numerically (2.4 < 2.39).
+        if(_version MATCHES "^[0-9]+(\\.[0-9]+)*$")
+            if(_version VERSION_GREATER _max)
+                set(_violation "requires ${tag} from ${file}, above the Ubuntu 24.04 (OD-10) ceiling ${_family}${_max}")
+            endif()
+        elseif(NOT tag IN_LIST _SPARK_LINUX_ABI_NAMED_TAGS)
+            set(_violation "requires ${tag} from ${file}, which is not a public Ubuntu 24.04 (OD-10) version")
+        endif()
+    endforeach()
+    set(${out_var} "${_violation}" PARENT_SCOPE)
 endfunction()
 
 # The directories the host dynamic loader treats as system locations: the
@@ -340,6 +414,31 @@ function(spark_linux_runtime_closure_violations)
             endforeach()
         endforeach()
 
+        # Symbol-version needs against the OD-10 ceilings. This is independent
+        # of the host: ldd below accepts anything the build host provides.
+        execute_process(COMMAND ${_spark_clean_env} "${SPARK_READELF}" -V --wide "${_file}"
+            RESULT_VARIABLE _versions_result OUTPUT_VARIABLE _versions ERROR_VARIABLE _versions_error TIMEOUT 60)
+        if(NOT _versions_result EQUAL 0)
+            list(APPEND _violations "${_relative}: readelf -V failed: ${_versions_error}")
+        else()
+            _spark_parse_version_needs("${_versions}" _version_needs)
+            foreach(_need IN LISTS _version_needs)
+                string(REPLACE "|" ";" _need_fields "${_need}")
+                list(GET _need_fields 0 _need_file)
+                list(GET _need_fields 1 _need_tag)
+                _spark_version_need_violation("${_need_file}" "${_need_tag}" _version_violation)
+                if(NOT _version_violation STREQUAL "")
+                    list(APPEND _violations "${_relative}: ${_version_violation}")
+                endif()
+                if(_need_tag MATCHES "^(GLIBC|GLIBCXX|CXXABI|GCC)_([0-9]+(\\.[0-9]+)*)$")
+                    set(_family "${CMAKE_MATCH_1}")
+                    if(NOT DEFINED _highest_${_family} OR CMAKE_MATCH_2 VERSION_GREATER _highest_${_family})
+                        set(_highest_${_family} "${CMAKE_MATCH_2}")
+                    endif()
+                endif()
+            endforeach()
+        endif()
+
         string(REGEX MATCHALL "\\(NEEDED\\)[^\n]*\\[[^]\n]+\\]" _needed_records "${_dynamic}")
         if(NOT _needed_records)
             continue()
@@ -386,8 +485,20 @@ function(spark_linux_runtime_closure_violations)
     list(JOIN _external "\n  " _external_text)
     set(${ARG_OUT_VAR} "${_violations}" PARENT_SCOPE)
     set(${ARG_ELF_COUNT_VAR} "${_elf_count}" PARENT_SCOPE)
+    set(_highest_text "")
+    foreach(_family IN ITEMS GLIBC GLIBCXX CXXABI GCC)
+        if(DEFINED _highest_${_family})
+            string(APPEND _highest_text " ${_family}_${_highest_${_family}}")
+        endif()
+    endforeach()
+    set(_ceiling_text "")
+    foreach(_ceiling IN LISTS _SPARK_LINUX_ABI_CEILINGS)
+        string(REGEX REPLACE "^.*\\|([A-Z]+_)\\|(.*)$" " \\1\\2" _ceiling_entry "${_ceiling}")
+        string(APPEND _ceiling_text "${_ceiling_entry}")
+    endforeach()
     string(CONCAT _report
         "ELF images: ${_elf_count}\nModule sidecars: ${_sidecar_count}\n"
+        "Highest symbol versions required:${_highest_text} (OD-10 ceilings:${_ceiling_text})\n"
         "Libraries resolved from host system directories:\n  ${_external_text}\n")
     set(${ARG_REPORT_VAR} "${_report}" PARENT_SCOPE)
 endfunction()
@@ -531,6 +642,82 @@ if(SPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST)
     file(MAKE_DIRECTORY "${_test_root}/symlink/lib")
     file(CREATE_LINK "${_fixture_bin}" "${_test_root}/symlink/lib/outside" SYMBOLIC)
     _spark_expect_closure(symlink-out-of-prefix "${_test_root}/symlink" "symlink leaves the prefix")
+
+    # An image built by a newer toolchain: rewrite one two-digit GLIBCXX_3.4.NN
+    # version-need string in the engine's .dynstr to one tag above the OD-10
+    # ceiling (same length). On a host whose libstdc++ defines that tag, ldd
+    # still accepts the image; only the ceiling rule rejects it.
+    _spark_stage_engine("${_test_root}/toolchain" "$ORIGIN/../lib" TRUE)
+    set(_patched_engine "${_test_root}/toolchain/bin/SparkEngine")
+    execute_process(COMMAND ${_spark_clean_env} grep -obaE "GLIBCXX_3\\.4\\.[1-9][0-9]" "${_patched_engine}"
+        RESULT_VARIABLE _grep_result OUTPUT_VARIABLE _glibcxx_hits ERROR_VARIABLE _grep_error TIMEOUT 60)
+    if(NOT _grep_result EQUAL 0 OR NOT _glibcxx_hits MATCHES "^([0-9]+):GLIBCXX_3\\.4\\.[0-9][0-9]")
+        list(APPEND _failures "toolchain-ceiling: the fixture engine names no GLIBCXX_3.4.NN version ${_grep_error}")
+    else()
+        math(EXPR _patch_offset "${CMAKE_MATCH_1} + 12")
+        file(WRITE "${_test_root}/glibcxx-minor" "34")
+        execute_process(COMMAND ${_spark_clean_env} dd "if=${_test_root}/glibcxx-minor" "of=${_patched_engine}"
+                bs=1 "seek=${_patch_offset}" conv=notrunc
+            RESULT_VARIABLE _dd_result ERROR_VARIABLE _dd_error TIMEOUT 60)
+        if(NOT _dd_result EQUAL 0)
+            list(APPEND _failures "toolchain-ceiling: could not patch the fixture copy: ${_dd_error}")
+        else()
+            _spark_expect_closure(toolchain-above-ceiling "${_test_root}/toolchain"
+                "bin/SparkEngine: requires GLIBCXX_3.4.34 from libstdc++.so.6, above the Ubuntu 24.04 (OD-10) ceiling")
+        endif()
+    endif()
+
+    # readelf -V parsing: needs only, never definitions; files attach to tags.
+    string(CONCAT _versions_sample
+        "Version definition section '.gnu.version_d' contains 2 entries:\n"
+        "  000000: Rev: 1  Flags: BASE  Index: 1  Cnt: 1  Name: libself.so\n"
+        "  0x001c: Rev: 1  Flags: none  Index: 2  Cnt: 1  Name: GLIBCXX_9.9\n\n"
+        "Version needs section '.gnu.version_r' contains 2 entries:\n"
+        " Addr: 0x0000000000001000  Offset: 0x001000  Link: 7 (.dynstr)\n"
+        "  000000: Version: 1  File: libstdc++.so.6  Cnt: 2\n"
+        "  0x0010:   Name: CXXABI_1.3  Flags: none  Version: 4\n"
+        "  0x0020:   Name: GLIBCXX_3.4.30  Flags: none  Version: 3\n"
+        "  0x0030: Version: 1  File: libc.so.6  Cnt: 1\n"
+        "  0x0040:   Name: GLIBC_2.34  Flags: none  Version: 2\n")
+    _spark_parse_version_needs("${_versions_sample}" _parsed_needs)
+    if(NOT _parsed_needs STREQUAL "libstdc++.so.6|CXXABI_1.3;libstdc++.so.6|GLIBCXX_3.4.30;libc.so.6|GLIBC_2.34")
+        list(APPEND _failures "readelf -V parser produced '${_parsed_needs}'")
+    endif()
+
+    # Ceiling comparison is numeric per dotted component, keyed by library.
+    set(_ceiling_cases
+        "libc.so.6|GLIBC_2.39|"
+        "libc.so.6|GLIBC_2.4|"
+        "libc.so.6|GLIBC_2.40|above the Ubuntu 24.04 (OD-10) ceiling GLIBC_2.39"
+        "libm.so.6|GLIBC_2.41|ceiling GLIBC_2.39"
+        "libc.so.6|GLIBC_ABI_DT_RELR|"
+        "libc.so.6|GLIBC_PRIVATE|not a public Ubuntu 24.04 (OD-10) version"
+        "libstdc++.so.6|GLIBCXX_3.4.33|"
+        "libstdc++.so.6|GLIBCXX_3.4.100|ceiling GLIBCXX_3.4.33"
+        "libstdc++.so.6|CXXABI_1.3.16|ceiling CXXABI_1.3.15"
+        "libstdc++.so.6|CXXABI_TM_1|"
+        "libgcc_s.so.1|GCC_14.0.0|"
+        "libgcc_s.so.1|GCC_15.0.0|ceiling GCC_14.0.0"
+        "libfoo.so.1|GLIBC_9.0|")
+    foreach(_case IN LISTS _ceiling_cases)
+        string(REPLACE "|" ";" _fields "${_case}")
+        list(LENGTH _fields _field_count)
+        list(GET _fields 0 _library)
+        list(GET _fields 1 _tag)
+        set(_expected "")
+        if(_field_count GREATER 2)
+            list(GET _fields 2 _expected)
+        endif()
+        _spark_version_need_violation("${_library}" "${_tag}" _violation)
+        if(_expected STREQUAL "" AND NOT _violation STREQUAL "")
+            list(APPEND _failures "ceiling ${_library} ${_tag}: unexpected violation '${_violation}'")
+        elseif(NOT _expected STREQUAL "")
+            string(FIND "${_violation}" "${_expected}" _position)
+            if(_position EQUAL -1)
+                list(APPEND _failures "ceiling ${_library} ${_tag}: expected '${_expected}', got '${_violation}'")
+            endif()
+        endif()
+    endforeach()
 
     # Loader-output classification, independent of what this host provides.
     set(_classify_cases

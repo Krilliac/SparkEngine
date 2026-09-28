@@ -4042,7 +4042,8 @@ set_tests_properties(PackageConsumer_SourceTreeBoundaryDetection PROPERTIES
 # ----------------------------------------------------------------------------
 # Installs this build into a build-owned prefix, then fails on any RUNPATH or
 # NEEDED that reaches the source/build tree or leaves the prefix for anything
-# but a host system library, on any module sidecar that no longer hashes its
+# but a host system library, on any glibc/libstdc++/libgcc_s symbol-version need
+# above the Ubuntu 24.04 (OD-10) ceiling, on any module sidecar that no longer hashes its
 # installed image, and on an installed SparkEngine -headless + SparkGameFPS run
 # (cwd=/, empty environment, fresh HOME/XDG) without clean lifecycle records.
 # The same script verifies a linux-shipping install standalone (see its header).
