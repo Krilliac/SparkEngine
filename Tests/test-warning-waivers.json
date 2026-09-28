@@ -312,6 +312,27 @@
       "kind": "environment"
     },
     {
+      "file": "Tests/TestTF120Residency.cpp",
+      "test": "TF120_Residency_DestinationKilledAfterClaimSourceReclaims",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestTF120Residency.cpp",
+      "test": "TF120_Residency_PeerKilledMidClaimLeavesExactlyOneValidResident",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestTF120Residency.cpp",
+      "test": "TF120_Residency_SourceKilledWhileResidentIsReclaimedWithLastCommit",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
       "file": "Tests/TestTF120SharedSaveRoot.cpp",
       "test": "TF120_SharedRoot_PeerKilledMidTransactionLeavesCommittedStateUsable",
       "sites": 1,
