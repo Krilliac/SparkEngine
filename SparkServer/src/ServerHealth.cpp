@@ -163,9 +163,10 @@ namespace Spark::Server
     std::string FormatHealthJson(const ServerHealth& health)
     {
         std::ostringstream stream;
-        stream << "{\"live\":" << JsonBool(health.live) << ",\"ready\":" << JsonBool(health.ready)
-               << ",\"draining\":" << JsonBool(health.draining) << ",\"stopping\":" << JsonBool(health.stopping)
-               << ",\"port\":" << health.port << ",\"players\":" << health.players << ",\"ticks\":" << health.ticks
+        stream << "{\"schema\":\"" << HealthSchema << "\",\"live\":" << JsonBool(health.live)
+               << ",\"ready\":" << JsonBool(health.ready) << ",\"draining\":" << JsonBool(health.draining)
+               << ",\"stopping\":" << JsonBool(health.stopping) << ",\"port\":" << health.port
+               << ",\"players\":" << health.players << ",\"ticks\":" << health.ticks
                << ",\"loadedModules\":" << health.loadedModules << ",\"gameModule\":\"" << EscapeJson(health.gameModule)
                << "\",\"map\":\"" << EscapeJson(health.currentMap) << "\",\"error\":\"" << EscapeJson(health.lastError)
                << "\",\"version\":\"" << EscapeJson(health.build.version) << "\",\"commit\":\""
@@ -178,7 +179,10 @@ namespace Spark::Server
             stream << *health.residentSetBytes;
         else
             stream << "null";
-        stream << '}';
+        stream << ",\"netQueueIn\":" << health.netQueues.incomingDepth
+               << ",\"netQueueOut\":" << health.netQueues.outgoingDepth
+               << ",\"netQueueInPeak\":" << health.netQueues.incomingPeak
+               << ",\"netQueueOutPeak\":" << health.netQueues.outgoingPeak << '}';
         return stream.str();
     }
 

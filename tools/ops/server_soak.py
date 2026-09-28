@@ -17,6 +17,13 @@ watches it from outside for ``--duration`` seconds after it first reports
   under ``--max-rss-slope-bytes-per-hour`` and the peak-minus-first RSS in
   that window under ``--max-rss-growth-bytes``. The health surface must also
   carry a non-null ``rssBytes`` so the in-process metric is proven live.
+* Network queues -- the health ``netQueueIn`` / ``netQueueOut`` depths are
+  sampled on the same cadence. The least-squares slope of each over the fit
+  window must stay under ``--max-net-queue-slope-per-hour`` (reliable
+  traffic is never dropped, so a growing depth is an unbounded queue), and
+  ``netQueueInPeak`` / ``netQueueOutPeak`` must stay below the engine's
+  Unreliable cap (NetworkManager::kMaxQueuedMessages, 4096): a peak at the
+  cap means traffic was already being shed.
 * Tick latency -- the server's own bounded histogram (``tickP95Us``,
   ``tickP99Us`` in the last live health snapshot before the stop request)
   must be at or under ``--max-tick-p95-us`` / ``--max-tick-p99-us``.
@@ -31,10 +38,13 @@ Every budget above is PROVISIONAL: a harness guard with headroom for
 shared-runner noise, not a governed SLO. OPS-110's versioned p95/p99 budgets
 remain open. A pass here is local precursor evidence, not certification.
 
+Every health snapshot is parsed by tools/ops/validate_server_health.py; one
+that violates the ``spark-server-health/1`` contract fails the soak.
+
 The summary (``--summary``) is a machine-readable JSON document labelled with
 the externally supplied ``--expected-sha``. The SHA is never inferred; when it
-is supplied the server's reported build commit must equal it, so a summary
-cannot be attributed to a different build than the one that ran.
+is supplied the server must report exactly that commit from a clean tree, so
+a summary cannot be attributed to a different build than the one that ran.
 
 Linux only: memory and process accounting read ``/proc``.
 """
@@ -57,12 +67,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from validate_server_health import (  # noqa: E402 -- sibling tool, the health contract
+    MAX_HEALTH_BYTES,
+    HealthContractError,
+    build_identity_problem,
+    parse_health,
+)
+
 SUMMARY_SCHEMA = "spark-server-soak-summary/1"
 EVIDENCE_SCOPE = "local-precursor: provisional budgets on an uncertified host; not release certification"
 MAX_DURATION_S = 7 * 24 * 3600.0
 MIN_FIT_SAMPLES = 10
-MAX_HEALTH_BYTES = 64 * 1024
 MAX_STDOUT_LINE_BYTES = 64 * 1024
+# NetworkManager::kMaxQueuedMessages: Unreliable traffic past this depth is shed.
+NET_QUEUE_CAP = 4096
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 # Provisional harness ceilings (not SLOs). The slope ceiling still trips on a
@@ -72,6 +92,8 @@ DEFAULT_MAX_RSS_GROWTH_BYTES = 32 * 1024 * 1024
 # A 60 Hz tick has a 16.7 ms budget; p99 must fit inside it and p95 inside half.
 DEFAULT_MAX_TICK_P95_US = 8000
 DEFAULT_MAX_TICK_P99_US = 16000
+# One message per second of sustained growth reaches the 4096 cap in about 68 minutes.
+DEFAULT_MAX_NET_QUEUE_SLOPE_PER_HOUR = 3600.0
 
 
 class SoakError(Exception):
@@ -93,6 +115,7 @@ class SoakConfig:
     max_rss_growth_bytes: int = DEFAULT_MAX_RSS_GROWTH_BYTES
     max_tick_p95_us: int = DEFAULT_MAX_TICK_P95_US
     max_tick_p99_us: int = DEFAULT_MAX_TICK_P99_US
+    max_net_queue_slope_per_hour: float = DEFAULT_MAX_NET_QUEUE_SLOPE_PER_HOUR
 
     def validate(self) -> None:
         if not math.isfinite(self.duration_s) or not 1.0 <= self.duration_s <= MAX_DURATION_S:
@@ -101,7 +124,8 @@ class SoakConfig:
                             ("--startup-timeout", self.startup_timeout_s),
                             ("--stall-timeout", self.stall_timeout_s),
                             ("--stop-timeout", self.stop_timeout_s),
-                            ("--max-rss-slope-bytes-per-hour", self.max_rss_slope_bytes_per_hour)):
+                            ("--max-rss-slope-bytes-per-hour", self.max_rss_slope_bytes_per_hour),
+                            ("--max-net-queue-slope-per-hour", self.max_net_queue_slope_per_hour)):
             if not math.isfinite(value) or value <= 0:
                 raise SoakError(f"{name} must be a positive finite number")
         if not math.isfinite(self.warmup_s) or self.warmup_s < 0:
@@ -146,6 +170,8 @@ class SoakOutcome:
     ready_after_s: float | None = None
     identity: dict[str, str] = field(default_factory=dict)
     samples: list[tuple[float, int, int]] = field(default_factory=list)  # (t, rssBytes, ticks)
+    queue_samples: list[tuple[float, int, int]] = field(default_factory=list)  # (t, netQueueIn, netQueueOut)
+    net_queue_slopes_per_hour: dict[str, float | None] = field(default_factory=dict)
     health_rss_bytes: int | None = None
     last_live_health: dict[str, Any] | None = None
     rss_slope_bytes_per_hour: float | None = None
@@ -160,6 +186,20 @@ class SoakOutcome:
     stderr_tail: str = ""
 
 
+def slope_per_hour(window: list[tuple[float, int]]) -> float | None:
+    """Least-squares slope of (seconds, value) points in value/hour, or None for too few or instantaneous points."""
+    count = len(window)
+    if count < MIN_FIT_SAMPLES:
+        return None
+    mean_t = sum(t for t, _ in window) / count
+    mean_value = sum(value for _, value in window) / count
+    variance = sum((t - mean_t) ** 2 for t, _ in window)
+    if variance <= 0.0:
+        return None
+    covariance = sum((t - mean_t) * (value - mean_value) for t, value in window)
+    return covariance / variance * 3600.0
+
+
 def fit_rss_slope(samples: list[tuple[float, int, int]], window_start_s: float,
                   window_end_s: float) -> tuple[float | None, int | None, int]:
     """Return (least-squares RSS slope in bytes/hour, peak-minus-first RSS, samples in window).
@@ -168,17 +208,11 @@ def fit_rss_slope(samples: list[tuple[float, int, int]], window_start_s: float,
     the window or the samples do not span any time.
     """
     window = [(t, rss) for t, rss, _ in samples if window_start_s <= t <= window_end_s]
-    count = len(window)
-    if count < MIN_FIT_SAMPLES:
-        return None, None, count
-    mean_t = sum(t for t, _ in window) / count
-    mean_rss = sum(rss for _, rss in window) / count
-    variance = sum((t - mean_t) ** 2 for t, _ in window)
-    if variance <= 0.0:
-        return None, None, count
-    covariance = sum((t - mean_t) * (rss - mean_rss) for t, rss in window)
+    slope = slope_per_hour(window)
+    if slope is None:
+        return None, None, len(window)
     growth = max(rss for _, rss in window) - window[0][1]
-    return covariance / variance * 3600.0, growth, count
+    return slope, growth, len(window)
 
 
 def read_process_rss(pid: int) -> int | None:
@@ -217,19 +251,20 @@ def session_members(session_id: int) -> list[dict[str, Any]]:
 
 
 def read_health(path: Path) -> dict[str, Any] | None:
-    """The current health snapshot, or None when absent, oversized, or mid-replace."""
+    """The current health snapshot, or None while the file is absent, locked mid-replace, or empty.
+
+    SparkServer replaces the file atomically, so any content it holds is a
+    whole snapshot: one that violates spark-server-health/1 raises
+    HealthContractError rather than reading as "not yet published".
+    """
     try:
         with path.open("rb") as stream:
             data = stream.read(MAX_HEALTH_BYTES + 1)
     except OSError:
         return None
-    if len(data) > MAX_HEALTH_BYTES:
+    if not data.strip():
         return None
-    try:
-        value = json.loads(data.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return None
-    return value if isinstance(value, dict) else None
+    return parse_health(data, source=str(path))
 
 
 def is_health_record(value: Any) -> bool:
@@ -385,8 +420,30 @@ def _sample_until_duration(process: subprocess.Popen[bytes], health_file: Path, 
             rss_bytes = read_process_rss(process.pid)
             if rss_bytes is not None:
                 outcome.samples.append((elapsed_s, rss_bytes, last_ticks))
+            if outcome.last_live_health is not None:
+                outcome.queue_samples.append((elapsed_s, outcome.last_live_health["netQueueIn"],
+                                              outcome.last_live_health["netQueueOut"]))
             next_sample_at = elapsed_s + config.sample_interval_s
         time.sleep(min(0.05, config.sample_interval_s / 4))
+
+
+def _evaluate_queues(config: SoakConfig, outcome: SoakOutcome) -> None:
+    """Fail a growing network queue depth, or a queue peak that reached the Unreliable cap."""
+    window = [sample for sample in outcome.queue_samples if config.warmup_s <= sample[0] <= config.duration_s]
+    for index, key in ((1, "netQueueIn"), (2, "netQueueOut")):
+        slope = slope_per_hour([(sample[0], sample[index]) for sample in window])
+        outcome.net_queue_slopes_per_hour[key] = slope
+        if slope is None:
+            outcome.failures.append(f"queue: {len(window)} {key} samples in the fit window, need {MIN_FIT_SAMPLES}")
+        elif slope > config.max_net_queue_slope_per_hour:
+            outcome.failures.append(f"queue: {key} slope {slope:.0f} messages/h exceeds the provisional ceiling "
+                                    f"{config.max_net_queue_slope_per_hour:.0f} messages/h")
+    health = outcome.last_live_health or {}
+    for key in ("netQueueInPeak", "netQueueOutPeak"):
+        peak = health.get(key)
+        if isinstance(peak, int) and peak >= NET_QUEUE_CAP:
+            outcome.failures.append(f"queue: {key} {peak} reached the Unreliable cap {NET_QUEUE_CAP}; "
+                                    "traffic was being shed")
 
 
 def _evaluate_run(config: SoakConfig, outcome: SoakOutcome) -> None:
@@ -414,6 +471,8 @@ def _evaluate_run(config: SoakConfig, outcome: SoakOutcome) -> None:
     if outcome.achieved_tick_rate_hz is None or outcome.achieved_tick_rate_hz < required_rate:
         outcome.failures.append(f"ticks: achieved {outcome.achieved_tick_rate_hz!r} Hz, need at least "
                                 f"{required_rate:g} Hz ({config.min_tick_rate_fraction:g} x {config.tick_rate_hz:g})")
+
+    _evaluate_queues(config, outcome)
 
     health = outcome.last_live_health or {}
     for key, ceiling in (("tickP95Us", config.max_tick_p95_us), ("tickP99Us", config.max_tick_p99_us)):
@@ -483,13 +542,14 @@ def run_soak(server: Path, module: Path, config: SoakConfig, *, expected_sha: st
         try:
             launched_at = time.monotonic()
             if _wait_ready(process, health_file, config, outcome, launched_at):
-                reported = outcome.identity.get("commit", "")
-                if expected_sha is not None and reported.lower() != expected_sha.lower():
-                    outcome.failures.append(f"identity: server reports commit {reported!r}, "
-                                            f"expected {expected_sha.lower()!r}")
+                identity_problem = build_identity_problem(outcome.identity, expected_sha)
+                if identity_problem is not None:
+                    outcome.failures.append(f"identity: {identity_problem}")
                 if _sample_until_duration(process, health_file, config, outcome):
                     _evaluate_run(config, outcome)
                     _stop_and_verify(process, stdout_path, health_file, config, outcome)
+        except HealthContractError as exc:
+            outcome.failures.append(f"health: contract violation: {exc}")
         finally:
             _kill_session(process)
             outcome.stderr_tail = _tail(stderr_path)
@@ -512,6 +572,8 @@ def build_summary(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | No
         "provisionalBudgets": {"maxRssSlopeBytesPerHour": config.max_rss_slope_bytes_per_hour,
                                "maxRssGrowthBytes": config.max_rss_growth_bytes,
                                "maxTickP95Us": config.max_tick_p95_us, "maxTickP99Us": config.max_tick_p99_us,
+                               "maxNetQueueSlopePerHour": config.max_net_queue_slope_per_hour,
+                               "netQueuePeakCeiling": NET_QUEUE_CAP - 1,
                                "minTickRateFraction": config.min_tick_rate_fraction,
                                "stallTimeoutS": config.stall_timeout_s, "stopTimeoutS": config.stop_timeout_s},
         "measurements": {
@@ -531,6 +593,12 @@ def build_summary(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | No
             "tickP95Us": health.get("tickP95Us"),
             "tickP99Us": health.get("tickP99Us"),
             "tickMaxUs": health.get("tickMaxUs"),
+            "netQueueIn": health.get("netQueueIn"),
+            "netQueueOut": health.get("netQueueOut"),
+            "netQueueInPeak": health.get("netQueueInPeak"),
+            "netQueueOutPeak": health.get("netQueueOutPeak"),
+            "netQueueInSlopePerHour": outcome.net_queue_slopes_per_hour.get("netQueueIn"),
+            "netQueueOutSlopePerHour": outcome.net_queue_slopes_per_hour.get("netQueueOut"),
             "stopAfterS": outcome.stop_after_s,
             "exitStatus": outcome.exit_status,
             "drain": {"records": outcome.drain.records,
@@ -598,8 +666,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="provisional budget (not an SLO)")
     parser.add_argument("--max-tick-p99-us", type=int, default=defaults.max_tick_p99_us,
                         help="provisional budget (not an SLO)")
-    parser.add_argument("--expected-sha", help="full commit SHA of the build under test; labels the summary and "
-                                               "must equal the server's reported commit")
+    parser.add_argument("--max-net-queue-slope-per-hour", type=float,
+                        default=defaults.max_net_queue_slope_per_hour, help="provisional ceiling (not an SLO)")
+    parser.add_argument("--expected-sha", help="full commit SHA of the build under test; labels the summary, and "
+                                               "the server must report exactly it from a clean tree")
     parser.add_argument("--summary", type=Path, help="write the machine-readable JSON summary here")
     parser.add_argument("--work-dir", type=Path, help="keep the server health file and logs here")
     args = parser.parse_args(argv)
@@ -611,7 +681,8 @@ def main(argv: list[str] | None = None) -> int:
                         stop_timeout_s=args.stop_timeout, min_tick_rate_fraction=args.min_tick_rate_fraction,
                         max_rss_slope_bytes_per_hour=args.max_rss_slope_bytes_per_hour,
                         max_rss_growth_bytes=args.max_rss_growth_bytes, max_tick_p95_us=args.max_tick_p95_us,
-                        max_tick_p99_us=args.max_tick_p99_us)
+                        max_tick_p99_us=args.max_tick_p99_us,
+                        max_net_queue_slope_per_hour=args.max_net_queue_slope_per_hour)
     try:
         outcome, document = soak(args.server, args.module, config, expected_sha=args.expected_sha,
                                  summary=args.summary, work_dir=args.work_dir)

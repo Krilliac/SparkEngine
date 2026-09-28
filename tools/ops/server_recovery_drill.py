@@ -25,8 +25,11 @@ advance ``ticks``. Detection and recovery latencies are recorded per scenario.
 
 The summary (``--summary``) is JSON schema ``spark-server-recovery-drill/1``,
 labelled with the externally supplied ``--expected-sha``; the SHA is never
-inferred, and when supplied the server's reported commit must equal it. A
-local pass is precursor evidence, not a recorded release drill.
+inferred, and when supplied the server must report exactly that commit from a
+clean tree. Every health snapshot is parsed by
+tools/ops/validate_server_health.py, and one that violates the
+``spark-server-health/1`` contract fails the drill. A local pass is precursor
+evidence, not a recorded release drill.
 """
 
 from __future__ import annotations
@@ -56,6 +59,7 @@ from server_soak import (  # noqa: E402 -- sibling tool, shared health contract
     scan_drain_sequence,
     write_json_atomic,
 )
+from validate_server_health import HealthContractError, build_identity_problem  # noqa: E402
 
 SUMMARY_SCHEMA = "spark-server-recovery-drill/1"
 EVIDENCE_SCOPE = "local-precursor: operator drill on an uncertified host; not a recorded release drill"
@@ -336,9 +340,9 @@ def run_drill(launcher: Sequence[str], module: Path, config: DrillConfig, scenar
                 return outcome
             outcome.identity = {key: str(ready.get(key, "")) for key in ("version", "commit", "treeState",
                                                                           "gameModule")}
-            if expected_sha is not None and outcome.identity["commit"].lower() != expected_sha.lower():
-                outcome.failures.append(f"identity: server reports commit {outcome.identity['commit']!r}, "
-                                        f"expected {expected_sha.lower()!r}")
+            identity_problem = build_identity_problem(outcome.identity, expected_sha)
+            if identity_problem is not None:
+                outcome.failures.append(f"identity: {identity_problem}")
             for name in scenarios:
                 result = ScenarioResult(name)
                 outcome.scenarios.append(result)
@@ -356,6 +360,8 @@ def run_drill(launcher: Sequence[str], module: Path, config: DrillConfig, scenar
                 outcome.scenarios.append(closing)
                 _run_drain(host, closing)
                 outcome.failures.extend(closing.failures)
+        except HealthContractError as exc:
+            outcome.failures.append(f"health: contract violation: {exc}")
         finally:
             host.cleanup()
             outcome.launches = host.launches

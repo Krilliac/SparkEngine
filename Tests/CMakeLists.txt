@@ -2176,8 +2176,17 @@ unset(_spark_sec_daemon_pipe_count)
 if(TARGET SparkServerCore)
     add_test(NAME ServerHealth COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(ServerHealth PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=Server_Health_;SPARK_TEST_EXPECT_COUNT=7"
+        ENVIRONMENT "SPARK_TEST_NAME=Server_Health_;SPARK_TEST_EXPECT_COUNT=8"
         LABELS "server;observability"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
+# OPS-110: NetworkManager queue depth/peak published through GetStats (the soak's queue-growth signal).
+if(ENABLE_NETWORKING)
+    add_test(NAME NetQueueMetrics COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetQueueMetrics PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=NetQueueMetrics_;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "network;observability;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)
 endif()
@@ -5043,7 +5052,7 @@ if(Python3_Interpreter_FOUND)
             NAME ServerSoak_Harness
             COMMAND ${Python3_EXECUTABLE} -B
                 ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_soak.py
-                FitTests DrainSequenceTests ConfigTests SummaryTests HarnessTests)
+                FitTests DrainSequenceTests ConfigTests SummaryTests HarnessTests QueueTests)
         set_tests_properties(ServerSoak_Harness PROPERTIES
             LABELS "ops;server;unit;python"
             TIMEOUT 180)
@@ -5074,6 +5083,15 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(ServerRecoveryDrill_Harness PROPERTIES
         LABELS "ops;server;unit;python"
         TIMEOUT 120)
+    # OPS-110: the versioned spark-server-health/1 contract that external consumers parse.
+    add_test(
+        NAME ServerHealth_ExternalContract
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_validate_server_health.py)
+    set_tests_properties(ServerHealth_ExternalContract PROPERTIES
+        LABELS "observability;ops;unit;python"
+        FAIL_REGULAR_EXPRESSION "Ran 0 tests"
+        TIMEOUT 60)
     if(TARGET SparkServer AND TARGET SparkGame AND (WIN32 OR (UNIX AND NOT APPLE)))
         add_dependencies(SparkTests SparkServer SparkGame)
         add_test(

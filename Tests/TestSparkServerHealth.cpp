@@ -206,6 +206,7 @@ TEST(Server_Health_JsonCarriesOperatorFields)
     health.build = {"1.2.3", "0123456789abcdef0123456789abcdef01234567", "dirty"};
     health.tickLatency = {42, 100, 2000, 4000, 3500};
     health.residentSetBytes = 123456789;
+    health.netQueues = {3, 5, 17, 4096};
 
     const std::string json = FormatHealthJson(health);
     EXPECT_EQ(json.front(), '{');
@@ -223,10 +224,40 @@ TEST(Server_Health_JsonCarriesOperatorFields)
     EXPECT_EQ(JsonField(json, "tickP99Us").value_or(""), std::string("4000"));
     EXPECT_EQ(JsonField(json, "tickMaxUs").value_or(""), std::string("3500"));
     EXPECT_EQ(JsonField(json, "rssBytes").value_or(""), std::string("123456789"));
+    EXPECT_EQ(JsonField(json, "netQueueIn").value_or(""), std::string("3"));
+    EXPECT_EQ(JsonField(json, "netQueueOut").value_or(""), std::string("5"));
+    EXPECT_EQ(JsonField(json, "netQueueInPeak").value_or(""), std::string("17"));
+    EXPECT_EQ(JsonField(json, "netQueueOutPeak").value_or(""), std::string("4096"));
 
     // An unavailable measurement is explicit, never a fabricated zero.
     health.residentSetBytes.reset();
     EXPECT_EQ(JsonField(FormatHealthJson(health), "rssBytes").value_or(""), std::string("null"));
+}
+
+TEST(Server_Health_JsonCarriesSchemaAndExactCommit)
+{
+    // External consumers (tools/ops/validate_server_health.py) key on the
+    // versioned schema, which must lead every snapshot.
+    ServerHealth health;
+    health.build = {"1.2.3", "0123456789abcdef0123456789abcdef01234567", "clean"};
+    const std::string json = FormatHealthJson(health);
+    EXPECT_TRUE(json.starts_with("{\"schema\":\"spark-server-health/1\","));
+    EXPECT_EQ(std::string(HealthSchema), std::string("spark-server-health/1"));
+    EXPECT_EQ(JsonField(json, "commit").value_or(""), std::string("\"0123456789abcdef0123456789abcdef01234567\""));
+    EXPECT_EQ(JsonField(json, "treeState").value_or(""), std::string("\"clean\""));
+
+    // Every documented contract key is present exactly once.
+    for (const std::string_view key : {"schema",      "live",       "ready",       "draining",       "stopping",
+                                       "port",        "players",    "ticks",       "loadedModules",  "gameModule",
+                                       "map",         "error",      "version",     "commit",         "treeState",
+                                       "tickSamples", "tickP50Us",  "tickP95Us",   "tickP99Us",      "tickMaxUs",
+                                       "rssBytes",    "netQueueIn", "netQueueOut", "netQueueInPeak", "netQueueOutPeak"})
+    {
+        const std::string needle = "\"" + std::string(key) + "\":";
+        const size_t first = json.find(needle);
+        EXPECT_TRUE(first != std::string::npos);
+        EXPECT_TRUE(first == std::string::npos || json.find(needle, first + 1) == std::string::npos);
+    }
 }
 
 TEST(Server_Health_RunPublishesDrainingBeforeStopping)
@@ -288,6 +319,18 @@ TEST(Server_Health_RunPublishesDrainingBeforeStopping)
     const std::string rss = JsonField(draining, "rssBytes").value_or("null");
     ASSERT_TRUE(rss != "null");
     EXPECT_TRUE(std::stoull(rss) > 0);
+
+    // The live server's network queue occupancy is published, and a peak never trails its depth.
+    using QueueKeys = std::pair<std::string_view, std::string_view>;
+    const std::array<QueueKeys, 2> queueKeys = {QueueKeys{"netQueueIn", "netQueueInPeak"},
+                                                QueueKeys{"netQueueOut", "netQueueOutPeak"}};
+    for (const auto& [depthKey, peakKey] : queueKeys)
+    {
+        const std::optional<std::string> depth = JsonField(draining, depthKey);
+        const std::optional<std::string> peak = JsonField(draining, peakKey);
+        ASSERT_TRUE(depth.has_value() && peak.has_value());
+        EXPECT_TRUE(std::stoull(*depth) <= std::stoull(*peak));
+    }
 
     // The final snapshot reports a fully stopped, non-draining process.
     const std::string& last = lines.back();

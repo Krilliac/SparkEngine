@@ -82,6 +82,24 @@ namespace Spark::Server
     /** @brief Current process resident set size in bytes, or nullopt when the platform query fails. */
     [[nodiscard]] std::optional<uint64_t> QueryResidentSetBytes() noexcept;
 
+    /** @brief Network message-queue occupancy copied from the last completed server tick. */
+    struct NetworkQueueHealth
+    {
+        uint64_t incomingDepth = 0;
+        uint64_t outgoingDepth = 0;
+        uint64_t incomingPeak = 0; ///< Largest incoming queue since the network runtime initialized.
+        uint64_t outgoingPeak = 0; ///< Largest outgoing queue since the network runtime initialized.
+    };
+
+    /**
+     * @brief Versioned contract identifier, emitted as the first field of every snapshot.
+     *
+     * The field set, types and units are documented in
+     * wiki/advanced/Server-Operations-Runbook.md and enforced by
+     * tools/ops/validate_server_health.py. Any change to the field set bumps the version.
+     */
+    inline constexpr std::string_view HealthSchema = "spark-server-health/1";
+
     /** @brief Point-in-time server status published to operators. */
     struct ServerHealth
     {
@@ -101,6 +119,7 @@ namespace Spark::Server
         BuildIdentity build;
         TickLatencySummary tickLatency;
         std::optional<uint64_t> residentSetBytes;
+        NetworkQueueHealth netQueues;
     };
 
     /** @brief Serialize a snapshot as one compact JSON object (no trailing newline). */

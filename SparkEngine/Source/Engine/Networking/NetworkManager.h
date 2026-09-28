@@ -479,6 +479,15 @@ namespace Spark::Net
         uint32_t handshakeResponsesComputed = 0; ///< Server: ClientHellos that reached RespondToClientHello
         uint32_t connectsRateLimited = 0;        ///< Server: unadmitted Connects dropped by ConnectRateLimiter
         uint32_t unadmittedSendsRefused = 0;     ///< Server: non-handshake sends refused to a non-Connected slot
+
+        /// OPS-110: message-queue occupancy, read live by NetworkManager::GetStats (never part of a
+        /// diagnostics snapshot). Depths are the queue sizes when the stats were read; peaks are the
+        /// largest size since Initialize. Unreliable traffic is capped at kMaxQueuedMessages but
+        /// reliable traffic is not, so a peak that keeps rising across a soak is unbounded growth.
+        size_t incomingQueueDepth = 0;
+        size_t outgoingQueueDepth = 0;
+        size_t incomingQueuePeak = 0;
+        size_t outgoingQueuePeak = 0;
     };
 
     // ============================================================================
@@ -506,6 +515,10 @@ namespace Spark::Net
     {
       public:
         static NetworkManager& GetInstance();
+
+        /// Upper bound on queued Unreliable messages per direction. A hostile or buggy peer that
+        /// spams packets cannot grow the queues past it; reliable traffic is never dropped here.
+        static constexpr size_t kMaxQueuedMessages = 4096;
 
         /// Initialize the networking subsystem (platform sockets).
         /// Must be called before StartServer() or Connect().
@@ -695,7 +708,14 @@ namespace Spark::Net
         NetworkStats GetStats() const
         {
             std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
-            return m_stats;
+            NetworkStats stats = m_stats;
+            // Documented lock order: m_apiMutex before m_queueMutex, never reversed.
+            std::lock_guard<std::mutex> queueLock(m_queueMutex);
+            stats.incomingQueueDepth = m_incomingQueue.size();
+            stats.outgoingQueueDepth = m_outgoingQueue.size();
+            stats.incomingQueuePeak = m_incomingQueuePeak;
+            stats.outgoingQueuePeak = m_outgoingQueuePeak;
+            return stats;
         }
         /// Replace the telemetry snapshot (diagnostic adapters/tests only).
         /// This never changes transport, connection, or wire state.
@@ -1034,14 +1054,13 @@ namespace Spark::Net
         ClientID m_nextClientID = 1;
         int m_maxClients = 32;
 
-        // Messages
-        // Upper bound protects against flood-induced memory exhaustion: a hostile or
-        // buggy peer that spams packets cannot grow these queues without limit.
-        static constexpr size_t kMaxQueuedMessages = 4096;
+        // Messages (Unreliable traffic is bounded by kMaxQueuedMessages).
         std::atomic<uint64_t> m_droppedIncomingMessages{0};
         std::atomic<uint64_t> m_droppedOutgoingMessages{0};
         std::queue<NetworkMessage> m_outgoingQueue;
         std::queue<NetworkMessage> m_incomingQueue;
+        size_t m_outgoingQueuePeak = 0; ///< Largest m_outgoingQueue size since Initialize (guarded by m_queueMutex).
+        size_t m_incomingQueuePeak = 0; ///< Largest m_incomingQueue size since Initialize (guarded by m_queueMutex).
         // Protocol handlers run first and are never exposed to application code.
         // Application observers may be replaced/cleared without disabling transport invariants.
         std::unordered_map<uint16_t, MessageHandler> m_internalHandlers;
@@ -1049,7 +1068,7 @@ namespace Spark::Net
         std::unordered_set<uint16_t> m_sensitiveMessageTypes;
         /// Registration owner of each application observer slot; absent means unowned (engine/host code).
         std::unordered_map<uint16_t, std::string> m_handlerOwners;
-        mutable std::mutex m_queueMutex;   ///< Protects m_outgoingQueue, m_incomingQueue
+        mutable std::mutex m_queueMutex;   ///< Protects both queues and their peaks
         mutable std::mutex m_handlerMutex; ///< Protects m_handlers, m_handlerOwners (lowest in lock order)
 
         // Active ScopedRegistrationOwner state and the timeout handler's owner (guarded by m_apiMutex).

@@ -760,6 +760,8 @@ namespace Spark::Server
             health.players = stats.currentPlayers;
             health.ticks = stats.totalTicksProcessed;
             health.currentMap = stats.currentMap;
+            health.netQueues = {stats.netIncomingQueueDepth, stats.netOutgoingQueueDepth, stats.netIncomingQueuePeak,
+                                stats.netOutgoingQueuePeak};
         }
         health.build = m_options.build;
         health.tickLatency = m_tickLatency.Summarize();

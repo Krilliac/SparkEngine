@@ -145,6 +145,12 @@ namespace Spark::Net
         uint32_t totalConnectionsServed = 0; ///< Lifetime connection count (including disconnected).
         float currentTickRate = 0.0f;        ///< Actual ticks per second (may differ from target).
 
+        // Network message queues at the end of the last tick (NetworkStats), for soak/queue-growth checks.
+        size_t netIncomingQueueDepth = 0; ///< Incoming messages still queued.
+        size_t netOutgoingQueueDepth = 0; ///< Outgoing messages still queued.
+        size_t netIncomingQueuePeak = 0;  ///< Largest incoming queue since the network runtime initialized.
+        size_t netOutgoingQueuePeak = 0;  ///< Largest outgoing queue since the network runtime initialized.
+
         // Match state
         std::string currentMap;          ///< Name of the active map (e.g. "de_dust2").
         int currentMapIndex = 0;         ///< Index into the map rotation list.

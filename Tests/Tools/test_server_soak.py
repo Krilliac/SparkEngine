@@ -8,8 +8,11 @@ contract (atomic health file plus one JSON snapshot per stdout line, a
 draining snapshot on SIGTERM, then stopping and a final live=false snapshot)
 and can be told to leak, stall, crash, run ticks backwards, report slow ticks,
 skip the drain snapshot, exit non-zero, ignore SIGTERM, leak a child process,
-never become ready, or report the wrong commit -- proving each failure is
-caught and that a healthy server passes.
+never become ready, or report the wrong commit or a dirty tree -- proving
+each failure is caught and that a healthy server passes. QueueTests do the
+same for the network message queues: a growing netQueueOut depth, a queue
+peak at the 4096 Unreliable cap, and a snapshot missing the queue fields
+(a spark-server-health/1 contract violation) each fail the soak.
 
 ServerSoakProcess soaks the real SparkServer with the SparkGame module when
 CTest supplies SPARK_SERVER and SPARK_SERVER_MODULE (CTest Server_Soak, label
@@ -57,6 +60,7 @@ interval = int(opt("--status-interval-ms")) / 1000.0
 rate = float(opt("--tick-rate"))
 fault = os.environ.get("SOAK_FAULT", "")
 commit = os.environ.get("SOAK_COMMIT", "{sha}")
+tree_state = "dirty" if fault == "dirty_tree" else "clean"
 stop = []
 signal.signal(signal.SIGTERM, lambda *_: stop.append(1))
 if fault == "ignore_sigterm":
@@ -69,11 +73,17 @@ def rss():
 
 def publish(live, ready, draining, stopping, ticks):
     p99 = 50000 if fault == "slow_p99" else 700
-    record = {{"live": live, "ready": ready, "draining": draining, "stopping": stopping, "port": 1, "players": 0,
+    queue_out = int((time.monotonic() - start) * 500) if fault == "queue_growth" else 2
+    queue_out_peak = 4096 if fault == "queue_peak" else max(queue_out, 5)
+    record = {{"schema": "spark-server-health/1", "live": live, "ready": ready, "draining": draining,
+              "stopping": stopping, "port": 1, "players": 0,
               "ticks": ticks, "loadedModules": 1 if live else 0, "gameModule": "Stand-in" if live else "",
-              "map": "soak", "error": "", "version": "0.9.0", "commit": commit, "treeState": "clean",
+              "map": "soak", "error": "", "version": "0.9.0", "commit": commit, "treeState": tree_state,
               "tickSamples": ticks, "tickP50Us": 50, "tickP95Us": 500, "tickP99Us": p99, "tickMaxUs": p99,
-              "rssBytes": rss()}}
+              "rssBytes": rss(), "netQueueIn": 0, "netQueueOut": queue_out, "netQueueInPeak": 3,
+              "netQueueOutPeak": queue_out_peak}}
+    if fault == "no_queue_fields":
+        del record["netQueueOut"], record["netQueueOutPeak"]
     text = json.dumps(record, separators=(",", ":"))
     print(text, flush=True)
     with open(health_path + ".tmp", "w") as stream:
@@ -223,8 +233,9 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(soak_tool.build_summary(outcome, FAST, None, "t")["verdict"], "fail")
 
 
-@LINUX_ONLY
-class HarnessTests(unittest.TestCase):
+class StandInServerCase(unittest.TestCase):
+    """Fixture: a stand-in SparkServer and a summary path; runs one soak per call."""
+
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         root = Path(self._tmp.name)
@@ -257,6 +268,9 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(document["verdict"], "fail")
         self.assertTrue(any(failure.startswith(prefix) for failure in document["failures"]), document["failures"])
 
+
+@LINUX_ONLY
+class HarnessTests(StandInServerCase):
     def test_healthy_server_passes(self) -> None:
         document = self.run_soak()
         self.assertEqual(document["failures"], [])
@@ -322,6 +336,17 @@ class HarnessTests(unittest.TestCase):
     def test_commit_mismatch_fails(self) -> None:
         self.assertFailsWith(self.run_soak(expected_sha=OTHER_SHA), "identity:")
 
+    def test_dirty_tree_fails_an_exact_sha_run(self) -> None:
+        self.assertFailsWith(self.run_soak("dirty_tree"), "identity: server was built from a 'dirty' tree")
+        # Without an expected SHA the dirty build is reported, not refused.
+        document = self.run_soak("dirty_tree", expected_sha=None)
+        self.assertEqual(document["failures"], [])
+        self.assertEqual(document["server"]["treeState"], "dirty")
+
+    def test_unstamped_commit_fails_an_exact_sha_run(self) -> None:
+        os.environ["SOAK_COMMIT"] = "unknown"
+        self.assertFailsWith(self.run_soak(), "identity: server reports commit 'unknown'")
+
     def test_cli_exit_status_and_stdout_summary(self) -> None:
         os.environ["SOAK_FAULT"] = ""
         argv = ["--server", str(self.server), "--module", str(self.module), "--duration", "3", "--warmup", "0.5",
@@ -335,6 +360,48 @@ class HarnessTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
             self.assertEqual(soak_tool.main(argv), 1)
         self.assertIn("server_soak: FAIL: latency", stderr.getvalue())
+
+
+class QueueTests(StandInServerCase):
+    """Network message-queue depth and peak bounds (netQueueIn/Out, netQueueIn/OutPeak)."""
+
+    def test_queue_fit_needs_samples_in_the_window(self) -> None:
+        outcome = soak_tool.SoakOutcome(queue_samples=[(float(t), 0, 0) for t in range(3)])
+        soak_tool._evaluate_queues(FAST, outcome)
+        self.assertTrue(all(failure.startswith("queue:") for failure in outcome.failures), outcome.failures)
+        self.assertEqual(len(outcome.failures), 2)
+
+    def test_linear_queue_growth_is_measured_in_messages_per_hour(self) -> None:
+        samples = [(float(t), 0, 3 * t) for t in range(20)]
+        config = soak_tool.SoakConfig(duration_s=19.0, warmup_s=0.0)
+        outcome = soak_tool.SoakOutcome(queue_samples=samples,
+                                        last_live_health={"netQueueInPeak": 0, "netQueueOutPeak": 57})
+        soak_tool._evaluate_queues(config, outcome)
+        self.assertAlmostEqual(outcome.net_queue_slopes_per_hour["netQueueOut"], 3 * 3600.0)
+        self.assertEqual(outcome.net_queue_slopes_per_hour["netQueueIn"], 0.0)
+        self.assertEqual(outcome.failures, ["queue: netQueueOut slope 10800 messages/h exceeds the provisional "
+                                            "ceiling 3600 messages/h"])
+
+    @LINUX_ONLY
+    def test_flat_queues_pass(self) -> None:
+        document = self.run_soak()
+        self.assertEqual(document["failures"], [])
+        measurements = document["measurements"]
+        self.assertEqual(measurements["netQueueOutSlopePerHour"], 0.0)
+        self.assertEqual(measurements["netQueueOutPeak"], 5)
+        self.assertEqual(document["provisionalBudgets"]["netQueuePeakCeiling"], soak_tool.NET_QUEUE_CAP - 1)
+
+    @LINUX_ONLY
+    def test_growing_outgoing_queue_fails(self) -> None:
+        self.assertFailsWith(self.run_soak("queue_growth"), "queue: netQueueOut slope")
+
+    @LINUX_ONLY
+    def test_peak_at_the_unreliable_cap_fails(self) -> None:
+        self.assertFailsWith(self.run_soak("queue_peak"), "queue: netQueueOutPeak 4096 reached the Unreliable cap")
+
+    @LINUX_ONLY
+    def test_missing_queue_fields_fail_closed(self) -> None:
+        self.assertFailsWith(self.run_soak("no_queue_fields"), "health: contract violation")
 
 
 class ServerSoakProcess(unittest.TestCase):

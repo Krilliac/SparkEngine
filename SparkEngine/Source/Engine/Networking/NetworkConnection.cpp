@@ -89,6 +89,11 @@ namespace Spark::Net
         m_bytesSentSinceSample = 0;
         m_bytesReceivedSinceSample = 0;
         m_stats = {};
+        {
+            std::lock_guard<std::mutex> queueLock(m_queueMutex);
+            m_outgoingQueuePeak = 0;
+            m_incomingQueuePeak = 0;
+        }
 
         // Mandatory protocol handlers are intentionally separate from application
         // observers. RegisterHandler/ClearHandlers must never replace or erase
@@ -261,6 +266,8 @@ namespace Spark::Net
                 m_outgoingQueue.pop();
             while (!m_incomingQueue.empty())
                 m_incomingQueue.pop();
+            m_outgoingQueuePeak = 0;
+            m_incomingQueuePeak = 0;
         }
         {
             std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
@@ -795,6 +802,7 @@ namespace Spark::Net
         }
 
         m_outgoingQueue.push(queued);
+        m_outgoingQueuePeak = std::max(m_outgoingQueuePeak, m_outgoingQueue.size());
         m_stats.packetsSent++;
     }
 
@@ -899,6 +907,7 @@ namespace Spark::Net
             copy.sequence = TakeReliableSequence(GetPeerState(client).nextOutgoingSequence);
         }
         m_outgoingQueue.push(copy);
+        m_outgoingQueuePeak = std::max(m_outgoingQueuePeak, m_outgoingQueue.size());
         m_stats.packetsSent++;
 #endif // ENABLE_NETWORKING
     }
@@ -2006,6 +2015,7 @@ namespace Spark::Net
             else
             {
                 m_incomingQueue.push(msg);
+                m_incomingQueuePeak = std::max(m_incomingQueuePeak, m_incomingQueue.size());
             }
         }
 

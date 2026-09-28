@@ -69,9 +69,12 @@ restarted = launch > 1
 commit = OTHER_SHA if fault == "restart_wrong_commit" and restarted else SHA
 
 def publish(live, ready, draining, stopping, ticks, echo=True):
-    record = {"live": live, "ready": ready, "draining": draining, "stopping": stopping, "port": 1, "players": 0,
+    record = {"schema": "spark-server-health/1", "live": live, "ready": ready, "draining": draining,
+              "stopping": stopping, "port": 1, "players": 0,
               "ticks": ticks, "loadedModules": 1 if live else 0, "gameModule": "Stand-in" if live else "",
-              "map": "drill", "error": "", "version": "0.9.0", "commit": commit, "treeState": "clean"}
+              "map": "drill", "error": "", "version": "0.9.0", "commit": commit, "treeState": "clean",
+              "tickSamples": ticks, "tickP50Us": 50, "tickP95Us": 500, "tickP99Us": 700, "tickMaxUs": 700,
+              "rssBytes": None, "netQueueIn": 0, "netQueueOut": 0, "netQueueInPeak": 0, "netQueueOutPeak": 0}
     text = json.dumps(record, separators=(",", ":"))
     if echo:
         print(text, flush=True)

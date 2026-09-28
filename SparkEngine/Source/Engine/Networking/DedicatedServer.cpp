@@ -255,6 +255,10 @@ namespace Spark::Net
             m_stats.totalBytesIn = netStats.bytesReceived;
             m_stats.totalBytesOut = netStats.bytesSent;
             m_stats.currentPlayers = playerCount;
+            m_stats.netIncomingQueueDepth = netStats.incomingQueueDepth;
+            m_stats.netOutgoingQueueDepth = netStats.outgoingQueueDepth;
+            m_stats.netIncomingQueuePeak = netStats.incomingQueuePeak;
+            m_stats.netOutgoingQueuePeak = netStats.outgoingQueuePeak;
         }
     }
 

@@ -208,6 +208,7 @@ replaces `--health-file` with the same object when one is given
 
 | Field | Meaning |
 |-------|---------|
+| `schema` | Always `spark-server-health/1`, the first field; bumped whenever the key set changes |
 | `live` / `ready` | Process lifecycle started / accepting work (server bound, Game module initialized, gateway control ready when configured) |
 | `draining` | A stop was requested (signal, `--stop-file`, `--run-for-ms`). Published with `ready=false` **before** teardown, and the loop keeps ticking while a module vetoes shutdown, so a supervisor can route traffic away |
 | `stopping` | Teardown in progress |
@@ -217,8 +218,11 @@ replaces `--health-file` with the same object when one is given
 | `treeState` | `clean`, `dirty` (tracked files differ from `commit`), or `unknown` |
 | `tickSamples`, `tickP50Us`, `tickP95Us`, `tickP99Us`, `tickMaxUs` | Tick work time (excluding the frame-budget sleep) since `Start()`, from a bounded 16-bucket histogram. Percentiles are the containing bucket's upper bound clamped to the observed max, so they never under-report |
 | `rssBytes` | Process resident set (`/proc/self/statm`, `GetProcessMemoryInfo`, or Mach `task_info`); `null` if the platform query fails |
+| `netQueueIn`, `netQueueOut`, `netQueueInPeak`, `netQueueOutPeak` | `NetworkManager` message-queue depths after the last tick, and their high-water marks since the network runtime initialized (`NetworkStats`) |
 
-Consumers must ignore unknown fields. `ctest -L observability` runs the
+The key set is exact and versioned by `schema`. The field-by-field contract
+(types and units) is in the [Server Operations Runbook](../advanced/Server-Operations-Runbook.md#health-snapshot-contract),
+and `tools/ops/validate_server_health.py` is the reference parser. `ctest -L observability` runs the
 `SparkServerVersion` stamp check and the `Server_Health_*` tests, including
 the draining-before-stopping ordering.
 
@@ -229,12 +233,13 @@ and a health file, then samples the health file and `/proc/<pid>/status` for
 `--duration` seconds after the first ready snapshot. It fails when the RSS slope
 or in-window RSS growth is over its ceiling, `tickP95Us`/`tickP99Us` is over
 budget, `ticks` goes backwards, stalls, or runs below half the requested tick
-rate. After the soak it sends SIGTERM. The stdout health stream must then show a
+rate, a `netQueueIn`/`netQueueOut` depth grows faster than its provisional
+ceiling, or a queue peak reaches the 4096 Unreliable cap. After the soak it sends SIGTERM. The stdout health stream must then show a
 live `draining` snapshot with `ready=false` before any `stopping` snapshot and
 end on `live=false`. The process must exit 0, and no process may be left in the
 server's session. `--summary` writes a `spark-server-soak-summary/1` JSON
-document. `--expected-sha` labels that document, and the server's reported
-`commit` must match it. The harness never infers the SHA.
+document. `--expected-sha` labels that document, and the server must report
+exactly that `commit` from a `clean` tree. The harness never infers the SHA.
 
 | CTest | Label | What it runs |
 |-------|-------|--------------|

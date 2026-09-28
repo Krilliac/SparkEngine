@@ -66,8 +66,8 @@ appear in every health snapshot.
 
 The server prints one JSON health snapshot per line to stdout at startup,
 every `--status-interval-ms`, and on each lifecycle change. It also replaces
-the `--health-file` atomically with the same object. The fields are listed on
-the [Dedicated Server](../subsystems/Dedicated-Server.md) page.
+the `--health-file` atomically with the same object. Every field, its type
+and its unit are listed under [Health Snapshot Contract](#health-snapshot-contract).
 
 Treat a server as failed when **any** of these holds:
 
@@ -111,7 +111,11 @@ Work through these in order.
    budget is 16,666 us, so a p99 near that is a server falling behind.
    `rssBytes` is the resident set. It is `null` if the platform query fails.
    Compare it across snapshots over time; `tools/ops/server_soak.py` applies
-   the same checks over a long run.
+   the same checks over a long run. `netQueueIn` and `netQueueOut` are the
+   network message queues after the last tick. Reliable traffic is never
+   dropped, so a depth that keeps rising is a server that cannot drain its
+   traffic. A `netQueueInPeak` or `netQueueOutPeak` of 4096 means Unreliable
+   traffic was already being shed.
 5. **What did it log?** The server logs to stderr, because stdout is reserved
    for the health stream. Keep stderr from every launch. The drill keeps
    `server-stderr-<launch>.log` per launch in `--work-dir`.
@@ -228,9 +232,59 @@ guards:
 | Not serving | `ready=false` without `draining` for longer than your startup time |
 | Tick budget | `tickP99Us` above 16,000 us at 60 Hz, the soak harness guard |
 | Memory growth | RSS rising faster than 64 MiB per hour, the soak harness guard |
+| Queue growth | `netQueueIn` or `netQueueOut` rising faster than 3,600 messages per hour, or a queue peak of 4096, the soak harness guards |
 | Crash loop | `SparkOrchestrator status <id>` reports `quarantined` |
 
 Tune these for your game before you rely on them. They are not SLOs.
+
+## Health Snapshot Contract
+
+Every snapshot is one JSON object whose first field is
+`"schema":"spark-server-health/1"`. The key set is exact: a consumer may
+reject a snapshot with a missing or an unknown key, and any change to the key
+set bumps the version. `tools/ops/validate_server_health.py` is the reference
+parser. The soak and the recovery drill both read the health file through
+it, and it checks one snapshot from the command line:
+
+```
+python3 tools/ops/validate_server_health.py /srv/spark/health.json --expected-sha <full-sha>
+```
+
+With `--expected-sha` it also refuses a snapshot whose `commit` is `unknown`
+or any other commit, and one built from a `dirty` or `unknown` tree, so
+telemetry is only ever attributed to the exact, clean commit that ran.
+
+| Field | Type | Unit and meaning |
+|---|---|---|
+| `schema` | string | Always `spark-server-health/1` |
+| `live` | boolean | The process has started and has not finished stopping |
+| `ready` | boolean | Serving: live, not draining or stopping, listener up, game module initialized, gateway control ready if configured |
+| `draining` | boolean | A stop was requested; route players away |
+| `stopping` | boolean | Teardown is in progress |
+| `port` | integer, 0 to 65535 | UDP port from the command line; 0 means an OS-assigned port |
+| `players` | integer | Connected players |
+| `ticks` | integer | Server ticks completed since start |
+| `loadedModules` | integer | Game and engine modules loaded |
+| `gameModule` | string | Name of the initialized game module, or empty |
+| `map` | string | Current map |
+| `error` | string | Last error, or empty |
+| `version` | string | `MAJOR.MINOR.PATCH`, or `unknown` |
+| `commit` | string | Full lowercase 40-hex commit SHA, or `unknown` without git metadata |
+| `treeState` | string | `clean`, `dirty` (tracked files differed from the commit), or `unknown` |
+| `tickSamples` | integer | Ticks recorded in the latency histogram for this run |
+| `tickP50Us` | integer, microseconds | Median tick work time, excluding the frame-budget sleep |
+| `tickP95Us` | integer, microseconds | 95th percentile tick work time |
+| `tickP99Us` | integer, microseconds | 99th percentile tick work time |
+| `tickMaxUs` | integer, microseconds | Longest tick work time |
+| `rssBytes` | integer or null, bytes | Resident set size; `null` when the platform query fails |
+| `netQueueIn` | integer, messages | Incoming network messages still queued after the last tick |
+| `netQueueOut` | integer, messages | Outgoing network messages still queued after the last tick |
+| `netQueueInPeak` | integer, messages | Largest incoming queue since the network runtime initialized |
+| `netQueueOutPeak` | integer, messages | Largest outgoing queue since the network runtime initialized |
+
+Integers are unsigned 64-bit. The tick percentiles never decrease from p50
+through p95 and p99 to the maximum, and each queue peak is at least its
+current depth.
 
 ## Threading Model
 
@@ -256,7 +310,8 @@ loop reads on its next tick, so a drain always starts on the loop thread.
 | `SparkServer --health-file`, `--stop-file`, `--version` | Operator surface of the server process |
 | `Spark::Server::ServerHealth` (`SparkServer/src/ServerHealth.h`) | Health snapshot fields |
 | `tools/ops/server_recovery_drill.py` | Detect, diagnose, drain, restart, and recover drill |
-| `tools/ops/server_soak.py` | Long-run memory and tick-budget soak |
+| `tools/ops/server_soak.py` | Long-run memory, network-queue and tick-budget soak |
+| `tools/ops/validate_server_health.py` | Reference parser for the `spark-server-health/1` snapshot |
 | `SparkOrchestrator` | Single-host supervision: define, start, drain, restart, status |
 | `Terrafront::TFDatabase::CreateBackup` / `RestoreFromBackup` | TERRAFRONT database backup and restore |
 
@@ -289,4 +344,6 @@ Written 2026-09-27 for `OPS-110` against `SparkServer/src/main.cpp`,
 `SparkServer/src/ServerApplication.cpp`, `SparkServer/src/ServerHealth.h`,
 `SparkDaemon/src/OrchestrationService.cpp`, and `tools/ops/`. The
 `ServerRecoveryDrill_Harness` CTest fails when a `SparkServer` flag or script
-path on this page no longer exists.
+path on this page no longer exists, and the `ServerHealth_ExternalContract`
+CTest fails when the field table differs from the validator's key set or from
+`FormatHealthJson` in `SparkServer/src/ServerHealth.cpp`.

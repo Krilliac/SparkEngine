@@ -293,3 +293,55 @@ TEST(NetworkManagerReal_Constants)
     EXPECT_EQ(INVALID_CLIENT, uint32_t(0));
     EXPECT_EQ(DEFAULT_PORT, uint16_t(27015));
 }
+
+// ---------------------------------------------------------------------------
+// OPS-110: message-queue occupancy published through GetStats
+// ---------------------------------------------------------------------------
+
+#ifdef ENABLE_NETWORKING
+TEST(NetQueueMetrics_DepthAndPeakTrackTheQueues)
+{
+    auto& nm = NetworkManager::GetInstance();
+    nm.Shutdown();
+    ASSERT_TRUE(nm.Initialize());
+    ASSERT_TRUE(nm.StartServer(0, 2, NetworkEndpointPolicy::Loopback()));
+
+    NetworkStats stats = nm.GetStats();
+    EXPECT_EQ(stats.outgoingQueueDepth, size_t{0});
+    EXPECT_EQ(stats.outgoingQueuePeak, size_t{0});
+    EXPECT_EQ(stats.incomingQueueDepth, size_t{0});
+    EXPECT_EQ(stats.incomingQueuePeak, size_t{0});
+
+    // Server-side Unreliable sends wait in the outgoing queue until Update flushes it.
+    NetworkMessage message;
+    message.type = MessageType::ChatMessage;
+    message.channel = ChannelType::Unreliable;
+    constexpr size_t kQueued = 7;
+    for (size_t index = 0; index < kQueued; ++index)
+        nm.SendMessage(message);
+    stats = nm.GetStats();
+    EXPECT_EQ(stats.outgoingQueueDepth, kQueued);
+    EXPECT_EQ(stats.outgoingQueuePeak, kQueued);
+
+    // Draining empties the queue but keeps the high-water mark.
+    nm.Update(0.0f);
+    stats = nm.GetStats();
+    EXPECT_EQ(stats.outgoingQueueDepth, size_t{0});
+    EXPECT_EQ(stats.outgoingQueuePeak, kQueued);
+
+    // A flood stops at the Unreliable cap, and the peak reports the cap rather than the attempts.
+    for (size_t index = 0; index < NetworkManager::kMaxQueuedMessages + 16; ++index)
+        nm.SendMessage(message);
+    stats = nm.GetStats();
+    EXPECT_EQ(stats.outgoingQueueDepth, NetworkManager::kMaxQueuedMessages);
+    EXPECT_EQ(stats.outgoingQueuePeak, NetworkManager::kMaxQueuedMessages);
+
+    // The peaks belong to one initialized lifecycle.
+    nm.StopServer();
+    nm.Shutdown();
+    stats = nm.GetStats();
+    EXPECT_EQ(stats.outgoingQueueDepth, size_t{0});
+    EXPECT_EQ(stats.outgoingQueuePeak, size_t{0});
+    EXPECT_EQ(stats.incomingQueuePeak, size_t{0});
+}
+#endif // ENABLE_NETWORKING
