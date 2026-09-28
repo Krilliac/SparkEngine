@@ -728,6 +728,9 @@ namespace SparkEditor
         if (!m_currentTerrain)
             return;
 
+        // This writes the engine runtime's World, not the editor document: SparkEditor never registers
+        // the document World with EngineContext, so these edits are outside document undo/redo
+        // (classified "non-document" in SparkEditor/world-mutation-inventory.json).
         auto* ctx = EngineContext::Get();
         if (!ctx)
             return;

@@ -1148,6 +1148,7 @@ target_sources(SparkTests PRIVATE
     TestEditorProjectMaterializationReal.cpp
     TestEditorUndoHierarchyReal.cpp
     TestEditorDocumentReal.cpp
+    TestEditorUndoWorldMatrixReal.cpp
     TestEDT210InspectorEditCommitReal.cpp
     TestFPSComponentsReal.cpp
     TestLoggerSinksReal.cpp
@@ -2949,6 +2950,23 @@ add_test(NAME EditorUndoDocument COMMAND $<TARGET_FILE:SparkTests> --warn-is-err
 set_tests_properties(EditorUndoDocument PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorUndo_Document_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "editor;editor-integration;unit"
+    TIMEOUT 60)
+
+# EDT-210: "all world mutations" is the closed list in SparkEditor/world-mutation-inventory.json.
+# The inventory test fails on an unlisted, recounted or stale mutation site; the matrix
+# drives every command-class entry point through one undo-all/redo-all session.
+add_test(
+    NAME EditorUndo_WorldMutationInventory
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_editor_world_mutation_inventory.py)
+set_tests_properties(EditorUndo_WorldMutationInventory PROPERTIES
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    LABELS "editor;editor-integration;unit;python"
+    TIMEOUT 120)
+add_test(NAME EditorUndoWorldMatrix COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(EditorUndoWorldMatrix PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorUndo_WorldMatrix_;SPARK_TEST_EXPECT_COUNT=2"
+    LABELS "editor;editor-integration"
     TIMEOUT 60)
 
 add_test(

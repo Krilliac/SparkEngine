@@ -81,6 +81,15 @@ namespace SparkEditor::SceneEditTools
     bool AlignEntityToGround(::World& world, ::EntityID entity);
 
     /**
+     * @brief Execute an undoable local-position change. Used by the viewport
+     * translate gizmo to turn a whole drag into a single history entry.
+     *
+     * @return true when a command was executed (values differ and the entity has a Transform).
+     */
+    bool CommitEntityPosition(::World& world, ::EntityID entity, const DirectX::XMFLOAT3& oldPosition,
+                              const DirectX::XMFLOAT3& newPosition);
+
+    /**
      * @brief Execute an undoable local-rotation change (Euler degrees).
      *
      * Applies newRotation and records a command that restores oldRotation on
