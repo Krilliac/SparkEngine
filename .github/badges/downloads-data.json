@@ -3,7 +3,7 @@
     "initialized": true,
     "baseTotal": 0,
     "baseInstallerTotal": 0,
-    "total": 66,
+    "total": 67,
     "installerTotal": 38,
     "assets": [
         {
@@ -90,7 +90,7 @@
             "id": 530455821,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Linux-x86_64-Release.zip",
-            "downloadCount": 1,
+            "downloadCount": 2,
             "digest": "sha256:3d799d9244315974e77278f2da44c432a6d32cfe05eb75b007a7c29c974e5656",
             "state": "uploaded"
         },
@@ -163,5 +163,5 @@
         538847551
     ],
     "pending": null,
-    "updated": "2026-09-27T21:02:56Z"
+    "updated": "2026-09-28T04:10:32Z"
 }
