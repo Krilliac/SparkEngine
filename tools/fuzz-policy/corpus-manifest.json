@@ -449,6 +449,81 @@
           "guard_test": "FuzzObjStaticSmoke"
         }
       ]
+    },
+    {
+      "id": "mmo-client-state-request-corpus",
+      "parser_id": "mmo-client-state-request",
+      "corpus_dir": "FuzzerTests/corpora/mmo-client-state-request",
+      "last_verified": "2026-09-28",
+      "content_digest": "ee457f6c0435ca8e548ac98865cdd677d4793f165b3d4ac1ea6a71a3daa3bed5",
+      "budget": {
+        "max_input_bytes": 1024,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "mmo-chat-wire-corpus",
+      "parser_id": "mmo-chat-wire",
+      "corpus_dir": "FuzzerTests/corpora/mmo-chat-wire",
+      "last_verified": "2026-09-28",
+      "content_digest": "cca0aa5dfb53373173045f63309c7c77c75334039111024bad2dc26dc7bcb489",
+      "budget": {
+        "max_input_bytes": 1024,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 7,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "mmo-player-entity-events-corpus",
+      "parser_id": "mmo-player-entity-events",
+      "corpus_dir": "FuzzerTests/corpora/mmo-player-entity-events",
+      "last_verified": "2026-09-28",
+      "content_digest": "103dce30e95b5ffc297c979c930876d6958c78dab6de394e7965758d227acc86",
+      "budget": {
+        "max_input_bytes": 1024,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 7,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-spawn-nan-position.bin",
+          "finding": "An EntitySpawn whose position was NaN decoded successfully and seeded a remote player's current and target position; the decoder now rejects non-finite positions.",
+          "found_by": "review",
+          "guard_test": "MMOEntityEvents_SpawnRejectsNonFinitePosition"
+        }
+      ]
+    },
+    {
+      "id": "tf-lan-discovery-beacon-corpus",
+      "parser_id": "tf-lan-discovery-beacon",
+      "corpus_dir": "FuzzerTests/corpora/tf-lan-discovery-beacon",
+      "last_verified": "2026-09-28",
+      "content_digest": "58aeb1f3bbda2149f7dc4cee624507c2d965434f4cf7e7cec1d540c82f26a62b",
+      "budget": {
+        "max_input_bytes": 8192,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 7,
+        "max_corpus_bytes": 8192,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

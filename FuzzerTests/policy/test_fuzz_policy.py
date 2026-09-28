@@ -112,6 +112,10 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzExr",
     "SparkFuzzTextureLinux",
     "SparkFuzzObjStatic",
+    "SparkFuzzTFLanBeacon",
+    "SparkFuzzMMOChatWire",
+    "SparkFuzzMMOClientState",
+    "SparkFuzzMMOEntityEvents",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -1977,6 +1981,30 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::Graphics::Detail::LoadOBJStaticMesh",
                 "mesh-obj-static-loader",
                 11,
+            ),
+            "tf-lan-discovery-beacon": (
+                "TFLanBeacon",
+                "Terrafront::DecodeLanBeacon",
+                "tf-lan-discovery-beacon",
+                7,
+            ),
+            "mmo-chat-wire": (
+                "MMOChatWire",
+                "MMO::MMOChatSystem::DecodeWirePayload",
+                "mmo-chat-wire",
+                7,
+            ),
+            "mmo-client-state-request": (
+                "MMOClientState",
+                "MMO::DecodeClientStateRequest",
+                "mmo-client-state-request",
+                6,
+            ),
+            "mmo-player-entity-events": (
+                "MMOEntityEvents",
+                "MMO::DecodeEntitySpawn",
+                "mmo-player-entity-events",
+                7,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

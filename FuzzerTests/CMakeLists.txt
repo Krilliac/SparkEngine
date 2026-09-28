@@ -1215,3 +1215,260 @@ set_tests_properties(FuzzObjStaticSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+
+# SEC-120 game-module network decoders: each adapter compiles the production
+# codec TU the module runs on untrusted datagrams, with the same libstdc++
+# driver / libc++ adapter split as SparkFuzzJsonUtils. The MMO decoders read
+# through NetBuffer, so they also compile its production reader and the
+# logger it reports overruns through (already libc++ via the property set on
+# SPARK_FUZZ_PRODUCTION_LOGGER above).
+
+# The TERRAFRONT LAN beacon codec is self-contained (no NetBuffer, no logger).
+add_executable(SparkFuzzTFLanBeacon
+    FuzzTFLanBeacon.cpp
+    FuzzTFLanBeaconProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMOFPS/Source/Game/TFLanBeaconCodec.cpp"
+)
+set_source_files_properties(
+    FuzzTFLanBeaconProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMOFPS/Source/Game/TFLanBeaconCodec.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzTFLanBeacon PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMOFPS/Source"
+)
+target_compile_features(SparkFuzzTFLanBeacon PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzTFLanBeacon PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzTFLanBeacon PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzTFLanBeacon PRIVATE Threads::Threads c++ c++abi)
+
+# fills-list-past-cap.bin frames 65 distinct beacons from one host, so every
+# replay drives UpsertLanServer into its kTFLanMaxServers refusal path.
+add_test(
+    NAME FuzzTFLanBeaconSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzTFLanBeacon>
+        -max_len=8192
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/tf-lan-discovery-beacon"
+)
+set_tests_properties(FuzzTFLanBeaconSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# MMOChatSystem.h reaches Spark/Version.h, which includes the configure-time
+# Spark/GeneratedVersion.h. A root-project build (the linux-fuzz preset) has
+# already generated it; the standalone tools/fuzz-policy project generates it
+# from the same template and the SPARK_ENGINE_VERSION the root CMakeLists sets.
+if(NOT DEFINED SPARK_GENERATED_INCLUDE_DIR)
+    set(SPARK_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+    file(STRINGS "${SPARK_FUZZ_PROJECT_ROOT}/CMakeLists.txt" _spark_fuzz_version_line
+        REGEX "^set\\(SPARK_ENGINE_VERSION \"[0-9]+\\.[0-9]+\\.[0-9]+\"")
+    if(NOT _spark_fuzz_version_line MATCHES "\"([0-9]+)\\.([0-9]+)\\.([0-9]+)\"")
+        message(FATAL_ERROR "[SEC-120] cannot read SPARK_ENGINE_VERSION from ${SPARK_FUZZ_PROJECT_ROOT}/CMakeLists.txt")
+    endif()
+    block()
+        set(PROJECT_VERSION_MAJOR "${CMAKE_MATCH_1}")
+        set(PROJECT_VERSION_MINOR "${CMAKE_MATCH_2}")
+        set(PROJECT_VERSION_PATCH "${CMAKE_MATCH_3}")
+        # Relative to this directory: the fuzz policy's CMake reader resolves no
+        # variable in a command's first argument.
+        configure_file(
+            "../cmake/SparkGeneratedVersion.h.in"
+            "${SPARK_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
+            @ONLY
+        )
+    endblock()
+endif()
+
+add_executable(SparkFuzzMMOChatWire
+    FuzzMMOChatWire.cpp
+    FuzzMMOChatWireProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/Chat/MMOChatWire.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Networking/NetworkBuffer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzMMOChatWireProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/Chat/MMOChatWire.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Networking/NetworkBuffer.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzMMOChatWire PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_GENERATED_INCLUDE_DIR}"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source"
+)
+target_compile_features(SparkFuzzMMOChatWire PRIVATE cxx_std_23)
+# The decoders are networking code (ENABLE_NETWORKING); Logger.cpp routes
+# warnings through DebugHookManager unless SPARK_SHIPPING compiles the hooks
+# out, and the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzMMOChatWire PRIVATE ENABLE_NETWORKING=1 SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzMMOChatWire PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzMMOChatWire PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzMMOChatWire PRIVATE Threads::Threads c++ c++abi)
+
+# string-len-overclaim.bin claims a 65535-byte sender in a few bytes; the
+# NetBuffer reader must refuse it before allocating.
+add_test(
+    NAME FuzzMMOChatWireSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzMMOChatWire>
+        -max_len=1024
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mmo-chat-wire"
+)
+set_tests_properties(FuzzMMOChatWireSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+add_executable(SparkFuzzMMOClientState
+    FuzzMMOClientState.cpp
+    FuzzMMOClientStateProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/World/MMOClientStateCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Networking/NetworkBuffer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzMMOClientStateProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/World/MMOClientStateCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Networking/NetworkBuffer.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzMMOClientState PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source"
+)
+target_compile_features(SparkFuzzMMOClientState PRIVATE cxx_std_23)
+# The decoders are networking code (ENABLE_NETWORKING); Logger.cpp routes
+# warnings through DebugHookManager unless SPARK_SHIPPING compiles the hooks
+# out, and the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzMMOClientState PRIVATE ENABLE_NETWORKING=1 SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzMMOClientState PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzMMOClientState PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzMMOClientState PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzMMOClientStateSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzMMOClientState>
+        -max_len=1024
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=6
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mmo-client-state-request"
+)
+set_tests_properties(FuzzMMOClientStateSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+add_executable(SparkFuzzMMOEntityEvents
+    FuzzMMOEntityEvents.cpp
+    FuzzMMOEntityEventsProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Networking/NetworkBuffer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzMMOEntityEventsProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Networking/NetworkBuffer.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzMMOEntityEvents PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source"
+)
+target_compile_features(SparkFuzzMMOEntityEvents PRIVATE cxx_std_23)
+# The decoders are networking code (ENABLE_NETWORKING); Logger.cpp routes
+# warnings through DebugHookManager unless SPARK_SHIPPING compiles the hooks
+# out, and the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzMMOEntityEvents PRIVATE ENABLE_NETWORKING=1 SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzMMOEntityEvents PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzMMOEntityEvents PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzMMOEntityEvents PRIVATE Threads::Threads c++ c++abi)
+
+# regression-spawn-nan-position.bin is a spawn whose position is NaN: the
+# pre-fix handler decoded it straight into a remote player's position.
+add_test(
+    NAME FuzzMMOEntityEventsSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzMMOEntityEvents>
+        -max_len=1024
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mmo-player-entity-events"
+)
+set_tests_properties(FuzzMMOEntityEventsSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

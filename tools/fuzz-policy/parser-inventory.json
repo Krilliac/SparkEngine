@@ -2037,18 +2037,26 @@
     },
     {
       "id": "mmo-client-state-request",
-      "description": "SparkGameMMO server-side decoder (MMOWorldSetup::ApplyClientStateRequest) for the fixed 42-byte client EntityStateUpdate state request: exact length, zero properties, no trailing bytes, finite and range-checked position, rotation and velocity, bound to the sender's own entity.",
+      "description": "SparkGameMMO server-side decoder (MMO::DecodeClientStateRequest, called by MMOWorldSetup::ApplyClientStateRequest) for the fixed 42-byte client EntityStateUpdate state request: exact length, zero properties, no trailing bytes, finite and range-checked position, rotation and velocity, bound to the sender's own entity.",
       "trust_boundary": "untrusted-network",
       "source_files": [
-        "GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp"
+        "GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp",
+        "GameModules/SparkGameMMO/Source/World/MMOClientStateCodec.cpp",
+        "GameModules/SparkGameMMO/Source/World/MMOClientStateCodec.h"
       ],
       "formats": [
         "packet"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; its packet campaign belongs with the NET-100 protocol work.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzMMOClientState.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzMMOClientState",
+        "test_selector": "FuzzMMOClientStateSmoke",
+        "corpus_id": "mmo-client-state-request-corpus",
+        "entry_symbol": "MMO::DecodeClientStateRequest",
+        "binding_source": "FuzzerTests/FuzzMMOClientStateProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeMMOClientState"
       }
     },
     {
@@ -2056,31 +2064,46 @@
       "description": "SparkGameMMO chat wire decoder (MMOChatSystem::DecodeWirePayload): a channel byte plus two length-prefixed strings from any admitted client, relayed by the server.",
       "trust_boundary": "untrusted-network",
       "source_files": [
-        "GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp"
+        "GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp",
+        "GameModules/SparkGameMMO/Source/Chat/MMOChatWire.cpp"
       ],
       "formats": [
         "packet"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; its packet campaign belongs with the NET-100 protocol work.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzMMOChatWire.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzMMOChatWire",
+        "test_selector": "FuzzMMOChatWireSmoke",
+        "corpus_id": "mmo-chat-wire-corpus",
+        "entry_symbol": "MMO::MMOChatSystem::DecodeWirePayload",
+        "binding_source": "FuzzerTests/FuzzMMOChatWireProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeMMOChat"
       }
     },
     {
       "id": "mmo-player-entity-events",
-      "description": "SparkGameMMO client-side EntitySpawn and EntityDestroy handlers (MMOPlayerSystem) that decode network ID, owner, entity type string and position from server datagrams.",
+      "description": "SparkGameMMO client-side EntitySpawn and EntityDestroy decoders (MMO::DecodeEntitySpawn, MMO::DecodeEntityDestroy, called by MMOPlayerSystem's handlers) for network ID, owner, entity type string and position from server datagrams.",
       "trust_boundary": "untrusted-network",
       "source_files": [
-        "GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp"
+        "GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp",
+        "GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.cpp",
+        "GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.h"
       ],
       "formats": [
         "packet"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; its packet campaign belongs with the NET-100 protocol work.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzMMOEntityEvents.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzMMOEntityEvents",
+        "test_selector": "FuzzMMOEntityEventsSmoke",
+        "corpus_id": "mmo-player-entity-events-corpus",
+        "entry_symbol": "MMO::DecodeEntitySpawn",
+        "binding_source": "FuzzerTests/FuzzMMOEntityEventsProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeMMOEntityEvents"
       }
     },
     {
@@ -2101,18 +2124,25 @@
     },
     {
       "id": "tf-lan-discovery-beacon",
-      "description": "Terrafront LAN discovery beacon decoded from UDP datagrams any host on the LAN can send.",
+      "description": "Terrafront LAN discovery beacon (Terrafront::DecodeLanBeacon) and scanner list merge (Terrafront::UpsertLanServer) run on UDP datagrams any host on the LAN can send.",
       "trust_boundary": "untrusted-network",
       "source_files": [
-        "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp"
+        "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp",
+        "GameModules/SparkGameMMOFPS/Source/Game/TFLanBeaconCodec.cpp"
       ],
       "formats": [
         "udp-beacon"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzTFLanBeacon.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzTFLanBeacon",
+        "test_selector": "FuzzTFLanBeaconSmoke",
+        "corpus_id": "tf-lan-discovery-beacon-corpus",
+        "entry_symbol": "Terrafront::DecodeLanBeacon",
+        "binding_source": "FuzzerTests/FuzzTFLanBeaconProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeTFLanBeacon"
       }
     },
     {
