@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
 import re
 import sys
 from collections import Counter
@@ -74,16 +75,30 @@ class Diagnostic:
         return f"{self.path}:{self.line}:{self.column}: {self.severity}: {self.message} [{self.check}]"
 
 
+def is_posix_root(root: Path) -> bool:
+    """True for a POSIX-style absolute root such as the CI runner's /home/runner/... checkout."""
+
+    text = root.as_posix()
+    return text.startswith("/") and not text.startswith("//")
+
+
 def normalize_path(raw_path: str, repo_root: Path) -> str:
-    """Return a repository-relative POSIX path, or the normalized absolute path outside it."""
+    """Return a repository-relative POSIX path, or the normalized absolute path outside it.
+
+    A POSIX-style root (a log from the Linux clang-tidy lane) is normalized with
+    POSIX path rules on every host, so replaying a CI log on Windows keys the same
+    files as CI does; any other root uses the host's own path rules.
+    """
 
     candidate = raw_path.strip()
-    if not os.path.isabs(candidate):
-        candidate = os.path.join(str(repo_root), candidate)
-    normalized = os.path.normpath(candidate)
-    root = os.path.normpath(str(repo_root))
-    if normalized == root or normalized.startswith(root + os.sep):
-        return Path(os.path.relpath(normalized, root)).as_posix()
+    paths = posixpath if is_posix_root(repo_root) else os.path
+    root_text = repo_root.as_posix() if paths is posixpath else str(repo_root)
+    if not paths.isabs(candidate):
+        candidate = paths.join(root_text, candidate)
+    normalized = paths.normpath(candidate)
+    root = paths.normpath(root_text)
+    if normalized == root or normalized.startswith(root + paths.sep):
+        return Path(paths.relpath(normalized, root)).as_posix()
     return Path(normalized).as_posix()
 
 
@@ -286,7 +301,11 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         major_version = parse_major_version(read_text(args.clang_tidy_version_file, "clang-tidy version file"))
-        repo_root = args.repo_root.resolve()
+        # Resolving a POSIX runner root on Windows would graft it onto the current
+        # drive (D:\home\runner\...), so such a root is taken as written there.
+        repo_root = args.repo_root
+        if not (os.name == "nt" and is_posix_root(repo_root)):
+            repo_root = repo_root.resolve()
         log_text = read_text(args.log, "clang-tidy log")
         if not log_text.strip():
             # clang-tidy prints at least its warning-suppression summary per
