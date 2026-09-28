@@ -7,6 +7,7 @@
 
 #include "TestFramework.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstring>
@@ -94,11 +95,26 @@ namespace SparkTestLinks
         if (error || absoluteTarget.empty())
             return false;
 #if defined(_WIN32)
-        if (!fs::create_directory(link, error) || error)
+        // A junction is an empty directory that gets a reparse point afterwards. Build it
+        // under a private sibling name and rename it into place, so @p link appears already
+        // a junction. Built in place, a concurrent opener of @p link (the swap-race tests)
+        // sees a plain empty directory, can write into it, and holds a handle that makes
+        // FSCTL_SET_REPARSE_POINT fail.
+        static std::atomic<unsigned> stagingSerial{0};
+        const fs::path staging = link.parent_path() / (link.filename().native() + L".link-staging." +
+                                                       std::to_wstring(::GetCurrentProcessId()) + L"." +
+                                                       std::to_wstring(stagingSerial.fetch_add(1)));
+        if (!fs::create_directory(staging, error) || error)
             return false;
-        if (!SetMountPoint(link, absoluteTarget))
+        if (!SetMountPoint(staging, absoluteTarget))
         {
-            ::RemoveDirectoryW(link.c_str());
+            ::RemoveDirectoryW(staging.c_str());
+            return false;
+        }
+        // MoveFileExW renames the reparse point itself and fails if @p link already exists.
+        if (!::MoveFileExW(staging.c_str(), link.c_str(), 0))
+        {
+            ::RemoveDirectoryW(staging.c_str());
             return false;
         }
         return IsDirectoryLink(link);

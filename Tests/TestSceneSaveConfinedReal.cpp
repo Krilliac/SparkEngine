@@ -246,10 +246,13 @@ TEST(SceneSaveConfined_ComponentSwapRaceNeverWritesOutsideRoot)
                 {
                     swaps.fetch_add(1);
                     std::this_thread::yield();
-                    RemoveDirectoryLink(levels);
                 }
                 do
                 {
+                    // Unlinking can fail while a save briefly holds the junction open to
+                    // inspect it, so retry it with the rename rather than leaving the
+                    // junction in place and spinning on a rename that can never succeed.
+                    SparkTestLinks::RemoveDirectoryLink(levels);
                     error.clear();
                     fs::rename(parked, levels, error);
                 } while (error && !stop.load());
@@ -269,6 +272,7 @@ TEST(SceneSaveConfined_ComponentSwapRaceNeverWritesOutsideRoot)
     attacker.join();
     // Restore the layout if the attacker stopped mid-swap.
     std::error_code error;
+    SparkTestLinks::RemoveDirectoryLink(levels);
     if (!fs::exists(fs::symlink_status(levels, error)))
         fs::rename(parked, levels, error);
 

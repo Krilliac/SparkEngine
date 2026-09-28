@@ -2063,6 +2063,9 @@ set_tests_properties(TFScramAuth PROPERTIES
     LABELS "network-security;persistence;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
+# Each TFScram_ case runs PBKDF2 at the production iteration floor (about 10 s for
+# the family in Release), so it runs only in the lane above, not twice.
+spark_exclude_from_main_suite(TFScram_)
 
 # Unwired-system removal: MaterialSystem/Material expose no file import, export, reload or
 # hot-reload path, and LifecycleSystem latches deaths (no unregistered callback) with

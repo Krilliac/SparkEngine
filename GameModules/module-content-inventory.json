@@ -153,7 +153,6 @@
         "Utils/ConsoleProcessManager.h",
         "Utils/ContainerUtils.h",
         "Utils/EventBus.h",
-        "Utils/FileUtils.h",
         "Utils/InvalidStateDetector.h",
         "Utils/LogMacros.h",
         "Utils/MathUtils.h",
@@ -163,7 +162,7 @@
         "Utils/StateMachine.h",
         "Utils/Validate.h"
       ],
-      "privateEngineHeaderCount": 52,
+      "privateEngineHeaderCount": 51,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],

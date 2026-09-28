@@ -18,7 +18,6 @@
 #include "Game.h"
 #include "ClassSystem.h"
 #include "Utils/Assert.h"
-#include "Utils/FileUtils.h"
 #include "Utils/Validate.h"
 #include "Utils/SparkConsole.h"
 
@@ -42,6 +41,7 @@
 #include <cmath>
 #include <filesystem>
 #include <string_view>
+#include <system_error>
 
 #include "Utils/LogMacros.h"
 
@@ -607,7 +607,8 @@ std::vector<std::string> Game::GetAvailableScenes() const
     {
         try
         {
-            const std::filesystem::path directory = Spark::FileUtils::PathFromUtf8(dir);
+            const std::filesystem::path directory(
+                std::u8string(reinterpret_cast<const char8_t*>(dir.data()), dir.size()));
             if (!std::filesystem::exists(directory))
                 continue;
             for (const auto& entry : std::filesystem::directory_iterator(directory))
@@ -617,8 +618,16 @@ std::vector<std::string> Game::GetAvailableScenes() const
                 const auto ext = entry.path().extension();
                 if (ext == ".scene" || ext == ".xml" || ext == ".json")
                 {
-                    if (auto scenePath = Spark::FileUtils::TryPathToUtf8(entry.path()))
-                        scenes.push_back(std::move(*scenePath));
+                    // u8string() throws only for a name that is not well-formed UTF-16;
+                    // skip that one entry, not the rest of the directory.
+                    try
+                    {
+                        const std::u8string scenePath = entry.path().u8string();
+                        scenes.emplace_back(reinterpret_cast<const char*>(scenePath.data()), scenePath.size());
+                    }
+                    catch (const std::system_error&)
+                    {
+                    }
                 }
             }
         }

@@ -189,7 +189,8 @@ cmake --build build --config Release
 # A heavy family that already has its own pinned prefix lane is also excluded from
 # SparkEngineTests via spark_exclude_from_main_suite() in Tests/CMakeLists.txt, and
 # only under the condition that registers that lane: FPSLAN_ (FPSLANTwoClientConvergence),
-# RacingCompleteRace_ (ModuleManifest_SparkGameRacing_RacingCompleteRace), and on Linux
+# RacingCompleteRace_ (ModuleManifest_SparkGameRacing_RacingCompleteRace), TFScram_
+# (TFScramAuth, always registered), and on Linux
 # OpenGLGolden_ / VulkanGolden_RHI230_. Configure fails if a TEST name contains an
 # excluded prefix without starting with it, since no lane would run that test.
 # Run the full ctest set (not just -R SparkEngineTests) to execute every family.
