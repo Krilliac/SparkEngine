@@ -256,7 +256,9 @@ namespace RTS
 
         // Scripted Human orders are part of the tick, so they follow the tick counter, not frame pacing.
         if (m_commander)
+        {
             m_commander->Apply(m_systems, m_tick);
+        }
         if (m_tick % AI_DECISION_TICKS == 0)
             RunAIOpponents();
         commands->Update(TICK_SECONDS);

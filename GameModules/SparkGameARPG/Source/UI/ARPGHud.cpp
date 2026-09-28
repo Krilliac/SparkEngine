@@ -51,7 +51,9 @@ namespace ARPG
                 for (const SkillCooldownState& cooldown : skills.GetCooldowns(hero->heroId))
                 {
                     if (cooldown.skillId == skill->skillId)
+                    {
                         model.primarySkillCooldown = cooldown.remainingCooldown;
+                    }
                 }
             }
         }
@@ -71,7 +73,9 @@ namespace ARPG
     bool ARPGHud::Initialize(Spark::UI::UISystem* ui)
     {
         if (!ui)
+        {
             return false;
+        }
         m_ui = ui;
         m_hasApplied = false;
 
@@ -81,7 +85,9 @@ namespace ARPG
         panel->SetPosition(20.0f, 20.0f);
         panel->SetSize(360.0f, 260.0f);
         for (size_t i = 0; i < LabelNames.size(); ++i)
+        {
             m_labels[i] = panel->CreateLabel(LabelNames[i], "");
+        }
         for (size_t i = 0; i < BarNames.size(); ++i)
         {
             m_bars[i] = panel->CreateProgressBar(BarNames[i]);
@@ -93,7 +99,9 @@ namespace ARPG
     void ARPGHud::Apply(const ARPGHudModel& model)
     {
         if (!m_ui || (m_hasApplied && model == m_applied))
+        {
             return;
+        }
 
         m_labels[0]->SetText(std::format("Floor {} | Kills {} ({}/{})", model.floor, model.totalKills,
                                          model.killsOnFloor, ARPGDemoEncounter::KillsPerFloor));
@@ -105,13 +113,19 @@ namespace ARPG
                                  ? std::format("{}: {:.1f}s", model.primarySkillName, model.primarySkillCooldown)
                                  : std::format("{}: ready", model.primarySkillName));
         if (model.runComplete)
+        {
             m_labels[4]->SetText(std::format("Dungeon cleared: boss defeated on floor {}", model.floor));
+        }
         else if (model.hasTarget)
+        {
             m_labels[4]->SetText(std::format("{} [{}] Lv{} | HP {:.0f}/{:.0f}", model.targetName,
                                              GetMonsterRankName(model.targetRank), model.targetLevel,
                                              model.targetHealth, model.targetMaxHealth));
+        }
         else
+        {
             m_labels[4]->SetText("No target");
+        }
 
         m_bars[0]->SetValue(Fraction(model.heroHealth, model.heroMaxHealth));
         m_bars[1]->SetValue(Fraction(model.heroMana, model.heroMaxMana));
@@ -124,7 +138,9 @@ namespace ARPG
     void ARPGHud::Shutdown()
     {
         if (m_ui)
+        {
             m_ui->GetCanvas().RemovePanel(PanelName);
+        }
         m_ui = nullptr;
         m_labels.fill(nullptr);
         m_bars.fill(nullptr);

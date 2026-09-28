@@ -254,7 +254,9 @@ void SparkGamePlatformerModule::OnFixedUpdate(float fixedDeltaTime)
         return;
 
     if (m_routeRunner)
+    {
         m_routeRunner->Drive(*m_levelSystem, *m_playerController);
+    }
     m_levelFlow->StepFixed(fixedDeltaTime);
 }
 
@@ -328,7 +330,9 @@ void SparkGamePlatformerModule::RegisterConsoleCommands()
                             [this](const std::vector<std::string>& args) -> std::string
                             {
                                 if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+                                {
                                     return "Usage: platformer_autoplay on|off";
+                                }
                                 if (args[0] == "off")
                                 {
                                     m_routeRunner.reset();
@@ -339,7 +343,9 @@ void SparkGamePlatformerModule::RegisterConsoleCommands()
                                 }
                                 if (m_levelSystem->GetCurrentLevelIndex() !=
                                     Platformer::PlatformerRouteRunner::kRouteLevel)
+                                {
                                     return "Autoplay follows the level 0 route only; load it with platformer_level 0";
+                                }
                                 m_routeRunner = std::make_unique<Platformer::PlatformerRouteRunner>();
                                 m_playerController->SetExternalInputDriven(true);
                                 return "Autoplay on (level 0 route)";

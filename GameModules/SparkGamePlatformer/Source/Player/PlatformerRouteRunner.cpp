@@ -27,13 +27,17 @@ namespace Platformer
     {
         const auto& colliders = level.GetActiveColliders();
         if (level.GetCurrentLevelIndex() != kRouteLevel || colliders.size() <= kGoalPlatform)
+        {
             return false;
+        }
 
         const PlayerPosition position = player.GetPlayerPosition();
 
         // A checkpoint restart teleports the player: resume the route at the platform beneath them.
         if (std::abs(position.x - m_lastX) > 3.0f || std::abs(position.y - m_lastY) > 3.0f)
+        {
             m_routeIndex = RouteIndexBelow(colliders, position);
+        }
         m_lastX = position.x;
         m_lastY = position.y;
 
@@ -42,7 +46,9 @@ namespace Platformer
         const float verticalSpeed = player.GetPlayerVelocity().y;
         const size_t touching = RouteIndexUnderFeet(colliders, position);
         if (touching != kNone)
+        {
             m_routeIndex = touching;
+        }
         const size_t standingOn = std::abs(verticalSpeed) < 1.0f ? touching : kNone;
 
         float move = 0.0f;
@@ -60,19 +66,15 @@ namespace Platformer
             {
                 move = Toward(position.x, loiterX);
             }
-            else if (standingOn == kGoalPlatform)
+            else if (standingOn == kGoalPlatform || (standingOn == kMovingPlatform && groundCentre < 38.5f))
             {
+                // Settle on the goal, or ride the moving platform to the far end of its track.
                 move = Toward(position.x, groundCentre);
             }
             else if (next == kMovingPlatform && target.minX > ground.maxX + 1.5f)
             {
                 // Wait near the edge until the moving platform comes back within jumping range.
                 move = Toward(position.x, ground.maxX - 1.0f);
-            }
-            else if (standingOn == kMovingPlatform && groundCentre < 38.5f)
-            {
-                // Ride the moving platform to the far end of its track.
-                move = Toward(position.x, groundCentre);
             }
             else
             {
@@ -86,7 +88,9 @@ namespace Platformer
             // horizontal speed that arrives over the aim point when the fall reaches the target's top.
             float aimX = targetCentre;
             if (position.y < target.maxY + 0.05f)
+            {
                 aimX = std::min(aimX, target.minX - kHalfWidth - 0.3f);
+            }
             const float discriminant = verticalSpeed * verticalSpeed + 2.0f * kGravity * (position.y - target.maxY);
             const float timeToTop = discriminant > 0.0f ? (verticalSpeed + std::sqrt(discriminant)) / kGravity : 0.25f;
             move = std::clamp((aimX - position.x) / std::max(timeToTop, 0.15f) / kRunSpeed, -1.0f, 1.0f);
@@ -95,7 +99,9 @@ namespace Platformer
 
         // Release the button for one frame after a jump so the next press registers as a new jump.
         if (jump && m_jumpHeld && standingOn != kNone)
+        {
             jump = false;
+        }
         m_jumpHeld = jump;
         player.SetMovementInput(move, true);
         player.SetJumpInput(jump);
@@ -106,7 +112,9 @@ namespace Platformer
     {
         const float delta = to - from;
         if (std::abs(delta) < 0.1f)
+        {
             return 0.0f;
+        }
         return std::clamp(delta, -1.0f, 1.0f);
     }
 
@@ -117,7 +125,9 @@ namespace Platformer
         {
             const PlatformCollider& c = colliders[i];
             if (p.x + kHalfWidth > c.minX && p.x - kHalfWidth < c.maxX && std::abs(p.y - c.maxY) < 0.1f)
+            {
                 return i;
+            }
         }
         return kNone;
     }
@@ -129,7 +139,9 @@ namespace Platformer
         {
             const PlatformCollider& c = colliders[i];
             if (p.x + kHalfWidth > c.minX && p.x - kHalfWidth < c.maxX && p.y >= c.maxY - 0.1f)
+            {
                 return i > 0 ? i - 1 : 0;
+            }
         }
         return 0;
     }

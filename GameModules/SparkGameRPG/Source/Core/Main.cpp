@@ -295,7 +295,9 @@ void SparkGameRPGModule::OnUpdate(float deltaTime)
     m_combatSystem->Update(deltaTime);
     // After the combat update, so an attack this frame sees this frame's cooldown progress.
     if (m_questAutopilot)
+    {
         m_questAutopilot->Step(*m_demoSession);
+    }
     m_npcSystem->Update(deltaTime);
 }
 
@@ -438,7 +440,9 @@ void SparkGameRPGModule::RegisterConsoleCommands()
         {
             constexpr const char* usage = "Usage: rpg_autoplay <quest-id> [quarry name] | rpg_autoplay off";
             if (args.empty())
+            {
                 return m_questAutopilot ? m_questAutopilot->GetStatusString() : usage;
+            }
             if (args[0] == "off")
             {
                 m_questAutopilot.reset();
@@ -446,10 +450,14 @@ void SparkGameRPGModule::RegisterConsoleCommands()
             }
             uint32_t questId = 0;
             if (!ParseUint(args[0], questId) || !Spark::Gameplay::QuestSystem::GetInstance().GetQuestDef(questId))
+            {
                 return usage;
+            }
             std::string quarry;
             for (size_t index = 1; index < args.size(); ++index)
+            {
                 quarry += (index > 1 ? " " : "") + args[index];
+            }
             m_questAutopilot = std::make_unique<RPG::RPGQuestAutopilot>(questId, quarry);
             return "Autoplay started for quest " + std::to_string(questId) +
                    (quarry.empty() ? std::string(", fighting every encounter") : ", hunting " + quarry);

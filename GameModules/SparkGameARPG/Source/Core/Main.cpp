@@ -299,7 +299,9 @@ void SparkGameARPGModule::OnUpdate(float deltaTime)
     m_actorPresentation->SyncActors();
     // The HUD is a projection of the authoritative state, so a load or restart shows up on the next frame.
     if (m_hud)
+    {
         m_hud->Apply(ARPG::BuildHudModel(*m_demoEncounter, *m_dungeonSystem, *m_skillSystem));
+    }
 }
 
 void SparkGameARPGModule::OnFixedUpdate(float fixedDeltaTime)

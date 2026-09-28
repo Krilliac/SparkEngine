@@ -654,7 +654,9 @@ namespace RPG
         // would leave the NPC away from it and replanning every frame, so it counts as blocked too.
         if (PlanRoute(npc, {waypoint.x, waypoint.y, waypoint.z}) &&
             HorizontalDistance(npc.route.back().x, npc.route.back().z, waypoint.x, waypoint.z) < ARRIVAL_DISTANCE)
+        {
             return;
+        }
 
         npc.route.clear();
         npc.routeIndex = 0;

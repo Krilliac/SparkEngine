@@ -363,7 +363,9 @@ void SparkGameRTSModule::RegisterConsoleCommands()
                             [this](const std::vector<std::string>& args) -> std::string
                             {
                                 if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+                                {
                                     return "Usage: rts_autoplay on|off";
+                                }
                                 if (args[0] == "off")
                                 {
                                     m_simulation->SetScriptedCommander(nullptr);
@@ -371,7 +373,9 @@ void SparkGameRTSModule::RegisterConsoleCommands()
                                     return "Autoplay off";
                                 }
                                 if (!m_simulation->StartDefaultSkirmish())
+                                {
                                     return "Autoplay failed: the default skirmish did not restart";
+                                }
                                 m_scriptedCommander = std::make_unique<RTS::RTSScriptedCommander>();
                                 m_simulation->SetScriptedCommander(m_scriptedCommander.get());
                                 return "Autoplay on: default skirmish restarted with the scripted Human commander";

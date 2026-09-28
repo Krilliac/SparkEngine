@@ -31,7 +31,9 @@ namespace RPG
     RPGQuestAutopilot::Outcome RPGQuestAutopilot::Step(RPGDemoSession& session)
     {
         if (m_outcome != Outcome::Running)
+        {
             return m_outcome;
+        }
 
         const auto state =
             Spark::Gameplay::QuestSystem::GetInstance().GetQuestState(session.GetPlayerCharacterId(), m_questId);
@@ -70,12 +72,16 @@ namespace RPG
             {
                 m_lastResult = session.Travel(kOakhollowArea);
                 if (session.GetCurrentAreaId() != kOakhollowArea)
+                {
                     m_outcome = Outcome::Stalled;
+                }
                 return m_outcome;
             }
             m_lastResult = session.Rest();
             if (!Contains(m_lastResult, "restored"))
+            {
                 m_outcome = Outcome::Stalled;
+            }
             m_needsRest = false;
             return m_outcome;
         }

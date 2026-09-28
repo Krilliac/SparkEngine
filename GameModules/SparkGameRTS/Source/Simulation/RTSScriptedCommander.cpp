@@ -29,20 +29,26 @@ namespace RTS
             for (uint32_t id : buildings.GetBuildingsByFaction(RTSFaction::Human))
             {
                 if (buildings.GetBuilding(id)->type == RTSBuildingType::Barracks)
+                {
                     return id;
+                }
             }
             return 0;
         };
 
         if (tick == 0 || tick == TICKS_PER_SECOND * 20 || tick == TICKS_PER_SECOND * 40)
+        {
             buildings.StartProduction(humanBarracks(), RTSUnitType::Marine);
+        }
         if (tick == COUNTER_ATTACK_TICK)
         {
             commands.DeselectAll();
             for (uint32_t id : units.GetUnitsByFaction(RTSFaction::Human))
             {
                 if (units.GetUnit(id)->type != RTSUnitType::Worker)
+                {
                     commands.AddToSelection(id);
+                }
             }
             commands.IssueCommandToSelection({RTSCommandType::Attack, 60.0f, 60.0f, 0});
         }
