@@ -130,6 +130,10 @@ namespace ARPG
         // RAII event handles — auto-unsubscribe on destruction
         std::vector<Spark::SubscriptionHandle> m_eventHandles;
 
+        // Engine DestructionSystem handler for the urn-loot callback (0 = none). The
+        // callback captures `this` and its code lives in this module, so Shutdown removes it.
+        uint64_t m_destructionCallbackId = 0;
+
         std::unique_ptr<Spark::Animation::AnimationStateMachine> m_heroAnimation;
         std::string m_actionCoroutineName;
         uint64_t m_actionGeneration = 0;

@@ -124,6 +124,13 @@ namespace ARPG
         // RAII handles auto-unsubscribe, but clear explicitly for deterministic order
         m_eventHandles.clear();
 
+        if (m_destructionCallbackId != 0 && m_context)
+        {
+            if (auto* destruction = m_context->GetDestruction())
+                destruction->RemoveDestructionCallback(m_destructionCallbackId);
+        }
+        m_destructionCallbackId = 0;
+
         ++m_actionGeneration;
         if (m_context && !m_actionCoroutineName.empty())
         {
@@ -254,7 +261,7 @@ namespace ARPG
         destruction->RegisterPattern("arpg_wall", wall);
 
         // Register callback: destructible urns drop loot
-        destruction->OnDestruction(
+        m_destructionCallbackId = destruction->OnDestruction(
             [this](const Spark::DestructionEvent& e)
             {
                 if (e.patternName == "arpg_urn" && m_loot)
