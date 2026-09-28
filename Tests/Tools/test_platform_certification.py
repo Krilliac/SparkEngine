@@ -2991,6 +2991,10 @@ def _row_plan_errors(
     required = set(row["evidenceRequired"])
     probes = set(plan["probes"])
     uncovered = plan.get("uncoveredCategories", {})
+    # collect_evidence.py --package-root measures dependency_closure against the
+    # plan's declared dependencyClosure; an empty declaration measures nothing.
+    if plan.get("dependencyClosure"):
+        probes.add("dependency_closure")
 
     for name in sorted(probes - required):
         errors.append(f"probe {name!r} is not in the row's evidenceRequired")
@@ -3143,6 +3147,39 @@ class TestRowProbePlans(unittest.TestCase):
             "category 'crash' is neither probed nor declared uncovered", self._errors(plan)
         )
 
+    CLOSURE = [{"name": "kernel32.dll", "version": "10.0.26100.1", "source": "system"}]
+
+    def test_a_declared_closure_that_is_still_declared_uncovered_is_rejected(self) -> None:
+        for row_id in (D3D11_ID, NULLRHI_ID):
+            plan = copy.deepcopy(self._plan(row_id))
+            plan["dependencyClosure"] = copy.deepcopy(self.CLOSURE)
+            plan["uncoveredCategories"].setdefault("dependency_closure", "not measured yet")
+            self.assertIn(
+                "category 'dependency_closure' is both probed and declared uncovered",
+                self._errors(plan),
+                row_id,
+            )
+
+    def test_a_declared_closure_covers_the_dependency_closure_category(self) -> None:
+        for row_id in (D3D11_ID, NULLRHI_ID):
+            plan = copy.deepcopy(self._plan(row_id))
+            plan["uncoveredCategories"].pop("dependency_closure", None)
+            self.assertIn(
+                "category 'dependency_closure' is neither probed nor declared uncovered",
+                self._errors(plan),
+                row_id,
+            )
+            plan["dependencyClosure"] = copy.deepcopy(self.CLOSURE)
+            self.assertEqual(self._errors(plan), [], row_id)
+
+    def test_an_empty_declared_closure_does_not_cover_the_category(self) -> None:
+        plan = copy.deepcopy(self._plan(NULLRHI_ID))
+        plan["uncoveredCategories"].pop("dependency_closure", None)
+        plan["dependencyClosure"] = []
+        self.assertIn(
+            "category 'dependency_closure' is neither probed nor declared uncovered",
+            self._errors(plan),
+        )
 
 
 class TestLedgerConsistency(BundleTestCase):
