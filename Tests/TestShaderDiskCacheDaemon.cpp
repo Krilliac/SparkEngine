@@ -16,6 +16,7 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 
+#include "Fixtures/ScopedUnboundedFileSize.h"
 #include "Graphics/ShaderDaemonBridge.h"
 #include "Graphics/ShaderDiskCache.h"
 #include "Utils/DaemonClient.h"
@@ -275,8 +276,12 @@ TEST(ShaderDiskCache_OversizedBlobIsAMiss)
     }
     ASSERT_EQ(blobFiles, static_cast<size_t>(1));
 
+    // One byte past the cap is 16 MiB + 1, which the sanitizer wrapper's 16 MiB soft
+    // RLIMIT_FSIZE would refuse with EFBIG.
+    const SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
     std::filesystem::resize_file(blobPath, Spark::Graphics::kMaxShaderDaemonBytecodeBytes + 1ull, ec);
     ASSERT_FALSE(static_cast<bool>(ec));
+    ASSERT_EQ(std::filesystem::file_size(blobPath, ec), Spark::Graphics::kMaxShaderDaemonBytecodeBytes + 1ull);
 
     EXPECT_FALSE(cache.Lookup(src, Spark::Graphics::ShaderTarget::DXBC).has_value());
 
