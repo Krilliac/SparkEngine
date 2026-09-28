@@ -84,13 +84,21 @@ namespace Terrafront
     class TFOutfitStore
     {
       public:
+        /// On-disk schema written as "schemaVersion". A file without the key is v0 (N-1): it loads and is
+        /// rewritten as the current version by the next save.
+        static constexpr uint32_t kSchemaVersion = 1;
+
         TFOutfitStore() = default;
         ~TFOutfitStore();
 
         /// e.g. SavePaths::File("outfits.json"). false on failure; a present
         /// corrupt file is retained and copied to <path>.corrupt-<ms>.bak; an
         /// unreadable file is left in place. Retaining the primary makes a fresh
-        /// process fail closed until an operator explicitly recovers it.
+        /// process fail closed until an operator explicitly recovers it. A file
+        /// from a newer schema is refused and left byte-identical, without a
+        /// quarantine copy, so an older build can never drop fields it does not
+        /// know (rollback guard). Every refusal latches this instance and
+        /// releases the ownership lock.
         bool Open(const std::filesystem::path& path);
         bool Close(); ///< false keeps the store open, dirty, and locked so the caller can retry
         bool IsOpen() const { return m_open; }
@@ -146,6 +154,7 @@ namespace Terrafront
             Loaded,
             Unreadable,
             Corrupt,
+            UnsupportedVersion, ///< "schemaVersion" above kSchemaVersion
         };
         LoadResult LoadFromDisk();
         bool WriteToDisk() const;

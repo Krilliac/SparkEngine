@@ -123,6 +123,21 @@ namespace Terrafront
         }
         if (!root.IsObject())
             return LoadResult::Corrupt;
+        // Read N and N-1 (no key), fail closed on anything newer before looking at any other field: a newer
+        // schema may have changed them, and a load-then-save here would drop what this build does not know.
+        if (root.HasKey("schemaVersion"))
+        {
+            uint32_t schemaVersion = 0;
+            if (!ReadUnsigned(root["schemaVersion"], schemaVersion) || schemaVersion == 0)
+                return LoadResult::Corrupt;
+            if (schemaVersion > kSchemaVersion)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] outfit store %s uses schema version %u, newer than supported %u; left untouched",
+                                SavePaths::Utf8ForLog(m_path).c_str(), schemaVersion, kSchemaVersion);
+                return LoadResult::UnsupportedVersion;
+            }
+        }
         if (!root["outfits"].IsArray())
             return LoadResult::Corrupt;
 
@@ -212,6 +227,7 @@ namespace Terrafront
         namespace fs = std::filesystem;
 
         Spark::Json::Value root = Spark::Json::Value::MakeObject();
+        root["schemaVersion"] = Spark::Json::Value(static_cast<double>(kSchemaVersion));
         root["nextOutfitId"] = Spark::Json::Value(static_cast<double>(m_nextOutfitId));
 
         Spark::Json::Value outfits = Spark::Json::Value::MakeArray();

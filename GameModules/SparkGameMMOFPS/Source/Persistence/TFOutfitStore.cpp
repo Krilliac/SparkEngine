@@ -211,6 +211,10 @@ namespace Terrafront
                         SavePaths::Utf8ForLog(m_path).c_str(), SavePaths::Utf8ForLog(backupPath).c_str(),
                         backupEc ? 0 : 1);
                 }
+                else if (result == LoadResult::UnsupportedVersion)
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                    "[TF] outfit store %s is from a newer build; left untouched, retries latched off",
+                                    SavePaths::Utf8ForLog(m_path).c_str());
                 else
                     SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                     "[TF] unreadable outfit store %s left in place; retries latched off",

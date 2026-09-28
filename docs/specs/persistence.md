@@ -16,8 +16,14 @@ Every store reads schema N and N-1, writes N, and fails closed on anything newer
 | Store | Current | N-1 | Newer file | Fixtures |
 |-------|---------|-----|------------|----------|
 | Territory, `terrafront_territory.<continent>.json` | `version` 1 (`WorldSave::kTerritorySchemaVersion`) | v0, no `version`: loaded, skyanchor owners coerced home, missing `dominion` inactive, rewritten as v1 | `WorldSave::TerritoryDecodeResult::NewerSchema`; writes latch off and the file is never rewritten | `Persistence_Migration_Territory*` (`Tests/TestDATA120PersistenceReal.cpp`) |
+| Outfits, `outfits.json` | `schemaVersion` 1 (`TFOutfitStore::kSchemaVersion`) | v0, no key: loaded, rewritten as v1 by the next save | `Open` returns false, the instance latches, the ownership lock is released, no `.corrupt-*.bak` copy is made and the file stays byte-identical | `Persistence_Migration_Outfit*` (`Tests/TestTFOutfitStore.cpp`) |
+| Social, `terrafront_social.json` | `schemaVersion` 1 (`TFSocialSystem::kStoreSchemaVersion`) | v0, `{"characters": [...]}` only: loaded, rewritten as v1 by the next save | refused before the exact-key check, store writes latch off, no quarantine copy, file byte-identical | `Persistence_Migration_Social*` (`Tests/TestTFSocialStore.cpp`) |
+
+A `schemaVersion` of 0 or one that is not a positive integer is corruption in both JSON stores, not a legacy file.
 
 The territory decode (`WorldSave::DecodeTerritory` in `TFWorldSave.h`) is pure, so the fixtures run it without a game context. `TFRegionSystem::LoadPersisted` keeps the file I/O, the logging and the latch policy.
+
+The progression world file (`terrafront_state.<continent>.json`, key `progression`) carries no schema version on purpose. Its rows are keyed by session-scoped `PlayerId`s, and the durable per-character progression lives in `TFDatabase`, which is versioned above. Nothing restores a character from the world file.
 
 ## Recovery point
 
