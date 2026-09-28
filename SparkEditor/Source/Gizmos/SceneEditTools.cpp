@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -179,6 +181,151 @@ namespace SparkEditor::SceneEditTools
             },
             "Rename Entity"));
         return true;
+    }
+
+    bool CommitEntityReparent(::World& world, ::EntityID child, ::EntityID newParent)
+    {
+        entt::registry& registry = world.GetRegistry();
+        if (child == entt::null || !registry.valid(child) || child == newParent)
+        {
+            return false;
+        }
+        if (newParent != entt::null && !registry.valid(newParent))
+        {
+            return false;
+        }
+        if (newParent != entt::null && IsSelfOrDescendantOf(registry, newParent, child))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Reparent refused: entity %u is an ancestor of target parent %u",
+                           static_cast<uint32_t>(child), static_cast<uint32_t>(newParent));
+            return false;
+        }
+
+        // The exact prior state, so undo reproduces the document byte for byte:
+        // the raw parent link, the child's slot in the old parent's list, and
+        // which Transforms the redo will have to add.
+        const ::Transform* childTransform = registry.try_get<::Transform>(child);
+        const bool childHadTransform = childTransform != nullptr;
+        const ::EntityID oldParentLink = childTransform ? childTransform->parent : static_cast<::EntityID>(entt::null);
+        const ::EntityID oldParent =
+            (oldParentLink != entt::null && registry.valid(oldParentLink)) ? oldParentLink : entt::null;
+        if (oldParent == newParent)
+        {
+            return false;
+        }
+        size_t oldIndex = 0;
+        if (oldParent != entt::null)
+        {
+            if (const ::Transform* oldParentTransform = registry.try_get<::Transform>(oldParent))
+            {
+                const auto& siblings = oldParentTransform->children;
+                oldIndex = static_cast<size_t>(std::find(siblings.begin(), siblings.end(), child) - siblings.begin());
+            }
+        }
+        const bool newParentHadTransform = newParent == entt::null || registry.all_of<::Transform>(newParent);
+
+        ::World* worldPtr = &world;
+        Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+            [worldPtr, child, newParent]() { worldPtr->SetParent(child, newParent); },
+            [worldPtr, child, newParent, oldParentLink, oldParent, oldIndex, childHadTransform, newParentHadTransform]()
+            {
+                entt::registry& reg = worldPtr->GetRegistry();
+                if (!reg.valid(child))
+                    return;
+                if (newParent != entt::null && reg.valid(newParent))
+                {
+                    if (::Transform* parentTransform = reg.try_get<::Transform>(newParent))
+                        std::erase(parentTransform->children, child);
+                    if (!newParentHadTransform)
+                        reg.remove<::Transform>(newParent);
+                }
+                if (!childHadTransform)
+                {
+                    reg.remove<::Transform>(child);
+                    return;
+                }
+                if (::Transform* transform = reg.try_get<::Transform>(child))
+                    transform->parent = oldParentLink;
+                if (oldParent != entt::null && reg.valid(oldParent))
+                {
+                    if (::Transform* oldParentTransform = reg.try_get<::Transform>(oldParent))
+                    {
+                        auto& siblings = oldParentTransform->children;
+                        const size_t slot = std::min(oldIndex, siblings.size());
+                        siblings.insert(siblings.begin() + static_cast<std::ptrdiff_t>(slot), child);
+                    }
+                }
+            },
+            "Reparent Entity"));
+        return true;
+    }
+
+    // ========================================================================
+    // CommitSceneImport
+    // ========================================================================
+
+    std::vector<::EntityID> CommitSceneImport(::World& world, std::vector<SceneObjectRecord> records,
+                                              const std::string& description)
+    {
+        if (records.empty())
+        {
+            return {};
+        }
+
+        // Shared between Execute/Undo: the entities created by the last
+        // Execute. Undo destroys them but KEEPS the ids so Redo recreates the
+        // exact same identifiers via create(hint).
+        auto shared = std::make_shared<const std::vector<SceneObjectRecord>>(std::move(records));
+        auto created = std::make_shared<std::vector<::EntityID>>();
+        ::World* worldPtr = &world; // safe: SwapWorld clears the history before freeing the World
+
+        auto redo = [worldPtr, shared, created]()
+        {
+            entt::registry& reg = worldPtr->GetRegistry();
+            const std::vector<::EntityID> hints = *created; // empty on the first execute
+            created->clear();
+            created->reserve(shared->size());
+
+            size_t index = 0;
+            for (const SceneObjectRecord& record : *shared)
+            {
+                const ::EntityID hint = (index < hints.size()) ? hints[index] : static_cast<::EntityID>(entt::null);
+                ++index;
+                const ::EntityID entity = (hint == entt::null) ? reg.create() : reg.create(hint);
+                created->push_back(entity);
+
+                reg.emplace<::NameComponent>(entity, ::NameComponent{record.name});
+
+                ::Transform& transform = reg.emplace<::Transform>(entity);
+                transform.position = {record.position[0], record.position[1], record.position[2]};
+                // .scene rotations are authored in degrees; ::Transform stores Euler degrees.
+                transform.rotation = {record.rotationDeg[0], record.rotationDeg[1], record.rotationDeg[2]};
+                transform.scale = {record.scale[0], record.scale[1], record.scale[2]};
+
+                // A cube has no model file: the reserved primitive resolves to the
+                // same centered unit cube the game instantiates for cube [Object]s.
+                ::MeshRenderer& meshRenderer = reg.emplace<::MeshRenderer>(entity);
+                meshRenderer.meshPath = record.model.empty() ? std::string("__spark_primitive_Cube.obj") : record.model;
+                meshRenderer.materialPath = record.material;
+            }
+        };
+
+        auto undo = [worldPtr, created]()
+        {
+            entt::registry& reg = worldPtr->GetRegistry();
+            // Destroy in reverse creation order; the ids stay as create(hint) seeds.
+            for (auto it = created->rbegin(); it != created->rend(); ++it)
+            {
+                if (*it != entt::null && reg.valid(*it))
+                {
+                    worldPtr->DestroyEntity(*it);
+                }
+            }
+        };
+
+        Spark::Editor::CommandHistory::GetInstance().Execute(
+            std::make_unique<Spark::Editor::LambdaCommand>(redo, undo, description));
+        return *created;
     }
 
     // ========================================================================

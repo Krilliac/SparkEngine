@@ -9,6 +9,8 @@
  *   component; children recursively), offset +1m on X.
  * - AlignEntityToGround: snap an entity down onto the highest AABB surface
  *   below it, or the y=0 ground plane when nothing is underneath.
+ * - CommitEntityReparent / CommitSceneImport: the Hierarchy drag-drop
+ *   reparent and the Scene Import panel's import, as single history entries.
  *
  * Every mutation executes through Spark::Editor::CommandHistory — the single
  * W6-converged undo surface — and captures entity IDs, never component
@@ -26,9 +28,22 @@
 #include "Engine/ECS/Components.h"
 
 #include <string>
+#include <vector>
 
 namespace SparkEditor::SceneEditTools
 {
+
+    /// @brief One importable [Object] parsed out of a game INI .scene file.
+    struct SceneObjectRecord
+    {
+        std::string type;                          ///< "cube" or "model" (lower/upper accepted)
+        std::string name;                          ///< name= key, or "<type>_<index>" fallback
+        std::string model;                         ///< model= path; empty for cubes
+        std::string material;                      ///< material= path (may be empty)
+        float position[3] = {0.0f, 0.0f, 0.0f};    ///< world-space meters
+        float rotationDeg[3] = {0.0f, 0.0f, 0.0f}; ///< Euler degrees (editor Transform convention)
+        float scale[3] = {1.0f, 1.0f, 1.0f};       ///< non-uniform scale
+    };
 
     /**
      * @brief Deep-duplicate an entity through CommandHistory.
@@ -92,6 +107,32 @@ namespace SparkEditor::SceneEditTools
      * @return true when a command was executed (name actually changes).
      */
     bool CommitEntityRename(::World& world, ::EntityID entity, const std::string& newName);
+
+    /**
+     * @brief Execute an undoable reparent (newParent == entt::null unparents).
+     *
+     * Refuses invalid entities, a no-op, and any newParent that is child itself
+     * or one of its descendants. Undo restores the child's exact prior parent
+     * link, its position in the old parent's children list, and removes any
+     * Transform the redo had to add. Captures ids only.
+     *
+     * @return true when a command was executed.
+     */
+    bool CommitEntityReparent(::World& world, ::EntityID child, ::EntityID newParent);
+
+    /**
+     * @brief Create one entity per record (Name + Transform + MeshRenderer) as a
+     * single undoable step.
+     *
+     * Cube records use the reserved unit-cube primitive mesh. Undo destroys the
+     * created entities; redo recreates them with the SAME identifiers
+     * (registry create-with-hint), so later commands that captured them keep
+     * resolving.
+     *
+     * @return The created entity ids in record order (empty when nothing was recorded).
+     */
+    std::vector<::EntityID> CommitSceneImport(::World& world, std::vector<SceneObjectRecord> records,
+                                              const std::string& description);
 
     /**
      * @brief Convert a world-space translation delta into the local space of

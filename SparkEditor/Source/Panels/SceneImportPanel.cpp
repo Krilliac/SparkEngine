@@ -9,13 +9,10 @@
  * module): '#'/';' comments, [Section] headers, key=value pairs, and
  * comma-separated float triples parsed with strtof. No game code is linked.
  *
- * Import execution follows the W9 SceneEditTools pattern: one LambdaCommand
- * through Spark::Editor::CommandHistory holding a shared created-ids vector;
- * undo destroys the entities but KEEPS the ids so redo recreates the exact
- * same identifiers via registry.create(hint) — later commands that captured
- * those ids keep resolving across undo/redo cycles. The raw ::World* capture
- * is safe because EditorUI::SwapWorld() clears the CommandHistory BEFORE
- * freeing the old World.
+ * Import execution is SceneEditTools::CommitSceneImport: one CommandHistory
+ * entry whose undo destroys the entities and whose redo recreates the exact
+ * same identifiers via registry.create(hint), so later commands that captured
+ * those ids keep resolving across undo/redo cycles.
  *
  * Contains: construction/lifecycle, discovery, parsing, and import execution.
  * The ImGui drawing lives in the sibling SceneImportPanelDrawing.cpp.
@@ -23,7 +20,6 @@
 
 #include "SceneImportPanel.h"
 
-#include "../CommandHistory.h"
 #include "../Core/EditorUI.h"
 #include "Engine/ECS/Components.h"
 #include "Utils/FileUtils.h"
@@ -34,7 +30,6 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
-#include <memory>
 #include <optional>
 
 namespace fs = std::filesystem;
@@ -60,13 +55,6 @@ namespace SparkEditor
                     ++c;
             }
         }
-
-        /// @brief The mesh path used for cube primitives. The file does not exist;
-        ///        WorldMeshCache::GetOrLoad -> LoadOrPlaceholderMesh falls back to
-        ///        Mesh::CreateCube(1.0f) — the same centered unit cube the game
-        ///        instantiates for cube [Object]s — so a scaled cube looks
-        ///        identical in the editor viewport and the runtime.
-        constexpr const char* kCubeMeshPath = "__spark_primitive_Cube.obj";
     } // namespace
 
     SceneImportPanel::SceneImportPanel() : EditorPanel("Scene Import", "scene_import_panel")
@@ -264,72 +252,15 @@ namespace SparkEditor
         if (!world || parsed.objects.empty())
             return;
 
-        // Shared between Execute/Undo (W9 SceneEditTools pattern): the entities
-        // created by the last Execute. Undo destroys them but KEEPS the ids so
-        // Redo recreates the exact same identifiers via create(hint).
-        auto records = std::make_shared<std::vector<SceneObjectRecord>>(parsed.objects);
-        auto created = std::make_shared<std::vector<::EntityID>>();
-
-        // Raw World pointer is safe here: SwapWorld() clears the CommandHistory
-        // BEFORE freeing the old World, so this command can never outlive the
-        // World it captured.
-        ::World* worldPtr = world;
-
         const std::string fileName = fs::path(parsed.diskPath).filename().string();
-        const std::string description = "Import Scene '" + fileName + "' (" + std::to_string(records->size()) +
-                                        (records->size() == 1 ? " entity)" : " entities)");
-
-        auto redo = [worldPtr, records, created]()
-        {
-            entt::registry& reg = worldPtr->GetRegistry();
-            const std::vector<::EntityID> hints = *created; // empty on the first execute
-            created->clear();
-            created->reserve(records->size());
-
-            size_t index = 0;
-            for (const SceneObjectRecord& record : *records)
-            {
-                const ::EntityID hint = (index < hints.size()) ? hints[index] : static_cast<::EntityID>(entt::null);
-                ++index;
-                const ::EntityID entity = (hint == entt::null) ? reg.create() : reg.create(hint);
-                created->push_back(entity);
-
-                reg.emplace<::NameComponent>(entity, ::NameComponent{record.name});
-
-                ::Transform& transform = reg.emplace<::Transform>(entity);
-                transform.position = {record.position[0], record.position[1], record.position[2]};
-                // .scene rotations are authored in degrees; the editor's
-                // ::Transform stores Euler degrees — copy through unchanged.
-                transform.rotation = {record.rotationDeg[0], record.rotationDeg[1], record.rotationDeg[2]};
-                transform.scale = {record.scale[0], record.scale[1], record.scale[2]};
-
-                ::MeshRenderer& meshRenderer = reg.emplace<::MeshRenderer>(entity);
-                meshRenderer.meshPath = record.model.empty() ? std::string(kCubeMeshPath) : record.model;
-                meshRenderer.materialPath = record.material;
-            }
-        };
-
-        auto undo = [worldPtr, created]()
-        {
-            entt::registry& reg = worldPtr->GetRegistry();
-            // Destroy in reverse creation order. The ids stay in 'created' as
-            // create(hint) seeds for a subsequent Redo.
-            for (auto it = created->rbegin(); it != created->rend(); ++it)
-            {
-                if (*it != entt::null && reg.valid(*it))
-                {
-                    worldPtr->DestroyEntity(*it);
-                }
-            }
-        };
-
-        Spark::Editor::CommandHistory::GetInstance().Execute(
-            std::make_unique<Spark::Editor::LambdaCommand>(redo, undo, description));
+        const std::string description = "Import Scene '" + fileName + "' (" + std::to_string(parsed.objects.size()) +
+                                        (parsed.objects.size() == 1 ? " entity)" : " entities)");
+        const std::vector<::EntityID> created = SceneEditTools::CommitSceneImport(*world, parsed.objects, description);
 
         // Build the summary for the dialog + status line.
         m_lastImport = ImportSummary{};
         m_lastImport.sourcePath = displayPath;
-        m_lastImport.imported = static_cast<int>(created->size());
+        m_lastImport.imported = static_cast<int>(created.size());
         m_lastImport.skippedTotal = static_cast<int>(parsed.skippedTypes.size());
         m_lastImport.skippedCounts = AggregateSkipped(parsed.skippedTypes);
         m_lastImport.unresolvedModels = parsed.unresolvedModels;
