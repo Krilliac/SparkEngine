@@ -566,21 +566,87 @@ class RepositoryProfileTests(unittest.TestCase):
 class InstallRuleTests(unittest.TestCase):
     """Configure and install a fixture project through SparkRuntimeAssets.cmake."""
 
-    def _install(self, fixture: Fixture, base: Path, profile: str) -> Path:
-        build = base / f"build-{profile}"
-        install = base / f"install-{profile}"
+    @staticmethod
+    def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
         env = dict(os.environ, GIT_CONFIG_NOSYSTEM="1")
-        for command in (
-            ["cmake", "-S", str(fixture.repo), "-B", str(build),
-             f"-DSPARK_RUNTIME_ASSETS_HELPER={RUNTIME_ASSETS_CMAKE}",
-             f"-DSPARK_ASSET_VERIFIER={SCRIPT}",
-             f"-DSPARK_ASSET_PROFILE={profile}",
-             f"-DPython3_EXECUTABLE={sys.executable}"],
-            ["cmake", "--install", str(build), "--prefix", str(install), "--component", "runtime"],
-        ):
-            result = subprocess.run(command, capture_output=True, text=True, check=False, env=env, timeout=300)
-            self.assertEqual(result.returncode, 0, f"{command}\n{result.stdout}\n{result.stderr}")
+        return subprocess.run(command, capture_output=True, text=True, check=False, env=env, timeout=300)
+
+    def _configure(self, fixture: Fixture, base: Path, profile: str) -> Path:
+        build = base / f"build-{profile}"
+        command = ["cmake", "-S", str(fixture.repo), "-B", str(build),
+                   f"-DSPARK_RUNTIME_ASSETS_HELPER={RUNTIME_ASSETS_CMAKE}",
+                   f"-DSPARK_ASSET_VERIFIER={SCRIPT}",
+                   f"-DSPARK_ASSET_PROFILE={profile}",
+                   f"-DPython3_EXECUTABLE={sys.executable}"]
+        result = self._run(command)
+        self.assertEqual(result.returncode, 0, f"{command}\n{result.stdout}\n{result.stderr}")
+        return build
+
+    def _run_install(self, base: Path, profile: str) -> tuple[subprocess.CompletedProcess[str], Path]:
+        install = base / f"install-{profile}"
+        result = self._run(["cmake", "--install", str(base / f"build-{profile}"), "--prefix", str(install),
+                            "--component", "runtime"])
+        return result, install
+
+    def _install(self, fixture: Fixture, base: Path, profile: str) -> Path:
+        self._configure(fixture, base, profile)
+        result, install = self._run_install(base, profile)
+        self.assertEqual(result.returncode, 0, f"{result.stdout}\n{result.stderr}")
+        self.assertIn("Runtime assets verified before package assembly", result.stdout)
         return install / "bin" / "Assets"
+
+    def _assert_install_refused(self, base: Path, profile: str, expected: str) -> None:
+        result, install = self._run_install(base, profile)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("before package assembly", result.stderr)
+        self.assertIn(expected, result.stderr)
+        # The check is the first asset install rule: nothing under bin/Assets was copied.
+        payload = [path for path in (install / "bin" / "Assets").rglob("*") if path.is_file()] \
+            if (install / "bin" / "Assets").exists() else []
+        self.assertEqual(payload, [])
+
+    def test_tampered_asset_after_configure_fails_before_assembly(self) -> None:
+        for profile in ("stable-v1", "default"):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                fixture = Fixture(base)
+                self._prepare_project(fixture)
+                self._configure(fixture, base, profile)
+                kept = fixture.assets / "Models/kept.obj"
+                kept.write_bytes(kept.read_bytes()[:-1] + b"#")
+                self._assert_install_refused(base, profile, "[hash-mismatch] Models/kept.obj")
+
+    def test_stable_v1_manifest_rewritten_after_configure_fails_before_assembly(self) -> None:
+        # The source tree and its manifest agree again, but the derived manifest
+        # configure staged for installation no longer describes them.
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            fixture = Fixture(base)
+            self._prepare_project(fixture)
+            self._configure(fixture, base, "stable-v1")
+            kept = fixture.assets / "Models/kept.obj"
+            kept.write_bytes(kept.read_bytes() + b"# edited\n")
+            manifest = json.loads(fixture.manifest_path.read_text(encoding="utf-8"))
+            for entry in manifest["entries"]:
+                if entry["path"] == "Models/kept.obj":
+                    entry["sha256"] = sha256(kept.read_bytes())
+                    entry["size"] = kept.stat().st_size
+            fixture.manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            self._assert_install_refused(base, "stable-v1", "re-run configure")
+
+    def test_traversal_manifest_entry_after_configure_fails_before_assembly(self) -> None:
+        for profile in ("stable-v1", "default"):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                fixture = Fixture(base)
+                self._prepare_project(fixture)
+                self._configure(fixture, base, profile)
+                manifest = json.loads(fixture.manifest_path.read_text(encoding="utf-8"))
+                for entry in manifest["entries"]:
+                    if entry["path"] == "Models/kept.obj":
+                        entry["path"] = "../escape.obj"
+                fixture.manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+                self._assert_install_refused(base, profile, "traversal path segment")
 
     def _prepare_project(self, fixture: Fixture) -> None:
         (fixture.repo / "CMakeLists.txt").write_text(
