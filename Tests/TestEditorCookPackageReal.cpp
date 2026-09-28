@@ -257,13 +257,13 @@ namespace
             projects.Initialize();
             ASSERT_TRUE(projects.OpenProject(Utf8(document)));
 
-            SparkEditor::EditorDocument document;
+            SparkEditor::EditorDocument editorDocument;
             auto authored = std::make_unique<::World>();
             const ::EntityID crate = authored->CreateEntity("Crate");
             authored->AddComponent<::Transform>(crate);
             authored->AddComponent<::MeshRenderer>(crate);
-            document.ReplaceWorld(std::move(authored));
-            ::World& world = *document.GetWorld();
+            editorDocument.ReplaceWorld(std::move(authored));
+            ::World& world = *editorDocument.GetWorld();
 
             // The Asset Browser's drag payload, received by the Inspector's mesh slot.
             const std::string reference = SparkEditor::MakeAssetDragReference(mesh, assets);
@@ -275,10 +275,10 @@ namespace
 
             // The drop commits through the document's applied-edit command, as EditorUI records it.
             History().Clear();
-            const auto snapshot = [&document]() { return document.Capture(); };
+            const auto snapshot = [&editorDocument]() { return editorDocument.Capture(); };
             const SparkEditor::InspectorPendingWorldEdit::CommitFn commit =
-                [&document](const std::string& before, const std::string& description)
-            { return document.RecordApplied(before, description); };
+                [&editorDocument](const std::string& before, const std::string& description)
+            { return editorDocument.RecordApplied(before, description); };
             ASSERT_EQ(static_cast<int>(SparkEditor::ApplyWorldAssetDrop(world, crate, "MeshRenderer", "meshPath",
                                                                         received, snapshot, commit)),
                       static_cast<int>(SparkEditor::AssetDropResult::Applied));
