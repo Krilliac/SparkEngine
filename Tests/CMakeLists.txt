@@ -4259,6 +4259,17 @@ add_test(
 set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
     LABELS "rendering;golden;unit;python"
     TIMEOUT 60)
+# PERF-100: tools/perf-budget/check_golden_review.py, the diff gate that the
+# required performance-budget-governance job runs on every PR and push, rejects
+# a baseline or threshold change that inherits or downgrades its review record.
+add_test(
+    NAME GoldenImage_ReviewGate
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_golden_review_gate.py -v)
+set_tests_properties(GoldenImage_ReviewGate PROPERTIES
+    LABELS "governance;golden;python"
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    TIMEOUT 120)
 
 # TF-110: TERRAFRONT multi-client harness (Tools/Terrafront/multiclient.py). The
 # unit test covers the audit parser, the convergence comparator and every

@@ -128,6 +128,24 @@ The bundled `ThirdParty/Utils/stb` headers are API stubs whose
 Until step 2 is done the hash check fails, so a new capture cannot pass
 without review.
 
+### Review-record gate (PERF-100)
+
+The required `performance-budget-governance` CI job runs
+`tools/perf-budget/check_golden_review.py --base <PR base or push before-SHA>`
+(falling back to the merge-base with `origin/Working`). For every entry that was
+added or whose `baselineSha256`, `perPixelThreshold`, `tolerancePercent` or
+`software` changed, it fails when the `reviewer` record is unchanged from the
+base (whitespace is ignored), or when a reviewed record is replaced by one with
+`owner review pending`. It also fails when a PNG changed but its manifest entry
+did not, and exits 2 when the base cannot be resolved. CTest
+`GoldenImage_ReviewGate` covers each case.
+
+The gate proves that every baseline change carries a new, non-downgraded review
+record. It does not prove that a person reviewed it. Every committed baseline is
+still `owner review pending`; requiring review on `Tests/GoldenImages/**`
+(CODEOWNERS or a ruleset rule) and naming who counts as a reviewer are owner
+decisions.
+
 ## Golden lanes and row parity
 
 A golden lane is a `Tests/TestRHI*Golden*.cpp` source that declares

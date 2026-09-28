@@ -3715,6 +3715,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The golden review gate diffs the manifest against the base revision.
+          fetch-depth: 0
 
       - name: Run performance budget governance tests
         run: >-
@@ -3722,10 +3725,23 @@ jobs:
           Tests.Tools.test_perf_budget
           Tests.Tools.test_perf_budget_adversarial
           Tests.Tools.test_perf_budget_hardening
+          Tests.Tools.test_golden_review_gate
           -v
 
       - name: Validate committed performance budget suite
         run: python3 tools/perf-budget/validate_budget.py perf-budgets/v1
+
+      # PERF-100: a golden baseline or threshold change must carry a new,
+      # non-downgraded review record. An empty, all-zero or unknown base (a new
+      # branch or a force push) falls back to the merge-base with Working; an
+      # unresolvable base fails the job (exit 2).
+      - name: Check golden baseline review records
+        env:
+          GOLDEN_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: >-
+          python3 tools/perf-budget/check_golden_review.py
+          --base "${GOLDEN_BASE_SHA}"
+          --fallback-base origin/Working
 
   # ===========================================================================
   # Coverage PR Comment — privileged, data-only reporter

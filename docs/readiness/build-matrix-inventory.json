@@ -1409,7 +1409,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4283,
+      "line": 4294,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2728,10 +2728,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 4926,
+      "line": 4937,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:4924",
+          "id": "Tests/CMakeLists.txt:4935",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4819,7 +4819,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 4926,
+          "line": 4937,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -12376,7 +12376,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 3,
+        "stepCount": 4,
         "steps": [
           {
             "index": 0,
@@ -12400,7 +12400,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "320670a2c3fe90c4"
+            "runDigest": "69bd3ee0c0e7bf7f"
           },
           {
             "index": 2,
@@ -12413,6 +12413,20 @@
             "hasRun": true,
             "env": [],
             "runDigest": "b4a632ccc5611cdc"
+          },
+          {
+            "index": 3,
+            "name": "Check golden baseline review records",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "GOLDEN_BASE_SHA"
+            ],
+            "runDigest": "7210f86572bb1491"
           }
         ],
         "envNames": [],

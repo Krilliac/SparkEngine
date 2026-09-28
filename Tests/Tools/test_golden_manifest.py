@@ -116,10 +116,18 @@ def entry_errors(index: int, entry: Any) -> list[str]:
 
 def load_manifest(golden_root: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """Return (valid entries, errors). Any error invalidates the manifest."""
-    path = golden_root / "manifest.json"
     try:
-        document = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_reject_duplicate_keys)
+        text = (golden_root / "manifest.json").read_text(encoding="utf-8")
     except (OSError, ValueError) as exc:
+        return [], [f"manifest.json: {exc}"]
+    return parse_manifest_text(text)
+
+
+def parse_manifest_text(text: str) -> tuple[list[dict[str, Any]], list[str]]:
+    """Parse manifest.json content (also used by tools/perf-budget/check_golden_review.py)."""
+    try:
+        document = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+    except ValueError as exc:
         return [], [f"manifest.json: {exc}"]
     if (
         not isinstance(document, dict)
