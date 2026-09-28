@@ -57,12 +57,13 @@
         },
         {
           "criterionDigest": "sha256:f529f9e7254b",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "tools/site-data/validate.py",
-            "Tests/Tools/test_site_data_contract.py"
+            "Tests/Tools/test_site_data_contract.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "FUTURE_ACCEPTANCE_PATHS is retired: every entryPoints/documentationUpdates/sourceContext and docs-catalog path must exist for open and done items alike (MissingReferencedPathTests in readiness-cross-references). Gates, work items, metrics and capabilities were already cross-validated. Local only; no hosted run."
+          "note": "FUTURE_ACCEPTANCE_PATHS is retired: entryPoints, documentationUpdates, sourceContext and docs-catalog paths must exist for open and done items (MissingReferencedPathTests in readiness-cross-references; 3 of 4 fail against the old validator). Local Windows run only; no exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:2c8c4a1437af",

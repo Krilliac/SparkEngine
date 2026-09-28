@@ -985,9 +985,18 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:b3240365716d",
-          "state": "unmet",
-          "evidence": [],
-          "note": "There is no D3D12 parity matrix and there are no D3D12 parity tests."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI225D3D12ParityReal.cpp",
+            "Tests/TestRHI225D3D12ValidationReal.cpp",
+            "Tests/CMakeLists.txt",
+            "wiki/graphics/D3D12-Backend.md",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12DescriptorHeap.cpp",
+            "SparkShaderCompiler/CMakeLists.txt"
+          ],
+          "note": "12 D3D12_Parity_* tests (CTest D3D12_Parity, exact count 12) and D3D12_Validation (5) pass in the central Windows CTest run (371/371, RTX 5070 Ti) after the binding fix; mutations of filter mapping, SetConstantBuffer and static-buffer copy are caught. No exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:210dbdea9230",

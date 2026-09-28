@@ -232,11 +232,13 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:8e008a4f4f0b",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            "cmake/RunSparkExperimentalModuleLifecycle.cmake",
+            "tools/module-evidence/manifest.json"
           ],
-          "note": "Per-module lifecycle tests are registered, but there is no recorded passing run for every module. The manifest-equality check runs only in the hosted advisory job."
+          "note": "Local WSL linux-gcc-release run at 75f51b7ff526fcee9a3ac1508e62842e0aacb4c0: 10/10 ExperimentalModuleLifecycle_* passed (JUnit tests=10 failures=0 skipped=0), inventory equals manifest; not hosted."
         },
         {
           "criterionDigest": "sha256:3cc352faa36d",
@@ -884,11 +886,16 @@
         },
         {
           "criterionDigest": "sha256:baedd16bd0b2",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestNET100TransportReal.cpp"
+            "Tests/TestNET100TransportReal.cpp",
+            "Tests/TestFPSLANLoopback.cpp",
+            "Tests/Fixtures/FPSLANLoopbackPeer.cpp",
+            "Tests/Fixtures/FPSLANIntruderTransport.cpp",
+            "Tests/CMakeLists.txt",
+            "SparkEngine/Source/Engine/Networking/NetworkManager.h"
           ],
-          "note": "FPS-level hostile-input datagram tests exist (FPSMultiplayerProduction_NetworkPath*: replayed, non-finite, zero-sequence, truncated and flooded PlayerInput on the server; malformed, non-finite, stale and oversized snapshot batches on the client). The criterion stays unmet because the FPS LAN path is not bound to the production secure transport."
+          "note": "FPS LAN runs NetworkManager protocol v2 (sealed, no plaintext fallback). FPSLAN_HostileDatagramsDoNotPerturbRound: the intruder is refused and counted, never admitted, and the round still converges. Passes in WSL GCC and in the central Windows CTest run (371/371). No exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:17033c17c6d7",

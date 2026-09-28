@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **154 implemented** (59%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **158 implemented** (61%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -56,9 +56,9 @@ Open **`RDY-000` — Establish the release profiles and capability ledger**. Its
 1. **[unmet]** No public capability or numeric claim exists without a validated contract entry
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
    - The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open.
-2. **[unmet]** Every referenced path, gate, work item, metric, and capability exists
-   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
-   - FUTURE_ACCEPTANCE_PATHS is retired: every entryPoints/documentationUpdates/sourceContext and docs-catalog path must exist for open and done items alike (MissingReferencedPathTests in readiness-cross-references). Gates, work items, metrics and capabilities were already cross-validated. Local only; no hosted run.
+2. **[implemented]** Every referenced path, gate, work item, metric, and capability exists
+   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`
+   - FUTURE_ACCEPTANCE_PATHS is retired: entryPoints, documentationUpdates, sourceContext and docs-catalog paths must exist for open and done items (MissingReferencedPathTests in readiness-cross-references; 3 of 4 fail against the old validator). Local Windows run only; no exact-commit CI yet.
 3. **[implemented]** A capability cannot be ready while a blocker or required gate is open
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references.
@@ -246,7 +246,7 @@ Establish the only source of readiness truth and make CI report reality.
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 2/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
+| [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 3/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 2/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
@@ -316,9 +316,9 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | [`MOD-370`](#mod-370--finish-rts-as-a-deterministic-playable-skirmish) Finish RTS as a deterministic playable skirmish | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-380`, `MOD-390` |
 | [`MOD-380`](#mod-380--finish-racing-as-a-physics-backed-complete-race) Finish Racing as a physics-backed complete race | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-390` |
 | [`MOD-390`](#mod-390--finish-visualscript-as-a-real-packaged-gameplay-loop) Finish VisualScript as a real packaged gameplay loop | P1 | **blocked** | 3/4 · 0/4 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380` |
-| [`RDY-015`](#rdy-015--build-real-source-lifecycle-evidence-for-experimental-modules) Build real-source lifecycle evidence for experimental modules | P1 | **in-progress** | 2/3 · 0/3 | `RDY-000`, `CI-100` | `MOD-295` |
+| [`RDY-015`](#rdy-015--build-real-source-lifecycle-evidence-for-experimental-modules) Build real-source lifecycle evidence for experimental modules | P1 | **in-progress** | 3/3 · 0/3 | `RDY-000`, `CI-100` | `MOD-295` |
 | [`MOD-295`](#mod-295--build-reusable-completion-helpers-for-prototype-modules) Build reusable completion helpers for prototype modules | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `RDY-015`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
-| [`MOD-315`](#mod-315--finish-optional-fps-lan-and-multiplayer-gameplay) Finish optional FPS LAN and multiplayer gameplay | P1 | **in-progress** | 3/4 · 0/4 | `MOD-310`, `NET-100` | `TF-110` |
+| [`MOD-315`](#mod-315--finish-optional-fps-lan-and-multiplayer-gameplay) Finish optional FPS LAN and multiplayer gameplay | P1 | **in-progress** | 4/4 · 0/4 | `MOD-310`, `NET-100` | `TF-110` |
 
 ### Wave 5 — Portable and modern backends
 
@@ -332,7 +332,7 @@ Certify or explicitly bound Linux, macOS, D3D12, Vulkan, OpenGL, Metal, mobile, 
 | [`PLT-240`](#plt-240--decide-and-implement-the-openxr-release-profile) Decide and implement the OpenXR release profile | P2 | **in-progress** | 1/2 · 0/2 | `RDY-000`, `ENG-220` | `PLT-230`, `PLT-250` |
 | [`PLT-250`](#plt-250--keep-console-support-gated-behind-platform-authority-and-certification) Keep console support gated behind platform authority and certification | P3 | **blocked** | 2/3 · 0/3 | `RDY-000` | `PLT-230`, `PLT-240` |
 | [`RHI-220`](#rhi-220--complete-metal-backend-implementation-and-parity) Complete Metal backend implementation and parity | P1 | **open** | 0/4 · 0/4 | `RHI-210`, `ENG-220`, `BLD-100` | `RHI-225`, `RHI-230`, `RHI-240` |
-| [`RHI-225`](#rhi-225--close-d3d12-synchronization-pass-shader-and-driver-parity) Close D3D12 synchronization, pass, shader, and driver parity | P1 | **in-progress** | 2/4 · 0/4 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-230`, `RHI-240` |
+| [`RHI-225`](#rhi-225--close-d3d12-synchronization-pass-shader-and-driver-parity) Close D3D12 synchronization, pass, shader, and driver parity | P1 | **in-progress** | 3/4 · 0/4 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-230`, `RHI-240` |
 | [`RHI-230`](#rhi-230--close-vulkan-gpu-backed-parity-and-shader-toolchain-gates) Close Vulkan GPU-backed parity and shader-toolchain gates | P1 | **in-progress** | 1/5 · 0/5 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-225`, `RHI-240` |
 | [`RHI-240`](#rhi-240--certify-opengl-translation-visual-driver-and-software-render-paths) Certify OpenGL translation, visual, driver, and software-render paths | P1 | **in-progress** | 2/4 · 0/4 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-225`, `RHI-230` |
 | [`ENG-220`](#eng-220--close-d3d11-model-import-and-canonical-content-interoperability) Close D3D11 model import and canonical-content interoperability | P1 | **in-progress** | 3/5 · 0/5 | `RDY-020`, `RHI-210` | `RHI-220`, `RHI-225`, `RHI-230`, `RHI-240` |
@@ -414,14 +414,14 @@ Status documents, roadmap entries, test counts, module counts, website copy, and
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** No public capability or numeric claim exists without a validated contract entry
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
    - The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open.
-2. **[unmet]** Every referenced path, gate, work item, metric, and capability exists
-   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
-   - FUTURE_ACCEPTANCE_PATHS is retired: every entryPoints/documentationUpdates/sourceContext and docs-catalog path must exist for open and done items alike (MissingReferencedPathTests in readiness-cross-references). Gates, work items, metrics and capabilities were already cross-validated. Local only; no hosted run.
+2. **[implemented]** Every referenced path, gate, work item, metric, and capability exists
+   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`
+   - FUTURE_ACCEPTANCE_PATHS is retired: entryPoints, documentationUpdates, sourceContext and docs-catalog paths must exist for open and done items (MissingReferencedPathTests in readiness-cross-references; 3 of 4 fail against the old validator). Local Windows run only; no exact-commit CI yet.
 3. **[implemented]** A capability cannot be ready while a blocker or required gate is open
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references.
@@ -4267,11 +4267,11 @@ Modules outside every declared release profile still need honest real-source lif
 
 **Acceptance criteria**
 
-Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 3 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Every experimental module has real-source lifecycle evidence
-   - Evidence: `Tests/CMakeLists.txt`
-   - Per-module lifecycle tests are registered, but there is no recorded passing run for every module. The manifest-equality check runs only in the hosted advisory job.
+1. **[implemented]** Every experimental module has real-source lifecycle evidence
+   - Evidence: `Tests/CMakeLists.txt`, `cmake/RunSparkExperimentalModuleLifecycle.cmake`, `tools/module-evidence/manifest.json`
+   - Local WSL linux-gcc-release run at 75f51b7ff526fcee9a3ac1508e62842e0aacb4c0: 10/10 ExperimentalModuleLifecycle_* passed (JUnit tests=10 failures=0 skipped=0), inventory equals manifest; not hosted.
 2. **[implemented]** Failures remain visible without changing stable-v1 support
    - Evidence: `.github/scripts/test-workflow-failure-propagation.py`, `.github/workflows/build.yml`
    - The local checker requires the experimental lane to be continue-on-error, publish JUnit with if: always(), stay out of required-ci-gate, and be excluded from full-ctest lanes. Mutation tests cover each rule.
@@ -4420,7 +4420,7 @@ SparkGameFPS multiplayer currently ignores address and port and fabricates conne
 
 **Acceptance criteria**
 
-Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Two clients converge on authoritative spawn-move-kill-respawn-score
    - Evidence: `Tests/TestFPSLANLoopback.cpp`, `Tests/Fixtures/FPSLANLoopbackPeer.cpp`, `Tests/Fixtures/FPSLANLoopbackScenario.h`, `Tests/CMakeLists.txt`
@@ -4428,9 +4428,9 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 2. **[implemented]** No fake connection state remains
    - Evidence: `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp`, `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h`, `GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp`, `GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp`, `Tests/TestFPSMultiplayer.cpp`, `GameModules/SparkGameFPS/module.json`
    - Pending the central MSVC build and a FPSMultiplayerProduction_ run.
-3. **[unmet]** Transport hostile-input tests pass
-   - Evidence: `Tests/TestNET100TransportReal.cpp`
-   - FPS-level hostile-input datagram tests exist (FPSMultiplayerProduction_NetworkPath*: replayed, non-finite, zero-sequence, truncated and flooded PlayerInput on the server; malformed, non-finite, stale and oversized snapshot batches on the client). The criterion stays unmet because the FPS LAN path is not bound to the production secure transport.
+3. **[implemented]** Transport hostile-input tests pass
+   - Evidence: `Tests/TestNET100TransportReal.cpp`, `Tests/TestFPSLANLoopback.cpp`, `Tests/Fixtures/FPSLANLoopbackPeer.cpp`, `Tests/Fixtures/FPSLANIntruderTransport.cpp`, `Tests/CMakeLists.txt`, `SparkEngine/Source/Engine/Networking/NetworkManager.h`
+   - FPS LAN runs NetworkManager protocol v2 (sealed, no plaintext fallback). FPSLAN_HostileDatagramsDoNotPerturbRound: the intruder is refused and counted, never admitted, and the round still converges. Passes in WSL GCC and in the central Windows CTest run (371/371). No exact-commit CI yet.
 4. **[implemented]** Failure cannot affect stable-v1 single-player readiness
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `docs/site/readiness.json`
    - The contract tests require MOD-315 to be outside stable-v1 and anchored only to networking.multiplayer and G12, which stable-v1 excludes. The validator also rejects outside items in profile blockers.
@@ -4982,10 +4982,11 @@ D3D12 has modern feature depth without certification against the primary rendere
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Declared parity matrix passes
-   - There is no D3D12 parity matrix and there are no D3D12 parity tests.
+1. **[implemented]** Declared parity matrix passes
+   - Evidence: `Tests/TestRHI225D3D12ParityReal.cpp`, `Tests/TestRHI225D3D12ValidationReal.cpp`, `Tests/CMakeLists.txt`, `wiki/graphics/D3D12-Backend.md`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12DescriptorHeap.cpp`, `SparkShaderCompiler/CMakeLists.txt`
+   - 12 D3D12_Parity_* tests (CTest D3D12_Parity, exact count 12) and D3D12_Validation (5) pass in the central Windows CTest run (371/371, RTX 5070 Ti) after the binding fix; mutations of filter mapping, SetConstantBuffer and static-buffer copy are caught. No exact-commit CI yet.
 2. **[implemented]** Validation layer/debug device is clean
    - Evidence: `SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp`, `Tests/TestRHI225D3D12ValidationReal.cpp`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `.github/workflows/release.yml`, `wiki/graphics/D3D12-Backend.md`
    - RHI-level declared set only (triangle frame, 200-cycle fence-deferred churn, negative control). GraphicsEngine is D3D11-direct, so engine frames are not covered. The Windows CI jobs now provision Graphics Tools before ctest.
