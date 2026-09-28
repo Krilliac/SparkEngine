@@ -11,31 +11,31 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 338230 |
-| **SparkEditor/Source** | 105249 |
-| **GameModules** | 156968 |
-| **External services** | 12571 |
+| **SparkEngine/Source** | 339188 |
+| **SparkEditor/Source** | 105121 |
+| **GameModules** | 158466 |
+| **External services** | 12596 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 238499 |
+| **Tests** | 243225 |
 | **SparkConsole/src** | 1857 |
 | **SparkShaderCompiler/src** | 839 |
-| **Total C++ (excl. ThirdParty)** | **~875466** |
+| **Total C++ (excl. ThirdParty)** | **~882543** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1130 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1754 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1145 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1778 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 703 |
+| Test-bearing implementation files (.cpp/.mm) | 711 |
 | Wiki pages (.md) | 205 |
 
 ### Largest Top-Level Source Section
 
-Graphics contains 123753 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 124219 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,14 +43,14 @@ Graphics contains 123753 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 123753 | 36.5% |
-| Engine (all subsystems) | 97182 | 28.7% |
-| Utils | 48364 | 14.2% |
-| Core | 32814 | 9.7% |
+| Graphics | 124219 | 36.6% |
+| Engine (all subsystems) | 97251 | 28.6% |
+| Utils | 48569 | 14.3% |
+| Core | 32917 | 9.7% |
 | Physics | 11077 | 3.2% |
 | Audio | 6992 | 2.0% |
 | Input | 4046 | 1.1% |
-| SceneManager | 4100 | 1.2% |
+| SceneManager | 4159 | 1.2% |
 | Enums | 1383 | 0.4% |
 | Game | 2950 | 0.8% |
 | Camera | 999 | 0.2% |
@@ -59,11 +59,11 @@ Graphics contains 123753 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 18222 |
+| Networking | 18262 |
 | AI | 13538 |
 | ECS | 8611 |
 | Gameplay | 7925 |
-| Scripting | 7784 |
+| Scripting | 7790 |
 | Animation | 6850 |
 | SaveSystem | 4087 |
 | UI | 2522 |
@@ -73,7 +73,7 @@ Graphics contains 123753 lines, or 36% of `SparkEngine/Source`. This is a source
 | Cinematic | 1652 |
 | World | 1604 |
 | Persistence | 1564 |
-| Dialogue | 1425 |
+| Dialogue | 1448 |
 | 2D | 1015 |
 | Coroutine | 841 |
 | Replay | 833 |
@@ -104,24 +104,24 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 105249 |
+| Total editor lines | 105121 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 703 |
-| TEST() definitions | 8211 |
+| Test files | 711 |
+| TEST() definitions | 8274 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
 
 | Metric | Count |
 |--------|------:|
-| CMake option() declarations | 34 |
-| ENABLE_* feature toggles | 25 |
+| CMake option() declarations | 33 |
+| ENABLE_* feature toggles | 24 |
 | Game modules | 11 |
-| SDK public headers | 17 |
+| SDK public headers | 18 |
 | Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 
@@ -158,15 +158,15 @@ inventory is implementation evidence, not support certification.
 | File | Lines |
 |------|------:|
 | `SaveSystem.cpp` | 2642 |
+| `ModuleManager.cpp` | 2546 |
 | `OpenGLDevice.cpp` | 2545 |
-| `ModuleManager.cpp` | 2544 |
-| `CrashHandler.cpp` | 2507 |
-| `NetworkConnection.cpp` | 2473 |
-| `D3D11Device.cpp` | 2096 |
+| `CrashHandler.cpp` | 2514 |
+| `NetworkConnection.cpp` | 2483 |
+| `D3D11Device.cpp` | 2109 |
 | `VulkanDevice.cpp` | 1983 |
 | `EngineSettings.cpp` | 1875 |
+| `D3D12Device.cpp` | 1817 |
 | `SceneManager.cpp` | 1760 |
-| `D3D12Device.cpp` | 1726 |
 
 ### SparkEngine .h Files (by line count)
 
@@ -175,8 +175,8 @@ inventory is implementation evidence, not support certification.
 | `RenderGraph.h` | 1427 |
 | `Telemetry.h` | 1419 |
 | `JsonUtils.h` | 1361 |
-| `GraphicsEngine.h` | 1293 |
-| `NetworkManager.h` | 1233 |
+| `GraphicsEngine.h` | 1341 |
+| `NetworkManager.h` | 1252 |
 | `OnlineServices.h` | 1225 |
 | `EngineSettings.h` | 1149 |
 | `SaveSystem.h` | 939 |
@@ -187,15 +187,15 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2890 |
 | `ProjectManager.cpp` | 2790 |
+| `EditorUI.cpp` | 2723 |
 | `JSONSceneSerializer.cpp` | 2020 |
 | `CollaborativeEditSession.cpp` | 1968 |
 | `BuildPipeline.cpp` | 1852 |
 | `EditorTheme.cpp` | 1669 |
 | `VisualScriptPanel.cpp` | 1668 |
-| `HierarchyPanel.cpp` | 1651 |
 | `PerformanceProfiler.cpp` | 1606 |
+| `HierarchyPanel.cpp` | 1583 |
 | `ProjectSettingsPanel.cpp` | 1517 |
 
 ## Shader Inventory
