@@ -312,6 +312,25 @@ cmake --build build/macos-release --parallel $(sysctl -n hw.logicalcpu)
 ./build/macos-release/bin/SparkTests
 ```
 
+## macOS Shipping (job `build-macos-shipping`, `continue-on-error`)
+
+`build-macos` configures by hand, so this job is the only one that proves the
+shipped macOS configuration (MinSizeRel, arm64, no editor or dev tools, no
+tests) still configures, builds and installs. It then checks that the staged
+engine records `SPARK_MACOS_MIN_VERSION` as its minimum OS:
+
+```bash
+cmake --preset macos-shipping
+cmake --build --preset macos-shipping --parallel $(sysctl -n hw.logicalcpu)
+cmake --install build/macos-shipping --prefix stage --component runtime
+python3 tools/check_macos_min_version.py --binary stage/bin/SparkEngine
+```
+
+It is advisory and not a `required-ci-gate` dependency until a hosted run is
+green; `macos_shipping_leg_errors()` in
+`.github/scripts/test-workflow-failure-propagation.py` keeps it present,
+preset-driven and advisory.
+
 ## MinGW + Wine (job `build-linux-mingw-wine`, `continue-on-error`)
 
 Cross-compiles the Windows D3D11 code on Linux and runs it under Wine:
@@ -430,6 +449,7 @@ and pins the workflow wiring. A full local run of the
   - Windows VS 2022 / VS 2026 recipes switched to Ninja Multi-Config + sccache (2026-09-06); the Visual Studio-generator configure now applies only to `build-windows-shipping`'s preset.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
+  - 2026-09-27: added the advisory `build-macos-shipping` job (PLT-220), the first lane that configures the `macos-shipping` preset; authored and structurally tested only, with no hosted macOS run yet.
   - 2026-09-26: added the CI-110 clang-tidy diagnostic budget ratchet (per-TU logs, `Tools/clang_tidy_budget.py`, `Tools/clang-tidy-budget.json`); the committed budget was measured locally with Ubuntu clang-tidy 18.1.3 and the lane's configure line, not yet on a hosted run.
   - 2026-09-25: added build-output reproducibility (BLD-100): the build-root prefix map, the GCC LTO seed, `tools/compare_build_outputs.py`, the `ReproducibleBuild_*` CTests and the advisory `reproducibility-windows` job, measured locally with GCC 13.3.
 

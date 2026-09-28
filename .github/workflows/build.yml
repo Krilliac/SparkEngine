@@ -3316,6 +3316,43 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
+  # macOS Shipping (PLT-220) — the macos-shipping preset, advisory
+  # build-macos configures by hand, so this is the only lane that proves the
+  # shipped macOS configuration (MinSizeRel, arm64, no editor or dev tools)
+  # still configures, builds, installs, and records the documented minimum OS.
+  # Advisory (continue-on-error, OD-11) and never a required-ci-gate
+  # dependency until a hosted run is green.
+  # ===========================================================================
+  build-macos-shipping:
+    name: "macOS Shipping (advisory)"
+    if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    continue-on-error: true
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        brew update
+        brew install cmake sdl2 openal-soft
+
+    - name: Configure, build and stage the Shipping runtime
+      run: |
+        set -euo pipefail
+        cmake --preset macos-shipping 2>&1 | tee cmake-configure.log
+        cmake --build --preset macos-shipping --parallel "$(sysctl -n hw.logicalcpu)" 2>&1 | tee cmake-build.log
+        cmake --install build/macos-shipping --prefix stage --component runtime
+
+    - name: Check macOS minimum version parity of the staged engine
+      run: python3 tools/check_macos_min_version.py --binary stage/bin/SparkEngine
+
+  # ===========================================================================
   # Code Coverage — GCC with lcov
   # ===========================================================================
   coverage:

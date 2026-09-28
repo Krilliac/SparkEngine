@@ -162,8 +162,9 @@ class RepositoryInventoryTests(unittest.TestCase):
     def test_live_configures_are_expanded_per_matrix_leg_with_owners(self) -> None:
         configs = self.data["workflowCmakeConfigs"]
         # reproducibility-windows (BLD-100) configures windows-shipping twice.
-        # golden-linux (CI-110) and service-contract (NET-110) each own one leg.
-        self.assertEqual(len(configs), 34)
+        # golden-linux (CI-110), service-contract (NET-110) and build-macos-shipping
+        # (PLT-220) each own one leg.
+        self.assertEqual(len(configs), 35)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -175,6 +176,7 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "build-linux-msan",
                 "build-linux-tsan",
                 "build-macos",
+                "build-macos-shipping",
                 "build-windows-shipping",
                 "build-windows-vs2022",
                 "build-windows-vs2026",

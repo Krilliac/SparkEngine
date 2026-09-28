@@ -6509,7 +6509,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 40,
+    "jobCount": 41,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -11266,6 +11266,83 @@
         "gating": "advisory"
       },
       {
+        "id": "build-macos-shipping",
+        "name": "macOS Shipping (advisory)",
+        "runsOn": "macos-15",
+        "runnerLabels": [
+          "macos-15"
+        ],
+        "runnerOsClasses": [
+          "macos"
+        ],
+        "if": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+        "continueOnError": true,
+        "timeoutMinutes": 120,
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 4,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Install dependencies",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "d5c0c4df3478c41b"
+          },
+          {
+            "index": 2,
+            "name": "Configure, build and stage the Shipping runtime",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "1f7c6d47cdf6f307"
+          },
+          {
+            "index": 3,
+            "name": "Check macOS minimum version parity of the staged engine",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "d18800cf00d734e6"
+          }
+        ],
+        "envNames": [],
+        "gating": "advisory"
+      },
+      {
         "id": "coverage",
         "name": "Code Coverage (GCC + per-subsystem thresholds)",
         "runsOn": "ubuntu-24.04",
@@ -15459,6 +15536,76 @@
         "commandIndex": 0
       },
       {
+        "job": "build-macos-shipping",
+        "step": "Configure, build and stage the Shipping runtime",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "macos",
+        "shell": "bash",
+        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake --preset macos-shipping 2>&1 | tee cmake-configure.log",
+        "commandProvenance": "literal",
+        "options": {},
+        "preset": "macos-shipping",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-macos-shipping",
+        "step": "Configure, build and stage the Shipping runtime",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "macos",
+        "shell": "bash",
+        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build --preset macos-shipping --parallel \"$(sysctl -n hw.logicalcpu)\" 2>&1 | tee cmake-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "all"
+        ],
+        "configuration": "",
+        "buildDir": "",
+        "preset": "macos-shipping",
+        "parallel": "$(sysctl -n hw.logicalcpu)",
+        "buildsAllTargets": true,
+        "commandIndex": 1
+      },
+      {
+        "job": "build-macos-shipping",
+        "step": "Configure, build and stage the Shipping runtime",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "macos",
+        "shell": "bash",
+        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "install",
+        "command": "cmake --install build/macos-shipping --prefix stage --component runtime",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "prefix": "stage",
+        "component": "runtime",
+        "commandIndex": 2
+      },
+      {
         "job": "coverage",
         "step": "Configure",
         "stepIndex": 4,
@@ -16786,6 +16933,27 @@
         "commandIndex": 0
       },
       {
+        "job": "build-macos-shipping",
+        "step": "Configure, build and stage the Shipping runtime",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "macos",
+        "shell": "bash",
+        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake --preset macos-shipping 2>&1 | tee cmake-configure.log",
+        "commandProvenance": "literal",
+        "options": {},
+        "preset": "macos-shipping",
+        "commandIndex": 0
+      },
+      {
         "job": "coverage",
         "step": "Configure",
         "stepIndex": 4,
@@ -17830,6 +17998,33 @@
         "parallel": "$(sysctl",
         "buildsAllTargets": true,
         "commandIndex": 0
+      },
+      {
+        "job": "build-macos-shipping",
+        "step": "Configure, build and stage the Shipping runtime",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "macos",
+        "shell": "bash",
+        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build --preset macos-shipping --parallel \"$(sysctl -n hw.logicalcpu)\" 2>&1 | tee cmake-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "all"
+        ],
+        "configuration": "",
+        "buildDir": "",
+        "preset": "macos-shipping",
+        "parallel": "$(sysctl -n hw.logicalcpu)",
+        "buildsAllTargets": true,
+        "commandIndex": 1
       },
       {
         "job": "coverage",
@@ -19090,17 +19285,17 @@
       }
     ],
     "summary": {
-      "jobCount": 40,
-      "matrixLegCount": 48,
+      "jobCount": 41,
+      "matrixLegCount": 49,
       "pathFilteredEventCount": 0,
-      "configureCount": 34,
-      "buildCount": 36,
+      "configureCount": 35,
+      "buildCount": 37,
       "testCount": 34,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
-      "buildAllTargetCount": 20,
+      "buildAllTargetCount": 21,
       "blockingJobCount": 30,
-      "advisoryJobCount": 6,
+      "advisoryJobCount": 7,
       "conditionalJobCount": 4,
       "builtOsConfigurationPairs": [
         "linux:Release",
@@ -19125,6 +19320,7 @@
   "workflowPresets": [
     "linux-gcc-release",
     "linux-shipping",
+    "macos-shipping",
     "windows-release",
     "windows-shipping"
   ],
@@ -19949,6 +20145,27 @@
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
       "buildDir": "build",
+      "commandIndex": 0
+    },
+    {
+      "job": "build-macos-shipping",
+      "step": "Configure, build and stage the Shipping runtime",
+      "stepIndex": 2,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "macos",
+      "shell": "bash",
+      "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+      "jobContinueOnError": true,
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "advisory",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake --preset macos-shipping 2>&1 | tee cmake-configure.log",
+      "commandProvenance": "literal",
+      "options": {},
+      "preset": "macos-shipping",
       "commandIndex": 0
     },
     {

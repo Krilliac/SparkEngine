@@ -2144,6 +2144,33 @@ def golden_linux_errors(document: dict, tests_cmake: str, manifest: dict) -> lis
     return errors
 
 
+MACOS_SHIPPING_JOB = "build-macos-shipping"
+
+
+def macos_shipping_leg_errors(document: dict) -> list[str]:
+    """PLT-220: an advisory lane builds the macos-shipping preset and checks the staged engine's minimum OS."""
+
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    job = jobs.get(MACOS_SHIPPING_JOB)
+    if not isinstance(job, dict):
+        return [f"{MACOS_SHIPPING_JOB} job is missing"]
+    errors: list[str] = []
+    runs = "\n".join(str(step.get("run", "")) for step in job.get("steps") or [] if isinstance(step, dict))
+    for fragment in ("cmake --preset macos-shipping", "cmake --build --preset macos-shipping"):
+        if fragment not in runs:
+            errors.append(f"{MACOS_SHIPPING_JOB} does not run {fragment!r}")
+    if not re.search(r"check_macos_min_version\.py --binary \S*bin/SparkEngine\b", runs):
+        errors.append(f"{MACOS_SHIPPING_JOB} does not check the staged engine's minimum macOS version")
+    if job.get("continue-on-error") is not True:
+        errors.append(f"{MACOS_SHIPPING_JOB} does not declare job-level continue-on-error: true")
+    gate = jobs.get("required-ci-gate")
+    if isinstance(gate, dict) and MACOS_SHIPPING_JOB in (gate.get("needs") or []):
+        errors.append(f"{MACOS_SHIPPING_JOB} is a required-ci-gate dependency before a hosted pass")
+    return errors
+
+
 RELEASE_LINUX_JOB = "build-linux"
 RELEASE_LINUX_GOLDEN_PREFIXES = ("OpenGLGolden_", "VulkanGolden_RHI230_")
 
@@ -3878,6 +3905,31 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 change(document)
                 self.assertNotEqual(document, baseline, "mutation fixture did not alter the workflow")
                 errors = release_linux_golden_errors(document)
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(message, errors[0])
+
+    def test_macos_shipping_leg_is_advisory_and_uses_the_preset(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        self.assertEqual(macos_shipping_leg_errors(baseline), [])
+
+        def edit_runs(document, old, new):
+            for step in document["jobs"][MACOS_SHIPPING_JOB]["steps"]:
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(old, new)
+
+        cases = (
+            (lambda d: d["jobs"].pop(MACOS_SHIPPING_JOB), "job is missing"),
+            (lambda d: edit_runs(d, "cmake --preset macos-shipping", "cmake -B build/macos-shipping"), "--preset"),
+            (lambda d: d["jobs"][MACOS_SHIPPING_JOB].pop("continue-on-error"), "continue-on-error"),
+            (lambda d: d["jobs"]["required-ci-gate"]["needs"].append(MACOS_SHIPPING_JOB), "required-ci-gate"),
+            (lambda d: edit_runs(d, "--binary stage/bin/SparkEngine", ""), "minimum macOS version"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(baseline)
+                change(document)
+                self.assertNotEqual(document, baseline, "mutation fixture did not alter the workflow")
+                errors = macos_shipping_leg_errors(document)
                 self.assertEqual(len(errors), 1, errors)
                 self.assertIn(message, errors[0])
 
