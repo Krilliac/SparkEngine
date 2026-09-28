@@ -2144,6 +2144,38 @@ def golden_linux_errors(document: dict, tests_cmake: str, manifest: dict) -> lis
     return errors
 
 
+RELEASE_LINUX_JOB = "build-linux"
+RELEASE_LINUX_GOLDEN_PREFIXES = ("OpenGLGolden_", "VulkanGolden_RHI230_")
+
+
+def release_linux_golden_errors(document: dict) -> list[str]:
+    """release.yml build-linux leaves the golden comparisons to build.yml's lanes.
+
+    Its runner resolves an unpinned Mesa, so both the golden CTest entries and the
+    raw SparkTests golden families must be excluded there. The Vulkan validation
+    tests it still runs require the validation layer, so it must be installed.
+    """
+
+    job = (document.get("jobs") or {}).get(RELEASE_LINUX_JOB)
+    if not isinstance(job, dict):
+        return [f"release.yml {RELEASE_LINUX_JOB} job is missing"]
+    errors: list[str] = []
+    steps = [step for step in job.get("steps") or [] if isinstance(step, dict)]
+    installs = [str(step.get("run")) for step in steps if step.get("name") == "Install dependencies"]
+    if not any(re.search(r"\bvulkan-validationlayers\b", run) for run in installs):
+        errors.append(f"release.yml {RELEASE_LINUX_JOB} does not install vulkan-validationlayers")
+    runs = [str(step.get("run")) for step in steps if step.get("name") == "Run Tests"]
+    ctest_lines = [line for run in runs for line in run.splitlines() if re.match(r"\s*ctest\b", line)]
+    if not ctest_lines or any(GOLDEN_LINUX_EXCLUDE not in line for line in ctest_lines):
+        errors.append(f"release.yml {RELEASE_LINUX_JOB} ctest run does not exclude the golden CTest entries")
+    for line in (line for run in runs for line in run.splitlines() if "./bin/SparkTests" in line):
+        match = re.search(r"SPARK_TEST_EXCLUDE=(\S+)\s+\./bin/SparkTests", line)
+        excluded = set(match.group(1).split(",")) if match else set()
+        if not excluded.issuperset(RELEASE_LINUX_GOLDEN_PREFIXES):
+            errors.append(f"release.yml {RELEASE_LINUX_JOB} raw SparkTests run does not exclude the golden families")
+    return errors
+
+
 def format_filter_suffixes(script: str) -> set[str]:
     """Return the file suffixes routed to clang-format by check-format-changed.sh's case arm."""
 
@@ -3822,6 +3854,32 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         mutated = self.tests_cmake.replace(label_line, 'LABELS "vulkan;vulkan-lavapipe;rendering"')
         errors = golden_linux_errors(baseline, mutated, manifest)
         self.assertTrue(any("VulkanGoldenTests with the vulkan-golden label" in error for error in errors), errors)
+
+    def test_release_linux_lane_leaves_goldens_to_the_pinned_lane(self) -> None:
+        baseline = parse_workflow_yaml(self.release)
+        self.assertEqual(release_linux_golden_errors(baseline), [])
+
+        def edit_runs(document, old, new):
+            for step in document["jobs"][RELEASE_LINUX_JOB]["steps"]:
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(old, new)
+
+        cases = (
+            (lambda d: edit_runs(d, " " + GOLDEN_LINUX_EXCLUDE, ""), "ctest run does not exclude"),
+            (
+                lambda d: edit_runs(d, "SPARK_TEST_EXCLUDE=OpenGLGolden_,VulkanGolden_RHI230_ ", ""),
+                "raw SparkTests run does not exclude",
+            ),
+            (lambda d: edit_runs(d, " vulkan-validationlayers", ""), "does not install vulkan-validationlayers"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(baseline)
+                change(document)
+                self.assertNotEqual(document, baseline, "mutation fixture did not alter the workflow")
+                errors = release_linux_golden_errors(document)
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(message, errors[0])
 
     def test_msan_is_verified_but_remains_optional(self) -> None:
         msan_block = named_step(self.build, "Run Tests under MSan")

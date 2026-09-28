@@ -2895,14 +2895,15 @@ jobs:
   # ===========================================================================
   # Linux golden images (CI-110 / RHI-230 / RHI-240)
   # The committed opengl-llvmpipe and vulkan-lavapipe baselines belong to one
-  # reviewed Mesa build (Tests/GoldenImages/manifest.json), so this is the only
-  # lane that compares them; build-linux-gcc and build-linux-clang exclude the
-  # two golden CTest entries. A runner with a different Mesa fails here instead
-  # of comparing against a rasterizer nobody reviewed.
-  # Advisory until its first hosted pass: it is deliberately NOT a
-  # required-ci-gate dependency yet. Promote it by adding it to the gate needs,
-  # EXPECTED_REQUIRED_JOBS_JSON and REQUIRED_CI_JOBS and flipping
-  # GOLDEN_LINUX_REQUIRED in .github/scripts/test-workflow-failure-propagation.py.
+  # reviewed Mesa build (Tests/GoldenImages/manifest.json). A runner with a
+  # different Mesa fails here instead of comparing against a rasterizer nobody
+  # reviewed. Advisory until its first hosted pass: it is deliberately NOT a
+  # required-ci-gate dependency yet, so build-linux-gcc and build-linux-clang
+  # keep the two golden CTest entries and hold the only required comparison.
+  # Promotion is one change: add this job to the gate needs,
+  # EXPECTED_REQUIRED_JOBS_JSON and REQUIRED_CI_JOBS, flip GOLDEN_LINUX_REQUIRED
+  # in .github/scripts/test-workflow-failure-propagation.py, and exclude the
+  # goldens from those two lanes' full ctest runs.
   # ===========================================================================
   golden-linux:
     runs-on: ubuntu-24.04

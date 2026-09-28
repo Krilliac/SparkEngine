@@ -704,7 +704,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Configure CMake
       run: |
@@ -722,11 +722,15 @@ jobs:
 
     # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence published by
     # build.yml's advisory experimental-module-lifecycle job, never a release gate.
+    # The OpenGL/Vulkan golden comparisons stay out of this lane: build.yml compares
+    # them on this same SHA (build-linux-gcc inside the Required CI Gate, which the
+    # release jobs re-verify, and the Mesa-pinned golden-linux job). Repeating them
+    # here would judge the images against whatever Mesa this runner resolves.
     - name: Run Tests
       run: |
         cd build
-        ctest --label-exclude '^experimental-modules$' --output-on-failure --no-tests=error
-        if [ -f bin/SparkTests ]; then ./bin/SparkTests; fi
+        ctest --label-exclude '^experimental-modules$' --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$' --output-on-failure --no-tests=error
+        if [ -f bin/SparkTests ]; then SPARK_TEST_EXCLUDE=OpenGLGolden_,VulkanGolden_RHI230_ ./bin/SparkTests; fi
 
     - name: Validate external package consumption
       run: |
