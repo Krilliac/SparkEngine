@@ -1,0 +1,5 @@
+# packaged showcase probe
+2 showcase_spawn PackagedProbe
+3 showcase_language fr
+4 showcase_status
+120 quit

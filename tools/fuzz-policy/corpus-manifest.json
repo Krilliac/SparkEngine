@@ -541,6 +541,23 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "exec-script-file-corpus",
+      "parser_id": "exec-script-file",
+      "corpus_dir": "FuzzerTests/corpora/exec-script-file",
+      "last_verified": "2026-09-28",
+      "content_digest": "96b133fe61a51226a1a25eb5de2bfcf467d5bd9b84d6a961610db036098a99c7",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 7,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

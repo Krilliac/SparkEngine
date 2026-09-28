@@ -1534,3 +1534,59 @@ set_tests_properties(FuzzZipListingSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# ParseExecScript lives in Core/ExecScriptParse.cpp, apart from the
+# ExecScriptPlayer members that call SimpleConsole, so the shipped parser links
+# alone: GNU ld reports undefined symbols even in sections --gc-sections drops.
+add_executable(SparkFuzzExecScript
+    FuzzExecScript.cpp
+    FuzzExecScriptProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/ExecScriptParse.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the production parser and the adapter use libc++ and meet the
+# driver only at the C ABI in FuzzExecScriptProduction.h.
+set_source_files_properties(
+    FuzzExecScriptProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/ExecScriptParse.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzExecScript PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzExecScript PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzExecScript PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzExecScript PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzExecScript PRIVATE Threads::Threads c++ c++abi)
+
+# t-400-digit-seconds.txt overflows a double, huge-frame-number.txt overflows
+# an int, and t-dots-only.txt is a digit followed only by dots: each must fall
+# back to a frame-0 entry instead of scheduling a non-finite or garbage time.
+add_test(
+    NAME FuzzExecScriptSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzExecScript>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/exec-script-file"
+)
+set_tests_properties(FuzzExecScriptSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

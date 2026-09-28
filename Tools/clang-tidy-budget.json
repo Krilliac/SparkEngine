@@ -2206,7 +2206,10 @@
     },
     "SparkEngine/Source/Core/ExecScript.cpp": {
       "modernize-return-braced-init-list": 1,
-      "readability-braces-around-statements": 10
+      "readability-braces-around-statements": 3
+    },
+    "SparkEngine/Source/Core/ExecScriptParse.cpp": {
+      "readability-braces-around-statements": 7
     },
     "SparkEngine/Source/Core/FaultIsolation.cpp": {
       "readability-braces-around-statements": 15

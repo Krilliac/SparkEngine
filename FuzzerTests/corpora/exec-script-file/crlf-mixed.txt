@@ -1,0 +1,5 @@
+10 first
+t0.25 second  
+
+5 thirdcontinued
+last line without newline
