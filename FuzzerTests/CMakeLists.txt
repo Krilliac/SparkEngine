@@ -567,3 +567,122 @@ set_tests_properties(FuzzTelemetrySpoolSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# The .spark_save byte codec lives in SaveFileCodec.cpp, split out of SaveSystem.cpp
+# so this target links the exact reader Load/QuickLoad/GetSaveSlots run without the
+# World/ECS/EventBus closure of the SaveSystem translation unit.
+add_executable(SparkFuzzSaveSystem
+    FuzzSaveSystem.cpp
+    FuzzSaveSystemProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/SaveSystem/SaveFileCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzSaveSystem.cpp use
+# libstdc++; the production codec, its logger and the adapter use libc++ and meet
+# the driver only at the C ABI in FuzzSaveSystemProduction.h.
+set_source_files_properties(
+    FuzzSaveSystemProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/SaveSystem/SaveFileCodec.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzSaveSystem PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzSaveSystem PRIVATE cxx_std_23)
+# Logger.cpp routes warnings/errors through DebugHookManager unless
+# SPARK_SHIPPING compiles the hooks out; the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzSaveSystem PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzSaveSystem PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzSaveSystem PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzSaveSystem PRIVATE Threads::Threads c++ c++abi)
+
+# entity-count-overclaim declares 4,294,967,295 entities and metadata-length-overclaim
+# a 65,520-byte metadata block in a few bytes; a reader that sized or read from either
+# before bounding it by the bytes present fails this test under ASan/-rss_limit_mb.
+# regression-metadata-carriage-return.save is a v3 save whose sceneName holds a CR: the
+# pre-fix reader accepted it although the writer (and so DeserializeWorld) refuses the
+# field, which the adapter's re-encode oracle aborts on.
+add_test(
+    NAME FuzzSaveSystemSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzSaveSystem>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=12
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/save-system"
+)
+set_tests_properties(FuzzSaveSystemSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# PrefabTextFormat is the pure text grammar PrefabAsset::TryLoad delegates to after
+# reading the file, so the adapter links it alone (no file I/O, no logger).
+add_executable(SparkFuzzEditorPrefab
+    FuzzEditorPrefab.cpp
+    FuzzEditorPrefabProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Prefabs/PrefabTextFormat.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzEditorPrefab.cpp
+# use libstdc++; the production parser and the adapter use libc++ and meet the
+# driver only at the C ABI in FuzzEditorPrefabProduction.h.
+set_source_files_properties(
+    FuzzEditorPrefabProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Prefabs/PrefabTextFormat.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorPrefab PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzEditorPrefab PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzEditorPrefab PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorPrefab PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorPrefab PRIVATE Threads::Threads c++ c++abi)
+
+# duplicate-property.sparkprefab declares one key twice; a parser that kept one of
+# them instead of rejecting the file fails the adapter's line-accounting oracle.
+add_test(
+    NAME FuzzEditorPrefabSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorPrefab>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-prefab"
+)
+set_tests_properties(FuzzEditorPrefabSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

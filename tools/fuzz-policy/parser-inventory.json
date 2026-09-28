@@ -331,6 +331,8 @@
       "description": "Runtime save-game reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
+        "SparkEngine/Source/Engine/SaveSystem/SaveFileCodec.cpp",
+        "SparkEngine/Source/Engine/SaveSystem/SaveFileCodec.h",
         "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
         "SparkEngine/Source/Engine/SaveSystem/SaveSystem.h",
         "SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h"
@@ -338,10 +340,16 @@
       "formats": [
         ".spark_save"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzSaveSystem.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzSaveSystem",
+        "test_selector": "FuzzSaveSystemSmoke",
+        "corpus_id": "save-system-corpus",
+        "entry_symbol": "Spark::DecodeSaveFileBytes",
+        "binding_source": "FuzzerTests/FuzzSaveSystemProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeSaveFile"
       }
     },
     {
@@ -885,16 +893,23 @@
       "description": "Editor prefab asset reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEditor/Source/Prefabs/PrefabAsset.cpp"
+        "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+        "SparkEditor/Source/Prefabs/PrefabTextFormat.cpp",
+        "SparkEditor/Source/Prefabs/PrefabTextFormat.h"
       ],
       "formats": [
-        ".prefab",
-        ".json"
+        ".sparkprefab"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorPrefab.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorPrefab",
+        "test_selector": "FuzzEditorPrefabSmoke",
+        "corpus_id": "editor-prefab-corpus",
+        "entry_symbol": "SparkEditor::PrefabTextFormat::Parse",
+        "binding_source": "FuzzerTests/FuzzEditorPrefabProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseEditorPrefab"
       }
     },
     {

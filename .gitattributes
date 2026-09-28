@@ -49,6 +49,8 @@ FuzzerTests/corpora/shader-daemon-blob/** -text
 FuzzerTests/corpora/shader-service-protocol/** -text
 FuzzerTests/corpora/config-parser/** -text
 FuzzerTests/corpora/telemetry-spool-format/** -text
+FuzzerTests/corpora/save-system/** -text
+FuzzerTests/corpora/editor-prefab/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

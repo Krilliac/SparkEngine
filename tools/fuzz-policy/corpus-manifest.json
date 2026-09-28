@@ -214,6 +214,47 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "save-system-corpus",
+      "parser_id": "save-system",
+      "corpus_dir": "FuzzerTests/corpora/save-system",
+      "last_verified": "2026-09-28",
+      "content_digest": "1295f0749b11837b0d26b1500122925e247b5389aba412161fd73af061a19671",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-metadata-carriage-return.save",
+          "finding": "A save whose sceneName held a CR was read and listed, but the writer refuses the field, so every Load failed in DeserializeWorld without trying the .bak and the next Save rotated the unloadable primary over it; the reader now accepts only metadata the writer can re-render.",
+          "found_by": "campaign",
+          "guard_test": "SaveSystemRoundTripReal_MetadataCarriageReturnSlotFallsBackToTheRetainedCopy"
+        }
+      ]
+    },
+    {
+      "id": "editor-prefab-corpus",
+      "parser_id": "editor-prefab",
+      "corpus_dir": "FuzzerTests/corpora/editor-prefab",
+      "last_verified": "2026-09-28",
+      "content_digest": "5e43e4efafe152c2522e80f2337df42749568dc03d87e93ecc20b0220332611e",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }
