@@ -16,6 +16,7 @@
 #include "Monster/ARPGMonsterSystem.h"
 #include "Demo/ARPGDemoEncounter.h"
 #include "Demo/ARPGActorPresentation.h"
+#include "UI/ARPGHud.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Input/InputManager.h"
 #include "Utils/SparkConsole.h"
@@ -142,6 +143,13 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Player HUD on the engine's runtime UI canvas (absent in tooling contexts without a UISystem)
+    if (context->GetUI())
+    {
+        m_hud = std::make_unique<ARPG::ARPGHud>();
+        m_hud->Initialize(context->GetUI());
+    }
+
     RegisterConsoleCommands();
 
     // Register ARPG-specific state validation rules
@@ -212,6 +220,11 @@ void SparkGameARPGModule::OnUnload()
     console.LogInfo("[ARPG] Unloading Spark ARPG module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module shutting down");
 
+    if (m_hud)
+    {
+        m_hud->Shutdown();
+        m_hud.reset();
+    }
     if (m_actorPresentation)
     {
         m_actorPresentation->Shutdown();
@@ -284,6 +297,9 @@ void SparkGameARPGModule::OnUpdate(float deltaTime)
     UpdateDemoInput();
     // Last, so the World reflects this frame's attacks, kills, spawns and any console-driven restart or load.
     m_actorPresentation->SyncActors();
+    // The HUD is a projection of the authoritative state, so a load or restart shows up on the next frame.
+    if (m_hud)
+        m_hud->Apply(ARPG::BuildHudModel(*m_demoEncounter, *m_dungeonSystem, *m_skillSystem));
 }
 
 void SparkGameARPGModule::OnFixedUpdate(float fixedDeltaTime)

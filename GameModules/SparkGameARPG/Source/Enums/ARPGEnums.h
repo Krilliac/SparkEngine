@@ -90,6 +90,26 @@ namespace ARPG
         Count = 5
     };
 
+    /// @brief Display name of a monster rank ("Boss", "Elite", ...), as the status line and HUD print it.
+    constexpr const char* GetMonsterRankName(ARPGMonsterRank rank)
+    {
+        switch (rank)
+        {
+        case ARPGMonsterRank::Normal:
+            return "Normal";
+        case ARPGMonsterRank::Champion:
+            return "Champion";
+        case ARPGMonsterRank::Elite:
+            return "Elite";
+        case ARPGMonsterRank::MiniBoss:
+            return "MiniBoss";
+        case ARPGMonsterRank::Boss:
+            return "Boss";
+        default:
+            return "Unknown";
+        }
+    }
+
     /**
      * @brief Skill activation types
      */

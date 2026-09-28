@@ -39,7 +39,7 @@
       "directory": "GameModules/SparkGameARPG",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameARPG/Source",
-      "sourceFileCount": 22,
+      "sourceFileCount": 24,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,
@@ -64,6 +64,7 @@
         "Engine/Gameplay/AbilitySystem.h",
         "Engine/SaveSystem/SaveSystem.h",
         "Engine/Security/MemoryIntegrity.h",
+        "Engine/UI/UISystem.h",
         "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
         "Utils/EventBus.h",
@@ -71,7 +72,7 @@
         "Utils/LogMacros.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 19,
+      "privateEngineHeaderCount": 20,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp"
       ]

@@ -10,6 +10,10 @@ SparkGameARPG is a compact systems-first action-RPG example. Loading the module 
 
 The same loop is scriptable through `arpg_encounter`, `arpg_attack`, `arpg_cast`, and `arpg_restart`. Monster, loot, skill, dungeon, combat, save, and AI state remain inspectable from the editor through the module's debug UI.
 
+## HUD
+
+When the engine exposes its runtime UI (`IEngineContext::GetUI()`), the module adds an `ARPGHud` panel to the UI canvas (`Source/UI/ARPGHud`): floor and kill counts, the hero's name, level, health and mana (with bars), carried loot, the primary skill and its remaining cooldown, and the current target's name, rank, level and health (with a bar), or the cleared-dungeon line once the boss falls. `BuildHudModel` projects all of it from the authoritative encounter, dungeon and skill state every frame, so the HUD holds no state of its own and shows a loaded save or a restart on the next frame. `ARPGDungeon_HudRoundTripsThroughSaveRestart` (`Tests/TestMOD330ARPGDungeonReal.cpp`) saves mid-floor through `SaveSystem`, rebuilds the systems and a fresh `UISystem`, loads, and requires the same model and identical widget text and fill values.
+
 ## Crypt kit
 
 When the module loads with a world, `ARPGDungeonSystem` dresses the crypt entry room with the Blender-authored Action RPG Dungeon kit in `Assets/Models/ARPG/Kit`: three destructible urns, a spike trap, a loot pile, and the portal gate to the next floor. The ModuleKits ARPG landmarks in `Assets/Models/ModuleKits/ARPG` frame the boss arena: two necrotic combat pillars, two summoner ritual braziers beside the portal gate, and the arcane loot chest next to the hoard. The props are set dressing only, with no colliders, triggers, or destructible components. Source, provenance, and preview are in `Art/Blender/SparkGameARPG/` and `Tools/model_pipeline/`, and `asset-references.json` records every asset path the module source names.

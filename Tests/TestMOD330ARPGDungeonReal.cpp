@@ -7,6 +7,8 @@
  * demo encounter) through BasicAttack/UsePrimarySkill, the same entry points the Space/Q keyboard input
  * and the arpg_attack/arpg_skill console commands call. The monster RNG is global and unseeded, so the
  * assertions compare restored state against captured state rather than against specific boss names.
+ * ARPGDungeon_HudRoundTripsThroughSaveRestart drives the module's runtime-UI HUD (UI/ARPGHud) on a real
+ * Spark::UI::UISystem across the same save and restart.
  */
 
 #include "TestFramework.h"
@@ -20,8 +22,10 @@
 #include "../GameModules/SparkGameARPG/Source/Loot/ARPGLootSystem.h"
 #include "../GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.h"
 #include "../GameModules/SparkGameARPG/Source/Skill/ARPGSkillSystem.h"
+#include "../GameModules/SparkGameARPG/Source/UI/ARPGHud.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/UI/UISystem.h"
 
 #include <algorithm>
 #include <cmath>
@@ -547,6 +551,121 @@ TEST(ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss)
     for (const ItemData& item : savedLoot)
         EXPECT_GT(bossDropId, item.itemId);
     EXPECT_TRUE(restarted->encounter.GetState().lastDropRank == ARPGMonsterRank::Boss);
+}
+
+namespace
+{
+    /// Every HUD widget's displayed text or fill, read back from the runtime UI canvas by widget name.
+    struct HudWidgets
+    {
+        std::vector<std::string> texts;
+        std::vector<float> values;
+
+        bool operator==(const HudWidgets&) const = default;
+    };
+
+    HudWidgets CaptureHud(Spark::UI::UISystem& ui)
+    {
+        HudWidgets widgets;
+        for (const char* name : ARPGHud::LabelNames)
+        {
+            const auto* label = dynamic_cast<const Spark::UI::UILabel*>(ui.GetCanvas().FindWidget(name));
+            widgets.texts.push_back(label ? label->GetText() : std::string("<missing>"));
+        }
+        for (const char* name : ARPGHud::BarNames)
+        {
+            const auto* bar = dynamic_cast<const Spark::UI::UIProgressBar*>(ui.GetCanvas().FindWidget(name));
+            widgets.values.push_back(bar ? bar->GetValue() : -1.0f);
+        }
+        return widgets;
+    }
+} // namespace
+
+TEST(ARPGDungeon_HudRoundTripsThroughSaveRestart)
+{
+    ScopedARPGSaveDirectory saves("hud");
+    ASSERT_TRUE(saves.IsInitialized());
+
+    ARPGHudModel savedModel;
+    HudWidgets savedWidgets;
+    std::string snapshot;
+    {
+        auto run = std::make_unique<ARPGRun>();
+        ASSERT_TRUE(run->initialized);
+        // Fight to the middle of floor 2 and wound its current target.
+        for (int frame = 0;
+             frame < 500 && !(run->dungeon.GetCurrentFloorNumber() == 2 && run->encounter.GetState().killsOnFloor == 1);
+             ++frame)
+            ASSERT_TRUE(run->Step());
+        ASSERT_EQ(run->dungeon.GetCurrentFloorNumber(), 2);
+        ASSERT_TRUE(run->encounter.BasicAttack());
+        ASSERT_TRUE(run->encounter.GetTarget() != nullptr);
+
+        Spark::UI::UISystem ui;
+        ui.Initialize(1280, 720);
+        ARPGHud hud;
+        ASSERT_TRUE(hud.Initialize(&ui));
+        savedModel = BuildHudModel(run->encounter, run->dungeon, run->skills);
+        hud.Apply(savedModel);
+        savedWidgets = CaptureHud(ui);
+
+        // The HUD shows the authoritative run, not placeholders.
+        EXPECT_EQ(savedModel.floor, 2);
+        EXPECT_EQ(savedModel.totalKills, run->encounter.GetState().totalKills);
+        EXPECT_EQ(savedModel.lootCarried, run->encounter.GetState().collectedLoot.size());
+        EXPECT_EQ(savedModel.heroName, run->encounter.GetHero()->name);
+        EXPECT_TRUE(savedModel.hasTarget);
+        EXPECT_EQ(savedModel.targetName, run->encounter.GetTarget()->name);
+        EXPECT_LT(savedModel.targetHealth, savedModel.targetMaxHealth);
+        EXPECT_FALSE(savedModel.primarySkillName.empty());
+        EXPECT_TRUE(savedWidgets.texts[0].find("Floor 2") != std::string::npos);
+        EXPECT_TRUE(savedWidgets.texts[4].find(savedModel.targetName) != std::string::npos);
+        EXPECT_GT(savedWidgets.values[0], 0.0f);
+        EXPECT_LT(savedWidgets.values[2], 1.0f);
+
+        snapshot = run->encounter.SerializeState();
+        ASSERT_FALSE(snapshot.empty());
+        World world;
+        Spark::SaveMetadata meta;
+        meta.saveName = "ARPG MOD-330 HUD";
+        const std::unordered_map<std::string, std::string> customState = {{DemoStateKey, snapshot}};
+        ASSERT_TRUE(saves.System().Save("arpg_hud", world, meta, customState));
+
+        hud.Shutdown();
+        EXPECT_TRUE(ui.GetCanvas().FindWidget(ARPGHud::LabelNames[0]) == nullptr);
+    }
+
+    // Restart: fresh systems, a fresh UI canvas, and a HUD that starts on the new run's floor 1.
+    ASSERT_TRUE(saves.System().Initialize(saves.Path().string()));
+    auto restarted = std::make_unique<ARPGRun>();
+    ASSERT_TRUE(restarted->initialized);
+    Spark::UI::UISystem ui;
+    ui.Initialize(1280, 720);
+    ARPGHud hud;
+    ASSERT_TRUE(hud.Initialize(&ui));
+    hud.Apply(BuildHudModel(restarted->encounter, restarted->dungeon, restarted->skills));
+    EXPECT_FALSE(CaptureHud(ui) == savedWidgets);
+
+    World loadedWorld;
+    std::unordered_map<std::string, std::string> loadedState;
+    const auto validate = [&restarted](const std::unordered_map<std::string, std::string>& candidate)
+    {
+        const auto state = candidate.find(DemoStateKey);
+        return state != candidate.end() && restarted->encounter.CanRestoreState(state->second);
+    };
+    ASSERT_TRUE(saves.System().Load("arpg_hud", loadedWorld, loadedState, validate));
+    ASSERT_TRUE(restarted->encounter.RestoreState(loadedState.at(DemoStateKey)));
+
+    // The next frame's projection of the restored run is the saved HUD, model and widgets alike.
+    const ARPGHudModel restoredModel = BuildHudModel(restarted->encounter, restarted->dungeon, restarted->skills);
+    EXPECT_TRUE(restoredModel == savedModel);
+    hud.Apply(restoredModel);
+    EXPECT_TRUE(CaptureHud(ui) == savedWidgets);
+
+    // One more attack must show up: a stale or constant HUD fails here.
+    ASSERT_TRUE(restarted->encounter.BasicAttack());
+    hud.Apply(BuildHudModel(restarted->encounter, restarted->dungeon, restarted->skills));
+    EXPECT_FALSE(CaptureHud(ui) == savedWidgets);
 }
 
 TEST(ARPGDungeon_RejectsForgedLootAndSkillStateWithoutMutation)

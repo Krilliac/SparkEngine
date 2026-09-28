@@ -1351,6 +1351,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Demo/ARPGActorPresentation.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/UI/ARPGHud.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp"
     )
 
