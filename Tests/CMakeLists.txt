@@ -341,6 +341,7 @@ add_executable(SparkTests
     TestGPUClusterCulling.cpp
     TestDirectStorageLoader.cpp
     TestSEC3GameplayHardening.cpp
+    TestSparkTerrainFormatReal.cpp
     TestMeshShaderPipeline.cpp
     TestSparkPak.cpp
     TestAssetParserHardening.cpp
@@ -2072,6 +2073,14 @@ set_tests_properties(SparkSEC3GameplayHardening PROPERTIES
     LABELS "security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
+
+# SEC-120 runtime .sparkterrain decoder: non-square heightmaps (which made the clipmap index
+# resolution^2 samples from a width*height map) are rejected, and the editor layout round-trips.
+add_test(NAME SparkTerrainFormat COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(SparkTerrainFormat PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SparkTerrainFormat_;SPARK_TEST_EXPECT_COUNT=2"
+    LABELS "security;unit"
+    TIMEOUT 60)
 
 # OPS-100: retired crash-transport credentials are dropped on settings load and never saved.
 add_test(NAME CrashSettingsCredentials COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)

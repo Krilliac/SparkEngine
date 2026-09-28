@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <istream>
 #include <string>
+#include <vector>
 
 namespace Spark::Graphics
 {
@@ -138,6 +139,50 @@ namespace Spark::Graphics
             uint64_t m_offset = 0;
             bool m_failed = false;
         };
+
+        /// LOD chain bounds. TerrainSystem loops lodLevels times per terrain per frame and selects LOD
+        /// `lodLevels - 1` at most, so 0 or a huge value is not a usable terrain.
+        inline constexpr int32_t kMinLodLevels = 1;
+        inline constexpr int32_t kMaxLodLevels = 16;
+
+        /**
+         * @brief The runtime's view of a .sparkterrain asset: the fields TerrainRenderer publishes on a
+         *        TerrainComponent. Detail meshes and per-layer material parameters have no runtime consumer.
+         */
+        struct RuntimeTerrain
+        {
+            std::string name;
+            float size = 0.0f;
+            int32_t lodLevels = 0;
+            float lodBias = 0.0f;
+            bool generateCollider = false;
+            int32_t resolution = 0; ///< Heightmap side length; heights holds resolution^2 samples.
+            float heightScale = 0.0f;
+            float minHeight = 0.0f;
+            float maxHeight = 0.0f;
+            std::vector<float> heights;
+            std::vector<std::string> layerDiffusePaths;
+            int32_t splatResolution = 0; ///< splatmap holds splatResolution^2 RGBA texels.
+            std::vector<uint8_t> splatmap;
+        };
+
+        /**
+         * @brief Decode a .sparkterrain stream up to and including the splatmap.
+         *
+         * The single runtime decoder behind TerrainRenderer::LoadSparkTerrain and the SparkFuzzSparkTerrain
+         * harness. Beyond the per-field bounds of Reader it enforces what the runtime consumers assume: a
+         * square heightmap (TerrainSystem hands the clipmap `resolution x resolution`), finite size, LOD
+         * bias, height scale, height range and samples, `minHeight <= maxHeight`, and lodLevels within
+         * [kMinLodLevels, kMaxLodLevels].
+         *
+         * Thread affinity: any thread. Allocation: bounded by the stream's size. No logging.
+         *
+         * @param stream  Binary stream holding the whole asset (Reader seeks to measure it).
+         * @param out     Receives the decoded fields on success; untouched on failure.
+         * @param error   Receives a one-line reason on failure.
+         * @return        `true` if every field through the splatmap decoded and validated.
+         */
+        bool DecodeRuntime(std::istream& stream, RuntimeTerrain& out, std::string& error);
     } // namespace SparkTerrain
 
 } // namespace Spark::Graphics
