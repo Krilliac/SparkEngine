@@ -6,17 +6,18 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository now has six structurally
+SEC-120 remains open and release-blocking. The repository now has ten structurally
 validated production fuzz targets and bounded seed corpora for `json-utils`,
 `crash-manifest-parser`, `texture-stex-compressor`, `neural-weights-nnw`,
-`scene-manifest`, and `sparkpak-reader`, but
+`scene-manifest`, `sparkpak-reader`, `shader-daemon-blob`, `shader-service-protocol`,
+`config-parser`, and `telemetry-spool-format`, but
 exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
 crash-free-duration evidence remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **135 explicitly inventoried parsers, 6
-fuzzed and 129 blocked**, **6 bound corpora with 48 seeds (32590 bytes)**, **0 deferred
-candidates and 115 OD-21 exemptions**, and **2084 source files scanned across 17
+For the recorded source-tree state it reports **141 explicitly inventoried parsers, 10
+fuzzed and 131 blocked**, **10 bound corpora with 79 seeds (35296 bytes)**, **0 deferred
+candidates and 114 OD-21 exemptions**, and **2088 source files scanned across 17
 first-party roots**. The unwired material file import path (`Material::LoadFromFile`,
 `Material::LoadTexture` and `MaterialSystem::LoadTextureFromFile`, inventoried as
 `pbr-material-file`, `wic-pbr-material-texture` and `wic-material-texture`) was deleted
@@ -179,7 +180,7 @@ The gate proves that:
   a non-blocking status, while blockers remain.
 
 The gate does **not** prove that the regex scanner finds every possible parser, or that
-declared limits hold at runtime. The full inventory report records 28 inventoried files
+declared limits hold at runtime. The full inventory report records 35 inventoried files
 that no detector pattern matches, found by human review, so that limitation is a number
 rather than an assumption.
 
@@ -424,12 +425,20 @@ change *is* the review record.
 
 ## Remaining Closure Work
 
-- retain exact-SHA sanitizer smoke for json-utils, crash-manifest-parser,
-  texture-stex-compressor, neural-weights-nnw, scene-manifest, and sparkpak-reader, then
-  implement production entry-point fuzz targets for the remaining 129 blocked parsers, starting
+- build and replay the four SEC-120 hardening targets (`shader-daemon-blob`,
+  `shader-service-protocol`, `config-parser`, `telemetry-spool-format`) on Linux Clang for
+  the first time, then retain exact-SHA sanitizer smoke for all ten targets;
+- implement production entry-point fuzz targets for the remaining 131 blocked parsers, starting
   with the highest-risk binary readers (`terrain-sparkterrain`,
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
-  `fps-terrain-heightmap-bmp`, `asset-media-windows`);
+  `fps-terrain-heightmap-bmp`, `asset-media-windows`). `asset-service-protocol` and
+  `daemon-protocol-frame` follow the `shader-service-protocol` template directly.
+  `rts-save-snapshot`, the reflected-scene path of `scene-serializer`, `save-system` and
+  `animation-skel-sanim` need a Linux build to settle their link closures first:
+  `RTSPersistence::Deserialize` calls `Validate`, which shares a translation unit with
+  `Capture`/`Apply` and calls `RTSCommandSystem::IsCommandValid` (ImGui and console code in
+  the same unit), and the scene, save and animation readers pull in the ECS, reflection
+  and glTF translation units;
 - commit bounded seed corpora under `FuzzerTests/corpora/` and minimized regressions;
 - retain the blocking ASan/UBSan smoke now wired for both targets and record hosted
   `fuzz-scheduled` campaign history with its crash-free-duration statistics, then add
@@ -437,8 +446,8 @@ change *is* the review record.
   `fuzzed`);
 - independently review that each harness reaches production parsing code and that
   allocation, depth, path, integer, and time bounds are enforced by that code;
-- extend the detector so the 28 known blind spots shrink;
-- have an independent security reviewer re-check the 115 OD-21 exemptions; they are
+- extend the detector so the 35 known blind spots shrink;
+- have an independent security reviewer re-check the 114 OD-21 exemptions; they are
   recorded judgement, not proof of unreachability.
 
 ## Source & Freshness
@@ -447,5 +456,5 @@ Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocki
 `fuzz-policy` job in `.github/workflows/build.yml`, the non-blocking `fuzz-scheduled`
 campaign in `.github/workflows/fuzz-scheduled.yml`, and the closure step in
 `.github/workflows/release.yml`. The OD-21 classification and the counts above were
-re-verified structurally 2026-09-25 on the release worktree; rerun the CI command for
+re-verified structurally 2026-09-27 (SEC-120 hardening pass); rerun the CI command for
 current counts and exact-SHA runtime evidence.
