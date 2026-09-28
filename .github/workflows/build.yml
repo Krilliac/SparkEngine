@@ -312,6 +312,7 @@ jobs:
       run: python3 -B -m unittest Tests.Tools.test_compare_build_outputs -v
 
     - name: Generate and compare the deterministic build-matrix inventory
+      id: build-matrix-inventory
       run: |
         python3 Tools/buildmatrix/inventory.py \
           --output build-matrix-inventory.json \
@@ -341,8 +342,12 @@ jobs:
         fi
         echo "status=$status" >> "$GITHUB_OUTPUT"
 
+    # Publish whenever the inventory step ran, including when it or the parity
+    # comparison failed. When an earlier step failed the job, the inventory step is
+    # skipped and there is nothing to publish; uploading anyway only adds a second,
+    # misleading "No files were found" error to the real failure.
     - name: Upload deterministic build-matrix evidence
-      if: always()
+      if: always() && steps.build-matrix-inventory.outcome != 'skipped'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: build-matrix-inventory-${{ github.sha }}-${{ github.run_attempt }}
