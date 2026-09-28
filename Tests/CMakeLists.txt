@@ -2982,6 +2982,7 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND TARG
     file(READ "${_spark_module_evidence_manifest}" _spark_module_evidence_json)
     string(JSON _spark_manifest_module_count LENGTH "${_spark_module_evidence_json}" modules)
     math(EXPR _spark_manifest_module_last "${_spark_manifest_module_count} - 1")
+    set(_spark_experimental_unregistered "")
     foreach(_spark_manifest_index RANGE ${_spark_manifest_module_last})
         string(JSON _spark_experimental_tracker ERROR_VARIABLE _spark_not_experimental
             GET "${_spark_module_evidence_json}" modules ${_spark_manifest_index} experimentalSeparation trackedUnder)
@@ -2991,8 +2992,9 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND TARG
         string(JSON _spark_experimental_module GET "${_spark_module_evidence_json}"
             modules ${_spark_manifest_index} cmakeTarget)
         # SPARK_GAME_MODULES may select a subset (e.g. the stable-v1 FPS-only
-        # profile); the advisory job asserts the full set is registered.
+        # profile); with the full module set every manifest module must build.
         if(NOT TARGET ${_spark_experimental_module})
+            list(APPEND _spark_experimental_unregistered "${_spark_experimental_module}")
             continue()
         endif()
         add_test(
@@ -3009,6 +3011,11 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND TARG
             RUN_SERIAL TRUE
             TIMEOUT 60)
     endforeach()
+    if(SPARK_GAME_MODULES STREQUAL "" AND _spark_experimental_unregistered)
+        message(FATAL_ERROR
+            "RDY-015: tools/module-evidence/manifest.json tracks experimental module(s) with no CMake target, "
+            "so they would get no ExperimentalModuleLifecycle_ test: ${_spark_experimental_unregistered}")
+    endif()
 endif()
 
 # SEC2: legacy peer-hosted collaboration — join-code authentication, frame/queue/
