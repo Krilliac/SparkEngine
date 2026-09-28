@@ -236,10 +236,12 @@ cross-checked with `llvm-readobj` and `llvm-pdbutil`. It also checks that
 `install(TARGETS)` rule in the root, `Spark*/`, `GameModules/` and `cmake/`
 CMake files, and that no `CPACK_COMPONENTS_ALL` list (root or
 `cmake/SparkCPackOptions.cmake`) names the symbols component.
-`ShippingManifest_PrivateSymbols` is registered only in a `STRIP_DEBUG_SYMBOLS`
-ELF tree with tests enabled; it installs the runtime/tools/samples and symbols
-components to separate roots under `<build>/shipping-symbol-stage` and maps
-every installed image, so it needs every installed target built. The local
+`ShippingManifest_PrivateSymbols` is registered in a `STRIP_DEBUG_SYMBOLS` ELF
+tree and in every MSVC tree with tests enabled (MSVC: Release, RelWithDebInfo
+and MinSizeRel only, because Debug links keep the absolute PDB path). Its body,
+`cmake/SparkStagePrivateSymbols.cmake`, installs the runtime/tools/samples and
+symbols components to separate roots under `<build>/shipping-symbol-stage` and
+maps every installed image, so it needs every installed target built. The local
 linux-shipping evidence is with `ENABLE_LTO=OFF`; a full LTO (preset default)
 build with `-g`, and its disk, memory and time on hosted runners, has not been
 measured. MSVC PDB output under `/Brepro` and the hosted job have not yet been

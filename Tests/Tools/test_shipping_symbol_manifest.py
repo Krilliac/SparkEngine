@@ -347,6 +347,67 @@ class PeSymbolTests(ToolTestCase):
         self.assert_fails(ManifestRun(self.root, [bin_dir], [bin_dir]), "broken.dll:")
 
 
+STAGE_SCRIPT = REPO_ROOT / "cmake" / "SparkStagePrivateSymbols.cmake"
+STAGE_FIXTURE = """cmake_minimum_required(VERSION 3.25)
+project(SparkStageFixture NONE)
+install(FILES "{dll}" DESTINATION bin COMPONENT runtime)
+install(FILES "{pdb}" DESTINATION symbols COMPONENT {pdb_component})
+{extra}"""
+
+
+@unittest.skipUnless(PE_TOOLS and CMAKE, "needs clang, lld-link and cmake")
+class StagePrivateSymbolsScriptTests(ToolTestCase):
+    """cmake/SparkStagePrivateSymbols.cmake, the ShippingManifest_PrivateSymbols body."""
+
+    def stage(self, pdb_component: str = "symbols", runtime_pdb: bool = False) -> subprocess.CompletedProcess:
+        dll = PeSymbolTests._dll(self, self.root / "out", "fixture")
+        pdb = dll.with_suffix(".pdb").as_posix()
+        source, build = self.root / "src", self.root / "build"
+        source.mkdir()
+        runtime_rule = f'install(FILES "{pdb}" DESTINATION bin COMPONENT runtime)\n'
+        (source / "CMakeLists.txt").write_text(
+            STAGE_FIXTURE.format(
+                dll=dll.as_posix(),
+                pdb=pdb,
+                pdb_component=pdb_component,
+                extra=runtime_rule if runtime_pdb else "",
+            ),
+            encoding="utf-8",
+        )
+        _check(CMAKE, "-S", source, "-B", build)
+        return _run(
+            CMAKE,
+            f"-DSTAGE={self.root / 'stage'}",
+            f"-DBUILD_DIR={build}",
+            "-DCONFIG=Release",
+            f"-DPYTHON={sys.executable}",
+            f"-DTOOL={TOOL}",
+            "-P",
+            STAGE_SCRIPT,
+        )
+
+    def test_staged_image_maps_to_its_staged_pdb(self) -> None:
+        result = self.stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("symbol manifest OK: 1 image(s) mapped", result.stdout)
+        manifest = json.loads((self.root / "stage" / "shipping-symbol-manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual([image["pdbName"] for image in manifest["images"]], ["fixture.pdb"])
+
+    def test_pdb_packaged_with_the_runtime_fails(self) -> None:
+        result = self.stage(runtime_pdb=True)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("private symbols in the runtime tree", result.stderr)
+
+    def test_missing_symbol_component_fails(self) -> None:
+        result = self.stage(pdb_component="unstaged")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_missing_argument_is_fatal(self) -> None:
+        result = _run(CMAKE, f"-DSTAGE={self.root / 'stage'}", "-P", STAGE_SCRIPT)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SparkStagePrivateSymbols: -DBUILD_DIR=", result.stderr)
+
+
 class ManifestContractTests(ToolTestCase):
     def test_empty_roots_fail(self) -> None:
         (self.root / "bin").mkdir()
@@ -419,6 +480,16 @@ class SymbolProductionContractTests(unittest.TestCase):
         # /DEBUG must not be conditional on STRIP_DEBUG_SYMBOLS again.
         conditional = r"if\(STRIP_DEBUG_SYMBOLS\)[^\n]*\n[^\n]*\n\s*else\(\)\s*add_link_options\(/DEBUG"
         self.assertNotRegex(self.text, conditional)
+
+    def test_ctest_registration_runs_the_staging_script_on_msvc_and_elf(self) -> None:
+        text = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        start = text.index("if(SPARK_SPLIT_DEBUG_SYMBOLS OR MSVC)")
+        block = text[start : text.index("\nendif()", start)]
+        self.assertIn("NAME ShippingManifest_PrivateSymbols", block)
+        self.assertIn("-P ${CMAKE_SOURCE_DIR}/cmake/SparkStagePrivateSymbols.cmake", block)
+        # MSVC Debug links keep absolute PDB paths by design; only optimized configs are checked.
+        self.assertIn("CONFIGURATIONS Release RelWithDebInfo MinSizeRel", block)
+        self.assertNotIn("/bin/sh", block)
 
     def test_elf_links_carry_a_build_id_and_split_symbols(self) -> None:
         self.assertIn("add_link_options(-Wl,--build-id=sha1)", self.text)

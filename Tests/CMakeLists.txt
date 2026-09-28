@@ -4095,26 +4095,32 @@ if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF" AND CMAKE_OBJCOPY)
         TIMEOUT 3600)
 endif()
 
-# In a STRIP_DEBUG_SYMBOLS ELF tree the packaged components (runtime, tools,
-# samples) and the private "symbols" component install to separate roots, as
-# a release stages them; every installed image must be stripped and map by
-# build-id to exactly one installed .debug file. Only shipped images are split,
-# so the test installs rather than scanning the output directories, and it
-# needs every installed target built.
-if(SPARK_SPLIT_DEBUG_SYMBOLS)
+# The packaged components (runtime, tools, samples) and the private "symbols"
+# component install to separate roots, as a release stages them
+# (cmake/SparkStagePrivateSymbols.cmake). In a STRIP_DEBUG_SYMBOLS ELF tree every
+# installed image must be stripped and map by build-id to exactly one installed
+# .debug file; on MSVC every installed EXE/DLL must map by its RSDS PDB GUID+age
+# to exactly one installed PDB and record a bare PDB name. Only shipped images
+# carry private symbols, so the test installs rather than scanning the output
+# directories, and it needs every installed target built. MSVC Debug links keep
+# the absolute PDB path for local debugging, so it runs in optimized
+# configurations only there.
+if(SPARK_SPLIT_DEBUG_SYMBOLS OR MSVC)
+    if(MSVC)
+        set(_spark_private_symbol_configs CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
+    else()
+        set(_spark_private_symbol_configs "")
+    endif()
     add_test(
         NAME ShippingManifest_PrivateSymbols
-        COMMAND /bin/sh -c [=[
-set -e
-rm -rf "$1"
-for component in runtime tools samples; do
-    "$2" --install "$3" --config "$4" --component "$component" --prefix "$1/runtime"
-done
-"$2" --install "$3" --config "$4" --component symbols --prefix "$1/private"
-exec "$5" -B "$6" --images "$1/runtime" --symbols "$1/private/symbols" --output "$1/shipping-symbol-manifest.json"
-]=] spark-private-symbols
-            ${CMAKE_BINARY_DIR}/shipping-symbol-stage ${CMAKE_COMMAND} ${CMAKE_BINARY_DIR} $<CONFIG>
-            ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/shipping_symbol_manifest.py)
+        ${_spark_private_symbol_configs}
+        COMMAND ${CMAKE_COMMAND}
+            -DSTAGE=${CMAKE_BINARY_DIR}/shipping-symbol-stage
+            -DBUILD_DIR=${CMAKE_BINARY_DIR}
+            -DCONFIG=$<CONFIG>
+            -DPYTHON=${Python3_EXECUTABLE}
+            -DTOOL=${CMAKE_SOURCE_DIR}/tools/shipping_symbol_manifest.py
+            -P ${CMAKE_SOURCE_DIR}/cmake/SparkStagePrivateSymbols.cmake)
     set_tests_properties(ShippingManifest_PrivateSymbols PROPERTIES
         LABELS "build;shipping;integration"
         TIMEOUT 600)
