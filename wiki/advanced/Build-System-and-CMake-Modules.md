@@ -79,14 +79,22 @@ passed as an untyped `-DNAME=VALUE` (or a preset string value) and nothing ran
 listing each name and the `cmake -U NAME <build-dir>` command to drop it. A typo
 such as `-DENABLE_EDTIOR=OFF`, or an option that only exists on another platform,
 can therefore no longer configure "successfully" with the default feature set.
-Explicitly typed entries (`-DNAME:BOOL=ON`) look identical to declared ones and are
-not checked. Options that must be accepted on every platform are declared
+Explicitly typed entries (`-DNAME:BOOL=ON`, or a preset boolean/typed value) are
+checked too: `spark_capture_cli_options()`, the first command after
+`cmake_minimum_required()`, returns every guarded entry that still carries CMake's
+command-line helpstring to `UNINITIALIZED`, so `option()` adopts it like an untyped
+entry and an undeclared one reaches the final check. Options that are declared but
+never read (no `if()`, `${}`, generator expression, forwarded `-D` or
+`configure_file` template consumes them) are reported by
+`Tools/buildmatrix/check_parity.py` as the blocking `declared-option-unread`
+finding; `ENABLE_GRAPHICS` is the current one (HEAD-220). Options that must be accepted on every platform are declared
 unconditionally: `SPARK_REQUIRE_WINDOWS_INSTALLERS` (SparkBuild passes it
 everywhere; `ON` off Windows is itself fatal) and the explicit
 `SPARK_MODULE_CXX_LANGUAGE_ABI` override (declared by `cmake/SparkGameModule.cmake`).
 `Tests/Tools/test_build_option_guard.py` (CTest `BuildOptions_UnknownOptionRejected`)
-configures a fixture project through the real module and audits every string
-cache variable in `CMakePresets.json` against the tree's declarations.
+configures a fixture project through the real module (typed and untyped `-D`
+entries, and a typed preset) and audits every cache variable in `CMakePresets.json`
+against the tree's declarations.
 
 | Option | Root default | Source-backed effect when disabled |
 |--------|--------------|------------------------------------|

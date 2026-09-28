@@ -665,6 +665,62 @@ def extract_all_cmake_options(paths: Iterable[Path] | None = None) -> list[dict[
     return sorted(declarations, key=lambda item: (item["name"], item["file"], item["line"]))
 
 
+GUARDED_OPTION_PATTERN = re.compile(r"^(ENABLE|SPARK|BUILD)_")
+_CMAKE_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# A forwarded "-DNAME=value" / "-UNAME" argument names NAME, not "DNAME".
+_DEFINE_FLAG = re.compile(r"(?<![A-Za-z0-9_])-[DU]")
+# Commands whose first argument names the variable being declared or written;
+# that argument is not a read of the variable. Every other argument is.
+_DECLARING_COMMANDS = {"option", "cmake_dependent_option", "set", "unset"}
+_TEMPLATE_READ_PATTERNS = (
+    re.compile(r"#cmakedefine(?:01)?[ \t]+([A-Za-z_][A-Za-z0-9_]*)"),
+    re.compile(r"@([A-Za-z_][A-Za-z0-9_]*)@"),
+    re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"),
+)
+
+
+def extract_cmake_option_reads_text(text: str, names: set[str], source: str = "<memory>") -> set[str]:
+    """Names from ``names`` that one CMake input reads anywhere but its declaration.
+
+    A read is any argument that mentions the name: if() conditions, ${} and
+    generator expressions, target_compile_definitions, configure_file inputs,
+    forwarded -D arguments, cmake_dependent_option() dependency lists.
+    """
+    reads: set[str] = set()
+    for command in _iter_cmake_commands(text, source):
+        tokens = _tokenize_cmake_arguments(command["body"])
+        if command["name"] in _DECLARING_COMMANDS:
+            tokens = tokens[1:]
+        for token in tokens:
+            reads.update(names.intersection(_CMAKE_IDENTIFIER.findall(_DEFINE_FLAG.sub(" ", token))))
+    return reads
+
+
+def extract_cmake_option_reads(
+    declarations: list[dict[str, Any]],
+    cmake_paths: Iterable[Path] | None = None,
+    template_paths: Iterable[Path] | None = None,
+) -> list[str]:
+    """Sorted guarded (ENABLE_/SPARK_/BUILD_) option names that something reads.
+
+    CMake inputs are scanned command by command; configure_file templates
+    (``*.in``) count through #cmakedefine, @NAME@ and ${NAME}. A declared
+    guarded option absent from this list is dead configuration surface: setting
+    it changes nothing, which check_parity reports as declared-option-unread.
+    """
+    names = {item["name"] for item in declarations if GUARDED_OPTION_PATTERN.match(item["name"])}
+    reads: set[str] = set()
+    for cmake_file in cmake_paths if cmake_paths is not None else _tracked_cmake_inputs():
+        reads |= extract_cmake_option_reads_text(
+            cmake_file.read_text(encoding="utf-8"), names, _source_label(cmake_file)
+        )
+    for template in template_paths if template_paths is not None else _git_ls_files("*.in"):
+        text = template.read_text(encoding="utf-8", errors="replace")
+        for pattern in _TEMPLATE_READ_PATTERNS:
+            reads.update(names.intersection(pattern.findall(text)))
+    return sorted(reads)
+
+
 def _evaluate_default(value: Any, context: dict[str, bool]) -> bool | str:
     if isinstance(value, bool):
         return value
@@ -4019,6 +4075,7 @@ def build_inventory(
         "cmakeOptionDeclarations": option_declarations,
         "cmakeOptions": effective_cmake_options(option_declarations),
         "allCmakeOptionDeclarations": all_option_declarations,
+        "cmakeOptionReads": extract_cmake_option_reads(all_option_declarations),
         "cmakePresets": extract_cmake_presets(),
         "cmakeTargetDeclarations": target_declarations,
         "cmakeTargets": aggregate_cmake_targets(target_declarations),

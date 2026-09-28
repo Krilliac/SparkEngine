@@ -4076,6 +4076,80 @@ class OptionActivationTests(unittest.TestCase):
                     inventory._evaluate_condition(expression)
 
 
+class UnreadOptionTests(unittest.TestCase):
+    """CI-120: a declared option that nothing consumes is an unused option and fails."""
+
+    def unread(self, cmake_text: str, template_text: str = "") -> list[check_parity.Finding]:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as directory:
+            cmake_file = Path(directory) / "CMakeLists.txt"
+            cmake_file.write_text(textwrap.dedent(cmake_text), encoding="utf-8")
+            template = Path(directory) / "Config.h.in"
+            template.write_text(template_text, encoding="utf-8")
+            declarations = inventory.extract_cmake_options_text(
+                cmake_file.read_text(encoding="utf-8"), "synthetic/CMakeLists.txt"
+            )
+            reads = inventory.extract_cmake_option_reads(declarations, [cmake_file], [template])
+        return check_parity.check_unread_options(declarations, reads)
+
+    def test_declaration_nobody_reads_is_blocking(self) -> None:
+        findings = self.unread(
+            """\
+            option(ENABLE_USED "Used" ON)
+            option(ENABLE_NOBODY_READS "Declared but never consumed" ON)
+            if(ENABLE_USED)
+              set(ENABLE_NOBODY_READS OFF)
+            endif()
+            """
+        )
+        self.assertEqual([finding.category for finding in findings], ["declared-option-unread"])
+        self.assertEqual(findings[0].severity, "error")
+        self.assertIn("ENABLE_NOBODY_READS", findings[0].message)
+        self.assertIn("synthetic/CMakeLists.txt:2", findings[0].detail)
+
+    def test_every_consumer_form_counts_as_a_read(self) -> None:
+        findings = self.unread(
+            """\
+            option(ENABLE_IF "if" ON)
+            option(SPARK_DEREF "deref" ON)
+            option(BUILD_GENEX "genex" ON)
+            option(ENABLE_FORWARDED "forwarded" ON)
+            option(ENABLE_DEPENDENCY "dependency" ON)
+            option(SPARK_TEMPLATE "template" ON)
+            if(ENABLE_IF)
+            endif()
+            message(STATUS "${SPARK_DEREF}")
+            target_compile_definitions(x PRIVATE $<$<BOOL:${BUILD_GENEX}>:GENEX>)
+            add_test(NAME t COMMAND cmake -DENABLE_FORWARDED=OFF)
+            cmake_dependent_option(ENABLE_DEPENDENT "d" ON "ENABLE_DEPENDENCY" OFF)
+            if(ENABLE_DEPENDENT)
+            endif()
+            """,
+            "#cmakedefine SPARK_TEMPLATE\n",
+        )
+        self.assertEqual(findings, [])
+
+    def test_names_outside_the_guarded_namespaces_are_not_checked(self) -> None:
+        self.assertEqual(self.unread('option(MY_UNREAD_TOGGLE "Unread" ON)\n'), [])
+
+    def test_repository_reads_are_recorded_and_the_inert_option_is_reported(self) -> None:
+        data = inventory.build_inventory()
+        self.assertIn("ENABLE_LTO", data["cmakeOptionReads"])
+        findings = check_parity.check_unread_options(
+            data["allCmakeOptionDeclarations"], data["cmakeOptionReads"]
+        )
+        # ENABLE_GRAPHICS is documented as inert (HEAD-220): declared, never consumed.
+        self.assertIn(
+            "CMake option 'ENABLE_GRAPHICS' is declared but nothing reads it",
+            [finding.message for finding in findings],
+        )
+
+    def test_inventory_without_read_record_is_rejected(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data.pop("cmakeOptionReads")
+        with self.assertRaisesRegex(inventory.InventoryError, "required fields"):
+            check_parity.run_all_checks(data)
+
+
 class TargetInventoryTests(unittest.TestCase):
     """Module targets are inventoried; templates and unknowns are not invented."""
 

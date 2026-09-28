@@ -5,7 +5,7 @@ Each case configures a throwaway fixture project that includes the real guard
 module exactly the way the root CMakeLists.txt does: options are declared in the
 top-level file and in a subdirectory, and the guard runs last. The static cases
 pin the root wiring and audit CMakePresets.json so a preset can never pass a
-string-valued ENABLE_*/SPARK_*/BUILD_* name the tree does not declare.
+ENABLE_*/SPARK_*/BUILD_* name (typed or not) the tree does not declare.
 """
 import json
 import re
@@ -23,12 +23,25 @@ GUARDED_PREFIX = re.compile(r"^(ENABLE|SPARK|BUILD)_")
 CMAKE = shutil.which("cmake")
 
 FIXTURE_ROOT = """cmake_minimum_required(VERSION 3.25)
+include("{module}")
+spark_capture_cli_options()
 project(SparkOptionGuardFixture NONE)
 option(ENABLE_DECLARED_FEATURE "Declared at the top level" OFF)
 set(SPARK_DECLARED_PATH "" CACHE PATH "Declared cache path")
 add_subdirectory(sub)
-include("{module}")
+message(STATUS "fixture ENABLE_DECLARED_FEATURE=${{ENABLE_DECLARED_FEATURE}}")
 spark_reject_undeclared_options()
+"""
+
+FIXTURE_PRESETS = """{{
+  "version": 6,
+  "configurePresets": [
+    {{"name": "typed", "binaryDir": "{build}",
+      "cacheVariables": {{"ENABLE_DECLARED_FEATURE": true, "ENABLE_PRESET_TYPO": {{"type": "BOOL", "value": "ON"}}}}}},
+    {{"name": "typed-declared", "binaryDir": "{build}",
+      "cacheVariables": {{"ENABLE_DECLARED_FEATURE": true, "BUILD_SUBDIR_FEATURE": {{"type": "BOOL", "value": "ON"}}}}}}
+  ]
+}}
 """
 
 FIXTURE_SUB = """option(BUILD_SUBDIR_FEATURE "Declared only by a subdirectory" OFF)
@@ -96,16 +109,47 @@ class OptionGuardBehaviorTests(unittest.TestCase):
         self.assert_rejects(self.configure(), "SPARK_TYPO_OPTION")
         self.assert_passes(self.configure("-U", "SPARK_TYPO_OPTION"))
 
-    def test_explicitly_typed_entries_are_outside_the_guard(self):
-        # Documented limit: a typed -D entry looks exactly like a declared one.
-        self.assert_passes(self.configure("-DENABLE_TYPED_TYPO:BOOL=ON"))
+    def test_explicitly_typed_typo_is_rejected(self):
+        result = self.configure("-DENABLE_TYPO:BOOL=ON", "-DSPARK_TYPED_PATH:PATH=/opt/typo")
+        self.assert_rejects(result, "ENABLE_TYPO=ON", "SPARK_TYPED_PATH")
+
+    def test_explicitly_typed_declared_options_keep_their_values(self):
+        result = self.configure("-DENABLE_DECLARED_FEATURE:BOOL=ON", "-DBUILD_SUBDIR_FEATURE:BOOL=ON")
+        self.assert_passes(result)
+        self.assertIn("fixture ENABLE_DECLARED_FEATURE=ON", result.stdout)
+        # A reconfigure that re-passes the typed option goes through the same path.
+        result = self.configure("-DENABLE_DECLARED_FEATURE:BOOL=OFF")
+        self.assert_passes(result)
+        self.assertIn("fixture ENABLE_DECLARED_FEATURE=OFF", result.stdout)
+        self.assert_passes(self.configure())
+
+    def test_typed_typo_persists_until_removed(self):
+        self.assert_rejects(self.configure("-DBUILD_TYPED_TYPO:BOOL=ON"), "BUILD_TYPED_TYPO")
+        self.assert_rejects(self.configure(), "BUILD_TYPED_TYPO")
+        self.assert_passes(self.configure("-U", "BUILD_TYPED_TYPO"))
+
+    def test_preset_typed_boolean_typo_is_rejected(self):
+        (self.source / "CMakePresets.json").write_text(
+            FIXTURE_PRESETS.format(build=self.build.as_posix()), encoding="utf-8")
+        result = subprocess.run(
+            [CMAKE, "--preset", "typed"], cwd=self.source,
+            capture_output=True, text=True, timeout=120, check=False)
+        self.assert_rejects(result, "ENABLE_PRESET_TYPO")
+        self.assertNotIn("ENABLE_DECLARED_FEATURE=", result.stderr)
+        shutil.rmtree(self.build)
+        result = subprocess.run(
+            [CMAKE, "--preset", "typed-declared"], cwd=self.source,
+            capture_output=True, text=True, timeout=120, check=False)
+        self.assert_passes(result)
 
 
 class OptionGuardWiringTests(unittest.TestCase):
-    def test_root_calls_guard_as_its_last_command(self):
+    def test_root_captures_first_and_rejects_last(self):
         lines = [line.strip() for line in ROOT_CMAKELISTS.read_text(encoding="utf-8").splitlines()]
         commands = [line for line in lines if line and not line.startswith("#")]
-        self.assertEqual(commands[-2], 'include("${CMAKE_SOURCE_DIR}/cmake/SparkOptionGuard.cmake")')
+        self.assertEqual(commands[0], "cmake_minimum_required(VERSION 3.25)")
+        self.assertEqual(commands[1], 'include("${CMAKE_SOURCE_DIR}/cmake/SparkOptionGuard.cmake")')
+        self.assertEqual(commands[2], "spark_capture_cli_options()")
         self.assertEqual(commands[-1], "spark_reject_undeclared_options()")
 
     def test_presets_only_pass_declared_guarded_names(self):
@@ -127,8 +171,8 @@ class OptionGuardWiringTests(unittest.TestCase):
         undeclared = []
         for preset in presets.get("configurePresets", []):
             for name, value in preset.get("cacheVariables", {}).items():
-                # Only untyped string values reach the cache as UNINITIALIZED.
-                if isinstance(value, str) and GUARDED_PREFIX.match(name) and name not in declared:
+                # Typed and untyped values are both guarded (spark_capture_cli_options).
+                if GUARDED_PREFIX.match(name) and name not in declared:
                     undeclared.append(f"{preset['name']}: {name}")
         self.assertEqual(undeclared, [])
 

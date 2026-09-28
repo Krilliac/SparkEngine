@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
-
-# ================================================================
-# Modern CMake Configuration - Cross-Platform Build
-# ================================================================
+# CI-120: reset typed -D ENABLE_*/SPARK_*/BUILD_* entries so the option guard at the end
+# of this file also rejects typed typos. Must run before any option() or cache declaration.
+include("${CMAKE_SOURCE_DIR}/cmake/SparkOptionGuard.cmake")
+spark_capture_cli_options()
 
 # All targets need PIC since game modules are shared libraries that link SparkEngineLib
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -3814,6 +3814,6 @@ include("${CMAKE_SOURCE_DIR}/cmake/SparkCpuFloor.cmake")
 spark_assert_cpu_floor()
 
 # CI-120: fail on -D ENABLE_*/SPARK_*/BUILD_* names nothing declared. Must stay
-# last so every subdirectory has had the chance to declare its options.
-include("${CMAKE_SOURCE_DIR}/cmake/SparkOptionGuard.cmake")
+# last so every subdirectory has had the chance to declare its options. The module
+# is included at the top of this file.
 spark_reject_undeclared_options()
