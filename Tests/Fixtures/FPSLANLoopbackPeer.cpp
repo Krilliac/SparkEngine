@@ -9,6 +9,7 @@
  *   SparkFPSLANLoopbackPeer --role server [--timeout <seconds>]
  *   SparkFPSLANLoopbackPeer --role shooter|target --port <port> --host-id <id> --server-key <hex>
  *                           [--timeout <seconds>]
+ *   SparkFPSLANLoopbackPeer --role intruder --port <port> [--timeout <seconds>]
  *
  * The server hosts on an ephemeral port with an ephemeral NET-100 identity and prints
  * `FPSLAN ready port=<port> host=<id> key=<hex>`; clients pin that key (--server-key). Each
@@ -18,9 +19,17 @@
  * `FPSLAN `; the coordinator (Tests/TestFPSLANLoopback.cpp) ignores the rest of the output.
  *
  * stdin carries the coordinator's commands, one per line: `report` prints this peer's view of
- * every player followed by `FPSLAN report-end`, and `quit` (or end of input) leaves the session
- * through Shutdown and exits 0. Scenario, network and timeout failures print `FPSLAN error ...`
- * and exit with the non-zero codes in FPSLANLoopbackScenario.h.
+ * every player and its NetworkManager transport counters (`FPSLAN stats ...`) followed by
+ * `FPSLAN report-end`, and `quit` (or end of input) leaves the session through Shutdown and exits
+ * 0. Scenario, network and timeout failures print `FPSLAN error ...` and exit with the non-zero
+ * codes in FPSLANLoopbackScenario.h.
+ *
+ * The intruder is no player: it opens a bare UDPTransport socket and sends the server hostile
+ * datagrams (unframed and unknown-kind bytes, forged and truncated sealed frames, maximum-size
+ * datagrams, bursts, and Connects with no handshake magic, a future protocol version or a
+ * malformed ClientHello), collects whatever the server answers, prints one
+ * `FPSLAN intruder ...` summary of what it sent and received, and exits 0 within a few seconds
+ * (it accepts --timeout like every role but never runs that long).
  *
  * Contract: single game thread plus one detached stdin reader that only sets atomics. Frames are
  * paced at 60 Hz of wall-clock time; a late frame is not caught up, so a client never submits
@@ -28,7 +37,9 @@
  */
 
 #include "FPSLANLoopbackScenario.h"
+#include "Engine/Networking/ITransport.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/NetworkWireLimits.h"
 #include "Game/MultiplayerSystem.h"
 
 #include <algorithm>
@@ -45,11 +56,17 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <optional>
+#include <random>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
+
+/// The intruder's bare UDPTransport (Tests/Fixtures/FPSLANIntruderTransport.cpp).
+std::unique_ptr<Spark::Net::ITransport> MakeFPSLANIntruderTransport();
 
 namespace
 {
@@ -74,6 +91,7 @@ namespace
         Server,
         Shooter,
         Target,
+        Intruder,
     };
 
     struct Options
@@ -141,6 +159,8 @@ namespace
                         options.role = Role::Shooter;
                     else if (value == "target")
                         options.role = Role::Target;
+                    else if (value == "intruder")
+                        options.role = Role::Intruder;
                     else
                         return std::nullopt;
                 }
@@ -180,8 +200,10 @@ namespace
             }
         }
 
-        const bool isClient = options.role != Role::Server;
-        if (!hasRole || isClient != hasPort || isClient != options.hasHostId || isClient != options.hasServerKey)
+        // Every role but the server targets a port; only the two players join the session.
+        const bool targetsServer = options.role != Role::Server;
+        const bool isPlayer = options.role == Role::Shooter || options.role == Role::Target;
+        if (!hasRole || targetsServer != hasPort || isPlayer != options.hasHostId || isPlayer != options.hasServerKey)
             return std::nullopt;
         return options;
     }
@@ -286,6 +308,12 @@ namespace
                  state.posX, state.posY, state.posZ, state.isAlive ? 1 : 0, state.health, score.kills, score.deaths,
                  score.score);
         }
+        // NET-100 refusal counters: the coordinator holds hostile datagrams against them.
+        const Spark::Net::NetworkStats stats = Spark::Net::NetworkManager::GetInstance().GetStats();
+        const uint64_t securityDrops =
+            std::accumulate(stats.securityDrops.begin(), stats.securityDrops.end(), uint64_t{0});
+        Emit("stats plaintext-dropped={} handshake-failures={} security-drops={} rate-limited={}",
+             stats.plaintextFramesDropped, stats.handshakeFailures, securityDrops, stats.connectsRateLimited);
         Emit("report-end role={} self={} players={}", role, system.GetLocalClientId(), players.size());
     }
 
@@ -633,6 +661,200 @@ namespace
         }
         return Leave(system, kExitOk);
     }
+
+    /// One unframed wire message in NetworkManager::SerializeMessage's layout
+    /// (docs/specs/networking-wire-format.md), built here so the intruder's bytes owe nothing to
+    /// the serializer under test.
+    std::vector<uint8_t> WireMessage(Spark::Net::MessageType type, const std::vector<uint8_t>& payload)
+    {
+        Spark::Net::NetBuffer buffer;
+        buffer.WriteUint32(0x5350524B); // "SPRK"
+        buffer.WriteUint16(static_cast<uint16_t>(type));
+        buffer.WriteUint8(static_cast<uint8_t>(Spark::Net::ChannelType::Unreliable));
+        buffer.WriteUint32(0); // sender
+        buffer.WriteUint32(0); // sequence
+        buffer.WriteFloat(0.0f);
+        buffer.WriteUint32(static_cast<uint32_t>(payload.size()));
+        buffer.WriteBytes(payload.data(), payload.size());
+        return buffer.GetData();
+    }
+
+    /// [frame kind][Connect] carrying @p magic and @p version, padded to the Connect schema's
+    /// 8-byte minimum so the server answers it instead of dropping it at the packet validator.
+    std::vector<uint8_t> HandshakeConnect(uint32_t magic, uint16_t version)
+    {
+        Spark::Net::NetBuffer hello;
+        hello.WriteUint32(magic);
+        hello.WriteUint16(version);
+        hello.WriteUint16(0);
+        std::vector<uint8_t> frame{Spark::Net::NETWORK_FRAME_HANDSHAKE};
+        const std::vector<uint8_t> message = WireMessage(Spark::Net::MessageType::Connect, hello.GetData());
+        frame.insert(frame.end(), message.begin(), message.end());
+        return frame;
+    }
+
+    /// What the intruder sent, and what the server answered it.
+    struct IntrusionTally
+    {
+        uint32_t refusedFrames = 0;     ///< Datagrams the server must drop as unframed or unopenable
+        uint32_t noMagicConnects = 0;   ///< Connects without the SPNH handshake magic
+        uint32_t futureConnects = 0;    ///< Connects naming a protocol version the server does not speak
+        uint32_t malformedConnects = 0; ///< Connects with magic and version but a truncated ClientHello
+        uint32_t sendFailures = 0;
+        std::map<Spark::Net::ConnectRejectReason, uint32_t> rejections;
+        uint32_t accepted = 0; ///< ConnectAccepted answers: the intruder must never get one
+        uint32_t otherReplies = 0;
+    };
+
+    /// Count one datagram the server sent the intruder. Only Handshake frames can reach an
+    /// endpoint that never finished a handshake.
+    void TallyReply(const uint8_t* data, size_t size, IntrusionTally& tally)
+    {
+        if (size < 1 + Spark::Net::NETWORK_WIRE_HEADER_SIZE || data[0] != Spark::Net::NETWORK_FRAME_HANDSHAKE)
+        {
+            ++tally.otherReplies;
+            return;
+        }
+        Spark::Net::NetBuffer wire;
+        wire.WriteBytes(data + 1, size - 1);
+        const uint32_t magic = wire.ReadUint32();
+        const auto type = static_cast<Spark::Net::MessageType>(wire.ReadUint16());
+        wire.ReadUint8();  // channel
+        wire.ReadUint32(); // sender
+        wire.ReadUint32(); // sequence
+        wire.ReadFloat();  // timestamp
+        const uint32_t payloadSize = wire.ReadUint32();
+        if (wire.HasError() || magic != 0x5350524B || payloadSize != wire.RemainingBytes())
+        {
+            ++tally.otherReplies;
+            return;
+        }
+        if (type == Spark::Net::MessageType::ConnectAccepted)
+        {
+            ++tally.accepted;
+            return;
+        }
+        wire.ReadString(); // human-readable reason
+        const auto reason = static_cast<Spark::Net::ConnectRejectReason>(wire.ReadUint8());
+        if (type != Spark::Net::MessageType::ConnectRejected || wire.HasError())
+        {
+            ++tally.otherReplies;
+            return;
+        }
+        ++tally.rejections[reason];
+    }
+
+    /// Hostile traffic against a running server, from an endpoint that never joins. The server
+    /// must refuse every datagram and count it (NetworkStats), answer each Connect with its typed
+    /// rejection, and keep the round it is hosting undisturbed (Tests/TestFPSLANLoopback.cpp).
+    /// Sends are paced so the server's 64 KiB socket buffer never overflows: every datagram sent
+    /// must reach the server, or its counters could not be held against the sent totals.
+    int RunIntruder(const Options& options)
+    {
+        using namespace std::chrono_literals;
+        const std::unique_ptr<Spark::Net::ITransport> transport = MakeFPSLANIntruderTransport();
+        Spark::Net::ITransport& socket = *transport;
+        if (!socket.Initialize(0))
+        {
+            Emit("error reason=intruder-socket");
+            return kExitNetworkFailure;
+        }
+
+        IntrusionTally tally;
+        std::vector<uint8_t> reply(Spark::Net::MAX_UDP_WIRE_DATAGRAM_SIZE);
+        const auto drainReplies = [&]
+        {
+            std::string from;
+            uint16_t fromPort = 0;
+            for (int received = 0; (received = socket.Receive(reply.data(), reply.size(), from, fromPort)) > 0;)
+                TallyReply(reply.data(), static_cast<size_t>(received), tally);
+        };
+        const auto send = [&](const std::vector<uint8_t>& datagram, uint32_t& counter)
+        {
+            if (socket.Send(datagram.data(), datagram.size(), "127.0.0.1", options.port))
+                ++counter;
+            else
+                ++tally.sendFailures;
+        };
+        const auto pause = [&](std::chrono::milliseconds duration)
+        {
+            std::this_thread::sleep_for(duration);
+            drainReplies();
+        };
+
+        std::mt19937 random(0x5EED315u); // fixed seed: the same forged bytes every run
+        const auto noise = [&](uint8_t frameKind, size_t size)
+        {
+            std::vector<uint8_t> datagram(size);
+            for (uint8_t& byte : datagram)
+                byte = static_cast<uint8_t>(random());
+            datagram[0] = frameKind;
+            return datagram;
+        };
+
+        // Unframed bytes: a pre-v2 message with no frame byte, and raw text.
+        send(WireMessage(Spark::Net::MessageType::Heartbeat, {}), tally.refusedFrames);
+        send({'h', 'e', 'l', 'l', 'o'}, tally.refusedFrames);
+        // Frame kinds v2 does not define.
+        for (const uint8_t kind : {uint8_t{0x00}, uint8_t{0x03}, uint8_t{0x7F}, uint8_t{0xFF}})
+            send(noise(kind, 48), tally.refusedFrames);
+        // Sealed frames from an endpoint that owns no SecureChannel: forged ciphertext of plausible
+        // sizes, and headers cut short (a lone kind byte, a partial sequence number).
+        for (const size_t size : {size_t{1}, size_t{4}, size_t{29}, size_t{64}, size_t{200}})
+            send(noise(Spark::Net::NETWORK_FRAME_SEALED, size), tally.refusedFrames);
+        pause(50ms);
+
+        // The largest datagram UDP can carry, twice, each into a drained socket buffer.
+        for (int copy = 0; copy < 2; ++copy)
+        {
+            send(noise(Spark::Net::NETWORK_FRAME_SEALED, Spark::Net::MAX_UDP_WIRE_DATAGRAM_SIZE), tally.refusedFrames);
+            pause(100ms);
+        }
+
+        // Handshake frames the server must answer with a typed rejection, never a session.
+        const uint32_t spnh = Spark::Net::NETWORK_HANDSHAKE_MAGIC;
+        const uint16_t version = Spark::Net::NETWORK_PROTOCOL_VERSION;
+        for (int copy = 0; copy < 2; ++copy)
+        {
+            send(HandshakeConnect(0x21474E57u, version), tally.noMagicConnects); // "WNG!", not "SPNH"
+            send(HandshakeConnect(spnh, static_cast<uint16_t>(version + 97)), tally.futureConnects);
+            send(HandshakeConnect(spnh, version), tally.malformedConnects); // 8 bytes, not a ClientHello
+        }
+        pause(50ms);
+
+        // Bursts: back-to-back datagrams, spaced so the server drains each before the next.
+        constexpr int kBursts = 4;
+        constexpr int kBurstSize = 32;
+        for (int burst = 0; burst < kBursts; ++burst)
+        {
+            for (int index = 0; index < kBurstSize; ++index)
+                send(noise(0x04, 24), tally.refusedFrames);
+            pause(250ms);
+        }
+
+        // Collect the remaining answers: one per Connect, or give up after two seconds.
+        const uint32_t connects = tally.noMagicConnects + tally.futureConnects + tally.malformedConnects;
+        const auto answered = [&]
+        {
+            uint32_t total = tally.accepted;
+            for (const auto& [reason, count] : tally.rejections)
+                total += count;
+            return total;
+        };
+        const auto settle = std::chrono::steady_clock::now() + 2s;
+        while (answered() < connects && std::chrono::steady_clock::now() < settle)
+            pause(10ms);
+
+        using Reason = Spark::Net::ConnectRejectReason;
+        Emit("intruder sent-refused={} sent-no-magic={} sent-future-version={} sent-malformed-hello={} "
+             "send-failures={} rejected-protocol-missing={} rejected-too-new={} rejected-malformed={} "
+             "rejected-total={} accepted={} other-replies={}",
+             tally.refusedFrames, tally.noMagicConnects, tally.futureConnects, tally.malformedConnects,
+             tally.sendFailures, tally.rejections[Reason::ProtocolMissing], tally.rejections[Reason::ProtocolTooNew],
+             tally.rejections[Reason::MalformedHandshake], answered() - tally.accepted, tally.accepted,
+             tally.otherReplies);
+        return kExitOk;
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -642,10 +864,13 @@ int main(int argc, char** argv)
     {
         std::fputs("usage: SparkFPSLANLoopbackPeer --role server [--timeout <s>]\n"
                    "       SparkFPSLANLoopbackPeer --role shooter|target --port <port> --host-id <id> "
-                   "--server-key <hex> [--timeout <s>]\n",
+                   "--server-key <hex> [--timeout <s>]\n"
+                   "       SparkFPSLANLoopbackPeer --role intruder --port <port> [--timeout <s>]\n",
                    stderr);
         return kExitUsage;
     }
+    if (options->role == Role::Intruder)
+        return RunIntruder(*options);
 
     CommandChannel commands;
     return options->role == Role::Server ? RunServer(*options, commands) : RunClient(*options, commands);
