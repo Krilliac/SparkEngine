@@ -25,8 +25,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <sstream>
+#include <vector>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -409,6 +412,26 @@ namespace Spark
                 m_transientBuffers.Shutdown(this);
                 if (m_directQueue)
                     WaitForIdle();
+                if (m_releaseQueue && m_infoQueue)
+                {
+                    // Once per Initialize(): m_releaseQueue is reset below.
+                    const D3D12ValidationCounts counts = GetValidationCounts();
+                    if (counts.corruption > 0 || counts.errors > 0 || counts.discarded > 0)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D12 validation: %llu corruption, %llu error, %llu warning message(s), "
+                                        "%llu discarded",
+                                        static_cast<unsigned long long>(counts.corruption),
+                                        static_cast<unsigned long long>(counts.errors),
+                                        static_cast<unsigned long long>(counts.warnings),
+                                        static_cast<unsigned long long>(counts.discarded));
+                    }
+                    else
+                    {
+                        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12 validation: clean (%llu warning(s))",
+                                       static_cast<unsigned long long>(counts.warnings));
+                    }
+                }
                 // The GPU is idle: release everything still queued, then detach so resources
                 // destroyed after shutdown release directly instead of into a dead queue.
                 if (m_releaseQueue)
@@ -432,6 +455,12 @@ namespace Spark
                             if (SUCCEEDED(debugController.As(&debugController1)))
                                 debugController1->SetEnableGPUBasedValidation(TRUE);
                         }
+                    }
+                    else
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "D3D12: debug layer requested but unavailable (install the Windows "
+                                       "'Graphics Tools' optional feature for d3d12SDKLayers.dll)");
                     }
                 }
 
@@ -497,14 +526,26 @@ namespace Spark
                     return false;
                 }
 
-                // Info queue for debug messages
+                // Info queue for debug messages. Store warnings and worse only, so the queue's
+                // message limit is not spent on per-object INFO chatter. Break on errors only
+                // under a debugger: without one the breakpoint exception kills the process and
+                // a validation run could never count or report what it found.
                 if (desc.enableDebugLayer)
                 {
                     m_device.As(&m_infoQueue);
                     if (m_infoQueue)
                     {
-                        m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-                        m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+                        D3D12_MESSAGE_SEVERITY deniedSeverities[] = {D3D12_MESSAGE_SEVERITY_INFO,
+                                                                     D3D12_MESSAGE_SEVERITY_MESSAGE};
+                        D3D12_INFO_QUEUE_FILTER storageFilter = {};
+                        storageFilter.DenyList.NumSeverities = static_cast<UINT>(std::size(deniedSeverities));
+                        storageFilter.DenyList.pSeverityList = deniedSeverities;
+                        m_infoQueue->PushStorageFilter(&storageFilter);
+                        if (IsDebuggerPresent())
+                        {
+                            m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+                            m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+                        }
                     }
                 }
 
@@ -1144,6 +1185,43 @@ namespace Spark
                 return m_releaseQueue ? m_releaseQueue->GetPendingCount() : 0;
             }
 
+            D3D12ValidationCounts D3D12Device::GetValidationCounts() const
+            {
+                D3D12ValidationCounts counts;
+                if (!m_infoQueue)
+                    return counts;
+                counts.active = true;
+                counts.discarded = m_infoQueue->GetNumMessagesDiscardedByMessageCountLimit();
+
+                std::vector<uint64_t> storage; // 8-byte aligned backing for D3D12_MESSAGE
+                const UINT64 stored = m_infoQueue->GetNumStoredMessages();
+                for (UINT64 i = 0; i < stored; ++i)
+                {
+                    SIZE_T length = 0;
+                    if (FAILED(m_infoQueue->GetMessage(i, nullptr, &length)) || length == 0)
+                        continue;
+                    storage.assign((length + sizeof(uint64_t) - 1) / sizeof(uint64_t), 0);
+                    auto* message = reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+                    if (FAILED(m_infoQueue->GetMessage(i, message, &length)))
+                        continue;
+                    switch (message->Severity)
+                    {
+                    case D3D12_MESSAGE_SEVERITY_CORRUPTION:
+                        ++counts.corruption;
+                        break;
+                    case D3D12_MESSAGE_SEVERITY_ERROR:
+                        ++counts.errors;
+                        break;
+                    case D3D12_MESSAGE_SEVERITY_WARNING:
+                        ++counts.warnings;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                return counts;
+            }
+
             // ============================================================================
             // D3D12 DEVICE — RESOURCE UPDATES
             // ============================================================================
@@ -1453,6 +1531,10 @@ namespace Spark
             {
                 switch (format)
                 {
+                case PixelFormat::Unknown:
+                    // No attachment (a PSO without depth). Falling through to the RGBA8 default
+                    // below turned "no depth buffer" into an invalid DSV format.
+                    return DXGI_FORMAT_UNKNOWN;
                 case PixelFormat::R8_UNORM:
                     return DXGI_FORMAT_R8_UNORM;
                 case PixelFormat::R8_SNORM:

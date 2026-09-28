@@ -45,6 +45,22 @@ namespace Spark
         namespace D3D12
         {
 
+            /**
+             * @brief Debug-layer message counts from the device's ID3D12InfoQueue.
+             *
+             * Only warning and higher severities are stored (Initialize() installs a storage
+             * filter), so `discarded` counts warnings or worse lost to the queue's message
+             * limit: when it is non-zero the other counts are a floor, not a total.
+             */
+            struct D3D12ValidationCounts
+            {
+                bool active = false; ///< False when the debug layer was not requested or is not installed.
+                uint64_t corruption = 0;
+                uint64_t errors = 0;
+                uint64_t warnings = 0;
+                uint64_t discarded = 0;
+            };
+
             // ============================================================================
             // D3D12 DEVICE
             // ============================================================================
@@ -101,6 +117,15 @@ namespace Spark
 
                 /// Entries still waiting on the GPU fence (0 before Initialize / after Shutdown).
                 size_t GetPendingReleaseCount() const;
+
+                // -- D3D12-specific: Debug-layer validation --------------------------------
+                // With RHIDeviceDesc::enableDebugLayer the device stores every warning,
+                // error and corruption message. It breaks into the debugger on errors only
+                // when one is attached, so a validation run without a debugger counts errors
+                // instead of dying on a breakpoint exception. Shutdown() logs the totals.
+
+                /// Stored debug-layer messages by severity. Game thread; walks the queue, not for per-frame use.
+                D3D12ValidationCounts GetValidationCounts() const;
 
                 // -- IRHIDevice: Resource updates -----------------------------------------
 

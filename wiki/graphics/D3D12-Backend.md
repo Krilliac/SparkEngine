@@ -146,12 +146,53 @@ heapAllocator.Free(allocation);
 
 ## Debug and Validation
 
-When enabled in debug builds, the backend activates:
+`RHIDeviceDesc::enableDebugLayer` turns on the D3D12 debug layer (and
+`enableGPUValidation` adds GPU-based validation). A requested debug layer that
+is not installed (no `d3d12SDKLayers.dll`, the Windows "Graphics Tools"
+optional feature) logs a warning and the device runs without validation.
 
-- **D3D12 Debug Layer** — Validates API usage, reports errors
-- **GPU-Based Validation** — Catches shader-level errors (expensive, use sparingly)
+With the layer active, `D3D12Device`:
+
+- stores warning, error and corruption messages in its `ID3D12InfoQueue`
+  (a storage filter drops INFO/MESSAGE chatter so the queue limit is spent on
+  real findings);
+- breaks on error and corruption **only when a debugger is attached**. An
+  unconditional break raised a breakpoint exception that killed any process
+  without a debugger, so a validation run could not count what it found;
+- exposes `GetValidationCounts()` (`active`, `corruption`, `errors`,
+  `warnings`, `discarded`). A non-zero `discarded` means warnings or worse were
+  lost to the queue limit, so the other counts are a floor, not a total;
+- logs the totals at `Shutdown()`: an error line when any error, corruption or
+  discard occurred, otherwise "clean".
+
+**Validation evidence (RHI-225).** CTest `D3D12_Validation` (Windows MSVC,
+`D3D12_Validation_*`, exact count 3, labels `d3d12;d3d12-validation`) runs
+`Tests/TestRHI225D3D12ValidationReal.cpp` with the debug layer and GPU-based
+validation on whichever adapter `D3D12Device` selects (hardware, or WARP on a
+GPU-less host):
+
+| Test | Declared scope |
+|------|----------------|
+| `D3D12_Validation_TriangleFrameIsClean` | HLSL VS/PS compiled through `CreateShader`, PSO without depth, dynamic vertex buffer, render-target transitions, clear, draw and a READBACK copy, recorded twice into the reset immediate list; the centre pixel must be the triangle colour, so an empty frame cannot pass |
+| `D3D12_Validation_ResourceChurnIsClean` | 200 frames that create dynamic and static buffers and a render-target texture, use the texture on the GPU and destroy all three while that work is in flight (fence-deferred release) |
+| `D3D12_Validation_CounterSeesInjectedError` | Negative control: an invalid `CreateCommittedResource` through the native device raises the error count and the process survives |
+
+Each clean test requires zero corruption, zero errors and zero discarded
+messages, and fails if the info queue is not active. This is RHI-level
+evidence for the listed operations only. Engine frames are not covered:
+`GraphicsEngine` renders through D3D11 directly on Windows.
+
+The lane found and fixed two defects on the way: `ConvertFormat` mapped
+`PixelFormat::Unknown` to RGBA8, so a PSO without depth got an invalid DSV
+format, and `D3D12CommandList::Begin()` kept the previous recording's PSO and
+root signature cached, so re-recording the same pipeline skipped its bind on a
+freshly reset list. The immediate command list owns a single allocator: it must
+be idle (for example after `WaitForIdle()`) before its next `Begin()`.
+
+Other tooling:
+
 - **DRED (Device Removed Extended Data)** — Provides detailed crash diagnostics
-- **PIX Event Markers** — Named regions for GPU profiling in PIX/RenderDoc
+- **PIX Event Markers** — `BeginEvent`/`EndEvent`/`SetMarker` are currently no-ops
 
 ## Integration with RHI
 
@@ -432,18 +473,10 @@ When enabled, DRED provides detailed diagnostics after a device-lost crash:
 
 ### Info Queue Filtering
 
-The `m_infoQueue` member (active in debug builds) filters validation messages:
-
-```cpp
-// The D3D12Device filters out known benign messages and promotes
-// warnings to errors for critical issues:
-//
-// Suppressed: D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE
-//             (harmless when using different clear colors)
-//
-// Promoted to error: D3D12_MESSAGE_SEVERITY_CORRUPTION
-//                    (memory corruption, must be fixed immediately)
-```
+`m_infoQueue` exists only when `enableDebugLayer` was requested and the layer is
+installed. Its storage filter denies INFO and MESSAGE severities; no message IDs
+are suppressed and no severities are promoted. See
+[Debug and Validation](#debug-and-validation) for the counts and break policy.
 
 ---
 

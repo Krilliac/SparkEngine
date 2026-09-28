@@ -179,6 +179,10 @@ namespace Spark
             {
                 m_commandAllocator->Reset();
                 m_commandList->Reset(m_commandAllocator.Get(), nullptr);
+                // A reset list has no PSO or root signature bound; forget the previous
+                // recording's so SetPipelineState cannot skip the bind as redundant.
+                m_currentPSO = nullptr;
+                m_currentRootSignature = nullptr;
             }
 
             void D3D12CommandList::End()
@@ -192,6 +196,7 @@ namespace Spark
                 m_commandAllocator->Reset();
                 m_commandList->Reset(m_commandAllocator.Get(), nullptr);
                 m_pendingBarriers.clear();
+                m_currentPSO = nullptr;
                 m_currentRootSignature = nullptr;
             }
 

@@ -1140,6 +1140,7 @@ target_sources(SparkTests PRIVATE
     TestRHI210D3D11ValidationReal.cpp
     TestRHI210D3D11DeviceLossReal.cpp
     TestSEC2RenderingHardeningReal.cpp
+    TestRHI225D3D12ValidationReal.cpp
     TestSEC4SoundEffectWav.cpp
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
@@ -2678,6 +2679,20 @@ if(WIN32)
             LABELS "security;rendering;d3d12"
             RUN_SERIAL TRUE
             TIMEOUT 120)
+
+        # RHI-225: the D3D12 RHI under the debug layer and GPU-based validation
+        # (TestRHI225D3D12ValidationReal.cpp): a triangle frame and 200 fence-deferred
+        # create/destroy cycles with zero error or corruption messages, and a negative
+        # control proving the counter sees an injected invalid call. Needs
+        # d3d12SDKLayers.dll (Windows "Graphics Tools"); an inactive debug layer fails.
+        # Out of the main suite: enabling the debug layer is process-wide.
+        add_test(NAME D3D12_Validation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(D3D12_Validation PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=D3D12_Validation_;SPARK_TEST_EXPECT_COUNT=3"
+            LABELS "d3d12;d3d12-validation"
+            RUN_SERIAL TRUE
+            TIMEOUT 300)
+        spark_exclude_from_main_suite(D3D12_Validation_)
     endif()
 endif()
 
