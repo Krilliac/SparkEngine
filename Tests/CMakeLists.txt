@@ -5100,6 +5100,16 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(ServerRecoveryDrill_Harness PROPERTIES
         LABELS "ops;server;unit;python"
         TIMEOUT 120)
+    # DATA-120 / OPS-110 / PERF-100: the scheduled operations workflow keeps its
+    # rehearsal contract (cron, exact SHA, blocking jobs, soak lengths, evidence).
+    add_test(
+        NAME OperationsScheduledWorkflow_Policy
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_operations_scheduled_workflow.py)
+    set_tests_properties(OperationsScheduledWorkflow_Policy PROPERTIES
+        LABELS "governance;ops;unit;python"
+        FAIL_REGULAR_EXPRESSION "Ran 0 tests"
+        TIMEOUT 60)
     # OPS-110: the versioned spark-server-health/1 contract that external consumers parse.
     add_test(
         NAME ServerHealth_ExternalContract

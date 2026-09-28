@@ -24,6 +24,7 @@ CODEQL_REPORT = ROOT / ".github" / "workflows" / "codeql-report.yml"
 SUMMARY = ROOT / ".github" / "workflows" / "summary.yml"
 RELEASE = ROOT / ".github" / "workflows" / "release.yml"
 MSVC = ROOT / ".github" / "workflows" / "msvc.yml"
+OPERATIONS = ROOT / ".github" / "workflows" / "operations-scheduled.yml"
 CODEQL_ACTION_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -329,6 +330,17 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
 
         self.assertEqual(_permissions(job), {"issues": "write", "models": "read"})
         self.assertNotIn("actions/checkout@", job)
+        _assert_full_sha_pins(self, text)
+
+    def test_scheduled_operations_jobs_are_read_only(self) -> None:
+        text = OPERATIONS.read_text(encoding="utf-8")
+        self.assertEqual(_block(text, "permissions", 0).splitlines()[1:], ["  contents: read"])
+        for name in ("recovery-drill", "server-soak", "soak-scheduled"):
+            job = _block(text, name, 2)
+            with self.subTest(job=name):
+                self.assertEqual(_permissions(job), {"contents": "read"})
+                self.assertIn("persist-credentials: false", job)
+                self.assertNotIn("secrets.", job)
         _assert_full_sha_pins(self, text)
 
 

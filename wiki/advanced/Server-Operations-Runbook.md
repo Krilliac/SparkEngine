@@ -35,6 +35,14 @@ From a build tree, `ctest -L recovery-drill` runs the same drill against the
 built `SparkServer` and `SparkGame` (CTest `Server_RecoveryDrill`), plus the
 DATA-120 backup/restore tests.
 
+The `Operations schedule` workflow (`.github/workflows/operations-scheduled.yml`)
+rehearses this on a schedule, each job on the exact commit it names:
+`recovery-drill` runs `ctest -L recovery-drill` on Linux and Windows nightly,
+`server-soak` runs the 30-minute release smoke nightly and a 4-hour soak weekly
+through `tools/ops/server_soak.py`, and `soak-scheduled` runs the one-hour
+NullRHI soak. Their summaries are uploaded as run artifacts. The workflow
+existing is not evidence; only its run history is. It has not run yet.
+
 ## When to Use
 
 - A server stops answering players, or its health file stops changing.
