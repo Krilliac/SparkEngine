@@ -673,16 +673,23 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/AI/NavMesh.cpp",
-        "SparkEngine/Source/Engine/AI/NavMesh.h"
+        "SparkEngine/Source/Engine/AI/NavMesh.h",
+        "SparkEngine/Source/Engine/AI/NavMeshFormat.cpp"
       ],
       "formats": [
         ".navmesh",
         ".bin"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzNavMesh.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzNavMesh",
+        "test_selector": "FuzzNavMeshSmoke",
+        "corpus_id": "navmesh-loader-corpus",
+        "entry_symbol": "DecodeSnav",
+        "binding_source": "FuzzerTests/FuzzNavMeshProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeSnav"
       }
     },
     {
@@ -1019,15 +1026,22 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Graphics/TerrainRenderer.cpp",
-        "SparkEngine/Source/Graphics/TerrainAssetFormat.h"
+        "SparkEngine/Source/Graphics/TerrainAssetFormat.h",
+        "SparkEngine/Source/Graphics/TerrainAssetFormat.cpp"
       ],
       "formats": [
         ".sparkterrain"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzSparkTerrain.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzSparkTerrain",
+        "test_selector": "FuzzSparkTerrainSmoke",
+        "corpus_id": "terrain-sparkterrain-corpus",
+        "entry_symbol": "Spark::Graphics::SparkTerrain::DecodeRuntime",
+        "binding_source": "FuzzerTests/FuzzSparkTerrainProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeSparkTerrain"
       }
     },
     {

@@ -120,6 +120,8 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzExecScript",
     "SparkFuzzSparkBuildConfig",
     "SparkFuzzVisualScriptGraph",
+    "SparkFuzzNavMesh",
+    "SparkFuzzSparkTerrain",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2032,6 +2034,18 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "VisualScriptGraph",
                 "Spark::Scripting::VisualScriptGraphIO::Parse",
                 "visual-script-graph",
+                8,
+            ),
+            "navmesh-loader": (
+                "NavMesh",
+                "DecodeSnav",  # Spark::AI::DecodeSnav; SYMBOL_PATTERN needs 3+ chars per scope
+                "navmesh-loader",
+                8,
+            ),
+            "terrain-sparkterrain": (
+                "SparkTerrain",
+                "Spark::Graphics::SparkTerrain::DecodeRuntime",
+                "terrain-sparkterrain",
                 8,
             ),
         }

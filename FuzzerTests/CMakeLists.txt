@@ -1717,3 +1717,115 @@ set_tests_properties(FuzzVisualScriptGraphSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+add_executable(SparkFuzzNavMesh
+    FuzzNavMesh.cpp
+    FuzzNavMeshProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/AI/NavMeshFormat.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the production decoder and the adapter use libc++ and meet the
+# driver only at the C ABI in FuzzNavMeshProduction.h. NavMeshFormat.cpp holds
+# DecodeSnav and RebuildTriangleAdjacency with no Recast/Detour or logger
+# dependency, so it is the whole link closure.
+set_source_files_properties(
+    FuzzNavMeshProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/AI/NavMeshFormat.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzNavMesh PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzNavMesh PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzNavMesh PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzNavMesh PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzNavMesh PRIVATE Threads::Threads c++ c++abi)
+
+# The two regression-*.snav seeds name a vertex past the vertex array and a
+# triangle past the triangle array; the pre-fix loader accepted both, which the
+# adapter's index oracles abort on. vertex-count-overclaim.snav declares 10M
+# vertices in 48 bytes, so a decoder that sized the allocation before bounding
+# it by the bytes present would exceed the -rss_limit_mb single-malloc cap.
+add_test(
+    NAME FuzzNavMeshSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzNavMesh>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/navmesh-loader"
+)
+set_tests_properties(FuzzNavMeshSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+add_executable(SparkFuzzSparkTerrain
+    FuzzSparkTerrain.cpp
+    FuzzSparkTerrainProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TerrainAssetFormat.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the production decoder and the adapter use libc++ and meet the
+# driver only at the C ABI in FuzzSparkTerrainProduction.h. TerrainAssetFormat.cpp
+# holds DecodeRuntime with no renderer or logger dependency.
+set_source_files_properties(
+    FuzzSparkTerrainProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TerrainAssetFormat.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzSparkTerrain PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzSparkTerrain PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzSparkTerrain PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzSparkTerrain PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzSparkTerrain PRIVATE Threads::Threads c++ c++abi)
+
+# regression-nonsquare-8x2.sparkterrain was accepted and published as
+# resolution 8 with 16 samples, which the adapter's resolution^2 oracle aborts
+# on. heightmap-8194 and splat-overclaim declare sizes past the format bounds
+# and past the bytes present.
+add_test(
+    NAME FuzzSparkTerrainSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzSparkTerrain>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/terrain-sparkterrain"
+)
+set_tests_properties(FuzzSparkTerrainSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

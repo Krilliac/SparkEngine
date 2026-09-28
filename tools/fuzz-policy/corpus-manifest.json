@@ -592,6 +592,60 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "navmesh-loader-corpus",
+      "parser_id": "navmesh-loader",
+      "corpus_dir": "FuzzerTests/corpora/navmesh-loader",
+      "last_verified": "2026-09-28",
+      "content_digest": "89b8d288ff54e10323ca616d2aef4ef83a68dcc2c010596df68c8bb66457bfc7",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-adjacency-past-triangles.snav",
+          "finding": "A dynamic adjacency entry naming a triangle past the triangle array was accepted and the mesh registered.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_NavMeshRejectsAdjacencyPastTriangles"
+        },
+        {
+          "file": "regression-tri-index-past-vertices.snav",
+          "finding": "A triangle naming a vertex past the vertex array was accepted and the mesh registered.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_NavMeshRejectsTriangleIndexPastVertices"
+        }
+      ]
+    },
+    {
+      "id": "terrain-sparkterrain-corpus",
+      "parser_id": "terrain-sparkterrain",
+      "corpus_dir": "FuzzerTests/corpora/terrain-sparkterrain",
+      "last_verified": "2026-09-28",
+      "content_digest": "783e4d442b0366f5d83feaea5c8ab3606008bfb0483ddd8a607b2e60944b1f09",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonsquare-8x2.sparkterrain",
+          "finding": "An 8x2 heightmap was accepted and published as resolution 8, so the clipmap indexed 64 samples of a 16-sample heightmap.",
+          "found_by": "review",
+          "guard_test": "SparkTerrainFormat_RejectsNonSquareHeightmap"
+        }
+      ]
     }
   ]
 }
