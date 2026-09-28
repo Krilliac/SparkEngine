@@ -3,7 +3,8 @@
 //   #9  DirectStorageLoader started one std::thread per flushed request and kept every
 //       finished thread until process exit; the fallback now runs on a bounded pool.
 //   #10 NavMeshManager::LoadNavMesh resized to header counts (up to 10M triangles) before
-//       checking that the file actually held them.
+//       checking that the file actually held them. It also registered meshes whose triangle
+//       indices or adjacency links pointed outside the mesh (SEC-120 .snav decoder).
 //   #11 ModSystem::LoadMod reported a mod Active even when it shipped scripts that no
 //       sandboxed loader runs.
 //   #12 ReplaySystem::LoadFromFile resized frames/entities/events to header counts before
@@ -300,7 +301,70 @@ TEST(SEC3Gameplay_NavMeshStillLoadsExactlySizedFile)
     EXPECT_EQ(mesh->vertices.size(), size_t{4});
     EXPECT_EQ(mesh->triangles.size(), size_t{2});
     EXPECT_EQ(mesh->triangles[1].adjacency.size(), size_t{1});
+
+    // The format stores no area flags; a loaded triangle must be walkable like a built one.
+    // With flags 0 FindPath skipped every neighbor, so no path could leave its start triangle.
+    EXPECT_EQ(mesh->triangles[0].flags, uint16_t{0xFFFF});
+    NavMeshQuery query(mesh);
+    PathRequest request;
+    request.start = XMFLOAT3{0.2f, 0.0f, 0.2f};
+    request.end = XMFLOAT3{0.8f, 0.0f, 0.8f};
+    EXPECT_TRUE(query.FindPath(request).found);
     manager.RemoveNavMesh("sec3_valid");
+}
+
+namespace
+{
+    /// One-triangle .snav over the unit right triangle, with caller-chosen indices and adjacency.
+    std::vector<char> OneTriangleSnav(const uint32_t (&indices)[3], const std::vector<uint32_t>& adjacency)
+    {
+        std::vector<char> buf = SnavHeader();
+        PutBytes(buf, uint32_t{3});
+        PutBytes(buf, XMFLOAT3{0, 0, 0});
+        PutBytes(buf, XMFLOAT3{1, 0, 0});
+        PutBytes(buf, XMFLOAT3{0, 0, 1});
+        PutBytes(buf, uint32_t{1});
+        PutBytes(buf, indices[0]);
+        PutBytes(buf, indices[1]);
+        PutBytes(buf, indices[2]);
+        PutBytes(buf, XMFLOAT3{0.3f, 0, 0.3f});
+        PutBytes(buf, XMFLOAT3{0, 1, 0});
+        PutBytes(buf, 0.5f);
+        PutBytes(buf, static_cast<uint32_t>(adjacency.size()));
+        for (const uint32_t neighbor : adjacency)
+            PutBytes(buf, neighbor);
+        return buf;
+    }
+} // namespace
+
+TEST(SEC3Gameplay_NavMeshRejectsTriangleIndexPastVertices)
+{
+    using namespace Spark::AI;
+    ScratchDir dir("navmesh_index");
+    const fs::path path = dir.path / "index.snav";
+    WriteFile(path, OneTriangleSnav({0, 1, 3}, {}));
+
+    // A 3-vertex mesh whose triangle names vertex 3 was accepted and registered.
+    auto& manager = NavMeshManager::GetInstance();
+    LogCapture log;
+    EXPECT_FALSE(manager.LoadNavMesh("sec3_index", path.string()));
+    EXPECT_TRUE(log.Contains("names vertex 3 but the mesh has 3 vertices"));
+    EXPECT_TRUE(manager.GetNavMesh("sec3_index") == nullptr);
+}
+
+TEST(SEC3Gameplay_NavMeshRejectsAdjacencyPastTriangles)
+{
+    using namespace Spark::AI;
+    ScratchDir dir("navmesh_link");
+    const fs::path path = dir.path / "link.snav";
+    WriteFile(path, OneTriangleSnav({0, 1, 2}, {5}));
+
+    // A 1-triangle mesh whose dynamic adjacency links to triangle 5 was accepted and registered.
+    auto& manager = NavMeshManager::GetInstance();
+    LogCapture log;
+    EXPECT_FALSE(manager.LoadNavMesh("sec3_link", path.string()));
+    EXPECT_TRUE(log.Contains("links to triangle 5 but the mesh has 1 triangles"));
+    EXPECT_TRUE(manager.GetNavMesh("sec3_link") == nullptr);
 }
 
 // ----------------------------------------------------------------------------

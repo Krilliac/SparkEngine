@@ -2061,13 +2061,14 @@ set_tests_properties(TelemetrySpool PROPERTIES
     TIMEOUT 30)
 
 # SEC3 gameplay-systems hardening: bounded DirectStorage fallback worker pool, navmesh and
-# replay counts checked against the bytes left in the file before any allocation, a
+# replay counts checked against the bytes left in the file before any allocation, navmesh
+# triangle indices and adjacency links checked against the mesh they index, a
 # linear size-capped localization parser, script-bearing mods refused instead of reported
 # Active, symlinked or oversized mod manifests refused with a bounded read, junctioned or
 # linked mod directories refused, and mod folder names outside the ANSI code page scanned.
 add_test(NAME SparkSEC3GameplayHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkSEC3GameplayHardening PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=11"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=13"
     LABELS "security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
