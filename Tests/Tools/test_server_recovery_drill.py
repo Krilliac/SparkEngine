@@ -81,15 +81,32 @@ def publish(live, ready, draining, stopping, ticks, echo=True):
     temp = health_path + ".tmp." + str(os.getpid())
     with open(temp, "w") as stream:
         stream.write(text + "\\n")
-    os.replace(temp, health_path)
+    for attempt in range(50):
+        try:
+            os.replace(temp, health_path)
+            break
+        except PermissionError:
+            # Windows refuses the rename while the drill has the file open.
+            time.sleep(0.005)
+    else:
+        os.replace(temp, health_path)
 
-if fault == "keeps_writing" and not os.environ.get("DRILL_WRITER"):
+writer = bool(os.environ.get("DRILL_WRITER"))
+writer_ready = os.path.join(os.path.dirname(health_path), "writer-ready")
+if fault == "keeps_writing" and not writer:
     # A detached helper keeps the health file changing after this process is
     # killed, so a detector that trusted the file's mere presence would pass.
+    # This process publishes ready only once the helper has published, so the
+    # drill cannot kill it before the simulated fault is in place, however
+    # slowly the helper interpreter starts.
+    if os.path.exists(writer_ready):
+        os.remove(writer_ready)
     subprocess.Popen([sys.executable, "-B", os.path.abspath(sys.argv[0])] + args,
                      env={**os.environ, "DRILL_WRITER": "1"}, cwd=os.path.dirname(os.path.abspath(sys.argv[0])),
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-writer = bool(os.environ.get("DRILL_WRITER"))
+    handshake_deadline = time.monotonic() + STARTUP_TIMEOUT_S
+    while not os.path.exists(writer_ready) and time.monotonic() < handshake_deadline:
+        time.sleep(0.01)
 start = time.monotonic()
 next_status = 0.0
 while not os.path.exists(stop_path):
@@ -100,9 +117,13 @@ while not os.path.exists(stop_path):
         time.sleep(0.05)
         continue
     ticks = 7 if fault == "frozen_restart" and restarted else int(elapsed * rate)
-    if elapsed >= next_status:
+    # The helper publishes every tick, not every status interval: only a stall
+    # of its whole process for stale_after_s could let the file go quiet.
+    if writer or elapsed >= next_status:
         publish(True, True, False, False, ticks, echo=not writer)
         next_status = elapsed + interval
+        if writer and not os.path.exists(writer_ready):
+            open(writer_ready, "w").close()
     time.sleep(1.0 / rate)
 
 if fault != "no_drain":
@@ -176,7 +197,7 @@ class HarnessTests(unittest.TestCase):
         root = Path(self._tmp.name)
         stand_in = root / "stand_in_server.py"
         stand_in.write_text(f"SHA = {SHA!r}\nOTHER_SHA = {OTHER_SHA!r}\nWRITER_LIFETIME_S = {WRITER_LIFETIME_S!r}\n"
-                            + STAND_IN, encoding="utf-8")
+                            f"STARTUP_TIMEOUT_S = {FAST.startup_timeout_s!r}\n" + STAND_IN, encoding="utf-8")
         self.launcher = [sys.executable, "-B", str(stand_in)]
         self.module = root / "SparkGame.bin"
         self.module.write_bytes(b"\0")
