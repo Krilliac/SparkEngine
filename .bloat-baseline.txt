@@ -48,8 +48,6 @@ SparkEditor/Source/AssetPipeline/AssetProcessors.cpp
 SparkEditor/Source/CommandHistory.h
 SparkEditor/Source/Communication/CollaborativeEditSession.cpp
 SparkEditor/Source/Communication/CollaborativeEditSession.h
-SparkEditor/Source/Communication/EngineInterface.cpp
-SparkEditor/Source/Communication/EngineInterface.h
 SparkEditor/Source/Core/EditorCrashHandler.cpp
 SparkEditor/Source/Core/EditorLayoutManager.cpp
 SparkEditor/Source/Core/EditorLogger.h

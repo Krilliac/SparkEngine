@@ -2189,22 +2189,6 @@
       }
     },
     {
-      "id": "editor-engine-ipc-events",
-      "description": "Editor-side EngineEvent decoder over bytes read from the engine named pipe, which any local process can connect to.",
-      "trust_boundary": "untrusted-ipc",
-      "source_files": [
-        "SparkEditor/Source/Communication/EngineInterface.cpp"
-      ],
-      "formats": [
-        "named-pipe-frame"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
       "id": "editor-project-file",
       "description": "Hand-rolled JSON field scrape of .sparkproject files and the recent-projects list opened by the editor.",
       "trust_boundary": "untrusted-file",
@@ -2793,17 +2777,6 @@
       ],
       "delegates_to": [
         "editor-collab-session-wire"
-      ]
-    },
-    {
-      "source_file": "SparkEditor/Source/Communication/EngineInterface.h",
-      "classification": "delegating-call-site",
-      "justification": "Declares EngineInterface::DeserializeEvent, implemented in the inventoried EngineInterface.cpp.",
-      "detected_by": [
-        "deserialize"
-      ],
-      "delegates_to": [
-        "editor-engine-ipc-events"
       ]
     },
     {

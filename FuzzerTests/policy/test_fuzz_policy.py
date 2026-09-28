@@ -1919,7 +1919,7 @@ class TestRepositoryIntegration(unittest.TestCase):
         boundaries = {parser.parser_id: parser.trust_boundary for parser in inventory.parsers}
         self.assertEqual(boundaries["tf-lan-discovery-beacon"], "untrusted-network")
         self.assertEqual(boundaries["editor-collab-session-wire"], "untrusted-network")
-        self.assertEqual(boundaries["editor-engine-ipc-events"], "untrusted-ipc")
+        self.assertEqual(boundaries["editor-engine-command-response"], "untrusted-ipc")
         exempt = {exemption.source_file for exemption in inventory.exempt_candidates}
         self.assertNotIn("SparkEditor/Source/Communication/CollaborativeEditSession.cpp", exempt)
         self.assertNotIn("GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp", exempt)

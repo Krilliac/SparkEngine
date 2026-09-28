@@ -756,8 +756,6 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManagerInstances.cpp"
     # Editor sources needed by tests
-    TestEngineInterfaceProtocol.cpp
-    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/EngineInterface.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/StandaloneCollaborationClient.cpp"

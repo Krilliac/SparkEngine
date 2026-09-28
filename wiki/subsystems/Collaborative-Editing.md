@@ -32,7 +32,6 @@ available as an explicit fallback for ad-hoc sessions.
 |-------|--------|---------|
 | **Editor Collaboration** | `CollaborativeEditSession` + `StandaloneCollaborationClient` | Editor API backed by the standalone broker (or explicit peer fallback) |
 | **Collaboration Authority** | `SparkCollabServer` | Capability-authenticated presence, locks, ordered edit history, and snapshots |
-| **Editor ↔ Engine IPC** | `EngineInterface` | Named pipe communication with local engine process |
 | **Live Push** | `LiveEditBridge` | Forward edits to a running AreaServer for live game updates |
 
 These are intentionally separate systems. Editor collaboration uses TCP for reliable ordered delivery of edits. Game networking uses UDP for low-latency gameplay. The `LiveEditBridge` connects the two when live editing of a running game world is desired.
