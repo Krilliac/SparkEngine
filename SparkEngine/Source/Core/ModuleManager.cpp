@@ -724,8 +724,10 @@ namespace
                     std::filesystem::remove_all(stagingDirectory, ignored);
                     continue;
                 }
+                // remove_all: a copy that failed part-way (EFBIG, ENOSPC) leaves the
+                // partial image behind, and remove() of a non-empty directory fails.
                 std::error_code ignored;
-                std::filesystem::remove(stagingDirectory, ignored);
+                std::filesystem::remove_all(stagingDirectory, ignored);
                 error = "failed to stage module image: " + copyError.message();
                 return false;
             }
