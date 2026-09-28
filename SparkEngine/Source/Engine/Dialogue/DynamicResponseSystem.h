@@ -222,6 +222,8 @@ namespace Spark::Dialogue
         std::vector<ResponseRule> m_rules;
         /// Signals already warned about having no matching rule; each is reported once per Initialize.
         std::unordered_set<std::string> m_unmatchedSignalsReported;
+        /// Set once a signal sent before Initialize has been warned about; reset by Initialize/Shutdown.
+        bool m_signalBeforeInitializeReported = false;
         Spark::Scheduler m_actionScheduler;
         float m_gameTime = 0.0f;
         bool m_initialized = false;

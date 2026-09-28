@@ -22,6 +22,7 @@ namespace Spark::Dialogue
         m_variables.clear();
         m_rules.clear();
         m_unmatchedSignalsReported.clear();
+        m_signalBeforeInitializeReported = false;
         m_actionScheduler.ClearAll();
         m_gameTime = 0.0f;
         m_initialized = true;
@@ -35,6 +36,7 @@ namespace Spark::Dialogue
         m_variables.clear();
         m_rules.clear();
         m_unmatchedSignalsReported.clear();
+        m_signalBeforeInitializeReported = false;
         m_actionScheduler.ClearAll();
         m_initialized = false;
     }
@@ -78,8 +80,15 @@ namespace Spark::Dialogue
     {
         if (!m_initialized)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "DynamicResponseSystem::SendSignal('%s') called before Initialize",
-                           signalName.c_str());
+            // Once until the next Initialize/Shutdown: gameplay keeps raising signals (one per
+            // destroyed object) whether or not the dialogue system is up.
+            if (!m_signalBeforeInitializeReported)
+            {
+                m_signalBeforeInitializeReported = true;
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "DynamicResponseSystem::SendSignal('%s') called before Initialize (reported once)",
+                               signalName.c_str());
+            }
             return;
         }
 
