@@ -180,6 +180,63 @@ namespace Spark
                 return &fields["farClip"];
             return nullptr;
         }
+
+        /// The order entities are written in: roots by ascending id, each
+        /// followed depth-first by its children in Transform::children order;
+        /// entities no root reaches (a broken parent link) follow by ascending id.
+        /// DeserializeInto creates entities and re-links children in document
+        /// order, so this order survives a snapshot restore unchanged: an editor
+        /// undo/redo reproduces the prior document byte for byte, sibling order
+        /// included. ECS storage order would not (a restore reverses it).
+        std::vector<entt::entity> EntitiesInDocumentOrder(const entt::registry& reg)
+        {
+            std::vector<entt::entity> alive;
+            for (auto&& [entity] : reg.storage<entt::entity>()->each())
+                alive.push_back(entity);
+            std::sort(alive.begin(), alive.end());
+
+            auto parentOf = [&reg](entt::entity entity) -> entt::entity
+            {
+                const Transform* transform = reg.try_get<Transform>(entity);
+                if (!transform || transform->parent == entity || !reg.valid(transform->parent))
+                    return entt::null;
+                return transform->parent;
+            };
+
+            std::vector<entt::entity> order;
+            order.reserve(alive.size());
+            std::unordered_set<entt::entity> written;
+            std::vector<entt::entity> pending;
+            for (const entt::entity root : alive)
+            {
+                if (parentOf(root) != entt::null)
+                    continue;
+                pending.push_back(root);
+                while (!pending.empty())
+                {
+                    const entt::entity entity = pending.back();
+                    pending.pop_back();
+                    if (!written.insert(entity).second)
+                        continue;
+                    order.push_back(entity);
+                    if (const Transform* transform = reg.try_get<Transform>(entity))
+                    {
+                        // Push in reverse so the first child is written first.
+                        for (auto child = transform->children.rbegin(); child != transform->children.rend(); ++child)
+                        {
+                            if (reg.valid(*child) && parentOf(*child) == entity && !written.contains(*child))
+                                pending.push_back(*child);
+                        }
+                    }
+                }
+            }
+            for (const entt::entity entity : alive)
+            {
+                if (written.insert(entity).second)
+                    order.push_back(entity);
+            }
+            return order;
+        }
     } // namespace
 
     /// Build the scene document. When @p unreadable is non-null it receives the
@@ -200,8 +257,7 @@ namespace Spark
         // Non-const World handle for the factory (its ops take void* world, uint32 entity).
         World& mutWorld = const_cast<World&>(world);
 
-        auto entityStorage = reg.storage<entt::entity>();
-        for (auto&& [entity] : entityStorage->each())
+        for (const entt::entity entity : EntitiesInDocumentOrder(reg))
         {
             json ent;
             ent["id"] = EntityIdToJson(entity);

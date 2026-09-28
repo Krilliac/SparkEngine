@@ -733,6 +733,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorRecovery.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorDocument.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLayoutManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorWindowManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
@@ -1146,6 +1147,7 @@ target_sources(SparkTests PRIVATE
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
     TestEditorUndoHierarchyReal.cpp
+    TestEditorDocumentReal.cpp
     TestEDT210InspectorEditCommitReal.cpp
     TestFPSComponentsReal.cpp
     TestLoggerSinksReal.cpp
@@ -2937,6 +2939,15 @@ endif()
 add_test(NAME EditorAssetDrag COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(EditorAssetDrag PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorAssetDrag_;SPARK_TEST_EXPECT_COUNT=10"
+    LABELS "editor;editor-integration;unit"
+    TIMEOUT 60)
+
+# EDT-210: the document create/delete/applied-edit commands EditorUI forwards to
+# SparkEditor::EditorDocument. Each records one undo step whose undo and redo
+# reproduce the SerializeWorld snapshots byte for byte.
+add_test(NAME EditorUndoDocument COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(EditorUndoDocument PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorUndo_Document_;SPARK_TEST_EXPECT_COUNT=5"
     LABELS "editor;editor-integration;unit"
     TIMEOUT 60)
 
