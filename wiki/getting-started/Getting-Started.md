@@ -518,7 +518,7 @@ find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkSha
 **Symptom:** The engine executable starts but immediately crashes or shows a black window.
 
 **Fix:** Check the following:
-1. Ensure your GPU supports DirectX 11 (Windows) or OpenGL 4.5 (Linux)
+1. Ensure your GPU supports DirectX 11 (Windows) or OpenGL 4.5 (the experimental Linux build)
 2. Update your GPU drivers to the latest version
 3. Check the `spark.log` file in the working directory for error messages
 4. Try running in Debug mode for better error messages:

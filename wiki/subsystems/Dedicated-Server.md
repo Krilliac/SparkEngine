@@ -556,7 +556,7 @@ directories and a working directory outside the source tree. Each run must pass 
 | `HeadlessShutdown_HarnessContract` | Self-test of the harness's audit and shutdown checks |
 
 Every wait has a wall-clock bound, and each run prints its seed (replay it with `--seed`). The
-tests run on Linux only. Windows is not covered: `SparkEngine` is a GUI-subsystem executable
+tests run on the experimental Linux host only. Windows is not covered: `SparkEngine` is a GUI-subsystem executable
 that skips `AllocConsole` when its output is redirected, so it has no console and a
 `CTRL_BREAK_EVENT` graceful stop cannot reach it. No run kills a real FPS save
 mid-write. This is source-tree evidence only, not packaged Windows certification.

@@ -3800,6 +3800,16 @@ add_test(
 set_tests_properties(PublicWording_DeferredPlatforms PROPERTIES
     LABELS "governance;platform;unit;python"
     TIMEOUT 60)
+# OD-10/OD-11 (PLT-210/PLT-220): the experimental Linux and macOS rows stay
+# experimental in the readiness contract and no public surface calls them supported.
+add_test(
+    NAME PublicWording_ExperimentalPlatforms
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_public_wording.py -v
+        ExperimentalPlatformWordingTests ExperimentalPlatformSupportTests)
+set_tests_properties(PublicWording_ExperimentalPlatforms PROPERTIES
+    LABELS "governance;platform;unit;python"
+    TIMEOUT 60)
 # PLT-250: no workflow, CMake file, public doc or engine source implies console
 # certification (console runners/options/presets, unqualified certification wording).
 add_test(

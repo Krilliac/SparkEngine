@@ -6,6 +6,9 @@ license classification (``legal_public_wording_errors``).
 OD-12 (PublicWording_DeferredPlatforms, PLT-230/240/250): mobile, OpenXR and
 console stay unsupported in the contract and in public wording
 (``deferred_platform_support_errors``, ``deferred_platform_claim_errors``).
+OD-10/OD-11 (PublicWording_ExperimentalPlatforms, PLT-210/220): the Linux and
+macOS rows stay experimental in the contract and are never summarized as
+supported (``experimental_platform_support_errors``, ``experimental_platform_claim_errors``).
 PLT-250 (PublicWording_ConsoleCertification): no CI, build configuration, doc or
 source implies console certification (``console_certification_implication_errors``).
 
@@ -255,6 +258,64 @@ class ConsoleCertificationImplicationTests(unittest.TestCase):
         self.assertEqual([], errors, "\n".join(errors))
 
 
+class ExperimentalPlatformWordingTests(unittest.TestCase):
+    """OD-10/OD-11 (PLT-210/PLT-220): experimental Linux and macOS rows are never summarized as supported."""
+
+    def errors(self, text: str, location: str = "README.md") -> list[str]:
+        return site_data_validate.experimental_platform_claim_errors({location: text})
+
+    def test_unqualified_support_claims_are_rejected_with_their_location(self) -> None:
+        for text in (
+            "SparkEngine supports Linux.",
+            "Runs on Ubuntu 24.04 out of the box.",
+            "macOS is fully supported.",
+            "The engine ships on Apple Silicon.",
+            "| Linux | Supported on every release |",
+        ):
+            with self.subTest(text=text):
+                errors = self.errors("intro\n" + text)
+                self.assertEqual(1, len(errors), errors)
+                self.assertRegex(errors[0], r"^README\.md:2: ")
+                self.assertIn("PLT-210/PLT-220", errors[0])
+
+    def test_qualified_or_scoped_wording_is_allowed(self) -> None:
+        for text in (
+            "Linux is experimental and outside stable-v1.",
+            "SparkEngine builds on Linux in CI.",
+            "macOS support is deferred (OD-11).",
+            "The sanitizer lanes run on Ubuntu 24.04.",
+            "The declared Linux support matrix is still open.",
+            "Smoke tests run on all hosts, including a MacOS path.",
+            "The GPU supportsRaytracing query exists on macOS 12.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual([], self.errors(text))
+
+    def test_rule_is_per_sentence_not_per_line(self) -> None:
+        errors = self.errors("Linux is experimental. SparkEngine supports macOS.")
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("'macOS'", errors[0])
+
+    def test_fenced_code_is_not_a_claim(self) -> None:
+        self.assertEqual([], self.errors("```text\nSparkEngine supports Linux.\n```"))
+
+    def test_non_text_surface_is_an_error(self) -> None:
+        self.assertEqual(
+            ["a.md: experimental-platform wording source must be text"],
+            site_data_validate.experimental_platform_claim_errors({"a.md": None}),
+        )
+
+    def test_live_governed_surfaces_summarize_no_experimental_row_as_supported(self) -> None:
+        contract = load_contract()
+        surfaces, missing = site_data_validate.experimental_platform_claim_surfaces(REPO_ROOT, contract)
+        self.assertEqual([], missing, "every governed surface must exist; a missing file is never a pass")
+        for page in ("wiki/platform/System-Requirements.md", "wiki/platform/Cross-Compilation-Wine-Testing.md"):
+            self.assertIn(page, surfaces)
+        self.assertTrue(site_data_validate.REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES <= surfaces.keys())
+        errors = site_data_validate.experimental_platform_claim_errors(surfaces)
+        self.assertEqual([], errors, "\n".join(errors))
+
+
 def capability_of(contract: dict, identifier: str) -> dict:
     return next(c for c in contract["readiness"]["capabilities"] if c["id"] == identifier)
 
@@ -302,6 +363,37 @@ class DeferredPlatformSupportTests(unittest.TestCase):
         self.contract["workItems"] = [i for i in self.contract["workItems"] if i["id"] != "PLT-250"]
         errors = site_data_validate.deferred_platform_support_errors(self.contract)
         self.assertEqual(2, len(errors), errors)
+
+
+class ExperimentalPlatformSupportTests(unittest.TestCase):
+    """The readiness contract keeps experimental hosts experimental and unpromoted while their item is open."""
+
+    def setUp(self) -> None:
+        self.contract = load_contract()
+
+    def test_live_contract_passes(self) -> None:
+        self.assertEqual({"platform.linux", "platform.macos"}, set(site_data_validate.EXPERIMENTAL_PLATFORMS))
+        self.assertEqual([], site_data_validate.experimental_platform_support_errors(self.contract))
+
+    def test_promoting_an_open_experimental_row_is_rejected(self) -> None:
+        cases = (
+            ("platform.linux", "support", "primary"),
+            ("platform.linux", "release", "candidate"),
+            ("platform.macos", "support", "supported"),
+            ("platform.macos", "release", "ready"),
+        )
+        for identifier, field, value in cases:
+            with self.subTest(capability=identifier, field=field):
+                contract = copy.deepcopy(self.contract)
+                capability_of(contract, identifier)[field] = value
+                errors = site_data_validate.experimental_platform_support_errors(contract)
+                self.assertEqual(1, len(errors), errors)
+                self.assertIn(f"capabilities.{identifier}: {field} is {value!r}", errors[0])
+
+    def test_done_item_lifts_the_restriction(self) -> None:
+        capability_of(self.contract, "platform.linux")["support"] = "supported"
+        next(i for i in self.contract["workItems"] if i["id"] == "PLT-210")["status"] = "done"
+        self.assertEqual([], site_data_validate.experimental_platform_support_errors(self.contract))
 
 
 if __name__ == "__main__":

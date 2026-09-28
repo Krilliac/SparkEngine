@@ -869,19 +869,22 @@ def deferred_platform_support_errors(contract: dict[str, Any]) -> list[str]:
     return errors
 
 
-def deferred_platform_claim_errors(surfaces: dict[str, str]) -> list[str]:
-    """Reject public wording that claims support for a deferred platform (OD-12).
+def _unqualified_platform_claims(
+    surfaces: dict[str, str],
+    claim_pattern: re.Pattern[str],
+    platform_pattern: re.Pattern[str],
+    qualifier_pattern: re.Pattern[str],
+    kind: str,
+    boundary: str,
+) -> list[str]:
+    """Support claims naming a platform, per sentence or Markdown table row, outside fenced code.
 
-    The check is per sentence, or per row for a Markdown table row, outside
-    fenced code blocks. A unit that also carries a planned/unsupported/framework
-    qualifier (or names OD-12 or the owning PLT item) states the boundary and
-    is allowed.
+    A unit that also carries a qualifier states the boundary and is allowed.
     """
-
     errors: list[str] = []
     for location, text in sorted(surfaces.items()):
         if not isinstance(text, str):
-            errors.append(f"{location}: deferred-platform wording source must be text")
+            errors.append(f"{location}: {kind} wording source must be text")
             continue
         in_fence = False
         for number, line in enumerate(text.splitlines(), start=1):
@@ -892,16 +895,125 @@ def deferred_platform_claim_errors(surfaces: dict[str, str]) -> list[str]:
                 continue
             is_table_row = line.lstrip().startswith("|")
             for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
-                claim = DEFERRED_PLATFORM_CLAIM.search(unit)
-                platform = DEFERRED_PLATFORM_TOKEN.search(unit)
-                if claim is None or platform is None or _DEFERRED_PLATFORM_QUALIFIER.search(unit):
+                claim = claim_pattern.search(unit)
+                platform = platform_pattern.search(unit)
+                if claim is None or platform is None or qualifier_pattern.search(unit):
                     continue
                 errors.append(
                     f"{location}:{number}: {claim.group(0)!r} {platform.group(0)!r} reads as a support claim; "
-                    "mobile, OpenXR and console are deferred from stable-v1 (OD-12, PLT-230/PLT-240/PLT-250) "
-                    "and public wording must say planned, unsupported or framework"
+                    f"{boundary}"
                 )
     return errors
+
+
+def deferred_platform_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject public wording that claims support for a deferred platform (OD-12).
+
+    A unit that also carries a planned/unsupported/framework qualifier (or
+    names OD-12 or the owning PLT item) states the boundary and is allowed.
+    """
+    return _unqualified_platform_claims(
+        surfaces,
+        DEFERRED_PLATFORM_CLAIM,
+        DEFERRED_PLATFORM_TOKEN,
+        _DEFERRED_PLATFORM_QUALIFIER,
+        "deferred-platform",
+        "mobile, OpenXR and console are deferred from stable-v1 (OD-12, PLT-230/PLT-240/PLT-250) "
+        "and public wording must say planned, unsupported or framework",
+    )
+
+
+# OD-10/OD-11 (PLT-210, PLT-220): Linux and macOS are experimental hosts outside
+# stable-v1. Until the owning item is done the capability stays experimental (or
+# unsupported) and not release-promoted, and public wording never summarizes the
+# row as supported without an experimental/build-only qualifier.
+EXPERIMENTAL_PLATFORMS = {
+    "platform.linux": ("PLT-210", "OD-10"),
+    "platform.macos": ("PLT-220", "OD-11"),
+}
+EXPERIMENTAL_PLATFORM_DOCUMENTATION = ("wiki/platform/System-Requirements.md",)
+_EXPERIMENTAL_PLATFORM_NAMES = r"(?:Linux|Ubuntu|macOS|Mac\s+OS|Apple\s+Silicon|Intel\s+Macs?)\b"
+EXPERIMENTAL_PLATFORM_TOKEN = re.compile(r"\b" + _EXPERIMENTAL_PLATFORM_NAMES, re.IGNORECASE)
+# "support" as a noun ("Linux support matrix") and "runs on all hosts" are not
+# claims; a host verb must sit directly before the platform name.
+EXPERIMENTAL_PLATFORM_CLAIM = re.compile(
+    r"\b(?:(?:supports|we\s+support|(?:is|are)\s+(?:fully\s+|officially\s+)?supported|fully\s+supported"
+    r"|supported\s+(?:on|hosts?|platforms?))\b"
+    r"|(?:runs?|ships?|certified)\s+(?:natively\s+)?(?:on|for)\s+(?:both\s+)?(?=" + _EXPERIMENTAL_PLATFORM_NAMES + r"))",
+    re.IGNORECASE,
+)
+_EXPERIMENTAL_PLATFORM_QUALIFIER = re.compile(
+    r"\b(?:experimental|not|no|unsupported|uncertified|deferred|planned|OD-1[01]|PLT-2[12]0"
+    r"|builds?|compiles?|CI|sanitizers?|presets?|cross-compil\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def experimental_platform_support_errors(contract: dict[str, Any]) -> list[str]:
+    """An experimental host row stays experimental and unpromoted until its owning item is done."""
+    errors: list[str] = []
+    readiness = contract.get("readiness", {})
+    capabilities = {
+        capability.get("id"): capability
+        for capability in readiness.get("capabilities", [])
+        if isinstance(capability, dict)
+    }
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    for capability_id, (item_id, decision) in sorted(EXPERIMENTAL_PLATFORMS.items()):
+        location = f"capabilities.{capability_id}"
+        capability = capabilities.get(capability_id)
+        if capability is None:
+            errors.append(f"{location}: experimental platform capability is missing ({decision}, {item_id})")
+            continue
+        item = items.get(item_id)
+        if item is None:
+            errors.append(f"{location}: owning work item {item_id} is missing")
+            continue
+        if item.get("status") == "done":
+            continue
+        if capability.get("support") not in {"experimental", "unsupported"}:
+            errors.append(
+                f"{location}: support is {capability.get('support')!r} but {item_id} is not done; the host is "
+                f"experimental outside stable-v1 ({decision}) and must stay 'experimental' or 'unsupported'"
+            )
+        if capability.get("release") in {"candidate", "ready"}:
+            errors.append(
+                f"{location}: release is {capability.get('release')!r} but {item_id} is not done; an experimental "
+                f"host ({decision}) cannot be release-promoted"
+            )
+    return errors
+
+
+def experimental_platform_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject public wording that summarizes the experimental Linux or macOS row as supported."""
+    return _unqualified_platform_claims(
+        surfaces,
+        EXPERIMENTAL_PLATFORM_CLAIM,
+        EXPERIMENTAL_PLATFORM_TOKEN,
+        _EXPERIMENTAL_PLATFORM_QUALIFIER,
+        "experimental-platform",
+        "Linux and macOS are experimental hosts outside stable-v1 (OD-10/OD-11, PLT-210/PLT-220) and public "
+        "wording must say experimental, not certified, or name the build/CI scope",
+    )
+
+
+def experimental_platform_claim_surfaces(
+    repo_root: Path, contract: dict[str, Any]
+) -> tuple[dict[str, str], list[str]]:
+    """Texts the experimental-platform wording rule governs, and the governed paths that are missing."""
+    paths = set(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES) | set(EXPERIMENTAL_PLATFORM_DOCUMENTATION)
+    for capability in contract.get("readiness", {}).get("capabilities", []):
+        if isinstance(capability, dict) and capability.get("id") in EXPERIMENTAL_PLATFORMS:
+            paths.update(page for page in capability.get("documentation", []) if isinstance(page, str))
+    surfaces: dict[str, str] = {}
+    missing: list[str] = []
+    for relative in sorted(paths):
+        path = repo_root / relative
+        if path.is_file():
+            surfaces[relative] = path.read_text(encoding="utf-8", errors="replace")
+        else:
+            missing.append(relative)
+    return surfaces, missing
 
 
 def deferred_platform_claim_surfaces(repo_root: Path, contract: dict[str, Any]) -> tuple[dict[str, str], list[str]]:
@@ -3541,7 +3653,8 @@ class Validator:
     def validate_deferred_platforms(self) -> None:
         """OD-12 (PLT-230/PLT-240/PLT-250): deferred platforms stay unsupported and blocked, console carries
         no platform authority, no public surface claims support for them, and no CI, build configuration, doc
-        or source implies console certification (PLT-250)."""
+        or source implies console certification (PLT-250). OD-10/OD-11 (PLT-210/PLT-220): the experimental
+        Linux and macOS rows stay experimental and are never summarized as supported."""
         for message in deferred_platform_support_errors(self.contract):
             self.error("deferredPlatforms", message)
         surfaces, missing = deferred_platform_claim_surfaces(REPO_ROOT, self.contract)
@@ -3549,6 +3662,13 @@ class Validator:
             self.error(f"deferredPlatforms.{relative}", "governed wording surface must exist")
         for violation in deferred_platform_claim_errors(surfaces):
             self.error("deferredPlatforms", violation)
+        for message in experimental_platform_support_errors(self.contract):
+            self.error("experimentalPlatforms", message)
+        surfaces, missing = experimental_platform_claim_surfaces(REPO_ROOT, self.contract)
+        for relative in missing:
+            self.error(f"experimentalPlatforms.{relative}", "governed wording surface must exist")
+        for violation in experimental_platform_claim_errors(surfaces):
+            self.error("experimentalPlatforms", violation)
         for violation in console_certification_implication_errors(console_certification_surfaces(REPO_ROOT)):
             self.error("consoleCertification", violation)
 

@@ -100,13 +100,14 @@ These are two different things that often get conflated:
   shared between CPU, GPU, and Neural Engine. Replaced Intel x86 Macs.
 - **Metal** is Apple's *graphics API* — the analogue of DirectX or
   Vulkan. Shipped in 2014 (iOS 8, OS X 10.11), long before Apple Silicon.
-  Runs on both Intel Macs and Apple Silicon Macs.
+  Apple ships the API on both Intel and Apple Silicon hardware.
 
-You can run Metal on an Intel Mac. You can run non-Metal code on Apple
-Silicon (via OpenGL, for example). They're orthogonal. SparkEngine's source
+The API and the CPU architecture are orthogonal: Metal exists on Intel Macs,
+and non-Metal code (OpenGL, for example) exists on Apple Silicon. That is a
+statement about Apple's platform, not about SparkEngine. SparkEngine's source
 contains x64 and ARM64 Mac paths; both are experimental and outside
-`stable-v1`. Apple Silicon is the preferred development path because the Metal
-driver and GPU are co-designed.
+`stable-v1`, and owner decision OD-11 limits any future macOS row to Apple
+Silicon only (PLT-220).
 
 ## Runtime Hardware Footprint
 
