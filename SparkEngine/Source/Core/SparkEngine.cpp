@@ -544,6 +544,10 @@ void SetupCrashHandler()
     // watchdog kill leaves a dump behind instead of only a log line.
     const char* envAssertCrash = std::getenv("SPARK_CRASH_ON_ASSERT");
     crashCfg.triggerCrashOnAssert = envAssertCrash != nullptr && std::string_view(envAssertCrash) == "1";
+    // Local debugging only: SPARK_CRASH_FULL_DUMP=1 keeps thread-stack memory in the minidump, which
+    // can then hold live secrets. It is never on by default and the manifest discloses it.
+    const char* envFullDump = std::getenv("SPARK_CRASH_FULL_DUMP");
+    crashCfg.includeStackMemory = envFullDump != nullptr && std::string_view(envFullDump) == "1";
     crashCfg.requireConsent = cr.requireConsent;
     crashCfg.headlessMode = cr.headlessMode;
     crashCfg.promptUserDescription = cr.promptUserDescription;

@@ -54,6 +54,9 @@ struct CrashConfig
     bool headlessMode = false;                    ///< Skip all dialog boxes and the reporter (CI/testing/headless)
     bool promptUserDescription = true;            ///< Show "what were you doing" text input after crash
     bool allowScreenshotRefusal = true;           ///< Let users refuse screenshots in consent dialog
+    /// Local-debugging opt-in (SPARK_CRASH_FULL_DUMP=1): write thread-stack memory into the minidump.
+    /// Such a dump can contain live secrets (passwords, keys, session tokens) and must not leave the machine.
+    bool includeStackMemory = false;
 
     // Populated at crash time by user input (not configured in settings)
     std::string userDescription = ""; ///< User-provided crash description (filled at crash time)
@@ -63,8 +66,9 @@ struct CrashConfig
  * @brief Install the crash handler with the given configuration
  *
  * On Windows: registers an SEH unhandled-exception filter that catches crashes
- * and generates memory-filtered minidumps: thread stacks keep only the pointer values needed to rebuild
- * call stacks, so no stack-resident secret (password, key, session token) reaches the .dmp. On Linux:
+ * and generates minidumps without thread-stack memory (registers, modules and the exception record stay,
+ * and the report's text call stack is walked at crash time), so no stack-resident secret (password, key,
+ * session token) reaches the .dmp unless CrashConfig::includeStackMemory opts in. On Linux:
  * installs signal handlers for SIGSEGV, SIGFPE, SIGABRT, etc. On other platforms: a no-op stub.
  *
  * @param cfg Configuration controlling crash report behavior

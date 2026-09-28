@@ -698,8 +698,9 @@ static std::string MakeManifestJson(const std::string& dumpFile, const std::stri
     j << "  \"requireConsent\": " << (g_cfg.requireConsent ? "true" : "false") << ",\n";
     j << "  \"allowScreenshotRefusal\": " << (g_cfg.allowScreenshotRefusal ? "true" : "false") << ",\n";
     j << "  \"promptUserDescription\": " << (g_cfg.promptUserDescription ? "true" : "false") << ",\n";
-    // The producer never writes full-memory dumps; the field stays for reporter schema compatibility.
-    j << "  \"fullMemoryDump\": false\n";
+    // True only under the SPARK_CRASH_FULL_DUMP opt-in, whose dumps carry thread-stack memory; the
+    // reporter's consent text then discloses that the dump can contain data held in memory.
+    j << "  \"fullMemoryDump\": " << (g_cfg.includeStackMemory ? "true" : "false") << "\n";
     j << "}\n";
     return j.str();
 }
@@ -1236,6 +1237,57 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     }
 }
 
+// OPS-100: thread stacks hold live locals (passwords, SCRAM keys, session tokens), and even
+// MiniDumpFilterMemory copies them verbatim, so by default no thread's stack memory is written.
+// DbgHelp ignores a cleared ThreadWriteStack flag, so each stack range recorded in ThreadCallback
+// is handed back through RemoveMemoryCallback. Registers, the instruction window, the module list
+// and the exception record stay; the report's text call stack is walked at crash time instead.
+// Fixed storage: this runs inside the crash handler, where allocating is not safe.
+struct StackRemoval
+{
+    static constexpr size_t kMaxThreads = 1024;
+    ULONG64 base[kMaxThreads]{};
+    ULONG size[kMaxThreads]{};
+    size_t count = 0;
+    size_t next = 0;
+    bool overflow = false; ///< More threads than kMaxThreads: the dump is discarded, never written with stacks
+};
+
+static BOOL CALLBACK OmitThreadStacks(PVOID param, const PMINIDUMP_CALLBACK_INPUT input,
+                                      PMINIDUMP_CALLBACK_OUTPUT output)
+{
+    auto* removal = static_cast<StackRemoval*>(param);
+    if (!input || !output || !removal)
+        return TRUE;
+
+    if (input->CallbackType == ThreadCallback || input->CallbackType == ThreadExCallback)
+    {
+        const ULONG64 low = (std::min)(input->Thread.StackBase, input->Thread.StackEnd);
+        const ULONG64 high = (std::max)(input->Thread.StackBase, input->Thread.StackEnd);
+        if (removal->count == StackRemoval::kMaxThreads)
+        {
+            removal->overflow = true;
+            return TRUE;
+        }
+        removal->base[removal->count] = low;
+        removal->size[removal->count] = static_cast<ULONG>(high - low);
+        ++removal->count;
+    }
+    else if (input->CallbackType == RemoveMemoryCallback)
+    {
+        // Called repeatedly until it returns an empty range.
+        output->MemoryBase = 0;
+        output->MemorySize = 0;
+        if (removal->next < removal->count)
+        {
+            output->MemoryBase = removal->base[removal->next];
+            output->MemorySize = removal->size[removal->next];
+            ++removal->next;
+        }
+    }
+    return TRUE;
+}
+
 static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWORD* failureError)
 {
     if (failureError)
@@ -1262,11 +1314,12 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWOR
     }
 
     MINIDUMP_EXCEPTION_INFORMATION info{GetCurrentThreadId(), ep, TRUE};
-    // OPS-100: MiniDumpNormal alone copies raw thread-stack memory, so a password,
-    // SCRAM key or session token live on any stack would land in the .dmp.
-    // MiniDumpFilterMemory keeps only the pointer values needed to rebuild the
-    // stack traces; locals are not recoverable from these dumps by design.
-    constexpr MINIDUMP_TYPE dumpType = static_cast<MINIDUMP_TYPE>(MiniDumpNormal | MiniDumpFilterMemory);
+    constexpr MINIDUMP_TYPE dumpType = MiniDumpNormal;
+    // Static: the crash path writes at most one report per process (see the manifest gate), and
+    // ~12 KiB is too much to put on a possibly exhausted faulting stack.
+    static StackRemoval removal;
+    MINIDUMP_CALLBACK_INFORMATION omitStacks{OmitThreadStacks, &removal};
+    MINIDUMP_CALLBACK_INFORMATION* callback = g_cfg.includeStackMemory ? nullptr : &omitStacks;
     BOOL result = FALSE;
     DWORD error = ERROR_SUCCESS;
     // A minidump can race a transiently inaccessible page on a live process.
@@ -1284,11 +1337,23 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWOR
             }
         }
         SetLastError(ERROR_SUCCESS);
-        result = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, nullptr);
+        removal.count = 0;
+        removal.next = 0;
+        removal.overflow = false;
+        result = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, callback);
         error = result ? ERROR_SUCCESS : GetLastError();
         if (result ||
             (error != ERROR_PARTIAL_COPY && error != static_cast<DWORD>(HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))))
             break;
+    }
+    if (result && callback && removal.overflow)
+    {
+        // Some stacks could not be removed: never leave that dump on disk.
+        LARGE_INTEGER start{};
+        SetFilePointerEx(h, start, nullptr, FILE_BEGIN);
+        SetEndOfFile(h);
+        result = FALSE;
+        error = ERROR_BUFFER_OVERFLOW;
     }
     CloseHandle(h);
     if (failureError)
