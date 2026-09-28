@@ -143,13 +143,41 @@ _run_checked("Validate installed FPS runtime package" 120
 # the build tree are never consulted, so a DLL this developer machine happens
 # to have installed does not hide a dependency a clean machine lacks. Debug
 # images import the Debug CRT, which is not redistributable, so a Debug stage
-# is a developer layout and is not checked.
+# is a developer layout and is not checked. Every other configuration is named
+# explicitly, so a new or misspelled configuration fails instead of skipping,
+# and the run must list the two images the package exists to ship: a closure
+# that covered neither of them checked the wrong tree.
 if(SPARK_CONFIG STREQUAL "Debug")
     message(STATUS "PE import closure not checked: Debug packages import the non-redistributable Debug CRT")
-else()
+elseif(SPARK_CONFIG MATCHES "^(Release|MinSizeRel|RelWithDebInfo)$")
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
-    _run_checked("Validate installed FPS package DLL import closure" 120
-        "${Python3_EXECUTABLE}" -B "${SPARK_SOURCE_ROOT}/tools/pe_import_closure.py" "${_install_root}")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" -B "${SPARK_SOURCE_ROOT}/tools/pe_import_closure.py" --list "${_install_root}"
+        RESULT_VARIABLE _pe_closure_result
+        OUTPUT_VARIABLE _pe_closure_output
+        ERROR_VARIABLE _pe_closure_error
+        TIMEOUT 120)
+    if(NOT "${_pe_closure_result}" STREQUAL "0")
+        message(FATAL_ERROR
+            "Validate installed FPS package DLL import closure failed (${_pe_closure_result}):\n"
+            "${_pe_closure_output}\n${_pe_closure_error}")
+    endif()
+    # --list prints one "<path relative to the install root>: <imports>" line per image.
+    set(_pe_closure_listing "\n${_pe_closure_output}")
+    foreach(_pe_required_image IN ITEMS "bin/SparkEngine.exe" "bin/SparkGameFPS.dll")
+        string(FIND "${_pe_closure_listing}" "\n${_pe_required_image}: " _pe_required_position)
+        if(_pe_required_position EQUAL -1)
+            message(FATAL_ERROR "PE import closure did not cover ${_pe_required_image}:\n${_pe_closure_output}")
+        endif()
+    endforeach()
+    if(NOT _pe_closure_output MATCHES "pe_import_closure: ([0-9]+) image\\(s\\) under [^\n]* resolve")
+        message(FATAL_ERROR "PE import closure printed no summary:\n${_pe_closure_output}")
+    endif()
+    message(STATUS "Installed FPS package PE import closure: ${CMAKE_MATCH_1} images resolve")
+else()
+    message(FATAL_ERROR
+        "SPARK_CONFIG '${SPARK_CONFIG}' is not a known configuration; the PE import closure "
+        "runs for Release, MinSizeRel and RelWithDebInfo and is skipped only for Debug")
 endif()
 
 if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
