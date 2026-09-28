@@ -14,12 +14,14 @@
 #include "Persistence/TFDatabase.h"
 #include "Persistence/TFPlayerMeta.h"
 #include "Persistence/TFSavePaths.h"
+#include "Persistence/TFWorldSave.h"
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -352,6 +354,119 @@ TEST(Persistence_Migration_NewerSchemaFailsClosedWithoutRewrite)
         fs::remove(badPath);
     }
     fs::remove(path);
+}
+
+namespace
+{
+    /// A three-region lattice: an MRA skyanchor, an outpost and a fort.
+    std::vector<RegionDef> TerritoryFixtureRegions()
+    {
+        std::vector<RegionDef> regions(3);
+        regions[0].tier = "skyanchor";
+        regions[0].homeFaction = FactionId::MRA;
+        regions[1].tier = "outpost";
+        regions[2].tier = "fort";
+        return regions;
+    }
+
+    WorldSave::TerritoryDecodeResult DecodeTerritoryFixture(const std::string& text, bool legacySource,
+                                                            WorldSave::TerritoryDecode& out)
+    {
+        Spark::Json::Value root;
+        std::string detail;
+        if (!Spark::Json::ParseStrict(text, &root, &detail))
+            return WorldSave::TerritoryDecodeResult::Invalid;
+        const std::vector<RegionDef> regions = TerritoryFixtureRegions();
+        return WorldSave::DecodeTerritory(root, regions, legacySource, out, detail);
+    }
+} // namespace
+
+TEST(Persistence_Migration_TerritoryLegacyUnversionedFileMigrates)
+{
+    // N-1 fixture: the pre-versioned territory layout, no "version" and no "dominion". Its skyanchor
+    // carries an AUC owner, which the v0 schema did not police; the decode coerces it home.
+    WorldSave::TerritoryDecode decoded;
+    const auto result = DecodeTerritoryFixture(
+        R"({"continentKey": "cindral_wastes", "continent": "Cindral Wastes", "regionCount": 3,
+            "owners": [2, 3, 0]})",
+        false, decoded);
+    ASSERT_TRUE(result == WorldSave::TerritoryDecodeResult::Migrate);
+    EXPECT_EQ(decoded.sourceVersion, uint32_t{0});
+    ASSERT_EQ(decoded.owners.size(), size_t{3});
+    EXPECT_TRUE(decoded.owners[0] == FactionId::MRA);
+    EXPECT_TRUE(decoded.owners[1] == FactionId::HLX);
+    EXPECT_TRUE(decoded.owners[2] == FactionId::None);
+    EXPECT_FALSE(decoded.dominion.active);
+
+    // A current-schema document read from the legacy location is also rewritten.
+    WorldSave::TerritoryDecode legacy;
+    EXPECT_TRUE(DecodeTerritoryFixture(R"({"version": 1, "continent": "Cindral Wastes", "regionCount": 3,
+            "owners": [1, 2, 2], "dominion": {"active": false, "faction": 0, "remainingSec": 0}})",
+                                       true, legacy) == WorldSave::TerritoryDecodeResult::Migrate);
+}
+
+TEST(Persistence_Migration_TerritoryCurrentSchemaLoadsAndRejectsSkyanchorConflict)
+{
+    WorldSave::TerritoryDecode decoded;
+    const auto result = DecodeTerritoryFixture(
+        R"({"version": 1, "continentKey": "cindral_wastes", "regionCount": 3, "owners": [1, 2, 1],
+            "dominion": {"active": true, "faction": 2, "remainingSec": 120.5}})",
+        false, decoded);
+    ASSERT_TRUE(result == WorldSave::TerritoryDecodeResult::Loaded);
+    EXPECT_EQ(decoded.sourceVersion, WorldSave::kTerritorySchemaVersion);
+    EXPECT_TRUE(decoded.owners[1] == FactionId::AUC);
+    EXPECT_TRUE(decoded.dominion.active);
+    EXPECT_EQ(decoded.dominion.faction, uint32_t{2});
+
+    // In the current schema a skyanchor away from its home faction is corruption, not something to coerce,
+    // and so is a missing dominion.
+    WorldSave::TerritoryDecode untouched;
+    untouched.sourceVersion = 77;
+    EXPECT_TRUE(DecodeTerritoryFixture(R"({"version": 1, "regionCount": 3, "owners": [2, 2, 1],
+            "dominion": {"active": false, "faction": 0, "remainingSec": 0}})",
+                                       false, untouched) == WorldSave::TerritoryDecodeResult::Invalid);
+    EXPECT_TRUE(DecodeTerritoryFixture(R"({"version": 1, "regionCount": 3, "owners": [1, 2, 1]})", false, untouched) ==
+                WorldSave::TerritoryDecodeResult::Invalid);
+    EXPECT_EQ(untouched.sourceVersion, uint32_t{77});
+}
+
+TEST(Persistence_Migration_TerritoryNewerSchemaIsRefused)
+{
+    // Rollback fixture: a file a newer build wrote, with a field this build does not know. It must be
+    // refused as a newer schema, not decoded, so the caller latches writes off and never rewrites it.
+    const std::string newer = std::string(R"({"version": )") + std::to_string(WorldSave::kTerritorySchemaVersion + 1) +
+                              R"(, "continentKey": "cindral_wastes", "regionCount": 3, "owners": [1, 2, 1],
+            "dominion": {"active": false, "faction": 0, "remainingSec": 0}, "siegeTimers": [30, 0, 0]})";
+    WorldSave::TerritoryDecode decoded;
+    EXPECT_TRUE(DecodeTerritoryFixture(newer, false, decoded) == WorldSave::TerritoryDecodeResult::NewerSchema);
+    EXPECT_TRUE(decoded.owners.empty());
+    EXPECT_TRUE(DecodeTerritoryFixture(newer, true, decoded) == WorldSave::TerritoryDecodeResult::NewerSchema);
+
+    // Malformed versions are corruption, not "legacy".
+    for (const char* bad : {R"("1")", "-1", "1.5"})
+    {
+        const std::string text = std::string(R"({"version": )") + bad +
+                                 R"(, "regionCount": 3, "owners": [1, 2, 1],
+            "dominion": {"active": false, "faction": 0, "remainingSec": 0}})";
+        EXPECT_TRUE(DecodeTerritoryFixture(text, false, decoded) == WorldSave::TerritoryDecodeResult::Invalid);
+    }
+}
+
+TEST(Persistence_Migration_TerritoryWrongLatticeIsInvalid)
+{
+    WorldSave::TerritoryDecode decoded;
+    const char* const lattices[] = {
+        R"({"version": 1, "regionCount": 4, "owners": [1, 2, 1, 0],
+            "dominion": {"active": false, "faction": 0, "remainingSec": 0}})",
+        R"({"version": 1, "regionCount": 3, "owners": [1, 2],
+            "dominion": {"active": false, "faction": 0, "remainingSec": 0}})",
+        R"({"version": 1, "regionCount": 3, "owners": [1, 2, 4],
+            "dominion": {"active": false, "faction": 0, "remainingSec": 0}})",
+        R"({"version": 1, "owners": [1, 2, 1], "dominion": {"active": false, "faction": 0, "remainingSec": 0}})",
+    };
+    for (const char* text : lattices)
+        EXPECT_TRUE(DecodeTerritoryFixture(text, false, decoded) == WorldSave::TerritoryDecodeResult::Invalid);
+    EXPECT_TRUE(decoded.owners.empty());
 }
 
 TEST(Persistence_Durable_ReplaceCommitsExactBytesAndClearsStaleStaging)

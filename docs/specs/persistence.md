@@ -9,6 +9,16 @@ This document specifies what the TERRAFRONT account/character database (`Terrafr
 - The file carries `schemaVersion` and a monotonically increasing `revision`. Each character row records the revision of its last change.
 - This build writes schema v2. Schema v3 is retired and the next bump is v4. For a short time, `b2d2953` wrote v3 files: v2 content plus an `appliedOperations` ledger that no caller ever filled. A v3 file whose ledger is an empty array loads as v2 and is rewritten as v2. Any other v3 file fails closed as `UnsupportedVersion`, because rewriting it would drop recorded operation ids.
 
+## Schema versions of the other stores
+
+Every store reads schema N and N-1, writes N, and fails closed on anything newer, so an older binary never loads and rewrites a file a newer build wrote (a rollback would silently drop the newer fields).
+
+| Store | Current | N-1 | Newer file | Fixtures |
+|-------|---------|-----|------------|----------|
+| Territory, `terrafront_territory.<continent>.json` | `version` 1 (`WorldSave::kTerritorySchemaVersion`) | v0, no `version`: loaded, skyanchor owners coerced home, missing `dominion` inactive, rewritten as v1 | `WorldSave::TerritoryDecodeResult::NewerSchema`; writes latch off and the file is never rewritten | `Persistence_Migration_Territory*` (`Tests/TestDATA120PersistenceReal.cpp`) |
+
+The territory decode (`WorldSave::DecodeTerritory` in `TFWorldSave.h`) is pure, so the fixtures run it without a game context. `TFRegionSystem::LoadPersisted` keeps the file I/O, the logging and the latch policy.
+
 ## Recovery point
 
 **After a crash, the database reopens at the last commit whose rename completed. Every call that reported success is included.** Here is what a crash at each point leaves behind:

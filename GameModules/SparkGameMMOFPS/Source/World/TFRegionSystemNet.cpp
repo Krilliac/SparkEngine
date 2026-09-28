@@ -26,11 +26,6 @@
 namespace Terrafront
 {
 
-    namespace
-    {
-        constexpr int kSaveVersion = 1;
-    } // namespace
-
     // ---------------------------------------------------------------------------
     // Persistence (authority only; shared Terrafront save root, tmp+rename atomic)
     // ---------------------------------------------------------------------------
@@ -110,97 +105,37 @@ namespace Terrafront
             return false;
         }
 
-        uint32_t saveVersion = 0;
-        if (root.HasKey("version") && !WorldSave::ReadUint32(root["version"], saveVersion))
+        // A newer schema and an invalid document are both refused: a qualified save latches writes off so
+        // it is never overwritten; a legacy-location candidate is only left in place (the qualified file
+        // does not exist yet).
+        WorldSave::TerritoryDecode decoded;
+        const WorldSave::TerritoryDecodeResult result =
+            m_state.size() == continent.regions.size()
+                ? WorldSave::DecodeTerritory(root, continent.regions, migratingLegacy, decoded, detail)
+                : WorldSave::TerritoryDecodeResult::Invalid;
+        if (result == WorldSave::TerritoryDecodeResult::NewerSchema ||
+            result == WorldSave::TerritoryDecodeResult::Invalid)
         {
             m_persistBlocked = !migratingLegacy;
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory save %s has an invalid schema version; %s",
-                            SavePaths::Utf8ForLog(source).c_str(),
-                            migratingLegacy ? "legacy preserved" : "writes latched off");
-            return false;
-        }
-        if (saveVersion > static_cast<uint32_t>(kSaveVersion))
-        {
-            m_persistBlocked = !migratingLegacy;
-            SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "[TF] territory save %s uses newer schema version %u (supported %d); %s",
-                            SavePaths::Utf8ForLog(source).c_str(), saveVersion, kSaveVersion,
-                            migratingLegacy ? "legacy preserved" : "writes latched off");
-            return false;
-        }
-        // Version 0 is the sole older schema: the pre-versioned layout has the
-        // same fields validated below and is rewritten as v1 only after every
-        // field has passed validation. No other downgrade is inferred.
-        const bool migratingSchema = saveVersion == 0;
-
-        const size_t count = m_state.size();
-        const Value& owners = root["owners"];
-        uint32_t persistedCount = 0;
-        if (!WorldSave::ReadUint32(root["regionCount"], persistedCount) || persistedCount != count ||
-            !owners.IsArray() || owners.Size() != count)
-        {
-            m_persistBlocked = !migratingLegacy;
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory save %s has an invalid region lattice; %s",
-                            SavePaths::Utf8ForLog(source).c_str(),
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory save %s refused (%s); %s",
+                            SavePaths::Utf8ForLog(source).c_str(), detail.c_str(),
                             migratingLegacy ? "legacy preserved" : "writes latched off");
             return false;
         }
 
-        const auto& regions = continent.regions;
-        std::vector<FactionId> validatedOwners(count);
-        for (size_t i = 0; i < count; ++i)
+        for (size_t i = 0; i < m_state.size(); ++i)
         {
-            uint32_t raw = 0;
-            if (!WorldSave::ReadUint32(owners[i], raw) || raw >= static_cast<uint32_t>(FactionId::COUNT))
-            {
-                m_persistBlocked = !migratingLegacy;
-                SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory owner %zu is malformed; %s", i,
-                                migratingLegacy ? "legacy preserved" : "writes latched off");
-                return false;
-            }
-            FactionId owner = static_cast<FactionId>(raw);
-            if (i < regions.size() && regions[i].tier == "skyanchor")
-            {
-                if (owner != regions[i].homeFaction && !migratingLegacy && !migratingSchema)
-                {
-                    m_persistBlocked = true;
-                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                                    "[TF] territory skyanchor owner %zu conflicts with its home faction", i);
-                    return false;
-                }
-                owner = regions[i].homeFaction;
-            }
-            validatedOwners[i] = owner;
-        }
-        WorldSave::DominionState dominion;
-        if (!root.HasKey("dominion"))
-        {
-            if (!migratingSchema)
-            {
-                m_persistBlocked = !migratingLegacy;
-                return false;
-            }
-        }
-        else if (!WorldSave::ReadDominionState(root["dominion"], !migratingSchema,
-                                               static_cast<uint32_t>(FactionId::COUNT), dominion))
-        {
-            m_persistBlocked = !migratingLegacy;
-            return false;
-        }
-
-        for (size_t i = 0; i < count; ++i)
-        {
-            m_state[i].owner = validatedOwners[i];
+            m_state[i].owner = decoded.owners[i];
             m_state[i].capturing = FactionId::None;
             m_state[i].progress = 0.0f;
             m_state[i].contested = false;
         }
 
-        m_domActive = dominion.active;
-        m_domFaction = static_cast<FactionId>(dominion.faction);
-        m_domEndsAt = m_time + dominion.remainingSec;
+        m_domActive = decoded.dominion.active;
+        m_domFaction = static_cast<FactionId>(decoded.dominion.faction);
+        m_domEndsAt = m_time + decoded.dominion.remainingSec;
 
-        if (migratingLegacy || migratingSchema)
+        if (result == WorldSave::TerritoryDecodeResult::Migrate)
         {
             m_dirty = true;
             if (!PersistNow())
@@ -228,7 +163,7 @@ namespace Terrafront
 
         using Spark::Json::Value;
         Value root = Value::MakeObject();
-        root["version"] = Value(kSaveVersion);
+        root["version"] = Value(static_cast<int>(WorldSave::kTerritorySchemaVersion));
         root["continentKey"] = Value(m_ctx->data->GetContinent().key);
         root["continent"] =
             Value(m_ctx->data && m_ctx->data->IsLoaded() ? m_ctx->data->GetContinent().name : std::string());
