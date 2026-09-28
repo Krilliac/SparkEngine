@@ -117,6 +117,8 @@ class ContractTestCase(unittest.TestCase):
                     ]
         contract["readiness"]["execution"]["firstUnblockedWorkItemId"] = None
         contract["readiness"]["globalRelease"]["state"] = "ready"
+        # REL-192: N-1 work (now done above) presupposes a published predecessor.
+        contract["readiness"]["predecessorRelease"]["state"] = "published"
         still_planned = [
             path
             for item in contract["workItems"]
