@@ -291,8 +291,9 @@ selection flags. The selection must hold at least one test without `DISABLED`,
 and every enabled selected test's executable must exist. A filter declared in
 `plannedTestSelectors` is listed as debt, not as a pass. It exits 2 when the tree
 is not configured or no command applies, so it cannot stop checking and still
-pass. CTest runs it as `DocumentedTestCommands_SelectBuiltTests` in `build/<preset>`
-trees, where exit 2 reports Skipped. `DocumentedTestCommands_CheckerFailsClosed`
+pass. CTest runs it as `DocumentedTestCommands_SelectBuiltTests` in the
+`build/linux-gcc-release` and `build/windows-release` trees, which the documented
+commands target; any non-zero exit fails it. `DocumentedTestCommands_CheckerFailsClosed`
 runs its fixture tests. The full-CTest lanes then run what these selections
 name. The `SPARK_TEST_*` environment selectors of `SparkTests` are not ctest
 commands and are not covered by this check.

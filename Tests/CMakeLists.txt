@@ -4161,10 +4161,14 @@ add_test(
 set_tests_properties(DocumentedTestCommands_CheckerFailsClosed PROPERTIES
     LABELS "ci;policy;python;unit"
     TIMEOUT 120)
-# Only a preset tree (build/<preset>) can match a documented --test-dir. Exit 2
-# (nothing applied to this tree) reports Skipped, never Passed.
+# Registered only in the preset trees the documented commands target (pinned by
+# DocumentedCommandInventoryTests), so every registration has commands to check;
+# any non-zero exit, including 2 for "nothing applied", fails the test.
+set(SPARK_DOCUMENTED_SELECTOR_TREES linux-gcc-release windows-release)
 get_filename_component(_spark_documented_tree_parent "${CMAKE_BINARY_DIR}" DIRECTORY)
-if(_spark_documented_tree_parent STREQUAL "${CMAKE_SOURCE_DIR}/build")
+get_filename_component(_spark_documented_tree_name "${CMAKE_BINARY_DIR}" NAME)
+if(_spark_documented_tree_parent STREQUAL "${CMAKE_SOURCE_DIR}/build"
+   AND _spark_documented_tree_name IN_LIST SPARK_DOCUMENTED_SELECTOR_TREES)
     add_test(
         NAME DocumentedTestCommands_SelectBuiltTests
         COMMAND ${Python3_EXECUTABLE} -B
@@ -4172,7 +4176,6 @@ if(_spark_documented_tree_parent STREQUAL "${CMAKE_SOURCE_DIR}/build")
             --build-dir ${CMAKE_BINARY_DIR} --config $<CONFIG> --ctest ${CMAKE_CTEST_COMMAND})
     set_tests_properties(DocumentedTestCommands_SelectBuiltTests PROPERTIES
         LABELS "ci;policy;python;unit"
-        SKIP_RETURN_CODE 2
         TIMEOUT 300)
 endif()
 # MOD-360: the real OWEngineSystems music tracks and OWWorldSetup area manifests name existing files.
