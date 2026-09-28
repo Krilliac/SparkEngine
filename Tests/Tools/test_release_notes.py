@@ -13,6 +13,7 @@ import copy
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -202,6 +203,29 @@ class HappyPathTests(ReleaseNotesTestCase):
         written = self.run_tool("--output", str(output))
         self.assertEqual(written.returncode, 0, written.stderr)
         self.assertEqual(output.read_text(encoding="utf-8"), first.stdout)
+
+    def test_output_bytes_are_utf8_lf_regardless_of_locale(self):
+        # The body is UTF-8 with LF on every host. A cp1252 stdout (a Windows pipe
+        # without UTF-8 mode) must not re-encode the title's em dash, and --output
+        # must not translate newlines to CRLF.
+        env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
+        output = self.temp / "notes.md"
+        runs = []
+        for extra in ((), ("--output", str(output))):
+            args = [sys.executable, str(TOOL), "--version", "1.2.3", "--readiness", str(self.readiness),
+                    "--changelog", str(self.changelog), "--sha256sums", str(self.sums),
+                    "--expected-assets-file", str(self.assets), "--signature-control-asset", str(self.control),
+                    "--signer-fingerprint", self.fingerprint, "--source-commit", COMMIT,
+                    "--built-at", "2026-10-01T12:00:00Z", "--repository", REPOSITORY, *extra]
+            runs.append(subprocess.run(args, capture_output=True, env=env, check=False, timeout=60))
+        for result in runs:
+            self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
+        stdout = runs[0].stdout
+        stdout.decode("utf-8")
+        self.assertEqual(runs[1].stdout, b"")
+        self.assertEqual(output.read_bytes(), stdout)
+        self.assertNotIn(b"\r\n", stdout)
+        self.assertIn("## SparkEngine 1.2.3 — Stable Release\n".encode("utf-8"), stdout)
 
     def test_missing_migration_section_is_stated_not_invented(self):
         self.changelog.write_text(CHANGELOG.replace("### Migration notes\n- Open v4 saves once to migrate them to v5.\n",

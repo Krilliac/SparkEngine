@@ -481,12 +481,19 @@ def main(argv: list[str] | None = None) -> int:
     try:
         body = build_notes(args)
     except ReleaseNotesError as exc:
-        print(f"release notes: {exc}", file=sys.stderr)
+        sys.stderr.flush()
+        sys.stderr.buffer.write(f"release notes: {exc}\n".encode("utf-8"))
+        sys.stderr.buffer.flush()
         return 1
+    # The body is UTF-8 with LF on every host: write bytes so neither the locale
+    # code page (cp1252 on a Windows pipe) nor text-mode CRLF translation applies.
+    data = body.encode("utf-8")
     if args.output:
-        args.output.write_text(body, encoding="utf-8")
+        args.output.write_bytes(data)
     else:
-        sys.stdout.write(body)
+        sys.stdout.flush()
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
     return 0
 
 
