@@ -15,7 +15,7 @@ TF_WRITERS = {
     "Persistence/TFDatabase.cpp": "WriteDurableReplace(m_path,",
     "Persistence/TFOutfitStoreDisk.cpp": "WriteDurableReplace(m_path,",
     "Persistence/TFWorldSave.h": "WriteDurableReplace(path,",
-    "Game/TFSocialSystemStore.cpp": "WriteDurableReplace(m_storePath,",
+    "Game/TFSocialSystemStore.cpp": "WriteDurableReplace(path,",
 }
 # Raw file-writing or renaming APIs a TERRAFRONT source could use to bypass the durable commit.
 TF_BYPASS_TOKENS = ("std::ofstream", "fopen", "AtomicReplace", "filesystem::rename", "std::rename", "MoveFileEx")
