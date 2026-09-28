@@ -10,6 +10,7 @@
 #include "RPGEngineSystems.h"
 #include "Gameplay/RPGGameplayBridge.h"
 #include "Gameplay/RPGDemoSession.h"
+#include "Gameplay/RPGQuestAutopilot.h"
 #include "World/RPGWorldSetup.h"
 #include "Character/RPGCharacterSystem.h"
 #include "Combat/RPGCombatSystem.h"
@@ -27,6 +28,9 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace
 {
@@ -233,7 +237,8 @@ void SparkGameRPGModule::OnUnload()
 
     UnregisterConsoleCommands();
 
-    // Shutdown in reverse initialization order
+    // Shutdown in reverse initialization order; the autopilot only drives the session.
+    m_questAutopilot.reset();
     if (m_demoSession)
     {
         m_demoSession->Shutdown();
@@ -288,6 +293,9 @@ void SparkGameRPGModule::OnUpdate(float deltaTime)
 
     m_worldSetup->Update(deltaTime);
     m_combatSystem->Update(deltaTime);
+    // After the combat update, so an attack this frame sees this frame's cooldown progress.
+    if (m_questAutopilot)
+        m_questAutopilot->Step(*m_demoSession);
     m_npcSystem->Update(deltaTime);
 }
 
@@ -422,6 +430,31 @@ void SparkGameRPGModule::RegisterConsoleCommands()
                                 return m_demoSession->AcceptQuest(questId);
                             });
 
+    // Automated player for packaged runs: one rest/travel/attack/flee session action per frame until the
+    // quest completes. With no arguments it reports progress.
+    console.RegisterCommand(
+        "rpg_autoplay",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            constexpr const char* usage = "Usage: rpg_autoplay <quest-id> [quarry name] | rpg_autoplay off";
+            if (args.empty())
+                return m_questAutopilot ? m_questAutopilot->GetStatusString() : usage;
+            if (args[0] == "off")
+            {
+                m_questAutopilot.reset();
+                return "Autoplay off";
+            }
+            uint32_t questId = 0;
+            if (!ParseUint(args[0], questId) || !Spark::Gameplay::QuestSystem::GetInstance().GetQuestDef(questId))
+                return usage;
+            std::string quarry;
+            for (size_t index = 1; index < args.size(); ++index)
+                quarry += (index > 1 ? " " : "") + args[index];
+            m_questAutopilot = std::make_unique<RPG::RPGQuestAutopilot>(questId, quarry);
+            return "Autoplay started for quest " + std::to_string(questId) +
+                   (quarry.empty() ? std::string(", fighting every encounter") : ", hunting " + quarry);
+        });
+
     console.RegisterCommand("rpg_areas", [this](const std::vector<std::string>&) -> std::string
                             { return m_worldSetup->GetAreaListString(); });
 
@@ -445,6 +478,7 @@ void SparkGameRPGModule::RegisterConsoleCommands()
                                        "  rpg_restart [warrior|mage|ranger|cleric|rogue|paladin]\n"
                                        "  rpg_travel <area-id> | rpg_attack | rpg_flee | rpg_rest | rpg_talk <npc-id>\n"
                                        "  rpg_use <item-id> | rpg_accept <quest-id>\n"
+                                       "  rpg_autoplay <quest-id> [quarry name] | rpg_autoplay off\n"
                                        "  rpg_areas | rpg_classes | rpg_items | rpg_quests | rpg_npcs\n"
                                        "  rpg_save <slot> | rpg_load <slot> | rpg_weather <type> | rpg_time <hour>";
                             });
@@ -507,10 +541,10 @@ void SparkGameRPGModule::RegisterConsoleCommands()
 void SparkGameRPGModule::UnregisterConsoleCommands()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
-    constexpr std::array<const char*, 20> commandNames{
+    constexpr std::array<const char*, 21> commandNames{
         "rpg_status", "rpg_play", "rpg_restart", "rpg_travel",  "rpg_attack",  "rpg_rest",   "rpg_flee",
         "rpg_talk",   "rpg_use",  "rpg_accept",  "rpg_areas",   "rpg_classes", "rpg_quests", "rpg_npcs",
-        "rpg_items",  "rpg_save", "rpg_load",    "rpg_weather", "rpg_time",    "rpg_help",
+        "rpg_items",  "rpg_save", "rpg_load",    "rpg_weather", "rpg_time",    "rpg_help",   "rpg_autoplay",
     };
     for (const char* commandName : commandNames)
     {

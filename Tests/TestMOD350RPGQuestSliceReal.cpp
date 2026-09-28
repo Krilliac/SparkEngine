@@ -8,6 +8,8 @@
  * rpg_accept, rpg_travel, rpg_attack, rpg_flee and rpg_rest console commands call; the combat
  * system is ticked between swings the way the module's update loop ticks it. Critical hits come
  * from an unseeded RNG, so fights loop until the encounter ends instead of asserting hit counts.
+ * RPGQuestSlice_AutopilotCompletesWolfHuntThroughSessionFrames instead runs the production
+ * RPGQuestAutopilot (the rpg_autoplay command) frame by frame with real ability cooldowns.
  *
  * The RPGPersistence_* tests add the module's RPGEngineSystems bridge on top of the real SaveSystem
  * singleton (rooted in a temporary directory) and rebuild the whole stack, including the engine
@@ -23,6 +25,7 @@
 #include "../GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.h"
 #include "../GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.h"
 #include "../GameModules/SparkGameRPG/Source/Gameplay/RPGGameplayBridge.h"
+#include "../GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.h"
 #include "../GameModules/SparkGameRPG/Source/Inventory/RPGInventorySystem.h"
 #include "../GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.h"
 #include "../GameModules/SparkGameRPG/Source/World/RPGWorldSetup.h"
@@ -33,6 +36,7 @@
 #include "Spark/IEngineContext.h"
 
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -358,6 +362,53 @@ TEST(RPGQuestSlice_WolfHuntCompletesAndGrantsReward)
     ASSERT_TRUE(slice.session.RestoreState(snapshot));
     EXPECT_TRUE(quests.GetQuestState(slice.Player(), kWolfHuntQuest) == EngineQuestState::Completed);
     EXPECT_EQ(slice.CountItem(kHealthPotion), potionsBefore + 1 + rewardCount);
+}
+
+TEST(RPGQuestSlice_AutopilotCompletesWolfHuntThroughSessionFrames)
+{
+    RPGQuestSlice slice;
+    ASSERT_TRUE(slice.initialized);
+    auto& quests = QuestSystem::GetInstance();
+    const auto* wolfHunt = quests.GetQuestDef(kWolfHuntQuest);
+    ASSERT_TRUE(wolfHunt != nullptr);
+    ASSERT_EQ(wolfHunt->itemRewards.size(), static_cast<size_t>(1));
+    ASSERT_EQ(wolfHunt->itemRewards[0].first, kHealthPotion);
+    const int rewardCount = static_cast<int>(wolfHunt->itemRewards[0].second);
+    const int potionsBefore = slice.CountItem(kHealthPotion);
+
+    // The module's frame (SparkGameRPGModule::OnUpdate): the combat update at 60 Hz, then one autopilot
+    // action. Ability cooldowns advance only through those frames; nothing skips them.
+    RPGQuestAutopilot autopilot(kWolfHuntQuest, "Shadow Wolf");
+    constexpr float kFrame = 1.0f / 60.0f;
+    constexpr int kMaxFrames = 60 * 60 * 30; // 30 simulated minutes
+    int frames = 0;
+    for (; frames < kMaxFrames && autopilot.GetOutcome() == RPGQuestAutopilot::Outcome::Running; ++frames)
+    {
+        slice.combat.Update(kFrame);
+        autopilot.Step(slice.session);
+    }
+    std::printf("  wolf hunt autopilot: %d frames (%.1f s), trips=%u kills=%u: %s\n", frames,
+                static_cast<float>(frames) * kFrame, autopilot.GetTrips(), autopilot.GetKills(),
+                autopilot.GetStatusString().c_str());
+
+    ASSERT_TRUE(autopilot.GetOutcome() == RPGQuestAutopilot::Outcome::Completed);
+    EXPECT_TRUE(quests.GetQuestState(slice.Player(), kWolfHuntQuest) == EngineQuestState::Completed);
+    // Only the five shadow wolves were fought (everything else was fled), each dropping one potion,
+    // plus the quest's potion reward.
+    EXPECT_EQ(autopilot.GetKills(), 5u);
+    EXPECT_GT(autopilot.GetTrips(), 5u);
+    EXPECT_EQ(slice.CountItem(kHealthPotion), potionsBefore + 5 + rewardCount);
+
+    // A finished autopilot takes no further action.
+    const std::string snapshot = slice.session.SerializeState();
+    slice.combat.Update(kFrame);
+    EXPECT_TRUE(autopilot.Step(slice.session) == RPGQuestAutopilot::Outcome::Completed);
+    EXPECT_EQ(slice.session.SerializeState(), snapshot);
+
+    // The completed quest and its reward survive the session's persisted snapshot.
+    ASSERT_TRUE(slice.session.RestoreState(snapshot));
+    EXPECT_TRUE(quests.GetQuestState(slice.Player(), kWolfHuntQuest) == EngineQuestState::Completed);
+    EXPECT_EQ(slice.CountItem(kHealthPotion), potionsBefore + 5 + rewardCount);
 }
 
 TEST(RPGQuestSlice_ChainedQuestUnlocksAfterPrerequisite)

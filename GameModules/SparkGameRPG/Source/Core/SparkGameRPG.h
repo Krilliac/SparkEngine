@@ -26,6 +26,7 @@ namespace RPG
     class RPGCombatSystem;
     class RPGGameplayBridge;
     class RPGDemoSession;
+    class RPGQuestAutopilot;
     class RPGInventorySystem;
     class RPGNPCSystem;
     class RPGEngineSystems;
@@ -83,6 +84,7 @@ class SparkGameRPGModule : public Spark::IModule
     std::unique_ptr<RPG::RPGNPCSystem> m_npcSystem;
     std::unique_ptr<RPG::RPGEngineSystems> m_engineSystems;
     std::unique_ptr<RPG::RPGDemoSession> m_demoSession;
+    std::unique_ptr<RPG::RPGQuestAutopilot> m_questAutopilot; ///< Set by rpg_autoplay until rpg_autoplay off
 };
 
 // Module exports

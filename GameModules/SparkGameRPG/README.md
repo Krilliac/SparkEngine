@@ -36,6 +36,14 @@ automated sessions:
 Discovery and engine-integration commands include rpg_areas, rpg_classes,
 rpg_items, rpg_quests, rpg_npcs, rpg_save, rpg_load, rpg_weather, and rpg_time.
 
+`rpg_autoplay <quest-id> [quarry name]` hands the adventure to
+`Source/Gameplay/RPGQuestAutopilot`, an automated player for Thornwood hunting quests. Each
+frame, after the combat update, it performs at most one of the actions above through the same
+RPGDemoSession calls the commands use: rest in Oakhollow, travel into Thornwood, attack an
+encounter whose name contains the quarry (an empty quarry fights everything), or flee any other.
+Attacks respect real ability cooldowns. It stops when the quest completes, when Rowan falls, or
+after 400 trips. `rpg_autoplay` alone reports its progress; `rpg_autoplay off` stops it.
+
 ## Assets
 
 RPGWorldSetup streams the Blender village and dungeon kit (`Assets/Models/RPG/Kit/`, authored by
@@ -50,7 +58,8 @@ name, with its sha256 and provenance rule, for `tools/check-module-asset-refs.py
 Build the SparkGameRPG and SparkTests targets. The focused regression source is
 Tests/TestGameModuleRPG.cpp. Tests/TestMOD350RPGQuestSliceReal.cpp drives the
 quest chain (Shadow Wolves, Healing Herbs, The Dark Below) end to end through the
-session API with the real RPGGameplayBridge quest policy installed; run it with
+session API with the real RPGGameplayBridge quest policy installed, and runs the production
+RPGQuestAutopilot through the wolf hunt frame by frame at 60 Hz; run it with
 `ctest --test-dir build/linux-gcc-release -R RPGQuestSlice --output-on-failure`.
 
 ## NPC navigation

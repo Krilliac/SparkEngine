@@ -1309,6 +1309,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/World/RPGWorldSetup.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Gameplay/RPGGameplayBridge.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
     )
 
@@ -4554,7 +4555,7 @@ set_tests_properties(ModuleDiscoveryProductionSourceContract PROPERTIES
 if(TARGET imgui)
     add_test(NAME RPGQuestSlice COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(RPGQuestSlice PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=RPGQuestSlice_;SPARK_TEST_EXPECT_COUNT=2"
+        ENVIRONMENT "SPARK_TEST_NAME=RPGQuestSlice_;SPARK_TEST_EXPECT_COUNT=3"
         LABELS "module;rpg;unit"
         RUN_SERIAL TRUE
         TIMEOUT 120)
