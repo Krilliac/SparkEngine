@@ -42,11 +42,33 @@ SparkEngine's D3D12 backend provides a modern, low-level graphics API implementa
 
 ```cpp
 auto& caps = device->GetCapabilities();
-caps.rayTracingSupport;          // DXR 1.0+
-caps.meshShaderSupport;          // Mesh shader tier
-caps.bindlessResourceSupport;    // Tier 3 binding
-caps.conservativeRasterSupport;  // Conservative raster
+caps.rayTracing.supportsHardwareRT; // DXR tier reported (OPTIONS5)
+caps.rayTracingSupport;             // Any RT backend, including the software fallback
+caps.meshShaderSupport;             // Mesh shader tier (OPTIONS7)
+caps.bindlessResourceSupport;       // Resource binding tier 3
+caps.conservativeRasterSupport;     // Conservative raster
+caps.enhancedBarrierSupport;        // OPTIONS12
+caps.hostImageCopySupport;          // GPU upload heaps (OPTIONS16)
 ```
+
+`rayTracingSupport` is not "DXR": `FinalizeDeviceCapabilities` sets it for any
+backend other than `Disabled`, and a D3D12 device without a DXR tier selects
+`RayTracingBackend::Software_SDFGI`. Use `rayTracing.supportsHardwareRT` or
+`GetDXRDevice()` for DXR. Without a DXR tier, whichever query failed (no
+`ID3D12Device5`, no `OPTIONS5`, or tier `NOT_SUPPORTED`), `GetDXRDevice()` is
+null and the hardware-only fields (inline RT, tier, recursion depth) are zero.
+
+**Fallback evidence (RHI-225).** CTest `D3D12Fallback` (Windows MSVC,
+`D3D12Fallback_*`, exact count 3, label `d3d12`) runs
+`Tests/TestRHI225D3D12FallbackReal.cpp` on the adapter `D3D12Device` selects
+(the largest hardware adapter, or WARP on a GPU-less host). Every advanced flag
+must equal an independent `CheckFeatureSupport` query on the same device, two
+initializations must report identical capabilities, and the DXR entry point
+must follow its flag. The RHI cannot pick WARP on a host with a GPU, so one
+host exercises one adapter's answers; hosted runners (WARP) and GPU hosts
+cover different ones. Mesh shaders, enhanced barriers and GPU upload heaps have
+no D3D12 RHI entry point yet (`MeshShaderPipeline` always takes the traditional
+path), so for those only the reported flag is verified.
 
 ## Root Signature Layout
 

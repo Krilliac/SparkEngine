@@ -734,7 +734,16 @@ namespace Spark
                     }
                 }
                 if (!m_dxrSupported)
+                {
+                    // Same answer whichever query failed (no ID3D12Device5, no OPTIONS5, or no
+                    // tier): no DXR device to misuse, and the compute (SDFGI) path is the backend.
                     m_dxrDevice.Reset();
+                    m_capabilities.rayTracing.supportsHardwareRT = false;
+                    m_capabilities.rayTracing.supportsInlineRT = false;
+                    m_capabilities.rayTracing.raytracingTier = 0;
+                    m_capabilities.rayTracing.maxRecursionDepth = 0;
+                    m_capabilities.rayTracing.bestBackend = RayTracingBackend::Software_SDFGI;
+                }
 
                 // VRS detection (independent of DXR — VRS works for rasterization too)
                 D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = {};

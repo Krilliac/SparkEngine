@@ -1141,6 +1141,7 @@ target_sources(SparkTests PRIVATE
     TestRHI210D3D11DeviceLossReal.cpp
     TestSEC2RenderingHardeningReal.cpp
     TestRHI225D3D12ValidationReal.cpp
+    TestRHI225D3D12FallbackReal.cpp
     TestSEC4SoundEffectWav.cpp
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
@@ -2738,6 +2739,18 @@ if(WIN32)
             RUN_SERIAL TRUE
             TIMEOUT 300)
         spark_exclude_from_main_suite(D3D12_Validation_)
+
+        # RHI-225: advanced-feature fallbacks (TestRHI225D3D12FallbackReal.cpp). On the adapter
+        # D3D12Device selects (hardware, or WARP on a GPU-less host) every advanced capability
+        # flag equals an independent CheckFeatureSupport query, two initializations agree, and
+        # the DXR entry point follows its flag (no ID3D12Device5 and the software backend when
+        # unsupported). Fails when no D3D12 device can be created.
+        add_test(NAME D3D12Fallback COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(D3D12Fallback PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=D3D12Fallback_;SPARK_TEST_EXPECT_COUNT=3"
+            LABELS "d3d12"
+            RUN_SERIAL TRUE
+            TIMEOUT 120)
     endif()
 endif()
 
