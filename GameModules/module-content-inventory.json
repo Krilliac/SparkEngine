@@ -337,7 +337,6 @@
       "sharedRootDependencies": [],
       "privateEngineHeaders": [
         "Audio/MusicManager.h",
-        "Core/Platform.h",
         "Engine/Destruction/DestructionSystem.h",
         "Engine/ECS/Components.h",
         "Engine/ECS/Components/GameplayComponents.h",
@@ -348,11 +347,9 @@
         "Engine/SaveSystem/SaveSystem.h",
         "Input/InputManager.h",
         "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
-        "Utils/LogMacros.h",
-        "Utils/SparkConsole.h"
+        "Utils/InvalidStateDetector.h"
       ],
-      "privateEngineHeaderCount": 15,
+      "privateEngineHeaderCount": 12,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
       ]
@@ -469,11 +466,9 @@
         "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
         "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
-        "Utils/LogMacros.h",
-        "Utils/SparkConsole.h"
+        "Utils/InvalidStateDetector.h"
       ],
-      "privateEngineHeaderCount": 14,
+      "privateEngineHeaderCount": 12,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
       ]

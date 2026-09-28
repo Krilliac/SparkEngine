@@ -6,8 +6,7 @@
 #include "PlatformerPlayerController.h"
 #include "Checkpoint/PlatformerCheckpointSystem.h"
 #include "Input/InputManager.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -35,9 +34,7 @@ namespace Platformer
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player controller initialized");
-        console.LogInfo("[Platformer Player] Player controller initialized");
+        Spark::ModuleLog::Info(m_context, "[Platformer Player] Player controller initialized");
         return true;
     }
 
@@ -425,8 +422,6 @@ namespace Platformer
             return false;
         }
 
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer player took %d damage (lives remaining: %d)", amount,
-                        m_lives - amount);
         m_lives -= amount;
         if (m_lives <= 0)
         {
@@ -473,36 +468,33 @@ namespace Platformer
 
         if (m_lives <= 0)
             m_lives = DEFAULT_LIVES; // Restart with default lives on game over
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player respawned at (%.0f, %.0f, %.0f)", m_position.x,
-                       m_position.y, m_position.z);
+        Spark::ModuleLog::Info(m_context, "[Platformer Player] Respawned at ({:.0f}, {:.0f}, {:.0f})", m_position.x,
+                               m_position.y, m_position.z);
     }
 
     void PlatformerPlayerController::UnlockAbility(PowerUpType type)
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-
         switch (type)
         {
         case PowerUpType::DoubleJump:
             m_abilities.doubleJump = true;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer ability unlocked: Double Jump");
-            console.LogInfo("[Platformer Player] Unlocked: Double Jump");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Double Jump");
             break;
         case PowerUpType::WallJump:
             m_abilities.wallJump = true;
-            console.LogInfo("[Platformer Player] Unlocked: Wall Jump");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Wall Jump");
             break;
         case PowerUpType::Dash:
             m_abilities.dash = true;
-            console.LogInfo("[Platformer Player] Unlocked: Dash");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Dash");
             break;
         case PowerUpType::GroundPound:
             m_abilities.groundPound = true;
-            console.LogInfo("[Platformer Player] Unlocked: Ground Pound");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Ground Pound");
             break;
         case PowerUpType::Climb:
             m_abilities.climb = true;
-            console.LogInfo("[Platformer Player] Unlocked: Climb");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Climb");
             break;
         case PowerUpType::SpeedBoost:
             // Speed boost is a temporary power-up, not a permanent unlock

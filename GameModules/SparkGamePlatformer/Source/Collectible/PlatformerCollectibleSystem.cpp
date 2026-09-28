@@ -5,8 +5,7 @@
 
 #include "PlatformerCollectibleSystem.h"
 #include "Engine/ECS/Components.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -33,11 +32,8 @@ namespace Platformer
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer collectible system initialized with %zu collectibles",
-                       m_collectibles.size());
-        console.LogInfo("[Platformer Collectible] System initialized with " + std::to_string(m_collectibles.size()) +
-                        " collectibles");
+        Spark::ModuleLog::Info(m_context, "[Platformer Collectible] System initialized with {} collectibles",
+                               m_collectibles.size());
         return true;
     }
 
@@ -169,8 +165,6 @@ namespace Platformer
                 {
                 case CollectibleType::Coin:
                     m_coinsCollected += item.value;
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer coin collected (total: %d)",
-                                    m_coinsCollected);
                     break;
                 case CollectibleType::Gem:
                     m_gemsCollected += item.value;

@@ -16,19 +16,20 @@
 #include "Hazard/PlatformerHazardSystem.h"
 #include "Checkpoint/PlatformerCheckpointSystem.h"
 #include "Camera/PlatformerCameraSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 #include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
 
 #include <Spark/ModuleDllMain.h>
+#include <Spark/ModuleLog.h>
 
 #include <cmath>
 #include <format>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 // =============================================================================
@@ -66,15 +67,13 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Platformer] Loading Spark Platformer module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module loading — initializing 7 subsystems");
+    Spark::ModuleLog::Info(context, "[Platformer] Loading Spark Platformer module (7 subsystems)...");
 
     // Initialize level system first (provides platform/spawn data to other systems)
     m_levelSystem = std::make_unique<Platformer::PlatformerLevelSystem>();
     if (!m_levelSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize level system");
+        Spark::ModuleLog::Error(context, "[Platformer] Failed to initialize level system");
         return false;
     }
 
@@ -82,7 +81,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_checkpointSystem = std::make_unique<Platformer::PlatformerCheckpointSystem>();
     if (!m_checkpointSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize checkpoint system");
+        Spark::ModuleLog::Error(context, "[Platformer] Failed to initialize checkpoint system");
         return false;
     }
 
@@ -90,7 +89,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_playerController = std::make_unique<Platformer::PlatformerPlayerController>();
     if (!m_playerController->Initialize(context, m_checkpointSystem.get(), m_levelSystem.get()))
     {
-        console.LogError("[Platformer] Failed to initialize player controller");
+        Spark::ModuleLog::Error(context, "[Platformer] Failed to initialize player controller");
         return false;
     }
 
@@ -98,7 +97,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_collectibleSystem = std::make_unique<Platformer::PlatformerCollectibleSystem>();
     if (!m_collectibleSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize collectible system");
+        Spark::ModuleLog::Error(context, "[Platformer] Failed to initialize collectible system");
         return false;
     }
 
@@ -106,7 +105,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_hazardSystem = std::make_unique<Platformer::PlatformerHazardSystem>();
     if (!m_hazardSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize hazard system");
+        Spark::ModuleLog::Error(context, "[Platformer] Failed to initialize hazard system");
         return false;
     }
 
@@ -114,7 +113,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_cameraSystem = std::make_unique<Platformer::PlatformerCameraSystem>();
     if (!m_cameraSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize camera system");
+        Spark::ModuleLog::Error(context, "[Platformer] Failed to initialize camera system");
         return false;
     }
 
@@ -124,7 +123,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
                                                                 m_checkpointSystem.get(), m_playerController.get()};
     if (!m_engineSystems->Initialize(context, progressSystems))
     {
-        console.LogError("[Platformer] Failed to initialize engine systems");
+        Spark::ModuleLog::Error(context, "[Platformer] Failed to initialize engine systems");
         return false;
     }
 
@@ -132,7 +131,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
         *m_levelSystem, *m_playerController, *m_collectibleSystem, *m_hazardSystem, *m_checkpointSystem);
     if (!LoadPlayableLevel(0))
     {
-        console.LogError("[Platformer] Failed to start the first playable level");
+        Spark::ModuleLog::Error(context, "[Platformer] Failed to start the first playable level");
         return false;
     }
 
@@ -163,13 +162,12 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
                            }});
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module loaded successfully");
-    console.LogInfo("[Platformer] Spark Platformer module loaded successfully (7 subsystems)");
-    console.LogInfo("[Platformer] Levels: " + std::to_string(m_levelSystem->GetLevelCount()) +
-                    " | Collectibles: " + std::to_string(m_collectibleSystem->GetTotalCollectibleCount()) +
-                    " | Hazards: " + std::to_string(m_hazardSystem->GetHazardCount()) +
-                    " | Checkpoints: " + std::to_string(m_checkpointSystem->GetCheckpointCount()));
-    console.LogInfo("[Platformer] Controls: A/D move, Shift run, Space jump, E dash, Ctrl ground pound, R respawn");
+    Spark::ModuleLog::Info(context, "[Platformer] Spark Platformer module loaded successfully (7 subsystems)");
+    Spark::ModuleLog::Info(context, "[Platformer] Levels: {} | Collectibles: {} | Hazards: {} | Checkpoints: {}",
+                           m_levelSystem->GetLevelCount(), m_collectibleSystem->GetTotalCollectibleCount(),
+                           m_hazardSystem->GetHazardCount(), m_checkpointSystem->GetCheckpointCount());
+    Spark::ModuleLog::Info(
+        context, "[Platformer] Controls: A/D move, Shift run, Space jump, E dash, Ctrl ground pound, R respawn");
     return true;
 }
 
@@ -187,9 +185,15 @@ void SparkGamePlatformerModule::OnUnload()
     // them before the module image is unmapped during hot unload/reload.
     Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("Platformer");
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Platformer] Unloading Spark Platformer module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module shutting down");
+    // Command handlers are std::functions in this DLL too, and they reference the systems torn down below.
+    if (Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr)
+    {
+        for (const std::string& name : m_consoleCommands)
+            console->UnregisterCommand(name);
+    }
+    m_consoleCommands.clear();
+
+    Spark::ModuleLog::Info(m_context, "[Platformer] Unloading Spark Platformer module...");
 
     // Shutdown in reverse initialization order; the flow and runner only reference the systems below.
     m_routeRunner.reset();
@@ -230,10 +234,9 @@ void SparkGamePlatformerModule::OnUnload()
         m_levelSystem.reset();
     }
 
+    Spark::ModuleLog::Info(m_context, "[Platformer] Spark Platformer module unloaded");
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module unloaded");
-    console.LogInfo("[Platformer] Spark Platformer module unloaded");
 }
 
 void SparkGamePlatformerModule::OnUpdate(float deltaTime)
@@ -242,7 +245,7 @@ void SparkGamePlatformerModule::OnUpdate(float deltaTime)
         return;
 
     if (m_levelFlow->StepFrame(deltaTime).goalReached)
-        Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Goal reached. Use platformer_next to continue.");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Goal reached. Use platformer_next to continue.");
 
     m_cameraSystem->Update(deltaTime, m_playerController->GetPlayerPosition());
     m_engineSystems->Update(deltaTime);
@@ -302,140 +305,150 @@ void SparkGamePlatformerModule::OnImGui()
 
 void SparkGamePlatformerModule::RegisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
+    Spark::IConsole* host = m_context->GetConsole();
+    if (!host)
+    {
+        Spark::ModuleLog::Warn(m_context, "[Platformer] Host has no console; Platformer commands are unavailable");
+        return;
+    }
+    // Remember each accepted name so OnUnload removes exactly what this module registered.
+    auto registerCommand = [this, host](std::string_view name, Spark::IConsole::CommandHandler handler)
+    {
+        if (host->RegisterCommand(name, std::move(handler), "", "Platformer", ""))
+            m_consoleCommands.emplace_back(name);
+        else
+            Spark::ModuleLog::Warn(m_context, "[Platformer] Console command '{}' was not registered", name);
+    };
 
-    console.RegisterCommand("platformer_status",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                if (!m_levelSystem)
-                                    return "Platformer module not initialized";
+    registerCommand("platformer_status",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        if (!m_levelSystem)
+                            return "Platformer module not initialized";
 
-                                std::string status = "=== Spark Platformer Status ===\n";
-                                status +=
-                                    "Current Level: " + std::to_string(m_levelSystem->GetCurrentLevelIndex()) + "\n";
-                                status += "Total Levels: " + std::to_string(m_levelSystem->GetLevelCount()) + "\n";
-                                status += "Player State: " + m_playerController->GetStateString() + "\n";
-                                status += "Lives: " + std::to_string(m_playerController->GetLives()) + "\n";
-                                status += "Coins: " + std::to_string(m_collectibleSystem->GetCoinsCollected()) + "\n";
-                                status += "Stars: " + std::to_string(m_collectibleSystem->GetStarsCollected()) + "\n";
-                                status +=
-                                    "Checkpoints: " + std::to_string(m_checkpointSystem->GetActivatedCount()) + "\n";
-                                status += std::format("Level time: {:.2f}\n", m_levelSystem->GetLevelTimer());
-                                return status;
-                            });
+                        std::string status = "=== Spark Platformer Status ===\n";
+                        status += "Current Level: " + std::to_string(m_levelSystem->GetCurrentLevelIndex()) + "\n";
+                        status += "Total Levels: " + std::to_string(m_levelSystem->GetLevelCount()) + "\n";
+                        status += "Player State: " + m_playerController->GetStateString() + "\n";
+                        status += "Lives: " + std::to_string(m_playerController->GetLives()) + "\n";
+                        status += "Coins: " + std::to_string(m_collectibleSystem->GetCoinsCollected()) + "\n";
+                        status += "Stars: " + std::to_string(m_collectibleSystem->GetStarsCollected()) + "\n";
+                        status += "Checkpoints: " + std::to_string(m_checkpointSystem->GetActivatedCount()) + "\n";
+                        status += std::format("Level time: {:.2f}\n", m_levelSystem->GetLevelTimer());
+                        return status;
+                    });
 
     // Automated player for packaged runs: the level 0 route runner drives the controller's input API each
     // fixed step, and the controller stops polling the (idle) keyboard while it does.
-    console.RegisterCommand("platformer_autoplay",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
-                                {
-                                    return "Usage: platformer_autoplay on|off";
-                                }
-                                if (args[0] == "off")
-                                {
-                                    m_routeRunner.reset();
-                                    m_playerController->SetExternalInputDriven(false);
-                                    m_playerController->SetMovementInput(0.0f);
-                                    m_playerController->SetJumpInput(false);
-                                    return "Autoplay off";
-                                }
-                                if (m_levelSystem->GetCurrentLevelIndex() !=
-                                    Platformer::PlatformerRouteRunner::kRouteLevel)
-                                {
-                                    return "Autoplay follows the level 0 route only; load it with platformer_level 0";
-                                }
-                                m_routeRunner = std::make_unique<Platformer::PlatformerRouteRunner>();
-                                m_playerController->SetExternalInputDriven(true);
-                                return "Autoplay on (level 0 route)";
-                            });
+    registerCommand("platformer_autoplay",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+                        {
+                            return "Usage: platformer_autoplay on|off";
+                        }
+                        if (args[0] == "off")
+                        {
+                            m_routeRunner.reset();
+                            m_playerController->SetExternalInputDriven(false);
+                            m_playerController->SetMovementInput(0.0f);
+                            m_playerController->SetJumpInput(false);
+                            return "Autoplay off";
+                        }
+                        if (m_levelSystem->GetCurrentLevelIndex() != Platformer::PlatformerRouteRunner::kRouteLevel)
+                        {
+                            return "Autoplay follows the level 0 route only; load it with platformer_level 0";
+                        }
+                        m_routeRunner = std::make_unique<Platformer::PlatformerRouteRunner>();
+                        m_playerController->SetExternalInputDriven(true);
+                        return "Autoplay on (level 0 route)";
+                    });
 
-    console.RegisterCommand("platformer_levels", [this](const std::vector<std::string>&) -> std::string
-                            { return m_levelSystem->GetLevelListString(); });
+    registerCommand("platformer_levels", [this](const std::vector<std::string>&) -> std::string
+                    { return m_levelSystem->GetLevelListString(); });
 
-    console.RegisterCommand("platformer_player", [this](const std::vector<std::string>&) -> std::string
-                            { return m_playerController->GetPlayerStatusString(); });
+    registerCommand("platformer_player", [this](const std::vector<std::string>&) -> std::string
+                    { return m_playerController->GetPlayerStatusString(); });
 
-    console.RegisterCommand("platformer_level",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.empty())
-                                    return "Usage: platformer_level <index>";
-                                uint32_t idx;
-                                try
-                                {
-                                    idx = static_cast<uint32_t>(std::stoi(args[0]));
-                                }
-                                catch (const std::exception&)
-                                {
-                                    return "Invalid level index: " + args[0];
-                                }
-                                return LoadPlayableLevel(idx) ? "Level " + std::to_string(idx) + " loaded"
-                                                              : "Failed to load level";
-                            });
+    registerCommand("platformer_level",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.empty())
+                            return "Usage: platformer_level <index>";
+                        uint32_t idx;
+                        try
+                        {
+                            idx = static_cast<uint32_t>(std::stoi(args[0]));
+                        }
+                        catch (const std::exception&)
+                        {
+                            return "Invalid level index: " + args[0];
+                        }
+                        return LoadPlayableLevel(idx) ? "Level " + std::to_string(idx) + " loaded"
+                                                      : "Failed to load level";
+                    });
 
-    console.RegisterCommand("platformer_next",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                const uint32_t next = m_levelSystem->GetCurrentLevelIndex() + 1;
-                                if (next >= m_levelSystem->GetLevelCount())
-                                    return "All platformer levels completed";
-                                return LoadPlayableLevel(next) ? "Advanced to level " + std::to_string(next)
-                                                               : "Next level is still locked";
-                            });
+    registerCommand("platformer_next",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        const uint32_t next = m_levelSystem->GetCurrentLevelIndex() + 1;
+                        if (next >= m_levelSystem->GetLevelCount())
+                            return "All platformer levels completed";
+                        return LoadPlayableLevel(next) ? "Advanced to level " + std::to_string(next)
+                                                       : "Next level is still locked";
+                    });
 
-    console.RegisterCommand("platformer_restart",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                const uint32_t current = m_levelSystem->GetCurrentLevelIndex();
-                                return LoadPlayableLevel(current) ? "Level restarted" : "Failed to restart level";
-                            });
+    registerCommand("platformer_restart",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        const uint32_t current = m_levelSystem->GetCurrentLevelIndex();
+                        return LoadPlayableLevel(current) ? "Level restarted" : "Failed to restart level";
+                    });
 
-    console.RegisterCommand("platformer_respawn",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                m_playerController->Respawn();
-                                return "Player respawned at last checkpoint";
-                            });
+    registerCommand("platformer_respawn",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        m_playerController->Respawn();
+                        return "Player respawned at last checkpoint";
+                    });
 
-    console.RegisterCommand("platformer_collectibles", [this](const std::vector<std::string>&) -> std::string
-                            { return m_collectibleSystem->GetCollectionString(); });
+    registerCommand("platformer_collectibles", [this](const std::vector<std::string>&) -> std::string
+                    { return m_collectibleSystem->GetCollectionString(); });
 
     // --- Engine system commands ---
 
-    console.RegisterCommand("plat_save",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                std::string slot = args.empty() ? "plat_slot1" : args[0];
-                                return m_engineSystems->SaveProgress(slot) ? "Saved to " + slot : "Save failed";
-                            });
+    registerCommand("plat_save",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        std::string slot = args.empty() ? "plat_slot1" : args[0];
+                        return m_engineSystems->SaveProgress(slot) ? "Saved to " + slot : "Save failed";
+                    });
 
-    console.RegisterCommand("plat_load",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                std::string slot = args.empty() ? "plat_slot1" : args[0];
-                                return m_engineSystems->LoadProgress(slot) ? "Loaded from " + slot : "Load failed";
-                            });
+    registerCommand("plat_load",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        std::string slot = args.empty() ? "plat_slot1" : args[0];
+                        return m_engineSystems->LoadProgress(slot) ? "Loaded from " + slot : "Load failed";
+                    });
 
-    console.RegisterCommand("plat_replay_start",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                m_engineSystems->StartReplayRecording();
-                                return "Replay recording started";
-                            });
+    registerCommand("plat_replay_start",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        m_engineSystems->StartReplayRecording();
+                        return "Replay recording started";
+                    });
 
-    console.RegisterCommand("plat_replay_stop",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                m_engineSystems->StopReplayRecording();
-                                return "Replay recording stopped and saved";
-                            });
+    registerCommand("plat_replay_stop",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        m_engineSystems->StopReplayRecording();
+                        return "Replay recording stopped and saved";
+                    });
 
-    console.RegisterCommand("plat_ghost",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                m_engineSystems->ToggleGhostPlayback();
-                                return "Ghost playback toggled";
-                            });
+    registerCommand("plat_ghost",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        m_engineSystems->ToggleGhostPlayback();
+                        return "Ghost playback toggled";
+                    });
 }

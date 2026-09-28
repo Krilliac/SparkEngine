@@ -5,8 +5,7 @@
 
 #include "RTSCommandSystem.h"
 #include "Unit/RTSUnitSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -27,8 +26,7 @@ namespace RTS
         m_context = context;
         m_unitSystem = unitSystem;
         m_buildingSystem = buildingSystem;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS command system initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Command system initialized");
+        Spark::ModuleLog::Info(m_context, "[RTS] Command system initialized");
         return true;
     }
 
@@ -111,8 +109,6 @@ namespace RTS
         queue.clear();
         queue.push_back(command);
         queue.back().path.clear();
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS command issued to unit %u (type=%d)", unitId,
-                        static_cast<int>(command.type));
     }
 
     void RTSCommandSystem::QueueCommand(uint32_t unitId, const UnitCommand& command)

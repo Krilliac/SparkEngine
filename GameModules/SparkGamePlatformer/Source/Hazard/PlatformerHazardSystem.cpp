@@ -5,8 +5,7 @@
 
 #include "PlatformerHazardSystem.h"
 #include "Engine/ECS/Components.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -29,10 +28,7 @@ namespace Platformer
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer hazard system initialized with %zu hazards",
-                       m_hazards.size());
-        console.LogInfo("[Platformer Hazard] System initialized with " + std::to_string(m_hazards.size()) + " hazards");
+        Spark::ModuleLog::Info(m_context, "[Platformer Hazard] System initialized with {} hazards", m_hazards.size());
         return true;
     }
 
@@ -254,8 +250,6 @@ namespace Platformer
                 proj.velY = hazard.fireDirY * hazard.projectileSpeed;
                 proj.damage = hazard.damage;
                 m_projectiles.push_back(proj);
-                SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer projectile fired from (%.0f, %.0f)", hazard.posX,
-                                hazard.posY);
             }
         }
 
@@ -286,9 +280,6 @@ namespace Platformer
             float t = std::fmod(m_globalTimer, cycleTime);
             bool wasActive = hazard.active;
             hazard.active = (t < hazard.laserOnTime);
-            if (hazard.active != wasActive)
-                SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer laser %u toggled %s", hazard.id,
-                                hazard.active ? "ON" : "OFF");
         }
     }
 

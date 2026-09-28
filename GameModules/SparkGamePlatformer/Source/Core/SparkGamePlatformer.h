@@ -17,6 +17,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace Platformer
@@ -66,6 +68,7 @@ class SparkGamePlatformerModule : public Spark::IModule
     bool LoadPlayableLevel(uint32_t index);
 
     Spark::IEngineContext* m_context{nullptr};
+    std::vector<std::string> m_consoleCommands; ///< Registered through m_context->GetConsole(); removed in OnUnload
     bool m_initialized{false};
     bool m_paused{false};
 
