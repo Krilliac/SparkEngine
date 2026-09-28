@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3598,
+      "line": 3593,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1396,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3636,
+      "line": 3631,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1405,10 +1405,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3152,
+      "line": 3147,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3080",
+          "id": "Tests/CMakeLists.txt:3092",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1422,7 +1422,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3879,
+      "line": 3874,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1500,7 +1500,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1632,
+      "line": 1634,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2690,10 +2690,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 4400,
+      "line": 4395,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:4398",
+          "id": "Tests/CMakeLists.txt:4393",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2860,10 +2860,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1413,
+      "line": 1415,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1401",
+          "id": "Tests/CMakeLists.txt:1403",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -4541,7 +4541,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 4400,
+          "line": 4395,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4721,7 +4721,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1413,
+          "line": 1415,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -9329,7 +9329,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 24,
+        "stepCount": 25,
         "steps": [
           {
             "index": 0,
@@ -9506,6 +9506,18 @@
           },
           {
             "index": 14,
+            "name": "Install D3D11 debug layer (Graphics Tools)",
+            "id": "",
+            "uses": "",
+            "shell": "pwsh",
+            "if": "matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "5000f15b9866d810"
+          },
+          {
+            "index": 15,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -9517,7 +9529,7 @@
             "runDigest": "5db485c42c212495"
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -9529,7 +9541,7 @@
             "runDigest": "04d1482b4a194b41"
           },
           {
-            "index": 16,
+            "index": 17,
             "name": "Census of production-source vs mirror tests",
             "id": "",
             "uses": "",
@@ -9541,7 +9553,7 @@
             "runDigest": "dcf673dbd92d4a69"
           },
           {
-            "index": 17,
+            "index": 18,
             "name": "Upload exact-commit CTest report",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9553,7 +9565,7 @@
             "runDigest": ""
           },
           {
-            "index": 18,
+            "index": 19,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9565,7 +9577,7 @@
             "runDigest": ""
           },
           {
-            "index": 19,
+            "index": 20,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -9577,7 +9589,7 @@
             "runDigest": "fe715c78b7a4aa4e"
           },
           {
-            "index": 20,
+            "index": 21,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9589,7 +9601,7 @@
             "runDigest": ""
           },
           {
-            "index": 21,
+            "index": 22,
             "name": "Upload sccache server log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9601,7 +9613,7 @@
             "runDigest": ""
           },
           {
-            "index": 22,
+            "index": 23,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -9613,7 +9625,7 @@
             "runDigest": "2eb3edeb34e3cec9"
           },
           {
-            "index": 23,
+            "index": 24,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -13786,7 +13798,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {
           "config": "Debug"
         },
@@ -13811,7 +13823,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {
           "config": "Debug"
         },
@@ -13947,7 +13959,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {
           "config": "Release"
         },
@@ -13972,7 +13984,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {
           "config": "Release"
         },
@@ -18259,7 +18271,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {
           "config": "Debug"
         },
@@ -18284,7 +18296,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {
           "config": "Debug"
         },
@@ -18334,7 +18346,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {
           "config": "Release"
         },
@@ -18359,7 +18371,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {
           "config": "Release"
         },

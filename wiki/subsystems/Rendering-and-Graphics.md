@@ -694,11 +694,11 @@ The `AssetPipeline` is rebuilt empty on the new device, so mesh owners must load
 
 | CTest | Tests | Needs |
 |-------|-------|-------|
-| `D3D11_Validation` | `D3D11_Validation_*` (3): 16 WARP engine frames around a resize are clean, the counter sees an injected `CreateBuffer` error, and the RHI golden triangle is clean | Graphics Tools debug layer |
+| `D3D11_Validation` | `D3D11_Validation_*` (4): 16 WARP engine frames around a resize are clean, the counter sees an injected `CreateBuffer` error, the RHI golden triangle is clean, and 2,000 texture, buffer and pipeline create/destroy cycles raise no errors and return to the debug layer's live-object baseline | Graphics Tools debug layer |
 | `D3D11_DeviceLoss` | `D3D11_DeviceLoss_*` (2): the reset creates a new, healthy device that renders the same frame again; attach mode refuses without teardown | WARP |
-| `D3D11_Resource` | `D3D11_Resource_*` (4): the render-target contracts, rendering after a resize to 1x1, 1920x1080 and 320x240, and 2,000 texture, buffer and pipeline create/destroy cycles returning to the debug layer's live-object baseline | Graphics Tools debug layer (the stress test) |
+| `D3D11_Resource` | `D3D11_Resource_*` (3): the render-target contracts and rendering after a resize to 1x1, 1920x1080 and 320x240 | a D3D11 device (the render-target contracts skip without one); WARP for the resize |
 
-`D3D11_Validation_` and `D3D11_Resource_` are excluded from the main `SparkEngineTests` run. On a host without the debug layer they fail in their own lanes and nowhere else. The fixture lives in `Tests/RHI210D3D11EngineFixture.h`.
+Only `D3D11_Validation_` is excluded from the main `SparkEngineTests` run: on a host without the debug layer it fails in its own lane (label `d3d11-debug-layer`) and nowhere else. `build-windows-vs2022` installs the Graphics Tools feature (`Tools.Graphics.DirectX~~~~0.0.1.0`) before running ctest and fails that step if `d3d11_3SDKLayers.dll` is still missing. The fixture lives in `Tests/RHI210D3D11EngineFixture.h`.
 
 ---
 

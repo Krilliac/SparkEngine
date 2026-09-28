@@ -2617,19 +2617,20 @@ if(WIN32)
         TIMEOUT 60)
     add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(D3D11_Resource PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=D3D11_Resource_;SPARK_TEST_EXPECT_COUNT=4"
+        ENVIRONMENT "SPARK_TEST_NAME=D3D11_Resource_;SPARK_TEST_EXPECT_COUNT=3"
         LABELS "d3d11-stress;d3d11;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 180)
-    # RHI-210: SPARK_D3D11_DEBUG_LAYER validation of real engine and RHI frames, and
-    # full device-loss recovery through gfx_reset_device (TestRHI210D3D11ValidationReal.cpp,
-    # TestRHI210D3D11DeviceLossReal.cpp). The validation and resource-stress tests need the
-    # Windows Graphics Tools debug layer and fail without it, so both families run only in
-    # their own lanes.
+    # RHI-210: SPARK_D3D11_DEBUG_LAYER validation of real engine and RHI frames plus the
+    # debug-layer create/destroy stress (TestRHI210D3D11ValidationReal.cpp), and full
+    # device-loss recovery through gfx_reset_device (TestRHI210D3D11DeviceLossReal.cpp).
+    # Every D3D11_Validation_ test needs the Windows Graphics Tools debug layer and fails
+    # (never skips) without it, so the family runs only in its own lane, labelled
+    # d3d11-debug-layer; build-windows-vs2022 installs the layer before running ctest.
     add_test(NAME D3D11_Validation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(D3D11_Validation PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=D3D11_Validation_;SPARK_TEST_EXPECT_COUNT=3"
-        LABELS "d3d11-validation;d3d11;stable-v1"
+        ENVIRONMENT "SPARK_TEST_NAME=D3D11_Validation_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "d3d11-validation;d3d11-debug-layer;d3d11;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 180)
     add_test(NAME D3D11_DeviceLoss COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
@@ -2639,7 +2640,6 @@ if(WIN32)
         RUN_SERIAL TRUE
         TIMEOUT 120)
     spark_exclude_from_main_suite(D3D11_Validation_)
-    spark_exclude_from_main_suite(D3D11_Resource_)
 endif()
 
 # SEC4 audio: SoundEffect accepts only PCM / IEEE-float WAV fmt chunks with

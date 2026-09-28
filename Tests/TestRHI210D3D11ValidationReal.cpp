@@ -14,6 +14,9 @@
  *     count, so a clean result above is a real observation, not a dead counter.
  *   - D3D11_Validation_RHIGoldenTriangleIsClean: the D3D11_Golden triangle drawn
  *     through a debug-layer D3D11Device is correct and raises no errors.
+ *   - D3D11_Validation_CreateDestroyStressReturnsToBaseline: 2,000 texture/buffer/
+ *     pipeline create-destroy cycles on a debug-layer D3D11Device raise no errors
+ *     and leave the layer's live-object count where it started.
  *
  * The layer needs the Windows "Graphics Tools" optional feature. These tests fail
  * (never skip) without it, so the dedicated D3D11_Validation CTest lane cannot
@@ -42,6 +45,20 @@ namespace
     constexpr const char* kMissingLayer =
         "GraphicsEngine::Initialize failed with SPARK_D3D11_DEBUG_LAYER=1; is the Windows 'Graphics Tools' "
         "optional feature (D3D11 debug layer) installed?";
+
+    /// Every live D3D11 object of @p device, as reported one message per object by
+    /// ReportLiveDeviceObjects(DETAIL). Deferred destruction is flushed first.
+    uint64_t CountLiveObjects(Spark::RHI::D3D11::D3D11Device& device, ID3D11Debug* debug)
+    {
+        ID3D11InfoQueue* queue = device.GetInfoQueue();
+        device.GetD3D11Context()->ClearState();
+        device.GetD3D11Context()->Flush();
+        queue->ClearStoredMessages();
+        debug->ReportLiveDeviceObjects(static_cast<D3D11_RLDO_FLAGS>(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL));
+        const uint64_t live = queue->GetNumStoredMessages();
+        queue->ClearStoredMessages();
+        return live;
+    }
 } // namespace
 
 TEST(D3D11_Validation_EngineFramesAreClean)
@@ -224,6 +241,98 @@ TEST(D3D11_Validation_RHIGoldenTriangleIsClean)
     vs.reset();
     ps.reset();
     target.reset();
+    device.Shutdown();
+}
+
+TEST(D3D11_Validation_CreateDestroyStressReturnsToBaseline)
+{
+    using namespace Spark::RHI;
+
+    D3D11::D3D11Device device;
+    RHIDeviceDesc deviceDesc;
+    deviceDesc.preferredBackend = GraphicsBackend::D3D11;
+    deviceDesc.enableDebugLayer = true;
+    deviceDesc.applicationName = "SparkTests_RHI210_Stress";
+    const bool initialized = device.Initialize(deviceDesc);
+    if (!initialized)
+        std::cerr << "  D3D11Device::Initialize failed with enableDebugLayer; is the D3D11 debug layer installed?\n";
+    ASSERT_TRUE(initialized);
+    ASSERT_TRUE(device.GetInfoQueue() != nullptr);
+    Microsoft::WRL::ComPtr<ID3D11Debug> debug;
+    ASSERT_TRUE(SUCCEEDED(device.GetD3D11Device()->QueryInterface(IID_PPV_ARGS(&debug))));
+
+    RHIShaderDesc vsDesc;
+    vsDesc.stage = RHIShaderStage::Vertex;
+    vsDesc.debugName = "RHI210_StressVS";
+    vsDesc.sourceCode = "float4 main(float2 pos : POSITION) : SV_Position { return float4(pos, 0.5f, 1.0f); }\n";
+    RHIShaderDesc psDesc;
+    psDesc.stage = RHIShaderStage::Pixel;
+    psDesc.debugName = "RHI210_StressPS";
+    psDesc.sourceCode = "float4 main() : SV_Target { return float4(0.2f, 0.6f, 0.9f, 1.0f); }\n";
+    auto vs = device.CreateShader(vsDesc);
+    auto ps = device.CreateShader(psDesc);
+    ASSERT_TRUE(vs != nullptr && ps != nullptr);
+
+    RHIPipelineStateDesc pipelineDesc;
+    RHIInputElement position;
+    position.semanticName = "POSITION";
+    position.format = RHIVertexFormat::Float2;
+    pipelineDesc.inputLayout.elements.push_back(position);
+    pipelineDesc.renderTargetFormats[0] = PixelFormat::R8G8B8A8_UNORM;
+    pipelineDesc.debugName = "RHI210_StressPSO";
+
+    const float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, 0.5f, -0.5f};
+    RHIBufferDesc bufferDesc;
+    bufferDesc.size = sizeof(vertices);
+    bufferDesc.stride = sizeof(float) * 2;
+    bufferDesc.usage = RHIBufferUsage::Vertex;
+    bufferDesc.access = RHIBufferAccess::Static;
+    bufferDesc.initialData = vertices;
+    bufferDesc.debugName = "RHI210_StressVB";
+
+    RHITextureDesc textureDesc;
+    textureDesc.width = 64;
+    textureDesc.height = 64;
+    textureDesc.format = PixelFormat::R8G8B8A8_UNORM;
+    textureDesc.usage = RHITextureUsage::RenderTarget | RHITextureUsage::ShaderResource;
+    textureDesc.debugName = "RHI210_StressRT";
+
+    const uint64_t baseline = CountLiveObjects(device, debug.Get());
+    ASSERT_TRUE(baseline > 0);
+
+    // Control: the count sees one extra live object, so an unchanged count after
+    // the loop is a measurement, not a counter that stopped counting.
+    {
+        auto held = device.CreateBuffer(bufferDesc);
+        ASSERT_TRUE(held != nullptr);
+        EXPECT_GT(CountLiveObjects(device, debug.Get()), baseline);
+    }
+    EXPECT_EQ(CountLiveObjects(device, debug.Get()), baseline);
+
+    constexpr int kCycles = 2000;
+    int created = 0;
+    GraphicsEngine::ValidationCounts counts;
+    for (int cycle = 0; cycle < kCycles; ++cycle)
+    {
+        auto texture = device.CreateTexture(textureDesc);
+        auto buffer = device.CreateBuffer(bufferDesc);
+        auto pipeline = device.CreatePipelineState(pipelineDesc, vs.get(), ps.get());
+        if (texture && buffer && pipeline)
+            ++created;
+        // Drain every cycle: the queue keeps its default storage limit, and a
+        // message dropped by it would never be classified.
+        GraphicsEngine::AccumulateValidationMessages(device.GetInfoQueue(), counts);
+    }
+    EXPECT_EQ(created, kCycles);
+    EXPECT_EQ(device.GetInfoQueue()->GetNumMessagesDiscardedByMessageCountLimit(), 0u);
+    EXPECT_EQ(counts.corruption, 0u);
+    EXPECT_EQ(counts.errors, 0u);
+
+    EXPECT_EQ(CountLiveObjects(device, debug.Get()), baseline);
+
+    vs.reset();
+    ps.reset();
+    debug.Reset();
     device.Shutdown();
 }
 

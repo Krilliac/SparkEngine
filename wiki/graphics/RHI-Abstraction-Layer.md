@@ -204,7 +204,7 @@ This is software-rasterizer shader evidence, not an engine-pass golden: `Graphic
 
 ### D3D11 debug-layer validation (RHI-210)
 
-`D3D11Device` created with `RHIDeviceDesc::enableDebugLayer` exposes the debug layer's `ID3D11InfoQueue` through `GetInfoQueue()`, set never to break on a message. The queue keeps the default storage limit, because nothing drains it every frame, so callers drain it with `GraphicsEngine::AccumulateValidationMessages`. That is the same severity rule the engine applies each frame under `SPARK_D3D11_DEBUG_LAYER=1`. The `D3D11_Validation` and `D3D11_Resource` CTest lanes use this path to render the golden triangle and to run a 2,000-cycle create/destroy stress on a debug device. Both lanes require the Windows Graphics Tools debug layer. Device-loss recovery and the engine-side counters are covered in [Rendering and Graphics](../subsystems/Rendering-and-Graphics.md).
+`D3D11Device` created with `RHIDeviceDesc::enableDebugLayer` exposes the debug layer's `ID3D11InfoQueue` through `GetInfoQueue()`, set never to break on a message. The queue keeps the default storage limit, because nothing drains it every frame, so callers drain it with `GraphicsEngine::AccumulateValidationMessages`. That is the same severity rule the engine applies each frame under `SPARK_D3D11_DEBUG_LAYER=1`. The `D3D11_Validation` CTest lane uses this path to render the golden triangle and to run a 2,000-cycle create/destroy stress on a debug device. The lane requires the Windows Graphics Tools debug layer, carries the `d3d11-debug-layer` label, and `build-windows-vs2022` installs the layer before it runs ctest. Device-loss recovery and the engine-side counters are covered in [Rendering and Graphics](../subsystems/Rendering-and-Graphics.md).
 
 ---
 

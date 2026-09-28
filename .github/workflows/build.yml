@@ -1766,6 +1766,25 @@ jobs:
         path: ${{ runner.temp }}\sccache
         key: ${{ steps.sccache-restore.outputs.cache-primary-key }}
 
+    # RHI-210: the D3D11_Validation lane (label d3d11-debug-layer) creates D3D11
+    # debug-layer devices and fails, never skips, without the Windows "Graphics
+    # Tools" optional feature. Install it and fail here, with a named cause, when
+    # the layer DLL is still missing instead of letting ctest report it as a test bug.
+    - name: Install D3D11 debug layer (Graphics Tools)
+      if: matrix.config == 'Release'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $capability = 'Tools.Graphics.DirectX~~~~0.0.1.0'
+        if ((Get-WindowsCapability -Online -Name $capability).State -ne 'Installed') {
+          Add-WindowsCapability -Online -Name $capability | Out-Null
+        }
+        $layer = Join-Path $env:SystemRoot 'System32\d3d11_3SDKLayers.dll'
+        if (-not (Test-Path -LiteralPath $layer)) {
+          throw "D3D11 debug layer missing after installing ${capability}: $layer"
+        }
+        Write-Host "D3D11 debug layer present: $layer"
+
     # Debug is built but not tested here: the Debug SparkTests run exceeds the
     # single ctest timeout this lane inherits, so no green lane in the
     # repository currently executes SparkTests in a Debug MSVC configuration
