@@ -83,7 +83,7 @@
 | `ActiveVolume` | struct | SparkEngine | [VolumeSystem.h:L430](../../SparkEngine/Source/Graphics/VolumeSystem.h#L430) |  |
 | `ActiveWorldEvent` | struct | GameModules | [OWDynamicEventSystem.h:L41](../../GameModules/SparkGameOpenWorld/Source/Events/OWDynamicEventSystem.h#L41) | Runtime state for an active world event |
 | `AdamConfig` | struct | SparkEngine | [CpuNeuralTraining.h:L84](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.h#L84) | Adam optimizer configuration (Kingma & Ba 2014). |
-| `AdapterIdentity` | struct | Tests | [TestRHI225D3D12ParityReal.cpp:L78](../../Tests/TestRHI225D3D12ParityReal.cpp#L78) |  |
+| `AdapterIdentity` | struct | Tests | [TestRHI225D3D12ParityReal.cpp:L81](../../Tests/TestRHI225D3D12ParityReal.cpp#L81) |  |
 | `AdapterScissorRect` | struct | SparkEngine | [RHIAdapter.h:L72](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.h#L72) | Convenience scissor rect matching GraphicsEngine semantics. |
 | `AdapterViewport` | struct | SparkEngine | [RHIAdapter.h:L59](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.h#L59) | Convenience viewport description matching GraphicsEngine semantics. |
 | `AdaptiveProbeVolumes` | class | SparkEngine | [AdaptiveProbeVolumes.h:L157](../../SparkEngine/Source/Graphics/AdaptiveProbeVolumes.h#L157) | Hierarchical adaptive probe volume with brick-based streaming |
@@ -986,7 +986,7 @@
 | `CycleFootprint` | struct | Tests | [TestLIFE200LifecycleLoopReal.cpp:L194](../../Tests/TestLIFE200LifecycleLoopReal.cpp#L194) |  |
 | `CycleWatchdog` | class | Tests | [LifecycleLoopGuards.h:L93](../../Tests/LifecycleLoopGuards.h#L93) | Fails the process when one armed cycle outlives its deadline. |
 | `D3D11_BUFFER_DESC` | struct | SparkEngine | [PlatformD3DStubs.h:L181](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L181) |  |
-| `D3D11Backend` | class | Tests | [TestRHI225D3D12ParityReal.cpp:L119](../../Tests/TestRHI225D3D12ParityReal.cpp#L119) |  |
+| `D3D11Backend` | class | Tests | [TestRHI225D3D12ParityReal.cpp:L126](../../Tests/TestRHI225D3D12ParityReal.cpp#L126) |  |
 | `D3D11Buffer` | class | SparkEngine | [D3D11Device.h:L44](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L44) |  |
 | `D3D11CommandList` | class | SparkEngine | [D3D11Device.h:L240](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L240) |  |
 | `D3D11Device` | class | SparkEngine | [D3D11Device.h:L313](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L313) |  |
@@ -997,7 +997,7 @@
 | `D3D11Shader` | class | SparkEngine | [D3D11Device.h:L117](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L117) |  |
 | `D3D11SwapChain` | class | SparkEngine | [D3D11Device.h:L205](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L205) |  |
 | `D3D11Texture` | class | SparkEngine | [D3D11Device.h:L76](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L76) |  |
-| `D3D12Backend` | class | Tests | [TestRHI225D3D12ParityReal.cpp:L193](../../Tests/TestRHI225D3D12ParityReal.cpp#L193) |  |
+| `D3D12Backend` | class | Tests | [TestRHI225D3D12ParityReal.cpp:L200](../../Tests/TestRHI225D3D12ParityReal.cpp#L200) |  |
 | `D3D12Buffer` | class | SparkEngine | [D3D12Types.h:L374](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L374) | D3D12 buffer backed by a committed ID3D12Resource. |
 | `D3D12CommandList` | class | SparkEngine | [D3D12Types.h:L674](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L674) |  |
 | `D3D12DeferredReleaseQueue` | class | SparkEngine | [D3D12Types.h:L217](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L217) |  |
@@ -2973,8 +2973,8 @@
 | `ParallelPerceptionSystem` | class | SparkEngine | [ParallelPerception.h:L120](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L120) |  |
 | `ParallelSystemExecutor` | class | SparkEngine | [ParallelSystemExecutor.h:L73](../../SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h#L73) | Executes ECS systems in parallel where safe, serial where required. |
 | `ParameterDecl` | struct | SparkEngine | [MaterialDefinition.h:L104](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L104) | Declaration of a single material parameter with metadata. |
-| `ParityBackend` | class | Tests | [TestRHI225D3D12ParityReal.cpp:L108](../../Tests/TestRHI225D3D12ParityReal.cpp#L108) |  |
-| `ParityScene` | struct | Tests | [TestRHI225D3D12ParityReal.cpp:L1048](../../Tests/TestRHI225D3D12ParityReal.cpp#L1048) |  |
+| `ParityBackend` | class | Tests | [TestRHI225D3D12ParityReal.cpp:L115](../../Tests/TestRHI225D3D12ParityReal.cpp#L115) |  |
+| `ParityScene` | struct | Tests | [TestRHI225D3D12ParityReal.cpp:L1055](../../Tests/TestRHI225D3D12ParityReal.cpp#L1055) |  |
 | `ParsedPrefab` | struct | SparkEditor | [PrefabTextFormat.h:L19](../../SparkEditor/Source/Prefabs/PrefabTextFormat.h#L19) |  |
 | `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecoveryFiles.h:L133](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L133) |  |
 | `ParsedScene` | struct | SparkEditor | [SceneImportPanel.h:L77](../../SparkEditor/Source/Panels/SceneImportPanel.h#L77) | Full parse result for one .scene file. |
@@ -3172,7 +3172,7 @@
 | `PinDescriptor` | struct | Tests | [TestShaderGraphCompiler.cpp:L211](../../Tests/TestShaderGraphCompiler.cpp#L211) |  |
 | `PinnedDirectory` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L599](../../SparkCrashReporter/src/CrashReporterApp.cpp#L599) |  |
 | `PinnedFile` | struct | SparkEngine | [CrashHandler.cpp:L257](../../SparkEngine/Source/Utils/CrashHandler.cpp#L257) |  |
-| `Pipeline` | struct | Tests | [TestRHI225D3D12ParityReal.cpp:L368](../../Tests/TestRHI225D3D12ParityReal.cpp#L368) |  |
+| `Pipeline` | struct | Tests | [TestRHI225D3D12ParityReal.cpp:L375](../../Tests/TestRHI225D3D12ParityReal.cpp#L375) |  |
 | `PipelineCacheMetrics` | struct | SparkEngine | [PipelineStateCache.h:L103](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L103) | Cache metrics for profiling state object reuse. |
 | `PipelineCallbacks` | struct | SparkEngine | [RenderGraphBuilder.h:L176](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L176) | User-supplied rendering callbacks for each standard pass. |
 | `PipelineConfig` | struct | SparkEngine | [RenderGraphBuilder.h:L72](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L72) | Configuration that controls which passes are enabled and at what |
@@ -4062,7 +4062,7 @@
 | `ScramVerifier` | struct | GameModules | [TFAccountSystem.cpp:L102](../../GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp#L102) |  |
 | `Scratch` | class | Tests | [TestEditorUntrustedProject.cpp:L36](../../Tests/TestEditorUntrustedProject.cpp#L36) |  |
 | `Scratch` | class | Tests | [TestSEC2PersistenceHardening.cpp:L55](../../Tests/TestSEC2PersistenceHardening.cpp#L55) |  |
-| `ScratchCrashDir` | class | Tests | [TestEditorCrashHandlerFilterReal.cpp:L36](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L36) | Unique scratch directory removed on scope exit. |
+| `ScratchCrashDir` | class | Tests | [TestEditorCrashHandlerFilterReal.cpp:L40](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L40) | Unique scratch directory removed on scope exit. |
 | `ScratchDir` | class | Tests | [TestEditorSubsystemsReal.cpp:L39](../../Tests/TestEditorSubsystemsReal.cpp#L39) | Unique scratch directory for one test, removed by the destructor. |
 | `ScratchDir` | struct | Tests | [TestSEC3GameplayHardening.cpp:L46](../../Tests/TestSEC3GameplayHardening.cpp#L46) |  |
 | `ScratchDirectory` | class | SparkCooker | [main.cpp:L41](../../SparkCooker/src/main.cpp#L41) |  |
@@ -4129,8 +4129,8 @@
 | `SearchResult` | struct | SparkEditor | [SearchPanel.h:L37](../../SparkEditor/Source/Panels/SearchPanel.h#L37) | A single search result entry |
 | `SeatRef` | struct | GameModules | [TFVehicleSystemRecords.h:L140](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemRecords.h#L140) |  |
 | `Sec100ChatRuntime` | class | Tests | [TestSEC100ChatAuditLogReal.cpp:L35](../../Tests/TestSEC100ChatAuditLogReal.cpp#L35) |  |
-| `SEC2MemberFunction` | struct | Tests | [TestSEC2GameModules.cpp:L413](../../Tests/TestSEC2GameModules.cpp#L413) |  |
-| `SEC2NetworkContext` | class | Tests | [TestSEC2GameModules.cpp:L885](../../Tests/TestSEC2GameModules.cpp#L885) |  |
+| `SEC2MemberFunction` | struct | Tests | [TestSEC2GameModules.cpp:L425](../../Tests/TestSEC2GameModules.cpp#L425) |  |
+| `SEC2NetworkContext` | class | Tests | [TestSEC2GameModules.cpp:L897](../../Tests/TestSEC2GameModules.cpp#L897) |  |
 | `Sec3ScriptFixture` | struct | Tests | [TestSEC3ScriptingHardening.cpp:L301](../../Tests/TestSEC3ScriptingHardening.cpp#L301) |  |
 | `SectionData` | struct | SparkEngine | [CpuDebugger.h:L321](../../SparkEngine/Source/Utils/CpuDebugger.h#L321) |  |
 | `SectionTimerFixed` | class | Tests | [Test_core_hardening.cpp:L95](../../Tests/harden/Test_core_hardening.cpp#L95) |  |
@@ -4476,7 +4476,7 @@
 | `StablePluginFile` | class | SparkEngine | [DynamicPluginHost.cpp:L123](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L123) |  |
 | `StackEntry` | struct | SparkEngine | [UICompositor.h:L230](../../SparkEngine/Source/Graphics/UICompositor.h#L230) |  |
 | `StackFrame` | struct | SparkEngine | [StackTrace.h:L54](../../SparkEngine/Source/Utils/StackTrace.h#L54) | Single frame in a captured stack trace |
-| `StackRemoval` | struct | SparkEngine | [MiniDumpWithoutStacks.cpp:L17](../../SparkEngine/Source/Utils/MiniDumpWithoutStacks.cpp#L17) |  |
+| `StackRemoval` | struct | SparkEngine | [MiniDumpWithoutStacks.cpp:L18](../../SparkEngine/Source/Utils/MiniDumpWithoutStacks.cpp#L18) |  |
 | `StackTrace` | class | SparkEngine | [Logger.h:L64](../../SparkEngine/Source/Utils/Logger.h#L64) |  |
 | `StackTrace` | class | SparkEngine | [StackTrace.h:L92](../../SparkEngine/Source/Utils/StackTrace.h#L92) | Captured stack trace with symbol resolution |
 | `StagedFile` | struct | SparkEngine | [SparkPakWriter.h:L57](../../SparkEngine/Source/Core/SparkPakWriter.h#L57) | Number of files staged for writing. |

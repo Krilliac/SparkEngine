@@ -925,7 +925,7 @@
 | `SE_LOG_WARNING` | macro | SparkEditor | [EditorLogger.h:L274](../../SparkEditor/Source/Core/EditorLogger.h#L274) |  |
 | `SE_LOG_WARNING_F` | macro | SparkEditor | [EditorLogger.h:L296](../../SparkEditor/Source/Core/EditorLogger.h#L296) |  |
 | `SeatRef` | alias | GameModules | [TFVehicleSystem.h:L146](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L146) |  |
-| `SEC2NetworkManager` | alias | Tests | [TestSEC2GameModules.cpp:L162](../../Tests/TestSEC2GameModules.cpp#L162) |  |
+| `SEC2NetworkManager` | alias | Tests | [TestSEC2GameModules.cpp:L174](../../Tests/TestSEC2GameModules.cpp#L174) |  |
 | `SelectionCallback` | alias | SparkEditor | [SelectionManager.h:L141](../../SparkEditor/Source/Panels/SelectionManager.h#L141) | Callback signature for selection changes |
 | `SelectionCallback` | alias | Tests | [TestSelectionManager.cpp:L30](../../Tests/TestSelectionManager.cpp#L30) |  |
 | `SentState` | alias | GameModules | [TFVehicleSystem.h:L148](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L148) |  |
