@@ -19,6 +19,7 @@
 #include "Spark/IEngineContext.h"
 
 #include "Core/Contracts.h"
+#include "Core/EngineSdkLogger.h"
 
 #include <algorithm>
 #include <any>
@@ -278,6 +279,9 @@ class EngineContext : public Spark::IEngineContext
 
     bool IsHeadless() const override;
 
+    /// The SDK logger game modules use instead of the private console/log headers.
+    Spark::ILogger* GetLogger() override { return &m_sdkLogger; }
+
     // =========================================================================
     // Named setters — delegate to generic registry (R1.1)
     // =========================================================================
@@ -413,4 +417,7 @@ class EngineContext : public Spark::IEngineContext
     // a concurrent insert that rehashes during a reader's find() is UB.
     mutable std::unordered_map<TypeId, void*, TypeIdHash> m_systems;
     mutable std::shared_mutex m_systemsMutex;
+
+    // Stateless: forwards to the Logger singleton, so it is valid for the context's whole life.
+    EngineSdkLogger m_sdkLogger;
 };

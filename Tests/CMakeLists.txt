@@ -622,6 +622,7 @@ add_executable(SparkTests
     TestGameModuleRTS.cpp
     TestMOD370SkirmishDeterminismReal.cpp
     TestMOD370RTSSaveReal.cpp
+    TestPrototypeModuleKitReal.cpp
     TestGameModuleMMO.cpp
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
@@ -4588,6 +4589,21 @@ add_test(
 set_tests_properties(PrototypeModuleKit_PrivateDependencyRatchet PROPERTIES
     LABELS "module;module-kit;prototype-module-kit;readiness;unit;python"
     TIMEOUT 120)
+
+# MOD-295: IEngineContext::GetLogger() and the Spark::ModuleLog helpers reach the
+# engine Logger, and SparkGameRTS's engine-system wiring logs through them. The RTS
+# case needs the module sources, which SparkTests compiles only with ImGui.
+if(TARGET imgui)
+    set(_spark_prototype_kit_count 3)
+else()
+    set(_spark_prototype_kit_count 2)
+endif()
+add_test(NAME PrototypeModuleKit_Helpers COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(PrototypeModuleKit_Helpers PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=PrototypeModuleKit_;SPARK_TEST_EXPECT_COUNT=${_spark_prototype_kit_count}"
+    LABELS "module;module-kit;prototype-module-kit;unit"
+    TIMEOUT 60)
+unset(_spark_prototype_kit_count)
 
 # MOD-310: the same ratchet on the stable-v1 SparkGameFPS module, under a
 # reviewed one-way ceiling (51 engine-private headers, 1 copied file at intro).

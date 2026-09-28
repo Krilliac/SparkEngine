@@ -23,7 +23,9 @@
 //     and the call would run off the end of it.
 // v5: Removed IEngineContext::InitializeAll()/ShutdownAll() (two vtable slots,
 //     OD-01): EngineRuntime owns subsystem lifecycle, so every later slot moved.
-#define SPARK_SDK_VERSION 5
+// v6: Appended IEngineContext::GetLogger() (one vtable slot, MOD-295) so modules
+//     log through the host's ILogger instead of the private console headers.
+#define SPARK_SDK_VERSION 6
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

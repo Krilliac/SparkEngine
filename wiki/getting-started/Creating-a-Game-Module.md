@@ -73,11 +73,12 @@ The `ModuleInfo` struct provides metadata about your module:
 | `sdkVersion` | `uint32_t` | SDK version this module was built against (`SPARK_SDK_VERSION`) |
 | `loadOrder` | `int` | Initialization priority (lower = earlier, default 1000) |
 
-`SPARK_SDK_VERSION` is **5** (`SparkSDK/include/Spark/Version.h`) after `IEngineContext` dropped
-`InitializeAll()` and `ShutdownAll()` (owner decision OD-01: `EngineRuntime` owns subsystem lifecycle).
-`IsSDKCompatible` is exact equality, so a v4 module is refused by a v5 host and a v5 module by a v4
+`SPARK_SDK_VERSION` is **6** (`SparkSDK/include/Spark/Version.h`): v5 dropped `IEngineContext`'s
+`InitializeAll()` and `ShutdownAll()` (owner decision OD-01: `EngineRuntime` owns subsystem lifecycle),
+and v6 appended `IEngineContext::GetLogger()` (MOD-295).
+`IsSDKCompatible` is exact equality, so a v5 module is refused by a v6 host and a v6 module by a v5
 host — there is no forward or backward window; rebuild modules against the current SDK.
-`Spark/IEngineContext.h` pins `EngineContextVirtualCount = 88` with a `static_assert` tying
+`Spark/IEngineContext.h` pins `EngineContextVirtualCount = 89` with a `static_assert` tying
 it to the version constant: adding or removing a virtual means updating **both** together, or an old
 host will accept a module that calls off the end of its vtable.
 
@@ -501,6 +502,25 @@ concrete host's `RegisterSystem<T>()` or `GetSystem<T>()` registry APIs. Keep
 game-specific managers in module-owned state, communicate through the public
 event bus or named getters, or define an explicit addon interface. Do not
 downcast `IEngineContext` to the private engine implementation.
+
+### Logging
+
+Log through the host with `IEngineContext::GetLogger()`, normally via the
+`std::format` helpers in `<Spark/ModuleLog.h>`:
+
+```cpp
+#include <Spark/ModuleLog.h>
+
+Spark::ModuleLog::Info(context, "[MyGame] wave {} started", wave);
+Spark::ModuleLog::Error(context, "[MyGame] save slot not found: {}", slot);
+```
+
+The engine routes these to its log file, stderr and console under
+`LogCategory::Game`; the helpers do nothing when the context or its logger is
+null. A module DLL's own `Utils/SparkConsole.h` / `Utils/LogMacros.h`
+singletons are DLL-local copies of private engine headers, so prefer the SDK
+logger. SparkGameRTS and SparkGamePlatformer log their engine-system wiring
+this way (`PrototypeModuleKit_Helpers` CTest).
 
 ## Subscribing to Events
 

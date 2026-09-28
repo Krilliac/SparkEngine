@@ -75,6 +75,7 @@ namespace Spark
     }
 
     class VirtualFileSystem;
+    class ILogger;
 
     namespace Net
     {
@@ -343,6 +344,15 @@ namespace Spark
          */
         virtual ComponentSerializerRegistry* GetComponentSerializers() { return nullptr; }
         virtual const ComponentSerializerRegistry* GetComponentSerializers() const { return nullptr; }
+
+        /**
+         * @brief Get the host's logger
+         *
+         * Routes a module's messages to the host's log sinks (log file, stderr,
+         * console). Prefer the Spark::ModuleLog helpers in <Spark/ModuleLog.h>,
+         * which format with std::format and do nothing when this returns nullptr.
+         */
+        virtual ILogger* GetLogger() { return nullptr; }
     };
 
     /**
@@ -358,9 +368,9 @@ namespace Spark
      * vtable changed without a SPARK_SDK_VERSION bump re-pinned in
      * SparkSDK/ABI/sdk-abi-surface.json.
      */
-    inline constexpr uint32_t EngineContextVirtualCount = 88;
+    inline constexpr uint32_t EngineContextVirtualCount = 89;
 
-    static_assert(EngineContextVirtualCount == 88 && SPARK_SDK_VERSION == 5,
+    static_assert(EngineContextVirtualCount == 89 && SPARK_SDK_VERSION == 6,
                   "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
                   "EngineContextVirtualCount together, or an old host will accept a module that "
                   "calls off the end of its vtable.");

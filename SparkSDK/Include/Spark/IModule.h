@@ -76,10 +76,10 @@ namespace Spark
     };
 
     // ModuleInfo crosses the DLL boundary by value (IModule::GetModuleInfo), so
-    // its layout is SDK ABI. These pins hold for SPARK_SDK_VERSION 5: changing
+    // its layout is SDK ABI. These pins hold for SPARK_SDK_VERSION 6: changing
     // the struct needs a SPARK_SDK_VERSION bump, and every bump re-pins this
     // block and SparkSDK/ABI/sdk-abi-surface.json (SparkSDK/Tools/sdk_abi_surface.py).
-    static_assert(SPARK_SDK_VERSION == 5, "SPARK_SDK_VERSION changed: re-pin the ModuleInfo layout below");
+    static_assert(SPARK_SDK_VERSION == 6, "SPARK_SDK_VERSION changed: re-pin the ModuleInfo layout below");
     static_assert(sizeof(ModuleKind) == 1, "ModuleKind is a uint8_t in the SDK ABI");
     static_assert(offsetof(ModuleInfo, name) == 0, "ModuleInfo layout changed without an SDK bump");
     static_assert(offsetof(ModuleInfo, version) == sizeof(void*), "ModuleInfo layout changed without an SDK bump");

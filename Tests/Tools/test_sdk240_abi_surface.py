@@ -121,7 +121,7 @@ class SdkAbiSurfaceTests(unittest.TestCase):
         # Declaration order is vtable order; the destructor is declared first.
         self.assertTrue(slots[0].startswith("~IEngineContext"), slots[0])
         self.assertEqual(slots[1], "GraphicsEngine* GetGraphics()")
-        self.assertEqual(slots[-1], "const ComponentSerializerRegistry* GetComponentSerializers() const")
+        self.assertEqual(slots[-1], "ILogger* GetLogger()")
         header = (INCLUDE / "IEngineContext.h").read_text(encoding="utf-8")
         pinned = int(re.search(r"EngineContextVirtualCount = (\d+);", header).group(1))
         self.assertEqual(len(slots), pinned)
@@ -183,7 +183,7 @@ class SdkAbiSurfaceTests(unittest.TestCase):
         self.assertFails(self.sdk.run(), f"// v{new_version}:")
 
     def test_stale_virtual_count_fails(self) -> None:
-        self.sdk.set_engine_context_count(89)
+        self.sdk.set_engine_context_count(GROWN_COUNT)
         self.assertFails(self.sdk.run(), "EngineContextVirtualCount")
 
     def test_stale_count_after_repinned_bump_fails(self) -> None:
