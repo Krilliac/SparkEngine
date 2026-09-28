@@ -18,6 +18,9 @@
  * `exec_audit.log` in the working directory, which the package smokes read).
  * Arguments of sensitive console commands (credentials such as `tf_login`) are
  * redacted in both the `[exec]` console line and the audit file.
+ * Each console marker includes `entry=N`, the zero-based index in the parsed,
+ * due-ordered schedule (not the source line or frame). It resets on Load.
+ * Audit blocks may repeat older markers from the console history window.
  */
 #pragma once
 
@@ -106,6 +109,8 @@ namespace Spark
 
         /**
          * @brief Execute every command due at @p frameCount / @p elapsedSeconds, in schedule order.
+         * A late frame catches up all due entries, including repeated commands and tied times;
+         * each entry executes once per Load, even when several execute in the same frame.
          * @return Number of commands executed by this call.
          */
         size_t RunDueAt(int frameCount, double elapsedSeconds, SimpleConsole& console);

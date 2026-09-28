@@ -121,27 +121,47 @@ TEST(ExecScript_SchedulerRunsInDueOrderAndKeepsFileOrderForTies)
                       "t1 exec_order_probe t1-second\n"
                       "5 exec_order_probe frame5\n"
                       "exec_order_probe frame0\n"
+                      "t0.5 exec_order_probe repeated\n"
+                      "t0.5 exec_order_probe repeated\n"
                       "t0.5 exec_order_probe t0.5\n"));
-    EXPECT_EQ(player.GetPendingCount(), size_t{5});
+    EXPECT_EQ(player.GetPendingCount(), size_t{7});
 
     EXPECT_EQ(player.RunDueAt(0, 0.0, console), size_t{1});
     EXPECT_EQ(player.RunDueAt(4, 0.2, console), size_t{0});
     // Frame 5 (~0.083 s) is due; t0.5 is not yet.
     EXPECT_EQ(player.RunDueAt(5, 0.3, console), size_t{1});
     // A late frame releases everything whose time has come, in schedule order.
-    EXPECT_EQ(player.RunDueAt(6, 1.0, console), size_t{3});
+    EXPECT_EQ(player.RunDueAt(6, 1.0, console), size_t{5});
     EXPECT_EQ(player.GetPendingCount(), size_t{0});
     EXPECT_EQ(player.RunDueAt(7, 9.0, console), size_t{0});
 
     std::string order;
     for (const auto& entry : ran)
         order += entry + ";";
-    EXPECT_EQ(order, std::string("frame0;frame5;t0.5;t1-first;t1-second;"));
+    EXPECT_EQ(order, std::string("frame0;frame5;repeated;repeated;t0.5;t1-first;t1-second;"));
 
     // Byte-compatible audit line format consumed by Tests/PackageSmoke/*.cmake.
     const std::string audit = ReadWholeFile(auditPath);
     EXPECT_STR_CONTAINS(audit, "frame 0 t=0.0s | ok  | exec_order_probe frame0\n");
     EXPECT_STR_CONTAINS(audit, "frame 6 t=1.0s | ok  | exec_order_probe t1-second\n");
+
+    // Identical commands with tied due times still emit distinct markers once
+    // each. Audit history may copy them into later blocks without re-execution.
+    const std::string firstMarker = "[exec] frame 6 (t=1.0s, entry=2): exec_order_probe repeated";
+    const std::string secondMarker = "[exec] frame 6 (t=1.0s, entry=3): exec_order_probe repeated";
+    size_t firstMarkers = 0;
+    size_t secondMarkers = 0;
+    for (const auto& entry : console.GetLogHistory())
+    {
+        if (entry.message == firstMarker)
+            ++firstMarkers;
+        if (entry.message == secondMarker)
+            ++secondMarkers;
+    }
+    EXPECT_EQ(firstMarkers, size_t{1});
+    EXPECT_EQ(secondMarkers, size_t{1});
+    EXPECT_STR_CONTAINS(audit, "    > " + firstMarker + "\n");
+    EXPECT_STR_CONTAINS(audit, "    > " + secondMarker + "\n");
 
     EXPECT_TRUE(console.UnregisterCommand("exec_order_probe"));
     std::error_code error;

@@ -417,10 +417,10 @@ class Harness:
 _SELF_TEST_AUDIT = (
     "frame 5 t=0.1s | ok  | save_list\n"
     "    > [Core] early boot line\n"
-    "    > [exec] frame 5 (t=0.1s): save_list\n"
+    "    > [exec] frame 5 (t=0.1s, entry=0): save_list\n"
     "    > === Save Slots (0) ===\n"
     "frame 6 t=0.1s | ok  | save_info fps_quicksave\n"
-    "    > [exec] frame 6 (t=0.1s): save_info fps_quicksave\n"
+    "    > [exec] frame 6 (t=0.1s, entry=1): save_info fps_quicksave\n"
     "    > Save 'fps_quicksave' not found\n"
 )
 
@@ -442,7 +442,7 @@ def self_test() -> int:
     expect_failure("err-dispatch", lambda: require_audit_commands(
         _SELF_TEST_AUDIT.replace("| ok  | save_list", "| ERR | save_list"), expected))
     expect_failure("missing-marker", lambda: require_audit_commands(
-        _SELF_TEST_AUDIT.replace("    > [exec] frame 5 (t=0.1s): save_list\n", ""), expected))
+        _SELF_TEST_AUDIT.replace("    > [exec] frame 5 (t=0.1s, entry=0): save_list\n", ""), expected))
     expect_failure("malformed-header", lambda: parse_audit("frame x | ok | save_list\n"))
     expect_failure("torn-slot-listed", lambda: require_torn_slot_rejected(require_audit_commands(
         _SELF_TEST_AUDIT.replace("=== Save Slots (0) ===",

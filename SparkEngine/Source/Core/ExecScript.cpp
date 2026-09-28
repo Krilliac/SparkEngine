@@ -179,7 +179,10 @@ namespace Spark
             const std::string& command = m_commands[m_next].command;
             // Credentials must never reach the console history or the audit file.
             const std::string shown = console.RedactSensitiveArguments(command);
-            console.LogInfo(std::format("[exec] frame {} (t={:.1f}s): {}", frameCount, elapsedSeconds, shown));
+            // The schedule index distinguishes repeated commands caught up in
+            // one frame, including equal due times and rounded elapsed times.
+            console.LogInfo(
+                std::format("[exec] frame {} (t={:.1f}s, entry={}): {}", frameCount, elapsedSeconds, m_next, shown));
             const bool ok = console.ExecuteCommand(command);
             AppendAudit(frameCount, elapsedSeconds, ok, shown, console);
             ++m_next;

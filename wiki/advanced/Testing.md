@@ -462,13 +462,22 @@ on Linux (headless and SDL2 windowed). The shared implementation is
 
 - Script lines are `<frame> <command>` or `t<seconds> <command>`. A line with
   no prefix runs at frame 0, `#` starts a comment, and CRLF files are accepted.
-  Entries that share a due time run in file order.
+  Entries that share a due time run in file order. A late frame catches up every
+  due entry once, including repeated commands; playback never drops or coalesces them.
 - `-test-seconds N` exits after N wall-clock seconds. The clock starts at the
   first main-loop tick, so boot time is not counted.
 - By default every executed command is appended to `exec_audit.log` in the
   working directory, which is the file the package smokes read. Use `-exec-audit <path>`
   to give each process its own file when several are launched from the same
   directory. A relative path is resolved against the launch directory.
+- Console markers are `[exec] frame N (t=X.Xs, entry=I): command`, where `I` is
+  the zero-based index in the parsed, due-ordered schedule, reset on each load.
+  Audit headers retain their existing format. Each block includes recent console
+  history, so earlier markers can recur before its own marker. The installed
+  module objective parser requires exactly one marker matching the block's
+  schedule index, frame, elapsed time and command, and requires all scripted
+  commands in order. This distinguishes catch-up from duplicate or missing execution
+  even when commands, scheduled times or rounded execution times coincide.
 - Sensitive console commands, the ones registered with `RegisterSensitiveCommand`
   (for example `tf_register` and `tf_login`), are written as
   `<name> <arguments-redacted>` in both the `[exec]` console line and the audit

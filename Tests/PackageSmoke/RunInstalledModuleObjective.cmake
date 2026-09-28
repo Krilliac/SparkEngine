@@ -20,7 +20,8 @@ cmake_minimum_required(VERSION 3.25)
 # A selector is a command exactly as written in the script. It names that
 # command's LAST block, or its Nth block as "command#N" (1-based). A block's
 # output is only what the audit recorded AFTER that command's own
-# "[exec] frame N (t=X.Xs): command" marker, so output left in the console
+# "[exec] frame N (t=X.Xs, entry=I): command" marker (I is the zero-based
+# index in the due-ordered schedule), so output left in the console
 # window by an earlier command can never satisfy a rule.
 # A spec may also define `spark_objective_verify_<P>(phase out_ok out_reason)`
 # for rules the generic forms cannot express. It reads the blocks through
@@ -226,7 +227,9 @@ endfunction()
 
 # Split the audit into blocks in one linear pass and store each command's
 # post-marker output. Fails on a malformed or ERR header, a block without
-# exactly one marker, or a header sequence that differs from the script.
+# exactly one marker for its schedule index, or a header sequence that differs
+# from the script. Prior markers may recur before the current marker because
+# AppendAudit copies a console history window, even within the same frame.
 function(_spark_objective_parse_audit phase audit expected_commands out_ok out_reason)
     set(_ok TRUE)
     set(_reason "")
@@ -238,6 +241,7 @@ function(_spark_objective_parse_audit phase audit expected_commands out_ok out_r
     string(REPLACE "\n" ";" _lines "${_text}")
 
     set(_seen_commands)
+    set(_seen_markers)
     set(_in_block FALSE)
     set(_command "")
     set(_marker "")
@@ -249,7 +253,7 @@ function(_spark_objective_parse_audit phase audit expected_commands out_ok out_r
         if(_in_block)
             if(NOT _markers EQUAL 1)
                 set(_ok FALSE)
-                set(_reason "command '${_command}' marker count was ${_markers}, expected 1")
+                set(_reason "command '${_command}' entry ${_entry} marker count was ${_markers}, expected 1")
             else()
                 get_property(_prior GLOBAL PROPERTY "SPARK_OBJECTIVE_${phase}_COUNT:${_command}")
                 if(NOT _prior)
@@ -259,6 +263,7 @@ function(_spark_objective_parse_audit phase audit expected_commands out_ok out_r
                 set_property(GLOBAL PROPERTY "SPARK_OBJECTIVE_${phase}_COUNT:${_command}" "${_prior}")
                 set_property(GLOBAL PROPERTY "SPARK_OBJECTIVE_${phase}_OUT:${_command}#${_prior}" "${_output}")
                 set_property(GLOBAL APPEND PROPERTY "SPARK_OBJECTIVE_${phase}_ORDER" "${_command}#${_prior}")
+                list(APPEND _seen_markers "${_marker}")
             endif()
         endif()
     endmacro()
@@ -283,7 +288,8 @@ function(_spark_objective_parse_audit phase audit expected_commands out_ok out_r
                 set(_reason "command '${_command}' has an ERR dispatch header")
                 break()
             endif()
-            set(_marker "    > [exec] frame ${CMAKE_MATCH_1} (t=${CMAKE_MATCH_2}s): ${_command}")
+            list(LENGTH _seen_commands _entry)
+            set(_marker "    > [exec] frame ${CMAKE_MATCH_1} (t=${CMAKE_MATCH_2}s, entry=${_entry}): ${_command}")
             list(APPEND _seen_commands "${_command}")
             set(_in_block TRUE)
             set(_markers 0)
@@ -295,6 +301,13 @@ function(_spark_objective_parse_audit phase audit expected_commands out_ok out_r
                 # Anything before the marker belongs to earlier commands.
                 set(_output "")
                 set(_have_output FALSE)
+            elseif(_line MATCHES "^    > \\[exec\\] frame ")
+                # Only previously validated markers BEFORE this occurrence are
+                # history. Any other marker is an extra or misidentified run.
+                if(_markers GREATER 0 OR NOT _line IN_LIST _seen_markers)
+                    set(_ok FALSE)
+                    set(_reason "unexpected exec marker in entry ${_entry}: ${_line}")
+                endif()
             elseif(_markers GREATER 0)
                 if(_have_output)
                     string(APPEND _output "\n${_line}")
@@ -472,17 +485,17 @@ if(SPARK_MODULE_OBJECTIVE_PARSER_SELF_TEST)
     set(_script "1 probe_status\nt1.5 probe_act go\n# comment\n\nt2 probe_status\n")
     set(_audit [=[frame 1 t=0.0s | ok  | probe_status
     > boot line
-    > [exec] frame 1 (t=0.0s): probe_status
+    > [exec] frame 1 (t=0.0s, entry=0): probe_status
     > Probe: idle
 Score: 0
 frame 90 t=1.5s | ok  | probe_act go
     > Probe: idle
 Score: 0
-    > [exec] frame 90 (t=1.5s): probe_act go
+    > [exec] frame 90 (t=1.5s, entry=1): probe_act go
     > Acted: go
 frame 120 t=2.0s | ok  | probe_status
     > Acted: go
-    > [exec] frame 120 (t=2.0s): probe_status
+    > [exec] frame 120 (t=2.0s, entry=2): probe_status
     > Probe: done
 Score: 7
 ]=])
@@ -525,8 +538,65 @@ Score: 7
     _spark_expect_objective_case(truncated_script 0 "${_stdout_ok}" "${_audit_truncated}" FALSE)
 
     _spark_objective_fixture(missing_marker)
-    string(REPLACE "    > [exec] frame 90 (t=1.5s): probe_act go\n" "" _audit_nomarker "${_audit}")
+    string(REPLACE "    > [exec] frame 90 (t=1.5s, entry=1): probe_act go\n" "" _audit_nomarker "${_audit}")
     _spark_expect_objective_case(missing_marker 0 "${_stdout_ok}" "${_audit_nomarker}" FALSE)
+
+    # A hitch releases two scheduled occurrences of the SAME command in one
+    # frame. AppendAudit's history window repeats occurrence 0 in block 1.
+    set(_catchup_script "t0.1 probe_act go\nt0.2 probe_act go\n")
+    set(_catchup_first [=[frame 12 t=0.3s | ok  | probe_act go
+    > [exec] frame 12 (t=0.3s, entry=0): probe_act go
+    > Acted: first
+]=])
+    set(_catchup_second [=[frame 12 t=0.3s | ok  | probe_act go
+    > [exec] frame 12 (t=0.3s, entry=0): probe_act go
+    > Acted: first
+    > [exec] frame 12 (t=0.3s, entry=1): probe_act go
+    > Acted: second
+]=])
+    set(SPARK_OBJECTIVE_catchup_SCRIPT "${_catchup_script}")
+    set(SPARK_OBJECTIVE_catchup_EXPECT "probe_act go#1|^    > Acted: first$"
+                                         "probe_act go#2|^    > Acted: second$")
+    _spark_expect_objective_case(catchup 0 "${_stdout_ok}" "${_catchup_first}${_catchup_second}" TRUE)
+
+    # Equal scheduled times also have distinct indices; no time string is used
+    # as occurrence identity. Rules still select each occurrence's own output.
+    set(SPARK_OBJECTIVE_tied_SCRIPT "t0.1 probe_act go\nt0.1 probe_act go\n")
+    set(SPARK_OBJECTIVE_tied_EXPECT "${SPARK_OBJECTIVE_catchup_EXPECT}")
+    _spark_expect_objective_case(tied 0 "${_stdout_ok}" "${_catchup_first}${_catchup_second}" TRUE)
+
+    set(_second_marker "    > [exec] frame 12 (t=0.3s, entry=1): probe_act go")
+    set(SPARK_OBJECTIVE_duplicate_marker_SCRIPT "${_catchup_script}")
+    string(REPLACE "${_second_marker}" "${_second_marker}\n${_second_marker}" _duplicate "${_catchup_second}")
+    _spark_expect_objective_case(duplicate_marker 0 "${_stdout_ok}" "${_catchup_first}${_duplicate}" FALSE)
+
+    # Two headers cannot claim the same occurrence, even when their text and
+    # total count match the script. An extra block cannot pass either.
+    set(SPARK_OBJECTIVE_duplicate_occurrence_SCRIPT "${_catchup_script}")
+    _spark_expect_objective_case(duplicate_occurrence 0 "${_stdout_ok}" "${_catchup_first}${_catchup_first}" FALSE)
+    set(SPARK_OBJECTIVE_extra_occurrence_SCRIPT "${_catchup_script}")
+    string(REPLACE "entry=1" "entry=2" _extra "${_catchup_second}")
+    _spark_expect_objective_case(extra_occurrence 0 "${_stdout_ok}"
+        "${_catchup_first}${_catchup_second}${_extra}" FALSE)
+
+    set(SPARK_OBJECTIVE_missing_occurrence_SCRIPT "${_catchup_script}")
+    _spark_expect_objective_case(missing_occurrence 0 "${_stdout_ok}" "${_catchup_first}" FALSE)
+    set(SPARK_OBJECTIVE_missing_catchup_marker_SCRIPT "${_catchup_script}")
+    string(REPLACE "${_second_marker}\n" "" _missing "${_catchup_second}")
+    _spark_expect_objective_case(missing_catchup_marker 0 "${_stdout_ok}" "${_catchup_first}${_missing}" FALSE)
+
+    set(SPARK_OBJECTIVE_wrong_occurrence_SCRIPT "${_catchup_script}")
+    string(REPLACE "entry=1" "entry=9" _wrong "${_catchup_second}")
+    _spark_expect_objective_case(wrong_occurrence 0 "${_stdout_ok}" "${_catchup_first}${_wrong}" FALSE)
+    set(SPARK_OBJECTIVE_extra_marker_SCRIPT "${_catchup_script}")
+    _spark_expect_objective_case(extra_marker 0 "${_stdout_ok}"
+        "${_catchup_first}${_catchup_second}    > [exec] frame 12 (t=0.3s, entry=9): probe_act go\n" FALSE)
+
+    # A previous occurrence's output in the same frame must not satisfy a rule.
+    set(SPARK_OBJECTIVE_stale_catchup_output_SCRIPT "${_catchup_script}")
+    set(SPARK_OBJECTIVE_stale_catchup_output_EXPECT "probe_act go#2|Acted: first")
+    _spark_expect_objective_case(stale_catchup_output 0 "${_stdout_ok}"
+        "${_catchup_first}${_catchup_second}" FALSE)
 
     # 'Probe: done' appears only in the first probe_status block; the rule reads the last.
     _spark_objective_fixture(non_final_block)

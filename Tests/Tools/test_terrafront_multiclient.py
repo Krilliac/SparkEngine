@@ -358,6 +358,15 @@ class ParserTests(unittest.TestCase):
         self.assertIsNotNone(samples[0].observation)
         self.assertIsNone(samples[1].observation)
 
+        # The extended engine marker preserves scoping, including catch-up in
+        # one frame. Older trails above remain readable by this analysis tool.
+        text = text.replace("(t=1.0s):", "(t=1.0s, entry=0):")
+        text = text.replace("frame 20 t=2.0s", "frame 10 t=1.0s")
+        text = text.replace("frame 20 (t=2.0s):", "frame 10 (t=1.0s, entry=1):")
+        samples = multiclient.observe_samples(multiclient.parse_audit(text))
+        self.assertIsNotNone(samples[0].observation)
+        self.assertIsNone(samples[1].observation)
+
     def test_cheat_stats_and_audit_lines_parse(self) -> None:
         entries = multiclient.parse_audit("\n".join(forged_lines(("loadout-ineligible",), 1)) + "\n")
         self.assertEqual(multiclient.cheat_stats_snapshots(entries), [{2: 1}])
