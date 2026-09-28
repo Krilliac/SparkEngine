@@ -159,7 +159,10 @@ function(spark_install_tracked_directory)
                 "Git resolved a repository root outside CMAKE_SOURCE_DIR: ${_spark_git_root}")
         endif()
 
-        cmake_path(RELATIVE_PATH _spark_source_directory
+        # Both sides real: CMAKE_SOURCE_DIR may keep a spelling (such as the
+        # 8.3 alias C:/Users/RUNNER~1) that REAL_PATH expands, and relating the
+        # spelled path to the real root would name a pathspec outside the repo.
+        cmake_path(RELATIVE_PATH _spark_source_directory_real
             BASE_DIRECTORY "${_spark_git_root_real}"
             OUTPUT_VARIABLE _spark_git_source_relative)
         string(REPLACE "\\" "/" _spark_git_source_relative
