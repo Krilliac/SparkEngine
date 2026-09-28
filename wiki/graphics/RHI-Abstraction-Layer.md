@@ -183,6 +183,31 @@ DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
 
 The OpenGL backend contains a Linux GLX PBuffer and FBO-backed off-screen path. llvmpipe is an explicitly configured development route; it does not establish identical behavior or release parity with a GPU-backed path.
 
+### Software and hardware rows (RHI-240)
+
+The real-GL lanes are labelled by the row they certify, and each row is enforced
+by `OpenGL_RHI240_DeviceRowMatchesLane`, which classifies the live
+`GL_RENDERER` with its own list of CPU rasterizers and fails when it disagrees
+with `SPARK_GL_EXPECT_ROW`:
+
+| CTest | Row | Labels | Registered |
+|-------|-----|--------|------------|
+| `SparkOpenGLTests` | `software` (llvmpipe) | `opengl;llvmpipe` | Linux builds with OpenGL |
+| `SparkOpenGLGoldenTests` | llvmpipe baselines | `opengl;llvmpipe;opengl-golden` | Linux builds with OpenGL |
+| `SparkOpenGLHardwareTests` | `hardware` | `opengl;opengl-hardware` | Linux builds with OpenGL and `-DSPARK_GL_HARDWARE_ROW=ON` |
+
+The two llvmpipe lanes set `LIBGL_ALWAYS_SOFTWARE=1` and
+`GALLIUM_DRIVER=llvmpipe`, so a host with a GPU still runs them on the software
+rasterizer instead of quietly reporting a hardware context under the llvmpipe
+label. The hardware lane runs the same 13 tests (`SPARK_TEST_EXPECT_COUNT=13`,
+`SPARK_REQUIRE_OPENGL=1`, `RUN_SERIAL`) with `SPARK_GL_EXPECT_ROW=hardware`;
+forcing it onto llvmpipe (`GALLIUM_DRIVER=llvmpipe`) makes the row test fail.
+`SPARK_GL_HARDWARE_ROW` defaults to OFF because hosted runners have no GPU. A
+WSL host with `/dev/dxg` gets a GPU-backed EGL context through Mesa's D3D12
+driver (`GL_RENDERER` "D3D12 (<adapter>)"), which classifies as hardware: that
+is Mesa's D3D12 translation layer, not a native Linux GPU driver, so it is not
+driver certification for the Ubuntu row.
+
 ### Shipped-shader goldens on llvmpipe (RHI-240)
 
 The `SparkOpenGLGoldenTests` CTest entry (labels `opengl`, `llvmpipe`, `opengl-golden`; Linux builds with OpenGL) runs the eight `OpenGLGolden_RHI240_*` tests in `Tests/TestRHI240OpenGLGoldenReal.cpp` with `SPARK_REQUIRE_OPENGL=1` and an exact `SPARK_TEST_EXPECT_COUNT=8`. Each test compiles the shipped `Shaders/GLSL` sources through a real `GLDevice` with a KHR_debug error counter, renders a fixed input, reads the target back and compares it with the committed baseline in `Tests/GoldenImages/opengl-llvmpipe/` through the manifest's reviewed thresholds and baseline SHA-256.

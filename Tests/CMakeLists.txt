@@ -1768,6 +1768,12 @@ set_tests_properties(SparkEngineLoadTests PROPERTIES
 # RHI-240: real OpenGL backend under KHR_debug (llvmpipe on Linux hosts). The
 # lane requires a GL context (SPARK_REQUIRE_OPENGL=1) so it cannot pass by
 # skipping; llvmpipe evidence is software-rasterizer only, not driver certification.
+# The llvmpipe lanes pin Mesa's software rasterizer (LIBGL_ALWAYS_SOFTWARE=1,
+# GALLIUM_DRIVER=llvmpipe) so a GPU host cannot quietly run them on hardware;
+# OpenGL_RHI240_DeviceRowMatchesLane fails when the context disagrees with
+# SPARK_GL_EXPECT_ROW. SPARK_GL_HARDWARE_ROW (default OFF: hosted runners have no
+# GPU) adds SparkOpenGLHardwareTests, the same file on a GPU-backed context.
+option(SPARK_GL_HARDWARE_ROW "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)" OFF)
 # The dedicated real-GL lane needs Mesa (EGL/llvmpipe or GLX) and a 4.5 core context: Linux only.
 # macOS caps at GL 4.1 core without KHR_debug/DSA and has no headless context bootstrap.
 if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -1783,9 +1789,31 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
             -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
     )
     set_tests_properties(SparkOpenGLTests PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLReal.cpp;SPARK_TEST_EXPECT_COUNT=13;SPARK_REQUIRE_OPENGL=1;SPARK_GL_EXPECT_ROW=software"
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLReal.cpp;SPARK_TEST_EXPECT_COUNT=13;SPARK_REQUIRE_OPENGL=1;SPARK_GL_EXPECT_ROW=software;LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe"
         LABELS "opengl;llvmpipe"
         TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+
+    # RHI-240 hardware row: the same 13 tests on a GPU-backed context, labelled apart
+    # from llvmpipe. The row test fails if the context is a software rasterizer, so the
+    # lane cannot pass on llvmpipe (for example with GALLIUM_DRIVER=llvmpipe forced).
+    if(SPARK_GL_HARDWARE_ROW)
+        add_test(
+            NAME SparkOpenGLHardwareTests
+            COMMAND ${CMAKE_COMMAND}
+                -DSPARK_TEST_EXECUTABLE=$<TARGET_FILE:SparkTests>
+                -DSPARK_JUNIT_REPORT=${CMAKE_BINARY_DIR}/SparkTests-opengl-hardware-junit.xml
+                -DSPARK_TEST_LOG=${CMAKE_BINARY_DIR}/SparkTests-opengl-hardware.log
+                -DSPARK_TEST_OUTPUT=${CMAKE_BINARY_DIR}/SparkTests-opengl-hardware-output.log
+                -DSPARK_TEST_WARN_IS_ERROR=${SPARK_TESTS_WARN_IS_ERROR}
+                "-DSPARK_TEST_TIMEOUT_SECONDS=$<IF:$<CONFIG:Debug>,${SPARK_TEST_TIMEOUT_DEBUG},${SPARK_TEST_TIMEOUT_OPTIMIZED}>"
+                -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
+        )
+        set_tests_properties(SparkOpenGLHardwareTests PROPERTIES
+            ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLReal.cpp;SPARK_TEST_EXPECT_COUNT=13;SPARK_REQUIRE_OPENGL=1;SPARK_GL_EXPECT_ROW=hardware"
+            LABELS "opengl;opengl-hardware"
+            RUN_SERIAL TRUE
+            TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+    endif()
 
     # RHI-240: shipped-shader goldens on the opengl-llvmpipe row. Renders the
     # production Shaders/GLSL programs through GLDevice and compares each frame
@@ -1805,7 +1833,7 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
             -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
     )
     set_tests_properties(SparkOpenGLGoldenTests PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=8;SPARK_REQUIRE_OPENGL=1;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=8;SPARK_REQUIRE_OPENGL=1;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output;LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe"
         LABELS "opengl;llvmpipe;opengl-golden"
         TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
     # The baselines belong to one reviewed Mesa build, so exactly one lane

@@ -114,7 +114,7 @@ namespace SparkGLTest
         const char* required = std::getenv("SPARK_REQUIRE_OPENGL");
         if (required && std::string(required) == "1")
             throw std::runtime_error("SPARK_REQUIRE_OPENGL=1 but GLDevice::Initialize failed");
-        SKIP_TEST("no OpenGL context available (EGL/llvmpipe missing)");
+        SKIP_TEST("no OpenGL context available (no EGL/GLX driver: Mesa llvmpipe or a GPU driver)");
     }
 
     inline std::unique_ptr<Spark::RHI::IRHIShader> MakeShader(Spark::RHI::OpenGL::GLDevice& device,
