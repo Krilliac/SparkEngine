@@ -20,6 +20,10 @@
 
 #include "Audio/SoundEffect.h"
 
+#if !defined(SPARK_PLATFORM_WINDOWS)
+#include "Audio/OpenALAudioEngine.h"
+#endif
+
 #include <cstdint>
 #include <initializer_list>
 #include <vector>
@@ -270,3 +274,84 @@ TEST(SEC4SoundWav_RejectedReloadLeavesSoundUnloaded)
     ASSERT_EQ(static_cast<int>(sound.GetFormat().wFormatTag), 0);
     ASSERT_EQ(static_cast<unsigned long>(sound.GetFormat().nAvgBytesPerSec), 0ul);
 }
+
+#if !defined(SPARK_PLATFORM_WINDOWS)
+// OpenALAudioEngine::LoadWAVFile decodes through SoundEffect::LoadFromMemory and
+// hands alBufferData GetData()/GetDataSize(), GetFormat().nSamplesPerSec and the
+// format SelectOpenALWavFormat picks. The OpenAL device half needs audio
+// hardware, so these pin the decoding half on every non-Windows build.
+namespace
+{
+    // AL/al.h values, which OpenALAudioEngine.cpp also uses when OpenAL is absent.
+    constexpr int kAlFormatMono8 = 0x1100;
+    constexpr int kAlFormatMono16 = 0x1101;
+    constexpr int kAlFormatStereo8 = 0x1102;
+    constexpr int kAlFormatStereo16 = 0x1103;
+} // namespace
+
+TEST(SEC4OpenALWav_PcmLayoutsMapToCoreFormats)
+{
+    SoundEffect mono16;
+    const WavSpec monoSpec;
+    ASSERT_TRUE(SUCCEEDED(Load(mono16, MakeWav(monoSpec))));
+    ASSERT_EQ(Spark::Audio::SelectOpenALWavFormat(mono16.GetFormat()), kAlFormatMono16);
+    ASSERT_EQ(static_cast<unsigned long>(mono16.GetFormat().nSamplesPerSec), 44100ul);
+    ASSERT_EQ(static_cast<unsigned long>(mono16.GetDataSize()), static_cast<unsigned long>(monoSpec.dataSize));
+    ASSERT_TRUE(mono16.GetData() != nullptr);
+
+    struct Layout
+    {
+        uint16_t channels;
+        uint16_t bits;
+        int alFormat;
+    };
+    for (const Layout& layout :
+         {Layout{1, 8, kAlFormatMono8}, Layout{2, 8, kAlFormatStereo8}, Layout{2, 16, kAlFormatStereo16}})
+    {
+        SoundEffect sound;
+        WavSpec spec;
+        spec.channels = layout.channels;
+        spec.bitsPerSample = layout.bits;
+        spec.blockAlign = static_cast<uint16_t>(layout.channels * layout.bits / 8);
+        spec.byteRate = spec.sampleRate * spec.blockAlign;
+        spec.dataSize = 64u * spec.blockAlign;
+        ASSERT_TRUE(SUCCEEDED(Load(sound, MakeWav(spec))));
+        ASSERT_EQ(Spark::Audio::SelectOpenALWavFormat(sound.GetFormat()), layout.alFormat);
+    }
+}
+
+// SoundEffect accepts IEEE float, 24/32-bit PCM and up to 8 channels, none of
+// which OpenAL's core formats hold; LoadWAVFile must refuse them instead of
+// guessing a format from the channel and bit counts.
+TEST(SEC4OpenALWav_RefusesLayoutsOutsideCoreFormats)
+{
+    SoundEffect stereoFloat;
+    WavSpec floatSpec;
+    floatSpec.formatTag = 3; // WAVE_FORMAT_IEEE_FLOAT
+    floatSpec.channels = 2;
+    floatSpec.bitsPerSample = 32;
+    floatSpec.blockAlign = 8;
+    floatSpec.byteRate = 44100u * 8u;
+    floatSpec.dataSize = 64u * 8u;
+    ASSERT_TRUE(SUCCEEDED(Load(stereoFloat, MakeWav(floatSpec))));
+    ASSERT_EQ(Spark::Audio::SelectOpenALWavFormat(stereoFloat.GetFormat()), 0);
+
+    SoundEffect pcm24;
+    WavSpec pcm24Spec;
+    pcm24Spec.bitsPerSample = 24;
+    pcm24Spec.blockAlign = 3;
+    pcm24Spec.byteRate = 44100u * 3u;
+    pcm24Spec.dataSize = 64u * 3u;
+    ASSERT_TRUE(SUCCEEDED(Load(pcm24, MakeWav(pcm24Spec))));
+    ASSERT_EQ(Spark::Audio::SelectOpenALWavFormat(pcm24.GetFormat()), 0);
+
+    SoundEffect surround;
+    WavSpec surroundSpec;
+    surroundSpec.channels = 6;
+    surroundSpec.blockAlign = 12;
+    surroundSpec.byteRate = 44100u * 12u;
+    surroundSpec.dataSize = 64u * 12u;
+    ASSERT_TRUE(SUCCEEDED(Load(surround, MakeWav(surroundSpec))));
+    ASSERT_EQ(Spark::Audio::SelectOpenALWavFormat(surround.GetFormat()), 0);
+}
+#endif

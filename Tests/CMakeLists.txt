@@ -2727,6 +2727,16 @@ set_tests_properties(SEC4SoundEffectWav PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4SoundWav_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "security;audio;unit"
     TIMEOUT 60)
+# SEC-120: OpenALAudioEngine::LoadWAVFile decodes through the same SoundEffect parser
+# and maps its format onto OpenAL's core buffer formats (SelectOpenALWavFormat). The
+# OpenAL backend only exists off Windows, so this family is registered there only.
+if(NOT WIN32)
+    add_test(NAME SEC4OpenALWav COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SEC4OpenALWav PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC4OpenALWav_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "security;audio;unit"
+        TIMEOUT 60)
+endif()
 
 # SEC2 rendering lane (TestSEC2RenderingHardeningReal.cpp): daemon shader-blob length
 # bounds, the shared UpdateBuffer range check, D3D11 UpdateBuffer, D3D12 render-target

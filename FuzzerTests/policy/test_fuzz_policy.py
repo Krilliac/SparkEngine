@@ -1980,6 +1980,23 @@ class TestRepositoryIntegration(unittest.TestCase):
                 self.assertIn('PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"', target)
                 self.assertIn("Threads::Threads c++ c++abi", target)
 
+    def test_openal_wav_loader_delegates_to_the_fuzzed_sound_effect_parser(self) -> None:
+        # OpenALAudioEngine used to walk RIFF chunks itself (audio-openal-wav). It now
+        # decodes through SoundEffect::LoadFromMemory, so it is a delegating call site of
+        # the fuzzed audio-sound-effect record instead of a second, unfuzzed parser.
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        self.assertNotIn("audio-openal-wav", {parser.parser_id for parser in inventory.parsers})
+        sound = next(parser for parser in inventory.parsers if parser.parser_id == "audio-sound-effect")
+        self.assertEqual(sound.status, "fuzzed")
+        exemptions = {item.source_file: item for item in inventory.exempt_candidates}
+        for source in ("SparkEngine/Source/Audio/OpenALAudioEngine.cpp", "SparkEngine/Source/Audio/OpenALAudioEngine.h"):
+            with self.subTest(source=source):
+                self.assertEqual(exemptions[source].classification, "delegating-call-site")
+                self.assertEqual(tuple(exemptions[source].delegates_to), ("audio-sound-effect",))
+        engine = (REPO_ROOT / "SparkEngine" / "Source" / "Audio" / "OpenALAudioEngine.cpp").read_text(encoding="utf-8")
+        self.assertIn("wav.LoadFromMemory(", engine)
+        self.assertNotIn("WAVChunkHeader", engine)
+
     def test_json_utils_fuzzer_link_keeps_compiler_runtimes_abi_compatible(self) -> None:
         cmake = (REPO_ROOT / "FuzzerTests" / "CMakeLists.txt").read_text(encoding="utf-8")
         production = (REPO_ROOT / "FuzzerTests" / "FuzzJsonUtilsProduction.cpp").read_text(encoding="utf-8")

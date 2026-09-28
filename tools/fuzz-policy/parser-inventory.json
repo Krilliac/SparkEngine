@@ -1315,22 +1315,6 @@
       }
     },
     {
-      "id": "audio-openal-wav",
-      "description": "OpenAL WAV RIFF loader.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Audio/OpenALAudioEngine.cpp"
-      ],
-      "formats": [
-        ".wav"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
       "id": "freeze-buffer-blob",
       "description": "Byte-cursor freeze/thaw deserializer for save-state blobs.",
       "trust_boundary": "untrusted-file",
@@ -3151,14 +3135,26 @@
       ]
     },
     {
+      "source_file": "SparkEngine/Source/Audio/OpenALAudioEngine.cpp",
+      "classification": "delegating-call-site",
+      "justification": "LoadWAVFile reads the whole file into a buffer (binary-stream-read, capped at 256 MB) and decodes it with SoundEffect::LoadFromMemory, the fuzzed audio-sound-effect parser; the file only maps the accepted PCM layout onto an AL_FORMAT_* value and walks no RIFF chunks itself.",
+      "detected_by": [
+        "binary-stream-read",
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "audio-sound-effect"
+      ]
+    },
+    {
       "source_file": "SparkEngine/Source/Audio/OpenALAudioEngine.h",
       "classification": "delegating-call-site",
-      "justification": "Declares OpenALAudioEngine::LoadWAVFile, implemented in the inventoried OpenALAudioEngine.cpp.",
+      "justification": "Declares OpenALAudioEngine::LoadWAVFile and SelectOpenALWavFormat, implemented in OpenALAudioEngine.cpp, which decodes WAV bytes only through the fuzzed SoundEffect::LoadFromMemory (audio-sound-effect).",
       "detected_by": [
         "load-format-entry"
       ],
       "delegates_to": [
-        "audio-openal-wav"
+        "audio-sound-effect"
       ]
     },
     {

@@ -80,6 +80,20 @@ namespace Spark::Audio
     };
 
     /**
+     * @brief Pick the OpenAL core buffer format for a WAV layout decoded by SoundEffect.
+     *
+     * OpenALAudioEngine::LoadWAVFile decodes every file through SoundEffect::LoadFromMemory, the
+     * engine's one WAV parser, and hands the decoded samples to alBufferData in this format.
+     * Thread affinity: any thread (pure function, no allocation).
+     *
+     * @param format The fmt chunk SoundEffect accepted (PCM or IEEE float, self-consistent fields).
+     * @return AL_FORMAT_MONO8, AL_FORMAT_MONO16, AL_FORMAT_STEREO8 or AL_FORMAT_STEREO16; 0 when
+     *         OpenAL's core formats cannot hold the layout (IEEE float, 24/32-bit PCM, or more than
+     *         two channels).
+     */
+    int SelectOpenALWavFormat(const WAVEFORMATEX& format);
+
+    /**
      * @brief Audio metrics for console integration
      */
     struct AudioMetrics
