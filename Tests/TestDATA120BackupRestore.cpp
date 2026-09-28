@@ -264,14 +264,15 @@ TEST(Persistence_BackupRestore_SchemaGateRefusesNewerAndMigratesOlderBackup)
     EXPECT_FALSE(fs::exists(dir / "newer.bak"));
     fs::remove(db);
 
-    // An N-1 backup restores and is written back in the current schema.
+    // An N-1 backup restores and is written back in the current schema. N-1 is v2: v3 is retired.
     fs::remove(backup);
     fs::remove(TFDatabase::BackupDigestPath(backup));
+    constexpr uint32_t kPreviousSchema = 2;
     const std::string previous =
-        "{\"schemaVersion\": " + std::to_string(TFDatabase::kSchemaVersion - 1) + ", \"revision\": 3, " + rows + "}";
+        "{\"schemaVersion\": " + std::to_string(kPreviousSchema) + ", \"revision\": 3, " + rows + "}";
     WriteBackupWithDigest(backup, previous);
     ASSERT_TRUE(TFDatabase::RestoreFromBackup(backup, db, info) == TFBackupStatus::Ok);
-    EXPECT_EQ(info.schemaVersion, TFDatabase::kSchemaVersion - 1);
+    EXPECT_EQ(info.schemaVersion, kPreviousSchema);
     EXPECT_EQ(info.revision, uint64_t{4});
     EXPECT_TRUE(info.displacedPrimary.empty());
     EXPECT_FALSE(info.supersedesPrimaryRevision);

@@ -259,9 +259,9 @@ TEST(Persistence_Migration_LegacyUnversionedFileUpgradesInPlace)
     EXPECT_TRUE(db.TouchLogin(1, 99));
     EXPECT_TRUE(db.Close());
 
-    // The first write stamps schema v2, which the previous build still loads.
+    // The first write stamps the current schema.
     const std::string upgraded = ReadFile(path);
-    EXPECT_TRUE(upgraded.find("\"schemaVersion\": 2") != std::string::npos);
+    EXPECT_TRUE(upgraded.find("\"schemaVersion\": " + std::to_string(TFDatabase::kSchemaVersion)) != std::string::npos);
     EXPECT_TRUE(upgraded.find("appliedOperations") == std::string::npos);
     TFDatabase reopened;
     ASSERT_TRUE(reopened.Open(path));
@@ -274,9 +274,9 @@ TEST(Persistence_Migration_LegacyUnversionedFileUpgradesInPlace)
 TEST(Persistence_Migration_RetiredLedgerSchemaLoadsOnlyWithEmptyLedger)
 {
     // b2d2953 wrote schema v3: v2 content plus an "appliedOperations" ledger
-    // that no caller ever filled. Such a file loads and is rewritten as v2, so
-    // the previous build can read it again; a ledger that holds ids, or a v3
-    // file without the ledger, fails closed rather than being rewritten.
+    // that no caller ever filled. Such a file loads as v2 content and is
+    // rewritten in the current schema; a ledger that holds ids, or a v3 file
+    // without the ledger, fails closed rather than being rewritten.
     const std::string body = R"("revision": 4, "nextAccountId": 2, "nextCharId": 2,
   "accounts": [{"id": 1, "username": "cloud", "salt": "s", "passwordHash": "h",
                 "createdAtMs": 1, "lastLoginMs": 2}],
@@ -295,7 +295,8 @@ TEST(Persistence_Migration_RetiredLedgerSchemaLoadsOnlyWithEmptyLedger)
         EXPECT_TRUE(db.Close());
     }
     const std::string rewritten = ReadFile(path);
-    EXPECT_TRUE(rewritten.find("\"schemaVersion\": 2") != std::string::npos);
+    EXPECT_TRUE(rewritten.find("\"schemaVersion\": " + std::to_string(TFDatabase::kSchemaVersion)) !=
+                std::string::npos);
     EXPECT_TRUE(rewritten.find("appliedOperations") == std::string::npos);
     {
         TFDatabase reopened;

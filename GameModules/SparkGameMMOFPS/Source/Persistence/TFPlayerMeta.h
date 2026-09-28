@@ -31,6 +31,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace Terrafront
@@ -102,7 +103,13 @@ namespace Terrafront
         {
             m_meta.clear();
             m_pendingByCharacter.clear();
+            m_resolvedParked.clear();
         }
+        /// True while `charId` has meta parked by a failed disconnect flush (TF-120: it keeps residency).
+        bool IsParked(uint64_t charId) const { return m_pendingByCharacter.contains(charId); }
+        /// Characters whose parked meta a PersistAllDirty sweep has since committed or discarded, so their
+        /// residency can be released; the list is cleared by the call.
+        std::vector<uint64_t> TakeResolvedParked() { return std::exchange(m_resolvedParked, {}); }
         bool IsDirty(PlayerId player) const;
         bool AnyDirty() const;
         size_t Count() const { return m_meta.size(); }
@@ -145,6 +152,7 @@ namespace Terrafront
 
         std::unordered_map<PlayerId, Meta> m_meta;
         std::unordered_map<uint64_t, Meta> m_pendingByCharacter;
+        std::vector<uint64_t> m_resolvedParked; ///< see TakeResolvedParked()
     };
 
 } // namespace Terrafront

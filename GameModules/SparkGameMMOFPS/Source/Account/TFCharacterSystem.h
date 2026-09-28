@@ -52,8 +52,15 @@ namespace Terrafront
 
         TFCharErr Delete(uint64_t accountId, uint64_t charId); // ownership-checked
 
-        // enter-world binding (Task 4): returns the character (faction becomes authoritative)
+        // enter-world binding (Task 4): returns the character (faction becomes authoritative). On a database
+        // bound to a continent (TF-120) it also claims the character's residency; the claim is refused with
+        // TFDatabaseStatus::ResidentElsewhere while the character is in world on another live continent.
         bool EnterWorld(uint64_t accountId, uint64_t charId, TFCharacterRecord& out);
+
+        /// TF-120 leave-world: release the residency EnterWorld claimed. Call only after the character's final
+        /// progress and meta are durable, so the next continent starts from them. True when released, already
+        /// released, or the database is unbound.
+        bool LeaveWorld(uint64_t charId);
 
         bool PersistProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux); // routes to db
 

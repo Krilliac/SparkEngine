@@ -200,14 +200,18 @@ namespace Terrafront
         // handling": "On disconnect, flush the active character's
         // progress") — the periodic TFProgressionSystem::SaveNow debounce
         // could otherwise miss a few seconds of the final session.
+        uint64_t leavingCharacter = 0;
+        bool progressDurable = false;
         if (auto cIt = m_activeCharacter.find(id); cIt != m_activeCharacter.end())
         {
+            leavingCharacter = cIt->second;
             if (m_ctx->characters && m_ctx->progression)
             {
-                const bool persisted =
-                    m_ctx->characters->PersistProgress(cIt->second, m_ctx->progression->XPOf(id),
-                                                       m_ctx->progression->RankOf(id), m_ctx->progression->FluxOf(id));
-                if (!persisted && !m_ctx->progression->SaveNow())
+                progressDurable = m_ctx->characters->PersistProgress(cIt->second, m_ctx->progression->XPOf(id),
+                                                                     m_ctx->progression->RankOf(id),
+                                                                     m_ctx->progression->FluxOf(id)) ||
+                                  m_ctx->progression->SaveNow();
+                if (!progressDurable)
                     SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                     "[TF] final progression persistence failed for disconnected player %u", id);
             }
@@ -217,9 +221,19 @@ namespace Terrafront
         // this PlayerId AFTER the final flush-to-character above. Without
         // this, a recycled PlayerId (a new client reusing a freed slot)
         // would inherit the prior occupant's xp/rank/flux and leak them
-        // onto a different account's character.
+        // onto a different account's character. It also flushes (or parks)
+        // the character's meta.
         if (m_ctx->progression)
             m_ctx->progression->ClearPlayer(id);
+        // TF-120: release the character's residency only once its final progress and meta are durable, so the
+        // next continent starts from them. Otherwise it stays resident here: a parked meta row is released by
+        // the progression sweep that resolves it, and a lost progress flush keeps the character on this
+        // continent (where it can still re-enter) until the next bind clears it.
+        if (leavingCharacter != 0 && m_ctx->characters && m_ctx->progression && progressDurable &&
+            !m_ctx->progression->HasParkedMeta(leavingCharacter) && !m_ctx->characters->LeaveWorld(leavingCharacter))
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] character %llu of disconnected player %u stays resident: releasing it failed",
+                            static_cast<unsigned long long>(leavingCharacter), id);
         // W6 directives: same recycled-PlayerId hygiene for directive progress.
         if (m_ctx->directives)
             m_ctx->directives->ClearPlayer(id);

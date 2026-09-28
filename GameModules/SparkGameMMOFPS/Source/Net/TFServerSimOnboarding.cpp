@@ -381,9 +381,22 @@ namespace Terrafront
         const std::filesystem::path path = SavePaths::File("terrafront.db");
         if (!path.empty() && m_ctx->db->Open(path))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened account database at %s",
-                           SavePaths::Utf8ForLog(path).c_str());
-            return true;
+            // TF-120: an authority that cannot fence its characters' residency must not let anyone in, or
+            // one character could be in world on two continents. The bind fails while another live
+            // authority serves this continent on the same save root.
+            const bool dataLoaded = m_ctx->data && m_ctx->data->IsLoaded();
+            if (dataLoaded && m_ctx->db->BindAuthority(m_ctx->data->GetContinent().key))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened account database at %s for '%s'",
+                               SavePaths::Utf8ForLog(path).c_str(), m_ctx->db->BoundContinent().c_str());
+                return true;
+            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] authority could not bind the account database at %s to continent '%s'; closed",
+                            SavePaths::Utf8ForLog(path).c_str(),
+                            dataLoaded ? m_ctx->data->GetContinent().key.c_str() : "<data tables not loaded>");
+            m_ctx->db->Close();
+            return false;
         }
         SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] authority failed to open account database at %s",
                         path.empty() ? "<invalid save path>" : SavePaths::Utf8ForLog(path).c_str());
@@ -549,9 +562,17 @@ namespace Terrafront
             return;
         }
 
+        // TF-120: EnterWorld claims the character's residency in the shared database, so a character in world
+        // on another live continent is refused here too. Like every refusal, it gets no reply.
         TFCharacterRecord rec;
         if (!m_ctx->characters->EnterWorld(acctId, req.charId, rec))
-            return; // unknown character or not owned by this account
+        {
+            if (m_ctx->db && m_ctx->db->LastStatus() == TFDatabaseStatus::ResidentElsewhere)
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF] player %u EnterWorldReq refused: character %llu is in world on another continent",
+                               sender, static_cast<unsigned long long>(req.charId));
+            return; // unknown character, not owned by this account, or resident elsewhere
+        }
 
         SetPlayerFaction(sender, rec.faction);
         m_enteredWorld.insert(sender);

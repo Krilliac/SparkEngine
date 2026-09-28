@@ -78,10 +78,6 @@ namespace Terrafront
             return true;
         }
 
-        // Bound on waiting for another authority's transaction. Transactions
-        // are a single small file rewrite, so a longer wait means a stuck peer.
-        constexpr std::chrono::milliseconds kLockTimeout{2000};
-
         int64_t NowMs()
         {
             using namespace std::chrono;
@@ -189,6 +185,11 @@ namespace Terrafront
 
     bool TFDatabase::Close()
     {
+        // The binding ends with the instance, also after a fail-closed Open or transaction. Residency rows
+        // stay as committed: a clean shutdown releases its characters first, and whatever is left is cleared
+        // by the continent's next bind or taken over as a dead owner's.
+        m_boundContinent.clear();
+        m_authorityLock.Unlock();
         if (!m_open)
             return true;
 
@@ -465,6 +466,12 @@ namespace Terrafront
             uint64_t rowRevision = 0;
             if (row.HasKey("revision") && (!ReadUnsigned(row["revision"], rowRevision) || rowRevision > fileRevision))
                 return LoadResult::Corrupt;
+            // TF-120 schema v4: absent on older files (not resident). A key names a lock file, so it must be
+            // a valid continent key.
+            if (row.HasKey("resident") &&
+                (!row["resident"].IsString() ||
+                 (!row["resident"].AsString().empty() && !SavePaths::IsValidContinentKey(row["resident"].AsString()))))
+                return LoadResult::Corrupt;
 
             if (row.HasKey("unlocks"))
             {
@@ -554,6 +561,8 @@ namespace Terrafront
                 rec.createdAtMs = static_cast<int64_t>(row["createdAtMs"].AsNumber(0.0));
                 rec.lastPlayedMs = static_cast<int64_t>(row["lastPlayedMs"].AsNumber(0.0));
                 rec.revision = static_cast<uint64_t>(row["revision"].AsNumber(0.0));
+                if (row["resident"].IsString())
+                    rec.residentContinent = row["resident"].AsString();
 
                 // W6 progression expansion (additive keys; tolerant of old files)
                 if (row.HasKey("unlocks") && row["unlocks"].IsArray())
@@ -643,6 +652,7 @@ namespace Terrafront
             row["createdAtMs"] = Spark::Json::Value(static_cast<double>(c.createdAtMs));
             row["lastPlayedMs"] = Spark::Json::Value(static_cast<double>(c.lastPlayedMs));
             row["revision"] = Spark::Json::Value(static_cast<double>(c.revision));
+            row["resident"] = Spark::Json::Value(c.residentContinent);
 
             // W6 progression expansion (additive keys)
             Spark::Json::Value unlocks = Spark::Json::Value::MakeArray();
@@ -955,8 +965,12 @@ namespace Terrafront
                                                     [&](const TFCharacterRecord& c) { return c.id == update.charId; });
                              if (it == fresh.characters.end())
                                  return false;
+                             // A bound authority writes only characters in world on its continent (TF-120);
+                             // the claim that moved one away also moved its revision, so this is a second
+                             // fence, not the only one.
                              const auto base = m_baseRevisions.find(update.charId);
-                             if (base == m_baseRevisions.end() || base->second != it->revision)
+                             if (base == m_baseRevisions.end() || base->second != it->revision ||
+                                 (!m_boundContinent.empty() && it->residentContinent != m_boundContinent))
                              {
                                  conflictCharId = update.charId;
                                  return false;

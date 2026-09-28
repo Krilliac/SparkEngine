@@ -7,7 +7,16 @@ This document specifies what the TERRAFRONT account/character database (`Terrafr
 - Each mutating call is one transaction under `<db>.lock` (`SavePaths::ExclusiveFileLock`). The transaction reloads and validates the committed file, applies the change, writes the whole new file, and then releases the lock. The OS drops the lock when its process dies, so a crashed writer cannot hold it.
 - Each commit goes through `SavePaths::WriteDurableReplace`. It writes `<db>.tmp` in full and flushes it (`fsync` on POSIX, `FlushFileBuffers` on Windows). It then renames the staging file over `<db>`. On POSIX it also fsyncs the parent directory; on Windows the rename uses `MOVEFILE_WRITE_THROUGH`.
 - The file carries `schemaVersion` and a monotonically increasing `revision`. Each character row records the revision of its last change.
-- This build writes schema v2. Schema v3 is retired and the next bump is v4. For a short time, `b2d2953` wrote v3 files: v2 content plus an `appliedOperations` ledger that no caller ever filled. A v3 file whose ledger is an empty array loads as v2 and is rewritten as v2. Any other v3 file fails closed as `UnsupportedVersion`, because rewriting it would drop recorded operation ids.
+- This build writes schema v4, which adds each character's `resident` continent key (TF-120, below). v2 files load with every character out of world and are rewritten as v4. Schema v3 is retired: for a short time, `b2d2953` wrote v3 files, v2 content plus an `appliedOperations` ledger that no caller ever filled. A v3 file whose ledger is an empty array loads as v2 content and is rewritten as v4. Any other v3 file fails closed as `UnsupportedVersion`, because rewriting it would drop recorded operation ids. A v4 file is `UnsupportedVersion` to a v2 build, so a rollback cannot drop residency.
+
+## Character residency (TF-120)
+
+A character is in world on at most one continent authority sharing the save root.
+
+- Each authority process binds its `TFDatabase` to its continent (`BindAuthority`, called by `TFServerSim::EnsureAuthorityDatabaseOpen`). The bind holds `<db>.authority.<continent>.lock` for the life of the instance. A second live authority for the same continent fails the bind with `AuthorityHeld`, and the server then serves no login. Holding the lock proves every earlier authority for that continent is dead, so the bind clears the residency they left in one transaction.
+- Enter world (`TFCharacterSystem::EnterWorld`) claims the character in one transaction. The claim is refused with `ResidentElsewhere` and writes nothing while the character is resident on another continent whose authority lock is held. If that lock is free, the owner is dead and the claim takes the character over from its last commit. The claim stamps a new row revision, so an authority that was fenced out holds a stale baseline. On a bound instance every absolute character write also requires the row to be resident on the bound continent.
+- Leave world (`TFCharacterSystem::LeaveWorld`) releases the residency only after the character's final progress and meta are durable. A disconnect whose meta flush fails parks the meta, and the character stays resident until the progression sweep commits (or discards) the parked row; `TFProgressionSystem::SaveNow` then releases it. A lost progress flush leaves the character resident on this continent, where it can still re-enter, until the continent's next bind.
+- Tests: `TF120_Residency_*` (`Tests/TestTF120Residency.cpp`).
 
 ## Schema versions of the other stores
 

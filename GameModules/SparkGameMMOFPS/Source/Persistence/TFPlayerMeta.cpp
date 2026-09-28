@@ -205,17 +205,28 @@ namespace Terrafront
         for (const uint64_t charId : conflicted)
         {
             if (m_pendingByCharacter.erase(charId) != 0)
+            {
+                m_resolvedParked.push_back(charId);
                 SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                 "[TF] discarded unsaved meta for disconnected character %llu: another authority "
                                 "changed the character after this process's last successful save",
                                 static_cast<unsigned long long>(charId));
+            }
             else
                 SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                 "[TF] character %llu is in world here but was changed by another authority; its "
                                 "progress and meta stay unsaved",
                                 static_cast<unsigned long long>(charId));
         }
-        std::erase_if(m_pendingByCharacter, [](const auto& entry) { return !entry.second.dirty; });
+        // Parked rows this sweep committed are resolved too (TF-120: their residency may now be released).
+        std::erase_if(m_pendingByCharacter,
+                      [this](const auto& entry)
+                      {
+                          if (entry.second.dirty)
+                              return false;
+                          m_resolvedParked.push_back(entry.first);
+                          return true;
+                      });
         return ok;
     }
 

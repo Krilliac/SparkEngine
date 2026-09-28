@@ -407,7 +407,7 @@ TEST(TF120_SharedRoot_LegacyFileUpgradesAndRevisionsAreValidated)
         EXPECT_EQ(row.revision, uint64_t{1});
     }
     const std::string upgraded = ReadFile(path);
-    EXPECT_TRUE(upgraded.find("\"schemaVersion\": 2") != std::string::npos);
+    EXPECT_TRUE(upgraded.find("\"schemaVersion\": " + std::to_string(TFDatabase::kSchemaVersion)) != std::string::npos);
     EXPECT_TRUE(upgraded.find("\"revision\": 1") != std::string::npos);
 
     // A row claiming a revision newer than its file is corrupt, not trusted.

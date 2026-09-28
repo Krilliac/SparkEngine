@@ -669,7 +669,10 @@ add_executable(SparkTests
     TestDATA120BackupRestore.cpp
     # TF-120 transaction-scoped locking: shared TF_SAVE_ROOT across authorities
     TestTF120SharedSaveRoot.cpp
+    # TF-120 character residency fence (TFDatabaseResidency.cpp below)
+    TestTF120Residency.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseResidency.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseBackup.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
@@ -2126,6 +2129,16 @@ foreach(_spark_data120_selector IN LISTS _spark_data120_recovery_selectors)
         RUN_SERIAL TRUE
         TIMEOUT 120)
 endforeach()
+
+# TF-120: a character is in world on at most one continent authority
+# (TFDatabase residency fence, TFCharacterSystem enter/leave world, parked
+# meta keeping residency). RUN_SERIAL: the cases reuse fixed Saves/ paths.
+add_test(NAME TF120_Residency COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(TF120_Residency PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_Residency_;SPARK_TEST_EXPECT_COUNT=11"
+    LABELS "persistence;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
 
 # Security: SparkDaemon shader/asset cache hardening. The pinned count fails the
 # lane if the family silently stops being compiled in.

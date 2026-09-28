@@ -18,7 +18,8 @@
  * TerraFront authority code passes SavePaths::File("terrafront.db").
  *
  * TF-120 shared-root concurrency: several continent authority processes may
- * open the same file. There is no lifetime lock. Every call is one
+ * open the same file. The file itself has no lifetime lock (only the
+ * per-continent authority lock below does). Every call is one
  * transaction under a short exclusive `<file>.lock` (SavePaths::
  * ExclusiveFileLock): reload the committed file, validate it, apply the
  * change to that fresh state, atomically write (tmp+rename), release. Reads
@@ -57,6 +58,29 @@
  * file with a missing or non-empty ledger fails closed as UnsupportedVersion,
  * because rewriting it would drop recorded operation ids.
  *
+ * Schema v4 (TF-120 residency, TFDatabaseResidency.cpp) adds each character's
+ * "resident" continent key: empty means the character is in no world. v2
+ * files and empty-ledger v3 files load with every character non-resident and
+ * are rewritten as v4. An authority process binds this instance to its
+ * continent (BindAuthority) by holding the lifetime lock
+ * `<file>.authority.<continent>.lock` until Close. Holding it proves every
+ * earlier authority for that continent is dead, so the bind clears their
+ * residency (own-crash recovery). ClaimCharacter marks a character resident
+ * on the bound continent inside one transaction, and refuses (status
+ * ResidentElsewhere) while the character is resident on another continent
+ * whose authority lock is held. A resident whose authority lock is free is a
+ * dead owner and is taken over. ReleaseCharacter clears the residency. A
+ * claim stamps a new row revision, so an authority that was fenced out holds
+ * a stale baseline and gets Conflict; on a bound instance every absolute
+ * character write also requires the row to be resident on the bound
+ * continent. Probing a dead owner is race-free: every claim runs under the
+ * per-call file lock, so no two claims interleave. Unbound instances (backup
+ * and restore tooling, tests) never read or change residency.
+ *
+ * Thread affinity: game thread only (no internal synchronization; the file
+ * locks serialize processes, not threads). Ownership: the authority lock
+ * lives exactly as long as the binding. Allocation: one snapshot per call.
+ *
  * DATA-120 backup/restore (TFDatabaseBackup.cpp, recovery point documented in
  * docs/specs/persistence.md): CreateBackup copies the committed file under the
  * authority lock into a durable, re-verified backup plus a sha256sum-format
@@ -72,6 +96,7 @@
 
 #include "Core/TFTypes.h" // FactionId
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -94,6 +119,8 @@ namespace Terrafront
         WriteFailed,
         UnsupportedVersion, ///< file written by a newer schema; left untouched
         Conflict,           ///< another authority changed a row since this instance's baseline
+        AuthorityHeld,      ///< BindAuthority: a live authority already owns this continent
+        ResidentElsewhere,  ///< ClaimCharacter: the character is in world on another live continent
     };
 
     /// Outcome of TFDatabase::CreateBackup / RestoreFromBackup. Anything but Ok
@@ -156,7 +183,8 @@ namespace Terrafront
         uint16_t rank = 1;
         uint32_t flux = 0;
         int64_t createdAtMs = 0, lastPlayedMs = 0;
-        uint64_t revision = 0; ///< file revision of this row's last change (0 == legacy/never rewritten)
+        uint64_t revision = 0;         ///< file revision of this row's last change (0 == legacy/never rewritten)
+        std::string residentContinent; ///< schema v4 "resident": continent key it is in world on; empty == none
 
         // --- W6 progression expansion (additive schema; absent keys on old save
         // files simply load as the empty defaults below) -------------------------
@@ -191,18 +219,18 @@ namespace Terrafront
     class TFDatabase
     {
       public:
-        /// On-disk schema written by this build. Files without the key are v0.
-        static constexpr uint32_t kSchemaVersion = 2;
+        /// On-disk schema written by this build (v4: character residency). Files without the key are v0.
+        static constexpr uint32_t kSchemaVersion = 4;
         /// Written only by the withdrawn operation-id ledger build (b2d2953).
-        /// Never reuse it: the next schema bump is 4.
+        /// Never reuse it.
         static constexpr uint32_t kRetiredLedgerSchemaVersion = 3;
-        static_assert(kSchemaVersion != kRetiredLedgerSchemaVersion, "schema v3 is retired; bump to 4");
+        static_assert(kSchemaVersion != kRetiredLedgerSchemaVersion, "schema v3 is retired");
 
         TFDatabase() = default;
         ~TFDatabase();
 
         bool Open(const std::filesystem::path& path); // false on missing parent/lock/stat/read/parse failure
-        bool Close();                                 // successful mutations are already durable
+        bool Close();                                 // successful mutations are already durable; releases the binding
         bool IsOpen() const { return m_open; }
         TFDatabaseStatus LastStatus() const { return m_status; }
         bool RecoveryLatched() const { return m_recoveryLatched; }
@@ -236,6 +264,24 @@ namespace Terrafront
         /// the returned values (enter world) and to retry after a Conflict.
         bool AcquireCharacter(uint64_t charId, TFCharacterRecord& out);
         bool DeleteCharacter(uint64_t charId);
+
+        // --- TF-120 residency (TFDatabaseResidency.cpp; contract in the file header) ---------------------------
+
+        /// Bind this open instance to `continentKey` for its lifetime (until Close). Waits up to the lock
+        /// timeout for the continent's authority lock; a live holder fails the bind with AuthorityHeld. On
+        /// success, every row still resident on this continent (left by a dead earlier authority) is cleared
+        /// in one transaction. False on a closed or already bound instance or an invalid key.
+        bool BindAuthority(std::string_view continentKey);
+        /// Continent this instance is bound to, empty when unbound.
+        const std::string& BoundContinent() const { return m_boundContinent; }
+        /// Enter-world claim: make `charId` resident on the bound continent and adopt its row revision as
+        /// the baseline (AcquireCharacter for a bound authority). Refused, writing nothing, with status
+        /// ResidentElsewhere while another continent whose authority is alive holds the character; a dead
+        /// holder is taken over. Claiming a character already resident here only re-adopts the baseline.
+        bool ClaimCharacter(uint64_t charId, TFCharacterRecord& out);
+        /// Leave-world release: clear the residency if it is on the bound continent (idempotent otherwise)
+        /// and drop this instance's baseline, so no later absolute write lands from here.
+        bool ReleaseCharacter(uint64_t charId);
         bool SaveCharacterProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux, int64_t lastPlayedMs);
 
         /// W6 progression expansion: overwrite the meta block (unlocks / loadout /
@@ -300,6 +346,13 @@ namespace Terrafront
         /// character rows with `newRevision`. Returning false writes nothing.
         using Mutation = std::function<bool(Snapshot& fresh, uint64_t newRevision)>;
 
+        /// Bound on waiting for another authority's transaction (or for a continent's authority lock).
+        /// Transactions are a single small file rewrite, so a longer wait means a stuck peer.
+        static constexpr std::chrono::milliseconds kLockTimeout{2000};
+
+        /// `<file>.authority.<continentKey>`; ExclusiveFileLock appends ".lock".
+        std::filesystem::path AuthorityLockTarget(std::string_view continentKey) const;
+
         LoadResult LoadFromDisk(Snapshot& out) const;
         /// Validate and decode committed file bytes (LoadFromDisk after the read).
         LoadResult ParseSnapshot(const std::string& text, Snapshot& out) const;
@@ -317,6 +370,9 @@ namespace Terrafront
         Snapshot m_snapshot;                                    ///< last committed state this instance saw
         std::unordered_map<uint64_t, uint64_t> m_baseRevisions; ///< charId -> baseline row revision
         uint64_t m_conflictCharId = 0;                          ///< see ConflictedCharacter()
+
+        std::string m_boundContinent;                 ///< TF-120: BindAuthority key, empty when unbound
+        SavePaths::ExclusiveFileLock m_authorityLock; ///< held while bound
     };
 
 } // namespace Terrafront

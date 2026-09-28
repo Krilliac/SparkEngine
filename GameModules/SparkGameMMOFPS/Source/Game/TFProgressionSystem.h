@@ -132,6 +132,10 @@ namespace Terrafront
         /// leaks them onto a different account's character.
         void ClearPlayer(PlayerId player);
 
+        /// TF-120: true while `charId` has meta that a failed disconnect flush parked for retry. Such a
+        /// character keeps its residency on this continent; SaveNow releases it once a sweep resolves the row.
+        bool HasParkedMeta(uint64_t charId) const { return m_meta.IsParked(charId); }
+
         /// Debug panel toggle (hidden by default; wired from tf_* console commands).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }
 

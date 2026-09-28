@@ -152,12 +152,23 @@ namespace Terrafront
         // The session now works from these values, so later progress/meta
         // commits are checked against this row revision (TF-120: another
         // continent authority may have written the character since this
-        // process last saw it).
-        if (!m_db->AcquireCharacter(charId, rec) || rec.accountId != accountId)
+        // process last saw it). A bound authority also claims the character's
+        // residency, which fails while it is in world on another live continent.
+        const bool bound = !m_db->BoundContinent().empty();
+        if (!(bound ? m_db->ClaimCharacter(charId, rec) : m_db->AcquireCharacter(charId, rec)) ||
+            rec.accountId != accountId)
             return false;
 
         out = rec;
         return true;
+    }
+
+    bool TFCharacterSystem::LeaveWorld(uint64_t charId)
+    {
+        if (!m_db)
+            return false;
+        // An unbound database never claimed the character, so there is nothing to release.
+        return m_db->BoundContinent().empty() || m_db->ReleaseCharacter(charId);
     }
 
     bool TFCharacterSystem::PersistProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux)
