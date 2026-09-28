@@ -40,6 +40,7 @@
       "Tests/TestTFDamageModel.cpp",
       "Tests/TestTFDeathRecapWire.cpp",
       "Tests/TestTFFixedStep.cpp",
+      "Tests/TestTFLanBeaconCodec.cpp",
       "Tests/TestTFNetProtocolLayout.cpp",
       "Tests/TestTFOnboarding.cpp",
       "Tests/TestTFOutfitStore.cpp",
@@ -124,6 +125,10 @@
       {
         "prefix": "TFSocialStore_",
         "count": 7
+      },
+      {
+        "prefix": "TFLanBeacon_",
+        "count": 3
       }
     ]
   },

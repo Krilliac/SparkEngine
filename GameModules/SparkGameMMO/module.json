@@ -47,6 +47,14 @@
       {
         "prefix": "MMOPersistence_",
         "count": 17
+      },
+      {
+        "prefix": "MMOClientState_",
+        "count": 2
+      },
+      {
+        "prefix": "MMOEntityEvents_",
+        "count": 3
       }
     ]
   },

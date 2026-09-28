@@ -97,7 +97,8 @@ namespace MMO
          * @brief Apply one client-authored player state request (server role only).
          *
          * The payload is the EntityStateUpdate layout MMOPlayerSystem sends: networkId,
-         * position, rotation, velocity, and a zero property count, with nothing trailing.
+         * position, rotation, velocity, and a zero property count, with nothing trailing,
+         * decoded and bounds-checked by DecodeClientStateRequest (MMOClientStateCodec.h).
          * The client-chosen networkId is ignored. The state lands on the one replicated
          * entity this server owns for message.senderID (created on first request), and
          * normal server replication republishes it; nothing is relayed verbatim.

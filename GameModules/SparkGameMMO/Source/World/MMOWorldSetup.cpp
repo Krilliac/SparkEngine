@@ -4,6 +4,7 @@
  */
 
 #include "MMOWorldSetup.h"
+#include "MMOClientStateCodec.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -20,52 +21,11 @@
 #include <imgui.h>
 #endif
 
-#include <cmath>
-#include <cstddef>
 #include <iterator>
+#include <optional>
 
 namespace MMO
 {
-#ifdef ENABLE_NETWORKING
-    namespace
-    {
-        /// networkId (4) + position, rotation, velocity (3 x 12) + property count (2).
-        constexpr size_t kClientStateRequestSize = 42;
-        /// Any coordinate past this is garbage or an exploit, not a world position (1000 km).
-        constexpr float kMaxClientCoordinate = 1.0e6f;
-        /// Sprinting players move at 10.5 m/s; this leaves headroom for knockback and lag.
-        constexpr float kMaxClientSpeed = 100.0f;
-        /// ReplicatedEntity rotation is Euler degrees, republished to every other client. Any
-        /// finite value used to pass, so a peer could push values near FLT_MAX that overflow to
-        /// inf/NaN in the first lerp or matrix built from them. One full turn either way covers
-        /// every orientation a client can mean.
-        constexpr float kMaxClientRotationDegrees = 360.0f;
-
-        bool IsFiniteVector(const DirectX::XMFLOAT3& value)
-        {
-            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-        }
-
-        bool IsPlausibleCoordinate(const DirectX::XMFLOAT3& value)
-        {
-            return IsFiniteVector(value) && std::abs(value.x) <= kMaxClientCoordinate &&
-                   std::abs(value.y) <= kMaxClientCoordinate && std::abs(value.z) <= kMaxClientCoordinate;
-        }
-
-        bool IsPlausibleRotation(const DirectX::XMFLOAT3& value)
-        {
-            return IsFiniteVector(value) && std::abs(value.x) <= kMaxClientRotationDegrees &&
-                   std::abs(value.y) <= kMaxClientRotationDegrees && std::abs(value.z) <= kMaxClientRotationDegrees;
-        }
-
-        bool IsPlausibleVelocity(const DirectX::XMFLOAT3& value)
-        {
-            return IsFiniteVector(value) &&
-                   value.x * value.x + value.y * value.y + value.z * value.z <= kMaxClientSpeed * kMaxClientSpeed;
-        }
-    } // namespace
-#endif // ENABLE_NETWORKING
-
     MMOWorldSetup::~MMOWorldSetup()
     {
         Shutdown();
@@ -355,27 +315,19 @@ namespace MMO
                                                     const Spark::Net::NetworkMessage& message)
     {
         const Spark::Net::ClientID sender = message.senderID;
-        if (network.GetRole() != Spark::Net::NetworkRole::Server || sender == Spark::Net::INVALID_CLIENT ||
-            message.payload.size() != kClientStateRequestSize)
+        if (network.GetRole() != Spark::Net::NetworkRole::Server || sender == Spark::Net::INVALID_CLIENT)
         {
             return 0;
         }
 
-        Spark::Net::NetBuffer buffer;
-        buffer.WriteBytes(message.payload.data(), message.payload.size());
-        (void)buffer.ReadUint32(); // Client-chosen network ID: identity comes from senderID, never the wire.
-        const DirectX::XMFLOAT3 position = buffer.ReadVector3();
-        const DirectX::XMFLOAT3 rotation = buffer.ReadVector3();
-        const DirectX::XMFLOAT3 velocity = buffer.ReadVector3();
-        const uint16_t propertyCount = buffer.ReadUint16();
-        if (buffer.HasError() || buffer.RemainingBytes() != 0 || propertyCount != 0)
+        const std::optional<ClientStateRequest> request = DecodeClientStateRequest(message.payload);
+        if (!request)
         {
             return 0;
         }
-        if (!IsPlausibleCoordinate(position) || !IsPlausibleRotation(rotation) || !IsPlausibleVelocity(velocity))
-        {
-            return 0;
-        }
+        const DirectX::XMFLOAT3& position = request->position;
+        const DirectX::XMFLOAT3& rotation = request->rotation;
+        const DirectX::XMFLOAT3& velocity = request->velocity;
 
         uint32_t networkId = 0;
         if (const auto owned = m_serverPlayerEntities.find(sender); owned != m_serverPlayerEntities.end())

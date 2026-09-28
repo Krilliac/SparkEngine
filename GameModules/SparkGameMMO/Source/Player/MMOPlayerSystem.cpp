@@ -11,6 +11,7 @@
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
+#include "MMOEntityEventCodec.h"
 #endif
 
 #include "Engine/World/SpatialGrid.h"
@@ -62,29 +63,22 @@ namespace MMO
         netMgr->RegisterHandler(Spark::Net::MessageType::EntitySpawn,
                                 [this](const Spark::Net::NetworkMessage& netMsg)
                                 {
-                                    if (netMsg.payload.size() < sizeof(uint32_t) * 2)
+                                    const std::optional<EntitySpawnEvent> spawn = DecodeEntitySpawn(netMsg.payload);
+                                    if (!spawn || spawn->entityType != "MMOPlayer" ||
+                                        spawn->clientId == m_localClientId)
                                         return;
 
-                                    Spark::Net::NetBuffer buf;
-                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                    uint32_t networkId = buf.ReadUint32();
-                                    uint32_t clientId = buf.ReadUint32();
-                                    std::string entityType = buf.ReadString();
-                                    const auto position = buf.ReadVector3();
-                                    (void)buf.ReadVector3(); // Rotation is not shown in the MMO player summary.
-                                    if (buf.HasError() || entityType != "MMOPlayer" || clientId == m_localClientId)
-                                        return;
-
+                                    const uint32_t clientId = spawn->clientId;
                                     if (!Spark::ContainerUtils::Contains(m_players, clientId))
                                     {
                                         MMOPlayer player{};
                                         player.clientId = clientId;
-                                        player.networkId = networkId;
+                                        player.networkId = spawn->networkId;
                                         player.name = "Player_" + std::to_string(clientId);
                                         player.currentAreaId = 0;
-                                        player.posX = player.targetPosX = position.x;
-                                        player.posY = player.targetPosY = position.y;
-                                        player.posZ = player.targetPosZ = position.z;
+                                        player.posX = player.targetPosX = spawn->position.x;
+                                        player.posY = player.targetPosY = spawn->position.y;
+                                        player.posZ = player.targetPosZ = spawn->position.z;
                                         m_players[clientId] = player;
 
                                         auto& console = Spark::SimpleConsole::GetInstance();
@@ -96,15 +90,10 @@ namespace MMO
         netMgr->RegisterHandler(Spark::Net::MessageType::EntityDestroy,
                                 [this](const Spark::Net::NetworkMessage& netMsg)
                                 {
-                                    if (netMsg.payload.size() < sizeof(uint32_t))
+                                    const std::optional<uint32_t> networkId = DecodeEntityDestroy(netMsg.payload);
+                                    if (!networkId)
                                         return;
-
-                                    Spark::Net::NetBuffer buf;
-                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                    const uint32_t networkId = buf.ReadUint32();
-                                    if (buf.HasError())
-                                        return;
-                                    if (auto* player = FindPlayerByNetworkId(networkId))
+                                    if (auto* player = FindPlayerByNetworkId(*networkId))
                                         RemovePlayer(player->clientId);
                                 });
 

@@ -706,6 +706,9 @@ add_executable(SparkTests
     # module .cpps immediately above.
     TestTFServerValidation.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.cpp"
+    # SEC-120: LAN discovery beacon decode + server-list cap (pure codec, no sockets)
+    TestTFLanBeaconCodec.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFLanBeaconCodec.cpp"
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
     # Packaged runtimes must resolve content when launched from a foreign CWD.
@@ -1283,12 +1286,15 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Chat/MMOChatWire.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Inventory/MMOInventorySystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Dungeon/MMODungeonSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/World/MMOClientStateCodec.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/WorldBoss/MMOWorldBossSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/UI/MMOLoginUI.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp"
@@ -2121,6 +2127,14 @@ set_tests_properties(TFScramAuth PROPERTIES
 # the family in Release), so it runs only in the lane above, not twice.
 spark_exclude_from_main_suite(TFScram_)
 
+# SEC-120: the TERRAFRONT LAN beacon decoder rejects wrong size, magic, version and
+# port, bounds unterminated wire names, and caps the scanner list a spoofing peer fills.
+add_test(NAME TFLanBeaconCodec COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(TFLanBeaconCodec PROPERTIES
+    ENVIRONMENT "SPARK_TEST_FILE=TestTFLanBeaconCodec.cpp;SPARK_TEST_NAME_PREFIX=TFLanBeacon_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "network-security;security;unit"
+    TIMEOUT 60)
+
 # Unwired-system removal: MaterialSystem/Material expose no file import, export, reload or
 # hot-reload path, and LifecycleSystem latches deaths (no unregistered callback) with
 # HealthComponent::SetHealth re-arming the latch on respawn.
@@ -2383,6 +2397,18 @@ if(TARGET imgui AND ENABLE_NETWORKING)
         ENVIRONMENT "SPARK_TEST_FILE=TestGameModuleMMO.cpp;SPARK_TEST_NAME_PREFIX=MMO_ServerBridge_;SPARK_TEST_EXPECT_COUNT=1"
         LABELS "network-security;network;security;unit"
         RUN_SERIAL TRUE
+        TIMEOUT 60)
+    # SEC-120: the network-free MMO decoders (client state request on the server,
+    # EntitySpawn / EntityDestroy on the client) that the module fuzz targets drive.
+    add_test(NAME MMOClientStateCodec COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(MMOClientStateCodec PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestGameModuleMMO.cpp;SPARK_TEST_NAME_PREFIX=MMOClientState_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "network-security;network;security;unit"
+        TIMEOUT 60)
+    add_test(NAME MMOEntityEventCodec COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(MMOEntityEventCodec PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestGameModuleMMO.cpp;SPARK_TEST_NAME_PREFIX=MMOEntityEvents_;SPARK_TEST_EXPECT_COUNT=3"
+        LABELS "network-security;network;security;unit"
         TIMEOUT 60)
 endif()
 

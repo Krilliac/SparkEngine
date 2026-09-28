@@ -25,6 +25,8 @@
 #include "../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h"
 
 #ifdef ENABLE_NETWORKING
+#include "../GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.h"
+#include "../GameModules/SparkGameMMO/Source/World/MMOClientStateCodec.h"
 #include "Engine/Networking/WorldServer.h"
 #include "Fixtures/NetworkTestSecurity.h"
 #include "Fixtures/SecureTestPeer.h"
@@ -34,6 +36,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <optional>
 #include <thread>
 #include <filesystem>
@@ -42,6 +45,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <vector>
 
 // Later game-module headers can include Windows.h after MMOChatSystem has
 // declared its SendMessage overloads. Keep the Win32 alias out of the calls
@@ -597,6 +601,113 @@ TEST(MMO_StateRequest_RejectsMalformedAndImplausibleState)
                   network, MMOStateRequest(3, 0, {4.0f, 1.0f, 1.0f}, still, 0, false, {-360.0f, 90.0f, 360.0f})),
               owned);
     EXPECT_NEAR(network.GetReplicatedEntitySnapshot(owned)->rotation.x, -360.0f, 1e-6f);
+}
+
+// ============================================================================
+// SEC-120: the network-free decoders the server and client run on untrusted
+// datagrams (MMOClientStateCodec, MMOEntityEventCodec), also driven by the
+// FuzzMMOClientState / FuzzMMOEntityEvents libFuzzer targets.
+// ============================================================================
+
+TEST(MMOClientState_DecodeRejectsNonFiniteAndImplausible)
+{
+    const DirectX::XMFLOAT3 still{0.0f, 0.0f, 0.0f};
+    const auto decode = [](const Spark::Net::NetworkMessage& message)
+    { return MMO::DecodeClientStateRequest(message.payload); };
+
+    const auto accepted =
+        decode(MMOStateRequest(3, 99, {5.0f, -2.0f, 1.0e6f}, {0.0f, 100.0f, 0.0f}, 0, false, {-360.0f, 0.0f, 360.0f}));
+    ASSERT_TRUE(accepted.has_value());
+    EXPECT_NEAR(accepted->position.z, 1.0e6f, 1.0f);
+    EXPECT_NEAR(accepted->velocity.y, 100.0f, 1e-6f);
+    EXPECT_NEAR(accepted->rotation.z, 360.0f, 1e-6f);
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, {nan, 0.0f, 0.0f}, still)).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, {0.0f, -inf, 0.0f}, still)).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, still, {0.0f, 0.0f, nan})).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, still, still, 0, false, {inf, 0.0f, 0.0f})).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, {1.01e6f, 0.0f, 0.0f}, still)).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, still, {80.0f, 80.0f, 0.0f})).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, still, still, 0, false, {0.0f, 361.0f, 0.0f})).has_value());
+}
+
+TEST(MMOClientState_DecodeRejectsWrongSizeAndProperties)
+{
+    const DirectX::XMFLOAT3 still{0.0f, 0.0f, 0.0f};
+    const std::vector<uint8_t> valid = MMOStateRequest(3, 0, still, still).payload;
+    ASSERT_EQ(valid.size(), MMO::kClientStateRequestSize);
+    EXPECT_TRUE(MMO::DecodeClientStateRequest(valid).has_value());
+
+    const std::vector<uint8_t> shortByOne(valid.begin(), valid.end() - 1);
+    EXPECT_FALSE(MMO::DecodeClientStateRequest(shortByOne).has_value());
+    EXPECT_FALSE(MMO::DecodeClientStateRequest(MMOStateRequest(3, 0, still, still, 0, true).payload).has_value());
+    EXPECT_FALSE(MMO::DecodeClientStateRequest(MMOStateRequest(3, 0, still, still, 1).payload).has_value());
+    EXPECT_FALSE(MMO::DecodeClientStateRequest(std::vector<uint8_t>{}).has_value());
+}
+
+namespace
+{
+    std::vector<uint8_t> MMOSpawnPayload(const std::string& entityType, const DirectX::XMFLOAT3& position)
+    {
+        Spark::Net::NetBuffer buffer;
+        buffer.WriteUint32(42);
+        buffer.WriteUint32(5);
+        buffer.WriteString(entityType);
+        buffer.WriteVector3(position);
+        buffer.WriteVector3(DirectX::XMFLOAT3{0.0f, 90.0f, 0.0f});
+        return buffer.GetData();
+    }
+} // namespace
+
+TEST(MMOEntityEvents_SpawnRejectsNonFinitePosition)
+{
+    const auto spawn = MMO::DecodeEntitySpawn(MMOSpawnPayload("MMOPlayer", {1.0f, 2.0f, 3.0f}));
+    ASSERT_TRUE(spawn.has_value());
+    EXPECT_EQ(spawn->networkId, 42u);
+    EXPECT_EQ(spawn->clientId, 5u);
+    EXPECT_TRUE(spawn->entityType == "MMOPlayer");
+    EXPECT_NEAR(spawn->position.y, 2.0f, 1e-6f);
+
+    // A NaN or infinite spawn position used to flow straight into a remote player's
+    // current and target position.
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    EXPECT_FALSE(MMO::DecodeEntitySpawn(MMOSpawnPayload("MMOPlayer", {nan, 2.0f, 3.0f})).has_value());
+    EXPECT_FALSE(MMO::DecodeEntitySpawn(MMOSpawnPayload("MMOPlayer", {1.0f, -inf, 3.0f})).has_value());
+    EXPECT_FALSE(MMO::DecodeEntitySpawn(MMOSpawnPayload("MMOPlayer", {1.0f, 2.0f, inf})).has_value());
+}
+
+TEST(MMOEntityEvents_SpawnRejectsTruncatedString)
+{
+    const std::vector<uint8_t> valid = MMOSpawnPayload("MMOPlayer", {1.0f, 2.0f, 3.0f});
+
+    // The entity type claims 65535 bytes but only three follow.
+    Spark::Net::NetBuffer overclaim;
+    overclaim.WriteUint32(42);
+    overclaim.WriteUint32(5);
+    overclaim.WriteUint16(0xFFFF);
+    overclaim.WriteBytes("MMO", 3);
+    EXPECT_FALSE(MMO::DecodeEntitySpawn(overclaim.GetData()).has_value());
+
+    // Cut inside the string, inside the position and inside the rotation.
+    for (const size_t cut : {size_t{12}, size_t{25}, valid.size() - 1})
+    {
+        const std::vector<uint8_t> truncated(valid.begin(), valid.begin() + static_cast<std::ptrdiff_t>(cut));
+        EXPECT_FALSE(MMO::DecodeEntitySpawn(truncated).has_value());
+    }
+}
+
+TEST(MMOEntityEvents_DestroyNeedsFourBytes)
+{
+    const std::vector<uint8_t> destroy = {0x2A, 0x00, 0x00, 0x01};
+    const auto networkId = MMO::DecodeEntityDestroy(destroy);
+    ASSERT_TRUE(networkId.has_value());
+    EXPECT_EQ(*networkId, 0x0100002Au);
+
+    EXPECT_FALSE(MMO::DecodeEntityDestroy(std::vector<uint8_t>{0x2A, 0x00, 0x00}).has_value());
+    EXPECT_FALSE(MMO::DecodeEntityDestroy(std::vector<uint8_t>{}).has_value());
 }
 
 namespace

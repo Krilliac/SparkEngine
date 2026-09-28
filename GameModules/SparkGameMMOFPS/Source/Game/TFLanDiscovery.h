@@ -22,7 +22,11 @@
  * register screen is actually rendering (so headless test runs never bind).
  * The scanner binds UDP 27025 (SO_REUSEADDR so several clients on one box
  * coexist), collects beacons non-blockingly, dedupes by source IP + advertised
- * game port, and expires entries not re-seen for 6 s.
+ * game port, and expires entries not re-seen for 6 s. The list holds at most
+ * kTFLanMaxServers entries, so a LAN peer spoofing many (ip, port) pairs cannot
+ * grow it without bound. DecodeLanBeacon and UpsertLanServer
+ * (TFLanBeaconCodec.cpp) are the socket-free decode and merge steps the scanner
+ * runs on every datagram; the SEC-120 fuzz target drives the same two functions.
  *
  * SAFETY:
  *  - All bind/socket failures are NON-FATAL: one SPARK_LOG_WARN, then the
@@ -41,8 +45,12 @@
 #include "Core/TFEvents.h"
 #include "Engine/Networking/NetworkBindPolicy.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Terrafront
@@ -59,6 +67,7 @@ namespace Terrafront
     constexpr uint16_t kTFLanBeaconVersion = 1;
     constexpr float kTFLanBeaconIntervalSec = 2.0f; ///< server broadcast cadence
     constexpr float kTFLanServerTtlSec = 6.0f;      ///< scanner entry expiry (3 missed beacons)
+    constexpr size_t kTFLanMaxServers = 64;         ///< scanner list cap; new servers past it are dropped
 
 #pragma pack(push, 1)
     struct TF_LanBeacon
@@ -88,6 +97,23 @@ namespace Terrafront
         uint8_t maxPlayers = 0;
         double lastSeen = 0.0; ///< internal clock stamp (freshness bookkeeping)
     };
+
+    // -----------------------------------------------------------------------
+    // Beacon codec (TFLanBeaconCodec.cpp) — pure functions, no sockets, any thread.
+    // -----------------------------------------------------------------------
+
+    /// Decode one scanner datagram.
+    /// @return The beacon, or nullopt unless @p datagram is exactly sizeof(TF_LanBeacon)
+    ///         bytes with kTFLanBeaconMagic, kTFLanBeaconVersion and a nonzero game port.
+    std::optional<TF_LanBeacon> DecodeLanBeacon(std::span<const uint8_t> datagram);
+
+    /// Merge a decoded beacon from @p srcIp into @p servers, deduped by (srcIp, gamePort).
+    /// The wire name and map are copied up to their first NUL (at most 32 / 24 bytes).
+    /// A known server is refreshed in place; a new one is appended only while the list
+    /// holds fewer than kTFLanMaxServers entries.
+    /// @return True when an entry was refreshed or added, false when the list is full.
+    bool UpsertLanServer(std::vector<TFLanServerEntry>& servers, const TF_LanBeacon& beacon, std::string_view srcIp,
+                         double clock);
 
     // -----------------------------------------------------------------------
     // TFLanDiscovery
@@ -127,13 +153,12 @@ namespace Terrafront
         void FillBeacon(TF_LanBeacon& out) const;
         void RefreshBroadcastTargets();
         void RefreshEndpointConfiguration();
-        void HandleDatagram(const TF_LanBeacon& b, const char* srcIp);
 
         TFGameContext* m_ctx{nullptr};
         bool m_initialized{false};
         bool m_wsaStarted{false}; // Windows: WSAStartup succeeded (paired WSACleanup in Shutdown)
         Spark::Net::NetworkEndpointPolicy m_endpointPolicy{}; // Same snapshot as the active game socket lifecycle.
-        bool m_allowAdvertisement{false};                      // Authoritative Network.lan_broadcast gate.
+        bool m_allowAdvertisement{false};                     // Authoritative Network.lan_broadcast gate.
         double m_clock{0.0};                                  // monotonic feature clock (drives TTL expiry)
 
         // Sockets stored type-erased so this header never includes WinSock;
