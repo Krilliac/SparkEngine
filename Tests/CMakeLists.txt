@@ -2730,7 +2730,8 @@ if(WIN32)
         # (TestRHI225D3D12ValidationReal.cpp): a triangle frame and 200 fence-deferred
         # create/destroy cycles with zero error or corruption messages, and a negative
         # control proving the counter sees an injected invalid call. Needs
-        # d3d12SDKLayers.dll (Windows "Graphics Tools"); an inactive debug layer fails.
+        # d3d12SDKLayers.dll (Windows "Graphics Tools"); an inactive debug layer fails. The
+        # Windows CI jobs that run the whole tree install it first ("Install D3D12 debug layer").
         # Out of the main suite: enabling the debug layer is process-wide.
         add_test(NAME D3D12_Validation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
         set_tests_properties(D3D12_Validation PROPERTIES

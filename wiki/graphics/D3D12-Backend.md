@@ -200,7 +200,16 @@ GPU-less host):
 | `D3D12_Validation_CounterSeesInjectedError` | Negative control: an invalid `CreateCommittedResource` through the native device raises the error count and the process survives |
 
 Each clean test requires zero corruption, zero errors and zero discarded
-messages, and fails if the info queue is not active. This is RHI-level
+messages, and fails if the info queue is not active. The lane is registered on
+every MSVC Windows configure, so a host without Graphics Tools fails it rather
+than skipping it. Every Windows CI job that runs the whole CTest tree
+(`build-windows-vs2022`, `build-windows-vs2026` and the release
+`build-windows`) therefore runs an "Install D3D12 debug layer" step first: it
+adds the `Tools.Graphics.DirectX~~~~0.0.1.0` capability when
+`d3d12SDKLayers.dll` is absent and fails the job if the DLL is still missing.
+Locally, install it with `Add-WindowsCapability -Online -Name
+Tools.Graphics.DirectX~~~~0.0.1.0` from an elevated PowerShell (or Settings >
+Optional features > Graphics Tools). This is RHI-level
 evidence for the listed operations only. Engine frames are not covered:
 `GraphicsEngine` renders through D3D11 directly on Windows.
 

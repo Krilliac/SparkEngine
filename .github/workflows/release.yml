@@ -187,6 +187,20 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
+    # RHI-225: both ctest paths below run D3D12_Validation, which needs
+    # d3d12SDKLayers.dll and fails closed without it.
+    - name: Install D3D12 debug layer
+      shell: pwsh
+      run: |
+        $layers = Join-Path $env:SystemRoot 'System32\d3d12SDKLayers.dll'
+        if (-not (Test-Path -LiteralPath $layers)) {
+          Add-WindowsCapability -Online -Name 'Tools.Graphics.DirectX~~~~0.0.1.0' -ErrorAction Stop | Out-Host
+        }
+        if (-not (Test-Path -LiteralPath $layers)) {
+          throw "Graphics Tools installed but $layers is missing; D3D12_Validation cannot run"
+        }
+        "d3d12SDKLayers.dll $((Get-Item -LiteralPath $layers).VersionInfo.FileVersion)"
+
     - name: Configure Windows stable validation
       if: needs.prepare.outputs.is_versioned == 'true'
       run: cmake --preset windows-release -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"

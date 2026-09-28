@@ -1785,6 +1785,20 @@ jobs:
         }
         Write-Host "D3D11 debug layer present: $layer"
 
+    # RHI-225: D3D12_Validation needs d3d12SDKLayers.dll and fails closed without it.
+    - name: Install D3D12 debug layer
+      if: matrix.config == 'Release'
+      shell: pwsh
+      run: |
+        $layers = Join-Path $env:SystemRoot 'System32\d3d12SDKLayers.dll'
+        if (-not (Test-Path -LiteralPath $layers)) {
+          Add-WindowsCapability -Online -Name 'Tools.Graphics.DirectX~~~~0.0.1.0' -ErrorAction Stop | Out-Host
+        }
+        if (-not (Test-Path -LiteralPath $layers)) {
+          throw "Graphics Tools installed but $layers is missing; D3D12_Validation cannot run"
+        }
+        "d3d12SDKLayers.dll $((Get-Item -LiteralPath $layers).VersionInfo.FileVersion)"
+
     # Debug is built but not tested here: the Debug SparkTests run exceeds the
     # single ctest timeout this lane inherits, so no green lane in the
     # repository currently executes SparkTests in a Debug MSVC configuration
@@ -2492,6 +2506,20 @@ jobs:
       with:
         path: ${{ runner.temp }}\sccache
         key: ${{ steps.sccache-restore.outputs.cache-primary-key }}
+
+    # RHI-225: D3D12_Validation needs d3d12SDKLayers.dll and fails closed without it.
+    - name: Install D3D12 debug layer
+      if: matrix.config == 'Release'
+      shell: pwsh
+      run: |
+        $layers = Join-Path $env:SystemRoot 'System32\d3d12SDKLayers.dll'
+        if (-not (Test-Path -LiteralPath $layers)) {
+          Add-WindowsCapability -Online -Name 'Tools.Graphics.DirectX~~~~0.0.1.0' -ErrorAction Stop | Out-Host
+        }
+        if (-not (Test-Path -LiteralPath $layers)) {
+          throw "Graphics Tools installed but $layers is missing; D3D12_Validation cannot run"
+        }
+        "d3d12SDKLayers.dll $((Get-Item -LiteralPath $layers).VersionInfo.FileVersion)"
 
     - name: Run Tests
       if: matrix.config == 'Release'
