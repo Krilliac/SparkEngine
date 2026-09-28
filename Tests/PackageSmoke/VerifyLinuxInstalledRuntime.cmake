@@ -431,7 +431,7 @@ if(SPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST)
 
     function(_spark_expect_closure case_name prefix expected_fragment)
         spark_linux_runtime_closure_violations(PREFIX "${prefix}" OUT_VAR _found REPORT_VAR _unused_report
-            ELF_COUNT_VAR _elf_count FORBIDDEN_ROOTS ${_forbidden} BUNDLED_SONAMES libSDL2-2.0.so.0)
+            ELF_COUNT_VAR _elf_count FORBIDDEN_ROOTS ${_forbidden} BUNDLED_SONAMES ${_sdl_soname})
         list(JOIN _found "\n    " _found_text)
         set(_case_failure "")
         if(_elf_count EQUAL 0)
@@ -457,21 +457,26 @@ if(SPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST)
     endfunction()
 
     # Stage the SDL2 the build-tree engine resolves, so the positive control
-    # ships its own copy exactly as an install does.
+    # ships its own copy exactly as an install does. SDL2's DEBUG_POSTFIX "d"
+    # makes a Debug build's soname libSDL2-2.0d.so.0, so the soname is taken
+    # from the engine's own closure rather than assumed.
     execute_process(COMMAND ${_spark_clean_env} "${SPARK_LDD}" "${SPARK_FIXTURE_ENGINE}"
         RESULT_VARIABLE _ldd_result OUTPUT_VARIABLE _engine_ldd ERROR_VARIABLE _ldd_error TIMEOUT 60)
     if(NOT _ldd_result EQUAL 0)
         message(FATAL_ERROR "ldd of the fixture engine failed: ${_ldd_error}")
     endif()
     _spark_parse_ldd("${_engine_ldd}" _engine_sonames _engine_paths)
-    list(FIND _engine_sonames "libSDL2-2.0.so.0" _sdl_index)
+    set(_sdl_soname "")
     set(_sdl_path "")
-    if(NOT _sdl_index EQUAL -1)
-        list(GET _engine_paths ${_sdl_index} _sdl_path)
-        if(_sdl_path STREQUAL "<not-found>")
-            message(FATAL_ERROR "The build-tree fixture engine cannot resolve its own libSDL2-2.0.so.0")
+    foreach(_entry IN ZIP_LISTS _engine_sonames _engine_paths)
+        if(_entry_0 MATCHES "^libSDL2-2\\.0d?\\.so\\.0$")
+            if(_entry_1 STREQUAL "<not-found>")
+                message(FATAL_ERROR "The build-tree fixture engine cannot resolve its own ${_entry_0}")
+            endif()
+            set(_sdl_soname "${_entry_0}")
+            set(_sdl_path "${_entry_1}")
         endif()
-    endif()
+    endforeach()
 
     function(_spark_stage_engine prefix runpath with_sdl)
         file(MAKE_DIRECTORY "${prefix}/bin")
@@ -481,8 +486,8 @@ if(SPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST)
         endif()
         if(with_sdl AND NOT _sdl_path STREQUAL "")
             file(MAKE_DIRECTORY "${prefix}/lib")
-            file(COPY_FILE "${_sdl_path}" "${prefix}/lib/libSDL2-2.0.so.0")
-            file(RPATH_SET FILE "${prefix}/lib/libSDL2-2.0.so.0" NEW_RPATH "$ORIGIN/../lib")
+            file(COPY_FILE "${_sdl_path}" "${prefix}/lib/${_sdl_soname}")
+            file(RPATH_SET FILE "${prefix}/lib/${_sdl_soname}" NEW_RPATH "$ORIGIN/../lib")
         endif()
     endfunction()
 
@@ -515,7 +520,7 @@ if(SPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST)
     # back to whatever the host provides (or to nothing).
     if(NOT _sdl_path STREQUAL "")
         _spark_stage_engine("${_test_root}/missing-sdl" "$ORIGIN/../lib" FALSE)
-        _spark_expect_closure(missing-bundled-sdl2 "${_test_root}/missing-sdl" "libSDL2-2.0.so.0")
+        _spark_expect_closure(missing-bundled-sdl2 "${_test_root}/missing-sdl" "${_sdl_soname}")
     endif()
 
     # The PLT-210 install defect: a module whose RUNPATH changed after its
