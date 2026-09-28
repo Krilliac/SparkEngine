@@ -7,17 +7,16 @@
  * @details
  * Extends the InputManager with runtime key rebinding, input presets
  * (e.g. "Default", "Left-Handed", "Accessibility"), hold-to-toggle mode,
- * and colorblind assist settings. Bindings can be serialized to/from JSON
- * for persistence between sessions.
+ * and colorblind assist settings. Bindings live in memory only; this class
+ * reads and writes no files.
  *
  * ## Usage
  * @code
  *   InputBindingManager bindings;
  *   bindings.SetBinding("MoveForward", InputBinding('W'));
  *   bindings.SetBinding("Jump", InputBinding(VK_SPACE));
- *   bindings.SaveToFile("Data/Config/keybinds.json");
  *
- *   bindings.SetPreset("Left-Handed");
+ *   bindings.ApplyPreset("Left-Handed");
  *   bindings.SetAccessibility(AccessibilityFlags::HoldToToggle |
  *                             AccessibilityFlags::ColorblindDeuteranopia);
  * @endcode
@@ -111,8 +110,7 @@ namespace Spark
  * @brief Manages input bindings, presets, and accessibility settings.
  *
  * Wraps around InputManager to provide runtime rebinding, preset management,
- * and accessibility configuration. Bindings are serialized to JSON for
- * persistence between sessions.
+ * and accessibility configuration.
  */
     class InputBindingManager
     {
@@ -193,22 +191,6 @@ namespace Spark
 
         /** @brief Check if a specific accessibility feature is enabled. */
         bool IsAccessibilityEnabled(AccessibilityFlags flag) const { return HasFlag(m_accessibilityFlags, flag); }
-
-        // --- Serialization ---
-
-        /**
-     * @brief Save current bindings and settings to a JSON file.
-     * @param filePath Output file path.
-     * @return true if saving succeeded.
-     */
-        bool SaveToFile(const std::string& filePath) const;
-
-        /**
-     * @brief Load bindings and settings from a JSON file.
-     * @param filePath Input file path.
-     * @return true if loading succeeded.
-     */
-        bool LoadFromFile(const std::string& filePath);
 
         // --- Rebinding callbacks ---
 

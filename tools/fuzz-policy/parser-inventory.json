@@ -228,39 +228,6 @@
       }
     },
     {
-      "id": "texture-basis-transcoder",
-      "description": "Basis and KTX2 texture transcoder.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Graphics/BasisTranscoder.h"
-      ],
-      "formats": [
-        ".basis",
-        ".ktx2"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
-      "id": "texture-streaming-container",
-      "description": "Streamed texture container reader.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Graphics/TextureStreaming.cpp"
-      ],
-      "formats": [
-        ".stex"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
       "id": "material-loader",
       "description": "Material definition loader.",
       "trust_boundary": "untrusted-file",
@@ -295,22 +262,6 @@
         ".vert",
         ".frag",
         ".comp"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
-      "id": "svg-renderer",
-      "description": "SVG document reader used by the renderer.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Graphics/SVGRenderer.h"
-      ],
-      "formats": [
-        ".svg"
       ],
       "status": "blocked",
       "blocker": {
@@ -565,24 +516,6 @@
       }
     },
     {
-      "id": "input-bindings",
-      "description": "User input-binding configuration reader.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Input/InputBindings.cpp",
-        "SparkEngine/Source/Input/InputBindings.h"
-      ],
-      "formats": [
-        ".json",
-        ".ini"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
       "id": "mod-manifest",
       "description": "Mod manifest and metadata reader.",
       "trust_boundary": "untrusted-file",
@@ -593,24 +526,6 @@
       "formats": [
         ".mod",
         ".json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
-      "id": "archive-resource-provider",
-      "description": "Archive-backed resource provider.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.cpp",
-        "SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h"
-      ],
-      "formats": [
-        ".pak",
-        ".zip"
       ],
       "status": "blocked",
       "blocker": {
@@ -3345,6 +3260,28 @@
       ]
     },
     {
+      "source_file": "SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.cpp",
+      "classification": "delegating-call-site",
+      "justification": "IResourceProvider adapter over SparkPakReader: the constructor calls SparkPakReader::Open, and Exists, ReadFile, ReadTextFile and ListFiles forward to the reader unchanged. The file decodes no archive bytes itself, and the reader opens only .spk archives (not .pak or .zip). The detector hit is the 'archive' file name.",
+      "detected_by": [
+        "parser-like-filename"
+      ],
+      "delegates_to": [
+        "sparkpak-reader"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares the ArchiveResourceProvider adapter, which holds a std::unique_ptr<SparkPakReader>; the header contains no decoding code. The detector hit is the 'archive' file name.",
+      "detected_by": [
+        "parser-like-filename"
+      ],
+      "delegates_to": [
+        "sparkpak-reader"
+      ]
+    },
+    {
       "source_file": "SparkEngine/Source/Engine/Persistence/AsyncDatabase.h",
       "classification": "delegating-call-site",
       "justification": "Declares SQLiteConnection::LoadFromDisk, implemented in the inventoried AsyncDatabase.cpp.",
@@ -3527,6 +3464,14 @@
       "delegates_to": [
         "mesh-obj-static-loader",
         "mesh-gltf-loader"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/BasisTranscoder.h",
+      "classification": "not-a-parser",
+      "justification": "No basisu backend is linked: BasisTranscoder::ParseHeader returns false and Transcode returns an empty TranscodedImage without reading a byte of their input (TestGraphicsIntegration pins both). The parse-entry hit is that stub's ParseHeader; linking a real .basis/.ktx2 decoder changes the detector hits and invalidates this exemption.",
+      "detected_by": [
+        "parse-entry"
       ]
     },
     {

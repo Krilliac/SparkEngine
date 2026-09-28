@@ -279,7 +279,6 @@ SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h
 SparkEngine/Source/Graphics/RenderGraphTypes.h
 SparkEngine/Source/Graphics/RenderTarget.h
 SparkEngine/Source/Graphics/RenderTargetPool.h
-SparkEngine/Source/Graphics/SVGRenderer.h
 SparkEngine/Source/Graphics/ScreenCapture.h
 SparkEngine/Source/Graphics/ScreenSpaceEffects.h
 SparkEngine/Source/Graphics/Shader.h
