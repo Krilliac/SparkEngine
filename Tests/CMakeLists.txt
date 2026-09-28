@@ -336,7 +336,6 @@ add_executable(SparkTests
     TestWARPRendering.cpp
     # Hardware acceleration tests
     TestGPUParticleSystem.cpp
-    TestGPUSkinning.cpp
     TestAsyncComputeScheduler.cpp
     TestGPUDrivenRenderer.cpp
     TestGPUClusterCulling.cpp
@@ -1037,6 +1036,7 @@ endif()
 if(WIN32)
     target_sources(SparkTests PRIVATE TestWorldBasicRender.cpp)
     target_sources(SparkTests PRIVATE TestLegacyGameObjectMaterial.cpp)
+    target_sources(SparkTests PRIVATE TestENG220GPUSkinningD3D11Real.cpp)
     target_sources(SparkTests PRIVATE TestPostProcessingPipelineD3D11.cpp)
     target_sources(SparkTests PRIVATE TestGPUDrivenRendererD3D11.cpp)
     target_compile_definitions(SparkTests PRIVATE
@@ -3170,6 +3170,20 @@ set_tests_properties(GLTFAnimationImport PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=GLTF_Animation_;SPARK_TEST_EXPECT_COUNT=27"
     LABELS "assets;gltf;unit"
     TIMEOUT 30)
+
+# ENG-220: production GPUSkinning (SkinningCS.hlsl) on a WARP D3D11 device. The skinned
+# fixture GLB goes through the shared MeshAsset glTF import and AnimationManager/Evaluator; the
+# GPU output buffer is read back and compared with the independent ReferencePose() at three clip
+# times, a mutated bone matrix must fail the comparison, and a 130-vertex four-influence blend
+# (with a zero weight on a NaN bone) matches its closed form. Exact count: a dropped test fails.
+if(WIN32)
+    add_test(NAME GPUSkinningD3D11 COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(GPUSkinningD3D11 PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=GPUSkinningD3D11_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "gltf-d3d11;d3d11;assets;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
 
 # ENG-220: basic-material texture diagnostics on a WARP GraphicsEngine. A rejected (rooted,
 # absolute or escaping) declared texture fails the material; a missing or undecodable one logs an

@@ -44,6 +44,7 @@
 #include <wrl/client.h>
 #endif
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -61,8 +62,9 @@ namespace Spark::Graphics
     /**
      * @brief Per-vertex data fed into the skinning compute shader.
      *
-     * Matches the StructuredBuffer<SkinnedVertex> layout in SkinningCS.hlsl.
-     * Each vertex carries position, normal, bone indices, and blend weights.
+     * Byte-for-byte the StructuredBuffer<SourceVertex> element in SkinningCS.hlsl (80 bytes; the
+     * static_asserts below pin every offset). Each vertex carries position, normal, texture
+     * coordinate and four bone influences; boneIndices address the palette passed to DispatchSkinning.
      */
     struct alignas(16) SkinningSourceVertex
     {
@@ -73,12 +75,20 @@ namespace Spark::Graphics
         DirectX::XMFLOAT2 texCoord;
         uint32_t boneIndices[4] = {0, 0, 0, 0}; ///< Up to 4 bone influences
         float boneWeights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        float padding2[2] = {0.0f, 0.0f};
     };
+    static_assert(sizeof(SkinningSourceVertex) == 80, "SkinningCS.hlsl SourceVertex is 80 bytes");
+    static_assert(offsetof(SkinningSourceVertex, normal) == 16, "SkinningCS.hlsl SourceVertex.normal");
+    static_assert(offsetof(SkinningSourceVertex, texCoord) == 32, "SkinningCS.hlsl SourceVertex.texCoord");
+    static_assert(offsetof(SkinningSourceVertex, boneIndices) == 40, "SkinningCS.hlsl SourceVertex.boneIndices");
+    static_assert(offsetof(SkinningSourceVertex, boneWeights) == 56, "SkinningCS.hlsl SourceVertex.boneWeights");
 
     /**
      * @brief Output vertex produced by the skinning compute shader.
      *
-     * Matches the RWStructuredBuffer<SkinningOutputVertex> layout in SkinningCS.hlsl.
+     * Byte-for-byte the RWStructuredBuffer<SkinnedVertex> element in SkinningCS.hlsl (48 bytes).
+     * A vertex with no usable influence (every weight zero or every index past the palette) is
+     * written unskinned.
      */
     struct alignas(16) SkinningOutputVertex
     {
@@ -89,6 +99,9 @@ namespace Spark::Graphics
         DirectX::XMFLOAT2 texCoord;
         float padding2[2] = {0.0f, 0.0f};
     };
+    static_assert(sizeof(SkinningOutputVertex) == 48, "SkinningCS.hlsl SkinnedVertex is 48 bytes");
+    static_assert(offsetof(SkinningOutputVertex, normal) == 16, "SkinningCS.hlsl SkinnedVertex.normal");
+    static_assert(offsetof(SkinningOutputVertex, texCoord) == 32, "SkinningCS.hlsl SkinnedVertex.texCoord");
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -128,6 +141,11 @@ namespace Spark::Graphics
 
         /**
          * @brief Initialize the skinning system and compile the compute shader.
+         *
+         * Compiles Shaders/HLSL/Compute/SkinningCS.hlsl relative to the working directory (the
+         * runtime directory, where the build stages Shaders/). A missing or failing shader is
+         * logged with its path and compiler output.
+         *
          * @param device  D3D11 device for resource creation.
          * @return true on success, false if shader compilation or resource creation fails.
          */
@@ -163,7 +181,8 @@ namespace Spark::Graphics
          *
          * @param context       D3D11 device context.
          * @param meshId        Mesh to skin.
-         * @param boneMatrices  Array of bone matrices (row-major 4x4).
+         * @param boneMatrices  Engine skinning matrices (AnimationEvaluator::ComputeSkinningMatrices:
+         *                      DirectXMath row-vector convention, translation in _41.._43).
          * @param boneCount     Number of bone matrices in the array.
          */
         void DispatchSkinning(ID3D11DeviceContext* context, uint32_t meshId, const DirectX::XMFLOAT4X4* boneMatrices,

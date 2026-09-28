@@ -17,7 +17,7 @@ All files confirmed present 2026-06-08.
 | System | Header | Impl | Shaders | Tests |
 |---|---|---|---|---|
 | GPU Compute Particles | `Graphics/GPUParticleSystem.h` | `GPUParticleSystem.cpp` | `ParticleSimulate/Emit/BitonicSort.hlsl` | `TestGPUParticleSystem.cpp` (11) |
-| GPU Skinning | `Graphics/GPUSkinning.h` | `GPUSkinning.cpp` | `SkinningCS.hlsl` | `TestGPUSkinning.cpp` (9) |
+| GPU Skinning | `Graphics/GPUSkinning.h` | `GPUSkinning.cpp` | `SkinningCS.hlsl` | `TestENG220GPUSkinningD3D11Real.cpp` (4, WARP) |
 | Async Compute | `Graphics/AsyncComputeScheduler.h` | `AsyncComputeScheduler.cpp` | — | `TestAsyncComputeScheduler.cpp` (9) |
 | GPU-Driven Renderer | `Graphics/GPUDrivenRenderer.h` | `GPUDrivenRenderer.cpp` | `GPUCull.hlsl`, `HiZBuild.hlsl` | `TestGPUDrivenRenderer.cpp` (12) |
 | GPU Cluster Culling | `Graphics/GPUClusterCulling.h` | `GPUClusterCulling.cpp` | `ClusterCull.hlsl` | `TestGPUClusterCulling.cpp` (11) |
