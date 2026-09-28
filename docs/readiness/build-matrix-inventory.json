@@ -7483,7 +7483,7 @@
           {
             "index": 56,
             "name": "Generate and compare the deterministic build-matrix inventory",
-            "id": "",
+            "id": "build-matrix-inventory",
             "uses": "",
             "shell": "",
             "if": "absent",
@@ -7510,7 +7510,7 @@
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "shell": "",
-            "if": "always()",
+            "if": "always() && steps.build-matrix-inventory.outcome != 'skipped'",
             "continueOnError": "absent",
             "hasRun": false,
             "env": [],
