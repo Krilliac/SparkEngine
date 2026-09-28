@@ -207,6 +207,9 @@ namespace Terrafront
         void RegisterClientHandlers();
         void ReleaseClientHandlers();
         void OnWorldWelcome(const void* data, size_t size);
+        /// TF-120: TF_ContinentIdentity. A server hosting another continent than the one this client loaded at
+        /// boot is refused: the client logs it and disconnects before TF_WorldWelcome can put it in the world.
+        void OnContinentIdentity(const void* data, size_t size);
         void OnSpawnReply(const void* data, size_t size);
         void OnHitConfirm(const void* data, size_t size);
         void OnDamageEvent(const void* data, size_t size);

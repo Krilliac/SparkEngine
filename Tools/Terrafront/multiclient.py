@@ -61,6 +61,11 @@ server on the same TF_SAVE_ROOT, logs the same account back in and requires the
 state, the character and exactly one character row to be restored
 (restart_verdict).
 
+Continent identity (continent_mismatch; TF-120). A cindral_wastes server and a
+client booted with TF_CONTINENT=veyra_highlands: the client must log the
+refusal of the server's TF_ContinentIdentity, disconnect, and never own a pawn
+on the server although its script asks to spawn (continent_mismatch_verdict).
+
 Soak (--soak-seconds; TF-110). A server with bots and two looping clients is
 sampled against soak_budgets.json: tick time (tf_perf), per-client downlink,
 replication rate and drops (the net line), and the RSS slope of every process.
@@ -1253,6 +1258,69 @@ def restart_verdict(before_view: Observation, before_id: int, after_view: Observ
     return problems
 
 
+# --------------------------------------------------------------------------- TF-120 continent identity
+
+# continent_mismatch: a cindral_wastes server and one client booted on veyra_highlands (TF_CONTINENT). The server
+# names its continent (TF_ContinentIdentity) just before TF_WorldWelcome; the client must refuse and disconnect, so
+# it never enters the world and no pawn of it ever exists, although it asks to spawn.
+MISMATCH_SERVER_CONTINENT = "cindral_wastes"
+MISMATCH_CLIENT_CONTINENT = "veyra_highlands"
+MISMATCH_SERVER_TAIL_S = 5.0  # the server keeps observing after the client has gone
+CONTINENT_REFUSAL = re.compile(r"\[TF\] server hosts continent '([a-z0-9_-]+)' but this client loaded '([a-z0-9_-]+)'")
+OBSERVED_CONTINENT = re.compile(r"\[TF-OBSERVE\] role=(\w+) .*\bcontinent=(\S+)")
+SPAWN_ACCEPTED = "[TF] spawn accepted"
+CONTINENT_MISMATCH = Scenario(
+    name="continent_mismatch",
+    client_factions=("mra",),
+    client_steps=ONBOARDING,
+    checkpoints=(14.0,),
+    client_seconds=16.0,
+)
+CONTINENT_SCENARIOS = {"continent_mismatch": CONTINENT_MISMATCH}
+
+
+def observed_continents(text: str, role: str) -> set[str]:
+    """Every continent key @p role's tf_observe headers named in @p text."""
+    return {match.group(2) for match in map(OBSERVED_CONTINENT.search, text.splitlines())
+            if match and match.group(1) == role}
+
+
+def continent_mismatch_verdict(server: RoleLog, client: RoleLog, client_text: str) -> list[str]:
+    """The client booted on another continent than the server's must refuse the world and never spawn.
+
+    @p client_text is everything the client printed (audit, stdout, stderr): the refusal is logged from a
+    network handler, not by a scripted command.
+    """
+    problems = []
+    for log in (server, client):
+        if log.returncode != 0:
+            problems.append(f"{log.role}: exited with {log.returncode}")
+        if log.anchor is None:
+            problems.append(f"{log.role}: no audit trail was written")
+    server_views = [sample.observation for sample in observe_samples(server.entries) if sample.observation]
+    if not server_views:
+        problems.append("continent_mismatch: the server printed no complete observation")
+    for view in server_views:
+        if view.continent != MISMATCH_SERVER_CONTINENT:
+            problems.append(f"continent_mismatch: the server hosts {view.continent}, expected "
+                            f"{MISMATCH_SERVER_CONTINENT}")
+            break
+    spawned = sorted({player for view in server_views for player in view.pawns})
+    if spawned:
+        problems.append(f"continent_mismatch: the server holds pawns {spawned} of a client it should never admit")
+    # Without this the run could pass on two processes that loaded the same continent.
+    loaded = observed_continents(client_text, "client")
+    if loaded != {MISMATCH_CLIENT_CONTINENT}:
+        problems.append(f"continent_mismatch: the client observed continents {sorted(loaded)}, expected only "
+                        f"{MISMATCH_CLIENT_CONTINENT}")
+    if (MISMATCH_SERVER_CONTINENT, MISMATCH_CLIENT_CONTINENT) not in CONTINENT_REFUSAL.findall(client_text):
+        problems.append(f"continent_mismatch: the client never refused the {MISMATCH_SERVER_CONTINENT} server "
+                        f"while it had loaded {MISMATCH_CLIENT_CONTINENT}")
+    if SPAWN_ACCEPTED in client_text:
+        problems.append("continent_mismatch: the client spawned a pawn on the wrong continent")
+    return problems
+
+
 # --------------------------------------------------------------------------- TF-110 soak
 
 SOAK_BUDGETS_PATH = Path(__file__).resolve().with_name("soak_budgets.json")
@@ -1516,7 +1584,7 @@ class Child:
 
 
 def launch(role: str, args: argparse.Namespace, workdir: Path, script: str, seconds: float,
-           save_root: Path | None = None) -> Child:
+           save_root: Path | None = None, continent: str | None = None) -> Child:
     role_dir = workdir / role
     # The audit is append-only: a previous run's trail would replay stale views.
     shutil.rmtree(role_dir, ignore_errors=True)
@@ -1529,7 +1597,12 @@ def launch(role: str, args: argparse.Namespace, workdir: Path, script: str, seco
     user_data = str(role_dir / "userdata")
     env = dict(os.environ, TF_SAVE_ROOT=str(save_root or role_dir / "saves"), SPARK_RHI_BACKEND="null",
                LOCALAPPDATA=user_data, XDG_DATA_HOME=user_data)
-    command = [str(args.engine), "-headless", "-no-subprocess", "-require-game", "-threads", "2", "-game",
+    # The continent is chosen at boot (TFDataTables: tf_continent / TF_CONTINENT). Every role loads the default
+    # unless the run names one, whatever the caller's own environment says.
+    env.pop("TF_CONTINENT", None)
+    if continent is not None:
+        env["TF_CONTINENT"] = continent
+    command =[str(args.engine), "-headless", "-no-subprocess", "-require-game", "-threads", "2", "-game",
                str(args.module), "-exec", str(cfg), "-exec-audit", str(audit), "-test-seconds",
                format_seconds(seconds)]
     with open(role_dir / "stdout.log", "wb") as stdout, open(role_dir / "stderr.log", "wb") as stderr:
@@ -1689,6 +1762,41 @@ def run_restart(args: argparse.Namespace, name: str, workdir: Path) -> dict:
             "checkpoints": first["checkpoints"] + second["checkpoints"], "workdir": str(workdir)}
 
 
+def role_text(workdir: Path, role: str) -> str:
+    """Everything @p role printed: its audit trail plus its stdout and stderr logs."""
+    texts = []
+    for name in ("exec_audit.log", "stdout.log", "stderr.log"):
+        path = workdir / role / name
+        texts.append(path.read_text(encoding="utf-8", errors="replace") if path.exists() else "")
+    return "\n".join(texts)
+
+
+def run_continent_mismatch(args: argparse.Namespace, name: str, workdir: Path) -> dict:
+    """TF-120: a client booted on another continent than the server's must refuse to enter its world."""
+    scenario = CONTINENT_SCENARIOS[name]
+    workdir.mkdir(parents=True, exist_ok=True)
+    port = free_udp_port()
+    deadline = time.monotonic() + args.timeout
+    server_seconds = scenario.client_seconds + MISMATCH_SERVER_TAIL_S
+    children: list[Child] = []
+    try:
+        server = launch("server", args, workdir, server_script(port, server_seconds), server_seconds,
+                        continent=MISMATCH_SERVER_CONTINENT)
+        children.append(server)
+        wait_for_server(server, min(deadline, time.monotonic() + SERVER_READY_TIMEOUT_S))
+        client = launch("client1", args, workdir, client_script(scenario, port, scenario.client_factions[0]),
+                        scenario.client_seconds, continent=MISMATCH_CLIENT_CONTINENT)
+        children.append(client)
+        wait_for_exit(children, deadline)
+    finally:
+        stop_all(children)
+        for child in children:
+            (workdir / child.role / f"{child.role}.cfg").unlink(missing_ok=True)
+    problems = continent_mismatch_verdict(server.log(), client.log(), role_text(workdir, client.role))
+    return {"scenario": name, "passed": not problems, "problems": problems, "checkpoints": [],
+            "port": port, "workdir": str(workdir)}
+
+
 def read_rss(pid: int) -> int | None:
     """Resident set of a live child in bytes (Linux /proc, Windows working set), or None."""
     if sys.platform != "win32":
@@ -1775,7 +1883,8 @@ def run_all(args: argparse.Namespace) -> dict:
         runs = []
         for name in names:
             target = workdir / name if len(names) > 1 else workdir
-            runner = run_restart if name in RESTART_SCENARIOS else run
+            runner = (run_restart if name in RESTART_SCENARIOS else
+                      run_continent_mismatch if name in CONTINENT_SCENARIOS else run)
             runs.append(lambda runner=runner, name=name, target=target: runner(args, name, target))
     summaries = []
     for name, runner in zip(names, runs):
@@ -1793,7 +1902,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--engine", required=True, type=Path, help="SparkEngine executable")
     parser.add_argument("--module", required=True, type=Path, help="SparkGameMMOFPS module")
-    parser.add_argument("--scenario", nargs="+", choices=sorted([*SCENARIOS, *RESTART_SCENARIOS]),
+    parser.add_argument("--scenario", nargs="+",
+                        choices=sorted([*SCENARIOS, *RESTART_SCENARIOS, *CONTINENT_SCENARIOS]),
                         help="one or more scenarios, run in order")
     parser.add_argument("--soak-seconds", type=float, help="run the TF-110 soak for this long instead")
     parser.add_argument("--budgets", type=Path, default=SOAK_BUDGETS_PATH, help="soak budget file")

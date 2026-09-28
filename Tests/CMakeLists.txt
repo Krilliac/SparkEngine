@@ -4278,7 +4278,9 @@ set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
 # real dedicated server plus two headless clients (onboard + spawn + walk,
 # combat kill/respawn, forged loadouts, reconnect, territory flips, vehicle life
 # cycle) and fails unless both clients agree with the server at every checkpoint
-# and the scenario's authoritative outcome holds.
+# and the scenario's authoritative outcome holds. ContinentMismatchRefused (TF-120)
+# runs one client booted on another continent than the server's: it must refuse
+# the server's TF_ContinentIdentity and never spawn.
 # The process runs are timing-sensitive (three processes on one host) and have
 # not yet run on hosted Linux or 2-core runners, so they are opt-in and stay out of the
 # required full-ctest lanes until a dedicated job enables it:
@@ -4304,7 +4306,8 @@ if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEA
             ForgedStateRejectedAndAudited:forged_state
             ReconnectRestoresAllowedState:reconnect
             TerritoryReplicates:territory
-            VehicleLifecycle:vehicle_lifecycle)
+            VehicleLifecycle:vehicle_lifecycle
+            ContinentMismatchRefused:continent_mismatch)
         string(REPLACE ":" ";" _tf_run "${_tf_run}")
         list(GET _tf_run 0 _tf_name)
         list(GET _tf_run 1 _tf_scenario)

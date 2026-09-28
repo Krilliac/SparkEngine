@@ -994,5 +994,90 @@ class RestartTests(unittest.TestCase):
         self.assertNotIn("tf_char_create", again)
 
 
+# --------------------------------------------------------------------------- continent identity
+
+REFUSAL = ("[TF] server hosts continent 'cindral_wastes' but this client loaded 'veyra_highlands'; "
+           "restart with TF_CONTINENT=cindral_wastes")
+
+
+def on_continent(lines: list[str], continent: str) -> list[str]:
+    return [line.replace("continent=cindral_wastes", f"continent={continent}") for line in lines]
+
+
+def mismatch_server_log(pawns: dict | None = None, observations: int = 6,
+                        continent: str = "cindral_wastes") -> multiclient.RoleLog:
+    lines = entry(15, 0.5, "tf_dedicated 23000", ["    > [TF] dedicated server started on port 23000"])
+    for index in range(observations):
+        view = on_continent(observation("server", SERVER_SELF, pawns or {}), continent)
+        lines += entry(30 + 15 * index, 1.0 + 0.5 * index, "tf_observe", view)
+    return multiclient.RoleLog("server", 0, SERVER_ANCHOR, multiclient.parse_audit("\n".join(lines) + "\n"))
+
+
+def mismatch_client_text(refused: bool = True, spawned: bool = False,
+                         continent: str = "veyra_highlands") -> str:
+    lines = entry(0, 0.0, "tf_status", ["    > [TF] TERRAFRONT role=standalone"])
+    lines += entry(270, 9.0, "tf_enter 0", ["    > [TF] enter-world request sent"])
+    lines += entry(315, 10.5, "tf_faction mra", [f"[WARN] {REFUSAL}"] if refused else [])
+    lines += entry(345, 11.5, "tf_spawn",
+                   ["    > [TF] spawn accepted: entity 7 at (300 24 3800)"] if spawned else [])
+    lines += entry(420, 14.0, "tf_observe",
+                   on_continent(observation("client", multiclient.NO_PLAYER, {}), continent))
+    return "\n".join(lines) + "\n"
+
+
+class ContinentIdentityTests(unittest.TestCase):
+    def verdict(self, server: multiclient.RoleLog | None = None, client_text: str | None = None) -> list[str]:
+        text = mismatch_client_text() if client_text is None else client_text
+        client = multiclient.RoleLog("client1", 0, CLIENT_ANCHOR, multiclient.parse_audit(text), "mra")
+        return multiclient.continent_mismatch_verdict(server or mismatch_server_log(), client, text)
+
+    def test_refused_client_that_never_spawned_passes(self) -> None:
+        self.assertEqual(self.verdict(), [])
+
+    def test_missing_refusal_line_fails(self) -> None:
+        # RED proof: a client without the guard logs nothing and enters the wrong continent's world.
+        self.assertIn("never refused", " ".join(self.verdict(client_text=mismatch_client_text(refused=False))))
+
+    def test_spawned_pawn_fails(self) -> None:
+        on_server = self.verdict(server=mismatch_server_log(pawns={2: (1, 1, 450, (300.0, 24.0, 3800.0))}))
+        self.assertIn("holds pawns [2]", " ".join(on_server))
+        on_client = self.verdict(client_text=mismatch_client_text(spawned=True))
+        self.assertIn("spawned a pawn", " ".join(on_client))
+
+    def test_client_on_the_server_continent_proves_nothing(self) -> None:
+        same = mismatch_client_text(refused=False, continent="cindral_wastes")
+        self.assertIn("observed continents ['cindral_wastes']", " ".join(self.verdict(client_text=same)))
+
+    def test_server_that_never_observed_fails(self) -> None:
+        self.assertIn("no complete observation", " ".join(self.verdict(server=mismatch_server_log(observations=0))))
+
+    def test_server_on_another_continent_fails(self) -> None:
+        wrong = mismatch_server_log(continent="veyra_highlands")
+        self.assertIn("the server hosts veyra_highlands", " ".join(self.verdict(server=wrong)))
+
+    def test_matched_continent_runs_boot_every_role_on_the_default_continent(self) -> None:
+        # The convergence and restart scenarios launch without a continent, so every role loads the default
+        # even when the caller's environment names another, and their clients spawn as before.
+        self.assertNotIn("continent_mismatch", multiclient.SCENARIOS)
+        self.assertEqual(multiclient.CONTINENT_REFUSAL.findall(client_audit(1, list(TRUTH))), [])
+        with tempfile.TemporaryDirectory() as workdir, \
+                mock.patch.dict(multiclient.os.environ, {"TF_CONTINENT": "veyra_highlands"}), \
+                mock.patch.object(multiclient.subprocess, "Popen") as popen:
+            args = mock.Mock(engine=Path("engine"), module=Path("module"), cwd=Path(workdir))
+            multiclient.launch("client1", args, Path(workdir), "", 10.0)
+            self.assertNotIn("TF_CONTINENT", popen.call_args.kwargs["env"])
+            multiclient.launch("client2", args, Path(workdir), "", 10.0, continent="veyra_highlands")
+            self.assertEqual(popen.call_args.kwargs["env"]["TF_CONTINENT"], "veyra_highlands")
+
+    def test_mismatch_run_with_an_engine_that_exits_early_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as workdir:
+            out = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(io.StringIO()):
+                code = multiclient.main(["--engine", sys.executable, "--module", __file__, "--scenario",
+                                         "continent_mismatch", "--workdir", workdir, "--timeout", "60"])
+        self.assertEqual(code, 1)
+        self.assertIn("server exited with", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
