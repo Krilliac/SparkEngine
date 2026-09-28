@@ -13,6 +13,11 @@ debug symbols) and excludes generated `manifest.txt` metadata. A failed legacy
 package reports the payload files copied before failure, while its output path
 remains empty and no manifest is published.
 
+The behaviours this page describes, and every `spark_cli.py` command and option in
+`Tools/spark-cli/README.md`, are mapped to the tests that prove them in
+`Tools/spark-cli/claims.json`; the `CLI_ClaimsMatchBehavior` CTest fails when a
+claim names a missing test or a documented surface has no claim.
+
 ## Overview
 
 > **Current readiness boundary:** the repository asset-integrity check is a

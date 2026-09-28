@@ -5405,6 +5405,17 @@ if(Python3_Interpreter_FOUND)
     )
     set_tests_properties(SparkCliContract PROPERTIES LABELS "cli;integration" TIMEOUT 180)
 
+    # ASSET-220: every CLI and packager claim (Tools/spark-cli/claims.json) names tests that
+    # exist, and every documented or parsed command and option is claimed.
+    add_test(
+        NAME CLI_ClaimsMatchBehavior
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest test_spark_cli_claims -v
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/Tools/spark-cli/tests)
+    set_tests_properties(CLI_ClaimsMatchBehavior PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "cli;packaging;unit"
+        TIMEOUT 120)
+
     add_test(
         NAME PlatformCertification
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_platform_certification.py

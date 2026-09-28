@@ -75,6 +75,30 @@ class SparkNewTests(unittest.TestCase):
         self.assertEqual(manifest["modules"][0]["name"], "FrontierGame")
         self.assertIn("FrontierGameModule", (project / "Source" / "GameModule.h").read_text(encoding="utf-8"))
 
+    def test_templates_lists_every_template_directory(self):
+        write_json(self.engine / "Templates" / "Blank3D" / "template.json", {"description": "Empty 3D scene"})
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ):
+            result = spark_cli.cmd_templates(SimpleNamespace())
+
+        self.assertEqual(result, 0)
+        self.assertIn("Blank3D", output.getvalue())
+        self.assertIn("Empty 3D scene", output.getvalue())
+        self.assertIn("MMOStarter", output.getvalue())
+
+    def test_info_reports_the_resolved_engine_root_and_templates(self):
+        output = io.StringIO()
+        with working_directory(self.output), contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ):
+            result = spark_cli.cmd_info(SimpleNamespace())
+
+        self.assertEqual(result, 0)
+        self.assertIn(f"Engine root:  {self.engine}", output.getvalue())
+        self.assertIn("Templates:    MMOStarter", output.getvalue())
+
 
 class SparkNewFromInstalledPrefixTests(unittest.TestCase):
     """ASSET-220: `spark new` run from an install prefix, as the tools component installs it."""
@@ -227,6 +251,28 @@ class SparkExternalToolTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual([entry["command"] for entry in report["tools"]], list(spark_cli.EXTERNAL_TOOLS))
         self.assertTrue(all(entry["available"] for entry in report["tools"]))
+
+    def test_external_tool_dry_run_prints_invocation_without_starting(self):
+        executable = self.create_tool("SparkDaemon")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ), mock.patch.object(spark_cli.subprocess, "run") as run:
+            result = spark_cli.cmd_external_tool(self.args(dry_run=True))
+
+        self.assertEqual(result, 0)
+        run.assert_not_called()
+        self.assertEqual(
+            json.loads(output.getvalue()),
+            {"command": "daemon", "executable": str(executable), "arguments": ["--socket", "owner-endpoint"]},
+        )
+
+    def test_cook_alias_routes_to_the_cooker(self):
+        args = spark_cli.build_parser().parse_args(["cook", "--dry-run", "--", "--help"])
+        self.assertIs(args.handler, spark_cli.cmd_external_tool)
+        self.assertEqual(args.tool_command, "cooker")
+        self.assertEqual(args.tool_executable, "SparkCooker")
+        self.assertEqual(args.tool_args, ["--", "--help"])
 
 
 class SparkRunTests(unittest.TestCase):
@@ -434,6 +480,23 @@ class SparkValidateTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("Broken.sparkscene", output.getvalue())
         self.assertIn("Could not parse scene file", output.getvalue())
+
+    def test_strict_changes_nothing_because_every_finding_is_an_error(self):
+        scene = self.root / "Scenes" / "Start.sparkscene"
+        scene.parent.mkdir(parents=True)
+        scene.write_text('{"entities": []}', encoding="utf-8")
+
+        reports = []
+        for strict in (False, True):
+            output = io.StringIO()
+            with working_directory(self.root), contextlib.redirect_stdout(output):
+                result = spark_cli.cmd_validate(SimpleNamespace(path=".", strict=strict, format="json"))
+            reports.append((result, json.loads(output.getvalue())))
+
+        self.assertEqual(reports[0], reports[1])
+        self.assertEqual(reports[0][0], 0)
+        self.assertEqual(reports[0][1]["warnings"], [])
+        self.assertTrue(reports[0][1]["passed"])
 
 
 class SparkPackageTests(unittest.TestCase):
@@ -751,6 +814,16 @@ class SparkPackageTests(unittest.TestCase):
         self.assertIn("not an owned Spark CLI package", output)
         self.assertTrue((package / "unrelated.txt").is_file())
         build.assert_not_called()
+
+    def test_package_rejects_cross_platform_request_before_build(self):
+        foreign = next(p for p in ("windows", "linux", "macos") if p != spark_cli.current_platform())
+
+        result, output, build = self.run_package(self.args(platform=foreign))
+
+        self.assertEqual(result, 1)
+        self.assertIn(f"Cannot package {foreign} binaries", output)
+        build.assert_not_called()
+        self.assertFalse((self.root / "dist").exists())
 
     def test_package_force_replaces_unknown_non_linked_target(self):
         package = self.package_path()
