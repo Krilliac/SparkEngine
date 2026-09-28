@@ -8,6 +8,12 @@
 if(POLICY CMP0007)
     cmake_policy(SET CMP0007 NEW)
 endif()
+# The notice renderer also runs as a bare `cmake -P` script (no
+# cmake_minimum_required), where CMake 3.x leaves CMP0057 unset and rejects
+# `if(... IN_LIST ...)`. CMake 4 forces it on, which hid this on Windows hosts.
+if(POLICY CMP0057)
+    cmake_policy(SET CMP0057 NEW)
+endif()
 
 # Strict-dependency closure: with SPARK_STRICT_DEPS=ON every entry in the
 # manifest is required, whatever its severity. The manifest is the only list of
