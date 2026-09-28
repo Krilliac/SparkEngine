@@ -84,8 +84,16 @@ print(f"SPARK_HEADLESS_TICK_STATS backend=null frames={{frames}} p50_us=90 p99_u
 # Lets the few-second stand-in runs exercise the --out path, which production
 # refuses below the one-hour headless-soak-1h scene length.
 SHORT_RESULT_RUNS = mock.patch.object(soak_tool, "MIN_RESULT_DURATION_S", 3.0)
-FAST = soak_tool.SoakConfig(duration_s=3.0, warmup_s=0.5, sample_interval_s=0.1, heartbeat_timeout_s=1.0,
-                            startup_timeout_s=5.0, teardown_timeout_s=5.0)
+# The hang detectors (startup, heartbeat, exit deadline) are loose here because
+# a window only costs time when it fires: a healthy stand-in is ready in ~30 ms
+# and finishes in ~3 s whatever the bounds. Tight bounds made the tests about
+# crashes, leaks and slow loops report a hang instead when the host stalled the
+# child (memory pressure delayed interpreter start-up past 5 s). The tests for a
+# given hang tighten only that window: test_never_ready_is_a_startup_hang the
+# startup bound and test_spinning_main_thread_is_a_hang the exit deadline; a
+# deadlock is still caught by the heartbeat long before the exit deadline.
+FAST = soak_tool.SoakConfig(duration_s=3.0, warmup_s=0.5, sample_interval_s=0.1, heartbeat_timeout_s=5.0,
+                            startup_timeout_s=60.0, teardown_timeout_s=30.0)
 
 
 def _outcome(**overrides: object) -> soak_tool.SoakOutcome:
@@ -245,7 +253,7 @@ class HarnessTests(unittest.TestCase):
         engine = self.engine("if elapsed > 2.8:\n    os.kill(os.getpid(), signal.SIGSEGV)")
         with SHORT_RESULT_RUNS:
             outcome = self.soak(engine, expected_sha=SHA, out=self.out)
-        self.assertTrue(outcome.crashed)
+        self.assertTrue(outcome.crashed, outcome.failures)
         self.assertEqual(outcome.exit_status, -11)
         self.assertTrue(any("SIGSEGV" in f for f in outcome.failures), outcome.failures)
         result = json.loads(self.out.read_text(encoding="utf-8"))
@@ -269,7 +277,7 @@ class HarnessTests(unittest.TestCase):
         engine = self.engine("if elapsed > 1.0:\n    lock = threading.Lock(); lock.acquire(); lock.acquire()")
         with SHORT_RESULT_RUNS:
             outcome = self.soak(engine, expected_sha=SHA, out=self.out)
-        self.assertTrue(outcome.hung)
+        self.assertTrue(outcome.hung, outcome.failures)
         self.assertTrue(any("neither slept nor ran" in f for f in outcome.failures), outcome.failures)
         self.assertFalse(self.out.exists())
         self.assertTrue(json.loads(self.report.read_text(encoding="utf-8"))["hung"])
@@ -278,8 +286,9 @@ class HarnessTests(unittest.TestCase):
     def test_spinning_main_thread_is_a_hang(self) -> None:
         # A spin burns CPU like a slow loop, so it is caught by the exit
         # deadline (1.5 * duration + teardown), not the heartbeat.
-        outcome = self.soak(self.engine("if elapsed > 1.0:\n    while True:\n        pass"))
-        self.assertTrue(outcome.hung)
+        config = soak_tool.SoakConfig(**{**FAST.__dict__, "teardown_timeout_s": 5.0})
+        outcome = self.soak(self.engine("if elapsed > 1.0:\n    while True:\n        pass"), config)
+        self.assertTrue(outcome.hung, outcome.failures)
         self.assertTrue(any("livelock spin" in f for f in outcome.failures), outcome.failures)
 
     @LINUX_ONLY
@@ -299,7 +308,7 @@ class HarnessTests(unittest.TestCase):
         config = soak_tool.SoakConfig(**{**FAST.__dict__, "startup_timeout_s": 1.0})
         outcome = self.soak(self.engine(script="import time\nprint('booting', flush=True)\ntime.sleep(60)\n"),
                             config)
-        self.assertTrue(outcome.hung)
+        self.assertTrue(outcome.hung, outcome.failures)
         self.assertIn("no SPARK_MODULE_READY", outcome.failures[0])
 
     @LINUX_ONLY
@@ -322,7 +331,7 @@ class HarnessTests(unittest.TestCase):
     @LINUX_ONLY
     def test_nonzero_exit_is_a_crash(self) -> None:
         outcome = self.soak(self.engine("if elapsed > 2.0:\n    sys.exit(2)"))
-        self.assertTrue(outcome.crashed)
+        self.assertTrue(outcome.crashed, outcome.failures)
         self.assertTrue(any("status 2" in f for f in outcome.failures), outcome.failures)
 
     def test_launch_line_is_shared_with_the_tick_collector(self) -> None:
@@ -418,7 +427,7 @@ class WindowsSamplerTests(unittest.TestCase):
         with mock.patch.object(soak_tool, "engine_command", lambda *_: command):
             outcome = soak_tool.soak(engine, module, FAST, expected_sha=None, out=None, report=report,
                                      budget_dir=BUDGET_DIR)
-        self.assertTrue(outcome.hung)
+        self.assertTrue(outcome.hung, outcome.failures)
         self.assertTrue(any("neither slept nor ran" in f for f in outcome.failures), outcome.failures)
         document = json.loads(report.read_text(encoding="utf-8"))
         self.assertEqual(document["memorySeries"], "PrivateUsage")

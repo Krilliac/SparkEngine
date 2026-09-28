@@ -114,7 +114,13 @@ sys.exit(3 if fault == "exit_nonzero" else 0)
 
 # Outlives the drill's detection window (3 x stale_after_s after the kill).
 WRITER_LIFETIME_S = 3.0
-FAST = drill_tool.DrillConfig(status_interval_ms=100, stale_after_s=0.5, startup_timeout_s=5.0, stop_timeout_s=3.0)
+# The startup bound is loose because it only costs time when it fires: a
+# healthy stand-in publishes live+ready in well under a second. A 5 s bound made
+# the wedge and drain restarts fail as "no fresh live+ready" when the host
+# stalled interpreter start-up under memory pressure. The never-ready tests
+# tighten it (NEVER_READY).
+FAST = drill_tool.DrillConfig(status_interval_ms=100, stale_after_s=0.5, startup_timeout_s=60.0, stop_timeout_s=3.0)
+NEVER_READY = drill_tool.DrillConfig(**{**FAST.__dict__, "startup_timeout_s": 1.0})
 
 
 class ConfigTests(unittest.TestCase):
@@ -186,9 +192,9 @@ class HarnessTests(unittest.TestCase):
         self._tmp.cleanup()
 
     def run_drill(self, fault: str = "", scenarios: tuple[str, ...] | None = None,
-                  expected_sha: str | None = SHA) -> dict:
+                  expected_sha: str | None = SHA, config: drill_tool.DrillConfig = FAST) -> dict:
         os.environ["DRILL_FAULT"] = fault
-        outcome, document = drill_tool.drill(self.launcher, self.module, FAST,
+        outcome, document = drill_tool.drill(self.launcher, self.module, config,
                                              scenarios or drill_tool.supported_scenarios(),
                                              expected_sha=expected_sha, summary=self.summary, work_dir=self.work)
         self.assertEqual(json.loads(self.summary.read_text(encoding="utf-8")), document)
@@ -226,10 +232,10 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(document["scenarios"][0]["diagnosis"], "wedged")
 
     def test_never_ready_fails_startup(self) -> None:
-        self.assertFailsWith(self.run_drill("never_ready", ("crash",)), "startup: no fresh live+ready")
+        self.assertFailsWith(self.run_drill("never_ready", ("crash",), config=NEVER_READY), "startup: no fresh live+ready")
 
     def test_restart_that_never_becomes_ready_fails(self) -> None:
-        self.assertFailsWith(self.run_drill("no_restart_ready", ("crash",)), "crash: restart: no fresh live+ready")
+        self.assertFailsWith(self.run_drill("no_restart_ready", ("crash",), config=NEVER_READY), "crash: restart: no fresh live+ready")
 
     def test_restart_reporting_another_build_fails(self) -> None:
         self.assertFailsWith(self.run_drill("restart_wrong_commit", ("crash",)), "crash: identity:")

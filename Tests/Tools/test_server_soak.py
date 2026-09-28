@@ -103,7 +103,9 @@ while not stop:
         continue
     if fault == "crash" and elapsed > 1.0:
         os._exit(7)
-    if fault == "leak":
+    # The leak grows with elapsed time, not loop iterations, so a stalled
+    # stand-in still leaks at the same rate once it runs again.
+    while fault == "leak" and len(hoard) < int(elapsed * rate):
         hoard.append(b"\\x01" * (256 * 1024))
     if not (fault == "stall" and elapsed > 1.0):
         ticks = int(elapsed * rate)
@@ -120,8 +122,16 @@ publish(False, False, False, False, 0)
 sys.exit(3 if fault == "exit_nonzero" else 0)
 """
 
+# The startup and stall bounds are loose here because a window only costs time
+# when it fires: a healthy stand-in is ready in well under a second and ticks
+# every status interval. Tight bounds made the leak, crash and identity tests
+# report a startup or stall failure instead when the host stalled the child
+# (memory pressure delayed interpreter start-up past 5 s). A stall bound equal
+# to the run length cannot fire on a stand-in that ticks at all; the tests for
+# those two failures tighten only their own window (test_tick_stall_fails,
+# test_never_ready_fails).
 FAST = soak_tool.SoakConfig(duration_s=3.0, warmup_s=0.5, sample_interval_s=0.1, status_interval_ms=100,
-                            startup_timeout_s=5.0, stall_timeout_s=1.0, stop_timeout_s=3.0,
+                            startup_timeout_s=60.0, stall_timeout_s=3.0, stop_timeout_s=3.0,
                             max_rss_growth_bytes=64 * 1024 * 1024)
 
 
@@ -287,7 +297,8 @@ class HarnessTests(StandInServerCase):
         self.assertFailsWith(self.run_soak("leak", config), "memory:")
 
     def test_tick_stall_fails(self) -> None:
-        self.assertFailsWith(self.run_soak("stall"), "stall:")
+        config = soak_tool.SoakConfig(**{**FAST.__dict__, "stall_timeout_s": 1.0})
+        self.assertFailsWith(self.run_soak("stall", config), "stall:")
 
     def test_ticks_going_backwards_fail(self) -> None:
         self.assertFailsWith(self.run_soak("ticks_backwards"), "ticks: counter went backwards")
@@ -350,7 +361,7 @@ class HarnessTests(StandInServerCase):
     def test_cli_exit_status_and_stdout_summary(self) -> None:
         os.environ["SOAK_FAULT"] = ""
         argv = ["--server", str(self.server), "--module", str(self.module), "--duration", "3", "--warmup", "0.5",
-                "--sample-interval", "0.1", "--status-interval-ms", "100", "--stall-timeout", "1",
+                "--sample-interval", "0.1", "--status-interval-ms", "100", "--stall-timeout", "3",
                 "--expected-sha", SHA]
         stdout, stderr = io.StringIO(), io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
