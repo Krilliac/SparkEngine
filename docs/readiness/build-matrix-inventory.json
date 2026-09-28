@@ -9470,7 +9470,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 26,
+        "stepCount": 27,
         "steps": [
           {
             "index": 0,
@@ -9597,6 +9597,18 @@
           },
           {
             "index": 10,
+            "name": "Install hash-pinned PyYAML into the configured test interpreter",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "84a19288c94dc190"
+          },
+          {
+            "index": 11,
             "name": "Enforce configured-tree CTest policy",
             "id": "",
             "uses": "",
@@ -9608,7 +9620,7 @@
             "runDigest": "f00c28008e2dcb49"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -9620,7 +9632,7 @@
             "runDigest": "07847ccc2fa9f873"
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Print sccache stats",
             "id": "",
             "uses": "",
@@ -9634,7 +9646,7 @@
             "runDigest": "ac023990345bb5e5"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Save sccache cache",
             "id": "",
             "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -9646,7 +9658,7 @@
             "runDigest": ""
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Install D3D11 debug layer (Graphics Tools)",
             "id": "",
             "uses": "",
@@ -9658,7 +9670,7 @@
             "runDigest": "5000f15b9866d810"
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Install D3D12 debug layer",
             "id": "",
             "uses": "",
@@ -9670,7 +9682,7 @@
             "runDigest": "463c86d8fa05240e"
           },
           {
-            "index": 16,
+            "index": 17,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -9682,7 +9694,7 @@
             "runDigest": "5db485c42c212495"
           },
           {
-            "index": 17,
+            "index": 18,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -9694,7 +9706,7 @@
             "runDigest": "04d1482b4a194b41"
           },
           {
-            "index": 18,
+            "index": 19,
             "name": "Census of production-source vs mirror tests",
             "id": "",
             "uses": "",
@@ -9706,7 +9718,7 @@
             "runDigest": "dcf673dbd92d4a69"
           },
           {
-            "index": 19,
+            "index": 20,
             "name": "Upload exact-commit CTest report",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9718,7 +9730,7 @@
             "runDigest": ""
           },
           {
-            "index": 20,
+            "index": 21,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9730,7 +9742,7 @@
             "runDigest": ""
           },
           {
-            "index": 21,
+            "index": 22,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -9742,7 +9754,7 @@
             "runDigest": "fe715c78b7a4aa4e"
           },
           {
-            "index": 22,
+            "index": 23,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9754,7 +9766,7 @@
             "runDigest": ""
           },
           {
-            "index": 23,
+            "index": 24,
             "name": "Upload sccache server log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9766,7 +9778,7 @@
             "runDigest": ""
           },
           {
-            "index": 24,
+            "index": 25,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -9778,7 +9790,7 @@
             "runDigest": "2eb3edeb34e3cec9"
           },
           {
-            "index": 25,
+            "index": 26,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -10208,7 +10220,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 18,
+        "stepCount": 19,
         "steps": [
           {
             "index": 0,
@@ -10323,6 +10335,18 @@
           },
           {
             "index": 9,
+            "name": "Install hash-pinned PyYAML into the configured test interpreter",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "84a19288c94dc190"
+          },
+          {
+            "index": 10,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -10334,7 +10358,7 @@
             "runDigest": "d69ad68ffbba1551"
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Print sccache stats",
             "id": "",
             "uses": "",
@@ -10348,7 +10372,7 @@
             "runDigest": "584ee9c080c11f3d"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Save sccache cache",
             "id": "",
             "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -10360,7 +10384,7 @@
             "runDigest": ""
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Install D3D12 debug layer",
             "id": "",
             "uses": "",
@@ -10372,7 +10396,7 @@
             "runDigest": "463c86d8fa05240e"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -10384,7 +10408,7 @@
             "runDigest": "d3c4368b3410f79a"
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -10396,7 +10420,7 @@
             "runDigest": "ccfea9cd882fe6e7"
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -10408,7 +10432,7 @@
             "runDigest": ""
           },
           {
-            "index": 16,
+            "index": 17,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -10420,7 +10444,7 @@
             "runDigest": ""
           },
           {
-            "index": 17,
+            "index": 18,
             "name": "Upload sccache server log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -14002,7 +14026,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 10,
+        "stepIndex": 11,
         "matrix": {
           "config": "Debug"
         },
@@ -14027,7 +14051,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {
           "config": "Debug"
         },
@@ -14056,7 +14080,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {
           "config": "Debug"
         },
@@ -14081,7 +14105,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 18,
+        "stepIndex": 19,
         "matrix": {
           "config": "Debug"
         },
@@ -14163,7 +14187,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 10,
+        "stepIndex": 11,
         "matrix": {
           "config": "Release"
         },
@@ -14188,7 +14212,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {
           "config": "Release"
         },
@@ -14217,7 +14241,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {
           "config": "Release"
         },
@@ -14242,7 +14266,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 18,
+        "stepIndex": 19,
         "matrix": {
           "config": "Release"
         },
@@ -14722,7 +14746,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "config": "Debug"
         },
@@ -14751,7 +14775,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {
           "config": "Debug"
         },
@@ -14832,7 +14856,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "config": "Release"
         },
@@ -14861,7 +14885,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {
           "config": "Release"
         },
@@ -17683,7 +17707,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {
           "config": "Debug"
         },
@@ -17712,7 +17736,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {
           "config": "Release"
         },
@@ -17876,7 +17900,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "config": "Debug"
         },
@@ -17905,7 +17929,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "config": "Release"
         },
@@ -18626,7 +18650,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 10,
+        "stepIndex": 11,
         "matrix": {
           "config": "Debug"
         },
@@ -18651,7 +18675,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {
           "config": "Debug"
         },
@@ -18676,7 +18700,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 18,
+        "stepIndex": 19,
         "matrix": {
           "config": "Debug"
         },
@@ -18701,7 +18725,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 10,
+        "stepIndex": 11,
         "matrix": {
           "config": "Release"
         },
@@ -18726,7 +18750,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {
           "config": "Release"
         },
@@ -18751,7 +18775,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 18,
+        "stepIndex": 19,
         "matrix": {
           "config": "Release"
         },
@@ -18799,7 +18823,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {
           "config": "Debug"
         },
@@ -18824,7 +18848,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {
           "config": "Release"
         },
