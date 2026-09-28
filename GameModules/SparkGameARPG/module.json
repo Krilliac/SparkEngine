@@ -22,12 +22,22 @@
   },
   "tests": {
     "files": [
-      "Tests/TestGameModulePlatformerARPG.cpp"
+      "Tests/TestGameModulePlatformerARPG.cpp",
+      "Tests/TestMOD330ARPGDungeonReal.cpp",
+      "Tests/TestMOD330ARPGWorldActors.cpp"
     ],
     "prefixes": [
       {
         "prefix": "ARPG_",
         "count": 24
+      },
+      {
+        "prefix": "ARPGDungeon_",
+        "count": 7
+      },
+      {
+        "prefix": "ARPGBoss_",
+        "count": 3
       }
     ]
   },
