@@ -145,7 +145,6 @@
                 "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libstdc++",
                 "SPARK_ENABLE_FUZZ_TARGETS": "ON",
                 "BUILD_GAME_MODULES": "OFF",
-                "ENABLE_GRAPHICS": "OFF",
                 "ENABLE_NETWORKING": "OFF",
                 "ENABLE_SERVER_PROCESSES": "OFF",
                 "ENABLE_DXR": "OFF",

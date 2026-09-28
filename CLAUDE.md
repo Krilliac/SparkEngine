@@ -206,7 +206,7 @@ SPARK_TEST_LIMIT=50 build/linux-gcc-release/bin/SparkTests                      
 
 **Fast local rebuilds:** configure an iterate-and-test tree with `-DENABLE_LTO=OFF`, ccache and mold. `SparkTests` then relinks in seconds instead of re-running LTO over the whole binary; CI Release lanes keep LTO. The exact configure line and the ccache settings the precompiled header needs are in `wiki/development/Workflow-Patterns.md` (Fast Local Rebuilds).
 
-CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR`, `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
+CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR`, `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
 
 **Cross-compilation (MinGW + Wine):** Build Windows D3D11 code on Linux via MinGW, run under Wine + DXVK/Lavapipe. See `wiki/development/MinGW-Wine-Cross-Compilation.md` for full setup. Presets: `linux-mingw-release`, `linux-mingw-debug`.
 

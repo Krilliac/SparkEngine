@@ -27,9 +27,8 @@ Presets: `cmake --preset <name>` (see `CMakePresets.json`).
 | `BUILD_GAME_MODULES` | ON | In-tree game-module targets |
 | `BUILD_TESTS` | ON | CTest unit tests |
 
-`ENABLE_GRAPHICS` is currently a compatibility cache variable, not a D3D11
-source-selection switch. `ENABLE_PHYSX`, `ENABLE_AI`, and `ENABLE_ANIMATION` are
-not root CMake options.
+There is no `ENABLE_GRAPHICS` switch; D3D11 sources are not option-selected.
+`ENABLE_PHYSX`, `ENABLE_AI`, and `ENABLE_ANIMATION` are not root CMake options.
 
 ### Build Targets
 

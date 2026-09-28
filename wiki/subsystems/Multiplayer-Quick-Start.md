@@ -291,7 +291,7 @@ server.Start(config);  // launches tick loop on background thread
 ./SparkServer --manifest spark.modules.json --port 27015 --max-clients 32  # compile-time headless (built-in)
 ```
 
-For the built-in server, build with `-DENABLE_GRAPHICS=OFF -DENABLE_SERVER_PROCESSES=ON`.
+For the built-in server, build with `-DENABLE_SERVER_PROCESSES=ON`.
 Every `SparkServer` launch must select game code with either `--manifest <path>`
 or `--module <game-library>`. See [Dedicated Server](Dedicated-Server.md) for full details.
 

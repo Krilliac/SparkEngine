@@ -183,8 +183,6 @@ namespace SparkBuild
         // ========================================================================
 
         // Core systems
-        config.options.push_back(
-            {"ENABLE_GRAPHICS", "Graphics Engine", "Build the graphics engine", true, true, OptionCategory::Core});
         config.options.push_back({"ENABLE_RECAST", "Recast Navigation",
                                   "Build the Recast/Detour navigation implementation", true, true,
                                   OptionCategory::Core});

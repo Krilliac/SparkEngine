@@ -87,7 +87,8 @@ entry and an undeclared one reaches the final check. Options that are declared b
 never read (no `if()`, `${}`, generator expression, forwarded `-D` or
 `configure_file` template consumes them) are reported by
 `Tools/buildmatrix/check_parity.py` as the blocking `declared-option-unread`
-finding; `ENABLE_GRAPHICS` is the current one (HEAD-220). Options that must be accepted on every platform are declared
+finding (the inert `ENABLE_GRAPHICS` was deleted on that basis). Options that
+must be accepted on every platform are declared
 unconditionally: `SPARK_REQUIRE_WINDOWS_INSTALLERS` (SparkBuild passes it
 everywhere; `ON` off Windows is itself fatal) and the explicit
 `SPARK_MODULE_CXX_LANGUAGE_ABI` override (declared by `cmake/SparkGameModule.cmake`).
@@ -98,7 +99,6 @@ against the tree's declarations.
 
 | Option | Root default | Source-backed effect when disabled |
 |--------|--------------|------------------------------------|
-| `ENABLE_GRAPHICS` | ON | Currently inert; OFF does not remove graphics/RHI (`HEAD-220`) |
 | `ENABLE_VULKAN` | ON | Disables Vulkan discovery and omits `SPARK_VULKAN_SUPPORT`; root source glob remains |
 | `ENABLE_OPENGL` | ON | Disables OpenGL discovery/enablement; verify host context separately |
 | `ENABLE_METAL` | ON on Apple, OFF elsewhere | Omits Metal enablement on Apple development builds |
@@ -114,9 +114,8 @@ against the tree's declarations.
 
 The `minimal` preset disables networking, DXR, and the optional tool and module
 targets. Every preset cache variable is a declared root option (the option guard
-rejects anything else), but some declared options are themselves inert (for
-example `ENABLE_GRAPHICS`, see the table), so this is not a core-only build
-contract. Disable declared targets such as the editor explicitly
+rejects anything else), but disabling them does not remove the graphics/RHI
+sources, so this is not a core-only build contract. Disable declared targets such as the editor explicitly
 when needed; `HEAD-220` tracks a true stripped/headless configuration.
 
 ```bash

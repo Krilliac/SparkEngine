@@ -193,7 +193,7 @@ Include:
 - **Steps to reproduce** — Minimal, numbered steps to trigger the bug
 - **Expected behavior** — What you expected to happen
 - **Actual behavior** — What actually happened (include error messages, stack traces)
-- **Build configuration** — CMake flags used (`ENABLE_EDITOR`, `ENABLE_GRAPHICS`, etc.)
+- **Build configuration** — CMake flags used (`ENABLE_EDITOR`, `ENABLE_NETWORKING`, etc.)
 - **Screenshots/logs** — If applicable, include console output or screenshots
 
 ### Feature Requests

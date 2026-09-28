@@ -270,7 +270,6 @@ graphics toggle rather than presenting it as a working build reduction:
 
 | Option | Default | Effect when OFF |
 |---|---|---|
-| `ENABLE_GRAPHICS` | ON | Currently inert: no target/source condition consumes it, so OFF does not strip the RHI (`HEAD-220`) |
 | `ENABLE_NETWORKING` | ON | Omits `ENABLE_NETWORKING` and networking libraries from `SparkEngineLib`; standalone service targets are controlled separately by `ENABLE_SERVER_PROCESSES` |
 | `ENABLE_VULKAN` | ON | Disables Vulkan discovery and omits `SPARK_VULKAN_SUPPORT`; root CMake does not separately filter Vulkan source files |
 | `ENABLE_METAL` | auto-ON on APPLE | Smaller binary on macOS if only OpenGL is wanted |

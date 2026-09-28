@@ -157,7 +157,7 @@ endif()
 # ---------------------------------------------------------------------
 # 3) Custom build options
 # ---------------------------------------------------------------------
-option(ENABLE_GRAPHICS "Enable graphics engine" ON)
+# ENABLE_GRAPHICS was deleted (CI-120): nothing read it, so OFF never stripped the RHI.
 option(ENABLE_PROFILING "Enable profiling tools" ON)
 option(ENABLE_NETWORKING "Enable networking features (UDP sockets)" ON)
 option(ENABLE_VULKAN "Enable Vulkan graphics backend (experimental)" ON)

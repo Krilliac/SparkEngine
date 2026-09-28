@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "profile": "stable-v1",
   "state": "blocked",
-  "errorCount": 4,
+  "errorCount": 3,
   "warningCount": 4,
   "findings": [
     {
@@ -10,12 +10,6 @@
       "severity": "warning",
       "message": "CMake option 'SPARK_ENABLE_FUZZ_TARGETS' is not representable in SparkBuild",
       "detail": "The supported configurator cannot reproduce the root configuration surface. Explicitly classified outside: Linux/Clang libFuzzer targets are release-validation tooling and are outside the Windows stable-v1 product profile."
-    },
-    {
-      "category": "declared-option-unread",
-      "severity": "error",
-      "message": "CMake option 'ENABLE_GRAPHICS' is declared but nothing reads it",
-      "detail": "Declared in CMakeLists.txt:160. No if(), ${}, generator expression, compile definition, forwarded -D or configure_file template consumes it, so setting it has no effect. Wire it in or delete the declaration."
     },
     {
       "category": "target-name-unresolved",

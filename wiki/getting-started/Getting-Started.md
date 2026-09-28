@@ -436,7 +436,6 @@ cmake -B build -DENABLE_EDITOR=OFF -DENABLE_NETWORKING=ON ...
 |------|---------|-------------|
 | `BUILD_TESTS` | ON | Build the unit test suite |
 | `ENABLE_EDITOR` | ON (Windows) | Include the ImGui editor |
-| `ENABLE_GRAPHICS` | ON | Declared but currently inert; OFF does not remove graphics/RHI (`HEAD-220`) |
 | `ENABLE_NETWORKING` | ON | Controls networking definitions/libraries; server-process targets have a separate option |
 | `ENABLE_PROFILING` | ON | Controls the `PROFILING_ENABLED` compile definition |
 | `ENABLE_VULKAN` | ON | Controls Vulkan discovery and its support definition; source-glob breadth still needs verification |

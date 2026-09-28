@@ -406,15 +406,6 @@
       "definitionScope": []
     },
     {
-      "name": "ENABLE_GRAPHICS",
-      "description": "Enable graphics engine",
-      "default": "ON",
-      "file": "CMakeLists.txt",
-      "line": 160,
-      "conditionFrames": [],
-      "definitionScope": []
-    },
-    {
       "name": "ENABLE_HYBRID_RT",
       "description": "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)",
       "default": "ON",
@@ -757,18 +748,6 @@
     {
       "name": "ENABLE_EDITOR",
       "description": "Enable editor features",
-      "default": true,
-      "status": "active",
-      "declarationCount": 1,
-      "activeDeclarationCount": 1,
-      "indeterminateDeclarationCount": 0,
-      "declaredIn": [
-        "CMakeLists.txt"
-      ]
-    },
-    {
-      "name": "ENABLE_GRAPHICS",
-      "description": "Enable graphics engine",
       "default": true,
       "status": "active",
       "declarationCount": 1,
@@ -1146,15 +1125,6 @@
       "default": "ON",
       "file": "CMakeLists.txt",
       "line": 189,
-      "conditionFrames": [],
-      "definitionScope": []
-    },
-    {
-      "name": "ENABLE_GRAPHICS",
-      "description": "Enable graphics engine",
-      "default": "ON",
-      "file": "CMakeLists.txt",
-      "line": 160,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1732,7 +1702,6 @@
           "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
           "ENABLE_AUTOMATION_HOST": "OFF",
           "ENABLE_DXR": "OFF",
-          "ENABLE_GRAPHICS": "OFF",
           "ENABLE_HYBRID_RT": "OFF",
           "ENABLE_INSTALLER": "OFF",
           "ENABLE_LAUNCHER": "OFF",
@@ -6211,7 +6180,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 224
+      "line": 222
     },
     {
       "name": "BUILD_TESTS",
@@ -6220,7 +6189,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 223
+      "line": 221
     },
     {
       "name": "ENABLE_ANGELSCRIPT",
@@ -6229,7 +6198,7 @@
       "default": true,
       "category": "Scripting",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 241
+      "line": 239
     },
     {
       "name": "ENABLE_ASSET_PIPELINE_TOOLS",
@@ -6238,7 +6207,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 232
+      "line": 230
     },
     {
       "name": "ENABLE_AUTOMATION_HOST",
@@ -6247,7 +6216,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 234
+      "line": 232
     },
     {
       "name": "ENABLE_CONSOLE_IN_SHIPPING",
@@ -6256,7 +6225,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 252
+      "line": 250
     },
     {
       "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
@@ -6265,7 +6234,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 254
+      "line": 252
     },
     {
       "name": "ENABLE_DXR",
@@ -6274,7 +6243,7 @@
       "default": true,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 207
+      "line": 205
     },
     {
       "name": "ENABLE_EDITOR",
@@ -6283,16 +6252,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 218
-    },
-    {
-      "name": "ENABLE_GRAPHICS",
-      "displayName": "Graphics Engine",
-      "description": "Build the graphics engine",
-      "default": true,
-      "category": "Core",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 187
+      "line": 216
     },
     {
       "name": "ENABLE_HYBRID_RT",
@@ -6301,7 +6261,7 @@
       "default": true,
       "category": "Rendering",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 210
+      "line": 208
     },
     {
       "name": "ENABLE_INSTALLER",
@@ -6310,7 +6270,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 231
+      "line": 229
     },
     {
       "name": "ENABLE_LAUNCHER",
@@ -6319,7 +6279,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 227
+      "line": 225
     },
     {
       "name": "ENABLE_LTO",
@@ -6328,7 +6288,7 @@
       "default": true,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 261
+      "line": 259
     },
     {
       "name": "ENABLE_METAL",
@@ -6337,7 +6297,7 @@
       "default": false,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 205
+      "line": 203
     },
     {
       "name": "ENABLE_MOBILE",
@@ -6346,7 +6306,7 @@
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 276
+      "line": 274
     },
     {
       "name": "ENABLE_NETWORKING",
@@ -6355,7 +6315,7 @@
       "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 269
+      "line": 267
     },
     {
       "name": "ENABLE_NEURAL_RENDERING",
@@ -6364,7 +6324,7 @@
       "default": true,
       "category": "Rendering",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 213
+      "line": 211
     },
     {
       "name": "ENABLE_OPENGL",
@@ -6373,7 +6333,7 @@
       "default": true,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 201
+      "line": 199
     },
     {
       "name": "ENABLE_PROFILING",
@@ -6382,7 +6342,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 220
+      "line": 218
     },
     {
       "name": "ENABLE_RECAST",
@@ -6391,7 +6351,7 @@
       "default": true,
       "category": "Core",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 188
+      "line": 186
     },
     {
       "name": "ENABLE_SDL2",
@@ -6400,7 +6360,7 @@
       "default": false,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 203
+      "line": 201
     },
     {
       "name": "ENABLE_SERVER_PROCESSES",
@@ -6409,7 +6369,7 @@
       "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 271
+      "line": 269
     },
     {
       "name": "ENABLE_SPARKBUILD",
@@ -6418,7 +6378,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 229
+      "line": 227
     },
     {
       "name": "ENABLE_VR",
@@ -6427,7 +6387,7 @@
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 274
+      "line": 272
     },
     {
       "name": "ENABLE_VULKAN",
@@ -6436,7 +6396,7 @@
       "default": true,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 199
+      "line": 197
     },
     {
       "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
@@ -6445,7 +6405,7 @@
       "default": false,
       "category": "Core",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 194
+      "line": 192
     },
     {
       "name": "SPARK_HEADLESS_SUPPORT",
@@ -6454,7 +6414,7 @@
       "default": true,
       "category": "Core",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 191
+      "line": 189
     },
     {
       "name": "SPARK_NATIVE_ARCH",
@@ -6463,7 +6423,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 246
+      "line": 244
     },
     {
       "name": "SPARK_REQUIRE_WINDOWS_INSTALLERS",
@@ -6472,7 +6432,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 264
+      "line": 262
     },
     {
       "name": "SPARK_STRICT_DEPS",
@@ -6481,7 +6441,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 249
+      "line": 247
     },
     {
       "name": "SPARK_SUPPRESS_THIRDPARTY_WARNINGS",
@@ -6490,7 +6450,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 236
+      "line": 234
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
@@ -6499,7 +6459,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 256
+      "line": 254
     }
   ],
   "workflow": {

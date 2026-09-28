@@ -111,29 +111,29 @@ TEST(SparkBuildConfig_LoadRejectsUnknownOptionTransactionally)
 {
     ConfigManager manager;
     const auto path =
-        WriteConfigFixture("unknown-option", "[Options]\nENABLE_GRAPHICS=OFF\nREMOVED_OR_UNKNOWN_OPTION=ON\n");
+        WriteConfigFixture("unknown-option", "[Options]\nENABLE_RECAST=OFF\nREMOVED_OR_UNKNOWN_OPTION=ON\n");
 
     EXPECT_FALSE(manager.Load(path.string()));
-    EXPECT_TRUE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    EXPECT_TRUE(OptionValue(manager, "ENABLE_RECAST"));
     std::filesystem::remove(path);
 }
 
 TEST(SparkBuildConfig_LoadRejectsInvalidOptionValue)
 {
     ConfigManager manager;
-    const auto path = WriteConfigFixture("invalid-value", "[Options]\nENABLE_GRAPHICS=perhaps\n");
+    const auto path = WriteConfigFixture("invalid-value", "[Options]\nENABLE_RECAST=perhaps\n");
 
     EXPECT_FALSE(manager.Load(path.string()));
-    EXPECT_TRUE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    EXPECT_TRUE(OptionValue(manager, "ENABLE_RECAST"));
     std::filesystem::remove(path);
 }
 
 TEST(SparkBuildConfig_LoadAcceptsKnownOptionValue)
 {
     ConfigManager manager;
-    const auto path = WriteConfigFixture("known-option", "[Options]\nENABLE_GRAPHICS=OFF\n");
+    const auto path = WriteConfigFixture("known-option", "[Options]\nENABLE_RECAST=OFF\n");
 
     EXPECT_TRUE(manager.Load(path.string()));
-    EXPECT_FALSE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    EXPECT_FALSE(OptionValue(manager, "ENABLE_RECAST"));
     std::filesystem::remove(path);
 }

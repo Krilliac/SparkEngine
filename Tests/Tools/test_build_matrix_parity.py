@@ -4131,17 +4131,15 @@ class UnreadOptionTests(unittest.TestCase):
     def test_names_outside_the_guarded_namespaces_are_not_checked(self) -> None:
         self.assertEqual(self.unread('option(MY_UNREAD_TOGGLE "Unread" ON)\n'), [])
 
-    def test_repository_reads_are_recorded_and_the_inert_option_is_reported(self) -> None:
+    def test_repository_reads_are_recorded_and_no_declared_option_is_unread(self) -> None:
         data = inventory.build_inventory()
         self.assertIn("ENABLE_LTO", data["cmakeOptionReads"])
         findings = check_parity.check_unread_options(
             data["allCmakeOptionDeclarations"], data["cmakeOptionReads"]
         )
-        # ENABLE_GRAPHICS is documented as inert (HEAD-220): declared, never consumed.
-        self.assertIn(
-            "CMake option 'ENABLE_GRAPHICS' is declared but nothing reads it",
-            [finding.message for finding in findings],
-        )
+        # The inert ENABLE_GRAPHICS was deleted; CI's pending-authority validator
+        # accepts no blocking finding besides the external codemodel authority.
+        self.assertEqual([finding.message for finding in findings], [])
 
     def test_inventory_without_read_record_is_rejected(self) -> None:
         data = copy.deepcopy(inventory.build_inventory())

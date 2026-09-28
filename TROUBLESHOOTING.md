@@ -194,7 +194,7 @@ git submodule update --init --recursive
 
 ### Linker errors on Linux
 
-Graphics features require stub implementations on Linux. If you see unresolved DirectX symbols, ensure `ENABLE_GRAPHICS=OFF` or that Platform.h stubs are in place.
+Graphics features require stub implementations on Linux. If you see unresolved DirectX symbols, ensure the Platform.h stubs are in place.
 
 ---
 

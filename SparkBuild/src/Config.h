@@ -23,8 +23,8 @@ namespace SparkBuild
 
     struct BuildOption
     {
-        std::string cmakeVar;    // e.g. "ENABLE_GRAPHICS"
-        std::string displayName; // e.g. "Graphics Engine"
+        std::string cmakeVar;    // e.g. "ENABLE_RECAST"
+        std::string displayName; // e.g. "Recast Navigation"
         std::string description; // Description text
         bool defaultValue;
         bool currentValue;

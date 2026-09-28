@@ -261,7 +261,6 @@ Key CMake options:
 
 | Option | Default | Description |
 |---|:---:|---|
-| `ENABLE_GRAPHICS` | ON | Declared option, but currently not consumed by target/source selection; setting it OFF does not strip the RHI |
 | `ENABLE_EDITOR` | ON | ImGui editor |
 | `ENABLE_NETWORKING` | ON | UDP multiplayer |
 | `ENABLE_VULKAN` | ON | Vulkan backend |
@@ -283,7 +282,7 @@ cmake --build build --config Release
 ./build/bin/SparkEngine -headless -game <module-path>
 ```
 
-`ENABLE_GRAPHICS=OFF` is currently inert. Compile-time graphics removal remains
+There is no compile-time graphics switch; graphics removal remains
 unproven; the headless entry points use runtime wiring and `HEAD-220` is open.
 
 ---

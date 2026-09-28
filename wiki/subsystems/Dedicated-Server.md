@@ -619,7 +619,7 @@ cmake --build build --config Release --target SparkServer
 
 `SparkServer` requires either `--manifest <path>` or `--module <game-library>`
 so that it can select the server game module explicitly.
-`ENABLE_GRAPHICS=OFF` is not used here because that option is currently inert;
+There is no compile-time graphics switch;
 `SparkServer` still links the full engine library and relies on runtime headless wiring.
 
 ## Thread Safety
