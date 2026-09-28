@@ -1404,7 +1404,7 @@
 | `ExactChild` | struct | SparkBuild | [ProcessRunnerTests.cpp:L30](../../SparkBuild/tests/ProcessRunnerTests.cpp#L30) |  |
 | `ExactMatchField` | struct | Tests | [TestModuleABIDiagnostics.cpp:L44](../../Tests/TestModuleABIDiagnostics.cpp#L44) |  |
 | `ExclusiveFileLock` | class | GameModules | [TFSavePaths.h:L51](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L51) |  |
-| `ExclusiveStagingFile` | class | SparkEngine | [SaveFileDurability.cpp:L59](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L59) |  |
+| `ExclusiveStagingFile` | class | SparkEngine | [SaveFileDurability.cpp:L59](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L59) |  |
 | `ExecScriptPlayer` | class | SparkEngine | [ExecScript.h:L58](../../SparkEngine/Source/Core/ExecScript.h#L58) | Plays an `-exec` script against the console from the main loop. |
 | `ExecutionSentinel` | class | Tests | [TestModuleVersion.cpp:L134](../../Tests/TestModuleVersion.cpp#L134) |  |
 | `ExhibitProp` | struct | GameModules | [GameplayShowcase.cpp:L594](../../GameModules/SparkGame/Source/Core/GameplayShowcase.cpp#L594) |  |
@@ -2004,12 +2004,12 @@
 | `info` | struct | SparkBuild | [PathSecurity.cpp:L285](../../SparkBuild/src/PathSecurity.cpp#L285) |  |
 | `info` | struct | SparkBuild | [PathSecurity.cpp:L308](../../SparkBuild/src/PathSecurity.cpp#L308) |  |
 | `info` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L627](../../SparkCrashReporter/src/CrashReporterApp.cpp#L627) |  |
-| `info` | struct | SparkEngine | [SaveFileDurability.cpp:L114](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L114) |  |
 | `info` | struct | SparkEngine | [CrashArtifactDirectory.h:L130](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L130) |  |
 | `info` | struct | SparkEngine | [CrashArtifactRetention.h:L168](../../SparkEngine/Source/Utils/CrashArtifactRetention.h#L168) |  |
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L182](../../SparkEngine/Source/Utils/CrashHandler.cpp#L182) |  |
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L344](../../SparkEngine/Source/Utils/CrashHandler.cpp#L344) |  |
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L409](../../SparkEngine/Source/Utils/CrashHandler.cpp#L409) |  |
+| `info` | struct | SparkEngine | [SaveFileDurability.cpp:L114](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L114) |  |
 | `info` | struct | SparkGateway | [GatewaySecurity.cpp:L310](../../SparkGateway/src/GatewaySecurity.cpp#L310) |  |
 | `info` | struct | SparkInstaller | [InstallerPreflight.cpp:L78](../../SparkInstaller/src/InstallerPreflight.cpp#L78) |  |
 | `info` | struct | Tests | [TestDocumentDurableWrite.cpp:L93](../../Tests/TestDocumentDurableWrite.cpp#L93) |  |

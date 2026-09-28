@@ -665,7 +665,7 @@
 | `RenderTargetFormat` | enum | SparkEngine | [RenderTarget.h:L33](../../SparkEngine/Source/Graphics/RenderTarget.h#L33) | Render target formats for different rendering passes |
 | `RenderTargetSlot` | enum | SparkEngine | [RHIBridge.h:L211](../../SparkEngine/Source/Graphics/RHI/RHIBridge.h#L211) |  |
 | `RenderTargetUsage` | enum | SparkEngine | [RenderTarget.h:L68](../../SparkEngine/Source/Graphics/RenderTarget.h#L68) | Render target usage flags |
-| `ReplaceOutcome` | enum | SparkEngine | [SaveFileDurability.h:L35](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.h#L35) | Outcome of ReplaceFileAtomically. The commit point is the rename itself. |
+| `ReplaceOutcome` | enum | SparkEngine | [SaveFileDurability.h:L35](../../SparkEngine/Source/Utils/SaveFileDurability.h#L35) | Outcome of ReplaceFileAtomically. The commit point is the rename itself. |
 | `ReputationTier` | enum | GameModules | [MMOEnums.h:L87](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L87) | Reputation standing tiers with a faction |
 | `Resolution` | enum | SparkEditor | [GameViewPanel.h:L115](../../SparkEditor/Source/Panels/GameViewPanel.h#L115) |  |
 | `ResourceState` | enum | SparkEngine | [GraphicsEnums.h:L65](../../SparkEngine/Source/Enums/GraphicsEnums.h#L65) | Resource states |

@@ -746,13 +746,13 @@
 | `NOMINMAX` | macro | SparkEngine | [GameImGuiLayer.h:L31](../../SparkEngine/Source/Core/GameImGuiLayer.h#L31) |  |
 | `NOMINMAX` | macro | SparkEngine | [ModSystem.cpp:L26](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp#L26) |  |
 | `NOMINMAX` | macro | SparkEngine | [AsyncDatabase.cpp:L25](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L25) |  |
-| `NOMINMAX` | macro | SparkEngine | [SaveFileDurability.cpp:L22](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L22) |  |
 | `NOMINMAX` | macro | SparkEngine | [ReflectedScenePersistence.cpp:L19](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L19) |  |
 | `NOMINMAX` | macro | SparkEngine | [SceneManager.cpp:L38](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L38) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashArtifactDirectory.h:L18](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L18) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashArtifactRetention.h:L38](../../SparkEngine/Source/Utils/CrashArtifactRetention.h#L38) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashHandlerSupport.h:L29](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L29) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashRedactionContext.h:L23](../../SparkEngine/Source/Utils/CrashRedactionContext.h#L23) |  |
+| `NOMINMAX` | macro | SparkEngine | [SaveFileDurability.cpp:L22](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L22) |  |
 | `NOMINMAX` | macro | SparkEngine | [SecureRandom.cpp:L17](../../SparkEngine/Source/Utils/SecureRandom.cpp#L17) |  |
 | `NOMINMAX` | macro | SparkEngine | [TelemetrySpool.cpp:L15](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L15) |  |
 | `NOMINMAX` | macro | SparkEngine | [TelemetrySpoolIO.cpp:L13](../../SparkEngine/Source/Utils/TelemetrySpoolIO.cpp#L13) |  |

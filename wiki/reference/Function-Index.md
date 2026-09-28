@@ -2043,7 +2043,7 @@
 | `backup` | function | Tests | [TestReflectedScene.cpp:L516](../../Tests/TestReflectedScene.cpp#L516) |  |
 | `BackupDigestPath` | function | GameModules | [TFDatabase.h:L278](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L278) |  |
 | `backupOutput` | function | Tests | [TestRegionMapDataSource.cpp:L156](../../Tests/TestRegionMapDataSource.cpp#L156) |  |
-| `BackupPathFor` | function | SparkEngine | [SaveFileDurability.cpp:L421](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L421) |  |
+| `BackupPathFor` | function | SparkEngine | [SaveFileDurability.cpp:L421](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L421) |  |
 | `bak` | function | SparkEditor | [DecorLayoutEditorIO.cpp:L411](../../SparkEditor/Source/Panels/DecorLayoutEditorIO.cpp#L411) |  |
 | `Bake` | function | SparkEngine | [LightmapBaker.h:L251](../../SparkEngine/Source/Graphics/LightmapBaker.h#L251) | Perform the lightmap bake |
 | `BakeAllProbes` | function | SparkEngine | [LightProbeSystem.h:L117](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L117) | Bake all probes |
@@ -3296,9 +3296,9 @@
 | `ChildCount` | function | Tests | [TestAIStress.cpp:L86](../../Tests/TestAIStress.cpp#L86) |  |
 | `ChildCount` | function | Tests | [TestAIStress.cpp:L108](../../Tests/TestAIStress.cpp#L108) |  |
 | `ChildDirectories` | function | SparkEditor | [AssetBrowserPanel.cpp:L91](../../SparkEditor/Source/Panels/AssetBrowserPanel.cpp#L91) |  |
-| `chunk` | function | SparkEngine | [SaveFileDurability.cpp:L392](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L392) |  |
 | `chunk` | function | SparkEngine | [ReflectedScenePersistence.cpp:L68](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L68) |  |
 | `chunk` | function | SparkEngine | [GoldenImagePng.h:L215](../../SparkEngine/Source/Utils/GoldenImagePng.h#L215) |  |
+| `chunk` | function | SparkEngine | [SaveFileDurability.cpp:L392](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L392) |  |
 | `CinematicSequencerPanel::Initialize` | method | SparkEditor | [CinematicSequencerPanel.cpp:L22](../../SparkEditor/Source/Panels/CinematicSequencerPanel.cpp#L22) |  |
 | `CinematicSequencerPanel::Render` | method | SparkEditor | [CinematicSequencerPanel.cpp:L48](../../SparkEditor/Source/Panels/CinematicSequencerPanel.cpp#L48) |  |
 | `CinematicSequencerPanel::RenderPropertyEditor` | method | SparkEditor | [CinematicSequencerPanel.cpp:L332](../../SparkEditor/Source/Panels/CinematicSequencerPanel.cpp#L332) |  |
@@ -3873,7 +3873,7 @@
 | `CloseModuleLibrary` | function | SparkEngine | [ModuleManager.cpp:L219](../../SparkEngine/Source/Core/ModuleManager.cpp#L219) |  |
 | `CloseNonStandardDescriptors` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L373](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L373) |  |
 | `CloseProject` | function | SparkEditor | [ProjectManager.h:L154](../../SparkEditor/Source/Core/ProjectManager.h#L154) | Persist a successfully opened/saved scene as project-relative state. |
-| `CloseQuietly` | function | SparkEngine | [SaveFileDurability.cpp:L211](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L211) |  |
+| `CloseQuietly` | function | SparkEngine | [SaveFileDurability.cpp:L211](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L211) |  |
 | `closer` | function | Tests | [Test_persistence_AsyncDatabasePool.cpp:L181](../../Tests/harden/Test_persistence_AsyncDatabasePool.cpp#L181) |  |
 | `CloseRepository` | function | SparkEditor | [VersionControlSystem.h:L114](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L114) | Close current repository |
 | `CloseSocket` | function | SparkEditor | [CollaborativeEditSession.cpp:L76](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L76) |  |
@@ -5323,7 +5323,7 @@
 | `CopyDirectoryContents` | function | SparkEditor | [BuildPipeline.cpp:L379](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L379) |  |
 | `CopyField` | function | GameModules | [TFOutfitSystemInternal.h:L40](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemInternal.h#L40) |  |
 | `CopyField` | function | GameModules | [TFScramWire.cpp:L38](../../GameModules/SparkGameMMOFPS/Source/Net/TFScramWire.cpp#L38) |  |
-| `CopyFileAtomically` | function | SparkEngine | [SaveFileDurability.cpp:L374](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L374) |  |
+| `CopyFileAtomically` | function | SparkEngine | [SaveFileDurability.cpp:L374](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L374) |  |
 | `CopyFixtureImage` | function | Tests | [TestModuleLifecycleReal.cpp:L132](../../Tests/TestModuleLifecycleReal.cpp#L132) | Copy the compatible ABI fixture (and its mandatory sidecar) into @p destination. |
 | `CopyFixtureWithSidecarField` | function | Tests | [TestSDK240ModuleDiagnostics.cpp:L67](../../Tests/TestSDK240ModuleDiagnostics.cpp#L67) |  |
 | `CopyGenerationFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L471](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L471) |  |
@@ -5918,7 +5918,7 @@
 | `CreateSphere` | function | SparkEngine | [Mesh.h:L117](../../SparkEngine/Source/Graphics/Mesh.h#L117) |  |
 | `CreateSphereShape` | function | SparkEngine | [PhysicsSystem.h:L799](../../SparkEngine/Source/Physics/PhysicsSystem.h#L799) |  |
 | `CreateSphereTrigger` | function | SparkEngine | [ProximityTriggerSystem.h:L115](../../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h#L115) | Create a sphere trigger volume. |
-| `CreateStaging` | function | SparkEngine | [SaveFileDurability.cpp:L236](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L236) |  |
+| `CreateStaging` | function | SparkEngine | [SaveFileDurability.cpp:L236](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L236) |  |
 | `CreateStagingDirectory` | function | SparkBuild | [ArchiveExtraction.cpp:L416](../../SparkBuild/src/ArchiveExtraction.cpp#L416) |  |
 | `CreateStructuredBuffer` | function | SparkEngine | [GPUDrivenRenderer.h:L167](../../SparkEngine/Source/Graphics/GPUDrivenRenderer.h#L167) | Create structured buffer + UAV/SRV pair |
 | `CreateStructuredBuffer` | function | SparkEngine | [GPUParticleSystemWindows.cpp:L57](../../SparkEngine/Source/Graphics/GPUParticleSystemWindows.cpp#L57) |  |
@@ -10097,7 +10097,7 @@
 | `FlushAll` | function | SparkEngine | [DeferredDeletion.h:L80](../../SparkEngine/Source/Utils/DeferredDeletion.h#L80) | Discard all pending items without processing. |
 | `FlushAll` | function | SparkEngine | [Logger.h:L593](../../SparkEngine/Source/Utils/Logger.h#L593) | Flush all sinks immediately (blocks until complete) |
 | `FlushAll` | function | Tests | [TestDeferredQueue.cpp:L23](../../Tests/TestDeferredQueue.cpp#L23) |  |
-| `FlushAndClose` | function | SparkEngine | [SaveFileDurability.cpp:L172](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L172) |  |
+| `FlushAndClose` | function | SparkEngine | [SaveFileDurability.cpp:L172](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L172) |  |
 | `FlushBarriers` | function | SparkEngine | [D3D12Types.h:L615](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L615) | Flushes any pending resource barriers recorded via |
 | `FlushBindings` | function | SparkEngine | [VulkanDevice.h:L392](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L392) |  |
 | `FlushDirty` | function | SparkEngine | [EntityReplicator.h:L161](../../SparkEngine/Source/Engine/Networking/EntityReplicator.h#L161) | Clear dirty bits for all registered entities (call after network send) |
@@ -18079,8 +18079,8 @@
 | `input` | function | SparkEditor | [RegionMapDataSource.cpp:L46](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L46) |  |
 | `input` | function | SparkEditor | [PrefabAsset.cpp:L67](../../SparkEditor/Source/Prefabs/PrefabAsset.cpp#L67) |  |
 | `input` | function | SparkEngine | [ExecScript.cpp:L136](../../SparkEngine/Source/Core/ExecScript.cpp#L136) |  |
-| `input` | function | SparkEngine | [SaveFileDurability.cpp:L380](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L380) |  |
 | `input` | function | SparkEngine | [ReflectedScenePersistence.cpp:L58](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L58) |  |
+| `input` | function | SparkEngine | [SaveFileDurability.cpp:L380](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L380) |  |
 | `input` | function | SparkGateway | [GatewayAreaControl.cpp:L1199](../../SparkGateway/src/GatewayAreaControl.cpp#L1199) |  |
 | `input` | function | SparkGateway | [GatewayAreaControl.cpp:L1319](../../SparkGateway/src/GatewayAreaControl.cpp#L1319) |  |
 | `input` | function | SparkGateway | [GatewayAreaControl.cpp:L1346](../../SparkGateway/src/GatewayAreaControl.cpp#L1346) |  |
@@ -19730,10 +19730,10 @@
 | `LastLines` | function | SparkEditor | [BuiltinWorkflows.cpp:L20](../../SparkEditor/Source/Workflow/BuiltinWorkflows.cpp#L20) |  |
 | `LastOperationSucceeded` | function | SparkEditor | [AssetBrowserPanel.h:L103](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L103) | Wire live basic-path cache invalidation after an import. |
 | `LastOpFeedback` | function | GameModules | [TFSocialSystem.h:L104](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L104) |  |
-| `LastPosixError` | function | SparkEngine | [SaveFileDurability.cpp:L48](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L48) |  |
+| `LastPosixError` | function | SparkEngine | [SaveFileDurability.cpp:L48](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L48) |  |
 | `LastSentInput` | function | Tests | [TestFPSMultiplayer.cpp:L74](../../Tests/TestFPSMultiplayer.cpp#L74) |  |
 | `LastStatus` | function | GameModules | [TFDatabase.h:L207](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L207) |  |
-| `LastWindowsError` | function | SparkEngine | [SaveFileDurability.cpp:L43](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L43) |  |
+| `LastWindowsError` | function | SparkEngine | [SaveFileDurability.cpp:L43](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L43) |  |
 | `LatchFrameEdges` | function | SparkEngine | [InputManager.h:L518](../../SparkEngine/Source/Input/InputManager.h#L518) | Latch this frame's key/button snapshot and shift the old one to "previous" |
 | `Launch` | function | SparkEngine | [Process.h:L97](../../SparkEngine/Source/Utils/Process.h#L97) |  |
 | `LaunchClient` | function | SparkEditor | [PlayControlPanel.h:L86](../../SparkEditor/Source/Panels/PlayControlPanel.h#L86) |  |
@@ -27542,17 +27542,17 @@
 | `publish` | function | SparkEngine | [GamePackager.cpp:L234](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L234) |  |
 | `publish` | function | SparkEngine | [GamePackager.cpp:L287](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L287) |  |
 | `publish` | function | SparkEngine | [GamePackager.cpp:L344](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L344) |  |
-| `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L285](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L285) |  |
-| `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L418](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L418) |  |
-| `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L454](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L454) |  |
-| `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L489](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L489) |  |
 | `Publish` | function | SparkEngine | [EntityEventBus.h:L162](../../SparkEngine/Source/Utils/EntityEventBus.h#L162) | Publish an event to a specific entity. |
 | `Publish` | function | SparkEngine | [EventBus.h:L206](../../SparkEngine/Source/Utils/EventBus.h#L206) | Publish an event, invoking all registered handlers synchronously. |
+| `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L285](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L285) |  |
+| `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L418](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L418) |  |
+| `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L454](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L454) |  |
+| `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L489](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L489) |  |
 | `Publish` | function | Tests | [TestCrossSystemIntegration.cpp:L140](../../Tests/TestCrossSystemIntegration.cpp#L140) |  |
 | `Publish` | function | Tests | [TestEventSystem.cpp:L45](../../Tests/TestEventSystem.cpp#L45) |  |
 | `PublishCrashManifest` | function | SparkEngine | [CrashHandler.cpp:L593](../../SparkEngine/Source/Utils/CrashHandler.cpp#L593) |  |
 | `PublishCrashManifest` | function | SparkEngine | [CrashHandler.cpp:L731](../../SparkEngine/Source/Utils/CrashHandler.cpp#L731) |  |
-| `PublishFileAtomically` | function | SparkEngine | [SaveFileDurability.cpp:L476](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L476) |  |
+| `PublishFileAtomically` | function | SparkEngine | [SaveFileDurability.cpp:L476](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L476) |  |
 | `PublishGeneration` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L544](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L544) |  |
 | `PublishHealth` | function | SparkGateway | [GatewayApplication.h:L98](../../SparkGateway/src/GatewayApplication.h#L98) |  |
 | `PublishHealth` | function | SparkServer | [ServerApplication.h:L95](../../SparkServer/src/ServerApplication.h#L95) |  |
@@ -29495,7 +29495,7 @@
 | `RemovePoint` | function | SparkEngine | [SplinePath.h:L72](../../SparkEngine/Source/Utils/SplinePath.h#L72) | Remove the control point at the given index. |
 | `RemovePrefab` | function | SparkEngine | [RuntimePrefab.h:L350](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L350) | Remove a prefab by ID. |
 | `RemoveProbe` | function | SparkEngine | [LightProbeSystem.h:L83](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L83) | Remove a probe by ID |
-| `RemoveQuietly` | function | SparkEngine | [SaveFileDurability.cpp:L278](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L278) |  |
+| `RemoveQuietly` | function | SparkEngine | [SaveFileDurability.cpp:L278](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L278) |  |
 | `RemoveRecentProject` | function | SparkEditor | [ProjectManager.h:L181](../../SparkEditor/Source/Core/ProjectManager.h#L181) |  |
 | `RemoveRetiredCrashTransportKeys` | function | SparkEngine | [EngineSettings.cpp:L694](../../SparkEngine/Source/Core/EngineSettings.cpp#L694) |  |
 | `RemoveReverbZone` | function | SparkEngine | [AudioMixer.h:L292](../../SparkEngine/Source/Audio/AudioMixer.h#L292) | Remove a reverb zone by name. |
@@ -30458,9 +30458,9 @@
 | `Replaced` | function | Tests | [TestMOD340PlatformerProgressReal.cpp:L193](../../Tests/TestMOD340PlatformerProgressReal.cpp#L193) |  |
 | `ReplaceFileAtomically` | function | SparkEditor | [BasicMaterialEditorPanel.cpp:L71](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L71) |  |
 | `ReplaceFileAtomically` | function | SparkEditor | [JSONSceneSerializer.cpp:L158](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L158) |  |
-| `ReplaceFileAtomically` | function | SparkEngine | [SaveFileDurability.cpp:L327](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L327) |  |
 | `ReplaceFileAtomically` | function | SparkEngine | [ReflectedScenePersistence.cpp:L140](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L140) |  |
 | `ReplaceFileAtomically` | function | SparkEngine | [SceneManager.cpp:L160](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L160) |  |
+| `ReplaceFileAtomically` | function | SparkEngine | [SaveFileDurability.cpp:L327](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L327) |  |
 | `ReplaceFirstAscii` | function | Tests | [Test_persistence_SaveSystem.cpp:L149](../../Tests/harden/Test_persistence_SaveSystem.cpp#L149) |  |
 | `ReplaceLengthPrefixedString` | function | Tests | [Test_persistence_SaveSystem.cpp:L160](../../Tests/harden/Test_persistence_SaveSystem.cpp#L160) |  |
 | `replacements` | function | SparkEngine | [AsyncDatabase.cpp:L401](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L401) |  |
@@ -37034,8 +37034,8 @@
 | `std::erase_if` | method | SparkEngine | [ContainerUtils.h:L108](../../SparkEngine/Source/Utils/ContainerUtils.h#L108) |  |
 | `std::erase_if` | method | SparkEngine | [InvalidStateDetector.cpp:L161](../../SparkEngine/Source/Utils/InvalidStateDetector.cpp#L161) |  |
 | `std::erase_if` | method | Tests | [TestContainerUtils.cpp:L51](../../Tests/TestContainerUtils.cpp#L51) |  |
-| `std::error_code` | method | SparkEngine | [SaveFileDurability.cpp:L45](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L45) |  |
-| `std::error_code` | method | SparkEngine | [SaveFileDurability.cpp:L50](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L50) |  |
+| `std::error_code` | method | SparkEngine | [SaveFileDurability.cpp:L45](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L45) |  |
+| `std::error_code` | method | SparkEngine | [SaveFileDurability.cpp:L50](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L50) |  |
 | `std::exchange` | method | SparkEngine | [DynamicPluginHost.cpp:L295](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L295) |  |
 | `std::exp` | method | SparkEngine | [FogSystem.h:L151](../../SparkEngine/Source/Graphics/FogSystem.h#L151) |  |
 | `std::exp` | method | SparkEngine | [FogSystem.h:L181](../../SparkEngine/Source/Graphics/FogSystem.h#L181) |  |
@@ -41169,7 +41169,7 @@
 | `TryComputeLayout` | function | GameModules | [TFRegionDecor.h:L174](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h#L174) |  |
 | `TryConfigureActiveSpool_GameThread` | function | SparkEngine | [Telemetry.h:L1127](../../SparkEngine/Source/Utils/Telemetry.h#L1127) |  |
 | `TryConnect` | function | SparkEngine | [DaemonConnection.h:L58](../../SparkEngine/Source/Utils/DaemonConnection.h#L58) |  |
-| `TryCreate` | function | SparkEngine | [SaveFileDurability.cpp:L68](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L68) |  |
+| `TryCreate` | function | SparkEngine | [SaveFileDurability.cpp:L68](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L68) |  |
 | `TryCreateD3D11Device` | function | Tests | [TestD3D11DeviceContractsReal.cpp:L121](../../Tests/TestD3D11DeviceContractsReal.cpp#L121) |  |
 | `TryCreateD3D11Device` | function | Tests | [TestRHI210D3D11GoldenReal.cpp:L71](../../Tests/TestRHI210D3D11GoldenReal.cpp#L71) |  |
 | `TryCreateD3D12Device` | function | Tests | [TestSEC2RenderingHardeningReal.cpp:L297](../../Tests/TestSEC2RenderingHardeningReal.cpp#L297) |  |
@@ -41540,7 +41540,7 @@
 | `UniqueSibling` | function | SparkInstaller | [GitBootstrap.cpp:L141](../../SparkInstaller/src/GitBootstrap.cpp#L141) |  |
 | `UniqueSocketPath` | function | Tests | [TestDaemonFoundation.cpp:L39](../../Tests/TestDaemonFoundation.cpp#L39) |  |
 | `UniqueSplashTestDirectory` | function | Tests | [TestStartupSplash.cpp:L16](../../Tests/TestStartupSplash.cpp#L16) |  |
-| `UniqueStagingPath` | function | SparkEngine | [SaveFileDurability.cpp:L461](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L461) |  |
+| `UniqueStagingPath` | function | SparkEngine | [SaveFileDurability.cpp:L461](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L461) |  |
 | `UniqueTempPath` | function | Tests | [TestExecScript.cpp:L45](../../Tests/TestExecScript.cpp#L45) |  |
 | `UniqueTestRoot` | function | Tests | [TestRuntimePackage.cpp:L29](../../Tests/TestRuntimePackage.cpp#L29) |  |
 | `UniqueTmpPath` | function | Tests | [TestFileUtilsReal.cpp:L14](../../Tests/TestFileUtilsReal.cpp#L14) |  |
@@ -42884,7 +42884,7 @@
 | `VerifyAllowedResponseCannotCrossEpoch` | function | Tests | [TestRemoteDebugSystem.cpp:L555](../../Tests/TestRemoteDebugSystem.cpp#L555) |  |
 | `VerifyBranchExecuted` | function | SparkEngine | [MemoryIntegrity.h:L192](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L192) |  |
 | `VerifyBranchExecuted` | function | SparkEngine | [MemoryIntegrity.h:L195](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L195) |  |
-| `VerifyFreshRegularFile` | function | SparkEngine | [SaveFileDurability.cpp:L98](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L98) |  |
+| `VerifyFreshRegularFile` | function | SparkEngine | [SaveFileDurability.cpp:L98](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L98) |  |
 | `VerifyGatewayMac` | function | SparkGateway | [GatewaySecurity.cpp:L395](../../SparkGateway/src/GatewaySecurity.cpp#L395) |  |
 | `VerifyPassword` | function | GameModules | [TFAccountSystem.h:L167](../../GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.h#L167) |  |
 | `VerifySha256` | function | SparkBuild | [DownloadSecurity.cpp:L185](../../SparkBuild/src/DownloadSecurity.cpp#L185) |  |
@@ -43753,7 +43753,6 @@
 | `Write` | function | SparkEditor | [SceneComponentCodec.h:L43](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.h#L43) |  |
 | `Write` | function | SparkEditor | [SceneComponentCodec.h:L47](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.h#L47) |  |
 | `Write` | function | SparkEditor | [SceneComponentCodec.h:L52](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.h#L52) |  |
-| `Write` | function | SparkEngine | [SaveFileDurability.cpp:L131](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L131) |  |
 | `Write` | function | SparkEngine | [NullRHIResources.h:L88](../../SparkEngine/Source/Graphics/RHI/NullRHIResources.h#L88) | CPU pointer used by NullRHIDevice::MapBuffer. |
 | `Write` | function | SparkEngine | [RenderGraphPass.h:L165](../../SparkEngine/Source/Graphics/RenderGraphPass.h#L165) | Declare that this pass writes to a resource. |
 | `Write` | function | SparkEngine | [ConsoleSink.h:L47](../../SparkEngine/Source/Utils/ConsoleSink.h#L47) | Construct a ConsoleSink |
@@ -43762,6 +43761,7 @@
 | `Write` | function | SparkEngine | [Logger.h:L326](../../SparkEngine/Source/Utils/Logger.h#L326) | Writes log messages to stderr (and OutputDebugStringA on Windows) |
 | `Write` | function | SparkEngine | [Logger.h:L348](../../SparkEngine/Source/Utils/Logger.h#L348) |  |
 | `Write` | function | SparkEngine | [Logger.h:L380](../../SparkEngine/Source/Utils/Logger.h#L380) |  |
+| `Write` | function | SparkEngine | [SaveFileDurability.cpp:L131](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L131) |  |
 | `Write` | function | SparkEngine | [Serializer.h:L135](../../SparkEngine/Source/Utils/Serializer.h#L135) |  |
 | `Write` | function | Tests | [TestAdvancedAssetPipeline.cpp:L41](../../Tests/TestAdvancedAssetPipeline.cpp#L41) |  |
 | `Write` | function | Tests | [TestCoverageScripting.cpp:L44](../../Tests/TestCoverageScripting.cpp#L44) |  |
@@ -43842,7 +43842,7 @@
 | `WriteFile` | function | Tests | [TestSEC4NarrowPathsReal.cpp:L77](../../Tests/TestSEC4NarrowPathsReal.cpp#L77) |  |
 | `WriteFile` | function | Tests | [TestTF120SharedSaveRoot.cpp:L58](../../Tests/TestTF120SharedSaveRoot.cpp#L58) |  |
 | `WriteFile` | function | Tests | [TestVersionControlSystemGitReal.cpp:L51](../../Tests/TestVersionControlSystemGitReal.cpp#L51) |  |
-| `WriteFileAtomically` | function | SparkEngine | [SaveFileDurability.cpp:L428](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L428) |  |
+| `WriteFileAtomically` | function | SparkEngine | [SaveFileDurability.cpp:L428](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L428) |  |
 | `WriteFloat` | function | GameModules | [MultiplayerSystem.h:L62](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L62) |  |
 | `WriteFloat` | function | SparkEditor | [CollaborativeEditSession.cpp:L125](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L125) |  |
 | `WriteFloat` | function | SparkEditor | [JSONSceneSerializer.cpp:L372](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L372) |  |
@@ -43965,7 +43965,7 @@
 | `WriteSkel` | function | Tests | [Test_ai-anim_animation.cpp:L36](../../Tests/harden/Test_ai-anim_animation.cpp#L36) |  |
 | `WriteSmokeResult` | function | SparkEditor | [main.cpp:L97](../../SparkEditor/Source/main.cpp#L97) |  |
 | `WriteSnav` | function | Tests | [Test_ai-anim_navmesh.cpp:L37](../../Tests/harden/Test_ai-anim_navmesh.cpp#L37) |  |
-| `WriteStagingFile` | function | SparkEngine | [SaveFileDurability.cpp:L307](../../SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp#L307) |  |
+| `WriteStagingFile` | function | SparkEngine | [SaveFileDurability.cpp:L307](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L307) |  |
 | `WriteStderr` | function | SparkEngine | [CrashHandler.cpp:L1755](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1755) |  |
 | `WriteStdin` | function | SparkEngine | [Process.h:L142](../../SparkEngine/Source/Utils/Process.h#L142) |  |
 | `WriteStdinFor` | function | SparkEngine | [Process.h:L156](../../SparkEngine/Source/Utils/Process.h#L156) |  |

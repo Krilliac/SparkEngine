@@ -44,8 +44,8 @@ Graphics contains 123753 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 123753 | 36.5% |
-| Engine (all subsystems) | 97838 | 28.9% |
-| Utils | 47708 | 14.1% |
+| Engine (all subsystems) | 97182 | 28.7% |
+| Utils | 48364 | 14.2% |
 | Core | 32814 | 9.7% |
 | Physics | 11077 | 3.2% |
 | Audio | 6992 | 2.0% |
@@ -65,7 +65,7 @@ Graphics contains 123753 lines, or 36% of `SparkEngine/Source`. This is a source
 | Gameplay | 7925 |
 | Scripting | 7784 |
 | Animation | 6850 |
-| SaveSystem | 4743 |
+| SaveSystem | 4087 |
 | UI | 2522 |
 | Streaming | 2236 |
 | Modding | 1860 |
