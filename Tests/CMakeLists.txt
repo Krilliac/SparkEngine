@@ -1148,6 +1148,7 @@ target_sources(SparkTests PRIVATE
     TestSEC2RenderingHardeningReal.cpp
     TestRHI225D3D12ValidationReal.cpp
     TestRHI225D3D12FallbackReal.cpp
+    TestRHI225D3D12ParityReal.cpp
     TestSEC4SoundEffectWav.cpp
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
@@ -2818,6 +2819,20 @@ if(WIN32)
             LABELS "d3d12"
             RUN_SERIAL TRUE
             TIMEOUT 120)
+
+        # RHI-225: the declared D3D11/D3D12 parity matrix (TestRHI225D3D12ParityReal.cpp,
+        # mirrored in wiki/graphics/D3D12-Backend.md). Each scene renders the same HLSL through
+        # both RHI devices; frames must agree (<= 0.5% of pixels beyond 2 per channel) and each
+        # must match a CPU expectation. Both devices must share an adapter (LUID, or both
+        # software); a missing D3D12 feature fails, nothing skips. Out of the main suite: every
+        # scene creates two GPU devices.
+        add_test(NAME D3D12_Parity COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(D3D12_Parity PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=D3D12_Parity_;SPARK_TEST_EXPECT_COUNT=12"
+            LABELS "d3d12;d3d12-parity"
+            RUN_SERIAL TRUE
+            TIMEOUT 300)
+        spark_exclude_from_main_suite(D3D12_Parity_)
     endif()
 endif()
 

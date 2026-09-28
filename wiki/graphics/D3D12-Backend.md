@@ -119,6 +119,64 @@ into the DEFAULT-heap buffer through the immediate list and waits, like
 was never copied, so static buffers read zeros. Both calls reuse the immediate
 list and must not run while it is recording.
 
+## D3D11/D3D12 Parity Matrix
+
+**Parity evidence (RHI-225).** CTest `D3D12_Parity` (Windows MSVC,
+`D3D12_Parity_*`, exact count 12, labels `d3d12;d3d12-parity`, out of the
+main suite) runs `Tests/TestRHI225D3D12ParityReal.cpp`. The matrix is declared
+at the RHI level, where D3D12 actually executes (`GraphicsEngine` renders
+through D3D11 directly). Each scene renders the same HLSL through
+`D3D11Device` and `D3D12Device` using only `IRHIDevice`/`IRHICommandList`
+(readback is the one backend-specific step), records two 64x64 frames (the
+second into a reset list) and checks the second:
+
+- **Cross-backend:** a pixel differs when any channel is more than 2 apart; at
+  most 0.5% of the pixels may differ. The test prints the maximum channel
+  distance and the differing count per scene.
+- **Analytic:** each backend's frame must match a CPU expectation of the scene
+  (don't-care only within one pixel of a triangle edge or 0.002 of the bloom
+  threshold, and under 10% of the frame), so two equally broken backends
+  cannot pass together. Every target must also pass
+  `GoldenImageTestRunner::FrameHasRenderedContent(frame, 0.95)`.
+- **Same adapter:** D3D11 takes the default adapter and D3D12 the
+  largest-VRAM hardware adapter (WARP without one). Both adapters are logged;
+  unless their LUIDs match or both are software adapters, the scene fails, so a
+  hybrid iGPU + dGPU host cannot compare two GPUs.
+
+These are cross-backend checks, not goldens: there are no baseline images and
+no owner-reviewed thresholds. A scene whose D3D12 feature is missing fails; no
+scene skips. The table below mirrors the test's scene table, and every test
+checks that the two list the same scenes in the same order.
+
+<!-- parity-matrix:begin -->
+| Scene | What it pins |
+|-------|--------------|
+| `SolidTriangle` | Position-only triangle, constant pixel shader |
+| `VertexColorInterpolation` | Per-vertex colour interpolated across a triangle (tolerance 2 against barycentrics) |
+| `ConstantBufferColor` | Pixel shader colour from `cbuffer` b0 via `SetConstantBuffer` |
+| `TexturedQuadPoint` | 4x4 texture from `UpdateTexture`, point/clamp sampler, every texel block exact |
+| `TexturedQuadLinear` | 2x2 texture, linear/clamp sampler (tolerance 3 against CPU bilinear) |
+| `DepthTestOrdering` | D32_FLOAT depth, `Less`: a far quad drawn second must not cover the near one |
+| `AlphaBlendOver` | `SrcAlpha`/`InvSrcAlpha` colour blend, `One`/`Zero` alpha blend over a cleared target |
+| `IndexedInstanced` | Static vertex, 16-bit index and per-instance buffers, `DrawIndexedInstanced` with a second vertex stream |
+| `ViewportScissor` | Right-half viewport intersected with a top-half scissor rect |
+| `MRTClearAndDraw` | Two render targets cleared to different colours and written by one draw |
+| `RenderToTextureThenSample` | Pass 1 renders a texture that pass 2 samples and inverts (render-target to shader-resource and back) |
+| `ShippedBloomExtract` | `Shaders/HLSL/BloomExtract.hlsl` (`PS_BloomExtract`) over a 64x64 RGBA32F HDR ramp, threshold in b1 |
+<!-- parity-matrix:end -->
+
+Local run (2026-09-28, RTX 5070 Ti, both devices on the same adapter): all 12
+scenes produced bit-identical D3D11 and D3D12 frames (maximum channel distance
+0) and met their CPU expectations. Mutation checks, each run against the lane
+and reverted: forcing the D3D12 sampler filter to point sampling fails
+`TexturedQuadLinear` (3,072 pixels beyond tolerance); making
+`SetConstantBuffer` a no-op fails `ConstantBufferColor` and
+`ShippedBloomExtract`; dropping the static-buffer upload copy fails
+`IndexedInstanced`. Hosted runners exercise WARP instead, which is not yet
+observed. Found on the way: `D3D11Device::CreateShader` passes `debugName` to
+`D3DCompile` as the source name and returns null without logging when it is
+empty, so the scenes set a debug name.
+
 Known differences from D3D11 that callers must handle:
 
 - D3D12 always scissor-tests (`rasterizer.scissorEnable` is ignored), so set a
@@ -289,7 +347,7 @@ Other tooling:
 
 ## Integration with RHI
 
-The D3D12 backend exposes resource, command-list, and capability-query paths through the [RHI abstraction layer](RHI-Abstraction-Layer.md) and `IRHIDevice`. That interface coverage is implementation evidence only: pass parity, synchronization, shader tooling, golden-scene, performance, and driver evidence remain incomplete.
+The D3D12 backend exposes resource, command-list, and capability-query paths through the [RHI abstraction layer](RHI-Abstraction-Layer.md) and `IRHIDevice`. The [parity matrix](#d3d11d3d12-parity-matrix) covers the declared RHI-level scene set against D3D11; engine render-graph passes, packaged scenes, performance, and multi-driver evidence remain incomplete.
 
 ## Threading Model
 
