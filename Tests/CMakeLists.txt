@@ -5591,6 +5591,9 @@ if(Python3_Interpreter_FOUND)
             set_tests_properties(runtime-bundle-validation PROPERTIES
                 LABELS "readiness;site-data;unit;node"
                 ENVIRONMENT "PYTHON=${Python3_EXECUTABLE}"
+                # verifyBundle.test.mjs runs generate.py in the source tree, which
+                # republishes docs/api through a docs/.api.staging-* directory.
+                RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
                 TIMEOUT 600)
         else()
             message(STATUS "runtime-bundle-validation not registered: Node.js 20+ was not found")
