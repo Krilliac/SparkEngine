@@ -87,6 +87,16 @@ structurally bound on Windows and awaits its first Linux Clang build and smoke r
   output. The seeds include a 4 GiB bytecode length claim in 16 bytes; the local-disk
   path in `ShaderDiskCache::Lookup` now applies the same 16 MiB cap to the cached file's
   length (`ShaderDiskCache_OversizedBlobIsAMiss`).
+- **`shader-service-protocol`** (`SparkFuzzShaderServiceProtocol`,
+  `FuzzShaderServiceProtocolSmoke`, `-runs=8`) covers the header-only daemon codecs in
+  `Utils/ShaderServiceProtocol.h`: input byte 0 selects `DecodeGetCacheEntryRequest`,
+  `DecodeGetCacheEntryResponse`, `DecodePutCacheEntryRequest` (the inventory entry
+  symbol) or `DecodeShaderCacheStats`. An accepted message must re-encode to exactly the
+  consumed payload prefix, a decoded blob may not outgrow its payload, the fixed-length
+  decoders must accept exactly when enough bytes are present (a 32-byte legacy stats
+  payload leaves `evictionCount` zero), and the two publish-on-success decoders must leave
+  a rejected output untouched. `asset-service-protocol` and `daemon-protocol-frame` stay
+  blocked until they get the same template.
 
 Two gates, deliberately separate:
 

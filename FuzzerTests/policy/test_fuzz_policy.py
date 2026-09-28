@@ -99,6 +99,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzSceneManifest",
     "SparkFuzzArchive",
     "SparkFuzzShaderBlob",
+    "SparkFuzzShaderServiceProtocol",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -1896,6 +1897,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::Graphics::DecodeCompiledShaderBlob",
                 "shader-daemon-blob",
                 7,
+            ),
+            "shader-service-protocol": (
+                "ShaderServiceProtocol",
+                "Spark::Daemon::DecodePutCacheEntryRequest",
+                "shader-service-protocol",
+                8,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

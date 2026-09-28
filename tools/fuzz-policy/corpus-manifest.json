@@ -156,6 +156,23 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "shader-service-protocol-corpus",
+      "parser_id": "shader-service-protocol",
+      "corpus_dir": "FuzzerTests/corpora/shader-service-protocol",
+      "last_verified": "2026-09-27",
+      "content_digest": "bae9d3107944b1431be8fb0adc179a8635e8f2bcaa67abac5be03c25f227b580",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

@@ -2455,10 +2455,16 @@
       "formats": [
         "shader-service-message"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzShaderServiceProtocol.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzShaderServiceProtocol",
+        "test_selector": "FuzzShaderServiceProtocolSmoke",
+        "corpus_id": "shader-service-protocol-corpus",
+        "entry_symbol": "Spark::Daemon::DecodePutCacheEntryRequest",
+        "binding_source": "FuzzerTests/FuzzShaderServiceProtocolProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeShaderServiceMessage"
       }
     },
     {

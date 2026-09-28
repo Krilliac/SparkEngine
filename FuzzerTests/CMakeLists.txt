@@ -406,3 +406,56 @@ set_tests_properties(FuzzShaderBlobSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# The shader daemon codecs are header-only (Utils/ShaderServiceProtocol.h over
+# Utils/Serializer.h), so the adapter compiles the whole production decoder.
+add_executable(SparkFuzzShaderServiceProtocol
+    FuzzShaderServiceProtocol.cpp
+    FuzzShaderServiceProtocolProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the decoders it compiles use libc++ and meet the
+# driver only at the C ABI in FuzzShaderServiceProtocolProduction.h.
+set_source_files_properties(
+    FuzzShaderServiceProtocolProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzShaderServiceProtocol PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzShaderServiceProtocol PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzShaderServiceProtocol PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzShaderServiceProtocol PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzShaderServiceProtocol PRIVATE Threads::Threads c++ c++abi)
+
+# The two *-length-overclaim seeds claim a 4 GiB / 2 GiB blob in a few bytes; a
+# decoder that resized before checking the bytes present would exceed the
+# -rss_limit_mb single-allocation cap and fail this test.
+add_test(
+    NAME FuzzShaderServiceProtocolSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzShaderServiceProtocol>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/shader-service-protocol"
+)
+set_tests_properties(FuzzShaderServiceProtocolSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
