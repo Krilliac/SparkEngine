@@ -2325,22 +2325,6 @@
       }
     },
     {
-      "id": "editor-visual-script-graph",
-      "description": "Visual-script graph loader that scrapes a hand-written JSON dialect with find/atoi offsets.",
-      "trust_boundary": "untrusted-file",
-      "source_files": [
-        "SparkEditor/Source/Panels/VisualScriptPanel.cpp"
-      ],
-      "formats": [
-        ".json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
-      }
-    },
-    {
       "id": "visual-script-graph",
       "description": "Engine .vscript visual-script graph decoder (VisualScriptGraphIO::Parse/LoadFile): fail-closed JSON graph reader whose result the visual script compiler turns into AngelScript.",
       "trust_boundary": "untrusted-file",
@@ -3065,6 +3049,17 @@
       "justification": "Drains child-process stdout and a size-capped health file into display strings; lines are truncated and shown verbatim, no fields are extracted.",
       "detected_by": [
         "getline-loop"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/VisualScriptPanel.cpp",
+      "classification": "delegating-call-site",
+      "justification": "VisualScriptPanel::LoadGraph hands the chosen .vscript path to VisualScriptGraphIO::LoadFile, which size-caps the file (kMaxFileBytes) and decodes it with VisualScriptGraphIO::Parse (the fuzzed visual-script-graph record); the panel only copies the decoded nodes, connections and variables into its UI state, and its remaining props.find calls are std::map lookups on that decoded graph. The panel decodes no file bytes itself (no atoi/strtol/stoi/substr on file text, no input stream); its one std::ofstream writes the compiled .as script.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "visual-script-graph"
       ]
     },
     {
