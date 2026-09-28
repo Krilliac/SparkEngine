@@ -13,6 +13,27 @@ from release_stages import (N_MINUS_ONE_PROVISIONER, candidate_readiness_errors,
 from common import criterion_digest, load_contract
 
 
+def criterion_for(item, prefix):
+    """Return the one acceptance criterion of ``item`` whose wording starts with ``prefix``."""
+    matches = [criterion for criterion in item["acceptanceCriteria"] if criterion.startswith(prefix)]
+    if len(matches) != 1:
+        raise LookupError(f"{item['id']}: {len(matches)} criteria start with {prefix!r}")
+    return matches[0]
+
+
+def status_for(item, prefix):
+    """Return the acceptanceStatus entry bound by digest to the criterion starting with ``prefix``.
+
+    Selecting by digest instead of position keeps a reordered or inserted criterion
+    from silently retargeting a case onto a different criterion.
+    """
+    digest = criterion_digest(criterion_for(item, prefix))
+    matches = [status for status in item["acceptanceStatus"] if status["criterionDigest"] == digest]
+    if len(matches) != 1:
+        raise LookupError(f"{item['id']}: {len(matches)} acceptanceStatus entries carry {digest}")
+    return matches[0]
+
+
 def candidate():
     return {
         "readiness": {
@@ -161,7 +182,7 @@ class ReleaseStageTests(unittest.TestCase):
     def test_predecessor_publication_evidence_naming_the_n_minus_one_provisioner_is_refused(self):
         contract = ledger_predecessor_candidate()
         items = {item["id"]: item for item in contract["workItems"]}
-        items["REL-193"]["acceptanceStatus"][0]["evidence"] = [N_MINUS_ONE_PROVISIONER]
+        status_for(items["REL-193"], "Artifacts are immutable and signed")["evidence"] = [N_MINUS_ONE_PROVISIONER]
         errors = predecessor_candidate_readiness_errors(contract)
         self.assertIn(f"REL-193.acceptanceStatus: predecessor evidence cites N-1 evidence {N_MINUS_ONE_PROVISIONER}",
                       errors)
@@ -169,8 +190,9 @@ class ReleaseStageTests(unittest.TestCase):
     def test_predecessor_evidence_reusing_an_n_minus_one_criterion_digest_is_refused(self):
         contract = ledger_predecessor_candidate()
         items = {item["id"]: item for item in contract["workItems"]}
-        digest = criterion_digest(items["INST-131"]["acceptanceCriteria"][1])
-        items["REL-191"]["acceptanceStatus"][2]["note"] = f"Upgrade and rollback passed ({digest})."
+        digest = criterion_digest(criterion_for(items["INST-131"], "Upgrade and rollback pass"))
+        status = status_for(items["REL-191"], "No N-1 upgrade or rollback result")
+        status["note"] = f"Upgrade and rollback passed ({digest})."
         errors = predecessor_candidate_readiness_errors(contract)
         self.assertIn(f"REL-191.acceptanceStatus: predecessor evidence cites N-1 evidence {digest}", errors)
 
@@ -178,9 +200,9 @@ class ReleaseStageTests(unittest.TestCase):
         contract = ledger_predecessor_candidate()
         items = {item["id"]: item for item in contract["workItems"]}
         # Installer_Interrupted is also INST-132's own bootstrap drill.
-        items["INST-132"]["acceptanceStatus"][0]["evidence"] = ["Installer_Interrupted"]
+        status_for(items["INST-132"], "Fresh predecessor installation")["evidence"] = ["Installer_Interrupted"]
         self.assertEqual(nminus1_evidence_errors(contract), [])
-        items["INST-132"]["acceptanceStatus"][1]["evidence"] = ["Installer_Rollback"]
+        status_for(items["INST-132"], "Repair and uninstall pass")["evidence"] = ["Installer_Rollback"]
         self.assertEqual(nminus1_evidence_errors(contract),
                          ["INST-132.acceptanceStatus: predecessor evidence cites N-1 evidence Installer_Rollback"])
 
@@ -193,10 +215,10 @@ class ReleaseStageTests(unittest.TestCase):
         baseline = stage["sourceCommitEvidence"]["baselineCommit"]
         stage["state"] = "published"
         items = {item["id"]: item for item in contract["workItems"]}
-        items["REL-192"]["acceptanceStatus"][0]["evidence"] = [f"ci:release/1@{baseline}"]
+        status_for(items["REL-192"], "Exact-SHA v1 rehearsal passes")["evidence"] = [f"ci:release/1@{baseline}"]
         self.assertEqual(predecessor_evidence_reuse_errors(contract),
                          ["REL-192.acceptanceStatus: cites a CI run at the predecessor baseline commit"])
-        items["REL-192"]["acceptanceStatus"][0]["evidence"] = ["ci:release/1@" + "f" * 40]
+        status_for(items["REL-192"], "Exact-SHA v1 rehearsal passes")["evidence"] = ["ci:release/1@" + "f" * 40]
         self.assertEqual(predecessor_evidence_reuse_errors(contract), [])
 
     def test_n_minus_one_citing_the_predecessor_rehearsal_or_bootstrap_mode_is_refused(self):
@@ -205,7 +227,7 @@ class ReleaseStageTests(unittest.TestCase):
                             ("Installer_Tamper", "Installer_Tamper")):
             contract = ledger_predecessor_candidate()
             items = {item["id"]: item for item in contract["workItems"]}
-            items["REL-192"]["acceptanceStatus"][2]["note"] = text
+            status_for(items["REL-192"], "The first predecessor path")["note"] = text
             self.assertIn(f"REL-192.acceptanceStatus: substituted v1 work cites predecessor evidence {cited}",
                           predecessor_evidence_reuse_errors(contract), text)
 
@@ -217,7 +239,7 @@ class ReleaseStageTests(unittest.TestCase):
         expected = "REL-192: N-1 work cannot be evidenced or done before a real predecessor is published"
         self.assertIn(expected, predecessor_evidence_reuse_errors(contract))
         items["REL-192"]["status"] = "in-progress"
-        items["REL-192"]["acceptanceStatus"][1]["state"] = "evidenced"
+        status_for(items["REL-192"], "Upgrade and rollback evidence")["state"] = "evidenced"
         self.assertIn(expected, predecessor_evidence_reuse_errors(contract))
         contract["readiness"]["predecessorRelease"]["state"] = "published"
         self.assertNotIn(expected, predecessor_evidence_reuse_errors(contract))
