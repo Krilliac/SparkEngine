@@ -8,20 +8,28 @@ Launches SparkEngine exactly as collect_headless_result.py does
 * Readiness -- the host flushes ``SPARK_MODULE_READY count=1`` to stdout once
   the game module is initialized, immediately before the 60 Hz loop starts.
   Its absence within ``--startup-timeout`` is a startup hang.
-* Heartbeat -- the main thread either sleeps or runs. Progress is either
-  its ``voluntary_ctxt_switches`` counter (``/proc/<pid>/task/<pid>/status``;
-  an on-budget tick ends in a sleep, so a live loop advances it about 60
-  times per second) or its CPU time (utime+stime in
-  ``/proc/<pid>/task/<pid>/stat``; a tick over the 16.7 ms budget skips the
-  sleep but still burns CPU). A main thread blocked on a lock advances
-  neither: no progress for ``--heartbeat-timeout`` seconds is a deadlock
-  hang. A thread that is running without ever sleeping looks the same from
-  outside whether it is a slow, over-budget loop or a livelock spin, so it is
+* Heartbeat -- the main thread either sleeps or runs. On Linux progress is
+  either its ``voluntary_ctxt_switches`` counter
+  (``/proc/<pid>/task/<pid>/status``; an on-budget tick ends in a sleep, so a
+  live loop advances it about 60 times per second) or its CPU time
+  (utime+stime in ``/proc/<pid>/task/<pid>/stat``; a tick over the 16.7 ms
+  budget skips the sleep but still burns CPU). On Windows it is
+  ``QueryThreadCycleTime`` of the process's earliest-created thread (found
+  through a Toolhelp32 snapshot and ``GetThreadTimes`` creation times): every
+  tick runs some cycles, even one that then sleeps, and unlike
+  ``GetThreadTimes`` the cycle counter has no 15.6 ms quantum. A main thread
+  blocked on a lock advances none of these: no progress for
+  ``--heartbeat-timeout`` seconds is a deadlock hang. A thread that is
+  running without ever sleeping looks the same from outside whether it is a
+  slow, over-budget loop or a livelock spin, so it is
   never called a hang early. Because the loop is bounded by frame count, a
   spin (or a loop so slow it cannot finish) is instead caught when the
   engine is still running ``1.5 * duration + --teardown-timeout`` seconds
   after module ready.
-* Memory -- ``VmRSS`` sampled every ``--sample-interval`` seconds. The leak
+* Memory -- ``VmRSS`` on Linux, and the process's private commit
+  (``PROCESS_MEMORY_COUNTERS_EX.PrivateUsage`` from ``K32GetProcessMemoryInfo``,
+  which the OS never trims the way it trims a working set) on Windows,
+  sampled every ``--sample-interval`` seconds. The leak
   slope is an ordinary least-squares fit of RSS against time over
   ``[ready + warmup, ready + duration]``. The loop runs at most 60 Hz, so it
   cannot finish before ``ready + duration``: the window never includes
@@ -50,8 +58,12 @@ cleanly without that proof (for example a one-hour soak that quit after 30
 seconds), writes no result: a truncated soak is not a measurement. ``--report`` writes the full local
 diagnostic record (samples, raw slope, heartbeat gaps) for any duration.
 
-The PERF-100 soak row of record is Windows NullRHI; results from this Linux
-harness are precursor evidence and carry no certification claim.
+The PERF-100 soak row of record is Windows NullRHI. No Windows soak metric row
+is defined yet, so ``--out`` is refused on Windows and a Windows run writes
+``--report`` only, as precursor data. Unbounded queue growth inside the host
+shows up here only as a rising memory slope; there is no separate queue check.
+Results from either host are precursor evidence and carry no certification
+claim.
 """
 
 from __future__ import annotations
@@ -99,6 +111,133 @@ _READY_RE = re.compile(r"^SPARK_MODULE_READY count=1\r?$", re.MULTILINE)
 _NULLRHI_RESOURCES_PREFIX = "SPARK_HEADLESS_NULLRHI_RESOURCES"
 _NULLRHI_RESOURCES_RE = re.compile(r"SPARK_HEADLESS_NULLRHI_RESOURCES live=(0|[1-9][0-9]{0,9})")
 REPORT_SCHEMA = "spark-nullrhi-soak-report/1"
+IS_WINDOWS = os.name == "nt"
+
+if IS_WINDOWS:
+    import ctypes
+    from ctypes import wintypes
+
+    _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    _PROCESS_VM_READ = 0x0010
+    _THREAD_QUERY_LIMITED_INFORMATION = 0x0800
+    _TH32CS_SNAPTHREAD = 0x00000004
+    _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+    class _ProcessMemoryCountersEx(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
+                    ("PrivateUsage", ctypes.c_size_t)]
+
+    class _ThreadEntry32(ctypes.Structure):
+        _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD), ("th32ThreadID", wintypes.DWORD),
+                    ("th32OwnerProcessID", wintypes.DWORD), ("tpBasePri", wintypes.LONG),
+                    ("tpDeltaPri", wintypes.LONG), ("dwFlags", wintypes.DWORD)]
+
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _kernel32.OpenProcess.restype = wintypes.HANDLE
+    _kernel32.OpenThread.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _kernel32.OpenThread.restype = wintypes.HANDLE
+    _kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    _kernel32.CloseHandle.restype = wintypes.BOOL
+    _kernel32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+    _kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    _kernel32.Thread32First.argtypes = (wintypes.HANDLE, ctypes.POINTER(_ThreadEntry32))
+    _kernel32.Thread32First.restype = wintypes.BOOL
+    _kernel32.Thread32Next.argtypes = (wintypes.HANDLE, ctypes.POINTER(_ThreadEntry32))
+    _kernel32.Thread32Next.restype = wintypes.BOOL
+    _kernel32.GetThreadTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(wintypes.FILETIME),) * 4
+    _kernel32.GetThreadTimes.restype = wintypes.BOOL
+    _kernel32.QueryThreadCycleTime.argtypes = (wintypes.HANDLE, ctypes.POINTER(ctypes.c_ulonglong))
+    _kernel32.QueryThreadCycleTime.restype = wintypes.BOOL
+    _kernel32.K32GetProcessMemoryInfo.argtypes = (wintypes.HANDLE, ctypes.POINTER(_ProcessMemoryCountersEx),
+                                                  wintypes.DWORD)
+    _kernel32.K32GetProcessMemoryInfo.restype = wintypes.BOOL
+
+    def _open_earliest_thread(pid: int) -> int | None:
+        """A query handle to the process's earliest-created thread (its main thread), or None."""
+        snapshot = _kernel32.CreateToolhelp32Snapshot(_TH32CS_SNAPTHREAD, 0)
+        if not snapshot or snapshot == _INVALID_HANDLE_VALUE:
+            return None
+        best: tuple[int, int] | None = None
+        try:
+            entry = _ThreadEntry32()
+            entry.dwSize = ctypes.sizeof(_ThreadEntry32)
+            more = _kernel32.Thread32First(snapshot, ctypes.byref(entry))
+            while more:
+                if entry.th32OwnerProcessID == pid:
+                    handle = _kernel32.OpenThread(_THREAD_QUERY_LIMITED_INFORMATION, False, entry.th32ThreadID)
+                    if handle:
+                        times = [wintypes.FILETIME() for _ in range(4)]
+                        created = None
+                        if _kernel32.GetThreadTimes(handle, *(ctypes.byref(value) for value in times)):
+                            created = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+                        if created is not None and (best is None or created < best[0]):
+                            if best is not None:
+                                _kernel32.CloseHandle(best[1])
+                            best = (created, handle)
+                        else:
+                            _kernel32.CloseHandle(handle)
+                more = _kernel32.Thread32Next(snapshot, ctypes.byref(entry))
+        finally:
+            _kernel32.CloseHandle(snapshot)
+        return None if best is None else best[1]
+
+
+class LinuxMainThreadSampler:
+    """VmRSS and the (voluntary switches, CPU ticks) heartbeat of the main thread from /proc."""
+
+    def __init__(self, pid: int) -> None:
+        self.pid = pid
+
+    def sample(self) -> tuple[int | None, tuple[int, ...] | None]:
+        return read_main_thread_status(self.pid)
+
+    def close(self) -> None:
+        pass
+
+
+class WindowsMainThreadSampler:
+    """Private commit and the cycle-count heartbeat of the earliest-created thread, through kernel32.
+
+    The main-thread handle is opened on the first sample after launch and held
+    until close(), so a recycled thread id can never be sampled in its place.
+    """
+
+    def __init__(self, pid: int) -> None:
+        self.pid = pid
+        self._process = _kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION | _PROCESS_VM_READ, False, pid)
+        self._thread: int | None = None
+
+    def sample(self) -> tuple[int | None, tuple[int, ...] | None]:
+        private_bytes: int | None = None
+        if self._process:
+            counters = _ProcessMemoryCountersEx()
+            counters.cb = ctypes.sizeof(_ProcessMemoryCountersEx)
+            if _kernel32.K32GetProcessMemoryInfo(self._process, ctypes.byref(counters), counters.cb):
+                private_bytes = int(counters.PrivateUsage)
+        if self._thread is None:
+            self._thread = _open_earliest_thread(self.pid)
+        heartbeat: tuple[int, ...] | None = None
+        if self._thread is not None:
+            cycles = ctypes.c_ulonglong()
+            if _kernel32.QueryThreadCycleTime(self._thread, ctypes.byref(cycles)):
+                heartbeat = (int(cycles.value),)
+        return private_bytes, heartbeat
+
+    def close(self) -> None:
+        for handle in (self._thread, self._process):
+            if handle:
+                _kernel32.CloseHandle(handle)
+        self._thread = None
+        self._process = None
+
+
+def make_sampler(pid: int) -> LinuxMainThreadSampler | WindowsMainThreadSampler:
+    return WindowsMainThreadSampler(pid) if IS_WINDOWS else LinuxMainThreadSampler(pid)
 
 
 @dataclass(frozen=True)
@@ -232,12 +371,14 @@ def _read_bounded(path: Path) -> str:
 
 def _kill(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
-        process.send_signal(signal.SIGKILL)
+        process.kill()  # SIGKILL on POSIX, TerminateProcess on Windows
         process.wait()
 
 
 def describe_exit_status(exit_status: int) -> str:
     """Name a Popen return code; real-time signals have no Signals member."""
+    if IS_WINDOWS and exit_status >= 0xC0000000:
+        return f"NTSTATUS 0x{exit_status:08X}"
     if exit_status >= 0:
         return f"status {exit_status}"
     try:
@@ -248,8 +389,9 @@ def describe_exit_status(exit_status: int) -> str:
 
 def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
     """Run one soak and return its outcome; failures are recorded, not raised."""
-    if not sys.platform.startswith("linux"):
-        raise CollectionError("the soak harness reads /proc and supports the Linux linux-nullrhi-ci row only")
+    if not (sys.platform.startswith("linux") or IS_WINDOWS):
+        raise CollectionError("the soak harness samples /proc (Linux) or kernel32 (Windows) and supports only "
+                              "those hosts")
     outcome = SoakOutcome(frames=config.frames)
     command = engine_command(engine, module, config.frames)
     poll_interval_s = min(0.05, config.sample_interval_s / 4)
@@ -261,10 +403,11 @@ def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
         with stdout_path.open("wb") as stdout_file, stderr_path.open("wb") as stderr_file:
             process = subprocess.Popen(command, cwd=engine.parent, stdin=subprocess.DEVNULL, stdout=stdout_file,
                                        stderr=stderr_file)
+        sampler = make_sampler(process.pid)
         try:
             launched_at = time.monotonic()
             ready_at: float | None = None
-            last_heartbeat: tuple[int, int] | None = None
+            last_heartbeat: tuple[int, ...] | None = None
             last_progress_at = launched_at
             next_sample_at = 0.0
             while process.poll() is None:
@@ -280,7 +423,7 @@ def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
                             f"hang: no SPARK_MODULE_READY within {config.startup_timeout_s:g}s of launch")
                         break
                 else:
-                    rss_bytes, heartbeat = read_main_thread_status(process.pid)
+                    rss_bytes, heartbeat = sampler.sample()
                     if heartbeat is not None and heartbeat != last_heartbeat:
                         outcome.max_heartbeat_gap_s = max(outcome.max_heartbeat_gap_s, now - last_progress_at)
                         last_heartbeat = heartbeat
@@ -305,6 +448,7 @@ def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
                 time.sleep(poll_interval_s)
         finally:
             _kill(process)
+            sampler.close()
 
         outcome.exit_status = process.returncode
         stdout_text = _read_bounded(stdout_path)
@@ -387,7 +531,10 @@ def build_report(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | Non
     stats = outcome.stats
     return {
         "schema": REPORT_SCHEMA,
-        "evidenceScope": "local-precursor (uncertified linux-nullrhi-ci row; soak row of record is Windows NullRHI)",
+        "evidenceScope": ("local-precursor (Windows NullRHI host; no Windows soak metric row is defined yet)"
+                          if IS_WINDOWS else
+                          "local-precursor (uncertified linux-nullrhi-ci row; soak row of record is Windows NullRHI)"),
+        "memorySeries": "PrivateUsage" if IS_WINDOWS else "VmRSS",
         "commitSha": commit_sha,
         "timestamp": timestamp,
         "durationS": config.duration_s,
@@ -436,6 +583,9 @@ def soak(engine: Path, module: Path, config: SoakConfig, *, expected_sha: str | 
             raise CollectionError(
                 f"--out requires --duration >= {MIN_RESULT_DURATION_S:g}: nullrhi.soak.* measure scene "
                 "headless-soak-1h; use --report for shorter runs")
+        if IS_WINDOWS:
+            raise CollectionError("--out records the linux-nullrhi-ci row; a Windows NullRHI soak writes --report "
+                                  "only until a Windows soak metric row is defined")
     if expected_sha is not None:
         sha_errors = _check_sha(expected_sha, "expectedSha", "soak")
         if sha_errors:
@@ -463,7 +613,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     defaults = SoakConfig()
     parser.add_argument("--engine", type=Path, required=True, help="SparkEngine executable")
-    parser.add_argument("--module", type=Path, help="game module (default: libSparkGame.so beside the engine)")
+    parser.add_argument("--module", type=Path,
+                        help="game module (default: libSparkGame.so, or SparkGame.dll on Windows, beside the engine)")
     parser.add_argument("--duration", type=float, default=defaults.duration_s,
                         help=f"soak length in seconds of 60 Hz ticks (default {defaults.duration_s:g})")
     parser.add_argument("--warmup", type=float,
@@ -486,7 +637,10 @@ def main(argv: list[str] | None = None) -> int:
                         heartbeat_timeout_s=args.heartbeat_timeout, startup_timeout_s=args.startup_timeout,
                         teardown_timeout_s=args.teardown_timeout,
                         max_leak_bytes_per_hour=args.max_leak_bytes_per_hour)
-    module = args.module if args.module is not None else default_module(args.engine)
+    if args.module is not None:
+        module = args.module
+    else:
+        module = args.engine.parent / "SparkGame.dll" if IS_WINDOWS else default_module(args.engine)
     try:
         outcome = soak(args.engine, module, config, expected_sha=args.expected_sha, out=args.out,
                        report=args.report, budget_dir=args.budget_dir)

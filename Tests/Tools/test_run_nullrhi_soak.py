@@ -7,7 +7,10 @@ against a stand-in engine executable that behaves like the headless host
 (module-ready marker, 60 Hz sleeping loop, final tick-stats record) and can be
 made to leak, crash, deadlock, spin, run over budget, quit early, or never
 become ready -- proving each failure mode is detected and that a slow but live
-loop is not mistaken for a hang. SoakNullRHIHeadlessSmoke runs the real SparkEngine
+loop is not mistaken for a hang. WindowsSamplerTests prove the Windows
+sampler against stand-in children: a sleeping loop advances its main-thread
+cycle count and a main thread blocked on an event does not, and the harness
+declares that blocked child hung. SoakNullRHIHeadlessSmoke runs the real SparkEngine
 headless host with the SparkGame module when CTest supplies
 SPARK_HEADLESS_ENGINE/SPARK_HEADLESS_MODULE (Soak_NullRHIHeadlessSmoke);
 SPARK_SOAK_DURATION overrides its 120 s length.
@@ -24,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -40,6 +44,21 @@ from validate_budget import validate_result  # noqa: E402
 BUDGET_DIR = REPO_ROOT / "perf-budgets" / "v1"
 SHA = "0123456789abcdef0123456789abcdef01234567"
 LINUX_ONLY = unittest.skipUnless(sys.platform.startswith("linux"), "soak harness supports the Linux row only")
+WINDOWS_ONLY = unittest.skipUnless(os.name == "nt", "the kernel32 sampler runs on Windows only")
+
+# Windows stand-in children, run with the current interpreter. "sleep" ticks at
+# 60 Hz until killed; "blocked" parks its main thread on an event forever. Both
+# print the module-ready marker first so the harness starts sampling them.
+WINDOWS_CHILD = """\
+import sys, threading, time
+print("SPARK_MODULE_READY count=1", flush=True)
+if sys.argv[1] == "blocked":
+    threading.Event().wait()
+ticks = 0
+while True:
+    ticks += 1
+    time.sleep(1 / 60)
+"""
 
 # Stand-in host: argv check, ready marker, a sleeping 60 Hz loop with an
 # optional per-tick fault hook (which may set live_resources), then the NullRHI
@@ -338,6 +357,79 @@ class HarnessTests(unittest.TestCase):
                                      "--out", str(self.out), "--expected-sha", SHA])
         self.assertEqual(status, 1)
         self.assertIn("headless-soak-1h", stderr.getvalue())
+
+
+@WINDOWS_ONLY
+class WindowsSamplerTests(unittest.TestCase):
+    """kernel32 sampler: private commit plus the main thread's cycle-count heartbeat."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.child = self.root / "child.py"
+        self.child.write_text(WINDOWS_CHILD, encoding="utf-8")
+        self.processes: list[subprocess.Popen[bytes]] = []
+
+    def tearDown(self) -> None:
+        for process in self.processes:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            process.stdout.close()
+        self._tmp.cleanup()
+
+    def launch(self, mode: str) -> subprocess.Popen[bytes]:
+        process = subprocess.Popen([sys.executable, "-B", str(self.child), mode], stdout=subprocess.PIPE)
+        self.processes.append(process)
+        self.assertEqual(process.stdout.readline().strip(), b"SPARK_MODULE_READY count=1")
+        return process
+
+    def heartbeats(self, process: subprocess.Popen[bytes]) -> tuple[tuple[int, ...], tuple[int, ...], int]:
+        sampler = soak_tool.make_sampler(process.pid)
+        try:
+            self.assertIsInstance(sampler, soak_tool.WindowsMainThreadSampler)
+            time.sleep(0.3)
+            private_bytes, first = sampler.sample()
+            time.sleep(0.5)
+            _, second = sampler.sample()
+        finally:
+            sampler.close()
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertIsNotNone(private_bytes)
+        return first, second, private_bytes
+
+    def test_sleeping_loop_advances_its_cycle_count(self) -> None:
+        first, second, private_bytes = self.heartbeats(self.launch("sleep"))
+        self.assertGreater(second[0], first[0])
+        self.assertGreater(private_bytes, 1024 * 1024)
+
+    def test_main_thread_blocked_on_an_event_does_not_advance(self) -> None:
+        first, second, _ = self.heartbeats(self.launch("blocked"))
+        self.assertEqual(second, first)
+
+    def test_blocked_main_thread_is_declared_hung(self) -> None:
+        module = self.root / "SparkGame.dll"
+        module.write_bytes(b"MZ")
+        engine = self.root / "SparkEngine.exe"
+        engine.write_bytes(b"MZ")
+        report = self.root / "report.json"
+        command = [sys.executable, "-B", str(self.child), "blocked"]
+        with mock.patch.object(soak_tool, "engine_command", lambda *_: command):
+            outcome = soak_tool.soak(engine, module, FAST, expected_sha=None, out=None, report=report,
+                                     budget_dir=BUDGET_DIR)
+        self.assertTrue(outcome.hung)
+        self.assertTrue(any("neither slept nor ran" in f for f in outcome.failures), outcome.failures)
+        document = json.loads(report.read_text(encoding="utf-8"))
+        self.assertEqual(document["memorySeries"], "PrivateUsage")
+        self.assertIn("Windows NullRHI host", document["evidenceScope"])
+
+    def test_out_is_refused_until_a_windows_row_exists(self) -> None:
+        engine = self.root / "SparkEngine.exe"
+        engine.write_bytes(b"MZ")
+        with self.assertRaisesRegex(CollectionError, "Windows NullRHI soak writes --report only"):
+            soak_tool.soak(engine, engine, soak_tool.SoakConfig(duration_s=3600.0), expected_sha=SHA,
+                           out=self.root / "result.json", report=None, budget_dir=BUDGET_DIR)
 
 
 class SoakNullRHIHeadlessSmoke(unittest.TestCase):

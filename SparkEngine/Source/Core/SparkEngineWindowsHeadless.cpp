@@ -60,9 +60,11 @@
 #include "Utils/Timer.h"
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <format>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -500,6 +502,10 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         static_cast<unsigned long long>(evidence.initialized), static_cast<unsigned long long>(evidence.updated),
         static_cast<unsigned long long>(evidence.fixedUpdated), static_cast<unsigned long long>(evidence.rendered),
         static_cast<unsigned long long>(evidence.unloaded), static_cast<unsigned long long>(evidence.faults));
+    // NullRHI resources an owner kept past device shutdown (the soak harness,
+    // tools/perf-budget/run_nullrhi_soak.py, requires live=0), as on Linux.
+    if (const std::optional<uint32_t> liveResources = GetEngineRuntime().headlessRhiLiveResourcesAtShutdown)
+        std::fprintf(stdout, "SPARK_HEADLESS_NULLRHI_RESOURCES live=%u\n", static_cast<unsigned>(*liveResources));
     // Teardown wall time, rounded up so a finished teardown never reads 0 ms;
     // Tests/PackageSmoke/run_headless_boot_loop.py enforces the
     // nullrhi.headless.shutdown_time ceiling of perf-budgets/v1/budget.json.

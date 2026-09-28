@@ -3130,7 +3130,8 @@ if(Python3_Interpreter_FOUND)
     add_test(
         NAME NullRHISoak_Harness
         COMMAND ${Python3_EXECUTABLE} -B
-            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py LeakFitTests ResultTests HarnessTests)
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py LeakFitTests ResultTests HarnessTests
+            WindowsSamplerTests)
     set_tests_properties(NullRHISoak_Harness PROPERTIES
         LABELS "perf-budget;unit;python"
         TIMEOUT 120)
@@ -3160,6 +3161,22 @@ if(Python3_Interpreter_FOUND)
         set_tests_properties(Soak_NullRHIHeadlessSmoke PROPERTIES
             ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGame>"
             ENVIRONMENT_MODIFICATION "${_spark_soak_asan_quarantine}"
+            LABELS "nullrhi-soak;nullrhi-headless;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 480)
+    endif()
+    # PERF-100: the same ~120 s real-host soak on the Windows headless host,
+    # sampled through kernel32 (private commit and main-thread cycle count).
+    # It writes a --report only: no Windows soak metric row is defined yet.
+    if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+       TARGET SparkEngine AND TARGET SparkGame)
+        add_dependencies(SparkTests SparkEngine SparkGame)
+        add_test(
+            NAME Soak_NullRHIHeadlessSmoke
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py SoakNullRHIHeadlessSmoke)
+        set_tests_properties(Soak_NullRHIHeadlessSmoke PROPERTIES
+            ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGame>"
             LABELS "nullrhi-soak;nullrhi-headless;integration;process"
             RUN_SERIAL TRUE
             TIMEOUT 480)
