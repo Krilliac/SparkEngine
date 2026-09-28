@@ -2248,7 +2248,7 @@ endif()
 # command" because TFDataTables::Initialize() returned false before the module could register
 # them. SparkTests.exe never hit this because its TFData_* tests walk up to the repo root
 # instead of trusting cwd.
-foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine)
+foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine Localization)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${ASSET_DIR}")
         add_custom_command(TARGET SparkEngine POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -3134,7 +3134,7 @@ spark_install_runtime_assets(
     COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
     PROFILE ${_spark_runtime_asset_profile}
     VERIFIER "${CMAKE_SOURCE_DIR}/tools/asset-integrity/verify_asset_integrity.py"
-    DIRECTORIES Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine
+    DIRECTORIES Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine Localization
     ROOT_FILES README.md
 )
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
