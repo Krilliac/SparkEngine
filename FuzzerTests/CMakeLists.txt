@@ -459,3 +459,57 @@ set_tests_properties(FuzzShaderServiceProtocolSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# ConfigParser::LoadFromString and SaveToString are header-inline
+# (Utils/ConfigParser.h over Utils/StringUtils.h), so the adapter compiles the
+# whole production parser; ConfigParser.cpp only adds the LocalFileCache I/O.
+add_executable(SparkFuzzConfigParser
+    FuzzConfigParser.cpp
+    FuzzConfigParserProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the parser it compiles use libc++ and meet the
+# driver only at the C ABI in FuzzConfigParserProduction.h.
+set_source_files_properties(
+    FuzzConfigParserProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzConfigParser PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzConfigParser PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzConfigParser PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzConfigParser PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzConfigParser PRIVATE Threads::Threads c++ c++abi)
+
+# regression-midfile-bom-key.ini is a global key that began with a byte-order
+# mark mid-document: the pre-fix parser accepted it, and its own SaveToString
+# output then failed to reload, which the adapter's round-trip oracle aborts on.
+add_test(
+    NAME FuzzConfigParserSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzConfigParser>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/config-parser"
+)
+set_tests_properties(FuzzConfigParserSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

@@ -97,6 +97,17 @@ structurally bound on Windows and awaits its first Linux Clang build and smoke r
   payload leaves `evictionCount` zero), and the two publish-on-success decoders must leave
   a rejected output untouched. `asset-service-protocol` and `daemon-protocol-frame` stay
   blocked until they get the same template.
+- **`config-parser`** (`SparkFuzzConfigParser`, `FuzzConfigParserSmoke`, `-runs=8`)
+  feeds `Spark::ConfigParser::LoadFromString` after loading a fixed baseline document.
+  A rejected document must leave the baseline's `SaveToString()` byte-identical (the
+  transactional-reload promise), an accepted one must reload from its own
+  `SaveToString()` output byte-stable, and no accepted key may be empty, contain `=` or a
+  line break, or carry edge whitespace. Modelling the round-trip oracle found a defect
+  before the target ever ran: a key that began with a UTF-8 BOM mid-document was accepted,
+  then saved as the first line, so the next load stripped the BOM (renaming the key, or
+  rejecting `\xEF\xBB\xBF= 1` outright). `LoadFromString` now rejects such keys;
+  `regression-midfile-bom-key.ini` and `ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected`
+  pin it.
 
 Two gates, deliberately separate:
 

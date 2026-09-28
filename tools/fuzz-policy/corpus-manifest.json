@@ -173,6 +173,30 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "config-parser-corpus",
+      "parser_id": "config-parser",
+      "corpus_dir": "FuzzerTests/corpora/config-parser",
+      "last_verified": "2026-09-27",
+      "content_digest": "ca86771a4f995c7d305651df44d04e21751a9a8cab377f895820ca12fb652696",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-midfile-bom-key.ini",
+          "finding": "A key that began with a UTF-8 BOM mid-document was accepted, but SaveToString emitted it as the first line and the reload stripped the BOM and rejected the empty key.",
+          "found_by": "review",
+          "guard_test": "ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected"
+        }
+      ]
     }
   ]
 }

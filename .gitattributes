@@ -47,6 +47,7 @@ FuzzerTests/corpora/sparkpak-reader/*.spk -text
 # CRLF, lone CR or NUL on purpose), so no checkout may normalize them.
 FuzzerTests/corpora/shader-daemon-blob/** -text
 FuzzerTests/corpora/shader-service-protocol/** -text
+FuzzerTests/corpora/config-parser/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

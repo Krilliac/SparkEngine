@@ -374,10 +374,16 @@
         ".cfg",
         ".config"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzConfigParser.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzConfigParser",
+        "test_selector": "FuzzConfigParserSmoke",
+        "corpus_id": "config-parser-corpus",
+        "entry_symbol": "Spark::ConfigParser::LoadFromString",
+        "binding_source": "FuzzerTests/FuzzConfigParserProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseConfig"
       }
     },
     {
