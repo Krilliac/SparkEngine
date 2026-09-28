@@ -55,6 +55,18 @@ claim names a missing test or a documented surface has no claim.
 > and redist components. `PEImportClosure_Contract` covers the checker with
 > synthetic PE fixtures on every host. Debug stages are not checked, because
 > the Debug CRT is not redistributable.
+>
+> **Open gap: Vulkan-enabled packages.** When the Vulkan SDK is found and
+> `ENABLE_VULKAN` is ON (the `windows-release` default), `SparkEngine.exe` and
+> `SparkServer.exe` hard-import `vulkan-1.dll`. Only a Vulkan GPU driver
+> installs that DLL, so such a package does not start on a clean or GPU-less
+> machine, NullRHI included, and the closure check correctly fails it. The
+> closure is proven only for `ENABLE_VULKAN=OFF` packages, the
+> `windows-shipping` profile. Configure an FPS package tree with
+> `-DENABLE_VULKAN=OFF`, for example
+> `cmake --preset windows-release -DSPARK_GAME_MODULES=SparkGameFPS -DENABLE_VULKAN=OFF -DBUILD_TESTS=ON`.
+> `Tests/CMakeLists.txt` warns at configure time when an FPS tree links
+> Vulkan. Closing the gap needs a delay-loaded, load-checked Vulkan backend.
 
 | Class | Responsibility |
 |-------|---------------|

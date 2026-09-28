@@ -3676,6 +3676,18 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         TIMEOUT 1800)
 
     if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
+        # ENG-220: a Vulkan-enabled Windows build hard-imports vulkan-1.dll,
+        # which only a Vulkan GPU driver provides, so its package fails the PE
+        # import-closure step of the two package tests below. That is an open
+        # product gap, not a test fault: configure the FPS package tree with
+        # ENABLE_VULKAN=OFF, as windows-shipping does.
+        if(WIN32 AND SPARK_VULKAN_AVAILABLE)
+            message(WARNING
+                "FPSPackage_InstalledRuntime and FPSHeadlessPackage_NullRHISaveReload will fail their import-closure "
+                "check: this tree links Vulkan, so SparkEngine.exe/SparkServer.exe hard-import vulkan-1.dll. "
+                "Configure the FPS package tree with -DENABLE_VULKAN=OFF (wiki/gameplay-tools/Game-Packaging.md).")
+        endif()
+
         add_test(
             NAME FPSPackage_InstalledRuntime
             COMMAND ${CMAKE_COMMAND}
