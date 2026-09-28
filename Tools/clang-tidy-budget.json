@@ -3,7 +3,7 @@
   "description": "CI-110 clang-tidy diagnostic budget: distinct diagnostics per file and check across every shipped-product translation unit, measured with the clang-tidy CI lane configuration. The checks and total fields summarize the files map. Lower entries as diagnostics are fixed; raising one is a reviewed exception. Regenerate with Tools/clang_tidy_budget.py update.",
   "clangTidyMajorVersion": 18,
   "measuredAt": "Local clang-tidy 18.1.3 (Ubuntu 24.04) with the clang-tidy lane's libc++ Debug configure, over all 955 shipped-product translation units of the shared working tree while HEAD moved from 1ea8275 to e82fe3a (2026-09-26). Not a hosted measurement: refresh from the first hosted clang-tidy-output artifact if counts differ. SaveSystem.cpp and SaveFileCodec.cpp re-measured locally with clang-tidy 18.1.8 and libc++ 18 headers after the SEC-120 save codec split (2026-09-28); the same setup reproduced the committed SaveSystem.cpp entries at e82fe3a.",
-  "total": 16559,
+  "total": 16544,
   "checks": {
     "bugprone-assignment-in-if-condition": 6,
     "bugprone-branch-clone": 62,
@@ -34,7 +34,7 @@
     "modernize-avoid-bind": 1,
     "modernize-concat-nested-namespaces": 31,
     "modernize-deprecated-headers": 10,
-    "modernize-loop-convert": 59,
+    "modernize-loop-convert": 51,
     "modernize-macro-to-enum": 17,
     "modernize-make-unique": 3,
     "modernize-pass-by-value": 37,
@@ -62,7 +62,7 @@
     "performance-trivially-destructible": 1,
     "performance-unnecessary-copy-initialization": 7,
     "performance-unnecessary-value-param": 108,
-    "readability-braces-around-statements": 13878,
+    "readability-braces-around-statements": 13871,
     "readability-inconsistent-declaration-parameter-name": 24
   },
   "files": {
@@ -2390,11 +2390,11 @@
     },
     "SparkEngine/Source/Engine/AI/NavMesh.cpp": {
       "google-build-using-namespace": 1,
-      "modernize-loop-convert": 9,
+      "modernize-loop-convert": 1,
       "modernize-use-auto": 4,
       "modernize-use-emplace": 1,
       "modernize-use-transparent-functors": 2,
-      "readability-braces-around-statements": 40
+      "readability-braces-around-statements": 34
     },
     "SparkEngine/Source/Engine/AI/NavMeshLink.h": {
       "readability-braces-around-statements": 4
@@ -3570,7 +3570,7 @@
       "google-build-using-namespace": 1,
       "modernize-use-auto": 2,
       "performance-move-const-arg": 1,
-      "readability-braces-around-statements": 6
+      "readability-braces-around-statements": 5
     },
     "SparkEngine/Source/Graphics/TextureBlockCompression.cpp": {
       "modernize-use-auto": 5,
