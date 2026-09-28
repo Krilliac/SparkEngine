@@ -181,8 +181,8 @@ endfunction()
 # ("noble"). ldd resolves against the build host, so an image built against a
 # newer glibc or a newer GCC's libstdc++/libgcc_s still passes ldd there and
 # then fails to load on a stock noble install ("version `GLIBCXX_3.4.34' not
-# found"). Each entry is "<library regex>|<tag prefix>|<highest tag noble
-# defines>", from the noble package versions:
+# found"). Each entry is "<tag prefix> <highest version noble defines>
+# <library regex>", from the noble package versions:
 #   libc6 2.39-0ubuntu8.x                       -> GLIBC_2.39 (every glibc library)
 #   libstdc++6 14-20240412 / 14.2.0 (updates)   -> GLIBCXX_3.4.33, CXXABI_1.3.15
 #   libgcc-s1 14-20240412 / 14.2.0 (updates)    -> GCC_14.0.0
@@ -190,10 +190,10 @@ endfunction()
 # GLIBCXX_3.4.33 and CXXABI_1.3.15; GCC 15 adds GLIBCXX_3.4.34). Raise them only
 # with the OD-10 row. Non-numeric tags must appear in the named list.
 set(_SPARK_LINUX_ABI_CEILINGS
-    "^(libc|libm|libmvec|libpthread|libdl|librt|libresolv|libutil|libanl|ld-linux-x86-64)\\.so\\.[0-9]+$|GLIBC_|2.39"
-    "^libstdc\\+\\+\\.so\\.6$|GLIBCXX_|3.4.33"
-    "^libstdc\\+\\+\\.so\\.6$|CXXABI_|1.3.15"
-    "^libgcc_s\\.so\\.1$|GCC_|14.0.0")
+    "GLIBC_ 2.39 ^(libc|libm|libmvec|libpthread|libdl|librt|libresolv|libutil|libanl|ld-linux-x86-64)\\.so\\.[0-9]+$"
+    "GLIBCXX_ 3.4.33 ^libstdc\\+\\+\\.so\\.6$"
+    "CXXABI_ 1.3.15 ^libstdc\\+\\+\\.so\\.6$"
+    "GCC_ 14.0.0 ^libgcc_s\\.so\\.1$")
 set(_SPARK_LINUX_ABI_NAMED_TAGS GLIBC_ABI_DT_RELR CXXABI_TM_1 CXXABI_FLOAT128)
 
 # Parses `readelf -V --wide` output into "<file>|<tag>" entries, one per
@@ -223,10 +223,10 @@ endfunction()
 function(_spark_version_need_violation file tag out_var)
     set(_violation "")
     foreach(_ceiling IN LISTS _SPARK_LINUX_ABI_CEILINGS)
-        string(REPLACE "|" ";" _fields "${_ceiling}")
-        list(GET _fields 0 _library)
-        list(GET _fields 1 _family)
-        list(GET _fields 2 _max)
+        string(REGEX MATCH "^([^ ]+) ([^ ]+) (.+)$" _unused "${_ceiling}")
+        set(_family "${CMAKE_MATCH_1}")
+        set(_max "${CMAKE_MATCH_2}")
+        set(_library "${CMAKE_MATCH_3}")
         if(NOT file MATCHES "${_library}")
             continue()
         endif()
@@ -493,7 +493,7 @@ function(spark_linux_runtime_closure_violations)
     endforeach()
     set(_ceiling_text "")
     foreach(_ceiling IN LISTS _SPARK_LINUX_ABI_CEILINGS)
-        string(REGEX REPLACE "^.*\\|([A-Z]+_)\\|(.*)$" " \\1\\2" _ceiling_entry "${_ceiling}")
+        string(REGEX REPLACE "^([^ ]+) ([^ ]+) .*$" " \\1\\2" _ceiling_entry "${_ceiling}")
         string(APPEND _ceiling_text "${_ceiling_entry}")
     endforeach()
     string(CONCAT _report
