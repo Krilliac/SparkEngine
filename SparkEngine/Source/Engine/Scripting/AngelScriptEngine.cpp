@@ -30,17 +30,6 @@
 
 namespace fs = std::filesystem;
 
-// Script `string` arguments and return slots can live on AngelScript's asDWORD script stack,
-// which is only 4-byte aligned (owner decision OD-23). A native binding marked
-// SPARK_SCRIPT_STRING_ABI is exempt from UBSan's alignment check and copies each script
-// string into an aligned local first, so nothing past its first statement touches a
-// misaligned object.
-#if defined(__GNUC__) || defined(__clang__)
-#define SPARK_SCRIPT_STRING_ABI __attribute__((no_sanitize("alignment")))
-#else
-#define SPARK_SCRIPT_STRING_ABI
-#endif
-
 // ============================================================================
 // Static singleton pointer
 // ============================================================================
@@ -71,15 +60,13 @@ static void LogInfo(const std::string& message)
 // Global functions callable from AngelScript
 // ============================================================================
 
-SPARK_SCRIPT_STRING_ABI void ASPrint(const std::string& messageArg)
+void ASPrint(const std::string& message)
 {
-    const std::string message(messageArg);
     SPARK_LOG_INFO("Scripting", "[Script] %s", message.c_str());
 }
 
-SPARK_SCRIPT_STRING_ABI EntityID ASCreateEntity(const std::string& nameArg)
+EntityID ASCreateEntity(const std::string& name)
 {
-    const std::string name(nameArg);
     if (name.empty())
     {
         LogWarning("ASCreateEntity: entity name should not be empty.");
@@ -208,9 +195,8 @@ static int ScriptKeyNameToVK(const std::string& key)
     return 0;
 }
 
-SPARK_SCRIPT_STRING_ABI bool ASGetKeyDown(const std::string& keyArg)
+bool ASGetKeyDown(const std::string& key)
 {
-    const std::string key(keyArg);
     auto* input = EngineContext::Get() ? EngineContext::Get()->GetInput() : nullptr;
     if (!input)
     {
@@ -226,9 +212,8 @@ SPARK_SCRIPT_STRING_ABI bool ASGetKeyDown(const std::string& keyArg)
     return input->WasKeyPressed(vk);
 }
 
-SPARK_SCRIPT_STRING_ABI bool ASGetKey(const std::string& keyArg)
+bool ASGetKey(const std::string& key)
 {
-    const std::string key(keyArg);
     auto* input = EngineContext::Get() ? EngineContext::Get()->GetInput() : nullptr;
     if (!input)
     {
@@ -399,9 +384,8 @@ void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force)
 // both stay cheap and idempotent, and warn at most once per call site: they only record the request on the entity
 // in the bound World, on the game thread that runs the script. AudioUpdateSystem and AnimationUpdateSystem act on
 // it the next time their ECS phase runs.
-SPARK_SCRIPT_STRING_ABI void ASPlaySound(EntityID entity, const std::string& soundNameArg)
+void ASPlaySound(EntityID entity, const std::string& soundName)
 {
-    const std::string soundName(soundNameArg);
     World* world = FindBoundWorldFor(entity);
     if (!world)
     {
@@ -440,9 +424,8 @@ SPARK_SCRIPT_STRING_ABI void ASPlaySound(EntityID entity, const std::string& sou
     cues.pending.push_back(std::move(cue));
 }
 
-SPARK_SCRIPT_STRING_ABI void ASPlayAnimation(EntityID entity, const std::string& animNameArg)
+void ASPlayAnimation(EntityID entity, const std::string& animName)
 {
-    const std::string animName(animNameArg);
     World* world = FindBoundWorldFor(entity);
     AnimationController* controller = world ? world->GetRegistry().try_get<AnimationController>(entity) : nullptr;
     if (!controller)
@@ -481,9 +464,8 @@ SPARK_SCRIPT_STRING_ABI void ASPlayAnimation(EntityID entity, const std::string&
     controller->playing = true;
 }
 
-SPARK_SCRIPT_STRING_ABI EntityID ASGetEntityByName(const std::string& nameArg)
+EntityID ASGetEntityByName(const std::string& name)
 {
-    const std::string name(nameArg);
     auto* world = AngelScriptEngine::GetBoundWorld();
     if (!world)
         return entt::null;
@@ -498,9 +480,8 @@ SPARK_SCRIPT_STRING_ABI EntityID ASGetEntityByName(const std::string& nameArg)
     return entt::null;
 }
 
-SPARK_SCRIPT_STRING_ABI void ASFireEvent(const std::string& eventNameArg)
+void ASFireEvent(const std::string& eventName)
 {
-    const std::string eventName(eventNameArg);
     if (eventName.empty())
     {
         SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
@@ -528,10 +509,8 @@ SPARK_SCRIPT_STRING_ABI void ASFireEvent(const std::string& eventNameArg)
 
 static DebugTraceCallback g_debugTraceCallback = nullptr;
 
-SPARK_SCRIPT_STRING_ABI void ASDebugTrace(uint32_t nodeId, const std::string& nodeNameArg, const std::string& outputArg)
+void ASDebugTrace(uint32_t nodeId, const std::string& nodeName, const std::string& output)
 {
-    const std::string nodeName(nodeNameArg);
-    const std::string output(outputArg);
     SPARK_LOG_INFO(Spark::LogCategory::Scripting, "[Trace] Node %u (%s): %s", nodeId, nodeName.c_str(), output.c_str());
     if (g_debugTraceCallback)
         g_debugTraceCallback(nodeId, nodeName.c_str(), output.c_str());
@@ -1400,11 +1379,8 @@ namespace
 {
 
     // Generic script function: get any reflected field by component type and field name
-    SPARK_SCRIPT_STRING_ABI std::string ASGetComponentField(uint32_t entityId, const std::string& compTypeArg,
-                                                            const std::string& fieldNameArg)
+    std::string ASGetComponentField(uint32_t entityId, const std::string& compType, const std::string& fieldName)
     {
-        const std::string compType(compTypeArg);
-        const std::string fieldName(fieldNameArg);
         // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
         // treat a destroyed entity as a fatal precondition failure.
         World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));
@@ -1428,12 +1404,9 @@ namespace
     }
 
     // Generic script function: set any reflected field by component type and field name
-    SPARK_SCRIPT_STRING_ABI void ASSetComponentField(uint32_t entityId, const std::string& compTypeArg,
-                                                     const std::string& fieldNameArg, const std::string& valueArg)
+    void ASSetComponentField(uint32_t entityId, const std::string& compType, const std::string& fieldName,
+                             const std::string& value)
     {
-        const std::string compType(compTypeArg);
-        const std::string fieldName(fieldNameArg);
-        const std::string value(valueArg);
         // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
         // treat a destroyed entity as a fatal precondition failure.
         World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));
@@ -1457,9 +1430,8 @@ namespace
     }
 
     // Generic script function: check if entity has a component by type name
-    SPARK_SCRIPT_STRING_ABI bool ASHasComponent(uint32_t entityId, const std::string& compTypeArg)
+    bool ASHasComponent(uint32_t entityId, const std::string& compType)
     {
-        const std::string compType(compTypeArg);
         // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
         // treat a destroyed entity as a fatal precondition failure.
         World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));

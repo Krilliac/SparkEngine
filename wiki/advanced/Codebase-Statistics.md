@@ -11,26 +11,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 339188 |
+| **SparkEngine/Source** | 339222 |
 | **SparkEditor/Source** | 105121 |
-| **GameModules** | 158466 |
+| **GameModules** | 158477 |
 | **External services** | 12596 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 243225 |
+| **Tests** | 243982 |
 | **SparkConsole/src** | 1857 |
 | **SparkShaderCompiler/src** | 839 |
-| **Total C++ (excl. ThirdParty)** | **~882543** |
+| **Total C++ (excl. ThirdParty)** | **~883345** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1145 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1778 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1779 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 711 |
+| Test-bearing implementation files (.cpp/.mm) | 712 |
 | Wiki pages (.md) | 205 |
 
 ### Largest Top-Level Source Section
@@ -44,9 +44,9 @@ Graphics contains 124219 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 124219 | 36.6% |
-| Engine (all subsystems) | 97251 | 28.6% |
+| Engine (all subsystems) | 97278 | 28.6% |
 | Utils | 48569 | 14.3% |
-| Core | 32917 | 9.7% |
+| Core | 32924 | 9.7% |
 | Physics | 11077 | 3.2% |
 | Audio | 6992 | 2.0% |
 | Input | 4046 | 1.1% |
@@ -60,11 +60,11 @@ Graphics contains 124219 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines |
 |-----------|------:|
 | Networking | 18262 |
-| AI | 13538 |
+| AI | 13559 |
 | ECS | 8611 |
 | Gameplay | 7925 |
-| Scripting | 7790 |
-| Animation | 6850 |
+| Scripting | 7762 |
+| Animation | 6852 |
 | SaveSystem | 4087 |
 | UI | 2522 |
 | Streaming | 2236 |
@@ -78,8 +78,8 @@ Graphics contains 124219 lines, or 36% of `SparkEngine/Source`. This is a source
 | Coroutine | 841 |
 | Replay | 833 |
 | Localization | 605 |
+| Destruction | 591 |
 | Tween | 579 |
-| Destruction | 559 |
 | Events | 492 |
 | Mobile | 452 |
 | Loading | 386 |
@@ -110,8 +110,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 711 |
-| TEST() definitions | 8274 |
+| Test files | 712 |
+| TEST() definitions | 8286 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

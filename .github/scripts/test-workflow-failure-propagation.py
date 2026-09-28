@@ -3426,25 +3426,17 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1", self.build)
         self.assertIn("ASAN_OPTIONS: detect_leaks=1:halt_on_error=1", self.build)
 
-    def test_ubsan_alignment_exemption_stays_scoped_to_basic_string(self) -> None:
-        # OD-23: alignment is the only recoverable check, and only libstdc++'s
-        # basic_string files may be suppressed. Anything wider fails here.
+    def test_asan_lane_has_no_recoverable_or_suppressed_ubsan_check(self) -> None:
+        # OD-23's alignment recovery and libstdc++ basic_string suppressions were
+        # removed on 2026-09-28 once the AngelScript patch aligned value objects on
+        # the script stack. Every UBSan check in the lane is fatal again; a returning
+        # -fsanitize-recover=, UBSan suppressions file or UBSAN_OPTIONS suffix fails here.
         asan_start = self.build.index("build-linux-asan:")
         asan_section = self.build[asan_start : self.build.index("\n  build-", asan_start + 1)]
-        recover_flags = re.findall(r"-fsanitize-recover=[^\s\"]+", asan_section)
-        self.assertEqual(recover_flags, ["-fsanitize-recover=alignment"] * 2)
-        self.assertIn(
-            "UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1:"
-            "suppressions=${{ github.workspace }}/Tests/ubsan_suppressions.txt:print_suppressions=0",
-            self.build,
-        )
-        suppressions = (REPO_ROOT / "Tests" / "ubsan_suppressions.txt").read_text(encoding="utf-8")
-        entries = [
-            line.strip()
-            for line in suppressions.splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
-        self.assertEqual(entries, ["alignment:*/bits/basic_string.h", "alignment:*/bits/basic_string.tcc"])
+        self.assertEqual(re.findall(r"-fsanitize-recover=[^\s\"]+", asan_section), [])
+        ubsan_options = re.findall(r"(?m)^\s*UBSAN_OPTIONS:\s*(\S+)\s*$", asan_section)
+        self.assertEqual(ubsan_options, ["print_stacktrace=1:halt_on_error=1"])
+        self.assertFalse((REPO_ROOT / "Tests" / "ubsan_suppressions.txt").exists())
 
     def test_sanitizer_runner_owns_private_runtime_log_prefix(self) -> None:
         self.assertEqual(self.build.count('--evidence-root "${{ runner.temp }}"'), 3)

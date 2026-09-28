@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3867,
+      "line": 3879,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1366,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3414,
+      "line": 3426,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3409",
+          "id": "Tests/CMakeLists.txt:3421",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3905,
+      "line": 3917,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,10 +1392,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3357,
+      "line": 3369,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3285",
+          "id": "Tests/CMakeLists.txt:3297",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1409,7 +1409,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4188,
+      "line": 4200,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1418,7 +1418,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1785,
+      "line": 1797,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1496,7 +1496,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1647,
+      "line": 1659,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2560,7 +2560,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 824,
+      "line": 825,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2728,10 +2728,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 4819,
+      "line": 4831,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:4817",
+          "id": "Tests/CMakeLists.txt:4829",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2774,7 +2774,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 786,
+      "line": 787,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2898,10 +2898,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1428,
+      "line": 1429,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1416",
+          "id": "Tests/CMakeLists.txt:1417",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -2916,7 +2916,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 940,
+      "line": 941,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3176,10 +3176,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 808,
+      "line": 809,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:807",
+          "id": "Tests/CMakeLists.txt:808",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3307,7 +3307,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 828,
+      "line": 829,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3317,7 +3317,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 819,
+      "line": 820,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3327,7 +3327,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 830,
+      "line": 831,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3357,10 +3357,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 799,
+      "line": 800,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:798",
+          "id": "Tests/CMakeLists.txt:799",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3397,7 +3397,7 @@
       "target": "SparkPreviousSdkModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 822,
+      "line": 823,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3407,7 +3407,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 826,
+      "line": 827,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3417,7 +3417,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 945,
+      "line": 946,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3477,7 +3477,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 832,
+      "line": 833,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3527,7 +3527,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 935,
+      "line": 936,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3537,7 +3537,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 775,
+      "line": 776,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4455,7 +4455,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 824,
+          "line": 825,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4619,7 +4619,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 4819,
+          "line": 4831,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4673,7 +4673,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 786,
+          "line": 787,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4799,7 +4799,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1428,
+          "line": 1429,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4817,7 +4817,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 940,
+          "line": 941,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5285,7 +5285,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 808,
+          "line": 809,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5421,7 +5421,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 828,
+          "line": 829,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5439,7 +5439,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 819,
+          "line": 820,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5457,7 +5457,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 830,
+          "line": 831,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5495,7 +5495,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 799,
+          "line": 800,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5551,7 +5551,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 822,
+          "line": 823,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5569,7 +5569,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 826,
+          "line": 827,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5587,7 +5587,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 945,
+          "line": 946,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5695,7 +5695,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 832,
+          "line": 833,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5769,7 +5769,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 935,
+          "line": 936,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5787,7 +5787,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 775,
+          "line": 776,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8244,7 +8244,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "3395b0c1cc4e8486"
+            "runDigest": "6df6b348873e9d00"
           },
           {
             "index": 6,
@@ -13292,7 +13292,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -13302,8 +13302,8 @@
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
-          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
+          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
         },
@@ -16364,7 +16364,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -16374,8 +16374,8 @@
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
-          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
+          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
         },
@@ -19583,7 +19583,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
       "commandProvenance": "literal",
       "options": {
         "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -19593,8 +19593,8 @@
         "CMAKE_CXX_COMPILER": "g++-14",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
-        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fsanitize-recover=alignment -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
       },
