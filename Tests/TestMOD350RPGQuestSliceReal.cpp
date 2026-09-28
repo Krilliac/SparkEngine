@@ -575,6 +575,84 @@ TEST(RPGPersistence_MidQuestSaveRestartRestoresQuestInventoryAreaAndNPCs)
     EXPECT_TRUE(second->session.AcceptQuest(kHerbQuest).find("Accepted quest 2") != std::string::npos);
 }
 
+TEST(RPGPersistence_LoadPreservesHeroIdentityAndDoesNotAllocateDuplicate)
+{
+    ScopedMOD350SaveDirectory saves("hero-identity");
+    ASSERT_TRUE(saves.IsInitialized());
+
+    std::string writerSnapshot;
+    std::string writerQuestStatus;
+    uint32_t writerPlayer = 0;
+    {
+        World writerWorld;
+        auto writer = std::make_unique<RPGQuestSlice>(&saves.System(), &writerWorld);
+        ASSERT_TRUE(writer->initialized);
+        writerPlayer = writer->Player();
+        ASSERT_TRUE(writer->Hunt("Shadow Wolf", 5));
+        ASSERT_TRUE(QuestSystem::GetInstance().GetQuestState(writerPlayer, kWolfHuntQuest) ==
+                    EngineQuestState::Completed);
+        writerSnapshot = writer->session.SerializeState();
+        writerQuestStatus = QuestSystem::GetInstance().Console_GetStatus();
+        ASSERT_TRUE(StartsWithMOD350(writer->SaveSlot("hero-identity"), "Saved RPG world"));
+    }
+
+    World readerWorld;
+    auto reader = std::make_unique<RPGQuestSlice>(&saves.System(), &readerWorld);
+    ASSERT_TRUE(reader->initialized);
+    const uint32_t startupPlayer = reader->Player();
+    EXPECT_EQ(startupPlayer, writerPlayer);
+    EXPECT_TRUE(reader->session.SerializeState() != writerSnapshot);
+
+    ASSERT_TRUE(StartsWithMOD350(reader->LoadSlot("hero-identity"), "Loaded RPG world"));
+    EXPECT_EQ(reader->Player(), startupPlayer);
+    EXPECT_EQ(reader->session.SerializeState(), writerSnapshot);
+    EXPECT_EQ(QuestSystem::GetInstance().Console_GetStatus(), writerQuestStatus);
+
+    // A load must update the existing hero in place. If it creates a replacement,
+    // the next character id skips one and exposes the duplicate allocation.
+    const uint32_t nextCharacter = reader->characters.CreateCharacter("IdentityProbe", CharacterClass::Warrior);
+    EXPECT_EQ(nextCharacter, startupPlayer + 1);
+    EXPECT_TRUE(reader->characters.DestroyCharacter(nextCharacter));
+
+    ASSERT_TRUE(StartsWithMOD350(reader->LoadSlot("hero-identity"), "Loaded RPG world"));
+    EXPECT_EQ(reader->Player(), startupPlayer);
+    EXPECT_EQ(reader->session.SerializeState(), writerSnapshot);
+    EXPECT_EQ(QuestSystem::GetInstance().Console_GetStatus(), writerQuestStatus);
+}
+
+TEST(RPGPersistence_RestoreUpdatesClassInPlaceAndClearsTransientCombatState)
+{
+    RPGQuestSlice slice;
+    ASSERT_TRUE(slice.initialized);
+
+    const uint32_t player = slice.Player();
+    const CharacterData* originalHero = slice.Hero();
+    ASSERT_TRUE(originalHero != nullptr);
+    ASSERT_TRUE(originalHero->classId == CharacterClass::Warrior);
+    const std::string snapshot = slice.session.SerializeState();
+    ASSERT_FALSE(snapshot.empty());
+
+    CharacterData* currentHero = slice.characters.GetCharacter(player);
+    ASSERT_TRUE(currentHero != nullptr);
+    currentHero->classId = CharacterClass::Mage;
+    ASSERT_TRUE(slice.combat.UseAbility(player, 99001, 60.0f));
+    slice.combat.RegisterHit(player);
+    ASSERT_NE(slice.combat.StartEncounter(player, 9001), 0u);
+    ASSERT_TRUE(slice.combat.GetActiveCombatCount() > 0);
+    ASSERT_FALSE(slice.combat.IsAbilityReady(player, 99001));
+    ASSERT_TRUE(slice.combat.GetComboState(player) != nullptr);
+
+    ASSERT_TRUE(slice.session.RestoreState(snapshot));
+    EXPECT_EQ(slice.Player(), player);
+    ASSERT_TRUE(slice.Hero() != nullptr);
+    EXPECT_TRUE(slice.Hero() == originalHero);
+    EXPECT_TRUE(slice.Hero()->classId == CharacterClass::Warrior);
+    EXPECT_EQ(slice.session.SerializeState(), snapshot);
+    EXPECT_EQ(slice.combat.GetActiveCombatCount(), static_cast<size_t>(0));
+    EXPECT_TRUE(slice.combat.IsAbilityReady(player, 99001));
+    EXPECT_TRUE(slice.combat.GetComboState(player) == nullptr);
+}
+
 TEST(RPGPersistence_CorruptSlotLeavesSessionUnchanged)
 {
     ScopedMOD350SaveDirectory saves("corrupt");

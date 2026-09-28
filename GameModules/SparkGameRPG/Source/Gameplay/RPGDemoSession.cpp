@@ -714,7 +714,7 @@ namespace RPG
     bool RPGDemoSession::CanRestoreState(const std::string& serializedState) const
     {
         RPGDemoSnapshot snapshot;
-        return m_characters && m_combat &&
+        return m_characters && m_characters->GetCharacter(m_playerCharacterId) && m_combat &&
                ParseRPGDemoSnapshot(serializedState, m_inventory, m_npcs, m_world, snapshot);
     }
 
@@ -727,10 +727,19 @@ namespace RPG
         if (!ParseRPGDemoSnapshot(serializedState, m_inventory, m_npcs, m_world, snapshot))
             return false;
 
-        Reset(snapshot.characterClass);
         CharacterData* character = m_characters->GetCharacter(m_playerCharacterId);
         if (!character)
             return false;
+
+        // Loading replaces the current hero's state. Reset() starts a new adventure and allocates
+        // a new character ID, invalidating the identity used by quests and other character references.
+        if (m_activeEncounterId != 0)
+        {
+            m_combat->EndEncounter(m_activeEncounterId);
+            m_activeEncounterId = 0;
+        }
+        m_combat->ClearCharacterState(m_playerCharacterId);
+        character->classId = snapshot.characterClass;
         character->level = snapshot.level;
         character->xp = snapshot.xp;
         character->xpToNextLevel = snapshot.xpToNextLevel;

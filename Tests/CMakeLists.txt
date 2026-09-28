@@ -4596,7 +4596,7 @@ if(TARGET imgui)
     # snapshots and damaged slots leave the session unchanged.
     add_test(NAME RPGPersistence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(RPGPersistence PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=RPGPersistence_;SPARK_TEST_EXPECT_COUNT=4"
+        ENVIRONMENT "SPARK_TEST_NAME=RPGPersistence_;SPARK_TEST_EXPECT_COUNT=6"
         LABELS "module;rpg;persistence;unit"
         RUN_SERIAL TRUE
         TIMEOUT 180)

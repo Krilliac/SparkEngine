@@ -208,6 +208,14 @@ SparkGameFPS declares `FPSLocalProfile::kSchema{"SparkGameFPS",
 (`FPSLocalProfile::WriteTo` / `ReadFrom`). Schema 1 is its first schema, so its
 window is 1-1 until a schema 2 adds a migration.
 
+SparkGameRPG stores its adventure in `SparkGameRPG.demo.v1` custom state. The hero
+lives in `RPGCharacterSystem`, separately from the ECS world. `RPGDemoSession::RestoreState`
+updates the existing hero and restores quests under that hero's character ID, clearing
+transient combat state without starting a new adventure. `Reset()` is reserved for new
+adventures: it destroys the old character and allocates a new ID. The restart regression
+in `Tests/TestMOD350RPGQuestSliceReal.cpp` compares the complete quest console output;
+the installed `RPGQuestSlicePackage_WolfHuntRestart` objective retains its `SAME_AS` check.
+
 ## Transaction and rollback behavior
 
 ### Saving
