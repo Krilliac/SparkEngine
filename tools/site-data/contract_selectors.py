@@ -202,6 +202,61 @@ def workflow_job_needs(workflow: Path) -> dict[str, frozenset[str]]:
     return {job: frozenset(jobs) for job, jobs in needs.items()}
 
 
+_RUNS_ON = re.compile(r"^    runs-on:\s*(\S[^#]*?)\s*(?:#.*)?$")
+_SANITIZER_JOB_ID = re.compile(r"^build-linux-(?:asan|tsan|msan)$")
+_SANITIZER_PRESET = re.compile(r"\bci-linux-(?:asan|tsan)\b")
+
+
+@dataclass(frozen=True)
+class WorkflowJob:
+    """One job's runner label and whether it is a Linux sanitizer lane."""
+
+    runs_on: str
+    sanitizer: bool
+
+    @property
+    def windows(self) -> bool:
+        return self.runs_on.startswith("windows-")
+
+
+@functools.lru_cache(maxsize=16)
+def workflow_jobs(workflow: Path) -> dict[str, WorkflowJob]:
+    """Every job in one workflow with its ``runs-on`` label and sanitizer classification.
+
+    A sanitizer lane is a ``build-linux-{asan,tsan,msan}`` job or a job that
+    configures the ``ci-linux-asan``/``ci-linux-tsan`` presets. An expression
+    runner such as ``${{ matrix.os }}`` is kept verbatim and is never Windows.
+    """
+    if not workflow.is_file():
+        raise SiteDataError(f"{workflow.relative_to(REPO_ROOT).as_posix()} does not exist")
+    text = read_bytes_stable(workflow, MAX_WORKFLOW_BYTES, f"workflow {workflow.name}").decode(
+        "utf-8", errors="replace"
+    )
+    bodies: dict[str, list[str]] = {}
+    current: str | None = None
+    in_jobs = False
+    for line in text.splitlines():
+        top = _TOP_LEVEL_KEY.match(line)
+        if top:
+            in_jobs = top.group(1) == "jobs"
+            current = None
+            continue
+        if not in_jobs:
+            continue
+        job = _JOB_KEY.match(line)
+        if job:
+            current = job.group(1)
+            bodies[current] = []
+        elif current is not None:
+            bodies[current].append(line)
+    jobs: dict[str, WorkflowJob] = {}
+    for name, lines in bodies.items():
+        runs_on = next((match.group(1).strip("'\"") for match in map(_RUNS_ON.match, lines) if match), "")
+        sanitizer = bool(_SANITIZER_JOB_ID.match(name)) or any(_SANITIZER_PRESET.search(line) for line in lines)
+        jobs[name] = WorkflowJob(runs_on, sanitizer)
+    return jobs
+
+
 @functools.lru_cache(maxsize=1)
 def required_gate_jobs() -> frozenset[str]:
     """Jobs the aggregate ``required-ci-gate`` job in build.yml needs.
@@ -460,6 +515,7 @@ def cmake_preset_index() -> CMakePresetIndex:
 def reset_caches() -> None:
     """Drop cached inventories so a test can point the resolvers at new content."""
     workflow_job_ids.cache_clear()
+    workflow_jobs.cache_clear()
     test_selector_targets.cache_clear()
     resolve_test_selector.cache_clear()
     cmake_preset_index.cache_clear()

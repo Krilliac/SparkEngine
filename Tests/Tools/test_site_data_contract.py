@@ -1350,10 +1350,6 @@ class ScopeNarrowingTests(ContractTestCase):
         linux = self.item_text(items["PLT-210"], "implementationScope", "commands")
         self.assertIn("linux", linux)
         self.assertEqual(items["PLT-210"]["profileApplicability"]["stable-v1"], "outside")
-        sanitizer = self.item_text(items["CI-110"], "implementationScope", "acceptanceCriteria")
-        self.assertIn("linux sanitizer", sanitizer)
-        self.assertIn("shared", sanitizer)
-        self.assertIn("without treating", sanitizer)
         self.assertEqual(items["CI-110"]["profileApplicability"]["stable-v1"], "shared")
 
     def test_security_performance_and_rehearsal_are_profile_bounded(self) -> None:
@@ -1415,6 +1411,75 @@ class ScopeNarrowingTests(ContractTestCase):
                 if name == "headless-scope-backup":
                     # One full run proves the rule is wired into Validator; the rest stay cheap.
                     self.assert_rejected(contract, fragment)
+
+
+class WindowsRowEvidenceTests(ContractTestCase):
+    """CI-110: Linux sanitizer evidence never promotes the Windows 11 stable-v1 row by itself."""
+
+    ASAN = {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-linux-asan", "label": "ASan"}
+    WINDOWS = {
+        "type": "workflow",
+        "path": ".github/workflows/build.yml",
+        "job": "build-windows-vs2022",
+        "label": "Windows",
+    }
+
+    def errors(self, contract: dict[str, Any]) -> list[str]:
+        return site_data_validate.windows_row_evidence_errors(contract)
+
+    def assert_error(self, contract: dict[str, Any], fragment: str) -> None:
+        errors = self.errors(contract)
+        self.assertTrue(any(fragment in error for error in errors), errors)
+
+    def test_live_contract_cites_windows_jobs_for_the_windows_row(self) -> None:
+        self.assertEqual(self.errors(self.mutable), [])
+
+    def test_runner_and_sanitizer_classification_come_from_the_workflow(self) -> None:
+        jobs = contract_selectors.workflow_jobs(REPO_ROOT / ".github" / "workflows" / "build.yml")
+        for sanitizer in ("build-linux-asan", "build-linux-tsan", "build-linux-msan"):
+            with self.subTest(job=sanitizer):
+                self.assertTrue(jobs[sanitizer].sanitizer)
+                self.assertFalse(jobs[sanitizer].windows)
+        self.assertTrue(jobs["build-windows-vs2022"].windows)
+        self.assertFalse(jobs["build-windows-vs2022"].sanitizer)
+
+    def test_sanitizer_job_replacing_windows_evidence_is_rejected(self) -> None:
+        windows = self.capabilities_of(self.mutable)["platform.windows"]
+        windows["evidence"] = [self.ASAN if entry.get("job") else entry for entry in windows["evidence"]]
+        self.assert_error(self.mutable, "stable-v1.platform.windows: promoted Windows row cites no workflow job")
+        self.assert_error(self.mutable, "Linux sanitizer evidence (.github/workflows/build.yml#build-linux-asan)")
+        self.assert_rejected(self.mutable, "cannot promote a Windows row by itself")
+
+    def test_sanitizer_job_alongside_windows_evidence_is_accepted(self) -> None:
+        self.capabilities_of(self.mutable)["platform.windows"]["evidence"].append(self.ASAN)
+        self.assertEqual(self.errors(self.mutable), [])
+
+    def test_passing_required_gate_with_only_sanitizer_evidence_is_rejected(self) -> None:
+        gate = self.gates_of(self.mutable)["G02"]
+        gate["state"] = "passing"
+        gate["evidence"] = [self.ASAN]
+        self.assert_error(self.mutable, "stable-v1.G02: Linux sanitizer evidence")
+        gate["evidence"] = [self.ASAN, self.WINDOWS]
+        self.assertEqual(self.errors(self.mutable), [])
+
+    def test_windows_certification_work_cannot_be_evidenced_by_sanitizer_reports(self) -> None:
+        entry = self.items_of(self.mutable)["PLT-200"]["acceptanceStatus"][0]
+        entry["state"] = "evidenced"
+        entry["evidence"] = [".github/scripts/verify-sanitizer-evidence.py", EXACT_CI_REFERENCE]
+        self.assert_error(self.mutable, "PLT-200.acceptanceStatus[0]: sanitizer-derived artifacts alone")
+        entry["evidence"] = ["Tools/platform-cert/validate_certification.py", EXACT_CI_REFERENCE]
+        self.assertEqual(self.errors(self.mutable), [])
+
+    def test_linux_host_certification_record_is_rejected_for_a_windows_row(self) -> None:
+        sys.path.insert(0, str(REPO_ROOT / "Tools" / "platform-cert"))
+        try:
+            import validate_certification  # noqa: PLC0415
+        finally:
+            sys.path.pop(0)
+        row = {"os": {"family": "Windows", "version": "11"}, "arch": "x64"}
+        evidence = {"host": {"os": {"family": "Linux", "version": "24.04"}, "arch": "x64", "compiler": {}}}
+        errors = validate_certification._cross_validate_host(row, evidence)
+        self.assertIn("OS family mismatch: row='Windows' host='Linux'", errors)
 
 
 class WebsitePrimaryGroupTests(ContractTestCase):

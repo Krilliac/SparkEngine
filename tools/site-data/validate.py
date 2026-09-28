@@ -14,7 +14,7 @@ import unicodedata
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from assets import validate_assets
 from module_content import validate as validate_module_content
@@ -32,8 +32,8 @@ from common import (
     read_bytes_stable,
     tracked_paths,
 )
-from contract_selectors import (cmake_preset_index, preset_references, required_gate_jobs, resolve_ci_job,
-                                resolve_test_selector)
+from contract_selectors import (WorkflowJob, cmake_preset_index, preset_references, required_gate_jobs,
+                                resolve_ci_job, resolve_test_selector, workflow_jobs)
 from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
@@ -1059,6 +1059,93 @@ _NON_WINDOWS_INSTALLER_WORDING = re.compile(
     r"\b(?:linux|macos|mac\s+os|os\s+x|appimage|flatpak|snap|deb|rpm|dmg|notari[sz]\w*)\b",
     re.IGNORECASE,
 )
+
+
+WINDOWS_CERTIFICATION_CAPABILITY = "platform.windows"
+_SANITIZER_ARTIFACT = re.compile(r"sanitizer|(?<![a-z])[atm]san(?![a-z])", re.IGNORECASE)
+
+
+def windows_row_evidence_errors(
+    contract: dict[str, Any], jobs_of: Callable[[str], dict[str, WorkflowJob]] | None = None
+) -> list[str]:
+    """CI-110: Linux sanitizer evidence never promotes a Windows-only profile's certification row by itself.
+
+    For each profile whose supported hosts are all Windows, a promoted included
+    capability whose workflow evidence names jobs, and every passing required
+    gate, cites at least one job on a ``windows-*`` runner; platform.windows
+    always does. No sanitizer lane may be the only job evidence, and the work
+    items blocking platform.windows cannot evidence a criterion with
+    sanitizer-derived repository artifacts alone.
+    """
+    if jobs_of is None:
+        jobs_of = lambda path: workflow_jobs(REPO_ROOT / path)  # noqa: E731
+    readiness = contract.get("readiness", {})
+    capabilities = {entry.get("id"): entry for entry in readiness.get("capabilities", []) if isinstance(entry, dict)}
+    gates = {entry.get("id"): entry for entry in readiness.get("gates", []) if isinstance(entry, dict)}
+    items = {entry.get("id"): entry for entry in contract.get("workItems", []) if isinstance(entry, dict)}
+
+    def cited_jobs(record: dict[str, Any]) -> list[tuple[str, WorkflowJob | None]]:
+        cited: list[tuple[str, WorkflowJob | None]] = []
+        for evidence in record.get("evidence", []):
+            if not isinstance(evidence, dict) or evidence.get("type") != "workflow" or not evidence.get("job"):
+                continue
+            path = str(evidence.get("path", ""))
+            try:
+                job = jobs_of(path).get(evidence["job"])
+            except SiteDataError:
+                job = None
+            cited.append((f"{path}#{evidence['job']}", job))
+        return cited
+
+    def row_errors(location: str, record: dict[str, Any], *, windows_required: bool) -> list[str]:
+        cited = cited_jobs(record)
+        if not cited and not windows_required:
+            return []
+        errors: list[str] = []
+        if not any(job is not None and job.windows for _, job in cited):
+            errors.append(f"{location}: promoted Windows row cites no workflow job on a windows-* runner")
+        if cited and all(job is not None and job.sanitizer for _, job in cited):
+            names = ", ".join(name for name, _ in cited)
+            errors.append(f"{location}: Linux sanitizer evidence ({names}) cannot promote a Windows row by itself")
+        return errors
+
+    errors: list[str] = []
+    for profile in readiness.get("releaseProfiles", []):
+        hosts = profile.get("supportedHosts", []) if isinstance(profile, dict) else []
+        if not hosts or not all(str(host).startswith("Windows") for host in hosts):
+            continue
+        prefix = f"windowsRowEvidence.{profile.get('id')}"
+        for capability_id in profile.get("includedCapabilityIds", []):
+            capability = capabilities.get(capability_id)
+            if capability is None:
+                continue
+            promoted = capability.get("verification") != "none" or capability.get("release") in {"candidate", "ready"}
+            if promoted:
+                errors.extend(
+                    row_errors(
+                        f"{prefix}.{capability_id}",
+                        capability,
+                        windows_required=capability_id == WINDOWS_CERTIFICATION_CAPABILITY,
+                    )
+                )
+        for gate_id in profile.get("requiredGateIds", []):
+            gate = gates.get(gate_id)
+            if gate is not None and gate.get("state") == "passing":
+                errors.extend(row_errors(f"{prefix}.{gate_id}", gate, windows_required=True))
+    windows_row = capabilities.get(WINDOWS_CERTIFICATION_CAPABILITY, {})
+    for owner_id in windows_row.get("blockingWorkItemIds", []):
+        for index, entry in enumerate(items.get(owner_id, {}).get("acceptanceStatus", [])):
+            if not isinstance(entry, dict) or entry.get("state") != "evidenced":
+                continue
+            artifacts = [
+                value for value in entry.get("evidence", []) if isinstance(value, str) and not value.startswith("ci:")
+            ]
+            if artifacts and all(_SANITIZER_ARTIFACT.search(value) for value in artifacts):
+                errors.append(
+                    f"windowsRowEvidence.{owner_id}.acceptanceStatus[{index}]: sanitizer-derived artifacts alone "
+                    "cannot evidence Windows certification work"
+                )
+    return errors
 
 
 def installer_platform_ownership_errors(contract: dict[str, Any]) -> list[str]:
@@ -3927,6 +4014,7 @@ class Validator:
         self.validate_online_service_boundary()
         for message in installer_platform_ownership_errors(self.contract):
             self.error("installerPlatformOwnership", message)
+        self.errors.extend(windows_row_evidence_errors(self.contract))
         self.validate_deferred_platforms()
         self.validate_legal(strict_public_wording=legal)
         if assets:
