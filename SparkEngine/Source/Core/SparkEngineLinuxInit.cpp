@@ -265,7 +265,7 @@ void InitLinuxCoreSubsystems(bool registerGameplay)
     auto* ctx = EngineContext::Get();
     if (!ctx)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — Linux init aborted");
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — Linux init stopped");
         return;
     }
 

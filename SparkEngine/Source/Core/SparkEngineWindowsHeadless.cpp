@@ -158,7 +158,7 @@ static bool InitHeadlessEngineContext()
     auto* ctx = EngineContext::Get();
     if (!ctx)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init aborted");
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init stopped");
         runtime.ShutdownHeadlessRhi();
         return false;
     }

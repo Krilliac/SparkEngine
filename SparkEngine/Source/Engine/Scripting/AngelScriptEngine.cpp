@@ -1213,7 +1213,7 @@ std::string AngelScriptEngine::DescribeScriptFault(asIScriptContext* ctx, int ex
     }
     else if (execResult == asEXECUTION_ABORTED)
     {
-        reason = "was aborted";
+        reason = "was interrupted";
         if (m_sandbox && m_sandbox->WasTerminated())
         {
             const auto violations = m_sandbox->GetViolations();

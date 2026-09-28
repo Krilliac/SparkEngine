@@ -205,7 +205,7 @@ bool AngelScriptEngine::HotReloadModuleFromSource(const std::string& moduleName,
     }
     if (source.empty())
     {
-        SetLastError("Hot-reload aborted: the new source of module '" + moduleName + "' is empty.");
+        SetLastError("Hot-reload rejected: the new source of module '" + moduleName + "' is empty.");
         SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", m_lastError.c_str());
         return false;
     }
@@ -259,7 +259,7 @@ bool AngelScriptEngine::StageAndCommitReload(const std::string& moduleName, cons
         {
             stage->Discard();
         }
-        SetLastError("Hot-reload aborted: recompilation of " + origin + " failed (" + m_firstCompileError +
+        SetLastError("Hot-reload rejected: recompilation of " + origin + " failed (" + m_firstCompileError +
                      "); live scripts left intact.");
         SPARK_LOG_ERROR(Spark::LogCategory::Scripting, "%s", m_lastError.c_str());
         return false;

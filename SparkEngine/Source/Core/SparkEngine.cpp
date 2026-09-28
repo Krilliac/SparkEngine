@@ -210,7 +210,7 @@ bool InitConsole()
             // No EngineStartEvent and no daemon wiring: nothing may observe a
             // started engine whose lifecycle stages were just rolled back.
             SPARK_LOG_ERROR(Spark::LogCategory::Core,
-                            "InitConsole: engine lifecycle initialization failed; startup aborted");
+                            "InitConsole: engine lifecycle initialization failed; startup stopped");
             return false;
         }
         SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitGameplaySystems");

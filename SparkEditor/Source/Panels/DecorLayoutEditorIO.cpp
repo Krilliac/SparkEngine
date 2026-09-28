@@ -411,13 +411,13 @@ namespace SparkEditor
             std::ofstream bak(bakPath, std::ios::binary | std::ios::trunc);
             if (!bak.is_open())
             {
-                outError = "cannot write backup '" + bakPath + "' - save aborted";
+                outError = "cannot write backup '" + bakPath + "' - save cancelled";
                 return false;
             }
             bak.write(oldBytes.data(), static_cast<std::streamsize>(oldBytes.size()));
             if (!bak.good())
             {
-                outError = "backup write failed for '" + bakPath + "' - save aborted";
+                outError = "backup write failed for '" + bakPath + "' - save cancelled";
                 return false;
             }
         }

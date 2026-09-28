@@ -343,7 +343,7 @@ void GameplayShowcase::AbortCoroutineSequence(const std::string& reason)
     m_coroutineScheduled = false;
     if (auto* scheduler = m_context ? m_context->GetCoroutineScheduler() : nullptr)
         scheduler->StopCoroutine(LifecycleCoroutineName);
-    Spark::SimpleConsole::GetInstance().LogWarning("[Showcase] Coroutine sequence aborted: " + reason);
+    Spark::SimpleConsole::GetInstance().LogWarning("[Showcase] Coroutine sequence stopped: " + reason);
 }
 
 HealthComponent* GameplayShowcase::FindCoroutineTargetHealth()

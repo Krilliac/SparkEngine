@@ -321,7 +321,7 @@ TEST(ScriptHotReload_ENG200_CompileErrorLeavesInstancesAndStateIntact)
                                    "    void Update(float dt) { counter = undefinedReloadSymbol; }\n"
                                    "}\n");
     EXPECT_FALSE(fx.engine.HotReloadModule("ENG200ReloadBroken"));
-    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "Hot-reload aborted");
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "Hot-reload rejected");
     EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "undefinedReloadSymbol");
 
     // R1: the old code and its state are untouched.
@@ -449,7 +449,7 @@ TEST(ScriptHotReload_ENG200_FromSourceReloadsInMemoryModule)
                                 "    int counter = 0;\n"
                                 "    void Update(float dt) { counter = undefinedInMemorySymbol; }\n"
                                 "}\n"));
-    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "Hot-reload aborted");
+    EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "Hot-reload rejected");
     EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "ENG200ReloadInMemory:4:");
     EXPECT_STR_CONTAINS(fx.engine.GetLastError(), "undefinedInMemorySymbol");
     EXPECT_EQ(fx.State(entity), v1State);
