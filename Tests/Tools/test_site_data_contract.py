@@ -140,6 +140,46 @@ class ContractTestCase(unittest.TestCase):
 
 EXACT_CI_REFERENCE = "ci:build.yml/1@" + "0" * 40
 
+# ENG-220 certifies only the D3D11 path; each experimental backend's parity is
+# owned by its own rendering work item (backend name, accepted title words).
+BACKEND_PARITY_OWNERS = {
+    "RHI-220": ("metal", ("parity",)),
+    "RHI-225": ("d3d12", ("parity",)),
+    "RHI-230": ("vulkan", ("parity",)),
+    "RHI-240": ("opengl", ("visual", "parity")),
+}
+ENG_220_PARITY_EXCLUSION = "Certifying D3D12, Vulkan, OpenGL, or Metal parity"
+
+
+def backend_parity_owner_errors(contract: dict[str, Any]) -> list[str]:
+    """Return every way experimental backend parity has lost its RHI owner."""
+    items = {item["id"]: item for item in contract["workItems"]}
+    errors: list[str] = []
+    for owner_id, (backend, title_words) in BACKEND_PARITY_OWNERS.items():
+        owner = items.get(owner_id)
+        if owner is None:
+            errors.append(f"{owner_id}: {backend} parity owner is missing")
+            continue
+        title = str(owner.get("title", "")).lower()
+        if backend not in title or not any(word in title for word in title_words):
+            errors.append(f"{owner_id}: title no longer names {backend} parity")
+        if owner.get("profileApplicability", {}).get("stable-v1") != "outside":
+            errors.append(f"{owner_id}: {backend} parity must stay outside stable-v1")
+        if owner.get("area") != "rendering":
+            errors.append(f"{owner_id}: {backend} parity owner must be a rendering item")
+        if "ENG-220" not in owner.get("dependencies", []):
+            errors.append(f"{owner_id}: must depend on ENG-220")
+    engine = items.get("ENG-220")
+    if engine is None:
+        errors.append("ENG-220: missing")
+        return errors
+    if ENG_220_PARITY_EXCLUSION not in engine.get("outOfScope", []):
+        errors.append("ENG-220: outOfScope must exclude experimental backend parity")
+    missing_parallel = sorted(set(BACKEND_PARITY_OWNERS) - set(engine.get("parallelWith", [])))
+    if missing_parallel:
+        errors.append(f"ENG-220: parallelWith is missing {missing_parallel}")
+    return errors
+
 
 class AcceptanceStatusTests(ContractTestCase):
     """acceptanceStatus tracks every criterion and never outruns the item status."""
@@ -1208,6 +1248,37 @@ class ScopeNarrowingTests(ContractTestCase):
         manifests = self.item_text(items["RDY-020"], "implementationScope", "acceptanceCriteria")
         self.assertIn("per-module", manifests)
         self.assertIn("in-profile", manifests)
+
+    def test_experimental_backend_parity_is_owned_by_rhi_items(self) -> None:
+        self.assertEqual(backend_parity_owner_errors(self.mutable), [])
+
+        def drift(mutate: Any, fragment: str) -> None:
+            contract = copy.deepcopy(self.mutable)
+            mutate(self.items_of(contract), contract)
+            errors = backend_parity_owner_errors(contract)
+            self.assertTrue(any(fragment in error for error in errors), errors)
+
+        cases = {
+            "deleted-owner": (
+                lambda items, contract: contract["workItems"].remove(items["RHI-230"]),
+                "RHI-230: vulkan parity owner is missing",
+            ),
+            "owner-promoted-into-stable": (
+                lambda items, _: items["RHI-225"]["profileApplicability"].__setitem__("stable-v1", "required"),
+                "RHI-225: d3d12 parity must stay outside stable-v1",
+            ),
+            "owner-detached-from-eng-220": (
+                lambda items, _: items["RHI-240"]["dependencies"].remove("ENG-220"),
+                "RHI-240: must depend on ENG-220",
+            ),
+            "eng-220-exclusion-dropped": (
+                lambda items, _: items["ENG-220"].__setitem__("outOfScope", []),
+                "ENG-220: outOfScope must exclude experimental backend parity",
+            ),
+        }
+        for name, (mutate, fragment) in cases.items():
+            with self.subTest(drift=name):
+                drift(mutate, fragment)
 
     def test_shared_manifest_kit_and_prototype_helpers_are_split(self) -> None:
         items = self.items_of(self.mutable)
