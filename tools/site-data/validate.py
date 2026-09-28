@@ -542,6 +542,72 @@ def online_service_spec_contract_errors(
     return errors
 
 
+# HEAD-220 ships a Windows NullRHI package; production operations stay with G12 and OPS-110.
+OPERATIONS_BOUNDARY_TERMS = (
+    "network administration",
+    "remote admin",
+    "fleet",
+    "telemetry",
+    "backup",
+    "restore",
+    "incident",
+    "alert",
+    "runbook",
+    "server_",
+)
+OPERATIONS_OWNER_SCOPE = ("administration", "telemetry", "backup", "incident")
+OPERATIONS_GATE_CRITERIA = ("telemetry", "backups", "incident drills")
+
+
+def operations_boundary_errors(contract: dict[str, Any]) -> list[str]:
+    """HEAD-220 never absorbs production operations; OPS-110 and gate G12 keep owning them."""
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    gates = {gate.get("id"): gate for gate in contract.get("readiness", {}).get("gates", []) if isinstance(gate, dict)}
+
+    def lowered(record: dict[str, Any], *fields: str) -> list[tuple[str, str]]:
+        return [
+            (field, str(value).lower())
+            for field in fields
+            for value in record.get(field, [])
+            if isinstance(record.get(field), list)
+        ]
+
+    errors: list[str] = []
+    headless = items.get("HEAD-220")
+    if headless is None:
+        errors.append("operationsBoundary.HEAD-220: work item is missing")
+    else:
+        for field, value in lowered(headless, "implementationScope", "commands", "testSelectors", "requiredCiJobs"):
+            for term in OPERATIONS_BOUNDARY_TERMS:
+                if term in value:
+                    errors.append(
+                        f"operationsBoundary.HEAD-220.{field}: {value!r} names production operations "
+                        f"({term!r}); that scope belongs to OPS-110 under G12"
+                    )
+    operations = items.get("OPS-110")
+    if operations is None:
+        errors.append("operationsBoundary.OPS-110: work item is missing")
+    else:
+        owned = " ".join(value for _, value in lowered(operations, "implementationScope", "acceptanceCriteria"))
+        for term in OPERATIONS_OWNER_SCOPE:
+            if term not in owned:
+                errors.append(f"operationsBoundary.OPS-110: scope and criteria must own {term}")
+    gate = gates.get("G12")
+    if gate is None:
+        errors.append("operationsBoundary.G12: gate is missing")
+    else:
+        blockers = gate.get("blockingWorkItemIds", [])
+        if "OPS-110" not in blockers:
+            errors.append("operationsBoundary.G12.blockingWorkItemIds: must list OPS-110")
+        if "HEAD-220" in blockers:
+            errors.append("operationsBoundary.G12.blockingWorkItemIds: must not list HEAD-220")
+        criteria = " ".join(value for _, value in lowered(gate, "acceptanceCriteria"))
+        for term in OPERATIONS_GATE_CRITERIA:
+            if term not in criteria:
+                errors.append(f"operationsBoundary.G12.acceptanceCriteria: must require {term}")
+    return errors
+
+
 # NET-110: no local JSON store, demo service or owner-local reference process
 # may be described as production infrastructure anywhere in the documentation.
 LOCAL_STORE_PRODUCTION_CLAIM = re.compile(
@@ -3237,6 +3303,7 @@ class Validator:
             self.error("onlineServiceBoundary", violation)
         for violation in adapter_name_production_errors(REPO_ROOT):
             self.error("onlineServiceBoundary", violation)
+        self.errors.extend(operations_boundary_errors(self.contract))
 
     def validate_deferred_platforms(self) -> None:
         """OD-12 (PLT-230/PLT-240/PLT-250): deferred platforms stay unsupported and blocked, console carries

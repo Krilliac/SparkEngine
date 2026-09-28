@@ -1336,6 +1336,43 @@ class ScopeNarrowingTests(ContractTestCase):
         for owned in ("backup", "incident", "telemetry"):
             self.assertIn(owned, operations)
 
+    def test_production_operations_stay_owned_by_g12_and_ops_110(self) -> None:
+        self.assertEqual(site_data_validate.operations_boundary_errors(self.mutable), [])
+
+        def scope_backup(items: dict[str, Any], _: dict[str, Any]) -> None:
+            items["HEAD-220"]["implementationScope"].append("Automate backup and restore")
+
+        def select_server_soak(items: dict[str, Any], _: dict[str, Any]) -> None:
+            items["HEAD-220"]["testSelectors"].append("Server_Soak")
+
+        def drop_ops_from_g12(_: dict[str, Any], contract: dict[str, Any]) -> None:
+            self.gates_of(contract)["G12"]["blockingWorkItemIds"].remove("OPS-110")
+
+        def add_headless_to_g12(_: dict[str, Any], contract: dict[str, Any]) -> None:
+            self.gates_of(contract)["G12"]["blockingWorkItemIds"].append("HEAD-220")
+
+        def drop_incident_scope(items: dict[str, Any], _: dict[str, Any]) -> None:
+            operations = items["OPS-110"]
+            for field in ("implementationScope", "acceptanceCriteria"):
+                operations[field] = [value for value in operations[field] if "incident" not in value.lower()]
+
+        cases = {
+            "headless-scope-backup": (scope_backup, "names production operations ('backup')"),
+            "headless-server-selector": (select_server_soak, "names production operations ('server_')"),
+            "g12-loses-ops-110": (drop_ops_from_g12, "G12.blockingWorkItemIds: must list OPS-110"),
+            "g12-gains-head-220": (add_headless_to_g12, "G12.blockingWorkItemIds: must not list HEAD-220"),
+            "ops-110-loses-incidents": (drop_incident_scope, "OPS-110: scope and criteria must own incident"),
+        }
+        for name, (mutate, fragment) in cases.items():
+            with self.subTest(mutation=name):
+                contract = copy.deepcopy(self.contract)
+                mutate(self.items_of(contract), contract)
+                errors = site_data_validate.operations_boundary_errors(contract)
+                self.assertTrue(any(fragment in error for error in errors), errors)
+                if name == "headless-scope-backup":
+                    # One full run proves the rule is wired into Validator; the rest stay cheap.
+                    self.assert_rejected(contract, fragment)
+
 
 class WebsitePrimaryGroupTests(ContractTestCase):
     """Frozen case 7: one primary group exactly equals profile capabilities."""
