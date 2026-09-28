@@ -17,6 +17,10 @@
 #include "Core/EngineRuntime.h"
 #include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Core/Lifecycle/LifecycleStages.h"
+#include "Engine/AI/AISystem.h"
+#include "Engine/AI/BehaviorTree.h"
+#include "Engine/Animation/AnimationSystem.h"
+#include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
@@ -528,4 +532,73 @@ TEST(EngineWiring_UncapturedMouseMoveIsTheFrameDelta)
     input.Update();
     EXPECT_EQ(input.GetMouseDelta().x, 0);
     EXPECT_EQ(input.GetMouseDelta().y, 0);
+}
+
+// ============================================================================
+// Module teardown: registries a game module fills with objects built in its own
+// image must be emptied by gameplay teardown, which runs after module OnUnload
+// and before FreeLibrary. Left to the singletons' process-exit destructors, the
+// installed ARPG and RPG packages crashed with an access violation after their
+// DLL was unmapped (behavior-tree node vtables, a make_shared clip control block).
+// ============================================================================
+
+namespace
+{
+    // Static, not a test-frame local: when the release regresses, the nodes are
+    // destroyed at process exit and must not write into a dead stack frame.
+    int s_destroyedTeardownProbeNodes = 0;
+
+    class TeardownProbeNode final : public Spark::AI::BTNode
+    {
+      public:
+        ~TeardownProbeNode() override { ++s_destroyedTeardownProbeNodes; }
+
+        Spark::AI::NodeStatus Tick(float, Spark::AI::Blackboard&) override
+        {
+            return m_status = Spark::AI::NodeStatus::Success;
+        }
+
+        std::unique_ptr<Spark::AI::BTNode> Clone() const override { return std::make_unique<TeardownProbeNode>(); }
+    };
+} // namespace
+
+TEST(EngineWiring_GameplayTeardownReleasesModuleBuiltRegistryEntries)
+{
+    SetupContextWithWorld();
+    auto* ctx = EngineContext::Get();
+    ASSERT_TRUE(ctx != nullptr);
+
+    InitializeProductionLifecycle();
+    ASSERT_TRUE(ctx->GetAI() != nullptr);
+    ASSERT_TRUE(ctx->GetAnimation() != nullptr);
+    ASSERT_TRUE(ctx->GetDestruction() != nullptr);
+
+    // What SparkGameARPG/SparkGameRPG register through IEngineContext at OnLoad:
+    // a behavior template (plus the per-agent clone the AI tick makes from it)...
+    s_destroyedTeardownProbeNodes = 0;
+    auto tree = std::make_unique<Spark::AI::BehaviorTree>("teardown_probe");
+    tree->SetRoot(std::make_unique<TeardownProbeNode>());
+    ctx->GetAI()->RegisterBehavior("teardown_probe", std::move(tree));
+    ASSERT_TRUE(ctx->GetAI()->CreateBehaviorInstance("teardown_probe") != nullptr);
+
+    // ...an animation clip...
+    auto clip = std::make_shared<Spark::Animation::AnimationClip>();
+    const std::weak_ptr<Spark::Animation::AnimationClip> clipWatch = clip;
+    ctx->GetAnimation()->RegisterClip("teardown_probe", std::move(clip));
+
+    // ...and a destruction callback.
+    auto callbackState = std::make_shared<int>(0);
+    const std::weak_ptr<int> callbackWatch = callbackState;
+    ctx->GetDestruction()->OnDestruction([callbackState](const Spark::DestructionEvent&) { ++*callbackState; });
+    callbackState.reset();
+
+    EXPECT_EQ(s_destroyedTeardownProbeNodes, 0);
+    EXPECT_FALSE(clipWatch.expired());
+    EXPECT_FALSE(callbackWatch.expired());
+
+    Spark::Core::Lifecycle::ShutdownGameplaySystemsImpl();
+
+    EXPECT_EQ(s_destroyedTeardownProbeNodes, 2); // the template root and its clone
+    EXPECT_TRUE(clipWatch.expired());
+    EXPECT_TRUE(callbackWatch.expired());
 }

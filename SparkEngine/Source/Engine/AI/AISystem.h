@@ -316,6 +316,17 @@ namespace Spark::AI
      */
         BehaviorTree* CreateBehaviorInstance(const std::string& templateName);
 
+        /**
+     * @brief Destroy every registered template and every per-agent instance.
+     *
+     * Game modules build behavior trees from their own code, so each node's
+     * vtable and destructor live in the module image. Teardown calls this after
+     * module OnUnload and before the image is unmapped (AIIntegratedSystem::Shutdown);
+     * leaving the trees to the process-exit destructor ran them in unmapped code.
+     * Every `AIComponent::behaviorTreeHandle` handed out earlier is invalid afterwards.
+     */
+        void ClearBehaviors();
+
         // =========================================================================
         // Console integration
         // =========================================================================

@@ -438,6 +438,8 @@ Engine Startup
     └── Unload DLL/SO (FreeLibrary / dlclose)
 ```
 
+Anything a module hands to an engine registry — a behavior tree, a `std::make_shared` animation clip, a `std::function` callback — carries a vtable or destructor that lives in the module image. At engine shutdown, gameplay teardown empties those registries after `OnUnload()` and before the image is unmapped (`AIIntegratedSystem::Shutdown`, `DestructionSystem::Shutdown`, `AnimationManager::Clear`, alongside the existing sequencer, network-handler, ECS-world and physics releases in `ShutdownEngineAfterPreflight`). An engine singleton that keeps such an object until process exit runs module code after unload: the installed ARPG and RPG packages crashed that way at shutdown. A callback that captures `this` should still be removed in your own `OnUnload()` (keep the id `OnDestruction()` returns and pass it to `RemoveDestructionCallback()`), because a hot reload does not run engine teardown.
+
 The process hosts one Game module. Compatible `ModuleKind::Addon` modules (library/extension-style modules), when present, follow their own `ModuleInfo` lifecycle rules; manifest `loadOrder` is not a runtime control.
 
 ## Using Engine Services

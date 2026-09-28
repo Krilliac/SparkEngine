@@ -251,6 +251,12 @@ namespace Spark::AI
         return ptr;
     }
 
+    void AISystem::ClearBehaviors()
+    {
+        m_behaviorInstances.clear();
+        m_behaviorTemplates.clear();
+    }
+
     void AISystem::UpdatePerception(World& world, EntityID selfEntity, AIComponent& ai, const Transform& transform,
                                     float deltaTime)
     {

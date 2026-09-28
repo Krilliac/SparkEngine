@@ -2407,7 +2407,7 @@ endif()
 set(_spark_life_selectors
     "ModuleLifecycle_=6"
     "ModuleABI_=${_spark_life_module_abi_count}"
-    "EngineWiring_=11"
+    "EngineWiring_=12"
     "ModuleHotReload_=15"
     "LIFE200_=${_spark_life_life200_count}"
     "LifecycleLoop_=7"

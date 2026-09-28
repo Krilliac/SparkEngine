@@ -1563,6 +1563,13 @@ namespace Spark::Core::Lifecycle
         ShutdownAIAndWorldSystems();
         ShutdownRenderingAndUtilitySystems();
 
+        // Game modules register fracture callbacks and animation clips built in
+        // their own image (AI behavior trees are released by AIIntegratedSystem::Shutdown
+        // above). This runs after module OnUnload and before the images are unmapped;
+        // the singletons' process-exit destructors would run that code after unload.
+        Spark::DestructionSystem::GetInstance().Shutdown();
+        Spark::Animation::AnimationManager::GetInstance().Clear();
+
         GetEngineRuntime().weaponSystem.reset();
         Spark::Audio::AudioMixer::GetInstance().SetPhysics(nullptr);
         Spark::Audio::AudioMixer::GetInstance().Shutdown();

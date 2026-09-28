@@ -361,9 +361,11 @@ namespace Spark::Animation
      *       complementary `AnimNotifyManager` (wired at
      *       `GameplayLifecycleShared.cpp:445,1032`) handles event
      *       delivery — it is orthogonal to this registry, not a
-     *       duplicate. `Clear()` is safe to call at level unload but is
-     *       not a lifecycle requirement because cached entries use
-     *       `shared_ptr` and outlive this map while anyone holds a ref.
+     *       duplicate. `Clear()` is safe to call at level unload, and
+     *       gameplay teardown calls it after module OnUnload and before
+     *       the module images are unmapped: a clip a module made with
+     *       `std::make_shared` carries a control block whose destructor
+     *       lives in that module, so the map must not survive to process exit.
      *       Production `.skel` parsing is exercised by
      *       `Tests/harden/Test_ai-anim_animation.cpp`;
      *       `Tests/TestAnimationSystem.cpp` is standalone behavior coverage,
