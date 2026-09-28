@@ -1078,6 +1078,16 @@ if(ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
         target_compile_options(angelscript PRIVATE -fno-sanitize=alignment)
     endif()
+    # gcov instrumentation of the GCC native-call thunks (X64_CallFunction and
+    # friends) gives them exception tables that do not list the call made from
+    # inline assembly, so a C++ exception thrown by a registered native function
+    # hits std::terminate instead of reaching asCContext's handler. Seen as a
+    # SIGABRT in AngelScriptStackAlignment_NativeExceptionsUnwindValueObjects in
+    # the --coverage job only. -fno-profile-arcs does not undo --coverage, so
+    # exclude those files from instrumentation (ThirdParty is not measured).
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_FLAGS MATCHES "--coverage|-fprofile-arcs")
+        target_compile_options(angelscript PRIVATE "-fprofile-exclude-files=as_callfunc_[a-z0-9]+_gcc[.]cpp$")
+    endif()
 
     list(APPEND THIRDPARTY_INCLUDE_DIRS "${SPARK_ANGELSCRIPT_ADDON_DIR}")
     set(SPARK_ANGELSCRIPT_AVAILABLE TRUE)
