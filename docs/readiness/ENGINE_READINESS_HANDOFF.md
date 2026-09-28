@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **152 implemented** (59%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **154 implemented** (59%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -309,9 +309,9 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | [`MOD-300`](#mod-300--complete-and-correctly-position-the-base-sparkgame-showcase) Complete and correctly position the base SparkGame showcase | P1 | **in-progress** | 3/5 · 0/5 | `MOD-290` | `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-310`](#mod-310--finish-fps-as-the-installed-single-player-stable-v1-slice) Finish FPS as the installed single-player stable-v1 slice | P1 | **in-progress** | 2/5 · 0/5 | `MOD-290`, `SDK-240`, `RDY-020` | `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-320`](#mod-320--finish-mmo-as-a-secure-persistent-integrated-world) Finish MMO as a secure persistent integrated world | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290`, `NET-100`, `DATA-120`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-360`](#mod-360--finish-openworld-as-a-streamed-survivalexploration-slice) Finish OpenWorld as a streamed survival/exploration slice | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-370`](#mod-370--finish-rts-as-a-deterministic-playable-skirmish) Finish RTS as a deterministic playable skirmish | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-380`, `MOD-390` |
 | [`MOD-380`](#mod-380--finish-racing-as-a-physics-backed-complete-race) Finish Racing as a physics-backed complete race | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-390` |
@@ -3698,10 +3698,11 @@ ARPG is mostly in-memory/debug state without integrated input, ECS world, assets
 
 **Acceptance criteria**
 
-Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Automated player clears a packaged dungeon and authoritative boss identity/state is correct
-   - ARPGDungeonPackage_ClearAndRestart (opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS) clears the dungeon and saves on Windows, then the installed SparkEngine hits an access violation during shutdown (child exit 1), so the packaged run fails. Stays open until the teardown crash is fixed.
+1. **[implemented]** Automated player clears a packaged dungeon and authoritative boss identity/state is correct
+   - Evidence: `Tests/PackageSmoke/ModuleObjectives/SparkGameARPG.cmake`, `Tests/PackageSmoke/RunInstalledModuleObjective.cmake`, `GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp`, `SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp`
+   - ARPGDungeonPackage_ClearAndRestart passes on Windows (105 s, opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS): the installed package clears floor 5, the boss holds its identity to the clear, and a restart reloads the save. Needed the module-teardown and exec-audit fixes. Not in hosted CI yet.
 2. **[implemented]** Hero/skills/combat/loot/UI/save all round-trip
    - Evidence: `Tests/TestMOD330ARPGDungeonReal.cpp`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.h`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.cpp`, `GameModules/SparkGameARPG/Source/Core/Main.cpp`, `GameModules/SparkGameARPG/module.json`
    - ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, learned skills, cooldowns, loot and boss through the real SaveSystem, and forged state is rejected. There is still no UI round-trip, so the criterion stays unmet.
@@ -3860,10 +3861,11 @@ RPG has broad in-memory models but no integrated input, entities, rendered scene
 
 **Acceptance criteria**
 
-Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Automated packaged quest flow completes and reward/state persist after restart
-   - RPGQuestSlicePackage_WolfHuntRestart (opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS) fails on Windows: the installed SparkEngine hits an access violation during shutdown after the quest phase (child exit 1). Stays open until the teardown crash is fixed.
+1. **[implemented]** Automated packaged quest flow completes and reward/state persist after restart
+   - Evidence: `Tests/PackageSmoke/ModuleObjectives/SparkGameRPG.cmake`, `GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp`, `Tests/TestMOD350RPGQuestSliceReal.cpp`
+   - RPGQuestSlicePackage_WolfHuntRestart passes on Windows (266 s, opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS): the wolf hunt completes, the reward persists and a restarted process restores it onto the same hero (RPGPersistence_LoadPreservesHeroIdentity...). Not in hosted CI yet.
 2. **[implemented]** NPCs navigate/interact through runtime systems
    - Evidence: `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp`, `Tests/TestMOD350RPGNPCNavigationReal.cpp`, `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.h`, `Tests/CMakeLists.txt`
    - Schedule changes walk NPCs at 3 m/s along engine NavMesh routes (NavMeshBuilder/NavMeshQuery, one bake per NPC area at module load) instead of teleporting; RPGNPCNavigation_* cover the world bake, a detour around blocked ground, unreachable posts and resuming after a restore. Patrol legs still move in straight lines and no packaged run exists.
