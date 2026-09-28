@@ -4809,6 +4809,19 @@ if(Python3_Interpreter_FOUND)
         LABELS "release;integrity;python"
         TIMEOUT 120)
 
+    # REL-191: the predecessor-stage rehearsal. Runs every predecessor case of
+    # the stage contract (including the N-1 evidence boundary) and of the
+    # qualifier, which must refuse the real predecessor stage while it is blocked.
+    add_test(
+        NAME ReleaseProfilePredecessorRehearsal_Qualification
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest -v -k predecessor
+                Tests/Tools/test_release_stages.py Tests/Tools/test_release_qualification.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    set_tests_properties(ReleaseProfilePredecessorRehearsal_Qualification PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "release;integrity;python"
+        TIMEOUT 120)
+
     # REL-110: protected stable-release approval event recorder, its consumer
     # digest binding, and the release.yml wiring.
     add_test(

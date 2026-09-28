@@ -7,9 +7,9 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "site-data"))
-from release_stages import (candidate_readiness_errors, finalization_contract_errors,
-                            predecessor_candidate_readiness_errors)
-from common import load_contract
+from release_stages import (N_MINUS_ONE_PROVISIONER, candidate_readiness_errors, finalization_contract_errors,
+                            nminus1_evidence_errors, predecessor_candidate_readiness_errors)
+from common import criterion_digest, load_contract
 
 
 def candidate():
@@ -69,6 +69,37 @@ def predecessor_candidate():
     return contract
 
 
+def ledger_predecessor_candidate():
+    """The real ledger with every common item finished and the predecessor stage signed off."""
+    contract = copy.deepcopy(load_contract())
+    readiness = contract["readiness"]
+    stage = readiness["predecessorRelease"]
+    readiness["globalRelease"]["state"] = "candidate"
+    profile = readiness["releaseProfiles"][0]
+    profile["state"] = "candidate"
+    profile["owner"] = "release-owner"
+    profile["signOffEvidence"] = [{"label": "review", "path": "review.json"}]
+    stage["state"] = "candidate"
+    stage["owner"] = "release-owner"
+    stage["signOffEvidence"] = [{"label": "review", "path": "review.json"}]
+    stage["sourceCommitEvidence"].pop("commit", None)
+    stage["sourceCommitEvidence"]["baselineCommit"] = "0123456789abcdef0123456789abcdef01234567"
+    items = {item["id"]: item for item in contract["workItems"]}
+    for item in items.values():
+        item["status"] = "done"
+        item["plannedCiJobs"] = []
+        item["plannedTestSelectors"] = []
+    # The predecessor has explicit equivalents, while the v1 rehearsal,
+    # N-1 and publication items remain unfinished and must not be
+    # silently promoted (OD-18 substitutes REL-191 for REL-190).
+    for source_id in ("INST-131", "REL-190", "REL-192", "REL-200"):
+        items[source_id]["status"] = "open" if source_id != "REL-200" else "blocked"
+    items["REL-193"]["status"] = "in-progress"
+    for gate in readiness["gates"]:
+        gate["state"] = "at-risk" if gate["id"] == "G18" else "passing"
+    return contract
+
+
 class ReleaseStageTests(unittest.TestCase):
     def test_predecessor_replaces_only_v1_terminal_publication(self):
         contract = predecessor_candidate()
@@ -109,37 +140,56 @@ class ReleaseStageTests(unittest.TestCase):
         self.assertTrue(predecessor_candidate_readiness_errors(contract))
 
     def test_actual_ledger_predecessor_can_pass_without_marking_v1_n_minus_one_done(self):
-        contract = load_contract()
-        contract = copy.deepcopy(contract)
-        readiness = contract["readiness"]
-        stage = readiness["predecessorRelease"]
-        readiness["globalRelease"]["state"] = "candidate"
-        profile = readiness["releaseProfiles"][0]
-        profile["state"] = "candidate"
-        profile["owner"] = "release-owner"
-        profile["signOffEvidence"] = [{"label": "review", "path": "review.json"}]
-        stage["state"] = "candidate"
-        stage["owner"] = "release-owner"
-        stage["signOffEvidence"] = [{"label": "review", "path": "review.json"}]
-        stage["sourceCommitEvidence"].pop("commit", None)
-        stage["sourceCommitEvidence"]["baselineCommit"] = "0123456789abcdef0123456789abcdef01234567"
-        items = {item["id"]: item for item in contract["workItems"]}
-        for item in items.values():
-            item["status"] = "done"
-            item["plannedCiJobs"] = []
-            item["plannedTestSelectors"] = []
-        # The predecessor has explicit equivalents, while the v1 rehearsal,
-        # N-1 and publication items remain unfinished and must not be
-        # silently promoted (OD-18 substitutes REL-191 for REL-190).
-        for source_id in ("INST-131", "REL-190", "REL-192", "REL-200"):
-            items[source_id]["status"] = "open" if source_id != "REL-200" else "blocked"
-        items["REL-193"]["status"] = "in-progress"
-        for gate in readiness["gates"]:
-            gate["state"] = "at-risk" if gate["id"] == "G18" else "passing"
+        contract = ledger_predecessor_candidate()
         self.assertEqual(predecessor_candidate_readiness_errors(contract), [])
         contract = predecessor_candidate()
         contract["workItems"][-1]["status"] = "done"
         self.assertTrue(predecessor_candidate_readiness_errors(contract))
+
+    def test_actual_ledger_keeps_n_minus_one_evidence_out_of_the_predecessor(self):
+        self.assertEqual(nminus1_evidence_errors(load_contract()), [])
+
+    def test_predecessor_signoff_citing_an_n_minus_one_rehearsal_is_refused(self):
+        contract = ledger_predecessor_candidate()
+        contract["readiness"]["predecessorRelease"]["signOffEvidence"].append(
+            {"label": "N-1 rehearsal passed", "path": "ctest -R ReleaseProfileNMinusOneRehearsal_Upgrade"})
+        errors = predecessor_candidate_readiness_errors(contract)
+        self.assertIn("predecessorRelease.signOffEvidence: cites N-1 evidence ReleaseProfileNMinusOneRehearsal_*",
+                      errors)
+
+    def test_predecessor_publication_evidence_naming_the_n_minus_one_provisioner_is_refused(self):
+        contract = ledger_predecessor_candidate()
+        items = {item["id"]: item for item in contract["workItems"]}
+        items["REL-193"]["acceptanceStatus"][0]["evidence"] = [N_MINUS_ONE_PROVISIONER]
+        errors = predecessor_candidate_readiness_errors(contract)
+        self.assertIn(f"REL-193.acceptanceStatus: predecessor evidence cites N-1 evidence {N_MINUS_ONE_PROVISIONER}",
+                      errors)
+
+    def test_predecessor_evidence_reusing_an_n_minus_one_criterion_digest_is_refused(self):
+        contract = ledger_predecessor_candidate()
+        items = {item["id"]: item for item in contract["workItems"]}
+        digest = criterion_digest(items["INST-131"]["acceptanceCriteria"][1])
+        items["REL-191"]["acceptanceStatus"][2]["note"] = f"Upgrade and rollback passed ({digest})."
+        errors = predecessor_candidate_readiness_errors(contract)
+        self.assertIn(f"REL-191.acceptanceStatus: predecessor evidence cites N-1 evidence {digest}", errors)
+
+    def test_predecessor_upgrade_or_rollback_selector_is_refused_but_shared_drill_is_not(self):
+        contract = ledger_predecessor_candidate()
+        items = {item["id"]: item for item in contract["workItems"]}
+        # Installer_Interrupted is also INST-132's own bootstrap drill.
+        items["INST-132"]["acceptanceStatus"][0]["evidence"] = ["Installer_Interrupted"]
+        self.assertEqual(nminus1_evidence_errors(contract), [])
+        items["INST-132"]["acceptanceStatus"][1]["evidence"] = ["Installer_Rollback"]
+        self.assertEqual(nminus1_evidence_errors(contract),
+                         ["INST-132.acceptanceStatus: predecessor evidence cites N-1 evidence Installer_Rollback"])
+
+    def test_predecessor_only_work_depending_on_n_minus_one_is_refused(self):
+        for item_id, dependency in (("REL-191", "REL-192"), ("REL-193", "INST-131")):
+            contract = ledger_predecessor_candidate()
+            items = {item["id"]: item for item in contract["workItems"]}
+            items[item_id]["dependencies"].append(dependency)
+            self.assertIn(f"{item_id}: predecessor-only work cannot depend on N-1 item {dependency}",
+                          predecessor_candidate_readiness_errors(contract))
 
     def test_actual_ledger_records_owner_decisions_without_claiming_a_baseline(self):
         # OD-18/OD-19 (docs/readiness/OWNER-DECISIONS.md): REL-191 replaces
