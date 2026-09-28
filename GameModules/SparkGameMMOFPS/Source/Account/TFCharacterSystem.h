@@ -50,7 +50,8 @@ namespace Terrafront
         // name 3..23, alnum+single-space (no lead/trail/double space), unique, valid faction, slot cap
         TFCharCreateResult Create(uint64_t accountId, const std::string& name, FactionId faction);
 
-        TFCharErr Delete(uint64_t accountId, uint64_t charId); // ownership-checked
+        /// Ownership-checked. TF-120: SessionActive while the character is in world on a live continent.
+        TFCharErr Delete(uint64_t accountId, uint64_t charId);
 
         // enter-world binding (Task 4): returns the character (faction becomes authoritative). On a database
         // bound to a continent (TF-120) it also claims the character's residency; the claim is refused with
@@ -63,6 +64,11 @@ namespace Terrafront
         bool LeaveWorld(uint64_t charId);
 
         bool PersistProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux); // routes to db
+
+        /// TF-120 disconnect durability, judged for this one character: true only if the committed row is
+        /// resident on this database's bound continent (none when unbound) and carries exactly these values.
+        /// Whether a whole-store save sweep succeeded says nothing about a single character's row.
+        bool IsProgressCommitted(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux);
 
         // Exposed for reuse (net-layer validation in Task 4/5) and unit testing.
         static bool ValidateCharacterName(const std::string& name, std::string& err);

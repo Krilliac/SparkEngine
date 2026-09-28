@@ -409,7 +409,7 @@ TEST(TF120_Residency_ParkedRowKeepsResidencyUntilSweepResolvesIt)
     // releasing it now would let the other continent start without the unlock.
     const fs::path staging(path.wstring() + L".tmp");
     ASSERT_TRUE(fs::create_directory(staging));
-    EXPECT_FALSE(store.Detach(PlayerId{1}, &cindralDb));
+    EXPECT_FALSE(store.Detach(PlayerId{1}, &cindralDb, /*progressDurable*/ true));
     fs::remove_all(staging);
     EXPECT_TRUE(store.IsParked(hero.charId));
     EXPECT_TRUE(store.TakeResolvedParked().empty());
@@ -428,6 +428,185 @@ TEST(TF120_Residency_ParkedRowKeepsResidencyUntilSweepResolvesIt)
 
     ASSERT_TRUE(veyra.EnterWorld(hero.accountId, hero.charId, rec));
     EXPECT_TRUE(std::find(rec.unlocks.begin(), rec.unlocks.end(), "parked_unlock") != rec.unlocks.end());
+}
+
+TEST(TF120_Residency_ParkedRowWithUndurableProgressKeepsResidency)
+{
+    const fs::path path = FreshResidencyDb("test_tf120_residency_parked_undurable.db");
+    TFDatabase cindralDb;
+    TFDatabase veyraDb;
+    ASSERT_TRUE(cindralDb.Open(path) && cindralDb.BindAuthority(kCindral));
+    ASSERT_TRUE(veyraDb.Open(path) && veyraDb.BindAuthority(kVeyra));
+    TFCharacterSystem cindral;
+    TFCharacterSystem veyra;
+    cindral.SetDatabase(&cindralDb);
+    veyra.SetDatabase(&veyraDb);
+    const Seeded hero = SeedCharacter(cindralDb, "undurable", "Undurable");
+    ASSERT_TRUE(hero.charId != 0);
+
+    TFPlayerMetaStore store;
+    TFCharacterRecord rec;
+    ASSERT_TRUE(cindral.EnterWorld(hero.accountId, hero.charId, rec));
+    store.SeedFromRecord(PlayerId{1}, rec);
+    store.Ensure(PlayerId{1}).unlocks.insert("parked_unlock");
+    store.Ensure(PlayerId{1}).dirty = true;
+
+    // The disconnect loses both flushes: the final progress never committed, and the meta is parked.
+    const fs::path staging(path.wstring() + L".tmp");
+    ASSERT_TRUE(fs::create_directory(staging));
+    EXPECT_FALSE(cindral.PersistProgress(hero.charId, 900, 2, 40));
+    EXPECT_FALSE(cindral.IsProgressCommitted(hero.charId, 900, 2, 40));
+    EXPECT_FALSE(store.Detach(PlayerId{1}, &cindralDb, /*progressDurable*/ false));
+    fs::remove_all(staging);
+
+    // The sweep commits the parked meta, but the character must not move on without its last progress.
+    EXPECT_TRUE(store.PersistAllDirty(cindralDb));
+    EXPECT_FALSE(store.IsParked(hero.charId));
+    EXPECT_TRUE(store.TakeResolvedParked().empty());
+    EXPECT_EQ(ResidentOnDisk(path, hero.charId), std::string(kCindral));
+    EXPECT_FALSE(veyra.EnterWorld(hero.accountId, hero.charId, rec));
+    EXPECT_TRUE(veyraDb.LastStatus() == TFDatabaseStatus::ResidentElsewhere);
+
+    // It can still re-enter here, where its row (with the committed meta) is resident.
+    ASSERT_TRUE(cindral.EnterWorld(hero.accountId, hero.charId, rec));
+    EXPECT_TRUE(std::find(rec.unlocks.begin(), rec.unlocks.end(), "parked_unlock") != rec.unlocks.end());
+}
+
+TEST(TF120_Residency_DurabilityJudgedPerCharacterNotBySweep)
+{
+    const fs::path path = FreshResidencyDb("test_tf120_residency_per_character.db");
+    TFDatabase cindralDb;
+    ASSERT_TRUE(cindralDb.Open(path) && cindralDb.BindAuthority(kCindral));
+    TFCharacterSystem cindral;
+    cindral.SetDatabase(&cindralDb);
+    const Seeded leaving = SeedCharacter(cindralDb, "leaving", "Leaving");
+    const Seeded staying = SeedCharacter(cindralDb, "staying", "Staying");
+    ASSERT_TRUE(leaving.charId != 0 && staying.charId != 0);
+
+    TFCharacterRecord rec;
+    ASSERT_TRUE(cindral.EnterWorld(leaving.accountId, leaving.charId, rec));
+    ASSERT_TRUE(cindral.EnterWorld(staying.accountId, staying.charId, rec));
+
+    // Tooling changes the staying character behind this authority's back, so its baseline goes stale.
+    {
+        TFDatabase tooling;
+        ASSERT_TRUE(tooling.Open(path));
+        TFCharacterRecord row;
+        ASSERT_TRUE(tooling.AcquireCharacter(staying.charId, row));
+        ASSERT_TRUE(tooling.SaveCharacterProgress(staying.charId, row.xp, row.rank, row.flux + 1, 5));
+    }
+
+    // The save sweep that carries both rows reports failure because of the stale one...
+    TFPlayerMetaStore store;
+    std::vector<TFCharacterUpdate> progress(2);
+    progress[0].charId = leaving.charId;
+    progress[0].writeProgress = true;
+    progress[0].xp = 640;
+    progress[0].rank = 2;
+    progress[0].flux = 12;
+    progress[1].charId = staying.charId;
+    progress[1].writeProgress = true;
+    progress[1].xp = 1;
+    progress[1].rank = 1;
+    progress[1].flux = 1;
+    EXPECT_FALSE(store.PersistAllDirty(cindralDb, progress));
+
+    // ...but the leaving character's own row committed, and that alone decides its release.
+    EXPECT_TRUE(cindral.IsProgressCommitted(leaving.charId, 640, 2, 12));
+    EXPECT_FALSE(cindral.IsProgressCommitted(leaving.charId, 641, 2, 12));
+    EXPECT_FALSE(cindral.IsProgressCommitted(staying.charId, 1, 1, 1));
+    ASSERT_TRUE(cindral.LeaveWorld(leaving.charId));
+    EXPECT_EQ(ResidentOnDisk(path, leaving.charId), std::string());
+
+    // A released row is no longer resident here, so it no longer counts as this continent's durable progress.
+    EXPECT_FALSE(cindral.IsProgressCommitted(leaving.charId, 640, 2, 12));
+}
+
+TEST(TF120_Residency_DeleteRefusedWhileResidentOnLiveContinent)
+{
+    const fs::path path = FreshResidencyDb("test_tf120_residency_delete.db");
+    TFDatabase cindralDb;
+    TFDatabase veyraDb;
+    ASSERT_TRUE(cindralDb.Open(path) && cindralDb.BindAuthority(kCindral));
+    ASSERT_TRUE(veyraDb.Open(path) && veyraDb.BindAuthority(kVeyra));
+    TFCharacterSystem cindral;
+    TFCharacterSystem veyra;
+    cindral.SetDatabase(&cindralDb);
+    veyra.SetDatabase(&veyraDb);
+    const Seeded hero = SeedCharacter(cindralDb, "deleter", "Deleter");
+    ASSERT_TRUE(hero.charId != 0);
+
+    TFCharacterRecord rec;
+    ASSERT_TRUE(cindral.EnterWorld(hero.accountId, hero.charId, rec));
+    const std::string committed = ReadFile(path);
+
+    // In world on cindral: character select on another continent, on cindral itself, or unbound tooling
+    // cannot delete it, and nothing is written.
+    EXPECT_TRUE(veyra.Delete(hero.accountId, hero.charId) == TFCharErr::SessionActive);
+    EXPECT_TRUE(veyraDb.LastStatus() == TFDatabaseStatus::ResidentElsewhere);
+    EXPECT_TRUE(cindral.Delete(hero.accountId, hero.charId) == TFCharErr::SessionActive);
+    TFDatabase tooling;
+    ASSERT_TRUE(tooling.Open(path));
+    EXPECT_FALSE(tooling.DeleteCharacter(hero.charId));
+    EXPECT_TRUE(tooling.LastStatus() == TFDatabaseStatus::ResidentElsewhere);
+    EXPECT_TRUE(ReadFile(path) == committed);
+    EXPECT_EQ(ResidentOnDisk(path, hero.charId), std::string(kCindral));
+
+    // Once it has left the world it can be deleted.
+    ASSERT_TRUE(cindral.LeaveWorld(hero.charId));
+    EXPECT_TRUE(veyra.Delete(hero.accountId, hero.charId) == TFCharErr::Ok);
+    EXPECT_FALSE(cindralDb.FindCharacter(hero.charId, rec));
+}
+
+TEST(TF120_Residency_ClaimChecksOwnershipInsideTheTransaction)
+{
+    const fs::path path = FreshResidencyDb("test_tf120_residency_claim_owner.db");
+    TFDatabase cindralDb;
+    ASSERT_TRUE(cindralDb.Open(path) && cindralDb.BindAuthority(kCindral));
+    const Seeded hero = SeedCharacter(cindralDb, "owner", "Owner");
+    const Seeded other = SeedCharacter(cindralDb, "intruder", "Intruder");
+    ASSERT_TRUE(hero.charId != 0 && other.accountId != 0);
+    const std::string before = ReadFile(path);
+
+    // A claim for another account's character is refused by the claim transaction itself: no residency and
+    // no write, so there is no claim left behind to leak.
+    TFCharacterRecord row;
+    EXPECT_FALSE(cindralDb.ClaimCharacter(hero.charId, row, other.accountId));
+    EXPECT_TRUE(ReadFile(path) == before);
+    EXPECT_EQ(ResidentOnDisk(path, hero.charId), std::string());
+
+    TFCharacterSystem cindral;
+    cindral.SetDatabase(&cindralDb);
+    EXPECT_FALSE(cindral.EnterWorld(other.accountId, hero.charId, row));
+    EXPECT_TRUE(ReadFile(path) == before);
+    EXPECT_EQ(ResidentOnDisk(path, hero.charId), std::string());
+
+    ASSERT_TRUE(cindralDb.ClaimCharacter(hero.charId, row, hero.accountId));
+    EXPECT_EQ(row.residentContinent, std::string(kCindral));
+}
+
+TEST(TF120_Residency_BindNonContentionLockErrorIsNotAuthorityHeld)
+{
+    const fs::path path = FreshResidencyDb("test_tf120_residency_bind_error.db");
+    // A directory where the continent's authority lock file belongs: opening the lock fails, but nobody holds it.
+    const fs::path lockFile(path.wstring() + L".authority." + fs::path(kCindral).wstring() + L".lock");
+    fs::remove_all(lockFile);
+    ASSERT_TRUE(fs::create_directory(lockFile));
+
+    TFDatabase cindral;
+    ASSERT_TRUE(cindral.Open(path));
+    EXPECT_FALSE(cindral.BindAuthority(kCindral));
+    EXPECT_TRUE(cindral.LastStatus() == TFDatabaseStatus::Unreadable);
+    EXPECT_TRUE(cindral.BoundContinent().empty());
+
+    // Real contention still reports a live authority.
+    fs::remove_all(lockFile);
+    TFDatabase live;
+    ASSERT_TRUE(live.Open(path) && live.BindAuthority(kCindral));
+    EXPECT_FALSE(cindral.BindAuthority(kCindral));
+    EXPECT_TRUE(cindral.LastStatus() == TFDatabaseStatus::AuthorityHeld);
+    EXPECT_TRUE(live.Close());
+    EXPECT_TRUE(cindral.BindAuthority(kCindral));
 }
 
 // ---------------------------------------------------------------------------

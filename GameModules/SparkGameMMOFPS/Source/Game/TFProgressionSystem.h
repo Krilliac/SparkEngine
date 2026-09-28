@@ -133,11 +133,14 @@ namespace Terrafront
         /// Drop this player's runtime progression record (e.g. on disconnect,
         /// AFTER the final flush to the character has been persisted). Without
         /// this, a recycled PlayerId inherits the prior occupant's xp/flux and
-        /// leaks them onto a different account's character.
-        void ClearPlayer(PlayerId player);
+        /// leaks them onto a different account's character. `progressDurable`
+        /// is whether that final progress flush committed (TF-120: a parked
+        /// meta row whose progress was not durable never releases residency).
+        void ClearPlayer(PlayerId player, bool progressDurable);
 
         /// TF-120: true while `charId` has meta that a failed disconnect flush parked for retry. Such a
-        /// character keeps its residency on this continent; SaveNow releases it once a sweep resolves the row.
+        /// character keeps its residency on this continent; SaveNow releases it once a sweep resolves the row
+        /// and the character's final progress was durable.
         bool HasParkedMeta(uint64_t charId) const { return m_meta.IsParked(charId); }
 
         /// Debug panel toggle (hidden by default; wired from tf_* console commands).

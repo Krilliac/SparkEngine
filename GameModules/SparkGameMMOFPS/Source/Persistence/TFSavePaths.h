@@ -157,7 +157,8 @@ namespace Terrafront::SavePaths
          */
         const std::filesystem::path& LockedTarget() const noexcept { return m_target; }
 
-      private:
+        /// True when a TryLock/Lock error means another owner holds the lock (as opposed to an I/O,
+        /// permission or path error opening the lock file).
         static bool IsContention(const std::error_code& ec) noexcept
         {
 #ifdef _WIN32
@@ -168,6 +169,7 @@ namespace Terrafront::SavePaths
 #endif
         }
 
+      private:
         std::filesystem::path m_lockPath;
         std::filesystem::path m_target; ///< set only while locked
 #ifdef _WIN32

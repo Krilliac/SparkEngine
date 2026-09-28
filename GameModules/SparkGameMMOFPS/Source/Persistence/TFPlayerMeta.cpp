@@ -41,7 +41,7 @@ namespace Terrafront
         return false;
     }
 
-    bool TFPlayerMetaStore::Detach(PlayerId player, TFDatabase* db)
+    bool TFPlayerMetaStore::Detach(PlayerId player, TFDatabase* db, bool progressDurable)
     {
         auto it = m_meta.find(player);
         if (it == m_meta.end())
@@ -52,6 +52,7 @@ namespace Terrafront
         if (meta.dirty && meta.charId != 0 && (!db || !PersistOne(meta, *db)))
         {
             meta.parkedBaseRevision = db ? db->BaselineRevision(meta.charId) : std::nullopt;
+            meta.parkedProgressDurable = progressDurable;
             m_pendingByCharacter[meta.charId] = std::move(meta);
             persisted = false;
         }
@@ -73,6 +74,7 @@ namespace Terrafront
                 Meta& adopted = m_meta[player];
                 adopted = std::move(pending->second);
                 adopted.parkedBaseRevision.reset();
+                adopted.parkedProgressDurable = true;
                 m_pendingByCharacter.erase(pending);
                 return;
             }
@@ -204,9 +206,11 @@ namespace Terrafront
         // keeps reporting failure; it means two authorities hold the character.
         for (const uint64_t charId : conflicted)
         {
-            if (m_pendingByCharacter.erase(charId) != 0)
+            if (auto parked = m_pendingByCharacter.find(charId); parked != m_pendingByCharacter.end())
             {
-                m_resolvedParked.push_back(charId);
+                if (parked->second.parkedProgressDurable)
+                    m_resolvedParked.push_back(charId);
+                m_pendingByCharacter.erase(parked);
                 SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                 "[TF] discarded unsaved meta for disconnected character %llu: another authority "
                                 "changed the character after this process's last successful save",
@@ -218,13 +222,15 @@ namespace Terrafront
                                 "progress and meta stay unsaved",
                                 static_cast<unsigned long long>(charId));
         }
-        // Parked rows this sweep committed are resolved too (TF-120: their residency may now be released).
+        // Parked rows this sweep committed are resolved too (TF-120: their residency may now be released,
+        // unless the character's final progress never became durable).
         std::erase_if(m_pendingByCharacter,
                       [this](const auto& entry)
                       {
                           if (entry.second.dirty)
                               return false;
-                          m_resolvedParked.push_back(entry.first);
+                          if (entry.second.parkedProgressDurable)
+                              m_resolvedParked.push_back(entry.first);
                           return true;
                       });
         return ok;

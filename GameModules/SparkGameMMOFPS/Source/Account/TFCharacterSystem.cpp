@@ -132,7 +132,9 @@ namespace Terrafront
             return TFCharErr::NotYourCharacter;
 
         if (!m_db->DeleteCharacter(charId))
-            return TFCharErr::ServerError;
+            // TF-120: in world on a live continent, so its session there still owns it.
+            return m_db->LastStatus() == TFDatabaseStatus::ResidentElsewhere ? TFCharErr::SessionActive
+                                                                             : TFCharErr::ServerError;
 
         return TFCharErr::Ok;
     }
@@ -142,25 +144,36 @@ namespace Terrafront
         if (!m_db)
             return false;
 
-        TFCharacterRecord rec;
-        if (!m_db->FindCharacter(charId, rec))
-            return false;
-
-        if (rec.accountId != accountId)
-            return false;
-
         // The session now works from these values, so later progress/meta
         // commits are checked against this row revision (TF-120: another
         // continent authority may have written the character since this
         // process last saw it). A bound authority also claims the character's
         // residency, which fails while it is in world on another live continent.
-        const bool bound = !m_db->BoundContinent().empty();
-        if (!(bound ? m_db->ClaimCharacter(charId, rec) : m_db->AcquireCharacter(charId, rec)) ||
-            rec.accountId != accountId)
+        // The claim checks ownership inside its own transaction, so it can never
+        // leave a claim behind for a character this account does not own.
+        TFCharacterRecord rec;
+        if (!m_db->BoundContinent().empty())
+        {
+            if (!m_db->ClaimCharacter(charId, rec, accountId))
+                return false;
+        }
+        else if (!m_db->FindCharacter(charId, rec) || rec.accountId != accountId ||
+                 !m_db->AcquireCharacter(charId, rec) || rec.accountId != accountId)
+        {
             return false;
+        }
 
         out = rec;
         return true;
+    }
+
+    bool TFCharacterSystem::IsProgressCommitted(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux)
+    {
+        if (!m_db)
+            return false;
+        TFCharacterRecord row;
+        return m_db->FindCharacter(charId, row) && row.residentContinent == m_db->BoundContinent() && row.xp == xp &&
+               row.rank == rank && row.flux == flux;
     }
 
     bool TFCharacterSystem::LeaveWorld(uint64_t charId)

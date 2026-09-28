@@ -34,11 +34,21 @@ namespace Terrafront
         std::error_code lockEc;
         if (!m_authorityLock.Lock(AuthorityLockTarget(continentKey), kLockTimeout, lockEc))
         {
-            m_status = TFDatabaseStatus::AuthorityHeld;
-            SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "[TF] db %s: continent '%.*s' already has a live authority (%s); bind refused",
-                            SavePaths::Utf8ForLog(m_path).c_str(), static_cast<int>(continentKey.size()),
-                            continentKey.data(), lockEc.message().c_str());
+            // Only contention proves a live authority. Any other failure (permissions, a directory where the
+            // lock file belongs) is an unusable save root and is reported with its real error.
+            const bool contended = SavePaths::ExclusiveFileLock::IsContention(lockEc);
+            m_status = contended ? TFDatabaseStatus::AuthorityHeld : TFDatabaseStatus::Unreadable;
+            if (contended)
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] db %s: continent '%.*s' already has a live authority (%s); bind refused",
+                                SavePaths::Utf8ForLog(m_path).c_str(), static_cast<int>(continentKey.size()),
+                                continentKey.data(), lockEc.message().c_str());
+            else
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] db %s: the authority lock for continent '%.*s' cannot be opened (%s); bind "
+                                "refused",
+                                SavePaths::Utf8ForLog(m_path).c_str(), static_cast<int>(continentKey.size()),
+                                continentKey.data(), lockEc.message().c_str());
             return false;
         }
         m_boundContinent = std::string(continentKey);
@@ -78,7 +88,17 @@ namespace Terrafront
         return true;
     }
 
-    bool TFDatabase::ClaimCharacter(uint64_t charId, TFCharacterRecord& out)
+    bool TFDatabase::IsHeldByLiveAuthority(std::string_view continentKey) const
+    {
+        // The holder is alive exactly while it holds its authority lock. Callers run this under the file lock,
+        // and every claim does too, so the holder cannot claim anything in between. The bound continent's own
+        // lock is held by this instance, so it always reads as live.
+        SavePaths::ExclusiveFileLock probe;
+        std::error_code probeEc;
+        return !probe.TryLock(AuthorityLockTarget(continentKey), probeEc);
+    }
+
+    bool TFDatabase::ClaimCharacter(uint64_t charId, TFCharacterRecord& out, uint64_t expectedAccountId)
     {
         if (!m_open || m_boundContinent.empty())
             return false;
@@ -87,39 +107,36 @@ namespace Terrafront
         std::string heldBy;        // live continent that keeps the character
         std::string takenOverFrom; // dead continent the claim took it from
         bool alreadyHere = false;
-        const bool committed =
-            Transact("ClaimCharacter",
-                     [&](Snapshot& fresh, uint64_t newRevision)
-                     {
-                         auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
-                                                [charId](const TFCharacterRecord& c) { return c.id == charId; });
-                         if (it == fresh.characters.end())
-                             return false;
-                         if (it->residentContinent == m_boundContinent)
-                         {
-                             alreadyHere = true;
-                             claimed = *it;
-                             return false; // nothing to write; the baseline is adopted below
-                         }
-                         if (!it->residentContinent.empty())
-                         {
-                             // The holder is alive exactly while it holds its authority lock. This probe runs under the
-                             // file lock, and every claim does too, so the holder cannot claim anything in between.
-                             SavePaths::ExclusiveFileLock probe;
-                             std::error_code probeEc;
-                             if (!probe.TryLock(AuthorityLockTarget(it->residentContinent), probeEc))
-                             {
-                                 heldBy = it->residentContinent;
-                                 return false;
-                             }
-                             probe.Unlock();
-                             takenOverFrom = it->residentContinent;
-                         }
-                         it->residentContinent = m_boundContinent;
-                         it->revision = newRevision;
-                         claimed = *it;
-                         return true;
-                     });
+        const bool committed = Transact(
+            "ClaimCharacter",
+            [&](Snapshot& fresh, uint64_t newRevision)
+            {
+                auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
+                                       [charId](const TFCharacterRecord& c) { return c.id == charId; });
+                // Ownership is checked inside the transaction, so a claim can never commit for a row
+                // that is not the caller's (there is no window between a check and the claim).
+                if (it == fresh.characters.end() || (expectedAccountId != 0 && it->accountId != expectedAccountId))
+                    return false;
+                if (it->residentContinent == m_boundContinent)
+                {
+                    alreadyHere = true;
+                    claimed = *it;
+                    return false; // nothing to write; the baseline is adopted below
+                }
+                if (!it->residentContinent.empty())
+                {
+                    if (IsHeldByLiveAuthority(it->residentContinent))
+                    {
+                        heldBy = it->residentContinent;
+                        return false;
+                    }
+                    takenOverFrom = it->residentContinent;
+                }
+                it->residentContinent = m_boundContinent;
+                it->revision = newRevision;
+                claimed = *it;
+                return true;
+            });
 
         if (!heldBy.empty())
         {

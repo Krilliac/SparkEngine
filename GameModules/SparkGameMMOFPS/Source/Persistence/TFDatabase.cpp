@@ -186,8 +186,9 @@ namespace Terrafront
     bool TFDatabase::Close()
     {
         // The binding ends with the instance, also after a fail-closed Open or transaction. Residency rows
-        // stay as committed: a clean shutdown releases its characters first, and whatever is left is cleared
-        // by the continent's next bind or taken over as a dead owner's.
+        // stay as committed: Close releases nothing, and the module unload path does not release in-world
+        // characters either. Whatever is left resident is cleared by the continent's next bind, or taken over
+        // as a dead owner's by another continent's claim.
         m_boundContinent.clear();
         m_authorityLock.Unlock();
         if (!m_open)
@@ -875,14 +876,33 @@ namespace Terrafront
 
     bool TFDatabase::DeleteCharacter(uint64_t charId)
     {
+        std::string heldBy; // live continent the character is in world on
         const bool committed =
             Transact("DeleteCharacter",
                      [&](Snapshot& fresh, uint64_t)
                      {
-                         const auto removed = std::erase_if(fresh.characters,
-                                                            [&](const TFCharacterRecord& c) { return c.id == charId; });
-                         return removed != 0;
+                         auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
+                                                [&](const TFCharacterRecord& c) { return c.id == charId; });
+                         if (it == fresh.characters.end())
+                             return false;
+                         // TF-120: a character in world on a live authority (this one included) still has
+                         // progress to commit there; deleting it would strand that authority's writes.
+                         if (!it->residentContinent.empty() && IsHeldByLiveAuthority(it->residentContinent))
+                         {
+                             heldBy = it->residentContinent;
+                             return false;
+                         }
+                         fresh.characters.erase(it);
+                         return true;
                      });
+        if (!heldBy.empty())
+        {
+            m_status = TFDatabaseStatus::ResidentElsewhere;
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] delete of character %llu refused: it is in world on live continent '%s'",
+                           static_cast<unsigned long long>(charId), heldBy.c_str());
+            return false;
+        }
         if (committed)
             m_baseRevisions.erase(charId);
         return committed;

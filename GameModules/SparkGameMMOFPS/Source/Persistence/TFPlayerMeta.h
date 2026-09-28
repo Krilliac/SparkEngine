@@ -93,6 +93,9 @@ namespace Terrafront
             /// row revision these values were computed from (TF-120); nullopt
             /// when parked without a database.
             std::optional<uint64_t> parkedBaseRevision;
+            /// Set while parked: whether the character's final progress (xp/rank/flux) was durable when it
+            /// disconnected. A parked row without durable progress never reports its residency releasable.
+            bool parkedProgressDurable = true;
         };
 
         Meta& Ensure(PlayerId player) { return m_meta[player]; }
@@ -107,8 +110,10 @@ namespace Terrafront
         }
         /// True while `charId` has meta parked by a failed disconnect flush (TF-120: it keeps residency).
         bool IsParked(uint64_t charId) const { return m_pendingByCharacter.contains(charId); }
-        /// Characters whose parked meta a PersistAllDirty sweep has since committed or discarded, so their
-        /// residency can be released; the list is cleared by the call.
+        /// Characters whose parked meta a PersistAllDirty sweep has since committed or discarded, and whose
+        /// final progress was durable, so their residency can be released; the list is cleared by the call. A
+        /// resolved row whose progress was not durable is left out: the character stays resident here until
+        /// the continent's next bind, so no other continent starts without its last progress.
         std::vector<uint64_t> TakeResolvedParked() { return std::exchange(m_resolvedParked, {}); }
         bool IsDirty(PlayerId player) const;
         bool AnyDirty() const;
@@ -116,7 +121,9 @@ namespace Terrafront
 
         /// Remove a disconnected PlayerId without losing a failed durable
         /// write or exposing its metadata if that transient id is reused.
-        bool Detach(PlayerId player, TFDatabase* db);
+        /// `progressDurable` says whether the character's final progress
+        /// committed; it rides with a parked row (see TakeResolvedParked).
+        bool Detach(PlayerId player, TFDatabase* db, bool progressDurable);
 
         /// Overwrite (not merge) this player's runtime meta from the durable
         /// character record — same replace semantics and call site as

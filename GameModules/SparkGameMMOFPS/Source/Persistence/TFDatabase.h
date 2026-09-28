@@ -69,7 +69,10 @@
  * on the bound continent inside one transaction, and refuses (status
  * ResidentElsewhere) while the character is resident on another continent
  * whose authority lock is held. A resident whose authority lock is free is a
- * dead owner and is taken over. ReleaseCharacter clears the residency. A
+ * dead owner and is taken over. DeleteCharacter is refused the same way while
+ * the character is resident on any live continent. BindAuthority reports
+ * AuthorityHeld only for lock contention; any other lock error is Unreadable.
+ * ReleaseCharacter clears the residency. A
  * claim stamps a new row revision, so an authority that was fenced out holds
  * a stale baseline and gets Conflict; on a bound instance every absolute
  * character write also requires the row to be resident on the bound
@@ -119,8 +122,8 @@ namespace Terrafront
         WriteFailed,
         UnsupportedVersion, ///< file written by a newer schema; left untouched
         Conflict,           ///< another authority changed a row since this instance's baseline
-        AuthorityHeld,      ///< BindAuthority: a live authority already owns this continent
-        ResidentElsewhere,  ///< ClaimCharacter: the character is in world on another live continent
+        AuthorityHeld,      ///< BindAuthority: a live authority already owns this continent (lock contention)
+        ResidentElsewhere,  ///< ClaimCharacter/DeleteCharacter: the character is in world on a live continent
     };
 
     /// Outcome of TFDatabase::CreateBackup / RestoreFromBackup. Anything but Ok
@@ -263,6 +266,8 @@ namespace Terrafront
         /// instance's baseline. Call it where the caller starts working from
         /// the returned values (enter world) and to retry after a Conflict.
         bool AcquireCharacter(uint64_t charId, TFCharacterRecord& out);
+        /// Delete a character row. TF-120: refused, writing nothing, with status ResidentElsewhere while the row
+        /// is resident on a continent whose authority lock is held (a bound instance's own continent included).
         bool DeleteCharacter(uint64_t charId);
 
         // --- TF-120 residency (TFDatabaseResidency.cpp; contract in the file header) ---------------------------
@@ -278,7 +283,9 @@ namespace Terrafront
         /// the baseline (AcquireCharacter for a bound authority). Refused, writing nothing, with status
         /// ResidentElsewhere while another continent whose authority is alive holds the character; a dead
         /// holder is taken over. Claiming a character already resident here only re-adopts the baseline.
-        bool ClaimCharacter(uint64_t charId, TFCharacterRecord& out);
+        /// A non-zero `expectedAccountId` is checked inside the claim transaction: a row owned by another
+        /// account is refused and nothing is written.
+        bool ClaimCharacter(uint64_t charId, TFCharacterRecord& out, uint64_t expectedAccountId = 0);
         /// Leave-world release: clear the residency if it is on the bound continent (idempotent otherwise)
         /// and drop this instance's baseline, so no later absolute write lands from here.
         bool ReleaseCharacter(uint64_t charId);
@@ -352,6 +359,8 @@ namespace Terrafront
 
         /// `<file>.authority.<continentKey>`; ExclusiveFileLock appends ".lock".
         std::filesystem::path AuthorityLockTarget(std::string_view continentKey) const;
+        /// True while some authority (this instance included) holds `continentKey`'s authority lock.
+        bool IsHeldByLiveAuthority(std::string_view continentKey) const;
 
         LoadResult LoadFromDisk(Snapshot& out) const;
         /// Validate and decode committed file bytes (LoadFromDisk after the read).

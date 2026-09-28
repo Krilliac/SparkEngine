@@ -207,10 +207,15 @@ namespace Terrafront
             leavingCharacter = cIt->second;
             if (m_ctx->characters && m_ctx->progression)
             {
-                progressDurable = m_ctx->characters->PersistProgress(cIt->second, m_ctx->progression->XPOf(id),
-                                                                     m_ctx->progression->RankOf(id),
-                                                                     m_ctx->progression->FluxOf(id)) ||
-                                  m_ctx->progression->SaveNow();
+                const uint32_t xp = m_ctx->progression->XPOf(id);
+                const uint16_t rank = m_ctx->progression->RankOf(id);
+                const uint32_t flux = m_ctx->progression->FluxOf(id);
+                // A failed direct flush gets one retry through the full sweep. Durability is then judged on this
+                // character's committed row alone: the sweep's result covers every player (another player's
+                // stale row fails it) and says nothing about whether this row landed.
+                if (!m_ctx->characters->PersistProgress(leavingCharacter, xp, rank, flux))
+                    (void)m_ctx->progression->SaveNow();
+                progressDurable = m_ctx->characters->IsProgressCommitted(leavingCharacter, xp, rank, flux);
                 if (!progressDurable)
                     SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                     "[TF] final progression persistence failed for disconnected player %u", id);
@@ -224,11 +229,11 @@ namespace Terrafront
         // onto a different account's character. It also flushes (or parks)
         // the character's meta.
         if (m_ctx->progression)
-            m_ctx->progression->ClearPlayer(id);
+            m_ctx->progression->ClearPlayer(id, progressDurable);
         // TF-120: release the character's residency only once its final progress and meta are durable, so the
         // next continent starts from them. Otherwise it stays resident here: a parked meta row is released by
-        // the progression sweep that resolves it, and a lost progress flush keeps the character on this
-        // continent (where it can still re-enter) until the next bind clears it.
+        // the progression sweep that resolves it (only if the progress was durable), and a lost progress flush
+        // keeps the character on this continent (where it can still re-enter) until the next bind clears it.
         if (leavingCharacter != 0 && m_ctx->characters && m_ctx->progression && progressDurable &&
             !m_ctx->progression->HasParkedMeta(leavingCharacter) && !m_ctx->characters->LeaveWorld(leavingCharacter))
             SPARK_LOG_ERROR(Spark::LogCategory::Game,
