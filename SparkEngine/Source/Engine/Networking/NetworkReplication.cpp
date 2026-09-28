@@ -346,7 +346,8 @@ namespace Spark::Net
                                     networkID, m_replicatedEntities.size(), kMaxReplicatedEntities);
                     return;
                 }
-                SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Creating placeholder for unknown entity netID=%u",
+                // Trace, not Debug: one line per unknown entity, and a peer controls how many arrive.
+                SPARK_LOG_TRACE(Spark::LogCategory::Network, "Creating placeholder for unknown entity netID=%u",
                                 networkID);
                 ReplicatedEntity placeholder;
                 placeholder.networkID = networkID;
