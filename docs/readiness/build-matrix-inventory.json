@@ -11840,7 +11840,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 16,
+        "stepCount": 17,
         "steps": [
           {
             "index": 0,
@@ -11952,6 +11952,18 @@
           },
           {
             "index": 9,
+            "name": "Install hash-pinned PyYAML into the configured test interpreter",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "d35b2107f4b6bf39"
+          },
+          {
+            "index": 10,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -11965,7 +11977,7 @@
             "runDigest": "5cb377af7e1d2af2"
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -11977,7 +11989,7 @@
             "runDigest": "478334f65ffcf8f2"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11989,7 +12001,7 @@
             "runDigest": ""
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -12001,7 +12013,7 @@
             "runDigest": "fc31090331ccd461"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12013,7 +12025,7 @@
             "runDigest": ""
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Upload Golden Image Diffs",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12025,7 +12037,7 @@
             "runDigest": ""
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -16118,7 +16130,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "backend": "OpenGL",
           "config": "Debug",
@@ -16214,7 +16226,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "backend": "OpenGL",
           "config": "Release",
@@ -16310,7 +16322,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "backend": "Metal",
           "config": "Release",
@@ -19671,7 +19683,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "backend": "OpenGL",
           "config": "Debug",
@@ -19698,7 +19710,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "backend": "OpenGL",
           "config": "Release",
@@ -19725,7 +19737,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "backend": "Metal",
           "config": "Release",

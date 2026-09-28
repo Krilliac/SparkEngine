@@ -3316,6 +3316,22 @@ jobs:
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # Same hash-pinned PyYAML install as build-windows-vs2022: the supply-chain,
+    # release-provenance and release-approval suites import it and fail without
+    # it. The configured interpreter is Homebrew's, which PEP 668 marks
+    # externally managed; this ephemeral runner owns it, and --require-hashes
+    # --only-binary still admits only the pinned wheels.
+    - name: Install hash-pinned PyYAML into the configured test interpreter
+      if: matrix.config == 'Release'
+      run: |
+        set -euo pipefail
+        python3_exe="$(ctest --test-dir build -C ${{ matrix.config }} --show-only=json-v1 -R '^ReleaseApproval_Record$' \
+          | python3 -c 'import json, sys; print(json.load(sys.stdin)["tests"][0]["command"][0])')"
+        test -n "$python3_exe" || { echo "::error::ReleaseApproval_Record registers no interpreter"; exit 1; }
+        "$python3_exe" -m pip install --disable-pip-version-check --break-system-packages \
+          --require-hashes --only-binary=:all: --no-deps -r .github/ci-python-requirements.txt
+        "$python3_exe" -c "import sys, yaml; print(sys.executable, 'PyYAML', yaml.__version__)"
+
     - name: Run Tests
       if: matrix.config == 'Release'
       env:
