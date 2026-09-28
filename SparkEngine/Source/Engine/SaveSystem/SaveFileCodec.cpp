@@ -53,14 +53,18 @@ namespace Spark
         bool TrailerVerifiesWithHeaderVersion(const std::vector<uint8_t>& fileData, uint32_t headerVersion) noexcept
         {
             if (fileData.size() < 8u + kSaveChecksumBytes)
+            {
                 return false;
+            }
             const size_t candidatePayloadEnd = fileData.size() - kSaveChecksumBytes;
             CRC32 candidate;
             candidate.Update(fileData.data(), 4u);
             const auto encodedVersion = EncodeLittleEndian32(headerVersion);
             candidate.Update(encodedVersion.data(), encodedVersion.size());
             if (candidatePayloadEnd > 8u)
+            {
                 candidate.Update(fileData.data() + 8u, candidatePayloadEnd - 8u);
+            }
             return candidate.Finalize() == DecodeLittleEndian32(fileData.data() + candidatePayloadEnd);
         }
 
@@ -145,7 +149,9 @@ namespace Spark
             auto rejectNewline = [&](const std::string& value, const char* field)
             {
                 if (value.find_first_of("\n\r") == std::string::npos)
+                {
                     return false;
+                }
                 SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: metadata field '%s' contains an embedded newline",
                                operation, field);
                 return true;
@@ -196,7 +202,9 @@ namespace Spark
             }
 
             if (!std::getline(stream, parsedMetadata.screenshotPath))
+            {
                 return false;
+            }
 
             stream >> parsedMetadata.timestamp;
             stream >> parsedMetadata.playTime;
@@ -207,7 +215,9 @@ namespace Spark
             stream >> parsedMetadata.playerKills;
             stream >> parsedMetadata.playerDeaths;
             if (!stream)
+            {
                 return false;
+            }
             if (!std::isfinite(parsedMetadata.playTime) || !std::isfinite(parsedMetadata.playerHealth) ||
                 !std::isfinite(parsedMetadata.playerArmor) || !std::isfinite(parsedMetadata.playerPosition.x) ||
                 !std::isfinite(parsedMetadata.playerPosition.y) || !std::isfinite(parsedMetadata.playerPosition.z))
@@ -217,7 +227,9 @@ namespace Spark
 
             stream >> std::ws;
             if (!stream.eof())
+            {
                 return false;
+            }
 
             // Accept only metadata this build can write again. DeserializeWorld and WriteToFile
             // re-render the block through BuildMetadataBlock, so a field the writer refuses (an
@@ -368,12 +380,16 @@ namespace Spark
             std::vector<const SerializedComponent*> transforms;
             transforms.reserve(data.entities.size());
             for (const SerializedEntity& entity : data.entities)
+            {
                 transforms.push_back(FindTransformRecord(entity));
+            }
 
             for (size_t entityIndex = 0; entityIndex < transforms.size(); ++entityIndex)
             {
                 if (!transforms[entityIndex])
+                {
                     continue;
+                }
 
                 long long parentIndex = -1;
                 if (!ParseTransformParentIndex(*transforms[entityIndex], parentIndex))
@@ -383,7 +399,9 @@ namespace Spark
                     return false;
                 }
                 if (parentIndex < 0)
+                {
                     continue;
+                }
 
                 const auto parent = static_cast<size_t>(parentIndex);
                 if (parent >= transforms.size() || parent == entityIndex || !transforms[parent])
@@ -409,7 +427,9 @@ namespace Spark
             uint32_t version = 0;
             size_t payloadEnd = 0;
             if (!ValidateSaveEnvelope(fileData, filepath, "ReadFromFile", version, payloadEnd))
+            {
                 return false;
+            }
 
             // Parse from the byte buffer using an offset cursor
             size_t offset = 8u;
@@ -418,7 +438,9 @@ namespace Spark
             auto readBytes = [&](void* dest, size_t count) -> bool
             {
                 if (offset > payloadEnd || count > payloadEnd - offset)
+                {
                     return false;
+                }
                 std::memcpy(dest, fileData.data() + offset, count);
                 offset += count;
                 return true;
@@ -427,7 +449,9 @@ namespace Spark
             {
                 std::array<uint8_t, 2> encoded{};
                 if (!readBytes(encoded.data(), encoded.size()))
+                {
                     return false;
+                }
                 value = DecodeLittleEndian16(encoded.data());
                 return true;
             };
@@ -435,7 +459,9 @@ namespace Spark
             {
                 std::array<uint8_t, 4> encoded{};
                 if (!readBytes(encoded.data(), encoded.size()))
+                {
                     return false;
+                }
                 value = DecodeLittleEndian32(encoded.data());
                 return true;
             };
@@ -444,10 +470,14 @@ namespace Spark
             // Read metadata
             uint32_t metaSize;
             if (!readUint32(metaSize))
+            {
                 return false;
+            }
             if (!SaveRepresentationLimits::SupportsMetadataBytes(metaSize) || offset > payloadEnd ||
                 metaSize > payloadEnd - offset)
+            {
                 return false;
+            }
             std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
             offset += metaSize;
 
@@ -461,7 +491,9 @@ namespace Spark
             // Read entities
             uint32_t entityCount;
             if (!readUint32(entityCount))
+            {
                 return false;
+            }
 
             // Sanity cap: prevent malformed files from causing huge allocations.
             if (!SaveRepresentationLimits::SupportsEntityCount(entityCount))
@@ -477,16 +509,22 @@ namespace Spark
 
                 uint16_t nameLen;
                 if (!readUint16(nameLen))
+                {
                     return false;
+                }
                 // No tighter local cap: the uint16 prefix is the shared representation
                 // boundary, so disk and in-memory inputs accept the same maximum name.
                 entity.name.resize(nameLen);
                 if (!readBytes(entity.name.data(), nameLen))
+                {
                     return false;
+                }
 
                 uint16_t compCount;
                 if (!readUint16(compCount))
+                {
                     return false;
+                }
                 if (!parsedBudget.AddComponents(compCount))
                 {
                     SPARK_LOG_WARN(Spark::LogCategory::Save,
@@ -504,10 +542,14 @@ namespace Spark
 
                     uint16_t typeLen;
                     if (!readUint16(typeLen))
+                    {
                         return false;
+                    }
                     comp.typeName.resize(typeLen);
                     if (!readBytes(comp.typeName.data(), typeLen))
+                    {
                         return false;
+                    }
                     if (comp.typeName == "NameComponent")
                     {
                         SPARK_LOG_WARN(Spark::LogCategory::Save,
@@ -524,7 +566,9 @@ namespace Spark
 
                     uint16_t propCount;
                     if (!readUint16(propCount))
+                    {
                         return false;
+                    }
                     if (!parsedBudget.AddProperties(propCount))
                     {
                         SPARK_LOG_WARN(Spark::LogCategory::Save,
@@ -537,17 +581,25 @@ namespace Spark
                     {
                         uint16_t keyLen;
                         if (!readUint16(keyLen))
+                        {
                             return false;
+                        }
                         std::string key(keyLen, '\0');
                         if (!readBytes(key.data(), keyLen))
+                        {
                             return false;
+                        }
 
                         uint16_t valLen;
                         if (!readUint16(valLen))
+                        {
                             return false;
+                        }
                         std::string val(valLen, '\0');
                         if (!readBytes(val.data(), valLen))
+                        {
                             return false;
+                        }
 
                         if (!comp.properties.emplace(std::move(key), std::move(val)).second)
                         {
@@ -567,26 +619,38 @@ namespace Spark
             // Every supported version ends with a custom-state count, even when zero.
             uint32_t customStateCount = 0;
             if (!readUint32(customStateCount))
+            {
                 return false;
+            }
 
             if (!SaveRepresentationLimits::SupportsCustomStateCount(customStateCount) ||
                 !parsedBudget.AddCustomStateEntries(customStateCount))
+            {
                 return false;
+            }
             for (uint32_t i = 0; i < customStateCount; ++i)
             {
                 uint16_t keyLen;
                 if (!readUint16(keyLen))
+                {
                     return false;
+                }
                 std::string key(keyLen, '\0');
                 if (!readBytes(key.data(), keyLen))
+                {
                     return false;
+                }
 
                 uint16_t valLen;
                 if (!readUint16(valLen))
+                {
                     return false;
+                }
                 std::string val(valLen, '\0');
                 if (!readBytes(val.data(), valLen))
+                {
                     return false;
+                }
 
                 if (!parsedData.customState.emplace(std::move(key), std::move(val)).second)
                 {
@@ -597,7 +661,9 @@ namespace Spark
             }
 
             if (offset != payloadEnd)
+            {
                 return false;
+            }
 
             // The block as stored must fit the budget, and the snapshot must also pass the exact
             // validation DeserializeWorld and WriteToFile run, so an accepted file can always be
@@ -614,7 +680,9 @@ namespace Spark
                                filepath.c_str(), version, kCurrentSaveVersion);
             }
             if (!MigrateSaveDataToCurrentVersion(parsedData))
+            {
                 return false;
+            }
 
             outData = std::move(parsedData);
             return true;
@@ -627,30 +695,40 @@ namespace Spark
             uint32_t version = 0;
             size_t payloadEnd = 0;
             if (!ValidateSaveEnvelope(fileData, filepath, "ReadMetadataOnly", version, payloadEnd))
+            {
                 return false;
+            }
 
             SaveMetadata parsedMetadata;
 
             // Metadata is a length-prefixed text block immediately after the header.
             size_t offset = 8u;
             if (offset > payloadEnd || sizeof(uint32_t) > payloadEnd - offset)
+            {
                 return false;
+            }
             const uint32_t metaSize = DecodeLittleEndian32(fileData.data() + offset);
             offset += sizeof(uint32_t);
             // Guard against a corrupt/oversized length before allocating.
             if (!SaveRepresentationLimits::SupportsMetadataBytes(metaSize) || offset > payloadEnd ||
                 metaSize > payloadEnd - offset)
+            {
                 return false;
+            }
 
             const std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
 
             if (!ParseMetadataBlock(version, metaStr, "ReadMetadataOnly", parsedMetadata))
+            {
                 return false;
+            }
 
             SaveData metadataOnly;
             metadataOnly.metadata = std::move(parsedMetadata);
             if (!MigrateSaveDataToCurrentVersion(metadataOnly))
+            {
                 return false;
+            }
 
             outMetadata = std::move(metadataOnly.metadata);
             return true;
@@ -666,12 +744,18 @@ namespace Spark
     {
         outVersion = 0;
         if (fileData.size() < 8u || std::memcmp(fileData.data(), "SPRK", 4) != 0)
+        {
             return false;
+        }
         const uint32_t version = DecodeLittleEndian32(fileData.data() + 4);
         if (version <= kCurrentSaveVersion)
+        {
             return false;
+        }
         if (TrailerVerifiesWithHeaderVersion(fileData, kCurrentSaveVersion))
+        {
             return false;
+        }
 
         outVersion = version;
         return true;
@@ -680,7 +764,9 @@ namespace Spark
     bool MigrateSaveDataToCurrentVersion(SaveData& data)
     {
         if (!IsSupportedSaveVersion(data.metadata.version))
+        {
             return false;
+        }
 
         // Work on a copy so future multi-step migrations can retain the same
         // fail-without-mutation contract if any individual step rejects data.
@@ -716,7 +802,9 @@ namespace Spark
         for (const SerializedComponent& component : entity.components)
         {
             if (component.typeName == "Transform")
+            {
                 return &component;
+            }
         }
         return nullptr;
     }
@@ -726,13 +814,17 @@ namespace Spark
         outIndex = -1;
         const auto it = transform.properties.find(kTransformParentProperty);
         if (it == transform.properties.end())
+        {
             return true;
+        }
 
         const std::string& value = it->second;
         long long parsed = 0;
         const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
         if (error != std::errc{} || end != value.data() + value.size() || parsed < -1)
+        {
             return false;
+        }
         outIndex = parsed;
         return true;
     }
