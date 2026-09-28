@@ -57,10 +57,14 @@ TOOLS_ROOT = Path(__file__).resolve().parents[1]
 if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 import docs_contract  # noqa: E402
+from validate_docs_links import heading_ids  # noqa: E402
 
 
 SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".m", ".mm"}
 LARGE_DOCUMENT_BYTES = 240_000
+# An inline Markdown link or image. The label may hold one nested link, as in a
+# badge ``[![alt](image)](target)``; the plain form cannot see that outer target.
+MARKDOWN_LINK = re.compile(r"(!?\[(?:[^\[\]]|\[[^\]]*\])*\]\()([^\s)]+)([^)]*\))")
 API_GENERATION_TIMEOUT_SECONDS = 240
 # Nine declared generators, each bounded to 300 s by docs/update-all-docs.sh.
 DOC_HEALTH_TIMEOUT_SECONDS = 1800
@@ -579,6 +583,33 @@ def split_large_document(document: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
         children.append(child)
+
+    # A "#anchor" link in one section may name a heading that is now on another
+    # page, so it would lead nowhere; point it at the page that owns the heading.
+    # A section's own "##" heading became that page's title, so its links go to
+    # the top of the page.
+    owners: dict[str, str] = {}
+    for child, piece in zip(children, pieces[1:]):
+        # Each piece starts at its "##" heading (the split is a lookahead on it).
+        section_ids = heading_ids(piece.splitlines()[0])
+        for identifier in heading_ids(piece):
+            owners.setdefault(identifier, child["slug"] if identifier in section_ids else f"{child['slug']}#{identifier}")
+
+    def retarget(content: str) -> str:
+        own = heading_ids(content)
+
+        def replace(match: re.Match[str]) -> str:
+            prefix, target, suffix = match.groups()
+            anchor = unquote(target[1:]) if target.startswith("#") else None
+            if anchor is None or anchor in own or anchor not in owners:
+                return match.group(0)
+            return f"{prefix}/docs/{owners[anchor]}{suffix}"
+
+        return MARKDOWN_LINK.sub(replace, content)
+
+    intro = retarget(intro)
+    for child in children:
+        child["content"] = retarget(child["content"])
     links = "\n".join(f"- [{child['title'].removeprefix(document['title'] + ' — ')}](/docs/{child['slug']})" for child in children)
     parent = dict(document)
     parent["content"] = (
@@ -802,7 +833,10 @@ def build_documents(
             return f"{prefix}{replacement}{suffix}"
 
         copy = dict(document)
-        copy["content"] = pattern.sub(replace_link, content)
+        # The plain pass rewrites every link whose label has no brackets,
+        # including an image nested in a badge; MARKDOWN_LINK then reaches the
+        # badge's outer target. rewrite_target leaves a rewritten target as is.
+        copy["content"] = MARKDOWN_LINK.sub(replace_link, pattern.sub(replace_link, content))
         rewritten.extend(split_large_document(copy))
 
     seen: dict[str, str] = {}

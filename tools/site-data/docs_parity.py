@@ -1,0 +1,170 @@
+"""DOC-400: a published bundle's documents, search index, source links and page links agree.
+
+validate.py's published-bundle check proves each pointer's bytes by hash. That
+cannot catch a bundle whose parts disagree with each other, or a page whose
+links lead nowhere. generate.py rewrites a relative link to ``/docs/<slug>``
+or an exact-commit repository URL, and silently keeps the original target when
+it cannot resolve it, so a broken link would otherwise ship unnoticed.
+
+This module checks three things:
+
+- search.json has exactly one record per document, with that document's
+  sourcePath;
+- each document's sourceUrl is ``<REPOSITORY_URL>/blob/<source commit>/<sourcePath>``,
+  and sourcePath is a document collect_document_sources selects at this
+  checkout (exact case). When the publication is current, it must also be
+  tracked, apart from the docs/api tree generate.py regenerates;
+- every link in page content is external (http, https, mailto, tel), a
+  repository blob/tree/raw URL pinned to the source commit, a same-page
+  ``#anchor``, or ``/docs/<slug>[#anchor]`` for a published slug. An anchor
+  must be a heading id of the target page or of one of its split children.
+  Heading ids follow GitHub's rules (validate_docs_links.heading_ids),
+  the same rules the source links were written and checked against.
+
+Thread/ownership: a pure function over files under ``root``. It runs inside
+validate.py and allocates only for one bundle.
+"""
+
+from __future__ import annotations
+
+import re
+from collections import Counter
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit
+
+from common import REPO_ROOT, REPOSITORY, REPOSITORY_URL, SiteDataError, decode_json_bytes, load_contract
+from common import read_bytes_stable, tracked_paths
+from validate_docs_links import LinkContractError, extract_links, heading_ids
+
+MAX_PAGE_BYTES = 2 * 1024 * 1024
+MAX_SEARCH_BYTES = 16 * 1024 * 1024
+MAX_REPORTED_LINK_ERRORS = 50
+EXTERNAL_SCHEMES = {"http", "https", "mailto", "tel"}
+_PINNED_PREFIXES = (
+    f"{REPOSITORY_URL}/blob/",
+    f"{REPOSITORY_URL}/tree/",
+    f"https://raw.githubusercontent.com/{REPOSITORY}/",
+)
+
+
+def _read_json(root: Path, pointer: Any, label: str, maximum: int) -> Any:
+    """Load a pointer's file; validate.py already proved its hash, so a failure here is an error."""
+    if not isinstance(pointer, dict) or not isinstance(pointer.get("path"), str):
+        raise SiteDataError(f"{label} pointer is missing")
+    path = (root / pointer["path"]).resolve()
+    path.relative_to(root)
+    return decode_json_bytes(read_bytes_stable(path, maximum, label), label, maximum)
+
+
+def _expected_source_paths(publication_state: Any) -> set[str]:
+    # generate imports validate, which imports this module: resolve it at call time.
+    from generate import collect_document_sources  # noqa: PLC0415
+
+    catalog = load_contract()["docsCatalog"]
+    paths = {path.relative_to(REPO_ROOT).as_posix() for path in collect_document_sources(catalog)}
+    if publication_state == "current":
+        # docs/api is regenerated into the (gitignored) tree by generate.py itself.
+        tracked = tracked_paths()
+        paths = {path for path in paths if path in tracked or path.startswith("docs/api/")}
+    return paths
+
+
+def _link_error(target: str, page_ids: set[str], route_ids: dict[str, set[str]], commit: str) -> str | None:
+    if target.startswith(("https://", "http://")):
+        pinned = next((prefix for prefix in _PINNED_PREFIXES if target.startswith(prefix)), None)
+        if pinned is not None and not target[len(pinned):].startswith(f"{commit}/"):
+            return "repository link is not pinned to the source commit"
+        return None
+    scheme = urlsplit(target).scheme.casefold()
+    if scheme or target.startswith("//"):
+        return None if not scheme or scheme in EXTERNAL_SCHEMES else f"unsupported link scheme {scheme!r}"
+    if target.startswith("#"):
+        return None if target[1:] in page_ids else f"same-page anchor {target} is not a heading"
+    match = re.fullmatch(r"/docs/([^#?]+)(?:#(.*))?", target)
+    if match is None:
+        return "unresolved route"
+    slug, anchor = match.group(1), match.group(2)
+    if slug not in route_ids:
+        return f"unknown docs slug {slug!r}"
+    if anchor and anchor not in route_ids[slug]:
+        return f"anchor #{anchor} is not a heading of {slug!r}"
+    return None
+
+
+def published_docs_parity_errors(root: Path, bundle: dict[str, Any], latest: dict[str, Any]) -> list[str]:
+    """Every docs-parity violation in a published bundle; empty when routes, search and links agree."""
+    root = root.resolve()
+    commit = latest.get("source", {}).get("commit")
+    docs = bundle.get("docs", {})
+    documents = [document for document in docs.get("documents", []) if isinstance(document, dict)]
+    errors: list[str] = []
+
+    by_slug = {document.get("slug"): document for document in documents}
+    try:
+        search = _read_json(root, latest.get("files", {}).get("docsSearch"), "docs search", MAX_SEARCH_BYTES)
+    except (SiteDataError, OSError, ValueError) as error:
+        return [f"docs parity: search index cannot be read: {error}"]
+    records = search.get("records", []) if isinstance(search, dict) else []
+    if not isinstance(search, dict) or search.get("sourceCommit") != commit:
+        errors.append("docs parity: search index is not for the source commit")
+    record_slugs = Counter(record.get("slug") for record in records if isinstance(record, dict))
+    for slug, count in sorted(record_slugs.items(), key=lambda item: str(item[0])):
+        if count > 1:
+            errors.append(f"docs parity: search has {count} records for {slug!r}")
+        if slug not in by_slug:
+            errors.append(f"docs parity: search record {slug!r} has no document")
+    for slug in sorted(set(by_slug) - set(record_slugs), key=str):
+        errors.append(f"docs parity: document {slug!r} is missing from search")
+    for record in records:
+        document = by_slug.get(record.get("slug")) if isinstance(record, dict) else None
+        if document is not None and record.get("sourcePath") != document.get("sourcePath"):
+            errors.append(f"docs parity: search sourcePath differs for {record.get('slug')!r}")
+
+    expected_sources = _expected_source_paths(latest.get("publication", {}).get("state"))
+    for slug, document in by_slug.items():
+        source_path = document.get("sourcePath")
+        if source_path not in expected_sources:
+            errors.append(f"docs parity: {slug!r} sourcePath {source_path!r} is not a published document source")
+        if document.get("sourceUrl") != f"{REPOSITORY_URL}/blob/{commit}/{source_path}":
+            errors.append(f"docs parity: {slug!r} sourceUrl is not pinned to the source commit and sourcePath")
+
+    pages: dict[str, str] = {}
+    for slug, document in by_slug.items():
+        try:
+            page = _read_json(root, document.get("published"), f"document {slug}", MAX_PAGE_BYTES)
+        except (SiteDataError, OSError, ValueError) as error:
+            errors.append(f"docs parity: document {slug!r} cannot be read: {error}")
+            continue
+        content = page.get("content") if isinstance(page, dict) else None
+        if not isinstance(content, str):
+            errors.append(f"docs parity: document {slug!r} has no content")
+            continue
+        pages[slug] = content
+
+    # A same-page anchor must be on that page. A /docs/<parent>#anchor route may
+    # also name a heading that now lives on one of the parent's split children.
+    page_ids = {slug: heading_ids(content) for slug, content in pages.items()}
+    route_ids = {slug: set(ids) for slug, ids in page_ids.items()}
+    for slug, document in by_slug.items():
+        parent = document.get("parentSlug")
+        if parent in route_ids and slug in page_ids:
+            route_ids[parent] |= page_ids[slug]
+
+    link_errors: list[str] = []
+    for slug, content in pages.items():
+        source_path = by_slug[slug].get("sourcePath")
+        try:
+            links = extract_links(content, REPO_ROOT / str(source_path))
+        except (LinkContractError, ValueError) as error:
+            link_errors.append(f"docs parity: {slug!r} links cannot be parsed: {error}")
+            continue
+        for link in links:
+            problem = link.get("error") or _link_error(link["target"], page_ids[slug], route_ids, commit)
+            if problem:
+                location = f"{slug!r} ({source_path}:{link['line']})"
+                link_errors.append(f"docs parity: {location} {link['target']!r}: {problem}")
+    errors.extend(link_errors[:MAX_REPORTED_LINK_ERRORS])
+    if len(link_errors) > MAX_REPORTED_LINK_ERRORS:
+        errors.append(f"docs parity: {len(link_errors) - MAX_REPORTED_LINK_ERRORS} more link error(s) not shown")
+    return errors

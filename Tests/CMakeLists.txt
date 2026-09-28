@@ -5580,6 +5580,19 @@ if(Python3_Interpreter_FOUND)
             RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
             TIMEOUT 180)
 
+        # DOC-400: a generate.py publication's documents, search records, source
+        # URLs and page links agree (tools/site-data/docs_parity.py, run by
+        # validate_published_bundle); each hash-consistent mutation must fail.
+        # generate.py republishes docs/api in the source tree, hence the lock.
+        add_test(
+            NAME live-docs-parity
+            COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_docs_parity.py -v)
+        set_tests_properties(live-docs-parity PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
+            FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+            TIMEOUT 600)
+
         # DOC-400: the reference site runtime verifier (tools/site-data/runtime)
         # checked against a bundle generate.py produces here plus tampered,
         # oversize, malformed, and path-escaping variants, each also fed to

@@ -35,6 +35,7 @@ from common import (
 from contract_selectors import (WorkflowJob, cmake_preset_index, command_tokens, ctest_filter_errors,
                                 preset_references, required_gate_jobs, resolve_ci_job, resolve_test_selector,
                                 workflow_jobs)
+from docs_parity import published_docs_parity_errors
 from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
@@ -4371,6 +4372,7 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
         if isinstance(search_pointer, dict):
             if bundle.get("docs", {}).get("searchPath") != search_pointer.get("path") or bundle.get("docs", {}).get("searchSha256") != search_pointer.get("sha256") or bundle.get("docs", {}).get("searchBytes") != search_pointer.get("bytes"):
                 errors.append("bundle docs search pointer differs from latest")
+        errors.extend(published_docs_parity_errors(root, bundle, latest))
 
     exact_pointer = latest.get("files", {}).get("exactCiEvidence")
     if exact_pointer is None:
