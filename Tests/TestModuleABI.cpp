@@ -1,5 +1,7 @@
 #include "TestFramework.h"
 
+#include "Fixtures/ScopedUnboundedFileSize.h"
+
 #include "Core/ModuleHotReload.h"
 #include "Core/ModuleManager.h"
 #include "Engine/SaveSystem/SaveSystem.h"
@@ -876,6 +878,9 @@ TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
     // registration and, critically, removal before the module image unloads.
     auto& saveSystem = Spark::SaveSystem::GetInstance();
     NullEngineContext context(&saveSystem);
+    // ModuleManager stages a copy of the image, and the ASan Debug libSparkGame exceeds the
+    // sanitizer wrapper's 16 MiB file-size cap (Fixtures/ScopedUnboundedFileSize.h).
+    const SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
     ModuleManager manager;
     struct ModuleManagerGuard final
     {

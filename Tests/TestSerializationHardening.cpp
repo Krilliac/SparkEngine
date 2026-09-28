@@ -15,6 +15,8 @@
 //    while in-process undo/PIE snapshots still restore.
 
 #include "TestFramework.h"
+
+#include "Fixtures/ScopedUnboundedFileSize.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "Engine/Modding/ModSystem.h"
@@ -140,7 +142,9 @@ TEST(SerializationHardening_LoadWorldRejectsOversizedSceneBeforeReading)
     backup += ".bak";
 
     // A sparse file one byte over the limit: the size check must reject it
-    // without reading 64 MiB of zeros into memory.
+    // without reading 64 MiB of zeros into memory. Its size exceeds the sanitizer
+    // wrapper's 16 MiB file-size cap, which makes resize_file fail with EFBIG.
+    const SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
     WriteText(scene, "{");
     std::filesystem::resize_file(scene, kMaxSceneDocumentBytes + 1);
 

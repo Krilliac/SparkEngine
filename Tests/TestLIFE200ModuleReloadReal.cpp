@@ -13,6 +13,8 @@
 
 #include "TestFramework.h"
 
+#include "Fixtures/ScopedUnboundedFileSize.h"
+
 #include "Core/ModuleManager.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/SaveSystem/SaveSystem.h"
@@ -168,6 +170,9 @@ namespace
 
 TEST(LIFE200_SparkGameSuccessfulReloadKeepsReplacementRegistrations)
 {
+    // ModuleManager stages a copy of the image, and the ASan Debug libSparkGame exceeds the
+    // sanitizer wrapper's 16 MiB file-size cap (Fixtures/ScopedUnboundedFileSize.h).
+    const SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
     ConsoleScope consoleScope;
     SerializerScope serializerScope;
     auto& console = consoleScope.console;
@@ -215,6 +220,9 @@ TEST(LIFE200_SparkGameSuccessfulReloadKeepsReplacementRegistrations)
 
 TEST(LIFE200_SparkGameFailedReloadKeepsWorkingRegistrations)
 {
+    // The private copy below and ModuleManager's staged copy both exceed the sanitizer
+    // wrapper's 16 MiB file-size cap on the ASan Debug libSparkGame.
+    const SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
     ConsoleScope consoleScope;
     SerializerScope serializerScope;
     auto& console = consoleScope.console;
