@@ -571,6 +571,7 @@ void Game::Update(float dt)
 
     SPARK_CATCH_ALL("Game", {
         HandleInput(dt);
+        UpdateArenaAutopilot(dt);
         UpdateCamera(dt);
         UpdateGameObjects(dt);
     });

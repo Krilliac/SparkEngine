@@ -1183,6 +1183,9 @@ target_sources(SparkTests PRIVATE
     TestSEC2GameModules.cpp
     TestSparkGameFPSMirrorCompanionsReal.cpp
     TestMOD310FPSSceneReloadRespawnReal.cpp
+    # MOD-310: arena autopilot phases/steering (links GameMode, RespawnSystem, camera and input only).
+    TestMOD310FPSArenaAutopilotReal.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp"
     TestAssetManifestReal.cpp
     TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp

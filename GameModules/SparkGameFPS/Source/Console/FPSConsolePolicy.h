@@ -27,7 +27,7 @@ namespace SparkFPS::ConsolePolicy
     /**
      * @brief Commands that bypass normal play: teleports, spawns, time control,
      *        free items/XP/progression, match and wave control, scene and
-     *        cinematic authoring, world destruction.
+     *        cinematic authoring, world destruction, scripted play (fps_autoplay).
      *
      * ENABLE_DEVCOMMANDS_IN_SHIPPING=OFF promises that a Shipping build carries
      * none of them. The gate used to wrap only god/noclip, so every other entry
@@ -35,10 +35,11 @@ namespace SparkFPS::ConsolePolicy
      * registered cannot be typed, scripted with -exec, or sent over the external
      * console pipe.
      */
-    inline constexpr std::array<std::string_view, 21> kDeveloperCommands = {
-        "god",      "noclip",   "player_tp",   "spawn",     "game_timescale",  "scene_load", "scene_save",
-        "gamemode", "give",     "quest_start", "quest_all", "destroy",         "weather",    "dialogue_start",
-        "seq_play", "seq_stop", "seq_time",    "wave_skip", "wave_difficulty", "xp",         "powerup",
+    inline constexpr std::array<std::string_view, 22> kDeveloperCommands = {
+        "god",          "noclip",   "player_tp",   "spawn",     "game_timescale",  "scene_load", "scene_save",
+        "gamemode",     "give",     "quest_start", "quest_all", "destroy",         "weather",    "dialogue_start",
+        "seq_play",     "seq_stop", "seq_time",    "wave_skip", "wave_difficulty", "xp",         "powerup",
+        "fps_autoplay",
     };
 
     /// Whether this build keeps developer commands (every non-Shipping build, or
