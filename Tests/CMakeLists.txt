@@ -3192,7 +3192,7 @@ set_tests_properties(GLTFAnimationImport PROPERTIES
 if(WIN32)
     add_test(NAME GPUSkinningD3D11 COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(GPUSkinningD3D11 PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=GPUSkinningD3D11_;SPARK_TEST_EXPECT_COUNT=4"
+        ENVIRONMENT "SPARK_TEST_NAME=GPUSkinningD3D11_;SPARK_TEST_EXPECT_COUNT=4"
         LABELS "gltf-d3d11;d3d11;assets;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 60)
