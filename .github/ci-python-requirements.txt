@@ -1,0 +1,12 @@
+# Python packages the Windows ctest lanes import (the Ubuntu lanes get the same
+# module from apt:python3-yaml). Installed with pip --require-hashes
+# --only-binary=:all:, so only these exact wheels can land; add the wheel hash
+# for a new runner Python before the image moves to it. Declared as pip:PyYAML
+# in ThirdParty/supply-chain.lock; tools/check-supply-chain.py rejects any line
+# here that is not an exact name==version pin with sha256 hashes.
+#
+# PyYAML 6.0.3 win_amd64 wheels for CPython 3.12, 3.13 and 3.14 (PyPI digests).
+PyYAML==6.0.3 \
+    --hash=sha256:5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b \
+    --hash=sha256:79005a0d97d5ddabfeeea4cf676af11e647e41d81c9a7722a193022accdb6b7c \
+    --hash=sha256:4a2e8cebe2ff6ab7d1050ecd59c25d4c8bd7e6f400f5f82b96557ac0abafd0ac

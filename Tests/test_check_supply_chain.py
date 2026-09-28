@@ -1570,6 +1570,40 @@ class TestExternalDependencies(FakeRepoCase):
         ))
         self.assert_passes()
 
+    _PIP_WORKFLOW = (
+        "name: deps\non: [push]\njobs:\n  build:\n    runs-on: windows-2022\n    steps:\n"
+        "      - run: python -m pip install --require-hashes --no-deps -r ci/req.txt\n"
+    )
+
+    def test_declared_hash_pinned_pip_requirements_pass(self) -> None:
+        self.write(".github/workflows/deps.yml", self._PIP_WORKFLOW)
+        self.write("ci/req.txt", f"PyYAML==6.0.3 \\\n    --hash=sha256:{'0' * 64}\n")
+        self.commit()
+        self.declare(self._record("py", "ci_packages", identifiers=["pip:PyYAML"]))
+        self.assert_passes()
+
+    def test_pip_requirement_without_a_hash_fails(self) -> None:
+        self.write(".github/workflows/deps.yml", self._PIP_WORKFLOW)
+        self.write("ci/req.txt", "PyYAML==6.0.3\n")
+        self.commit()
+        self.declare(self._record("py", "ci_packages", identifiers=["pip:PyYAML"]))
+        self.assert_violation("not an exact name==version pin")
+
+    def test_missing_pip_requirements_file_fails(self) -> None:
+        self.write(".github/workflows/deps.yml", self._PIP_WORKFLOW)
+        self.commit()
+        self.assert_violation("pip requirements file 'ci/req.txt'")
+
+    def test_pip_package_installed_by_name_fails_even_when_declared(self) -> None:
+        self.write(
+            ".github/workflows/deps.yml",
+            "name: deps\non: [push]\njobs:\n  build:\n    runs-on: windows-2022\n    steps:\n"
+            "      - run: pip install PyYAML==6.0.3\n",
+        )
+        self.commit()
+        self.declare(self._record("py", "ci_packages", identifiers=["pip:PyYAML"]))
+        self.assert_violation("is installed by name")
+
     # ── Remote web runtime ───────────────────────────────────────────
 
     def test_cdn_import_without_sri_fails(self) -> None:
@@ -1679,6 +1713,27 @@ class TestExternalScanners(unittest.TestCase):
     def test_shell_package_installs(self) -> None:
         script = "sudo apt-get -q install -y a b=1.0; apt install c\nbrew install d | tee log\nnot apt-get update x\n"
         self.assertEqual(sc.shell_package_installs(script), ["apt:a", "apt:b", "apt:c", "brew:d"])
+
+    def test_pip_installs_split_named_packages_from_requirement_files(self) -> None:
+        script = (
+            '"$py" -m pip install --require-hashes -r ci/req.txt \\\n  --requirement=ci/more.txt -c pins.txt\n'
+            "pip3 install Loose==1.0 && pip install -r other.txt\n"
+        )
+        self.assertEqual(sc.shell_package_installs(script), ["pip:Loose"])
+        self.assertEqual(sc.pip_requirement_files(script), ["ci/req.txt", "ci/more.txt", "other.txt"])
+
+    def test_pip_requirement_lines_must_be_exact_hashed_pins(self) -> None:
+        digest = "0" * 64
+        text = (
+            f"# comment\nPyYAML==6.0.3 \\\n    --hash=sha256:{digest} \\\n    --hash=sha256:{digest}  # wheels\n"
+            f"floating>=1 --hash=sha256:{digest}\nunhashed==1.0\n--index-url https://example.invalid/simple\n"
+        )
+        packages, rejected = sc.pip_requirement_packages(text)
+        self.assertEqual(packages, ["pip:PyYAML"])
+        self.assertEqual(
+            rejected,
+            [f"floating>=1 --hash=sha256:{digest}", "unhashed==1.0", "--index-url https://example.invalid/simple"],
+        )
 
 
 class TestUpdateMode(FakeRepoCase):

@@ -1714,6 +1714,22 @@ jobs:
           -DGENERATE_DEBUG_SYMBOLS=OFF \
           -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log
 
+    # ReleaseApproval_Record and the supply-chain suites import PyYAML and fail
+    # in CI without it (the Ubuntu lanes get it from apt:python3-yaml). Install
+    # the hash-pinned wheel into the exact interpreter the configured ctest
+    # registrations run, not whichever python is first on PATH.
+    - name: Install hash-pinned PyYAML into the configured test interpreter
+      if: matrix.config == 'Release'
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3_exe="$(ctest --test-dir build -C ${{ matrix.config }} --show-only=json-v1 -R '^ReleaseApproval_Record$' \
+          | python -c 'import json, sys; print(json.load(sys.stdin)["tests"][0]["command"][0])')"
+        test -n "$python3_exe" || { echo "::error::ReleaseApproval_Record registers no interpreter"; exit 1; }
+        "$python3_exe" -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps \
+          -r .github/ci-python-requirements.txt
+        "$python3_exe" -c "import sys, yaml; print(sys.executable, 'PyYAML', yaml.__version__)"
+
     # CI-110: every test this configured tree registers (subdirectories, loops
     # and WIN32-only branches included) must carry a positive TIMEOUT and
     # LABELS, so one hang fails its own test and label lanes can select it.
@@ -2468,6 +2484,19 @@ jobs:
           -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
           -DGENERATE_DEBUG_SYMBOLS=OFF \
           -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
+
+    # Same hash-pinned PyYAML install as build-windows-vs2022.
+    - name: Install hash-pinned PyYAML into the configured test interpreter
+      if: matrix.config == 'Release'
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3_exe="$(ctest --test-dir build -C ${{ matrix.config }} --show-only=json-v1 -R '^ReleaseApproval_Record$' \
+          | python -c 'import json, sys; print(json.load(sys.stdin)["tests"][0]["command"][0])')"
+        test -n "$python3_exe" || { echo "::error::ReleaseApproval_Record registers no interpreter"; exit 1; }
+        "$python3_exe" -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps \
+          -r .github/ci-python-requirements.txt
+        "$python3_exe" -c "import sys, yaml; print(sys.executable, 'PyYAML', yaml.__version__)"
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel

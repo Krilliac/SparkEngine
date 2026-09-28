@@ -243,7 +243,7 @@ dependency that does not live in a `ThirdParty/` container. Each record has a
 | Class | Extra fields | What the checker scans |
 |---|---|---|
 | `system_libraries` | `identifiers`: `cmake:<Package>` or `pkg-config:<module>` | `find_package`, `find_dependency`, `pkg_check_modules`, and `pkg_search_module` calls in every tracked `CMakeLists.txt`, `*.cmake`, and `*.cmake.in`, with comments removed |
-| `ci_packages` | `identifiers`: `apt:<package>` or `brew:<formula>` | `apt-get install`, `apt install`, and `brew install` commands in every workflow and composite-action `run:` script, parsed as YAML. Backslash continuations are joined, and a comment or shell operator ends the package list. |
+| `ci_packages` | `identifiers`: `apt:<package>`, `brew:<formula>`, or `pip:<project>` | `apt-get install`, `apt install`, `brew install`, and `pip install` commands in every workflow and composite-action `run:` script, parsed as YAML. Backslash continuations are joined, and a comment or shell operator ends the package list. A `pip install` must read a repository-relative requirements file (`-r`) whose every line is an exact `name==version` pin with `--hash=sha256:` digests; a package named on the command line cannot carry a hash and fails. |
 | `web_runtime` | `url` with an exact version (`name@1.2.3/`), and `sri` (`sha384-` or `sha512-`) | `<script src>`, import maps, and module `import` statements in tracked `.html`, `.js`, and `.mjs` files. Import-map specifiers are resolved first. |
 | `vendored_outside_thirdparty` | `paths`: tracked files, or directories ending in `/` | Tracked files outside `ThirdParty/` that contain an MIT, Apache-2.0, or BSD license grant phrase. The scan reads the index with `git grep --cached`, so binary files are included. |
 

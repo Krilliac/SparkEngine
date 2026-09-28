@@ -189,7 +189,7 @@ EXTERNAL_CLASS_FIELDS = {
 }
 EXTERNAL_IDENTIFIER_NAMESPACES = {
     "system_libraries": frozenset({"cmake", "pkg-config"}),
-    "ci_packages": frozenset({"apt", "brew"}),
+    "ci_packages": frozenset({"apt", "brew", "pip"}),
 }
 EXTERNAL_IDENTIFIER_RE = re.compile(r"^(?P<ns>[a-z-]+):(?P<name>[A-Za-z0-9][A-Za-z0-9._+-]*)$")
 # Build-only CI packages are not distributed, so their records may state
@@ -214,7 +214,14 @@ CMAKE_FIND_RE = re.compile(
 PKG_CONFIG_KEYWORDS = frozenset({
     "REQUIRED", "QUIET", "NO_CMAKE_PATH", "NO_CMAKE_ENVIRONMENT_PATH", "IMPORTED_TARGET", "GLOBAL",
 })
-PACKAGE_MANAGERS = {"apt-get": "apt", "apt": "apt", "brew": "brew"}
+PACKAGE_MANAGERS = {"apt-get": "apt", "apt": "apt", "brew": "brew", "pip": "pip", "pip3": "pip"}
+# pip options whose value is the next token rather than a package to install.
+PIP_VALUE_OPTIONS = frozenset({"-r", "--requirement", "-c", "--constraint"})
+# The only requirement line a CI requirements file may hold: one exact version
+# and at least one wheel/sdist hash, so pip runs in hash-checking mode.
+PIP_REQUIREMENT_RE = re.compile(
+    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==[A-Za-z0-9.+!-]+(?:\s+--hash=sha256:[0-9a-f]{64})+$"
+)
 SHELL_COMMAND_BREAKS = ("&&", "||", ";", "|", ">", "<", "&")
 WEB_SOURCE_RE = re.compile(r"\.(?:html?|m?js)$")
 REMOTE_URL_RE = re.compile(r"^(?:https?:)?//", re.IGNORECASE)
@@ -2469,13 +2476,13 @@ def check_cmake_external_packages(
     return observed
 
 
-def shell_package_installs(script: str) -> list[str]:
-    """Namespaced packages that ``apt-get``/``apt``/``brew install`` lines in a script install.
+def _shell_install_commands(script: str) -> list[tuple[str, list[str]]]:
+    """(manager, arguments) for every ``apt-get``/``apt``/``brew``/``pip install`` in a script.
 
     Backslash continuations are joined first, so a multi-line install is one
-    command.  Collection stops at a comment or a shell operator.
+    command.  Arguments stop at a comment or a shell operator.
     """
-    installs: list[str] = []
+    commands: list[tuple[str, list[str]]] = []
     for line in re.sub(r"\\\r?\n", " ", script).split("\n"):
         tokens = line.split()
         comment = next((i for i, token in enumerate(tokens) if token.startswith("#")), len(tokens))
@@ -2489,16 +2496,98 @@ def shell_package_installs(script: str) -> list[str]:
                 position += 1
             if position >= len(tokens) or tokens[position] != "install":
                 continue
-            for package in tokens[position + 1:]:
-                if package in SHELL_COMMAND_BREAKS:
+            arguments: list[str] = []
+            for argument in tokens[position + 1:]:
+                if argument in SHELL_COMMAND_BREAKS:
                     break
-                ends_command = package.endswith(";")
-                package = package.rstrip(";")
-                if package and not package.startswith("-"):
-                    installs.append(f"{manager}:{package.split('=', 1)[0]}")
+                ends_command = argument.endswith(";")
+                argument = argument.rstrip(";")
+                if argument:
+                    arguments.append(argument)
                 if ends_command:
                     break
+            commands.append((manager, arguments))
+    return commands
+
+
+def shell_package_installs(script: str) -> list[str]:
+    """Namespaced packages that install commands in a script name on their command line."""
+    installs: list[str] = []
+    for manager, arguments in _shell_install_commands(script):
+        skip_value = False
+        for argument in arguments:
+            if skip_value:
+                skip_value = False
+            elif manager == "pip" and argument in PIP_VALUE_OPTIONS:
+                skip_value = True
+            elif not argument.startswith("-"):
+                installs.append(f"{manager}:{argument.split('=', 1)[0]}")
     return installs
+
+
+def pip_requirement_files(script: str) -> list[str]:
+    """Requirements files (``-r``/``--requirement``) that ``pip install`` commands in a script read."""
+    files: list[str] = []
+    for manager, arguments in _shell_install_commands(script):
+        if manager != "pip":
+            continue
+        for index, argument in enumerate(arguments):
+            if argument in ("-r", "--requirement") and index + 1 < len(arguments):
+                files.append(arguments[index + 1])
+            elif argument.startswith("--requirement="):
+                files.append(argument.split("=", 1)[1])
+    return files
+
+
+def pip_requirement_packages(text: str) -> tuple[list[str], list[str]]:
+    """``pip:<name>`` identifiers in a requirements file, and every line that is not hash-pinned.
+
+    Only ``name==version --hash=sha256:...`` lines are accepted: an option line
+    (another index, a nested file) or an unpinned or unhashed requirement could
+    install code no hash in the repository names.
+    """
+    packages: list[str] = []
+    rejected: list[str] = []
+    for line in re.sub(r"\\\r?\n", " ", text).split("\n"):
+        line = re.sub(r"(?:^|\s)#.*$", "", line).strip()
+        if not line:
+            continue
+        match = PIP_REQUIREMENT_RE.match(" ".join(line.split()))
+        if match:
+            packages.append(f"pip:{match.group('name')}")
+        else:
+            rejected.append(line)
+    return packages, rejected
+
+
+def _check_pip_requirement_file(
+    root: Path, root_resolved: Path, rel: str, location: str, result: CheckResult
+) -> list[str]:
+    """Identifiers a workflow's pip requirements file installs; violations are reported on <location>."""
+    requirement = PurePosixPath(rel.replace("\\", "/"))
+    if requirement.is_absolute() or ".." in requirement.parts or re.match(r"^[A-Za-z]:", rel):
+        result.error("external", location, f"pip requirements file {rel!r} must be a repository-relative path")
+        return []
+    filepath = root / requirement
+    reason = assert_regular_file_no_escape(filepath, root_resolved)
+    if reason:
+        result.error("external", location, f"pip requirements file {rel!r}: {reason}")
+        return []
+    _bounded_size(filepath, MAX_WORKFLOW_BYTES, f"pip requirements file {rel}")
+    try:
+        text = filepath.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        result.error("external", location, f"cannot read pip requirements file {rel!r}: {e}")
+        return []
+    packages, rejected = pip_requirement_packages(text)
+    for line in rejected:
+        result.error(
+            "external", str(requirement),
+            f"pip requirement {line!r} is not an exact name==version pin with --hash=sha256 digests",
+        )
+    if not packages and not rejected:
+        result.error("external", str(requirement), "pip requirements file names no package")
+    return packages
 
 
 def check_ci_system_packages(
@@ -2520,11 +2609,23 @@ def check_ci_system_packages(
             for trail, script in _iter_key(document, "run"):
                 if not isinstance(script, str):
                     continue
-                for identifier in shell_package_installs(script):
+                location = f"{rel}:{trail}"
+                identifiers = shell_package_installs(script)
+                for identifier in identifiers:
+                    if identifier.startswith("pip:"):
+                        # A command-line requirement cannot carry --hash.
+                        result.error(
+                            "external", location,
+                            f"PyPI package {identifier!r} is installed by name; install it from a "
+                            "hash-pinned requirements file (pip install -r <file>)",
+                        )
+                for requirements in pip_requirement_files(script):
+                    identifiers.extend(_check_pip_requirement_file(root, root_resolved, requirements, location, result))
+                for identifier in identifiers:
                     observed.add(identifier)
                     if identifier not in declared:
                         result.error(
-                            "external", f"{rel}:{trail}",
+                            "external", location,
                             f"CI system package {identifier!r} is not declared in {LOCKFILE_REL} "
                             "external_dependencies (class ci_packages)",
                         )
