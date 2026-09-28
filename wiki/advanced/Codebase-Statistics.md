@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 339222 |
+| **SparkEngine/Source** | 339308 |
 | **SparkEditor/Source** | 105121 |
-| **GameModules** | 158477 |
+| **GameModules** | 158486 |
 | **External services** | 12596 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 243982 |
+| **Tests** | 244255 |
 | **SparkConsole/src** | 1857 |
 | **SparkShaderCompiler/src** | 839 |
-| **Total C++ (excl. ThirdParty)** | **~883345** |
+| **Total C++ (excl. ThirdParty)** | **~883713** |
 
 ### File Counts
 
@@ -35,7 +35,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 124219 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 124245 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,10 +43,10 @@ Graphics contains 124219 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 124219 | 36.6% |
+| Graphics | 124245 | 36.6% |
 | Engine (all subsystems) | 97278 | 28.6% |
-| Utils | 48569 | 14.3% |
-| Core | 32924 | 9.7% |
+| Utils | 48607 | 14.3% |
+| Core | 32946 | 9.7% |
 | Physics | 11077 | 3.2% |
 | Audio | 6992 | 2.0% |
 | Input | 4046 | 1.1% |
@@ -111,7 +111,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 712 |
-| TEST() definitions | 8286 |
+| TEST() definitions | 8292 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -162,7 +162,7 @@ inventory is implementation evidence, not support certification.
 | `OpenGLDevice.cpp` | 2545 |
 | `CrashHandler.cpp` | 2514 |
 | `NetworkConnection.cpp` | 2483 |
-| `D3D11Device.cpp` | 2109 |
+| `D3D11Device.cpp` | 2135 |
 | `VulkanDevice.cpp` | 1983 |
 | `EngineSettings.cpp` | 1875 |
 | `D3D12Device.cpp` | 1817 |

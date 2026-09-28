@@ -914,7 +914,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*712 test-bearing `.cpp`/`.mm` files, 8286 source-level test definitions*
+*712 test-bearing `.cpp`/`.mm` files, 8292 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1037,7 +1037,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCrashHandlerGatingReal` | 8 |
 | `TestCrashSymbolication` | 5 |
 | `TestCrossSystemIntegration` | 4 |
-| `TestD3D11DeviceContractsReal` | 14 |
+| `TestD3D11DeviceContractsReal` | 17 |
 | `TestDATA120BackupRestore` | 16 |
 | `TestDATA120PersistenceReal` | 14 |
 | `TestDATA120SecretsAtRest` | 5 |
@@ -1139,7 +1139,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEventResponseSystem` | 15 |
 | `TestEventResponseSystemPhaseEE` | 8 |
 | `TestEventSystem` | 10 |
-| `TestExecScript` | 10 |
+| `TestExecScript` | 11 |
 | `TestExtendedSystems` | 38 |
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 17 |
@@ -1263,7 +1263,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMOD340PlatformerCompletionReal` | 12 |
 | `TestMOD340PlatformerProgressReal` | 2 |
 | `TestMOD350RPGNPCNavigationReal` | 6 |
-| `TestMOD350RPGQuestSliceReal` | 7 |
+| `TestMOD350RPGQuestSliceReal` | 9 |
 | `TestMOD360OpenWorldPersistenceReal` | 5 |
 | `TestMOD360OpenWorldTraversalReal` | 5 |
 | `TestMOD370RTSSaveReal` | 3 |
