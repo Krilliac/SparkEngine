@@ -8,19 +8,26 @@
  * TF_SAVE_ROOT: the continent authority lock (SavePaths::ExclusiveFileLock)
  * conflicts between two instances of one process exactly as it does between
  * processes, and destroying an instance releases it the way a process death
- * does.
+ * does. The POSIX-only cases at the end make that real: a peer SparkTests
+ * process (TF120PeerProcess.h) holds a continent and is SIGKILLed.
  */
 #include "TestFramework.h"
 #include "Account/TFCharacterSystem.h"
 #include "Persistence/TFDatabase.h"
 #include "Persistence/TFPlayerMeta.h"
 #include "Persistence/TFSavePaths.h"
+#include "TF120PeerProcess.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace Terrafront;
@@ -421,3 +428,210 @@ TEST(TF120_Residency_ParkedRowKeepsResidencyUntilSweepResolvesIt)
     ASSERT_TRUE(veyra.EnterWorld(hero.accountId, hero.charId, rec));
     EXPECT_TRUE(std::find(rec.unlocks.begin(), rec.unlocks.end(), "parked_unlock") != rec.unlocks.end());
 }
+
+// ---------------------------------------------------------------------------
+// Forced source/destination crashes (POSIX): a peer SparkTests process is the
+// veyra_highlands authority and is SIGKILLed; this process is cindral_wastes.
+// ---------------------------------------------------------------------------
+
+#ifndef _WIN32
+namespace
+{
+    constexpr const char* kPeerReady = "TF120_PEER_READY=";
+
+    /// Stay alive (holding the continent) until the coordinator kills this process; bounded so a lost
+    /// coordinator cannot leave it running forever.
+    void HoldUntilKilled()
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(120);
+        while (std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    /// Peer role "resident": the veyra authority claims the character, commits xp = the tag, reports ready
+    /// and stays in world until it is killed.
+    void RunResidentPeer()
+    {
+        const fs::path path = TF120Peer::EnvOrEmpty(TF120Peer::kDbEnv);
+        const uint64_t charId = std::strtoull(TF120Peer::EnvOrEmpty(TF120Peer::kCharEnv).c_str(), nullptr, 10);
+        const auto xp =
+            static_cast<uint32_t>(std::strtoul(TF120Peer::EnvOrEmpty(TF120Peer::kTagEnv).c_str(), nullptr, 10));
+        TFDatabase peer;
+        ASSERT_TRUE(charId != 0 && peer.Open(path) && peer.BindAuthority(kVeyra));
+        TFCharacterRecord row;
+        ASSERT_TRUE(peer.ClaimCharacter(charId, row));
+        ASSERT_TRUE(peer.SaveCharacterProgress(charId, xp, row.rank, row.flux, 1));
+        std::printf("%s1\n", kPeerReady);
+        std::fflush(stdout);
+        HoldUntilKilled();
+    }
+
+    /// Peer role "claim-hammer": claim, commit, release as fast as possible until killed, so the kill lands
+    /// inside a claim or release transaction.
+    void RunClaimHammerPeer()
+    {
+        const fs::path path = TF120Peer::EnvOrEmpty(TF120Peer::kDbEnv);
+        const uint64_t charId = std::strtoull(TF120Peer::EnvOrEmpty(TF120Peer::kCharEnv).c_str(), nullptr, 10);
+        TFDatabase peer;
+        ASSERT_TRUE(charId != 0 && peer.Open(path) && peer.BindAuthority(kVeyra));
+        for (bool announced = false;;)
+        {
+            TFCharacterRecord row;
+            ASSERT_TRUE(peer.ClaimCharacter(charId, row));
+            ASSERT_TRUE(peer.SaveCharacterProgress(charId, row.xp + 1, row.rank, row.flux, 1));
+            ASSERT_TRUE(peer.ReleaseCharacter(charId));
+            if (!announced)
+            {
+                std::printf("%s1\n", kPeerReady);
+                std::fflush(stdout);
+                announced = true;
+            }
+        }
+    }
+
+    std::expected<Spark::Process, std::string> SpawnResidencyPeer(const char* testName, const char* role,
+                                                                  const fs::path& path, uint64_t charId,
+                                                                  uint32_t tag = 0)
+    {
+        return TF120Peer::SpawnPeer(testName, {std::string(TF120Peer::kRoleEnv) + "=" + role,
+                                               std::string(TF120Peer::kDbEnv) + "=" + path.string(),
+                                               std::string(TF120Peer::kCharEnv) + "=" + std::to_string(charId),
+                                               std::string(TF120Peer::kTagEnv) + "=" + std::to_string(tag)});
+    }
+
+    bool PeerIsReady(Spark::Process& peer)
+    {
+        std::string log;
+        const bool ready = TF120Peer::WaitPeerReady(peer, log, kPeerReady, std::chrono::seconds(60));
+        if (!ready)
+            std::fprintf(stderr, "---- TF120 residency peer output ----\n%s\n----\n", log.c_str());
+        return ready;
+    }
+} // namespace
+
+TEST(TF120_Residency_SourceKilledWhileResidentIsReclaimedWithLastCommit)
+{
+    if (TF120Peer::EnvOrEmpty(TF120Peer::kRoleEnv) == "resident")
+    {
+        RunResidentPeer();
+        return;
+    }
+
+    const fs::path path = fs::absolute(FreshResidencyDb("test_tf120_residency_kill_source.db"));
+    TFDatabase cindral;
+    ASSERT_TRUE(cindral.Open(path) && cindral.BindAuthority(kCindral));
+    const Seeded hero = SeedCharacter(cindral, "killsource", "Kill Source");
+    ASSERT_TRUE(hero.charId != 0);
+
+    auto launched = SpawnResidencyPeer("TF120_Residency_SourceKilledWhileResidentIsReclaimedWithLastCommit", "resident",
+                                       path, hero.charId, 321);
+    if (!launched)
+        SKIP_TEST("cannot spawn a peer test process: " + launched.error());
+    Spark::Process& source = *launched;
+    ASSERT_TRUE(PeerIsReady(source));
+
+    // While the source process lives, the character cannot enter world here.
+    TFCharacterRecord row;
+    EXPECT_FALSE(cindral.ClaimCharacter(hero.charId, row));
+    EXPECT_TRUE(cindral.LastStatus() == TFDatabaseStatus::ResidentElsewhere);
+
+    // The source dies without releasing; the character comes back with its last committed state.
+    source.Kill();
+    EXPECT_FALSE(source.IsRunning());
+    ASSERT_TRUE(cindral.ClaimCharacter(hero.charId, row));
+    EXPECT_EQ(row.xp, uint32_t{321});
+    EXPECT_EQ(row.residentContinent, std::string(kCindral));
+    EXPECT_TRUE(cindral.SaveCharacterProgress(hero.charId, 322, row.rank, row.flux, 2));
+}
+
+TEST(TF120_Residency_DestinationKilledAfterClaimSourceReclaims)
+{
+    if (TF120Peer::EnvOrEmpty(TF120Peer::kRoleEnv) == "resident")
+    {
+        RunResidentPeer();
+        return;
+    }
+
+    const fs::path path = fs::absolute(FreshResidencyDb("test_tf120_residency_kill_destination.db"));
+    TFDatabase cindral;
+    ASSERT_TRUE(cindral.Open(path) && cindral.BindAuthority(kCindral));
+    const Seeded hero = SeedCharacter(cindral, "killdest", "Kill Destination");
+    ASSERT_TRUE(hero.charId != 0);
+
+    // The source hands the character over: final commit, then release.
+    TFCharacterRecord row;
+    ASSERT_TRUE(cindral.ClaimCharacter(hero.charId, row));
+    ASSERT_TRUE(cindral.SaveCharacterProgress(hero.charId, 10, row.rank, row.flux, 1));
+    ASSERT_TRUE(cindral.ReleaseCharacter(hero.charId));
+
+    auto launched = SpawnResidencyPeer("TF120_Residency_DestinationKilledAfterClaimSourceReclaims", "resident", path,
+                                       hero.charId, 20);
+    if (!launched)
+        SKIP_TEST("cannot spawn a peer test process: " + launched.error());
+    Spark::Process& destination = *launched;
+    ASSERT_TRUE(PeerIsReady(destination));
+    EXPECT_FALSE(cindral.ClaimCharacter(hero.charId, row));
+    EXPECT_TRUE(cindral.LastStatus() == TFDatabaseStatus::ResidentElsewhere);
+
+    // The destination crashes after its claim and one commit; the source takes the character back with the
+    // destination's commit, neither duplicated nor lost.
+    destination.Kill();
+    EXPECT_FALSE(destination.IsRunning());
+    ASSERT_TRUE(cindral.ClaimCharacter(hero.charId, row));
+    EXPECT_EQ(row.xp, uint32_t{20});
+    EXPECT_TRUE(cindral.SaveCharacterProgress(hero.charId, 21, row.rank, row.flux, 3));
+}
+
+TEST(TF120_Residency_PeerKilledMidClaimLeavesExactlyOneValidResident)
+{
+    if (TF120Peer::EnvOrEmpty(TF120Peer::kRoleEnv) == "claim-hammer")
+    {
+        RunClaimHammerPeer();
+        return;
+    }
+
+    const fs::path path = fs::absolute(FreshResidencyDb("test_tf120_residency_kill_hammer.db"));
+    TFDatabase cindral;
+    ASSERT_TRUE(cindral.Open(path) && cindral.BindAuthority(kCindral));
+    const Seeded hero = SeedCharacter(cindral, "killhammer", "Kill Hammer");
+    ASSERT_TRUE(hero.charId != 0);
+
+    uint32_t lastXp = 0;
+    for (int kill = 0; kill < 6; ++kill)
+    {
+        auto launched = SpawnResidencyPeer("TF120_Residency_PeerKilledMidClaimLeavesExactlyOneValidResident",
+                                           "claim-hammer", path, hero.charId);
+        if (!launched)
+            SKIP_TEST("cannot spawn a peer test process: " + launched.error());
+        Spark::Process& peer = *launched;
+        ASSERT_TRUE(PeerIsReady(peer));
+        std::this_thread::sleep_for(std::chrono::milliseconds(15 + 7 * kill));
+        peer.Kill();
+        EXPECT_FALSE(peer.IsRunning());
+
+        // The file loads, and the character is out of world or resident on the dead continent only.
+        const std::string resident = ResidentOnDisk(path, hero.charId);
+        EXPECT_TRUE(resident.empty() || resident == kVeyra);
+
+        // A restart of the killed continent clears its own rows before serving anyone.
+        {
+            TFDatabase restarted;
+            ASSERT_TRUE(restarted.Open(path) && restarted.BindAuthority(kVeyra));
+            EXPECT_EQ(ResidentOnDisk(path, hero.charId), std::string());
+        }
+
+        // The survivor claims the character with every commit the peer acknowledged, then hands it back.
+        TFCharacterRecord row;
+        ASSERT_TRUE(cindral.ClaimCharacter(hero.charId, row));
+        EXPECT_TRUE(row.xp > lastXp); // the peer committed at least once
+        ASSERT_TRUE(cindral.SaveCharacterProgress(hero.charId, row.xp + 1, row.rank, row.flux, 2));
+        lastXp = row.xp + 1;
+        ASSERT_TRUE(cindral.ReleaseCharacter(hero.charId));
+    }
+
+    TFCharacterRecord durable;
+    ASSERT_TRUE(cindral.FindCharacter(hero.charId, durable));
+    EXPECT_EQ(durable.xp, lastXp);
+    EXPECT_TRUE(durable.residentContinent.empty());
+}
+#endif

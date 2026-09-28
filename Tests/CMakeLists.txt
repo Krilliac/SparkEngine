@@ -2133,9 +2133,16 @@ endforeach()
 # TF-120: a character is in world on at most one continent authority
 # (TFDatabase residency fence, TFCharacterSystem enter/leave world, parked
 # meta keeping residency). RUN_SERIAL: the cases reuse fixed Saves/ paths.
+# The three forced-crash cases SIGKILL a peer SparkTests process and exist on
+# POSIX only, so Windows registers three fewer.
+if(WIN32)
+    set(_spark_tf120_residency_count 11)
+else()
+    set(_spark_tf120_residency_count 14)
+endif()
 add_test(NAME TF120_Residency COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(TF120_Residency PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_Residency_;SPARK_TEST_EXPECT_COUNT=11"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_Residency_;SPARK_TEST_EXPECT_COUNT=${_spark_tf120_residency_count}"
     LABELS "persistence;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)

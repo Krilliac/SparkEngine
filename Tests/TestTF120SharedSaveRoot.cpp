@@ -15,7 +15,7 @@
 #include "Persistence/TFDatabase.h"
 #include "Persistence/TFPlayerMeta.h"
 #include "Persistence/TFSavePaths.h"
-#include "Utils/Process.h"
+#include "TF120PeerProcess.h"
 
 #include <chrono>
 #include <cstdio>
@@ -28,11 +28,10 @@
 #include <thread>
 #include <vector>
 
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
-
 using namespace Terrafront;
+#ifndef _WIN32
+using namespace TF120Peer;
+#endif
 
 namespace
 {
@@ -160,119 +159,6 @@ namespace
         return RmwResult::Failed;
     }
 
-#ifndef _WIN32
-    constexpr const char* kPeerRoleEnv = "SPARK_TF120_PEER_ROLE";
-    constexpr const char* kPeerDbEnv = "SPARK_TF120_PEER_DB";
-    constexpr const char* kPeerCharEnv = "SPARK_TF120_PEER_CHAR";
-    constexpr const char* kPeerTagEnv = "SPARK_TF120_PEER_TAG";
-    constexpr const char* kPeerGateEnv = "SPARK_TF120_PEER_GATE";
-
-    std::string EnvOrEmpty(const char* name)
-    {
-        const char* value = std::getenv(name);
-        return value ? value : "";
-    }
-
-    fs::path TestBinaryPath()
-    {
-#ifdef __APPLE__
-        uint32_t size = 0;
-        _NSGetExecutablePath(nullptr, &size);
-        std::string buffer(size, '\0');
-        if (_NSGetExecutablePath(buffer.data(), &size) != 0)
-            return {};
-        return fs::path(buffer.c_str());
-#else
-        std::error_code error;
-        const fs::path self = fs::read_symlink("/proc/self/exe", error);
-        return error ? fs::path{} : self;
-#endif
-    }
-
-    /// Launch a fresh SparkTests process that runs only `testName`. That test
-    /// sees `SPARK_TF120_PEER_ROLE` in its environment and plays the peer
-    /// authority instead of the coordinator.
-    std::expected<Spark::Process, std::string> SpawnPeer(const char* testName, const std::vector<std::string>& settings)
-    {
-        const fs::path self = TestBinaryPath();
-        if (self.empty())
-            return std::unexpected(std::string("cannot resolve the test binary path"));
-
-        Spark::Process::Builder builder("env");
-        // Drop the parent's test selection so the peer runs exactly one test.
-        for (const char* selection :
-             {"SPARK_TEST_FILE", "SPARK_TEST_EXPECT_COUNT", "SPARK_TEST_EXCLUDE", "SPARK_TEST_LIMIT"})
-        {
-            builder.Arg("-u").Arg(selection);
-        }
-        builder.Arg(std::string("SPARK_TEST_NAME=") + testName);
-        for (const std::string& setting : settings)
-            builder.Arg(setting);
-        builder.Arg(self.string())
-            .WorkingDirectory(fs::current_path().string())
-            .CaptureStdout()
-            .MergeStderrIntoStdout();
-        return builder.Launch();
-    }
-
-    void DrainPeer(Spark::Process& peer, std::string& log)
-    {
-        std::string line;
-        while (peer.TryReadLine(line))
-        {
-            log += line;
-            log += '\n';
-        }
-    }
-
-    /// Wait for every peer while draining its output (so a full pipe never
-    /// stalls it), killing any still running at the deadline. Returns each
-    /// peer's exit code, -1 when it was killed or died on a signal.
-    std::vector<int> WaitPeers(std::vector<Spark::Process>& peers, std::vector<std::string>& logs,
-                               std::chrono::seconds timeout)
-    {
-        const auto deadline = std::chrono::steady_clock::now() + timeout;
-        std::vector<int> codes(peers.size(), -1);
-        std::vector<bool> finished(peers.size(), false);
-        size_t remaining = peers.size();
-        while (remaining > 0)
-        {
-            for (size_t i = 0; i < peers.size(); ++i)
-            {
-                if (finished[i])
-                    continue;
-                DrainPeer(peers[i], logs[i]);
-                if (const std::optional<int> code = peers[i].GetExitCode())
-                {
-                    logs[i] += peers[i].ReadAllStdout();
-                    codes[i] = *code;
-                    finished[i] = true;
-                    --remaining;
-                }
-            }
-            if (remaining == 0)
-                break;
-            if (std::chrono::steady_clock::now() >= deadline)
-            {
-                for (size_t i = 0; i < peers.size(); ++i)
-                    if (!finished[i])
-                        peers[i].Kill();
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-        return codes;
-    }
-
-    /// Value after `key` on the peer's report line, or -1 when absent.
-    long long PeerReport(const std::string& log, const std::string& key)
-    {
-        const size_t at = log.find(key);
-        if (at == std::string::npos)
-            return -1;
-        return std::atoll(log.c_str() + at + key.size());
-    }
-#endif
 } // namespace
 
 TEST(TF120_SharedRoot_TwoInstancesSeeEachOthersCommits)
@@ -617,10 +503,10 @@ namespace
     /// Peer role: one independent continent authority on the shared root.
     void RunInterleavePeer()
     {
-        const fs::path path = EnvOrEmpty(kPeerDbEnv);
-        const uint64_t sharedChar = std::strtoull(EnvOrEmpty(kPeerCharEnv).c_str(), nullptr, 10);
-        const std::string tag = EnvOrEmpty(kPeerTagEnv);
-        const fs::path gate = EnvOrEmpty(kPeerGateEnv);
+        const fs::path path = EnvOrEmpty(kDbEnv);
+        const uint64_t sharedChar = std::strtoull(EnvOrEmpty(kCharEnv).c_str(), nullptr, 10);
+        const std::string tag = EnvOrEmpty(kTagEnv);
+        const fs::path gate = EnvOrEmpty(kGateEnv);
         ASSERT_TRUE(sharedChar != 0 && !tag.empty() && !gate.empty());
 
         // Hold until every peer is running so the transactions really overlap.
@@ -658,8 +544,8 @@ namespace
     /// before the rename).
     void RunHammerPeer()
     {
-        const fs::path path = EnvOrEmpty(kPeerDbEnv);
-        const uint64_t charId = std::strtoull(EnvOrEmpty(kPeerCharEnv).c_str(), nullptr, 10);
+        const fs::path path = EnvOrEmpty(kDbEnv);
+        const uint64_t charId = std::strtoull(EnvOrEmpty(kCharEnv).c_str(), nullptr, 10);
         TFDatabase peer;
         ASSERT_TRUE(charId != 0 && peer.Open(path));
         for (bool announced = false;;)
@@ -679,7 +565,7 @@ namespace
 
 TEST(TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates)
 {
-    if (EnvOrEmpty(kPeerRoleEnv) == "interleave")
+    if (EnvOrEmpty(kRoleEnv) == "interleave")
     {
         RunInterleavePeer();
         return;
@@ -701,11 +587,11 @@ TEST(TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates)
     std::vector<Spark::Process> peers;
     for (int peer = 0; peer < kInterleavePeers; ++peer)
     {
-        auto launched = SpawnPeer(
-            "TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates",
-            {std::string(kPeerRoleEnv) + "=interleave", std::string(kPeerDbEnv) + "=" + path.string(),
-             std::string(kPeerCharEnv) + "=" + std::to_string(sharedChar),
-             std::string(kPeerTagEnv) + "=" + std::to_string(peer), std::string(kPeerGateEnv) + "=" + gate.string()});
+        auto launched =
+            SpawnPeer("TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates",
+                      {std::string(kRoleEnv) + "=interleave", std::string(kDbEnv) + "=" + path.string(),
+                       std::string(kCharEnv) + "=" + std::to_string(sharedChar),
+                       std::string(kTagEnv) + "=" + std::to_string(peer), std::string(kGateEnv) + "=" + gate.string()});
         if (!launched)
             SKIP_TEST("cannot spawn a peer test process: " + launched.error());
         peers.push_back(std::move(*launched));
@@ -786,7 +672,7 @@ TEST(TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates)
 
 TEST(TF120_SharedRoot_PeerKilledMidTransactionLeavesCommittedStateUsable)
 {
-    if (EnvOrEmpty(kPeerRoleEnv) == "hammer")
+    if (EnvOrEmpty(kRoleEnv) == "hammer")
     {
         RunHammerPeer();
         return;
@@ -802,8 +688,8 @@ TEST(TF120_SharedRoot_PeerKilledMidTransactionLeavesCommittedStateUsable)
     for (int kill = 0; kill < 8; ++kill)
     {
         auto launched = SpawnPeer("TF120_SharedRoot_PeerKilledMidTransactionLeavesCommittedStateUsable",
-                                  {std::string(kPeerRoleEnv) + "=hammer", std::string(kPeerDbEnv) + "=" + path.string(),
-                                   std::string(kPeerCharEnv) + "=" + std::to_string(charId)});
+                                  {std::string(kRoleEnv) + "=hammer", std::string(kDbEnv) + "=" + path.string(),
+                                   std::string(kCharEnv) + "=" + std::to_string(charId)});
         if (!launched)
             SKIP_TEST("cannot spawn a peer test process: " + launched.error());
         Spark::Process& peer = *launched;
