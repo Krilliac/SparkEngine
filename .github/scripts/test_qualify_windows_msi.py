@@ -25,6 +25,17 @@ PREVIOUS_SIGNER_THUMBPRINT = "A" * 40
 REVIEWED_BASELINE_SHA = "b" * 40
 
 
+def setUpModule():
+    """Build fixtures under the canonical temp root, not through an OS-owned alias.
+
+    The qualifier rejects an MSI path with any symlink component. macOS's default
+    temp root lives under ``/var``, a symlink to ``/private/var``, so fixtures made
+    there would trip that guard before the drill under test ever runs. Resolving
+    the root once keeps the guard's no-traversal property intact for the fixtures.
+    """
+    tempfile.tempdir = os.path.realpath(tempfile.gettempdir())
+
+
 def fake_git(parents, *, returncode=0, calls=None):
     """Answer only ``git rev-list --parents -n 1 <sha>`` with the given parents."""
     def git_runner(argv, **kwargs):
