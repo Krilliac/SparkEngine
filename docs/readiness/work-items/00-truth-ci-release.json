@@ -1317,8 +1317,7 @@
         "sbom",
         "artifact-scan",
         "sign",
-        "attest",
-        "release-approval"
+        "attest"
       ],
       "plannedTestSelectors": []
     },
@@ -1374,8 +1373,8 @@
       "definitionOfDone": ["Exact-SHA predecessor rehearsal and protected sign-off pass"],
       "profileApplicability": {"stable-v1": "outside"},
       "predecessorOnly": true,
-      "plannedCiJobs": ["release-approval"],
-      "plannedTestSelectors": ["ReleaseProfilePredecessorRehearsal_*"]
+      "plannedCiJobs": [],
+      "plannedTestSelectors": []
     },
     {
       "id": "REL-192",
@@ -1427,7 +1426,7 @@
       "outOfScope": ["First-predecessor bootstrap qualification"],
       "definitionOfDone": ["Hosted exact-SHA N-1 rehearsal and rollback pass"],
       "profileApplicability": {"stable-v1": "required"},
-      "plannedCiJobs": ["release-approval"],
+      "plannedCiJobs": [],
       "plannedTestSelectors": ["ReleaseProfileNMinusOneRehearsal_*"]
     },
     {
@@ -1579,7 +1578,7 @@
       "outOfScope": ["Publishing artifacts or changing final readiness", "Protocol migration, production-service backup/restore, and incident drills owned by G12 and OPS-110"],
       "definitionOfDone": ["All supported-host rehearsals pass at the candidate SHA", "Qualification sign-off and protected approval evidence are retained", "No planned qualification job or selector remains"],
       "profileApplicability": {"stable-v1": "shared"},
-      "plannedCiJobs": ["release-approval"],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
