@@ -10,6 +10,7 @@
  */
 
 #include "PrefabTextFormat.h"
+#include "Utils/StringUtils.h"
 
 #include <algorithm>
 #include <charconv>
@@ -133,7 +134,7 @@ namespace SparkEditor::PrefabTextFormat
                 return true;
             }
 
-            /// A space, then a number that from_chars consumes completely.
+            /// A space, then a number that from_chars (or, for floats, its portable twin) consumes completely.
             template <typename T> bool SpacedNumber(T& value)
             {
                 std::string_view word;
@@ -141,8 +142,20 @@ namespace SparkEditor::PrefabTextFormat
                 {
                     return false;
                 }
-                const auto [end, ec] = std::from_chars(word.data(), word.data() + word.size(), value);
-                return ec == std::errc{} && end == word.data() + word.size();
+                if constexpr (std::is_floating_point_v<T>)
+                {
+                    const std::optional<T> parsed = Spark::StringUtils::ParseFloatingExact<T>(word);
+                    if (parsed)
+                    {
+                        value = *parsed;
+                    }
+                    return parsed.has_value();
+                }
+                else
+                {
+                    const auto [end, ec] = std::from_chars(word.data(), word.data() + word.size(), value);
+                    return ec == std::errc{} && end == word.data() + word.size();
+                }
             }
 
             bool Quoted(std::string& out)

@@ -17,6 +17,7 @@
 #include "Graphics/WeatherSystem.h"
 #include "Engine/Networking/InstabilitySimulator.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/StringUtils.h"
 
 #include <charconv>
 #include <cmath>
@@ -320,11 +321,8 @@ namespace Spark
     // NaN/inf and out-of-range values so a typo never changes impairment state.
     static std::optional<double> ParseImpairmentValue(const std::string& text, double lo, double hi)
     {
-        double value = 0.0;
-        const char* begin = text.data();
-        const char* end = begin + text.size();
-        const auto [ptr, ec] = std::from_chars(begin, end, value);
-        if (ec != std::errc{} || ptr != end || !std::isfinite(value) || value < lo || value > hi)
+        const std::optional<double> value = StringUtils::ParseFloatingExact<double>(text);
+        if (!value || !std::isfinite(*value) || *value < lo || *value > hi)
             return std::nullopt;
         return value;
     }
