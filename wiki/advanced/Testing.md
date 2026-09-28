@@ -60,8 +60,8 @@ TEST(MyTestName) {
     EXPECT_THROW(expr, ExceptionType); // Expects a specific exception
     EXPECT_NO_THROW(expr);             // Expects no exception
     EXPECT_WARN_ONLY(expr, "reason");  // Waive ONE environment-sensitive assertion (counted as waived, never a pass)
-    EXPECT_NO_CRASH("reason");         // Replaces EXPECT_TRUE(true) in deliberate does-not-crash tests
-    SKIP_TEST("reason");               // Mandatory in a #else placeholder when the feature is compiled out
+    EXPECT_NO_CRASH("reason");         // Runner-semantics probes only (CI-110 validator rejects it elsewhere)
+    SKIP_TEST("reason");               // Mandatory in a #else placeholder; the reason is classified in test-warning-waivers.json
 }
 ```
 
@@ -94,8 +94,9 @@ All macros use `do { ... } while(0)` for safe use in if/else blocks. Failed asse
   run); prefer the per-assertion macro.
 - A test that executes zero assertions is reported as `[ EMPTY ]`. This is a
   non-failing label by default; pass `--empty-is-error` to the runner to treat it
-  as a failure. `EXPECT_NO_CRASH(reason)` exists so a deliberate does-not-crash
-  test declares that intent instead of asserting `EXPECT_TRUE(true)`.
+  as a failure. `EXPECT_NO_CRASH(reason)` makes a does-not-crash claim countable
+  instead of hiding it behind `EXPECT_TRUE(true)`; the CI-110 validator (below)
+  allows it only in the runner-semantics probes.
 - `SKIP_TEST(reason)` is mandatory for a `#else` placeholder when a feature is
   compiled out; a placeholder that silently passes fabricates evidence.
 - The runner summary now prints `Assertions: ... N waived, M no-crash-only` and
@@ -129,6 +130,19 @@ All macros use `do { ... } while(0)` for safe use in if/else blocks. Failed asse
   `Tests/TestRunnerSemanticsReal.cpp`, which exercise the macro itself.
   Schema-1 metadata (whole-test waivers only) is still accepted and declares
   no per-assertion waivers.
+- The same validator owns the other two exception shapes (schema 3):
+  - `EXPECT_NO_CRASH` is rejected anywhere in `Tests/**/*.{cpp,h}` except the
+    `RunnerSemanticsReal_*` probes. A test must assert observable state; when
+    nothing is observable, the test has no claim to make and is deleted.
+  - Every `SKIP_TEST` (and the Vulkan `SkipOrFail` forwarder) is classified. A
+    string-literal reason must start with exactly one `skipReasons` prefix; a
+    reason built at run time needs a `dynamicSkips` entry keyed by file and
+    test (`"test": null` for a helper outside any test body) with its exact
+    site count. Each entry names an `owner` and a `kind`: `environment` (a
+    missing platform capability; no expiry), `flaky` (timing or test-order
+    coupling; needs a future `expires`), or `probe` (the skip is the behaviour
+    under test). Unclassified, ambiguous, stale, miscounted, ownerless, and
+    unexpiring flaky entries fail the workflow.
 
 ### Production-source census
 

@@ -258,10 +258,184 @@ class TestAssertionWaiverPolicy(ValidatorHarness):
         self.assertIn("Tests/TestRunnerSemanticsReal.cpp::Unrelated_Flaky", rejected.stderr)
 
     def test_rejects_unknown_schema_version(self) -> None:
-        text = json.dumps({"schemaVersion": 3, "waivers": [waiver("Flaky_A")], "assertionWaivers": []})
+        text = json.dumps({"schemaVersion": 4, "waivers": [waiver("Flaky_A")], "assertionWaivers": []})
         result = self.run_validator(registry("Flaky_A"), text)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("schemaVersion must be 1 or 2", result.stderr)
+        self.assertIn("schemaVersion must be 1, 2 or 3", result.stderr)
+
+
+def metadata_v3(skip_reasons: list[dict[str, object]], dynamic_skips: list[dict[str, object]]) -> str:
+    return (
+        json.dumps(
+            {
+                "schemaVersion": 3,
+                "waivers": [waiver("Flaky_A")],
+                "assertionWaivers": [],
+                "skipReasons": skip_reasons,
+                "dynamicSkips": dynamic_skips,
+            }
+        )
+        + "\n"
+    )
+
+
+def skip_reason(prefix: str, kind: str = "environment", owner: str = "rendering", **extra: str) -> dict[str, object]:
+    return {"prefix": prefix, "owner": owner, "kind": kind, **extra}
+
+
+def dynamic_skip(
+    file: str = "Tests/TestSpawn.cpp", test: str | None = "Spawn_Peer", sites: int = 1
+) -> dict[str, object]:
+    return {"file": file, "test": test, "sites": sites, "owner": "persistence", "kind": "environment"}
+
+
+DEVICE_SKIP_SOURCE = """#include "TestFramework.h"
+
+TEST(Render_NeedsDevice)
+{
+    if (!HasDevice())
+        SKIP_TEST("No D3D11 device available "
+                  "(hardware or WARP)");
+    EXPECT_TRUE(Draw());
+}
+"""
+
+SPAWN_SKIP_SOURCE = """#include "TestFramework.h"
+
+TEST(Spawn_Peer)
+{
+    auto launched = Spawn();
+    if (!launched)
+        SKIP_TEST("cannot spawn a peer: " + launched.error());
+    EXPECT_TRUE(launched->Wait());
+}
+"""
+
+
+class TestNoCrashAndSkipPolicy(ValidatorHarness):
+    def run_case(
+        self, sources: dict[str, str], skip_reasons=(), dynamic_skips=()
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run_validator(registry("Flaky_A"), metadata_v3(list(skip_reasons), list(dynamic_skips)), sources)
+
+    def test_rejects_no_crash_outside_the_runner_probes(self) -> None:
+        source = 'TEST(Panel_SetterIsSafe)\n{\n    panel.Set(1);\n    EXPECT_NO_CRASH("no getter");\n}\n'
+        result = self.run_case({"Tests/TestPanel.cpp": source})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("EXPECT_NO_CRASH at Tests/TestPanel.cpp:4 (Panel_SetterIsSafe)", result.stderr)
+
+        helper = 'inline void Check()\n{\n    EXPECT_NO_CRASH("hidden in a helper");\n}\n'
+        result = self.run_case({"Tests/PanelSupport.h": helper})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("EXPECT_NO_CRASH at Tests/PanelSupport.h:3 (outside a test body)", result.stderr)
+
+    def test_accepts_no_crash_in_a_runner_probe_and_ignores_the_definition(self) -> None:
+        probe = 'TEST(RunnerSemanticsReal_NoCrash)\n{\n    EXPECT_NO_CRASH("the probe");\n}\n'
+        definition = "#define EXPECT_NO_CRASH(reason) static_cast<void>(reason)\n"
+        result = self.run_case({"Tests/TestRunnerSemanticsReal.cpp": probe, "Tests/TestFramework.h": definition})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("outside the 1 runner-semantics probe(s)", result.stdout)
+
+    def test_accepts_classified_literal_and_registered_dynamic_skips(self) -> None:
+        result = self.run_case(
+            {"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE, "Tests/TestSpawn.cpp": SPAWN_SKIP_SOURCE},
+            [skip_reason("No D3D11 device available")],
+            [dynamic_skip()],
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("validated 2 SKIP_TEST site(s)", result.stdout)
+        self.assertIn("2 environment", result.stdout)
+
+    def test_rejects_an_unclassified_skip_reason(self) -> None:
+        result = self.run_case({"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "unclassified skip reason at Tests/TestRender.cpp:6: 'No D3D11 device available (hardware or WARP)'",
+            result.stderr,
+        )
+
+    def test_rejects_an_ambiguously_classified_skip_reason(self) -> None:
+        result = self.run_case(
+            {"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE},
+            [skip_reason("No D3D11"), skip_reason("No D3D11 device")],
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ambiguously classified skip reason", result.stderr)
+
+    def test_rejects_a_flaky_skip_without_expiry(self) -> None:
+        result = self.run_case(
+            {"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE}, [skip_reason("No D3D11 device available", kind="flaky")]
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("with kind 'flaky' must contain exactly expires, kind, owner, prefix", result.stderr)
+
+    def test_rejects_an_expired_flaky_skip(self) -> None:
+        result = self.run_case(
+            {"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE},
+            [skip_reason("No D3D11 device available", kind="flaky", expires=AS_OF)],
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("skipReasons[0] is expired", result.stderr)
+
+    def test_rejects_an_environment_skip_with_an_expiry_or_without_an_owner(self) -> None:
+        result = self.run_case(
+            {"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE},
+            [skip_reason("No D3D11 device available", expires="2027-01-01")],
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("with kind 'environment' must contain exactly kind, owner, prefix", result.stderr)
+
+        result = self.run_case(
+            {"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE}, [skip_reason("No D3D11 device available", owner="tbd")]
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("owner must be a named owner", result.stderr)
+
+    def test_rejects_an_unknown_skip_kind(self) -> None:
+        result = self.run_case(
+            {"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE}, [skip_reason("No D3D11 device available", kind="later")]
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("kind must be one of environment, flaky, probe", result.stderr)
+
+    def test_rejects_an_unregistered_or_miscounted_run_time_reason(self) -> None:
+        result = self.run_case({"Tests/TestSpawn.cpp": SPAWN_SKIP_SOURCE})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unregistered run-time skip reason at Tests/TestSpawn.cpp::Spawn_Peer (line 7)", result.stderr)
+
+        result = self.run_case({"Tests/TestSpawn.cpp": SPAWN_SKIP_SOURCE}, dynamic_skips=[dynamic_skip(sites=2)])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("declares 2 site(s)", result.stderr)
+
+    def test_rejects_stale_skip_classifications(self) -> None:
+        result = self.run_case({}, [skip_reason("No D3D11 device available")], [dynamic_skip()])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("stale skip reason prefix", result.stderr)
+        self.assertIn("stale dynamic skip entry", result.stderr)
+
+    def test_forwarding_helper_is_classified_but_its_definition_is_not_a_site(self) -> None:
+        helper = (
+            "[[noreturn]] inline void SkipOrFail(const char* reason)\n{\n    SKIP_TEST(reason);\n}\n"
+            'inline void Require()\n{\n    SkipOrFail("no Vulkan ICD available");\n}\n'
+        )
+        rejected = self.run_case({"Tests/VulkanSupport.h": helper}, [skip_reason("no Vulkan ICD available")])
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("unregistered run-time skip reason at Tests/VulkanSupport.h::outside a test body", rejected.stderr)
+
+        accepted = self.run_case(
+            {"Tests/VulkanSupport.h": helper},
+            [skip_reason("no Vulkan ICD available")],
+            [dynamic_skip(file="Tests/VulkanSupport.h", test=None)],
+        )
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertIn("validated 2 SKIP_TEST site(s)", accepted.stdout)
+
+    def test_schema_v2_metadata_cannot_hide_a_skip(self) -> None:
+        result = self.run_validator(
+            registry("Flaky_A"), metadata_v2([waiver("Flaky_A")], []), {"Tests/TestRender.cpp": DEVICE_SKIP_SOURCE}
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unclassified skip reason", result.stderr)
 
 
 if __name__ == "__main__":
