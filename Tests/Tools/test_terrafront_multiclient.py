@@ -1020,8 +1020,9 @@ def mismatch_client_text(refused: bool = True, spawned: bool = False,
     lines += entry(315, 10.5, "tf_faction mra", [f"[WARN] {REFUSAL}"] if refused else [])
     lines += entry(345, 11.5, "tf_spawn",
                    ["    > [TF] spawn accepted: entity 7 at (300 24 3800)"] if spawned else [])
+    # A refused client has disconnected and observes as a standalone host, as the real run prints it.
     lines += entry(420, 14.0, "tf_observe",
-                   on_continent(observation("client", multiclient.NO_PLAYER, {}), continent))
+                   on_continent(observation("host", 4294967041, {}), continent))
     return "\n".join(lines) + "\n"
 
 

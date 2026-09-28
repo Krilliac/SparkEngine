@@ -1267,7 +1267,7 @@ MISMATCH_SERVER_CONTINENT = "cindral_wastes"
 MISMATCH_CLIENT_CONTINENT = "veyra_highlands"
 MISMATCH_SERVER_TAIL_S = 5.0  # the server keeps observing after the client has gone
 CONTINENT_REFUSAL = re.compile(r"\[TF\] server hosts continent '([a-z0-9_-]+)' but this client loaded '([a-z0-9_-]+)'")
-OBSERVED_CONTINENT = re.compile(r"\[TF-OBSERVE\] role=(\w+) .*\bcontinent=(\S+)")
+OBSERVED_CONTINENT = re.compile(r"\[TF-OBSERVE\] role=\w+ .*\bcontinent=(\S+)")
 SPAWN_ACCEPTED = "[TF] spawn accepted"
 CONTINENT_MISMATCH = Scenario(
     name="continent_mismatch",
@@ -1279,10 +1279,10 @@ CONTINENT_MISMATCH = Scenario(
 CONTINENT_SCENARIOS = {"continent_mismatch": CONTINENT_MISMATCH}
 
 
-def observed_continents(text: str, role: str) -> set[str]:
-    """Every continent key @p role's tf_observe headers named in @p text."""
-    return {match.group(2) for match in map(OBSERVED_CONTINENT.search, text.splitlines())
-            if match and match.group(1) == role}
+def observed_continents(text: str) -> set[str]:
+    """Every continent key the tf_observe headers in one process's @p text named, whatever its role then
+    (a refused client reports role=host once it has disconnected)."""
+    return {match.group(1) for match in map(OBSERVED_CONTINENT.search, text.splitlines()) if match}
 
 
 def continent_mismatch_verdict(server: RoleLog, client: RoleLog, client_text: str) -> list[str]:
@@ -1309,7 +1309,7 @@ def continent_mismatch_verdict(server: RoleLog, client: RoleLog, client_text: st
     if spawned:
         problems.append(f"continent_mismatch: the server holds pawns {spawned} of a client it should never admit")
     # Without this the run could pass on two processes that loaded the same continent.
-    loaded = observed_continents(client_text, "client")
+    loaded = observed_continents(client_text)
     if loaded != {MISMATCH_CLIENT_CONTINENT}:
         problems.append(f"continent_mismatch: the client observed continents {sorted(loaded)}, expected only "
                         f"{MISMATCH_CLIENT_CONTINENT}")
