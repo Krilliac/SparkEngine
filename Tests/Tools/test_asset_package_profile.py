@@ -26,6 +26,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -605,15 +606,32 @@ class InstallRuleTests(unittest.TestCase):
             if (install / "bin" / "Assets").exists() else []
         self.assertEqual(payload, [])
 
-    def test_tampered_asset_after_configure_fails_before_assembly(self) -> None:
+    def _installed_payload(self, build: Path, name: str) -> Path:
+        """Return the file the generated install rules copy for ``name``.
+
+        Read from cmake_install.cmake rather than assumed, so the test tampers
+        the bytes that would actually be packaged whatever staging layout the
+        helper uses.
+        """
+        rules = (build / "cmake_install.cmake").read_text(encoding="utf-8")
+        sources = sorted({match for match in re.findall(r'"([^"\n]+)"', rules) if match.endswith("/" + name)})
+        self.assertEqual(len(sources), 1, sources)
+        payload = Path(sources[0])
+        self.assertTrue(payload.is_file(), payload)
+        self.assertTrue(payload.resolve().is_relative_to(build.resolve()), payload)
+        return payload
+
+    def test_tampered_payload_after_configure_fails_before_assembly(self) -> None:
+        # The source tree and manifest stay intact; only the configure-time
+        # payload the install rules copy is changed.
         for profile in ("stable-v1", "default"):
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as temporary:
                 base = Path(temporary)
                 fixture = Fixture(base)
                 self._prepare_project(fixture)
-                self._configure(fixture, base, profile)
-                kept = fixture.assets / "Models/kept.obj"
-                kept.write_bytes(kept.read_bytes()[:-1] + b"#")
+                build = self._configure(fixture, base, profile)
+                payload = self._installed_payload(build, "kept.obj")
+                payload.write_bytes(payload.read_bytes()[:-1] + b"#")
                 self._assert_install_refused(base, profile, "[hash-mismatch] Models/kept.obj")
 
     def test_stable_v1_manifest_rewritten_after_configure_fails_before_assembly(self) -> None:

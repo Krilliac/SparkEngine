@@ -151,6 +151,48 @@ if(UNIX)
     endif()
 endif()
 
+# SNAPSHOT_ROOT: the install rules copy from the caller-named snapshot, and a
+# snapshot root outside the build tree is refused before it is emptied.
+set(_spark_snapshot_source "${_spark_test_root}/snapshot-source")
+file(MAKE_DIRECTORY "${_spark_snapshot_source}/Data")
+file(WRITE "${_spark_snapshot_source}/Data/tracked.txt" "tracked\n")
+file(WRITE "${_spark_snapshot_source}/CMakeLists.txt"
+    "cmake_minimum_required(VERSION 3.25)\n"
+    "project(SparkTrackedSnapshotFixture NONE)\n"
+    "include(\"\${SPARK_HELPER}\")\n"
+    "spark_install_tracked_directory(SOURCE Data DESTINATION data COMPONENT data\n"
+    "    SNAPSHOT_ROOT \"\${SPARK_SNAPSHOT_ROOT}\")\n")
+_spark_run_checked("snapshot fixture git init"
+    "${GIT_EXECUTABLE}" -C "${_spark_snapshot_source}" init --quiet)
+_spark_run_checked("snapshot fixture git add"
+    "${GIT_EXECUTABLE}" -C "${_spark_snapshot_source}" add -- Data/tracked.txt)
+set(_spark_snapshot_build "${_spark_test_root}/snapshot-build")
+_spark_run_checked("snapshot fixture configure"
+    "${CMAKE_COMMAND}" -S "${_spark_snapshot_source}" -B "${_spark_snapshot_build}"
+        "-DSPARK_HELPER=${SPARK_TRACKED_INSTALL_HELPER}"
+        "-DSPARK_SNAPSHOT_ROOT=${_spark_snapshot_build}/staged/Data")
+file(READ "${_spark_snapshot_build}/cmake_install.cmake" _spark_snapshot_rules)
+string(FIND "${_spark_snapshot_rules}" "${_spark_snapshot_build}/staged/Data/tracked.txt" _spark_snapshot_rule_index)
+if(_spark_snapshot_rule_index EQUAL -1 OR NOT EXISTS "${_spark_snapshot_build}/staged/Data/tracked.txt")
+    message(FATAL_ERROR "SNAPSHOT_ROOT was not the install source:\n${_spark_snapshot_rules}")
+endif()
+set(_spark_outside_snapshot "${_spark_test_root}/outside-snapshot")
+file(WRITE "${_spark_outside_snapshot}/keep.txt" "not a build directory\n")
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -S "${_spark_snapshot_source}" -B "${_spark_test_root}/snapshot-outside-build"
+        "-DSPARK_HELPER=${SPARK_TRACKED_INSTALL_HELPER}"
+        "-DSPARK_SNAPSHOT_ROOT=${_spark_outside_snapshot}"
+    RESULT_VARIABLE _spark_outside_result
+    OUTPUT_VARIABLE _spark_outside_output
+    ERROR_VARIABLE _spark_outside_error)
+if(_spark_outside_result EQUAL 0
+   OR NOT "${_spark_outside_error}" MATCHES "SNAPSHOT_ROOT must be an absolute directory beneath CMAKE_BINARY_DIR"
+   OR NOT EXISTS "${_spark_outside_snapshot}/keep.txt")
+    message(FATAL_ERROR
+        "SNAPSHOT_ROOT outside the build tree was not refused before use:\n"
+        "${_spark_outside_output}\n${_spark_outside_error}")
+endif()
+
 # The NUL-delimited Git manifest is decoded byte-by-byte specifically so a
 # semicolon cannot become a CMake list separator. Confirm that such a tracked
 # filename is rejected instead of being split into package entries.

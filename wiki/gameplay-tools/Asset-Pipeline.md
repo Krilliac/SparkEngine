@@ -175,8 +175,21 @@ python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.int
 The explicit `--root` is authoritative; manifest metadata cannot redirect the
 scan. Verification rejects traversal and Windows path aliases, reparses,
 non-regular files, incomplete declarations, resource-limit violations, and a
-file that changes while it is read. This is a repository-content gate, not yet
-proof that the same verified snapshot was consumed by package assembly.
+file that changes while it is read.
+
+The same check guards package assembly (RDY-020).
+`cmake/SparkRuntimeAssets.cmake` snapshots every runtime asset at configure time
+into one staged root, `<build>/spark-asset-profile/staged-<profile>/Assets`, and
+the install rules copy from that snapshot, never from the source tree. The first
+install rule of the asset set runs `verify <manifest being installed> --root
+<staged root>`. For stable-v1 it also re-derives the package manifest and
+exclusions from the sources and requires them to equal the configure-time
+copies. `cmake --install` and `cpack` run the same rules. So a snapshot byte
+changed, a file planted in the snapshot, or a manifest rewritten after
+configure (including a `../` traversal entry) stops the install before any asset
+is copied. `Tests/Tools/test_asset_package_profile.py` (`InstallRuleTests`)
+tampers the payload named in the generated `cmake_install.cmake`. It shows the
+install is refused and leaves `bin/Assets` empty.
 
 ### Staged reference closure (ENG-220)
 
