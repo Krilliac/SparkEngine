@@ -321,6 +321,9 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
     auto loadTexture = [this, &jsonPath, &rejectTexture](std::string_view projectRoot, const char* key,
                                                          std::string& declaredPath) -> ID3D11ShaderResourceView*
     {
+        // The declared spelling, kept for the diagnostic: on Windows the cache key
+        // that replaces declaredPath below is case-folded.
+        const std::string declared = declaredPath;
         const auto resolved = Spark::ResolveProjectAssetPath(projectRoot, declaredPath);
         if (!resolved)
         {
@@ -339,7 +342,7 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
             SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
                             "GetOrLoadBasicMaterial: material '%s' key '%s' texture '%s' failed to load (%s); "
                             "rendering it with the default texture until the file is fixed",
-                            jsonPath.c_str(), key, declaredPath.c_str(), exists ? "decode failure" : "missing file");
+                            jsonPath.c_str(), key, declared.c_str(), exists ? "decode failure" : "missing file");
         }
         return srv;
     };
