@@ -406,6 +406,15 @@
       "definitionScope": []
     },
     {
+      "name": "ENABLE_GRAPHICS",
+      "description": "Enable graphics engine",
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 160,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
       "name": "ENABLE_HYBRID_RT",
       "description": "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)",
       "default": "ON",
@@ -748,6 +757,18 @@
     {
       "name": "ENABLE_EDITOR",
       "description": "Enable editor features",
+      "default": true,
+      "status": "active",
+      "declarationCount": 1,
+      "activeDeclarationCount": 1,
+      "indeterminateDeclarationCount": 0,
+      "declaredIn": [
+        "CMakeLists.txt"
+      ]
+    },
+    {
+      "name": "ENABLE_GRAPHICS",
+      "description": "Enable graphics engine",
       "default": true,
       "status": "active",
       "declarationCount": 1,
@@ -1129,6 +1150,15 @@
       "definitionScope": []
     },
     {
+      "name": "ENABLE_GRAPHICS",
+      "description": "Enable graphics engine",
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 160,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
       "name": "ENABLE_HYBRID_RT",
       "description": "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)",
       "default": "ON",
@@ -1357,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3572,
+      "line": 3598,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3610,
+      "line": 3636,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1375,10 +1405,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3126,
+      "line": 3152,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3071",
+          "id": "Tests/CMakeLists.txt:3080",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1392,7 +1422,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3853,
+      "line": 3879,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1483,47 +1513,6 @@
       "conditionFrames": [],
       "definitionScope": []
     }
-  ],
-  "cmakeOptionReads": [
-    "BUILD_GAME_MODULES",
-    "BUILD_TESTS",
-    "ENABLE_ANGELSCRIPT",
-    "ENABLE_ASSET_PIPELINE_TOOLS",
-    "ENABLE_AUTOMATION_HOST",
-    "ENABLE_CONSOLE_IN_SHIPPING",
-    "ENABLE_DEVCOMMANDS_IN_SHIPPING",
-    "ENABLE_DXR",
-    "ENABLE_EDITOR",
-    "ENABLE_HYBRID_RT",
-    "ENABLE_INSTALLER",
-    "ENABLE_LAUNCHER",
-    "ENABLE_LTO",
-    "ENABLE_METAL",
-    "ENABLE_MOBILE",
-    "ENABLE_NETWORKING",
-    "ENABLE_NEURAL_RENDERING",
-    "ENABLE_OPENGL",
-    "ENABLE_PROFILING",
-    "ENABLE_RECAST",
-    "ENABLE_SDL2",
-    "ENABLE_SERVER_PROCESSES",
-    "ENABLE_SPARKBUILD",
-    "ENABLE_VR",
-    "ENABLE_VULKAN",
-    "SPARK_DOUBLE_PRECISION_PHYSICS",
-    "SPARK_ENABLE_FUZZ_POLICY_CHECKS",
-    "SPARK_ENABLE_FUZZ_TARGETS",
-    "SPARK_ENABLE_INSTALLED_SDK_TESTS",
-    "SPARK_ENABLE_PACKAGE_CONSUMER_TESTS",
-    "SPARK_ENABLE_SOAK_TESTS",
-    "SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS",
-    "SPARK_HEADLESS_SUPPORT",
-    "SPARK_IMGUI_ENABLE_FREETYPE",
-    "SPARK_NATIVE_ARCH",
-    "SPARK_REQUIRE_WINDOWS_INSTALLERS",
-    "SPARK_STRICT_DEPS",
-    "SPARK_SUPPRESS_THIRDPARTY_WARNINGS",
-    "SPARK_TESTS_WARN_IS_ERROR"
   ],
   "cmakePresets": {
     "presetsVersion": 6,
@@ -1702,6 +1691,7 @@
           "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
           "ENABLE_AUTOMATION_HOST": "OFF",
           "ENABLE_DXR": "OFF",
+          "ENABLE_GRAPHICS": "OFF",
           "ENABLE_HYBRID_RT": "OFF",
           "ENABLE_INSTALLER": "OFF",
           "ENABLE_LAUNCHER": "OFF",
@@ -2700,10 +2690,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 4468,
+      "line": 4400,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:4466",
+          "id": "Tests/CMakeLists.txt:4398",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4551,7 +4541,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 4468,
+          "line": 4400,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6180,7 +6170,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 222
+      "line": 224
     },
     {
       "name": "BUILD_TESTS",
@@ -6189,7 +6179,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 221
+      "line": 223
     },
     {
       "name": "ENABLE_ANGELSCRIPT",
@@ -6198,7 +6188,7 @@
       "default": true,
       "category": "Scripting",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 239
+      "line": 241
     },
     {
       "name": "ENABLE_ASSET_PIPELINE_TOOLS",
@@ -6207,7 +6197,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 230
+      "line": 232
     },
     {
       "name": "ENABLE_AUTOMATION_HOST",
@@ -6216,7 +6206,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 232
+      "line": 234
     },
     {
       "name": "ENABLE_CONSOLE_IN_SHIPPING",
@@ -6225,7 +6215,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 250
+      "line": 252
     },
     {
       "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
@@ -6234,7 +6224,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 252
+      "line": 254
     },
     {
       "name": "ENABLE_DXR",
@@ -6243,7 +6233,7 @@
       "default": true,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 205
+      "line": 207
     },
     {
       "name": "ENABLE_EDITOR",
@@ -6252,7 +6242,16 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 216
+      "line": 218
+    },
+    {
+      "name": "ENABLE_GRAPHICS",
+      "displayName": "Graphics Engine",
+      "description": "Build the graphics engine",
+      "default": true,
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 187
     },
     {
       "name": "ENABLE_HYBRID_RT",
@@ -6261,7 +6260,7 @@
       "default": true,
       "category": "Rendering",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 208
+      "line": 210
     },
     {
       "name": "ENABLE_INSTALLER",
@@ -6270,7 +6269,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 229
+      "line": 231
     },
     {
       "name": "ENABLE_LAUNCHER",
@@ -6279,7 +6278,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 225
+      "line": 227
     },
     {
       "name": "ENABLE_LTO",
@@ -6288,7 +6287,7 @@
       "default": true,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 259
+      "line": 261
     },
     {
       "name": "ENABLE_METAL",
@@ -6297,7 +6296,7 @@
       "default": false,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 203
+      "line": 205
     },
     {
       "name": "ENABLE_MOBILE",
@@ -6306,7 +6305,7 @@
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 274
+      "line": 276
     },
     {
       "name": "ENABLE_NETWORKING",
@@ -6315,7 +6314,7 @@
       "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 267
+      "line": 269
     },
     {
       "name": "ENABLE_NEURAL_RENDERING",
@@ -6324,7 +6323,7 @@
       "default": true,
       "category": "Rendering",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 211
+      "line": 213
     },
     {
       "name": "ENABLE_OPENGL",
@@ -6333,7 +6332,7 @@
       "default": true,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 199
+      "line": 201
     },
     {
       "name": "ENABLE_PROFILING",
@@ -6342,7 +6341,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 218
+      "line": 220
     },
     {
       "name": "ENABLE_RECAST",
@@ -6351,7 +6350,7 @@
       "default": true,
       "category": "Core",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 186
+      "line": 188
     },
     {
       "name": "ENABLE_SDL2",
@@ -6360,7 +6359,7 @@
       "default": false,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 201
+      "line": 203
     },
     {
       "name": "ENABLE_SERVER_PROCESSES",
@@ -6369,7 +6368,7 @@
       "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 269
+      "line": 271
     },
     {
       "name": "ENABLE_SPARKBUILD",
@@ -6378,7 +6377,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 227
+      "line": 229
     },
     {
       "name": "ENABLE_VR",
@@ -6387,7 +6386,7 @@
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 272
+      "line": 274
     },
     {
       "name": "ENABLE_VULKAN",
@@ -6396,7 +6395,7 @@
       "default": true,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 197
+      "line": 199
     },
     {
       "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
@@ -6405,7 +6404,7 @@
       "default": false,
       "category": "Core",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 192
+      "line": 194
     },
     {
       "name": "SPARK_HEADLESS_SUPPORT",
@@ -6414,7 +6413,7 @@
       "default": true,
       "category": "Core",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 189
+      "line": 191
     },
     {
       "name": "SPARK_NATIVE_ARCH",
@@ -6423,7 +6422,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 244
+      "line": 246
     },
     {
       "name": "SPARK_REQUIRE_WINDOWS_INSTALLERS",
@@ -6432,7 +6431,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 262
+      "line": 264
     },
     {
       "name": "SPARK_STRICT_DEPS",
@@ -6441,7 +6440,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 247
+      "line": 249
     },
     {
       "name": "SPARK_SUPPRESS_THIRDPARTY_WARNINGS",
@@ -6450,7 +6449,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 234
+      "line": 236
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
@@ -6459,7 +6458,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 254
+      "line": 256
     }
   ],
   "workflow": {
@@ -6510,7 +6509,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 41,
+    "jobCount": 40,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -9655,7 +9654,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 20,
+        "stepCount": 19,
         "steps": [
           {
             "index": 0,
@@ -9743,18 +9742,6 @@
           },
           {
             "index": 7,
-            "name": "Verify Shipping is a distinct configuration (BLD-100)",
-            "id": "",
-            "uses": "",
-            "shell": "bash",
-            "if": "absent",
-            "continueOnError": "absent",
-            "hasRun": true,
-            "env": [],
-            "runDigest": "8963db5f9c2a7690"
-          },
-          {
-            "index": 8,
             "name": "Install the Windows Shipping SDK for the consumer profile",
             "id": "",
             "uses": "",
@@ -9766,7 +9753,7 @@
             "runDigest": "36f226b69437d456"
           },
           {
-            "index": 9,
+            "index": 8,
             "name": "Configure and build the Windows validation lane",
             "id": "",
             "uses": "",
@@ -9778,7 +9765,7 @@
             "runDigest": "5605dbef17f25623"
           },
           {
-            "index": 10,
+            "index": 9,
             "name": "Capture Windows validation provenance",
             "id": "",
             "uses": "",
@@ -9790,7 +9777,7 @@
             "runDigest": "3460874c75995c44"
           },
           {
-            "index": 11,
+            "index": 10,
             "name": "Configure and build the installed SDK consumer lane",
             "id": "",
             "uses": "",
@@ -9802,7 +9789,7 @@
             "runDigest": "9cd61c1b24e1a4ef"
           },
           {
-            "index": 12,
+            "index": 11,
             "name": "Capture installed SDK consumer provenance",
             "id": "",
             "uses": "",
@@ -9814,7 +9801,7 @@
             "runDigest": "22ba85fa35d4e34d"
           },
           {
-            "index": 13,
+            "index": 12,
             "name": "Generate the configured build-matrix inventory",
             "id": "",
             "uses": "",
@@ -9826,7 +9813,7 @@
             "runDigest": "e3982ce2ce04dc8f"
           },
           {
-            "index": 14,
+            "index": 13,
             "name": "Check the configured build matrix",
             "id": "build-matrix-parity",
             "uses": "",
@@ -9838,7 +9825,7 @@
             "runDigest": "847469c7e07435aa"
           },
           {
-            "index": 15,
+            "index": 14,
             "name": "Package Windows Shipping MSI for package-smoke consumer",
             "id": "",
             "uses": "",
@@ -9850,7 +9837,7 @@
             "runDigest": "9d7b1cdb557b7c1f"
           },
           {
-            "index": 16,
+            "index": 15,
             "name": "Upload exact Windows Shipping MSI for package smoke",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9862,7 +9849,7 @@
             "runDigest": ""
           },
           {
-            "index": 17,
+            "index": 16,
             "name": "Upload Windows Shipping MSI packaging diagnostics",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9874,7 +9861,7 @@
             "runDigest": ""
           },
           {
-            "index": 18,
+            "index": 17,
             "name": "Upload build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9886,7 +9873,7 @@
             "runDigest": ""
           },
           {
-            "index": 19,
+            "index": 18,
             "name": "Record build-matrix evidence",
             "id": "",
             "uses": "",
@@ -11273,83 +11260,6 @@
             "hasRun": false,
             "env": [],
             "runDigest": ""
-          }
-        ],
-        "envNames": [],
-        "gating": "advisory"
-      },
-      {
-        "id": "build-macos-shipping",
-        "name": "macOS Shipping (advisory)",
-        "runsOn": "macos-15",
-        "runnerLabels": [
-          "macos-15"
-        ],
-        "runnerOsClasses": [
-          "macos"
-        ],
-        "if": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
-        "continueOnError": true,
-        "timeoutMinutes": 120,
-        "needs": [],
-        "failFast": "absent",
-        "maxParallel": "absent",
-        "matrixAxes": [],
-        "matrixCombinations": [],
-        "matrixResolved": true,
-        "defaultShell": "",
-        "permissions": {
-          "contents": "read"
-        },
-        "stepCount": 4,
-        "steps": [
-          {
-            "index": 0,
-            "name": "Checkout repository",
-            "id": "",
-            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-            "shell": "",
-            "if": "absent",
-            "continueOnError": "absent",
-            "hasRun": false,
-            "env": [],
-            "runDigest": ""
-          },
-          {
-            "index": 1,
-            "name": "Install dependencies",
-            "id": "",
-            "uses": "",
-            "shell": "",
-            "if": "absent",
-            "continueOnError": "absent",
-            "hasRun": true,
-            "env": [],
-            "runDigest": "d5c0c4df3478c41b"
-          },
-          {
-            "index": 2,
-            "name": "Configure, build and stage the Shipping runtime",
-            "id": "",
-            "uses": "",
-            "shell": "",
-            "if": "absent",
-            "continueOnError": "absent",
-            "hasRun": true,
-            "env": [],
-            "runDigest": "1f7c6d47cdf6f307"
-          },
-          {
-            "index": 3,
-            "name": "Check macOS minimum version parity of the staged engine",
-            "id": "",
-            "uses": "",
-            "shell": "",
-            "if": "absent",
-            "continueOnError": "absent",
-            "hasRun": true,
-            "env": [],
-            "runDigest": "d18800cf00d734e6"
           }
         ],
         "envNames": [],
@@ -14179,7 +14089,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Install the Windows Shipping SDK for the consumer profile",
-        "stepIndex": 8,
+        "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -14201,7 +14111,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 9,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -14222,7 +14132,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 9,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -14249,7 +14159,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -14277,7 +14187,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -14304,7 +14214,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -14327,7 +14237,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Package Windows Shipping MSI for package-smoke consumer",
-        "stepIndex": 15,
+        "stepIndex": 14,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15549,76 +15459,6 @@
         "commandIndex": 0
       },
       {
-        "job": "build-macos-shipping",
-        "step": "Configure, build and stage the Shipping runtime",
-        "stepIndex": 2,
-        "matrix": {},
-        "matrixResolved": true,
-        "runnerOs": "macos",
-        "shell": "bash",
-        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
-        "jobContinueOnError": true,
-        "stepIf": "absent",
-        "stepContinueOnError": "absent",
-        "gating": "advisory",
-        "tool": "cmake",
-        "kind": "configure",
-        "command": "cmake --preset macos-shipping 2>&1 | tee cmake-configure.log",
-        "commandProvenance": "literal",
-        "options": {},
-        "preset": "macos-shipping",
-        "commandIndex": 0
-      },
-      {
-        "job": "build-macos-shipping",
-        "step": "Configure, build and stage the Shipping runtime",
-        "stepIndex": 2,
-        "matrix": {},
-        "matrixResolved": true,
-        "runnerOs": "macos",
-        "shell": "bash",
-        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
-        "jobContinueOnError": true,
-        "stepIf": "absent",
-        "stepContinueOnError": "absent",
-        "gating": "advisory",
-        "tool": "cmake",
-        "kind": "build",
-        "command": "cmake --build --preset macos-shipping --parallel \"$(sysctl -n hw.logicalcpu)\" 2>&1 | tee cmake-build.log",
-        "commandProvenance": "literal",
-        "targets": [
-          "all"
-        ],
-        "configuration": "",
-        "buildDir": "",
-        "preset": "macos-shipping",
-        "parallel": "$(sysctl -n hw.logicalcpu)",
-        "buildsAllTargets": true,
-        "commandIndex": 1
-      },
-      {
-        "job": "build-macos-shipping",
-        "step": "Configure, build and stage the Shipping runtime",
-        "stepIndex": 2,
-        "matrix": {},
-        "matrixResolved": true,
-        "runnerOs": "macos",
-        "shell": "bash",
-        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
-        "jobContinueOnError": true,
-        "stepIf": "absent",
-        "stepContinueOnError": "absent",
-        "gating": "advisory",
-        "tool": "cmake",
-        "kind": "install",
-        "command": "cmake --install build/macos-shipping --prefix stage --component runtime",
-        "commandProvenance": "literal",
-        "configuration": "",
-        "prefix": "stage",
-        "component": "runtime",
-        "commandIndex": 2
-      },
-      {
         "job": "coverage",
         "step": "Configure",
         "stepIndex": 4,
@@ -16484,7 +16324,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 9,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16505,7 +16345,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16943,27 +16783,6 @@
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
         "buildDir": "build",
-        "commandIndex": 0
-      },
-      {
-        "job": "build-macos-shipping",
-        "step": "Configure, build and stage the Shipping runtime",
-        "stepIndex": 2,
-        "matrix": {},
-        "matrixResolved": true,
-        "runnerOs": "macos",
-        "shell": "bash",
-        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
-        "jobContinueOnError": true,
-        "stepIf": "absent",
-        "stepContinueOnError": "absent",
-        "gating": "advisory",
-        "tool": "cmake",
-        "kind": "configure",
-        "command": "cmake --preset macos-shipping 2>&1 | tee cmake-configure.log",
-        "commandProvenance": "literal",
-        "options": {},
-        "preset": "macos-shipping",
         "commandIndex": 0
       },
       {
@@ -17584,7 +17403,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 9,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17611,7 +17430,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -18011,33 +17830,6 @@
         "parallel": "$(sysctl",
         "buildsAllTargets": true,
         "commandIndex": 0
-      },
-      {
-        "job": "build-macos-shipping",
-        "step": "Configure, build and stage the Shipping runtime",
-        "stepIndex": 2,
-        "matrix": {},
-        "matrixResolved": true,
-        "runnerOs": "macos",
-        "shell": "bash",
-        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
-        "jobContinueOnError": true,
-        "stepIf": "absent",
-        "stepContinueOnError": "absent",
-        "gating": "advisory",
-        "tool": "cmake",
-        "kind": "build",
-        "command": "cmake --build --preset macos-shipping --parallel \"$(sysctl -n hw.logicalcpu)\" 2>&1 | tee cmake-build.log",
-        "commandProvenance": "literal",
-        "targets": [
-          "all"
-        ],
-        "configuration": "",
-        "buildDir": "",
-        "preset": "macos-shipping",
-        "parallel": "$(sysctl -n hw.logicalcpu)",
-        "buildsAllTargets": true,
-        "commandIndex": 1
       },
       {
         "job": "coverage",
@@ -18592,7 +18384,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -19155,7 +18947,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture Windows validation provenance",
-        "stepIndex": 10,
+        "stepIndex": 9,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -19183,7 +18975,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture installed SDK consumer provenance",
-        "stepIndex": 12,
+        "stepIndex": 11,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -19211,7 +19003,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Generate the configured build-matrix inventory",
-        "stepIndex": 13,
+        "stepIndex": 12,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -19243,7 +19035,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check the configured build matrix",
-        "stepIndex": 14,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -19271,7 +19063,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check the configured build matrix",
-        "stepIndex": 14,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -19298,17 +19090,17 @@
       }
     ],
     "summary": {
-      "jobCount": 41,
-      "matrixLegCount": 49,
+      "jobCount": 40,
+      "matrixLegCount": 48,
       "pathFilteredEventCount": 0,
-      "configureCount": 35,
-      "buildCount": 37,
+      "configureCount": 34,
+      "buildCount": 36,
       "testCount": 34,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
-      "buildAllTargetCount": 21,
+      "buildAllTargetCount": 20,
       "blockingJobCount": 30,
-      "advisoryJobCount": 7,
+      "advisoryJobCount": 6,
       "conditionalJobCount": 4,
       "builtOsConfigurationPairs": [
         "linux:Release",
@@ -19333,7 +19125,6 @@
   "workflowPresets": [
     "linux-gcc-release",
     "linux-shipping",
-    "macos-shipping",
     "windows-release",
     "windows-shipping"
   ],
@@ -19699,7 +19490,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the Windows validation lane",
-      "stepIndex": 9,
+      "stepIndex": 8,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",
@@ -19720,7 +19511,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the installed SDK consumer lane",
-      "stepIndex": 11,
+      "stepIndex": 10,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",
@@ -20158,27 +19949,6 @@
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
       "buildDir": "build",
-      "commandIndex": 0
-    },
-    {
-      "job": "build-macos-shipping",
-      "step": "Configure, build and stage the Shipping runtime",
-      "stepIndex": 2,
-      "matrix": {},
-      "matrixResolved": true,
-      "runnerOs": "macos",
-      "shell": "bash",
-      "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
-      "jobContinueOnError": true,
-      "stepIf": "absent",
-      "stepContinueOnError": "absent",
-      "gating": "advisory",
-      "tool": "cmake",
-      "kind": "configure",
-      "command": "cmake --preset macos-shipping 2>&1 | tee cmake-configure.log",
-      "commandProvenance": "literal",
-      "options": {},
-      "preset": "macos-shipping",
       "commandIndex": 0
     },
     {
