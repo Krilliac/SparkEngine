@@ -56,7 +56,7 @@
       "file_count": 1240
     },
     "ThirdParty/Scripting/patches": {
-      "digest": "b52b26d3f8b5cc3ea6a9405e430993af1dff63cd2a416a46f07792802846c4f4",
+      "digest": "5c8e38e7f831e2192af56e9c7beb9c6c77b8e95ec805632d32eb02919710382b",
       "file_count": 3
     },
     "ThirdParty/Utils/cgltf": {
