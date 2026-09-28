@@ -246,6 +246,20 @@ ctest --test-dir build/linux-gcc-release --show-only=json-v1 > ctest.json
 python3 Tools/validate_ctest_policy.py --ctest-json ctest.json
 ```
 
+The configured-tree view also enforces the CI-110 shipped-binary rule. Every
+`install(TARGETS ... RUNTIME)` executable that the tree's tests invoke (as the
+command, an argument, a `-D...=` value or an `ENVIRONMENT` value) needs at least
+one test that does more than print `--help`/`--version` (a
+`-DSPARK_VERSION_EXECUTABLE=` runner counts as a version probe) and carries an
+`integration`, `smoke` or `process` label. `SparkInstallerHeadlessSmoke` is the
+installer's lane: it runs a headless install, resume and refusal against a local
+fixture repository. `KNOWN_BINARY_LANE_GAPS` lists the documented exceptions,
+which are printed as notes on every run: `SparkLauncher` is a GUI with no
+headless mode, and only its launch-request logic is tested, in process. An entry
+whose binary gains a lane fails until it is removed. Measured on a 2026-09-27
+Windows Release tree before the installer lane existed, the rule flagged exactly
+`SparkInstaller`.
+
 `cmake/RunSparkTests.cmake` **requires** `-DSPARK_TEST_TIMEOUT_SECONDS=<n>`; any
 script that invokes it directly must pass one (the 180 s default is gone so no
 configuration can inherit the fast configuration's wall clock).

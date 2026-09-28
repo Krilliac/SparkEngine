@@ -261,4 +261,23 @@ endif()
     set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15 LABELS installer)
     unset(_sparkinstaller_version_test_script)
     unset(_sparkinstaller_platform)
+
+    # CI-110: the shipped binary's behavioural lane -- a headless install, resume
+    # and refusal against a local fixture repository, with no network. Without
+    # git the lane is not registered, and Tools/validate_ctest_policy.py then
+    # reports SparkInstaller as a shipped binary with only a --version test.
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        add_test(NAME SparkInstallerHeadlessSmoke
+            COMMAND "${CMAKE_COMMAND}"
+                "-DSPARK_INSTALLER=$<TARGET_FILE:SparkInstaller>"
+                "-DSPARK_GIT=${GIT_EXECUTABLE}"
+                "-DSPARK_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/installer-headless-smoke/$<CONFIG>"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/InstallerHeadlessSmoke.cmake")
+        set_tests_properties(SparkInstallerHeadlessSmoke PROPERTIES
+            TIMEOUT 60
+            LABELS "installer;integration;process")
+    else()
+        message(WARNING "git was not found: SparkInstallerHeadlessSmoke is not registered")
+    endif()
 endif()

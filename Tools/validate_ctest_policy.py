@@ -18,7 +18,11 @@ Two views of the same rule:
 * ``--ctest-json FILE``: validate ``ctest --show-only=json-v1`` output from a
   configured tree. This sees tests registered from subdirectories, loops and
   functions after CMake evaluated them, and rejects an empty inventory so a
-  tree that registered nothing cannot pass.
+  tree that registered nothing cannot pass. It also enforces "every shipped
+  binary has a smoke or integration lane": each ``install(TARGETS ... RUNTIME)``
+  executable that the tree's tests invoke must have one test that does more
+  than print its help or version and carries an integration, smoke or process
+  label (``KNOWN_BINARY_LANE_GAPS`` lists the documented exceptions).
 
 Exit status: 0 when the policy holds, 1 on any violation, 2 on unreadable input.
 """
@@ -48,6 +52,24 @@ MAX_TIMEOUT_SECONDS = 3600
 _COMMAND_RE = re.compile(r"(?i)(?<![A-Za-z0-9_])(add_test|set_tests_properties)\s*\(")
 _VARIABLE_REF_RE = re.compile(r"^\$\{[A-Za-z0-9_]+\}$")
 _INTEGER_RE = re.compile(r"^-?[0-9]+$")
+
+# Shipped-binary rule (CI-110 "every shipped binary has a smoke or integration lane").
+_TARGET_COMMAND_RE = re.compile(r"(?i)(?<![A-Za-z0-9_])(add_executable|install)\s*\(")
+_INSTALL_KEYWORDS = frozenset(
+    {"EXPORT", "RUNTIME", "LIBRARY", "ARCHIVE", "BUNDLE", "FRAMEWORK", "DESTINATION", "COMPONENT", "PERMISSIONS"}
+)
+SMOKE_LABELS = frozenset({"integration", "smoke", "process"})
+HELP_VERSION_ARGS = frozenset({"--help", "-h", "--version", "-v"})
+# cmake -P runners that only compare the target's --version output (the generated
+# Verify<Target>Version.cmake scripts in the product CMakeLists).
+VERSION_PROBE_DEFINES = frozenset({"SPARK_VERSION_EXECUTABLE"})
+# Shipped binaries with no non-interactive mode a lane could drive. Each entry
+# says where the behaviour is covered instead; the gap is printed on every run,
+# and an entry whose binary gains a behavioural lane fails until it is removed.
+KNOWN_BINARY_LANE_GAPS = {
+    "SparkLauncher": "GUI-only project picker with no headless mode; its launch-request validation runs "
+    "in-process in Tests/TestLauncherProcess.cpp, not through the shipped binary",
+}
 
 
 @dataclass
@@ -279,6 +301,87 @@ def check_ctest_json(document: object, origin: str) -> list[str]:
     return errors
 
 
+def shipped_executables(root: Path = REPO_ROOT) -> list[str]:
+    """Executable targets that an ``install(TARGETS ... RUNTIME ...)`` rule ships, from the tracked CMake files."""
+    candidates = _git_tracked_cmake_sources(root)
+    if candidates is None:
+        candidates = _walked_cmake_sources(root)
+    executables: set[str] = set()
+    installed: set[str] = set()
+    for relative in candidates:
+        if relative.split("/", 1)[0] in EXCLUDED_TOP_LEVEL_DIRS or not _is_cmake_source(relative):
+            continue
+        path = root / relative
+        if not path.is_file():
+            continue
+        source = strip_comments(path.read_text(encoding="utf-8"))
+        for match in _TARGET_COMMAND_RE.finditer(source):
+            tokens = _tokens(_balanced_body(source, match.end() - 1)[0])
+            if match.group(1).lower() == "add_executable":
+                if tokens and "$" not in tokens[0]:
+                    executables.add(tokens[0])
+            elif tokens[:1] == ["TARGETS"] and "RUNTIME" in tokens:
+                names = tokens[1:]
+                end = next((index for index, token in enumerate(names) if token in _INSTALL_KEYWORDS), len(names))
+                installed.update(name for name in names[:end] if "$" not in name)
+    return sorted(executables & installed)
+
+
+def _binary_name(value: str) -> str:
+    name = re.split(r"[\\/]", value)[-1]
+    return name[:-4] if name.lower().endswith(".exe") else name
+
+
+def _is_version_probe(command: list[str], target: str) -> bool:
+    """True when the only thing a test does with ``target`` is print its help or version."""
+    if command and _binary_name(command[0]) == target:
+        return bool(command[1:]) and set(command[1:]) <= HELP_VERSION_ARGS
+    references = [arg for arg in command if "=" in arg and _binary_name(arg.split("=", 1)[1]) == target]
+    return bool(references) and all(
+        arg.startswith("-D") and arg[2:].split("=", 1)[0] in VERSION_PROBE_DEFINES for arg in references
+    )
+
+
+def check_shipped_binary_lanes(
+    document: dict, shipped: list[str], origin: str, gaps: dict[str, str] = KNOWN_BINARY_LANE_GAPS
+) -> tuple[list[str], list[str]]:
+    """Every shipped executable this tree's tests invoke needs a behavioural smoke/integration/process lane.
+
+    A target counts as built in the tree once any registered test names its
+    file (as the command, an argument, a ``-D...=`` value, or an ENVIRONMENT
+    value). Tests that only print its help or version do not count, and the
+    behavioural test must carry an integration, smoke or process label.
+    Returns (errors, notes); a known gap is a note, and a stale one an error.
+    """
+    covered: dict[str, bool] = {}
+    for entry in document["tests"]:
+        if not isinstance(entry, dict):
+            continue
+        command = [str(arg) for arg in entry.get("command") or []]
+        properties = {
+            prop.get("name"): prop.get("value") for prop in entry.get("properties", []) if isinstance(prop, dict)
+        }
+        environment = [str(value) for value in properties.get("ENVIRONMENT") or []]
+        labels = {str(label) for label in properties.get("LABELS") or []}
+        referenced = {_binary_name(arg.split("=", 1)[-1]) for arg in command + environment} & set(shipped)
+        for target in referenced:
+            behavioural = not _is_version_probe(command, target) and bool(labels & SMOKE_LABELS)
+            covered[target] = covered.get(target, False) or behavioural
+    errors: list[str] = []
+    notes: list[str] = []
+    for target in sorted(covered):
+        if target in gaps and covered[target]:
+            errors.append(f"{origin}: {target} now has a behavioural lane; remove it from KNOWN_BINARY_LANE_GAPS")
+        elif target in gaps:
+            notes.append(f"{origin}: known gap: shipped binary {target} has no behavioural lane ({gaps[target]})")
+        elif not covered[target]:
+            errors.append(
+                f"{origin}: shipped binary {target} is only exercised through --help/--version or by tests without "
+                f"an {'/'.join(sorted(SMOKE_LABELS))} label; add a behavioural lane"
+            )
+    return errors, notes
+
+
 def _display_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT).as_posix()
@@ -317,11 +420,16 @@ def main(argv: list[str] | None = None) -> int:
             text = path.read_text(encoding="utf-8")
             errors.extend(check_cmake_text(text, _display_path(path)))
             checked += len(parse_cmake(text)[0])
+        shipped = shipped_executables() if args.ctest_json else []
         for path in args.ctest_json or []:
             document = json.loads(path.read_text(encoding="utf-8"))
             errors.extend(check_ctest_json(document, str(path)))
             if isinstance(document, dict) and isinstance(document.get("tests"), list):
                 checked += len(document["tests"])
+                lane_errors, lane_notes = check_shipped_binary_lanes(document, shipped, str(path))
+                errors.extend(lane_errors)
+                for note in lane_notes:
+                    print(f"validate_ctest_policy: note: {note}")
     except (OSError, ValueError) as exc:
         print(f"validate_ctest_policy: error: {exc}", file=sys.stderr)
         return 2
