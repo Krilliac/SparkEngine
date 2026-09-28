@@ -123,7 +123,8 @@ namespace Terrafront
         /// write or exposing its metadata if that transient id is reused.
         /// `progressDurable` says whether the character's final progress
         /// committed; it rides with a parked row (see TakeResolvedParked).
-        bool Detach(PlayerId player, TFDatabase* db, bool progressDurable);
+        /// TFProgressionSystem::ClearPlayer always passes it explicitly.
+        bool Detach(PlayerId player, TFDatabase* db, bool progressDurable = true);
 
         /// Overwrite (not merge) this player's runtime meta from the durable
         /// character record — same replace semantics and call site as
