@@ -1083,7 +1083,9 @@ void Game::UpdateMultiplayer(float dt)
 {
     auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
     multiplayer.Update(dt);
-    if (!multiplayer.IsActive() || !m_player || !m_input)
+    // Input goes out only once the session is live: a client whose handshake is still
+    // pending has no id for the server to apply it to.
+    if (!multiplayer.IsConnected() || !m_player || !m_input)
     {
         m_networkInputAccumulator = 0.0f;
         return;
@@ -1114,7 +1116,7 @@ void Game::UpdateMultiplayer(float dt)
         input.crouch = m_input->IsKeyDown(VK_LCONTROL);
     }
 
-    while (m_networkInputAccumulator >= kInputStep && multiplayer.IsActive())
+    while (m_networkInputAccumulator >= kInputStep && multiplayer.IsConnected())
     {
         m_networkInputAccumulator -= kInputStep;
         multiplayer.SendInput(input);
@@ -1123,10 +1125,7 @@ void Game::UpdateMultiplayer(float dt)
 
 bool Game::IsNetworkActive() const
 {
-    if (!m_networkInitialized)
-        return false;
-    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-    return netMgr.GetRole() != Spark::Net::NetworkRole::None;
+    return m_networkInitialized && SparkFPS::FPSMultiplayerSystem::GetInstance().IsActive();
 }
 
 std::string Game::GetNetworkStatus() const

@@ -68,7 +68,9 @@ enemy, weapon, progression, time-scale, and engine-service state.
   context exposes neither service. `save_list` reads the same `SaveSystem`.
 - `net_host`, `net_connect`, `net_disconnect`, `net_status`, and `net_stats` run the FPS multiplayer session when
   networking is enabled (experimental; outside `stable-v1`). `FPSMultiplayerSystem` is the module's only network path:
-  the game ticks it each frame and sends the local player's WASD/look/fire input at a fixed 60 Hz. The game does not
+  the game ticks it each frame and sends the local player's WASD/look/fire input at a fixed 60 Hz once the session is
+  connected. `net_status` reports a client as `connecting` until the server admits it and assigns an id; a rejected,
+  timed-out or lost connection ends the session and logs `[FPSMultiplayer] Connection failed: <reason>`. The game does not
   yet read the authoritative state back (open under `MOD-315`): the rendered local `Player` keeps its own movement,
   collision and health, remote players are not rendered, and server-side hits do not change the local `Player`. The
   convergence evidence below is of `FPSMultiplayerSystem` state, not of the rendered game.

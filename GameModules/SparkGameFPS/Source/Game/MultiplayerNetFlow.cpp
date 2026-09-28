@@ -274,7 +274,12 @@ namespace SparkFPS
             return status;
         }
 
-        status += m_isServer ? "Server" : "Client";
+        if (m_isServer)
+            status += "Server";
+        else if (IsConnected())
+            status += "Client (connected, id " + std::to_string(m_localClientId) + ")";
+        else
+            status += "Client (connecting)";
         status += " | Players: " + std::to_string(m_playerStates.size());
         status += " | Projectiles: " + std::to_string(m_projectiles.size());
         status += " | Tick: " + std::to_string(m_tickRate) + "Hz";

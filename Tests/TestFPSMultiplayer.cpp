@@ -17,6 +17,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #include "Fixtures/NetworkTestSecurity.h"
 #include "Fixtures/SecureTestPeer.h"
+#include "Utils/SparkConsole.h"
 
 #include <array>
 #include <chrono>
@@ -24,6 +25,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -446,6 +448,24 @@ namespace
                 return false;
 
             return PumpUntil(client, [&] { return client.GetLocalClientId() == assignedId; });
+        }
+
+        /// Pump @p client until its Connect arrives, then refuse it with a plaintext
+        /// ConnectRejected carrying @p reason. Returns false on timeout or a failed send.
+        bool RejectClient(FPSMultiplayerSystem& client, const std::string& reason)
+        {
+            WireMessage connect;
+            sockaddr_in clientAddress{};
+            const bool gotConnect = PumpUntil(
+                client,
+                [&] { return Receive(connect, &clientAddress) && connect.type == Spark::Net::MessageType::Connect; });
+            if (!gotConnect)
+                return false;
+            m_remote = clientAddress;
+
+            Spark::Net::NetBuffer body;
+            body.WriteString(reason);
+            return Send(Spark::Net::MessageType::ConnectRejected, Spark::Net::ChannelType::Reliable, 0, body.GetData());
         }
 
       private:
@@ -1299,5 +1319,65 @@ TEST(FPSMultiplayerProduction_NetworkPathClientAppliesSnapshotBatches)
     // The server closing the session ends it on the client.
     ASSERT_TRUE(fakeServer.Send(Spark::Net::MessageType::Disconnect, Spark::Net::ChannelType::Reliable, 2, {}));
     ASSERT_TRUE(PumpUntil(client, [&] { return !client.IsActive(); }));
+    EXPECT_TRUE(Spark::Net::NetworkManager::GetInstance().GetRole() == Spark::Net::NetworkRole::None);
+}
+
+namespace
+{
+    /// True when SimpleConsole's history holds a message containing @p text.
+    bool ConsoleLogContains(const std::string& text)
+    {
+        for (const auto& entry : Spark::SimpleConsole::GetInstance().GetLogHistory())
+        {
+            if (entry.message.find(text) != std::string::npos)
+                return true;
+        }
+        return false;
+    }
+} // namespace
+
+TEST(FPSMultiplayerProduction_ConnectIsNotConnectedUntilAccepted)
+{
+    LoopbackPeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
+    FPSSessionGuard guard;
+    ASSERT_TRUE(fakeServer.IsReady());
+
+    auto& client = FPSMultiplayerSystem::GetInstance();
+    Spark::Net::NetworkManager::GetInstance().Shutdown();
+    client.Initialize(false);
+    ASSERT_TRUE(client.Connect("127.0.0.1", fakeServer.Port()));
+
+    // A queued ClientHello opens the session but is not a connection.
+    EXPECT_TRUE(client.IsActive());
+    EXPECT_FALSE(client.IsConnected());
+    EXPECT_TRUE(client.Console_GetStatus().find("Client (connecting)") != std::string::npos);
+
+    constexpr uint32_t kAssignedId = 7;
+    ASSERT_TRUE(fakeServer.AcceptClient(client, kAssignedId));
+    EXPECT_TRUE(client.IsActive());
+    EXPECT_TRUE(client.IsConnected());
+    EXPECT_TRUE(client.Console_GetStatus().find("Client (connected, id 7)") != std::string::npos);
+}
+
+TEST(FPSMultiplayerProduction_RejectedConnectEndsSession)
+{
+    LoopbackPeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
+    FPSSessionGuard guard;
+    ASSERT_TRUE(fakeServer.IsReady());
+
+    auto& client = FPSMultiplayerSystem::GetInstance();
+    Spark::Net::NetworkManager::GetInstance().Shutdown();
+    client.Initialize(false);
+    ASSERT_TRUE(client.Connect("127.0.0.1", fakeServer.Port()));
+    ASSERT_TRUE(client.IsActive());
+
+    // The server refuses the handshake: the session must end instead of staying "active"
+    // with no server behind it, and the reason must reach the console.
+    const std::string reason = "FPS server full for MOD-315";
+    ASSERT_TRUE(fakeServer.RejectClient(client, reason));
+    ASSERT_TRUE(PumpUntil(client, [&] { return !client.IsActive(); }));
+    EXPECT_FALSE(client.IsConnected());
+    EXPECT_EQ(client.Console_GetStatus(), std::string("FPSMultiplayer: Inactive"));
+    EXPECT_TRUE(ConsoleLogContains("[FPSMultiplayer] Connection failed: " + reason));
     EXPECT_TRUE(Spark::Net::NetworkManager::GetInstance().GetRole() == Spark::Net::NetworkRole::None);
 }

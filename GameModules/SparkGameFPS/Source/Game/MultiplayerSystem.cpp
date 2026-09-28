@@ -127,6 +127,17 @@ namespace SparkFPS
 
         if (!m_isServer)
         {
+            // A rejected or timed-out handshake, or a lost session, leaves NetworkManager
+            // Disconnected without a Disconnect message. The FPS session ends with its
+            // transport (this module does not enable NetworkManager auto-reconnect).
+            if (network.GetConnectionState() == Spark::Net::ConnectionState::Disconnected)
+            {
+                Spark::SimpleConsole::GetInstance().Log(
+                    "[FPSMultiplayer] Connection failed: " + network.GetLastConnectionError(), "ERROR");
+                Disconnect();
+                return;
+            }
+
             const uint32_t assignedClientId = network.GetLocalClientID();
             if (assignedClientId != Spark::Net::INVALID_CLIENT && assignedClientId != m_localClientId)
             {
@@ -218,6 +229,16 @@ namespace SparkFPS
         auto& console = Spark::SimpleConsole::GetInstance();
         console.Log("[FPSMultiplayer] Connecting to " + address + ":" + std::to_string(port));
         return true;
+    }
+
+    bool FPSMultiplayerSystem::IsConnected() const
+    {
+        if (!m_isActive)
+            return false;
+        if (m_isServer)
+            return true;
+        return m_localClientId != Spark::Net::INVALID_CLIENT &&
+               Spark::Net::NetworkManager::GetInstance().GetConnectionState() == Spark::Net::ConnectionState::Connected;
     }
 
     void FPSMultiplayerSystem::Disconnect()

@@ -351,8 +351,21 @@ namespace SparkFPS
         /** @brief Check if this instance is the server. */
         bool IsServer() const { return m_isServer; }
 
-        /** @brief Check if connected (client) or hosting (server). */
+        /**
+         * @brief Check if a session is open: hosting (server), or connecting or connected (client).
+         *
+         * A client session that the server rejects, that times out, or that the server closes
+         * ends on the next Update, so IsActive() never outlives the transport session.
+         */
         bool IsActive() const { return m_isActive; }
+
+        /**
+         * @brief Check if the session is live: hosting (server), or admitted with an assigned id (client).
+         *
+         * False while a client handshake is still pending, so callers never treat a queued
+         * ClientHello as a connection.
+         */
+        bool IsConnected() const;
 
         /** @brief Get local client ID. */
         uint32_t GetLocalClientId() const { return m_localClientId; }
