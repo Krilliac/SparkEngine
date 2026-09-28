@@ -505,9 +505,13 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:1a190dffcb31",
-          "state": "unmet",
-          "evidence": [],
-          "note": "GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocolOnboarding.h still sends a plaintext password field (char pass[64]) at login."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestSecureTransportWired.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Net/TFScramWire.cpp",
+            "Tests/TestTFServerSecurity.cpp"
+          ],
+          "note": "Only the handshake frame is plaintext; every later datagram is sealed. Capture tests SecureTransport_Wired_CaptureContainsNoPayloadPlaintext, SecureTransport_Handshake_PlayerNameNeverInPlaintextCapture and SecureTransport_TFLogin_CaptureHasNoPasswordOrSaltedPassword (SCRAM, connection-bound challenge) pass on Windows. Local only; no exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:1294cd87e10f",
@@ -521,9 +525,13 @@
         },
         {
           "criterionDigest": "sha256:c7a82159fc73",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Authentication and gameplay do not share an audited encrypted path."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Engine/Networking/NetworkManager.cpp",
+            "Tests/TestSecureTransportWired.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.cpp"
+          ],
+          "note": "Connect carries the signed handshake and NetworkManager seals every later datagram, so Terrafront SCRAM login and gameplay use the same channel. SecureTransport_Wired_PlaintextGameplayAfterHandshakeDropped and SensitiveMessageRefusedWithoutChannel pin it. Local Windows run only; no exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:04b666ab668b",
