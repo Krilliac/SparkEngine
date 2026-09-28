@@ -18,7 +18,68 @@
       "editorDebug",
       "testsDocs"
     ],
-    "parityEvidence": {},
+    "parityEvidence": {
+      "SparkGameMMO": {
+        "persistence": {
+          "testSelectors": [
+            "MMOPersistence_*"
+          ]
+        }
+      },
+      "SparkGame": {
+        "persistence": {
+          "testSelectors": [
+            "SparkGameShowcase_QuickLoadRestoresExactState"
+          ]
+        },
+        "assets": {
+          "testSelectors": [
+            "SparkGameShowcase_Localization*"
+          ]
+        }
+      },
+      "SparkGameOpenWorld": {
+        "gameplayLoop": {
+          "testSelectors": [
+            "OpenWorldTraversal_*"
+          ]
+        },
+        "persistence": {
+          "testSelectors": [
+            "OpenWorldPersistence_*"
+          ]
+        },
+        "assets": {
+          "testSelectors": [
+            "OpenWorldAssets_*"
+          ]
+        }
+      },
+      "SparkGameVisualScript": {
+        "lifecycle": {
+          "testSelectors": [
+            "VisualScriptDiagnostics_*",
+            "VisualScriptHotReload_*"
+          ]
+        },
+        "gameplayLoop": {
+          "testSelectors": [
+            "VisualScriptGameplay_*",
+            "VisualScriptRuntime_*"
+          ]
+        },
+        "editorDebug": {
+          "testSelectors": [
+            "VisualScriptGraphs_*"
+          ]
+        },
+        "testsDocs": {
+          "testSelectors": [
+            "VisualScriptGraphs_*"
+          ]
+        }
+      }
+    },
     "currentScores": {
       "SparkGameMMOFPS": [
         2,
