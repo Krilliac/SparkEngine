@@ -342,6 +342,16 @@ namespace
         return input;
     }
 
+    /// Stay on @p post after arriving. Arrival is judged on the predicted state, before the
+    /// server has applied the last steps; when the server drops one of them (its input budget
+    /// after a stalled frame under a slow sanitizer run), reconciliation moves the player back
+    /// off the post, and holding still would leave it there for the rest of the round.
+    PlayerInput HoldPost(const NetworkPlayerState& self, const Point& post)
+    {
+        bool onPost = false;
+        return SteerTo(self, post, onPost);
+    }
+
     /// The client's side of the round. It sees the session only as the FPS module's public API
     /// exposes it: its predicted own state and the replicated states and scores of the others.
     class ClientScript
@@ -396,8 +406,9 @@ namespace
                 {
                     Emit("event=death id={}", selfId);
                     m_phase = Phase::Dead;
+                    return IdleInput(*self);
                 }
-                return IdleInput(*self);
+                return HoldPost(*self, m_role == Role::Shooter ? kShooterPost : kTargetPost);
 
             case Phase::Fire:
             {
@@ -442,8 +453,9 @@ namespace
                 {
                     Emit("event=done id={}", selfId);
                     m_phase = Phase::Done;
+                    return IdleInput(*self);
                 }
-                return IdleInput(*self);
+                return HoldPost(*self, m_role == Role::Shooter ? kShooterPost : kTargetReturnPost);
 
             case Phase::Done:
                 return IdleInput(*self);
