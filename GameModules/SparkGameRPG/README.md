@@ -62,6 +62,14 @@ session API with the real RPGGameplayBridge quest policy installed, and runs the
 RPGQuestAutopilot through the wolf hunt frame by frame at 60 Hz; run it with
 `ctest --test-dir build/linux-gcc-release -R RPGQuestSlice --output-on-failure`.
 
+## Packaged quest run
+
+`RPGQuestSlicePackage_WolfHuntRestart` (registered with `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON`, run with `ctest -L module-package-run`; it installs the runtime and samples components and drives the installed `SparkEngine` and module headless on NullRHI through `Tests/PackageSmoke/RunInstalledModuleObjective.cmake` and `Tests/PackageSmoke/ModuleObjectives/SparkGameRPG.cmake`). A
+writer process runs `rpg_autoplay 1 Shadow Wolf`; at 240 s the autopilot must report the quest completed with
+five kills, the journal must show it completed, and `rpg_save packaged` must succeed. A second process first shows
+the quest still active, then `rpg_load packaged` must bring back the writer's journal and hero status (level, XP,
+health, mana, area, gold and carried weight) in the same frame. It is a local opt-in run, not hosted CI evidence.
+
 ## NPC navigation
 
 SparkGameRPGModule bakes one engine NavMesh per NPC area at load

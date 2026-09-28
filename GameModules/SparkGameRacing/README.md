@@ -33,6 +33,13 @@ The whole race loop (roster/grid setup, race clock, surface and hazard sync, ord
 
 Finished and DNF racers remain visible in the presentation state at their last pose.
 
+## Packaged race run
+
+`RacingCompleteRacePackage_Circuit` (registered with `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON`, run with `ctest -L module-package-run`; it installs the runtime and samples components and drives the installed `SparkEngine` and module headless on NullRHI through `Tests/PackageSmoke/RunInstalledModuleObjective.cmake` and `Tests/PackageSmoke/ModuleObjectives/SparkGameRacing.cmake`). It
+runs `race_autopilot on` on the default circuit and, at 400 s of real loop time, requires all six racers (the
+player and five AI drivers) `[FINISHED]` on the final lap, none `[DNF]`, and the race no longer running. It is a
+local opt-in run, not hosted CI evidence.
+
 ## Saving results
 
 `race_save <slot>` and `race_load <slot>` (`RacingEngineSystems::SaveRaceData` / `LoadRaceData`) store the race through the engine `SaveSystem`: the ECS world plus a `SparkGameRacing.race.v1` custom-state entry written by `RacingPersistence` (track, AI difficulty, every vehicle, and the race manager's lap, split, best-lap, placing, finish, and championship records). Floats are written at full precision, so a finished race's results and best laps load back bit-identical in a restarted module. `race_load` decodes and validates the racing state before the `SaveSystem` restores the world, so a slot with missing, damaged, or edited racing state, or one saved on a track the build does not have, changes neither the world nor the running race. Validation rejects results the race flow cannot produce: a lap count that differs from the recorded lap times, a best lap that is not the fastest recorded lap, a finish without the final lap or after the saved race clock, duplicate placings, and a finished race with a racer still on track. `RacingCompleteRace_ResultsAndBestLapsSurviveSaveSystemRestart` and `RacingCompleteRace_SaveRejectsEditedResultsBeforeWorldRestore` cover this on the real `SaveSystem`.

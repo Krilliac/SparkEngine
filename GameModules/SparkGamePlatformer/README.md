@@ -52,6 +52,13 @@ collectible or checkpoint ids, and unlocks or ratings the saved stars cannot exp
 world and every gameplay system unchanged. Collectible and checkpoint ids come from a fixed build order, so a save
 maps to the same items only within builds that place the same items; changing placement requires a new key.
 
+## Packaged run
+
+`PlatformerCompletionPackage_Level0ThreeMinutes` (registered with `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON`, run with `ctest -L module-package-run`; it installs the runtime and samples components and drives the installed `SparkEngine` and module headless on NullRHI through `Tests/PackageSmoke/RunInstalledModuleObjective.cmake` and `Tests/PackageSmoke/ModuleObjectives/SparkGamePlatformer.cmake`).
+It reloads level 0, turns on `platformer_autoplay`, and at 180 s of real loop time requires `Green Hills (11
+platforms) [DONE]`, three activated checkpoints, and a level timer of at most 180 s, with every command accepted
+and a clean NullRHI lifecycle. It is a local opt-in run; there is no hosted CI lane for it.
+
 ## Known limitations
 
 - Localization resources are missing. `PlatformerEngineSystems::SetupLocalization()` loads

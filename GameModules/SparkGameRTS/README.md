@@ -89,6 +89,13 @@ simulation tick.
 - `rts_save [slot]` / `rts_load [slot]` save or resume the skirmish (default slot `rts_quicksave`; an autosave is
   written to `rts_autosave` every two minutes).
 
+## Packaged skirmish run
+
+`RTSSkirmishPackage_DeterministicVictory` (registered with `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON`, run with `ctest -L module-package-run`; it installs the runtime and samples components and drives the installed `SparkEngine` and module headless on NullRHI through `Tests/PackageSmoke/RunInstalledModuleObjective.cmake` and `Tests/PackageSmoke/ModuleObjectives/SparkGameRTS.cmake`).
+Two separate processes each run `rts_autoplay on`; at 600 s of real loop time both must report `Match: Victory`,
+and the second process's `rts_status` (final tick, counts and state hash) must equal the first's byte for byte.
+It is a local opt-in run, not hosted CI evidence.
+
 ## Save and resume
 
 Saves go through the engine `SaveSystem` under the custom-state key `SparkGameRTS.match.v2`, encoded by
