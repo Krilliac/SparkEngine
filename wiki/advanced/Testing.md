@@ -667,7 +667,9 @@ the verified source event. Today that covers `build-linux-mingw-wine`
 (`workflow_dispatch` only) and `Coverage PR Comment` (`pull_request` only) on a
 push. Any other `if:` expression, a required job, or a guard that is true for
 the event still rejects the skip. Re-verified 2026-09-24 with
-`python3 .github/scripts/verify-working-ruleset.py --live`. That command asserts
+`GITHUB_TOKEN=$(gh auth token) python3 .github/scripts/verify-working-ruleset.py --live`
+(GitHub omits `bypass_actors` without an admin-scoped token, and the verifier then
+fails closed with `bypass_actors not visible`). That command asserts
 that ruleset `21968740` is active, has no bypass actors, and requires exactly
 `Required CI Gate` from integration 15368. CI runs its fixture tests in
 `validate-ci-tools`. Every `tools/validate-all.sh` check except the advisory

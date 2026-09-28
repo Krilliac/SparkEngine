@@ -173,6 +173,19 @@ class VerifyWorkingRulesetTests(unittest.TestCase):
                 change(document["ruleset"])
                 self.assert_rejected(document, message)
 
+    def test_hidden_bypass_actors_fail_closed_as_not_visible(self) -> None:
+        # An unauthenticated or non-admin response omits the field; that is missing evidence, not a bypass list.
+        document = captured()
+        del document["ruleset"]["bypass_actors"]
+        result = MODULE.verdict(document["rulesForBranch"], document["ruleset"], "test")
+        self.assertFalse(result["ok"])
+        self.assertEqual(
+            result["errors"], ["bypass_actors not visible: --live requires an admin-scoped GITHUB_TOKEN"]
+        )
+        document = captured()
+        document["ruleset"]["bypass_actors"] = None
+        self.assert_rejected(document, "declares bypass actors")
+
     def test_malformed_responses_are_rejected(self) -> None:
         self.assertFalse(MODULE.verdict({}, captured()["ruleset"], "test")["ok"])
         self.assertFalse(MODULE.verdict(captured()["rulesForBranch"], [], "test")["ok"])

@@ -15,8 +15,9 @@ Actions app. Legacy branch protection is not consulted: rulesets and branch
 protection are cumulative, so legacy settings cannot weaken what this checks.
 
 ``--fixture`` checks a captured response pair and needs no network. CI uses
-it to test the verifier. ``--live`` queries the API (``GITHUB_TOKEN`` is used
-when set) and is the operator re-verification command. The verdict is printed
+it to test the verifier. ``--live`` queries the API and is the operator
+re-verification command. It needs an admin-scoped ``GITHUB_TOKEN``: without one
+GitHub omits ``bypass_actors``, and the verifier fails closed saying so. The verdict is printed
 as JSON, and the exit code is 0 only when every assertion holds.
 """
 
@@ -105,7 +106,11 @@ def verify_ruleset(ruleset: Any) -> list[str]:
         errors.append("ruleset does not target branches")
     if ruleset.get("enforcement") != "active":
         errors.append(f"ruleset enforcement is '{ruleset.get('enforcement')}', expected 'active'")
-    if ruleset.get("bypass_actors") != []:
+    # GitHub omits bypass_actors from responses to callers without admin access, so an absent field proves
+    # nothing either way; it must fail closed without claiming the ruleset has bypass actors.
+    if "bypass_actors" not in ruleset:
+        errors.append("bypass_actors not visible: --live requires an admin-scoped GITHUB_TOKEN")
+    elif ruleset["bypass_actors"] != []:
         errors.append("ruleset declares bypass actors")
     conditions = ruleset.get("conditions")
     ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
