@@ -50,7 +50,7 @@ class DocumentedSelectorTests(unittest.TestCase):
         source.mkdir()
         (source / "CMakeLists.txt").write_text(FIXTURE_CMAKE, encoding="utf-8")
         cls.build_dir = root / "linux-gcc-release"
-        subprocess.run(["cmake", "-S", str(source), "-B", str(cls.build_dir)], check=True,
+        subprocess.run(["cmake", "-S", str(source), "-B", str(cls.build_dir), "-DFIXTURE_ENABLED=ON"], check=True,
                        capture_output=True, text=True)
         cls.root = root
 
@@ -101,6 +101,18 @@ class DocumentedSelectorTests(unittest.TestCase):
                                          "cd build && ctest -L gamma --no-tests=error"])
         self.assertEqual(code, 0, output)
         self.assertIn("1 applicable command(s): 1 pass, 0 fail; 0 declared debt; 2 not applicable", output)
+
+    def test_command_needing_an_unset_configure_option_is_not_applicable(self) -> None:
+        configure = "cmake --preset linux-gcc-release"
+        code, output = self.run_checker([
+            f"{configure} -DFIXTURE_ENABLED=TRUE && ctest --test-dir {TREE} -L alpha --no-tests=error",
+            f"{configure} -DFIXTURE_OPT_IN=ON && ctest --test-dir {TREE} -L nothing --no-tests=error",
+        ])
+        self.assertEqual(code, 0, output)
+        self.assertIn("1 applicable command(s): 1 pass, 0 fail; 0 declared debt; 1 not applicable", output)
+        outcome = checker.evaluate(checker.load_override(self.root / "commands.json")[1], "ctest", self.build_dir, None)
+        self.assertEqual((outcome.status, outcome.detail),
+                         ("not-applicable", "tree is not configured with -DFIXTURE_OPT_IN=ON"))
 
     def test_only_inapplicable_commands_exit_2(self) -> None:
         code, output = self.run_checker(["ctest --test-dir build/windows-release -C Release -L alpha --no-tests=error"])

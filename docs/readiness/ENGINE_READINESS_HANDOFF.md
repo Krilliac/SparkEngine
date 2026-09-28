@@ -3195,7 +3195,7 @@ Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
 
 ```bash
 ctest --test-dir build/linux-gcc-release -R TerrafrontMigration --output-on-failure --no-tests=error
-ctest --test-dir build/linux-gcc-release -R TerrafrontRestart --output-on-failure --no-tests=error
+cmake --preset linux-gcc-release -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON && cmake --build build/linux-gcc-release && ctest --test-dir build/linux-gcc-release -R TerrafrontRestart --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**

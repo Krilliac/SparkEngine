@@ -9,8 +9,9 @@ line in a fenced block of ``wiki/advanced/Testing.md``.
 
 A command applies to the tree when its ``--test-dir`` (or ``--preset``) resolves,
 through ``CMakePresets.json``, to the preset whose ``build/<name>`` tree has the
-same name as ``--build-dir``. Every other command is reported as not applicable
-to this tree and is never counted as a pass. For each applicable command the
+same name as ``--build-dir`` and the tree's ``CMakeCache.txt`` holds every
+``-D`` setting the same documented command configures it with. Every other
+command is reported as not applicable to this tree and is never counted as a pass. For each applicable command the
 tool runs ``ctest --show-only=json-v1`` with the command's own selection flags
 and requires at least one selected test without the ``DISABLED`` property and,
 for every enabled selected test, a ``command[0]`` that exists on disk (the test
@@ -59,6 +60,8 @@ SELECTION_FLAGS = {
 }
 FENCE = re.compile(r"^\s*(```|~~~)")
 CTEST_TIMEOUT_SECONDS = 120
+CMAKE_TOOL = re.compile(r"^(?:.*[/\\])?cmake(?:\.exe)?$", re.IGNORECASE)
+CACHE_ENTRY = re.compile(r"^([A-Za-z_][A-Za-z0-9_.+-]*)(?::[A-Z]+)?=(.*)$")
 
 
 @dataclass
@@ -69,6 +72,8 @@ class DocumentedCommand:
     text: str
     arguments: list[str]
     planned: list[str] = field(default_factory=list)
+    # -D cache settings the same documented command configures the tree with.
+    requires: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -78,14 +83,58 @@ class Outcome:
     detail: str
 
 
+def configure_defines(command: str) -> dict[str, str]:
+    """``-DNAME[:TYPE]=VALUE`` settings passed to a CMake configure step in the same command."""
+    defines: dict[str, str] = {}
+    for segment in re.split(r"[;&|\r\n]+", command):
+        tokens = command_tokens(segment)
+        start = next((index for index, token in enumerate(tokens) if CMAKE_TOOL.match(token)), None)
+        if start is None or any(token in ("--build", "--install", "-E", "-P") for token in tokens[start + 1:]):
+            continue
+        arguments = tokens[start + 1:]
+        for index, token in enumerate(arguments):
+            value = token[2:] if token.startswith("-D") and len(token) > 2 else None
+            if token == "-D" and index + 1 < len(arguments):
+                value = arguments[index + 1]
+            if value and "=" in value:
+                name, setting = value.split("=", 1)
+                defines[name.split(":", 1)[0]] = setting
+    return defines
+
+
+def _cmake_value(value: str) -> str:
+    """Normalise CMake truth constants so ON/TRUE/1 and OFF/FALSE/0 compare equal."""
+    upper = value.strip().upper()
+    if upper in ("ON", "TRUE", "YES", "Y", "1"):
+        return "ON"
+    if upper in ("OFF", "FALSE", "NO", "N", "0", "") or upper.endswith("-NOTFOUND"):
+        return "OFF"
+    return value.strip()
+
+
+def unmet_requirements(build_dir: Path, requires: dict[str, str]) -> list[str]:
+    """The ``-D`` settings a documented command needs that this tree's CMakeCache.txt does not hold."""
+    cache: dict[str, str] = {}
+    cache_file = build_dir / "CMakeCache.txt"
+    if cache_file.is_file():
+        for line in cache_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            match = CACHE_ENTRY.match(line)
+            if match:
+                cache[match.group(1)] = match.group(2)
+    return [f"-D{name}={value}" for name, value in sorted(requires.items())
+            if name not in cache or _cmake_value(cache[name]) != _cmake_value(value)]
+
+
 def _invocations(source: str, command: str, planned: list[str]) -> list[DocumentedCommand]:
     found = []
+    requires = configure_defines(command)
     for segment in executable_ctest_segments(command):
         matches = list(_CTEST_COMMAND_TOKEN.finditer(segment))
         for index, match in enumerate(matches):
             end = matches[index + 1].start() if index + 1 < len(matches) else len(segment)
             arguments = command_tokens(segment[match.end():end])
-            found.append(DocumentedCommand(source, segment[match.start():end].strip(), arguments, planned))
+            found.append(DocumentedCommand(source, segment[match.start():end].strip(), arguments, planned,
+                                           requires))
     return found
 
 
@@ -213,6 +262,9 @@ def evaluate(command: DocumentedCommand, ctest: str, build_dir: Path, config: st
         return Outcome(command, "not-applicable", "no --test-dir/--preset naming a preset build tree")
     if tree.split("/", 1)[1] != build_dir.name:
         return Outcome(command, "not-applicable", f"targets {tree}")
+    unmet = unmet_requirements(build_dir, command.requires)
+    if unmet:
+        return Outcome(command, "not-applicable", f"tree is not configured with {' '.join(unmet)}")
     selection = selection_arguments(command.arguments)
     if selection is None:
         return Outcome(command, "not-applicable", "selection value is a placeholder")
