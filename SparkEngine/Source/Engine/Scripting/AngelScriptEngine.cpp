@@ -648,7 +648,13 @@ bool AngelScriptEngine::Initialize()
 
     if (m_engine)
     {
+        // A successful Initialize() always leaves this engine as GetInstance(), as the full
+        // path below does. Another engine initialized and shut down since this one started
+        // clears s_instance, and a caller re-initializing this still-running engine (a
+        // lifecycle boot after an unfinished one) then published an engine GetInstance()
+        // did not name.
         LogWarning("Already initialized.");
+        s_instance = this;
         return true;
     }
 

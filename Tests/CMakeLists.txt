@@ -2410,7 +2410,7 @@ set(_spark_life_selectors
     "EngineWiring_=11"
     "ModuleHotReload_=15"
     "LIFE200_=${_spark_life_life200_count}"
-    "LifecycleLoop_=6"
+    "LifecycleLoop_=7"
     "ModuleReload_=3")
 if(NOT WIN32)
     list(APPEND _spark_life_selectors "EngineLifecycle_=22")

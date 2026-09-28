@@ -552,3 +552,22 @@ TEST(LifecycleLoop_ForeignScriptEngineIsNeitherAdoptedNorShutDown)
 #endif
     }
 }
+
+TEST(LifecycleLoop_ReinitializedRunningScriptEngineIsTheInstanceAgain)
+{
+    // An unfinished lifecycle leaves its script engine running but unpublished. Another
+    // engine that starts and stops meanwhile clears GetInstance(); the next boot
+    // re-initializes the still-running engine and publishes it, so that Initialize()
+    // must name it again (a shuffled suite otherwise failed ServicesPublished).
+    ForeignScriptEngine running;
+    ASSERT_TRUE(running.engine.Initialize());
+    {
+        ForeignScriptEngine other;
+        ASSERT_TRUE(other.engine.Initialize());
+        ASSERT_TRUE(AngelScriptEngine::GetInstance() == &other.engine);
+    }
+    ASSERT_TRUE(AngelScriptEngine::GetInstance() == nullptr);
+
+    ASSERT_TRUE(running.engine.Initialize());
+    EXPECT_TRUE(AngelScriptEngine::GetInstance() == &running.engine);
+}
