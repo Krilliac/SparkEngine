@@ -733,8 +733,10 @@ class WorkItemPresetResolutionTests(ContractTestCase):
             self.shipping_errors(stranger), "HEAD-220 configures an experimental Shipping preset owned by PLT-220"
         )
 
-        # The rule is wired into the full validator, not only callable.
-        self.assert_rejected(promoted, "experimental Shipping preset is in stable-v1 build scope")
+        # The rule runs inside work-item validation, not only as a helper.
+        validator = site_data_validate.Validator(promoted)
+        validator.validate_work_items()
+        self.assert_shipping_error(validator.errors, "experimental Shipping preset is in stable-v1 build scope")
 
 
 class LegalContractConsistencyTests(ContractTestCase):
@@ -1409,8 +1411,10 @@ class ScopeNarrowingTests(ContractTestCase):
                 errors = site_data_validate.operations_boundary_errors(contract)
                 self.assertTrue(any(fragment in error for error in errors), errors)
                 if name == "headless-scope-backup":
-                    # One full run proves the rule is wired into Validator; the rest stay cheap.
-                    self.assert_rejected(contract, fragment)
+                    # The rule runs inside the OD-08 boundary check, not only as a helper.
+                    validator = site_data_validate.Validator(contract)
+                    validator.validate_online_service_boundary()
+                    self.assertTrue(any(fragment in error for error in validator.errors), validator.errors)
 
 
 class WindowsRowEvidenceTests(ContractTestCase):

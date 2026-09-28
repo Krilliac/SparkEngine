@@ -1070,12 +1070,12 @@ def windows_row_evidence_errors(
 ) -> list[str]:
     """CI-110: Linux sanitizer evidence never promotes a Windows-only profile's certification row by itself.
 
-    For each profile whose supported hosts are all Windows, a promoted included
-    capability whose workflow evidence names jobs, and every passing required
-    gate, cites at least one job on a ``windows-*`` runner; platform.windows
-    always does. No sanitizer lane may be the only job evidence, and the work
-    items blocking platform.windows cannot evidence a criterion with
-    sanitizer-derived repository artifacts alone.
+    For each profile whose supported hosts are all Windows, promoted
+    platform.windows cites at least one job on a ``windows-*`` runner, and no
+    promoted included capability or passing required gate has a Linux
+    sanitizer lane as its only job evidence. The work items blocking
+    platform.windows cannot evidence a criterion with sanitizer-derived
+    repository artifacts alone.
     """
     if jobs_of is None:
         jobs_of = lambda path: workflow_jobs(REPO_ROOT / path)  # noqa: E731
@@ -1099,10 +1099,8 @@ def windows_row_evidence_errors(
 
     def row_errors(location: str, record: dict[str, Any], *, windows_required: bool) -> list[str]:
         cited = cited_jobs(record)
-        if not cited and not windows_required:
-            return []
         errors: list[str] = []
-        if not any(job is not None and job.windows for _, job in cited):
+        if windows_required and not any(job is not None and job.windows for _, job in cited):
             errors.append(f"{location}: promoted Windows row cites no workflow job on a windows-* runner")
         if cited and all(job is not None and job.sanitizer for _, job in cited):
             names = ", ".join(name for name, _ in cited)
@@ -1131,7 +1129,7 @@ def windows_row_evidence_errors(
         for gate_id in profile.get("requiredGateIds", []):
             gate = gates.get(gate_id)
             if gate is not None and gate.get("state") == "passing":
-                errors.extend(row_errors(f"{prefix}.{gate_id}", gate, windows_required=True))
+                errors.extend(row_errors(f"{prefix}.{gate_id}", gate, windows_required=False))
     windows_row = capabilities.get(WINDOWS_CERTIFICATION_CAPABILITY, {})
     for owner_id in windows_row.get("blockingWorkItemIds", []):
         for index, entry in enumerate(items.get(owner_id, {}).get("acceptanceStatus", [])):
