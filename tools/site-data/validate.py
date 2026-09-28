@@ -1208,6 +1208,8 @@ def publication_evidence_errors(contract: dict[str, Any], workflows: set[str] | 
     errors: list[str] = []
     if not workflows:
         return [f"publicationEvidence: no workflow defines the {PUBLICATION_JOB} job"]
+    # A global release is one source commit: its profiles cannot each cite their own.
+    release_commits: set[str] = set()
     for profile in readiness.get("releaseProfiles", []):
         if not isinstance(profile, dict) or (profile.get("state") != "ready" and not global_ready):
             continue
@@ -1240,11 +1242,17 @@ def publication_evidence_errors(contract: dict[str, Any], workflows: set[str] | 
                 commits.update(reference.rsplit("@", 1)[1] for reference in references)
         if len(commits) > 1:
             errors.append(f"{location}: publication evidence cites different commits {sorted(commits)}")
+        release_commits.update(commits)
         gate = gates.get(finalization.get("gateId"))
         if gate is None or gate.get("state") != "passing" or not gate.get("evidence"):
             errors.append(
                 f"{location}: finalization gate {finalization.get('gateId')} must be passing with evidence"
             )
+    if global_ready and len(release_commits) > 1:
+        errors.append(
+            "publicationEvidence: publication evidence cites different commits across profiles "
+            f"{sorted(release_commits)}"
+        )
     return errors
 
 
