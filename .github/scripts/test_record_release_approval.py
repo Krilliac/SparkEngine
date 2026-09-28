@@ -282,6 +282,39 @@ class WorkflowWiringTests(unittest.TestCase):
                               if "guard_release_mutation.py" in step.get("run", "") or "git push" in step.get("run", ""))
         self.assertLess(gate + 1, first_mutation)
 
+    def test_release_approval_job_records_the_approval_before_the_publisher_starts(self):
+        job = self.workflow["jobs"]["release-approval"]
+        versioned = "needs.prepare.outputs.is_versioned == 'true'"
+        self.assertNotIn("if", job)
+        self.assertEqual(job["environment"], f"${{{{ {versioned} && 'stable-release' || 'nightly-release' }}}}")
+        self.assertEqual(job["permissions"], {"actions": "read", "contents": "read"})
+        self.assertNotIn("continue-on-error", job)
+        self.assertNotIn("secrets.", str(job))
+        steps = job["steps"]
+        self.assertEqual([step["name"] for step in steps], [
+            "Checkout exact approval source",
+            "Verify stable publication environment protection",
+            "Record pre-publication stable-release approval",
+            "Retain pre-publication stable-release approval evidence",
+        ])
+        for step in steps:
+            self.assertNotIn("continue-on-error", step)
+            self.assertEqual(step["if"], versioned)
+        self.assertEqual(steps[1]["run"], "python3 .github/scripts/verify_release_environment.py")
+        record = steps[2]
+        self.assertEqual(record["env"]["GH_TOKEN"], "${{ github.token }}")
+        self.assertIn("record_release_approval.py", record["run"])
+        for argument in ("--run-id", "--run-attempt", "--source-commit", "--output"):
+            self.assertIn(argument, record["run"])
+        retain = steps[3]
+        self.assertTrue(retain["uses"].startswith("actions/upload-artifact@"))
+        self.assertEqual(retain["with"]["path"], "${{ runner.temp }}/stable-release-prepublication-approval.json")
+        self.assertEqual(retain["with"]["if-no-files-found"], "error")
+        self.assertEqual(retain["with"]["retention-days"], 90)
+        # The publisher waits for this job; the consumer still rebuilds the
+        # publisher's final record, which includes the publisher's own review.
+        self.assertIn("release-approval", self.workflow["jobs"]["release"]["needs"])
+
     def test_consumer_requires_the_publisher_approval_digest(self):
         consumer = self.workflow["jobs"]["verify-stable-publication"]
         step = next(step for step in consumer["steps"]

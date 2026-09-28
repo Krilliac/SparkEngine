@@ -159,6 +159,14 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
         )
         self.assertNotIn("actions: write", release)
 
+    def test_release_approval_job_is_read_only(self) -> None:
+        text = RELEASE.read_text(encoding="utf-8")
+        approval = _block(text, "release-approval", 2)
+
+        self.assertEqual(_permissions(approval), {"actions": "read", "contents": "read"})
+        self.assertNotIn(": write", approval)
+        self.assertNotIn("secrets.", approval)
+
     def test_release_publisher_verifies_published_asset_attestation(self) -> None:
         text = RELEASE.read_text(encoding="utf-8")
         release = _block(text, "release", 2)

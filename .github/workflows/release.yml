@@ -1202,10 +1202,64 @@ jobs:
         retention-days: 90
 
   # ===========================================================================
+  # Protected stable-release approval (REL-190)
+  # ===========================================================================
+  # A versioned candidate that passed every gate and build stops here for
+  # Krilliac's stable-release environment review. The job verifies the
+  # environment protection and retains the pre-publication approval record, so
+  # a missing or rejected approval fails a named job before the publisher can
+  # start. It holds no write permission or secret. The release job keeps the
+  # stable-release environment as well (defense in depth: two reviews per
+  # stable run) and records the final approval set the consumer rebuilds.
+  # Like the publisher, the job has no job-level if (a skipped need would skip
+  # the release job): a nightly runs it in nightly-release with every step off.
+  release-approval:
+    needs: [prepare, profile-required-gates, build-windows, build-linux, build-macos, build-installer]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
+    permissions:
+      actions: read
+      contents: read
+    steps:
+    - name: Checkout exact approval source
+      if: needs.prepare.outputs.is_versioned == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+
+    - name: Verify stable publication environment protection
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: python3 .github/scripts/verify_release_environment.py
+
+    - name: Record pre-publication stable-release approval
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        python3 .github/scripts/record_release_approval.py \
+          --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+          --source-commit "$GITHUB_SHA" --output "$RUNNER_TEMP/stable-release-prepublication-approval.json"
+
+    - name: Retain pre-publication stable-release approval evidence
+      if: needs.prepare.outputs.is_versioned == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: stable-release-prepublication-approval-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/stable-release-prepublication-approval.json
+        if-no-files-found: error
+        retention-days: 90
+
+  # ===========================================================================
   # Publish GitHub Release (versioned or rolling "latest")
   # ===========================================================================
   release:
-    needs: [prepare, profile-required-gates, build-windows, build-linux, build-macos, build-installer]
+    needs: [prepare, profile-required-gates, build-windows, build-linux, build-macos, build-installer, release-approval]
     runs-on: ubuntu-latest
     environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
     outputs:

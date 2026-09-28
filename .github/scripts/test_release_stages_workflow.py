@@ -115,6 +115,25 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("Verify stable-v1 candidate is qualified for versioned publication", release_names)
         self.assertNotIn("Verify SEC-120 parser fuzz-policy closure", release_names)
 
+    def test_release_approval_job_blocks_the_publisher(self):
+        jobs = self.workflow["jobs"]
+        approval = jobs["release-approval"]
+        release = jobs["release"]
+        upstream = ["prepare", "profile-required-gates", "build-windows", "build-linux", "build-macos",
+                    "build-installer"]
+        self.assertEqual(approval["needs"], upstream)
+        self.assertEqual(release["needs"], upstream + ["release-approval"])
+        # Neither job may carry a job-level if or continue-on-error: the
+        # publisher then runs only when the approval job succeeded, and a
+        # versioned run cannot reach the approval job without the stable-release
+        # environment review.
+        for job in (approval, release):
+            for key in ("if", "continue-on-error"):
+                self.assertNotIn(key, job)
+        self.assertEqual(approval["environment"], release["environment"])
+        self.assertIn("'stable-release'", approval["environment"])
+        self.assertEqual(release["outputs"]["approval_record_sha256"], "${{ steps.release-approval.outputs.sha256 }}")
+
     def test_independent_consumer_has_no_publication_authority(self):
         consumer = self.workflow["jobs"]["verify-stable-publication"]
         self.assertEqual(consumer["needs"], ["prepare", "release"])
