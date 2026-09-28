@@ -1525,12 +1525,12 @@ TEST(SEC4Launcher_RecentLoadSkipsUnreadableEntries)
     const std::string good = TestPathUtf8(root / "Good.sparkproject");
     {
         std::ofstream seed(profileDir / "RecentProjects.json", std::ios::binary);
-        seed << R"({"recentProjects":[)"
-             << R"({"name":"Overflow","path":")" << TestPathUtf8(root / "Overflow.sparkproject")
+        seed << R"({"recentProjects":[)" << R"({"name":"Overflow","path":")"
+             << TestPathUtf8(root / "Overflow.sparkproject")
              << R"(","engineVersion":"1.0","lastOpened":999999999999999999999999999},)"
              << R"({"name":"BadText","path":")" << TestPathUtf8(root) << "/bad\xFF\xFE.sparkproject"
-             << R"(","engineVersion":"1.0","lastOpened":2},)"
-             << R"({"name":"Good","path":")" << good << R"(","engineVersion":"1.0","lastOpened":3}]})";
+             << R"(","engineVersion":"1.0","lastOpened":2},)" << R"({"name":"Good","path":")" << good
+             << R"(","engineVersion":"1.0","lastOpened":3}]})";
     }
 
     ProjectManager manager(TestPathUtf8(profileDir));

@@ -92,6 +92,7 @@ git diff --name-only --diff-filter=ACMR origin/Working -- \
 - **`.clang-format` at the repo root is the source of truth.** Don't pass `--style=...`.
 - When you change the gate, edit `.github/scripts/check-format-changed.sh` and extend `.github/scripts/test-check-format-changed.sh`.
 - **Zero-initialise `struct stat` (and any other elaborated-type declaration) with `= {}`, not `{}`.** clang-format 18 reads `struct stat s{};` as a struct *definition* and, under this repo's Allman style, rewrites it into a three-line brace block; `struct stat s = {};` is the same zero-initialisation and stays on one line.
+- **Check with the exact CI patch release, 18.1.3.** `check-format` runs Ubuntu 24.04's apt `clang-format` (18.1.3). Other 18.x patch releases lay out some constructs differently. For example, 18.1.8 accepts a `<<` chain of raw-string literals broken one operand per line, but 18.1.3 repacks it. On Windows, `python -m pip install --target <dir> clang-format==18.1.3` provides the matching binary.
 
 ## Source & Freshness
 
@@ -101,6 +102,7 @@ git diff --name-only --diff-filter=ACMR origin/Working -- \
 - **UPDATED:** CI validates every configured source root and clang-format installation, preserves the Objective-C warning workaround, and incrementally enforces all engine/module/tool/test surfaces without failing on unrelated legacy formatting debt.
 - **UPDATED 2026-09-03:** The local commands now carry CI's full fifteen-root list (the standalone process roots and `Tests` were missing, which let a touched `SparkDaemon`/`SparkGateway` file pass locally and fail `check-format`), and the incremental `git diff` form is the primary check. Recorded the `struct stat s = {};` rule.
 - **UPDATED 2026-09-24 (CI-100):** The gate moved from inline workflow YAML into `.github/scripts/check-format-changed.sh` with an executable controlled-failure suite in `validate-ci-tools`. Removed the stale claim that a clang-format exit without a violation marker is tolerated (any nonzero exit fails). The move also closed two fail-open paths: a root commit previously selected nothing (plain `git rev-parse HEAD^` echoes `HEAD^`), and a failed `git diff` previously read as "no changes".
+- **UPDATED 2026-09-27:** Recorded the 18.1.3 patch-release pin after a `Tests/TestEditorSubsystems.cpp` `<<` chain passed a local 18.1.8 check and failed hosted `check-format`.
 - **VERIFIED:** `--Werror` requirement, no `head -N`, no `--style=` override, `.clang-format` at repo root all still hold. CI command still lives in `.github/workflows/build.yml`.
 
 ## Related Pages
