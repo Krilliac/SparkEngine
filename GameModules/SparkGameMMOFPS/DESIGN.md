@@ -302,7 +302,13 @@ plain core-logic classes (unit-tested standalone against a bare
 `SetDatabase(...)`; authority roles lazily open
 `SavePaths::File("terrafront.db")` in
 `TFServerSim::EnsureAuthorityDatabaseOpen()` on the first register/login
-request. Pure clients never open or flush the authority database. `OnImGui`
+request, and bind it to their continent (`TFDatabase::BindAuthority`, TF-120);
+if the bind fails (another live server already serves the continent on this
+save root) the database is closed and nobody logs in. On a bound database
+`TFCharacterSystem::EnterWorld` claims the character's residency and is
+refused while the character is in world on another live continent; the
+disconnect cleanup releases it (`LeaveWorld`) only after the final progress
+and meta are durable. Pure clients never open or flush the authority database. `OnImGui`
 renders `TFLoginFlow::RenderUI()` unconditionally (a no-op once
 `InWorld()`), and additionally gates HUD/map/spawn/scoreboard behind
 `InWorld()` (they already gated on `HasLocalPlayer()`). `TFSpawnScreen`'s
@@ -446,8 +452,9 @@ TerminateProcess/SIGKILL. `cold_restart` kills after a `tf_save` reports
 kills once the 2 s progression debounce has passed. That point is the recovery
 point in `docs/specs/persistence.md`, and region flips persist immediately.
 
-Phase 2 starts a new server on the same `TF_SAVE_ROOT`. The same account logs
-back in (no register, no create). The comparison requires all of the following:
+Phase 2 starts a new server on the same `TF_SAVE_ROOT`. Its database bind
+clears the residency the killed server left, so the character can enter world
+again. The same account logs back in (no register, no create). The comparison requires all of the following:
 
 - equal region owners;
 - equal faction, loadout, rank, xp, kill tally and unlock set;

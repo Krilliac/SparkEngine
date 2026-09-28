@@ -4,7 +4,14 @@
 and server-authoritative, but production multi-continent hosting is **not yet
 complete**. The account/character store (`terrafront.db`, `TFDatabase`) is
 transaction-scoped (TF-120): several authorities may open it, and stale
-character writes are rejected. The outfit and social JSON stores still take
+character writes are rejected. Each authority binds the store to its
+continent, and a character is resident (in world) on at most one continent:
+enter world claims it, leave world releases it once its final progress is
+durable, a dead authority's characters are taken over from their last commit,
+and a second live server for the same continent cannot bind
+(`docs/specs/persistence.md`, "Character residency"). The hop handler does not
+yet hand the character over itself; the source releases it when the client
+disconnects. The outfit and social JSON stores still take
 lifetime-exclusive authority locks, so a second server on the same
 `TF_SAVE_ROOT` still fails closed at startup. Two servers cannot share one
 root until those stores are converted too. Do not present the hop button as
