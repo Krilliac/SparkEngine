@@ -4048,8 +4048,10 @@ set_tests_properties(ShippingManifest_SymbolManifestTool PROPERTIES
 # code and timestamp differences, closed manifest schema, failure codes).
 # ReproducibleBuild_LinuxToolTargets copies this source tree to two
 # differently named and nested directories, configures each with the
-# linux-shipping settings (MinSizeRel, LTO, split private symbols) and this
-# tree's compiler, builds SparkCooker without any compiler cache, and requires
+# linux-shipping settings (MinSizeRel, split private symbols) plus this tree's
+# compiler, ENABLE_LTO and cached C/C++/linker flags, so a lane proves the
+# toolchain it ships (the Clang lane: LTO off, libc++), builds SparkCooker
+# without any compiler cache, and requires
 # equivalent bin/ outputs: the stripped image and its .debug file. lib/ is not
 # compared: GCC's LTO IR in static-library members records the build
 # directory whatever the prefix maps say, so those members differ between
@@ -4080,6 +4082,13 @@ if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF" AND CMAKE_OBJCOPY)
             -DCMAKE_BUILD_TYPE=MinSizeRel
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
             -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+            # two-tree scrubs CFLAGS/CXXFLAGS/LDFLAGS, so this lane's own LTO
+            # choice and cached flags (the Clang lane's libc++) travel here.
+            -DENABLE_LTO=${ENABLE_LTO}
+            "-DCMAKE_C_FLAGS=$CACHE{CMAKE_C_FLAGS}"
+            "-DCMAKE_CXX_FLAGS=$CACHE{CMAKE_CXX_FLAGS}"
+            "-DCMAKE_EXE_LINKER_FLAGS=$CACHE{CMAKE_EXE_LINKER_FLAGS}"
+            "-DCMAKE_SHARED_LINKER_FLAGS=$CACHE{CMAKE_SHARED_LINKER_FLAGS}"
             -DSTRIP_DEBUG_SYMBOLS=ON
             -DSPARK_NATIVE_ARCH=OFF
             -DENABLE_EDITOR=OFF

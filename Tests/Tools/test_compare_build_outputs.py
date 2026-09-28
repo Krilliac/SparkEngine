@@ -281,6 +281,34 @@ class TwoTreeCommandTests(unittest.TestCase):
             self.assertNotIn("--config", command)
 
 
+class TwoTreeRegistrationTests(unittest.TestCase):
+    """The CTest registrations hand each lane's own toolchain choice to the inner builds."""
+
+    def registration(self, name: str) -> str:
+        text = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        start = text.index(f"NAME {name}")
+        return text[start : text.index("set_tests_properties", start)]
+
+    def test_linux_trees_inherit_the_lane_flags(self) -> None:
+        # two-tree scrubs CFLAGS/CXXFLAGS/LDFLAGS; without these the Clang lane
+        # (LTO off, libc++) would prove a GCC-default libstdc++ LTO build instead.
+        block = self.registration("ReproducibleBuild_LinuxToolTargets")
+        for argument in (
+            "-DENABLE_LTO=${ENABLE_LTO}",
+            '"-DCMAKE_C_FLAGS=$CACHE{CMAKE_C_FLAGS}"',
+            '"-DCMAKE_CXX_FLAGS=$CACHE{CMAKE_CXX_FLAGS}"',
+            '"-DCMAKE_EXE_LINKER_FLAGS=$CACHE{CMAKE_EXE_LINKER_FLAGS}"',
+            '"-DCMAKE_SHARED_LINKER_FLAGS=$CACHE{CMAKE_SHARED_LINKER_FLAGS}"',
+        ):
+            self.assertIn(argument, block)
+
+    def test_windows_trees_build_the_shipping_configuration(self) -> None:
+        block = self.registration("ReproducibleBuild_WindowsToolTargets")
+        for argument in ("--config MinSizeRel", "--scan bin/MinSizeRel", "-DCMAKE_CONFIGURATION_TYPES=MinSizeRel",
+                         "CONFIGURATIONS MinSizeRel", "${_spark_repro_generator_args}"):
+            self.assertIn(argument, block)
+
+
 @unittest.skipUnless(ELF_TOOLS, "requires gcc and readelf on Linux")
 class ElfFixtureTests(unittest.TestCase):
     def setUp(self) -> None:
