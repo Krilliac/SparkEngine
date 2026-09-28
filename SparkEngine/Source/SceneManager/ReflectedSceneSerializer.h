@@ -62,6 +62,9 @@ namespace Spark
     /// string/vector set the reflection layer round-trips are logged and skipped.
     /// The result is suitable for in-process snapshots (TrustedSnapshot); use
     /// TrySerializeWorld for anything that must load back through LoadWorld.
+    /// Entities are written in a canonical parents-first order (roots by id,
+    /// children in Transform::children order), so serializing a World restored
+    /// from this text reproduces the text byte for byte.
     std::string SerializeWorld(const World& world);
     /**
      * @brief Serialize @p world for persistence, failing closed when the reader would reject the result.
