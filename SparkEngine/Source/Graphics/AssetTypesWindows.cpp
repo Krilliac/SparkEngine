@@ -2,8 +2,8 @@
  * @file AssetTypesWindows.cpp
  * @brief Windows/D3D11 mesh asset implementation (MeshAsset)
  *
- * Converts geometry from the shared OBJ/glTF CPU loaders and creates the D3D11
- * GPU buffers for meshes.
+ * Converts geometry from the shared OBJ/glTF CPU loaders (skinned glTF keeps
+ * its bone influences) and creates the D3D11 GPU buffers for meshes.
  * Split from AssetTypes.cpp for platform isolation; the texture/audio/cache
  * implementations live in AssetTypesWindowsMedia.cpp. The Linux counterpart
  * lives in AssetTypesLinux.cpp.
@@ -13,7 +13,6 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
-#include "GLTFStaticMeshLoader.h"
 #include "OBJStaticMeshLoader.h"
 #include "Utils/Assert.h"
 #include "Utils/LogMacros.h"
@@ -116,40 +115,33 @@ HRESULT MeshAsset::Load(ID3D11Device* device)
         }
         else if (ext == ".gltf" || ext == ".glb")
         {
-            Spark::Graphics::Detail::GLTFStaticMeshData imported;
+            // Shared with the portable MeshAsset: a skinned file keeps its four influences per vertex
+            // in boneIndices/boneWeights, and the vertex buffer below uploads them with the rest of
+            // the Vertex.
+            size_t boneCount = 0;
             std::string error;
-            if (!Spark::Graphics::Detail::LoadGLTFStaticMesh(std::filesystem::path(m_path), imported, error))
+            if (!Spark::Graphics::Detail::ImportGLTFMeshAssetData(std::filesystem::path(m_path), m_meshData, boneCount,
+                                                                  error))
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load glTF '%s': %s", m_path.c_str(),
                                 error.c_str());
                 return E_FAIL;
             }
-
-            m_meshData.vertices.reserve(imported.vertices.size());
-            m_meshData.indices = std::move(imported.indices);
-            m_meshData.submeshes.reserve(imported.primitives.size());
+            if (boneCount > 0)
+            {
+                m_metadata.customProperties["gltf.boneCount"] = std::to_string(boneCount);
+            }
 
             XMFLOAT3 bbMin = {FLT_MAX, FLT_MAX, FLT_MAX};
             XMFLOAT3 bbMax = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
-            for (const auto& source : imported.vertices)
+            for (const auto& vertex : m_meshData.vertices)
             {
-                MeshAssetData::Vertex vertex{};
-                vertex.position = {source.position[0], source.position[1], source.position[2]};
-                vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
-                vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
-                vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
-                m_meshData.vertices.push_back(vertex);
-
                 bbMin.x = std::min(bbMin.x, vertex.position.x);
                 bbMin.y = std::min(bbMin.y, vertex.position.y);
                 bbMin.z = std::min(bbMin.z, vertex.position.z);
                 bbMax.x = std::max(bbMax.x, vertex.position.x);
                 bbMax.y = std::max(bbMax.y, vertex.position.y);
                 bbMax.z = std::max(bbMax.z, vertex.position.z);
-            }
-            for (const auto& primitive : imported.primitives)
-            {
-                m_meshData.submeshes.push_back(primitive.indexStart);
             }
 
             m_meshData.boundingBoxMin = bbMin;

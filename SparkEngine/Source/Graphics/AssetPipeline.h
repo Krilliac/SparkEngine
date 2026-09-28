@@ -18,6 +18,7 @@
 #include <wrl/client.h>
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -108,6 +109,28 @@ struct MeshAssetData
     float boundingSphereRadius;
     XMFLOAT3 boundingSphereCenter;
 };
+
+namespace Spark::Graphics::Detail
+{
+    /**
+     * @brief Import a .gltf/.glb into @p meshData, keeping skin influences when the file declares a skin.
+     *
+     * Skinned files keep four influences per vertex in boneIndices/boneWeights, indexed into the
+     * Skeleton that AnimationManager::LoadSkeleton builds from the same file; static files go through
+     * the static-mesh loader and leave the influences zeroed. Shared by the D3D11 and portable
+     * MeshAsset so both platforms accept the same content. Bounds and tangents are left to the caller.
+     * Thread affinity: any thread (file I/O and CPU work only). Clears @p meshData first, so a
+     * failure leaves it empty.
+     *
+     * @param path      Source file.
+     * @param meshData  Receives vertices, indices and one submesh start per primitive.
+     * @param boneCount Receives the skeleton's bone count (0 for a static file).
+     * @param error     Receives the importer's diagnostic on failure.
+     * @return false when the file is malformed or outside the supported subset.
+     */
+    bool ImportGLTFMeshAssetData(const std::filesystem::path& path, MeshAssetData& meshData, size_t& boneCount,
+                                 std::string& error);
+} // namespace Spark::Graphics::Detail
 
 /**
  * @brief Animation data structure

@@ -3103,18 +3103,11 @@ set_tests_properties(GLTFSkinnedMeshImport PROPERTIES
 
 # ENG-220: glTF skeletons and LINEAR/STEP TRS joint animations through AnimationManager
 # (LoadSkeleton/LoadAnimations), posed vertices from AnimationEvaluator checked against an
-# independent skinning reference, and skin influences in the portable MeshAsset. CPU only:
-# no skinned rendering, and the Windows D3D11 MeshAsset still rejects skinned glTF. Exact
-# count: a dropped test fails. The three portable MeshAsset tests are compiled out on
-# Windows (the D3D11 MeshAsset needs a device).
-if(WIN32)
-    set(_gltf_animation_test_count 24)
-else()
-    set(_gltf_animation_test_count 27)
-endif()
+# independent skinning reference, and skin influences kept by MeshAsset on every platform
+# (Windows loads the D3D11 MeshAsset on a WARP device). Exact count: a dropped test fails.
 add_test(NAME GLTFAnimationImport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(GLTFAnimationImport PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=GLTF_Animation_;SPARK_TEST_EXPECT_COUNT=${_gltf_animation_test_count}"
+    ENVIRONMENT "SPARK_TEST_NAME=GLTF_Animation_;SPARK_TEST_EXPECT_COUNT=27"
     LABELS "assets;gltf;unit"
     TIMEOUT 30)
 

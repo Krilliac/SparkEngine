@@ -1,6 +1,6 @@
 /**
  * @file TestGLTFAnimationImport.cpp
- * @brief glTF skeleton and animation import through AnimationManager, plus skinned glTF in the portable MeshAsset.
+ * @brief glTF skeleton and animation import through AnimationManager, plus skinned glTF in MeshAsset (D3D11 and portable).
  *
  * Every fixture is a GLB assembled in-test: Armature (non-joint) -> Root joint (+1 Y) -> Tip
  * joint (+2 Y), with a Body node binding a three-vertex triangle to the skin. Expected values are
@@ -884,15 +884,30 @@ TEST(GLTF_Animation_MutatedKeyframeFailsPosedVertexComparison)
     EXPECT_TRUE(MaxDeviation(rig.Pose(*rig.clip, 1.5f), ReferencePose(1.5f)) > 0.1f);
 }
 
-// The portable MeshAsset (AssetTypesLinux.cpp) loads without a device and keeps skin influences.
-// The Windows D3D11 MeshAsset (AssetTypesWindows.cpp) requires a device and still rejects skinned
-// glTF, so these tests are not built there; Tests/CMakeLists.txt lowers the exact count to match.
-#ifndef SPARK_PLATFORM_WINDOWS
+// MeshAsset keeps skin influences on every platform: the D3D11 MeshAsset (AssetTypesWindows.cpp) and
+// the portable one (AssetTypesLinux.cpp) share ImportGLTFMeshAssetData. The D3D11 path needs a device,
+// so Windows loads through WARP and the vertex buffer upload runs too.
+namespace
+{
+    HRESULT LoadMeshAsset(MeshAsset& asset)
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        Microsoft::WRL::ComPtr<ID3D11Device> device;
+        D3D_FEATURE_LEVEL featureLevel{};
+        ASSERT_TRUE(SUCCEEDED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0,
+                                                D3D11_SDK_VERSION, device.GetAddressOf(), &featureLevel, nullptr)));
+        return asset.Load(device.Get());
+#else
+        return asset.Load(nullptr);
+#endif
+    }
+} // namespace
+
 TEST(GLTF_Animation_PortableMeshAssetKeepsSkinInfluences)
 {
     TemporaryGLB glb("mesh_asset", WaveFixture());
     MeshAsset asset(glb.path.string());
-    ASSERT_TRUE(SUCCEEDED(asset.Load(nullptr)));
+    ASSERT_TRUE(SUCCEEDED(LoadMeshAsset(asset)));
 
     const MeshAssetData& data = asset.GetMeshData();
     ASSERT_EQ(data.vertices.size(), 3u);
@@ -923,7 +938,7 @@ TEST(GLTF_Animation_PortableMeshAssetStaticGLBHasNoInfluences)
     fixture.skinned = false;
     TemporaryGLB glb("static_mesh_asset", fixture);
     MeshAsset asset(glb.path.string());
-    ASSERT_TRUE(SUCCEEDED(asset.Load(nullptr)));
+    ASSERT_TRUE(SUCCEEDED(LoadMeshAsset(asset)));
 
     const MeshAssetData& data = asset.GetMeshData();
     ASSERT_EQ(data.vertices.size(), 3u);
@@ -937,7 +952,6 @@ TEST(GLTF_Animation_PortableMeshAssetFailsOnInvalidSkin)
     fixture.skinJoints = "[1,1]";
     TemporaryGLB glb("invalid_skin_asset", fixture);
     MeshAsset asset(glb.path.string());
-    EXPECT_FALSE(SUCCEEDED(asset.Load(nullptr)));
+    EXPECT_FALSE(SUCCEEDED(LoadMeshAsset(asset)));
     EXPECT_TRUE(asset.GetMeshData().vertices.empty());
 }
-#endif // SPARK_PLATFORM_WINDOWS
