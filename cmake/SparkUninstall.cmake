@@ -38,6 +38,10 @@
 # combined with DESTDIR is refused, as `cmake --install` refuses it.
 cmake_minimum_required(VERSION 3.25)
 
+# Real paths come from spark_real_path, not file(REAL_PATH): CMake 3.x does not
+# follow Windows junctions there, which would let a junctioned parent pass.
+include("${CMAKE_CURRENT_LIST_DIR}/SparkRealPath.cmake")
+
 foreach(_spark_required IN ITEMS PREFIX MANIFEST)
     if(NOT DEFINED ${_spark_required} OR "${${_spark_required}}" STREQUAL "")
         message(FATAL_ERROR "SparkUninstall: -D${_spark_required}=... is required")
@@ -106,7 +110,7 @@ string(REPLACE "\n" ";" _spark_manifest_entries "${_spark_manifest_text}")
 _spark_uninstall_staged_path("${_spark_root}" _spark_staged_root)
 set(_spark_real_root "")
 if(IS_DIRECTORY "${_spark_staged_root}")
-    file(REAL_PATH "${_spark_staged_root}" _spark_real_root)
+    spark_real_path(_spark_real_root "${_spark_staged_root}")
 endif()
 
 # Phase 1: validate every entry. Nothing is removed unless all of them pass.
@@ -164,7 +168,7 @@ foreach(_spark_entry IN LISTS _spark_manifest_entries)
     endif()
 
     cmake_path(GET _spark_target PARENT_PATH _spark_target_parent)
-    file(REAL_PATH "${_spark_target_parent}" _spark_real_parent)
+    spark_real_path(_spark_real_parent "${_spark_target_parent}")
     _spark_uninstall_is_beneath("${_spark_real_root}" "${_spark_real_parent}" _spark_parent_is_beneath
         ALLOW_EQUAL)
     if(NOT _spark_parent_is_beneath)

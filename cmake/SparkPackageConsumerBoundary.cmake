@@ -29,6 +29,10 @@
 #     ALLOWED_ROOTS <dir>...        consumer-owned exceptions inside them
 # )
 
+# Symlink resolution uses spark_real_path: file(REAL_PATH) on CMake 3.x does not
+# follow Windows symbolic links or junctions, so a linked checkout would hide a leak.
+include("${CMAKE_CURRENT_LIST_DIR}/SparkRealPath.cmake")
+
 function(_spark_consumer_boundary_normalize _out _path)
     cmake_path(SET _normalized NORMALIZE "${_path}")
     # Drop a trailing separator so prefix checks compare whole components.
@@ -73,7 +77,7 @@ function(spark_package_consumer_boundary_violations)
             _spark_consumer_boundary_normalize(_normalized "${_root}")
             list(APPEND _roots_${_kind} "${_normalized}")
             if(EXISTS "${_root}")
-                file(REAL_PATH "${_root}" _real)
+                spark_real_path(_real "${_root}")
                 _spark_consumer_boundary_normalize(_normalized "${_real}")
                 list(APPEND _roots_${_kind} "${_normalized}")
             endif()
@@ -117,7 +121,7 @@ function(spark_package_consumer_boundary_violations)
             _spark_consumer_boundary_normalize(_path "${_token}")
             set(_candidates "${_path}")
             if(EXISTS "${_path}")
-                file(REAL_PATH "${_path}" _real)
+                spark_real_path(_real "${_path}")
                 list(APPEND _candidates "${_real}")
             endif()
             foreach(_candidate IN LISTS _candidates)
