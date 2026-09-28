@@ -618,6 +618,7 @@ namespace Spark
             void GLCommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                  IRHITexture* depthStencil)
             {
+                m_defaultFramebufferDepth = nullptr;
                 if (count == 0 || !renderTargets[0])
                 {
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -628,10 +629,12 @@ namespace Spark
 
                 if (glTex->GetGLFramebuffer() == 0)
                 {
-                    // Default framebuffer: valid draw buffers are GL_BACK (not GL_COLOR_ATTACHMENT0)
+                    // Default framebuffer: valid draw buffers are GL_BACK (not GL_COLOR_ATTACHMENT0).
+                    // Its own depth buffer stands in for depthStencil (see ClearDepthStencil).
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
                     GLenum backBuf = GL_BACK;
                     glDrawBuffers(1, &backBuf);
+                    m_defaultFramebufferDepth = depthStencil;
                 }
                 else
                 {
@@ -707,6 +710,12 @@ namespace Spark
                     return;
                 auto* glTex = static_cast<GLTexture*>(target);
                 ClearStateScope scope;
+                if (target == m_defaultFramebufferDepth)
+                {
+                    // Draws into framebuffer 0 test against its own depth buffer, never this texture,
+                    // so an uncleared framebuffer-0 depth would reject every later frame's geometry.
+                    glClearNamedFramebufferfi(0, GL_DEPTH_STENCIL, 0, depth, stencil);
+                }
                 const GLuint fbo = glTex->GetGLFramebuffer();
                 if (HasStencilComponent(glTex->GetFormat()))
                 {

@@ -403,6 +403,10 @@ namespace Spark
                 IRHIPipelineState* m_lastBoundPipeline = nullptr; ///< Redundant bind elimination
                 GLuint m_compositeFBO = 0;          ///< FBO composing MRT color targets + depth for SetRenderTargets
                 uint32_t m_compositeColorCount = 0; ///< Color attachments currently set on m_compositeFBO
+                /// Depth target passed with the default framebuffer. A texture cannot attach to
+                /// framebuffer 0, whose own depth buffer serves instead, so clearing this target
+                /// also clears framebuffer 0's depth and stencil.
+                IRHITexture* m_defaultFramebufferDepth = nullptr;
             };
 
             // ============================================================================
