@@ -211,13 +211,16 @@
         },
         {
           "criterionDigest": "sha256:0c8c1f94727a",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_site_data_contract.py",
             "tools/site-data/validate.py",
-            "docs/site/readiness.json"
+            "docs/site/readiness.json",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt",
+            "wiki/platform/System-Requirements.md"
           ],
-          "note": "Partial: the validator rejects Linux in stable-v1 claims. Generic 'Linux is supported' wording is not caught, and there is no Linux row matrix."
+          "note": "Update the PLT-210 note: the generic 'Linux is supported' wording gap is closed by CTest PublicWording_ExperimentalPlatforms."
         },
         {
           "criterionDigest": "sha256:2889e6c2676e",
@@ -749,17 +752,22 @@
           ],
           "note": "Only a uniform frame and a triangle golden are checked. No primary-pass or representative-content goldens with reviewed thresholds."
         },
-        {
-          "criterionDigest": "sha256:745ccd700288",
-          "state": "unmet",
-          "evidence": [],
-          "note": "There are no D3D11 device-loss, resize or stress-recovery tests."
-        },
+        {"criterionDigest": "sha256:745ccd700288", "state": "implemented", "evidence": ["Tests/TestRHI210D3D11DeviceLossReal.cpp", "Tests/TestRHI210D3D11ValidationReal.cpp", "Tests/RHI210D3D11EngineFixture.h", "Tests/CMakeLists.txt", "SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp", "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp", "SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp", "wiki/subsystems/Rendering-and-Graphics.md"], "note": "D3D11_DeviceLoss (2, WARP) and D3D11_Resource (3, includes the 1x1/1920x1080/320x240 resize) lanes, plus the 2,000-cycle create/destroy live-object baseline in the debug-layer lane (D3D11_Validation_CreateDestroyStressReturnsToBaseline). Local Windows run only; no exact-commit CI yet."},
         {
           "criterionDigest": "sha256:ab52617664c9",
-          "state": "unmet",
-          "evidence": [],
-          "note": "There is no GPU debug-layer validation gate. Windows GPU runs are needed."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI210D3D11ValidationReal.cpp",
+            "Tests/CMakeLists.txt",
+            "SparkEngine/Source/Graphics/GraphicsEngine.h",
+            "SparkEngine/Source/Graphics/GraphicsEngineWindows.cpp",
+            "SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h",
+            ".github/workflows/build.yml",
+            "wiki/graphics/RHI-Abstraction-Layer.md"
+          ],
+          "note": "The D3D11_Validation lane (4 tests, label d3d11-validation;d3d11-debug-layer) runs WARP and debug-layer frames under SPARK_D3D11_DEBUG_LAYER=1, with an injected-error negative control. build-windows-vs2022 installs the Graphics Tools layer before ctest. This is WARP software validation; hardware GPU rows remain open."
         },
         {
           "criterionDigest": "sha256:0a3989a189ef",
@@ -935,7 +943,7 @@
       "id": "RHI-225",
       "title": "Close D3D12 synchronization, pass, shader, and driver parity",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "rendering",
@@ -981,18 +989,30 @@
         },
         {
           "criterionDigest": "sha256:210dbdea9230",
-          "state": "unmet",
-          "evidence": [],
-          "note": "There is no debug-layer validation gate. Windows GPU runs are needed."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp",
+            "Tests/TestRHI225D3D12ValidationReal.cpp",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            ".github/workflows/release.yml",
+            "wiki/graphics/D3D12-Backend.md"
+          ],
+          "note": "RHI-level declared set only (triangle frame, 200-cycle fence-deferred churn, negative control). GraphicsEngine is D3D11-direct, so engine frames are not covered. The Windows CI jobs now provision Graphics Tools before ctest."
         },
         {
           "criterionDigest": "sha256:b0eacef609fe",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestDXRSupport.cpp",
-            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp"
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp",
+            "Tests/TestRHI225D3D12FallbackReal.cpp",
+            "Tests/CMakeLists.txt",
+            "wiki/graphics/D3D12-Backend.md"
           ],
-          "note": "Partial: only DXR-unavailable headless/null cases are tested. There are no deterministic D3D12 device fallback tests."
+          "note": "CTest D3D12Fallback (exact 3)."
         },
         {
           "criterionDigest": "sha256:f3df062bd6ee",
@@ -1117,13 +1137,15 @@
         },
         {
           "criterionDigest": "sha256:c30a0243b349",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp",
             "CMakeLists.txt",
-            "Tests/TestRHI230VulkanValidationReal.cpp"
+            "Tests/TestRHI230VulkanValidationReal.cpp",
+            "Tests/CMakeLists.txt",
+            "wiki/graphics/RHI-Abstraction-Layer.md"
           ],
-          "note": "Non-Windows Vulkan builds now fail configure without glslangValidator and fail the build on GLSL glslang rejects; the runtime rejects non-SPIR-V. Verified locally only (no hosted run). Windows Vulkan builds build no SPIR-V and DXC stays unintegrated, so the criterion stays open."
+          "note": "Windows Vulkan builds require glslangValidator and build and ship SPIR-V. CTest VulkanShaderToolchainWindows (exact 4) registers only where the Vulkan SDK is present."
         },
         {
           "criterionDigest": "sha256:92b1fcb816d0",
@@ -1243,13 +1265,15 @@
         },
         {
           "criterionDigest": "sha256:78dd0099af39",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestRHI240OpenGLReal.cpp",
             "SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            "Tests/OpenGLTestSupport.h",
+            "wiki/graphics/RHI-Abstraction-Layer.md"
           ],
-          "note": "Software row only. OpenGL_RHI240_DeviceRowMatchesLane classifies GL_RENDERER with its own CPU-rasterizer list (Mesa llvmpipe/softpipe/swrast, GDI Generic, Microsoft Basic Render Driver, Apple Software Renderer) and fails if isSoftwareDevice or SPARK_GL_EXPECT_ROW disagrees. llvmpipe lane: software, EXPECT_COUNT=13; =hardware fails on llvmpipe locally. No opengl-hardware lane or run yet."
+          "note": "The llvmpipe lanes pin LIBGL_ALWAYS_SOFTWARE/GALLIUM_DRIVER. The opt-in SPARK_GL_HARDWARE_ROW lane SparkOpenGLHardwareTests (labels opengl;opengl-hardware, exact 13) fails on a software context. The local hardware row is Mesa D3D12 translation under WSL, not native driver certification."
         },
         {
           "criterionDigest": "sha256:032eb8523eaf",
@@ -1305,7 +1329,7 @@
       "id": "ENG-220",
       "title": "Close D3D11 model import and canonical-content interoperability",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 5,
       "area": "rendering",
@@ -1347,16 +1371,25 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:697d4717fa4c",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestGLTFStaticMeshLoader.cpp",
             "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp",
             "Tests/TestGLTFSkinnedMeshLoader.cpp",
             "SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp",
             "Tests/TestGLTFAnimationImport.cpp",
-            "SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp"
+            "SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp",
+            "SparkEngine/Source/Graphics/AssetTypes.cpp",
+            "SparkEngine/Source/Graphics/AssetTypesWindows.cpp",
+            "SparkEngine/Source/Graphics/AssetPipeline.h",
+            "SparkEngine/Source/Graphics/GPUSkinning.cpp",
+            "Shaders/HLSL/Compute/SkinningCS.hlsl",
+            "Tests/TestENG220GPUSkinningD3D11Real.cpp",
+            "Tests/GLTFSkinningReference.h",
+            "Tests/CMakeLists.txt",
+            "wiki/gameplay-tools/Asset-Pipeline.md"
           ],
-          "note": "linux-gcc-release: GLTF_Skinning_* 19/19 and GLTF_Animation_* 19/19 pass (16 on Windows: no portable MeshAsset). AnimationManager LoadSkeleton/LoadAnimations import glTF skins and LINEAR TRS clips; non-Windows MeshAsset keeps bone data. Missing: D3D11 MeshAsset skin handoff (AssetTypesWindows.cpp), GPUSkinning/skinned-shader consumer, Blender-authored skinned fixture, D3D11 skinned render proof."
+          "note": "CTest GPUSkinningD3D11 (SPARK_TEST_NAME=GPUSkinningD3D11_, exact 4, stable-v1) and GLTFAnimationImport (exact 27 on every host). Pending the dispatcher's MSVC build and run."
         },
         {
           "criterionDigest": "sha256:60f825cc1ca8",
@@ -1366,14 +1399,18 @@
         },
         {
           "criterionDigest": "sha256:a0ea46f75153",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestGLTFStaticMeshLoader.cpp",
             "Tests/TestENG220ObjImportReal.cpp",
             "Tests/TestGLTFSkinnedMeshLoader.cpp",
-            "Tests/TestGLTFAnimationImport.cpp"
+            "Tests/TestGLTFAnimationImport.cpp",
+            "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsBasicState.cpp",
+            "Tests/TestLegacyGameObjectMaterial.cpp",
+            "Tests/CMakeLists.txt",
+            "wiki/gameplay-tools/Asset-Pipeline.md"
           ],
-          "note": "Static glTF/OBJ rejections are tested. Skinned rejections (GLTF_Skinning_*): JOINTS_1, joint range, weights, 256-joint cap, joint graph, inverse binds. Animation rejections (GLTF_Animation_*): non-LINEAR, non-joint/morph targets, offset animated root, bad times/outputs, duplicates, failed skinned mesh; MeshAsset fails on invalid skins. Material/texture and Windows package diagnostics are missing."
+          "note": "CTest BasicMaterialDiagnostics (exact 4). The errors name the declared (not case-folded) texture path. This covers the basic-material half only; the Windows package-diagnostics half is still owed by ENG-220/windows-package-run. Pending the dispatcher's MSVC run."
         },
         {
           "criterionDigest": "sha256:99267550fdd7",
@@ -1388,7 +1425,7 @@
         },
         {
           "criterionDigest": "sha256:0bdf64af2831",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_site_data_contract.py"
           ],
@@ -1499,11 +1536,14 @@
         },
         {
           "criterionDigest": "sha256:dda52a09803d",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "cmake/RunSparkHeadlessNullRHILifecycle.cmake"
+            "cmake/RunSparkHeadlessNullRHILifecycle.cmake",
+            "cmake/RunSparkHeadlessFPSSaveReload.cmake",
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "The parser rejects D3D11 device records, but repository-content isolation is not asserted. There is no clean-host run."
+          "note": "Pending the central build and a FPSHeadlessPackage_NullRHISaveReload run."
         },
         {
           "criterionDigest": "sha256:113da975258b",
@@ -1522,9 +1562,10 @@
         },
         {
           "criterionDigest": "sha256:e6a39adf789f",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_site_data_contract.py"
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py"
           ],
           "note": "The contract checks OPS-110 wording only. Nothing asserts that HEAD-220 excludes these concerns or that G12 owns them."
         }
@@ -1767,13 +1808,28 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:75e8e61a5f5f",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestEditorRecovery.cpp",
             "Tests/TestEditorAssetDropWorldReal.cpp",
-            "SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp"
+            "SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp",
+            "SparkEditor/Source/Core/EditorDocument.h",
+            "SparkEditor/Source/Core/EditorDocument.cpp",
+            "SparkEditor/Source/Core/EditorUI.cpp",
+            "SparkEditor/Source/Gizmos/SceneEditTools.h",
+            "SparkEditor/Source/Gizmos/SceneEditTools.cpp",
+            "SparkEditor/Source/Panels/HierarchyPanel.cpp",
+            "SparkEditor/Source/Panels/SceneImportPanel.cpp",
+            "SparkEditor/Source/Panels/SceneViewPanel.cpp",
+            "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
+            "SparkEditor/world-mutation-inventory.json",
+            "Tests/Tools/test_editor_world_mutation_inventory.py",
+            "Tests/TestEditorDocumentReal.cpp",
+            "Tests/TestEditorUndoHierarchyReal.cpp",
+            "Tests/TestEditorUndoWorldMatrixReal.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Progress: asset-drop mutations record exactly one CommandHistory entry, and undo/redo restore exact document state, including ordering after a flushed pending field edit; an unrecordable mutation is reverted (EditorAssetDrag_WorldDrop*). No audit or check proves every World mutation goes through the command stack."
+          "note": "ctests: EditorUndoDocument (EditorUndo_Document_, count 5), EditorUndoWorldMatrix (EditorUndo_WorldMatrix_, count 2), EditorUndo_WorldMutationInventory (python), and 3 EditorUndoHierarchy_ tests in the main lane. Before 32a298f85 none of the C++ tests compiled. They have not been run locally, so status stays 'implemented' until the central build passes."
         },
         {
           "criterionDigest": "sha256:69382bab2d53",
@@ -1803,11 +1859,14 @@
         },
         {
           "criterionDigest": "sha256:4c9b9b22f00d",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "cmake/RunSparkLinuxScenePreview.cmake"
+            "cmake/RunSparkLinuxScenePreview.cmake",
+            "cmake/RunEditorAuthorInstalledRuntime.cmake",
+            "Tests/TestEditorCookPackageReal.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "There is no automated author-to-installed-runtime scenario or cook/package test. The editor smoke also runs on Linux under xvfb-run/llvmpipe (execution only, not D3D11 certification). The Linux runtime now honors -scene (LinuxScenePreview), which such a scenario needs, but the editor-cook-install-run scenario itself does not exist."
+          "note": "ctest EditorCookPackageInstalledRuntime (Windows, RUN_SERIAL). Commit 241a603c5 fixed the redeclaration that broke the Windows SparkTests compile. The lane still has to pass in the central Windows build."
         },
         {
           "criterionDigest": "sha256:66e00b9727df",
@@ -1925,12 +1984,18 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:167749619b69",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "GameModules/SparkGameFPS/CMakeLists.txt",
-            "Tests/PackageSmoke/CMakeLists.txt"
+            "Tests/PackageSmoke/CMakeLists.txt",
+            "Tools/spark-cli/spark_cli.py",
+            "Tools/spark-cli/tests/test_spark_cli.py",
+            "Tests/PackageSmoke/RunInstalledSDKTemplate.cmake",
+            "cmake/RunInstalledPackageConsumer.cmake",
+            "Tests/CMakeLists.txt",
+            "Tools/spark-cli/README.md"
           ],
-          "note": "Only the header smoke builds from the installed SDK. The FPS module still uses private headers and links SparkEngineLib."
+          "note": "SDKConsumer_InstalledEmptyProjectTemplate (Windows), PackageConsumer_LinuxInstalledSDK and SparkNewFromInstalledPrefixTests (in SparkCliContract)."
         },
         {
           "criterionDigest": "sha256:0ec10cc244b9",
@@ -1944,11 +2009,17 @@
         },
         {
           "criterionDigest": "sha256:037f80907fc4",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "SparkEngine/Source/Core/SparkEngineLinux.cpp"
+            "SparkEngine/Source/Core/SparkEngineLinux.cpp",
+            "Tools/spark-cli/claims.json",
+            "Tools/spark-cli/tests/test_spark_cli_claims.py",
+            "Tools/spark-cli/spark_cli.py",
+            "Tools/spark-cli/README.md",
+            "wiki/gameplay-tools/Game-Packaging.md",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "The Linux host now honors -scene (LinuxScenePreview) and GamePackager copy failures fail the package (GamePackager_ASSET220_*). No test checks every advertised CLI and packager claim against behaviour, and the CLI_* selector is still planned."
+          "note": "ctest CLI_ClaimsMatchBehavior; the claims file is also in SparkCliContract's discover run."
         },
         {
           "criterionDigest": "sha256:94cbedf9f93f",

@@ -374,12 +374,7 @@
         "Required fuzz smoke is deterministic and blocking"
       ],
       "acceptanceStatus": [
-        {
-          "criterionDigest": "sha256:cd03931e2734",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Only some parsers have bounds or libFuzzer targets. The item still lists blocked and unclassified parser candidates, so 'every parser' is not shown."
-        },
+        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "Partial progress: ShaderDiskCache and ConfigParser gained libFuzzer targets and regressions (10 of 141 inventoried parsers fuzzed); 131 parsers remain blocked, so the criterion stays open.", "evidence": []},
         {
           "criterionDigest": "sha256:f3d43da4661a",
           "state": "implemented",
@@ -392,9 +387,13 @@
         },
         {
           "criterionDigest": "sha256:f4d1e4691985",
-          "state": "unmet",
-          "evidence": [],
-          "note": "A blocking fuzz-smoke gate needs hosted, exact-SHA CI evidence. The local fuzz-smoke CTest targets cover only some parsers."
+          "state": "implemented",
+          "evidence": [
+            "FuzzerTests/CMakeLists.txt",
+            "tools/fuzz-policy/corpus_manifest.py",
+            "FuzzerTests/policy/test_fuzz_policy.py"
+          ],
+          "note": "No blocking smoke passes -max_total_time any more, and the policy rejects time- or worker-bounded smoke flags. test_smoke_replay_may_not_be_time_or_worker_bounded pins this."
         }
       ],
       "commands": [
@@ -808,27 +807,32 @@
         },
         {
           "criterionDigest": "sha256:f67e46df6e00",
-          "state": "unmet",
-          "evidence": [],
-          "note": "The N-1 migration tests cover only the TFDatabase character store. No rollback or downgrade fixture exists, and no economy or territory store is migrated."
-        },
-        {
-          "criterionDigest": "sha256:824bc738ee74",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestDATA120BackupRestore.cpp",
+            "Tests/TestDATA120PersistenceReal.cpp",
+            "Tests/TestTFOutfitStore.cpp",
+            "Tests/TestTFSocialStore.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h",
+            "GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp",
             "docs/specs/persistence.md"
           ],
-          "note": "Partial, local POSIX only: Persistence_RecoveryDrill_* kill a spawned writer process inside a TFDatabase commit or restore and reopen at the recovery point in docs/specs/persistence.md. Missing: power-loss simulation, a Windows drill, drills for the outfit/social/world stores, and CI evidence."
+          "note": "Persistence_Migration_* (11, pinned) covers N-1 and newer-schema rollback fixtures for TFDatabase (v0, retired v3, v2 -> v4), the territory file (WorldSave::DecodeTerritory), TFOutfitStore and the TFSocialSystem store. The progression world file is deliberately unversioned (session-scoped; persistence.md says why). Pending the central build/run: nothing was compiled in this lane."
         },
+        {"criterionDigest": "sha256:824bc738ee74", "state": "implemented", "evidence": ["Tests/TestDATA120BackupRestore.cpp", "docs/specs/persistence.md", "Tests/CMakeLists.txt"], "note": "Persistence_RecoveryDrill_* (9, pinned on every host) now also run on Windows (write-through flush and rename, ExclusiveFileLock, TerminateProcess) and cover TFOutfitStore, the social store and a territory write besides TFDatabase; docs/specs/persistence.md has the per-store recovery table. Power loss is not simulated (no fault-injecting filesystem). Local only; no exact-commit CI yet."},
         {
           "criterionDigest": "sha256:d2d86202a7f2",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestDATA120BackupRestore.cpp",
-            "docs/specs/persistence.md"
+            "docs/specs/persistence.md",
+            "tools/ops/server_recovery_drill.py",
+            "Tests/Tools/test_server_recovery_drill.py",
+            ".github/workflows/operations-scheduled.yml",
+            "Tests/Tools/test_operations_scheduled_workflow.py",
+            "wiki/advanced/Server-Operations-Runbook.md"
           ],
-          "note": "Partial: TFDatabase CreateBackup/RestoreFromBackup exist with digest and schema gates, and Persistence_BackupRestore_* rehearse them under ctest -L recovery-drill. 'Regularly' needs the planned scheduled recovery-drill CI job and its history; other stores have no backup."
+          "note": "Commits da6328d74 and 2f4f93f67. In the same merge, the dispatcher must also remove 'recovery-drill' from DATA-120.plannedCiJobs (see risks)."
         }
       ],
       "commands": [
@@ -933,9 +937,18 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:71c492c4e794",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Full-memory dumps can still hold in-process secrets, as the consent text itself says. The privacy review is still pending."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Utils/CrashHandler.h",
+            "SparkEngine/Source/Utils/CrashHandler.cpp",
+            "Tests/TestCrashHandlerGatingReal.cpp",
+            "Tests/TestCoreAndBuildSystems.cpp",
+            "Tests/Tools/run_crash_capture_security.py",
+            "Tests/Tools/test_crash_capture_security.py",
+            "SECURITY.md",
+            "wiki/advanced/Crash-Reporting.md"
+          ],
+          "note": "Commit 8d249f919."
         },
         {
           "criterionDigest": "sha256:2f215b96fa7c",
@@ -1125,9 +1138,20 @@
         },
         {
           "criterionDigest": "sha256:3d3d8ebe5028",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Server_Soak runs a 60 s SparkServer soak with RSS-slope and tickP95/P99 guards, and one local 1800 s run passed as precursor only. The budgets are provisional harness guards, not SLOs, and no hosted release smoke or scheduled soak history exists."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Engine/Networking/DedicatedServer.cpp",
+            "SparkEngine/Source/Engine/Networking/NetworkManager.h",
+            "SparkEngine/Source/Engine/Networking/NetworkConnection.cpp",
+            "SparkServer/src/ServerHealth.cpp",
+            "tools/ops/server_soak.py",
+            "Tests/TestNetworkManagerReal.cpp",
+            "Tests/Tools/test_server_soak.py",
+            ".github/workflows/operations-scheduled.yml",
+            "Tests/Tools/test_operations_scheduled_workflow.py",
+            "wiki/advanced/Server-Operations-Runbook.md"
+          ],
+          "note": "Commits da6328d74 and 2f4f93f67."
         },
         {
           "criterionDigest": "sha256:6a1b58381966",
@@ -1140,9 +1164,17 @@
         },
         {
           "criterionDigest": "sha256:6a4de067db5d",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No telemetry export exists that outside tools can consume with exact-SHA labels, and it would need hosted evidence."
+          "state": "implemented",
+          "evidence": [
+            "SparkServer/src/ServerHealth.h",
+            "SparkServer/src/ServerHealth.cpp",
+            "SparkServer/src/ServerApplication.cpp",
+            "tools/ops/validate_server_health.py",
+            "Tests/TestSparkServerHealth.cpp",
+            "Tests/Tools/test_validate_server_health.py",
+            "wiki/subsystems/Dedicated-Server.md"
+          ],
+          "note": "Commit da6328d74 (the versioned spark-server-health/1 contract)."
         }
       ],
       "commands": [
@@ -1271,9 +1303,17 @@
         },
         {
           "criterionDigest": "sha256:4570b349bbe5",
-          "state": "unmet",
-          "evidence": [],
-          "note": "tools/perf-budget/run_nullrhi_soak.py and Soak_NullRHIHeadlessSmoke (120 s) detect leak slope, crashes and hangs locally. Only a >=1 h run with --expected-sha may record a result; none has run hosted, and nullrhi.soak budgets stay pending_measurement."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp",
+            "tools/perf-budget/run_nullrhi_soak.py",
+            "Tests/Tools/test_run_nullrhi_soak.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/operations-scheduled.yml",
+            "Tests/Tools/test_operations_scheduled_workflow.py",
+            "wiki/advanced/Performance-Profiling-Guide.md"
+          ],
+          "note": "Commits 6f7407646 and 2f4f93f67."
         },
         {
           "criterionDigest": "sha256:aa587eb5dfef",

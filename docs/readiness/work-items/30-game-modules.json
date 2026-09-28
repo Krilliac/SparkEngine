@@ -411,9 +411,23 @@
         },
         {
           "criterionDigest": "sha256:39962a8a47f7",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No reusable prototype helpers exercise production SDK surfaces."
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Core/EngineSdkLogger.h",
+            "SparkEngine/Source/Core/EngineSdkLogger.cpp",
+            "SparkEngine/Source/Core/EngineContext.h",
+            "SparkSDK/Include/Spark/IEngineContext.h",
+            "SparkSDK/Include/Spark/ILogger.h",
+            "SparkSDK/Include/Spark/ModuleLog.h",
+            "SparkSDK/Include/Spark/Version.h",
+            "SparkSDK/ABI/sdk-abi-surface.json",
+            "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp",
+            "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp",
+            "Tests/TestPrototypeModuleKitReal.cpp",
+            "Tests/Tools/test_sdk240_abi_surface.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ctest PrototypeModuleKit_Helpers (PrototypeModuleKit_, count 3 with ImGui / 2 without)."
         },
         {
           "criterionDigest": "sha256:49b427f3412f",
@@ -536,8 +550,13 @@
         },
         {
           "criterionDigest": "sha256:904f84ed4a14",
-          "state": "unmet",
-          "evidence": [],
+          "state": "implemented",
+          "evidence": [
+            "CMakeLists.txt",
+            "Tests/CMakeLists.txt",
+            "Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake",
+            "Tests/PackageSmoke/RunInstalledModuleObjective.cmake"
+          ],
           "note": "There is no packaged SparkGame smoke."
         },
         {
@@ -667,12 +686,15 @@
         },
         {
           "criterionDigest": "sha256:8011beba4f11",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestSparkGameFPSLoopReal.cpp",
-            "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
+            "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp",
+            "GameModules/SparkGameFPS/module.json",
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
+            "cmake/RunSparkHeadlessFPSSaveReload.cmake"
           ],
-          "note": "Only FPSLocalProfile serialization is unit-tested. Nothing locally tests QuickSaveProfile/QuickLoadProfile through SaveSystem end to end."
+          "note": "File path: FPSLocalProfile_EveryDeclaredFieldSurvivesSaveSystemFile. Remaining gap: in the windowed host run, class, weapon, health and armor keep their defaults. Pending the central build."
         },
         {
           "criterionDigest": "sha256:76dc60949a13",
@@ -788,11 +810,16 @@
         },
         {
           "criterionDigest": "sha256:5bc1ee8cc5b7",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp"
+            "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp",
+            "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h",
+            "GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp",
+            "GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp",
+            "Tests/TestFPSMultiplayer.cpp",
+            "GameModules/SparkGameFPS/module.json"
           ],
-          "note": "Connect marks the session active before a handshake is confirmed, and nothing proves real connection state."
+          "note": "Pending the central MSVC build and a FPSMultiplayerProduction_ run."
         },
         {
           "criterionDigest": "sha256:baedd16bd0b2",
@@ -1042,17 +1069,25 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:57ffda3b6ee4",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestMOD330ARPGDungeonReal.cpp"
+            "Tests/TestMOD330ARPGDungeonReal.cpp",
+            "Tests/PackageSmoke/ModuleObjectives/SparkGameARPG.cmake",
+            "Tests/PackageSmoke/RunInstalledModuleObjective.cmake",
+            "GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp",
+            "Tests/CMakeLists.txt"
           ],
           "note": "Boss identity and state are tested in-process only. No packaged dungeon is cleared automatically."
         },
         {
           "criterionDigest": "sha256:a2753a909b88",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestMOD330ARPGDungeonReal.cpp"
+            "Tests/TestMOD330ARPGDungeonReal.cpp",
+            "GameModules/SparkGameARPG/Source/UI/ARPGHud.h",
+            "GameModules/SparkGameARPG/Source/UI/ARPGHud.cpp",
+            "GameModules/SparkGameARPG/Source/Core/Main.cpp",
+            "GameModules/SparkGameARPG/module.json"
           ],
           "note": "ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, learned skills, cooldowns, loot and boss through the real SaveSystem, and forged state is rejected. There is still no UI round-trip, so the criterion stays unmet."
         },
@@ -1156,8 +1191,15 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:23dedc4ed8b4",
-          "state": "unmet",
-          "evidence": [],
+          "state": "implemented",
+          "evidence": [
+            "GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.h",
+            "GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.cpp",
+            "GameModules/SparkGamePlatformer/Source/Core/Main.cpp",
+            "Tests/PackageSmoke/ModuleObjectives/SparkGamePlatformer.cmake",
+            "Tests/TestMOD340PlatformerCompletionReal.cpp",
+            "Tests/CMakeLists.txt"
+          ],
           "note": "No automated three-minute packaged level-completion run exists."
         },
         {
@@ -1277,19 +1319,26 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:7a3b148c732e",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/TestMOD350RPGQuestSliceReal.cpp",
-            "GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp"
+            "GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp",
+            "GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.h",
+            "GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.cpp",
+            "GameModules/SparkGameRPG/Source/Core/Main.cpp",
+            "Tests/PackageSmoke/ModuleObjectives/SparkGameRPG.cmake",
+            "Tests/CMakeLists.txt"
           ],
           "note": "RPGQuestSlice_* finish the quest chain in-process. RPGPersistence_* save mid-quest via the real SaveSystem, rebuild all RPG systems, restore quest, inventory, area, NPC disposition/patrol and world hour, and keep the quest reward across a second restart. RPGDEMO 2 (N-1) slots migrate to default NPC state; corrupt, truncated, v1 and future-version slots are rejected. No packaged run exists."
         },
         {
           "criterionDigest": "sha256:63d66a74b7a8",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp",
-            "Tests/TestMOD350RPGNPCNavigationReal.cpp"
+            "Tests/TestMOD350RPGNPCNavigationReal.cpp",
+            "GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.h",
+            "Tests/CMakeLists.txt"
           ],
           "note": "Schedule changes walk NPCs at 3 m/s along engine NavMesh routes (NavMeshBuilder/NavMeshQuery, one bake per NPC area at module load) instead of teleporting; RPGNPCNavigation_* cover the world bake, a detour around blocked ground, unreachable posts and resuming after a restore. Patrol legs still move in straight lines and no packaged run exists."
         },
@@ -1523,9 +1572,15 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:311c6dcb8387",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestMOD370SkirmishDeterminismReal.cpp"
+            "Tests/TestMOD370SkirmishDeterminismReal.cpp",
+            "GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.h",
+            "GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.cpp",
+            "GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp",
+            "GameModules/SparkGameRTS/Source/Core/Main.cpp",
+            "Tests/PackageSmoke/ModuleObjectives/SparkGameRTS.cmake",
+            "Tests/CMakeLists.txt"
           ],
           "note": "The deterministic skirmish reaches victory in-process only. No packaged build does."
         },
@@ -1638,9 +1693,14 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:2a64ef1c2cac",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestMOD380RacingCompleteRaceReal.cpp"
+            "Tests/TestMOD380RacingCompleteRaceReal.cpp",
+            "GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.cpp",
+            "GameModules/SparkGameRacing/Source/Core/MainRaceFlow.cpp",
+            "GameModules/SparkGameRacing/Source/Core/Main.cpp",
+            "Tests/PackageSmoke/ModuleObjectives/SparkGameRacing.cmake",
+            "Tests/CMakeLists.txt"
           ],
           "note": "Player and AI finish valid laps in-process, but no packaged race run exists."
         },
@@ -2057,17 +2117,16 @@
           "evidence": [],
           "note": "No committed test proves cross-continent travel is visually and physically correct."
         },
-        {
-          "criterionDigest": "sha256:00177fa65d14",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No committed test shows duplicate or lost migration messages keep every entity."
-        },
+        {"criterionDigest": "sha256:00177fa65d14", "state": "unmet", "evidence": [], "note": "Partial: the database residency fence (TFDatabaseResidency, TF120_Residency_*) makes duplicate claims and releases idempotent, refuses a second continent while the holder lives, and recovers a lost release via dead-owner takeover. The hop-handler handoff that carries migration messages is not built and the server wiring is not proven end to end, so the criterion stays open."},
         {
           "criterionDigest": "sha256:1d6ff567117a",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No committed forced source or destination crash-recovery tests."
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestTF120Residency.cpp",
+            "Tests/TF120PeerProcess.h",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "Three POSIX process drills SIGKILL a peer SparkTests authority that holds the character, as source, as destination, and mid claim/release. The survivor reclaims with the last acknowledged commit, and a restart of the killed continent clears its own rows. Two in-process cases cover rebind and dead-owner recovery on every host. Needs the Linux GCC/ASan build to execute; not run here."
         },
         {
           "criterionDigest": "sha256:5058dc638b97",

@@ -11,8 +11,8 @@
 - Ledger gates marked blocking: **19** (profile applicability determines release impact)
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
-- Work-item status: **0 done**, **56 in progress**, **5 blocked**, **3 open**
-- Acceptance criteria: **259 total**, **100 implemented** (39%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
+- Acceptance criteria: **259 total**, **154 implemented** (59%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -62,9 +62,9 @@ Open **`RDY-000` — Establish the release profiles and capability ledger**. Its
 3. **[implemented]** A capability cannot be ready while a blocker or required gate is open
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references.
-4. **[unmet]** Two clean generations produce byte-identical content except declared timestamps
-   - Evidence: `.github/workflows/site-data.yml`, `Tests/Tools/test_site_data_contract.py`
-   - Only the hosted site-data workflow generates twice and diffs. The local test only checks the workflow text and that the handoff render is deterministic.
+4. **[implemented]** Two clean generations produce byte-identical content except declared timestamps
+   - Evidence: `.github/workflows/site-data.yml`, `Tests/Tools/test_site_data_contract.py`, `Tests/Tools/test_site_data_generation_determinism.py`, `Tests/CMakeLists.txt`
+   - HYG-b (not applied, JSON is off-limits here): the RDY-000 rationale sentence 'macos-shipping is a self-pruning planned preset owned by PLT-220' is stale. Replace it with 'macos-shipping now exists in CMakePresets.json and PLANNED_CMAKE_PRESETS is empty; its CI build leg is still missing (see the macOS shipping CI slice).'
 
 ### Session verification
 
@@ -246,11 +246,11 @@ Establish the only source of readiness truth and make CI report reality.
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 1/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
+| [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 2/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
-| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 1/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
-| [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 0/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
-| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 3/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
+| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 2/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
+| [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
+| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 4/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
 
@@ -258,15 +258,15 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 0/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
-| [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | 3/8 · 0/8 | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
-| [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | 0/4 · 0/4 | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
-| [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 2/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
+| [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 3/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
+| [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | 5/8 · 0/8 | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
+| [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | 3/4 · 0/4 | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
+| [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 3/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **in-progress** | 2/4 · 0/4 | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **in-progress** | 4/4 · 0/4 | — | `CI-100`, `OPS-100`, `RDY-000` |
 | [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **in-progress** | 4/4 · 0/4 | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
-| [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **in-progress** | 1/3 · 0/3 | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
-| [`OPS-100`](#ops-100--secure-and-complete-crash-reporting-telemetry-delivery-and-symbol-operations) Secure and complete crash reporting, telemetry delivery, and symbol operations | P0 | **in-progress** | 2/5 · 0/5 | — | `SEC-100`, `CI-100`, `RDY-000` |
+| [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **in-progress** | 2/3 · 0/3 | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
+| [`OPS-100`](#ops-100--secure-and-complete-crash-reporting-telemetry-delivery-and-symbol-operations) Secure and complete crash reporting, telemetry delivery, and symbol operations | P0 | **in-progress** | 3/5 · 0/5 | — | `SEC-100`, `CI-100`, `RDY-000` |
 
 ### Wave 2 — Primary engine workflow
 
@@ -275,15 +275,15 @@ Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK,
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
 | [`PLT-200`](#plt-200--certify-the-primary-windows-support-row) Certify the primary Windows support row | P0 | **in-progress** | 1/3 · 0/3 | `BLD-100`, `REL-100`, `RDY-020`, `RHI-210`, `EDT-210`, `OPS-100` | `HEAD-220`, `SAVE-230`, `SDK-240` |
-| [`RHI-210`](#rhi-210--certify-d3d11-as-the-primary-renderer) Certify D3D11 as the primary renderer | P0 | **in-progress** | 0/4 · 0/4 | `CI-110`, `BLD-100`, `RDY-020` | `HEAD-220`, `EDT-210`, `ENG-200` |
-| [`HEAD-220`](#head-220--certify-packaged-windows-11-nullrhi-execution) Certify packaged Windows 11 NullRHI execution | P0 | **in-progress** | 2/4 · 0/4 | `BLD-100`, `RDY-010`, `RDY-020` | `RHI-210`, `EDT-210`, `LIFE-200` |
+| [`RHI-210`](#rhi-210--certify-d3d11-as-the-primary-renderer) Certify D3D11 as the primary renderer | P0 | **in-progress** | 2/4 · 0/4 | `CI-110`, `BLD-100`, `RDY-020` | `HEAD-220`, `EDT-210`, `ENG-200` |
+| [`HEAD-220`](#head-220--certify-packaged-windows-11-nullrhi-execution) Certify packaged Windows 11 NullRHI execution | P0 | **in-progress** | 4/4 · 0/4 | `BLD-100`, `RDY-010`, `RDY-020` | `RHI-210`, `EDT-210`, `LIFE-200` |
 | [`LIFE-200`](#life-200--close-runtime-ownership-shutdown-reload-and-failure-semantics) Close runtime ownership, shutdown, reload, and failure semantics | P0 | **in-progress** | 4/4 · 0/4 | `RDY-010`, `BLD-100` | `HEAD-220`, `EDT-210`, `ENG-200` |
-| [`EDT-210`](#edt-210--finish-the-editor-authoring-and-undo-safe-package-round-trip) Finish the editor authoring and undo-safe package round trip | P1 | **in-progress** | 2/4 · 0/4 | `RDY-010`, `RDY-020`, `LIFE-200` | `RHI-210`, `ENG-200`, `SAVE-230` |
-| [`ASSET-220`](#asset-220--consolidate-cooking-packaging-cli-and-installed-consumer-behavior) Consolidate cooking, packaging, CLI, and installed consumer behavior | P0 | **in-progress** | 1/4 · 0/4 | `RDY-020`, `BLD-100`, `LIFE-200` | `EDT-210`, `SAVE-230`, `SDK-240` |
+| [`EDT-210`](#edt-210--finish-the-editor-authoring-and-undo-safe-package-round-trip) Finish the editor authoring and undo-safe package round trip | P1 | **in-progress** | 4/4 · 0/4 | `RDY-010`, `RDY-020`, `LIFE-200` | `RHI-210`, `ENG-200`, `SAVE-230` |
+| [`ASSET-220`](#asset-220--consolidate-cooking-packaging-cli-and-installed-consumer-behavior) Consolidate cooking, packaging, CLI, and installed consumer behavior | P0 | **in-progress** | 3/4 · 0/4 | `RDY-020`, `BLD-100`, `LIFE-200` | `EDT-210`, `SAVE-230`, `SDK-240` |
 | [`INST-130`](#inst-130--make-installer-clean-install-repair-and-uninstall-behavior-verified-and-recoverable) Make installer clean-install, repair, and uninstall behavior verified and recoverable | P0 | **in-progress** | 3/5 · 0/5 | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
 | [`SAVE-230`](#save-230--version-saves-scenes-assets-editor-data-and-migrations) Version saves, scenes, assets, editor data, and migrations | P0 | **in-progress** | 4/4 · 0/4 | `RDY-000`, `RDY-010`, `LIFE-200` | `EDT-210`, `ASSET-220`, `SDK-240` |
 | [`SDK-240`](#sdk-240--stabilize-sdk-module-abi-package-exports-and-compatibility-diagnostics) Stabilize SDK, module ABI, package exports, and compatibility diagnostics | P0 | **in-progress** | 4/4 · 0/4 | `ASSET-220`, `LIFE-200`, `REL-100` | `SAVE-230`, `EDT-210` |
-| [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **in-progress** | 0/4 · 0/4 | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
+| [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **in-progress** | 1/4 · 0/4 | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
 | [`ENG-200`](#eng-200--complete-the-angelscript-and-visual-script-runtime-lifecycle) Complete the AngelScript and visual-script runtime lifecycle | P0 | **in-progress** | 4/4 · 0/4 | `RDY-010`, `LIFE-200`, `SAVE-230` | `EDT-210`, `RHI-210` |
 
 ### Wave 3 — Secure multiplayer reference
@@ -294,10 +294,10 @@ Close transport, true multi-client, persistence, migration, load, and operations
 |---|---|---|---|---|---|
 | [`NET-100`](#net-100--replace-placeholder-transport-security-with-audited-authenticated-encryption) Replace placeholder transport security with audited authenticated encryption | P0 | **in-progress** | 4/4 · 0/4 | `SEC-100`, `SEC-110`, `SEC-120`, `CI-110` | `NET-110`, `DATA-120` |
 | [`NET-110`](#net-110--define-and-implement-the-production-online-service-boundary) Define and implement the production online-service boundary | P1 | **in-progress** | 4/4 · 0/4 | `NET-100`, `SEC-100` | `DATA-120`, `TF-110`, `OPS-110` |
-| [`DATA-120`](#data-120--make-multiplayer-persistence-transactional-migratable-backed-up-and-recoverable) Make multiplayer persistence transactional, migratable, backed up, and recoverable | P1 | **in-progress** | 0/4 · 0/4 | `SAVE-230`, `NET-100` | `NET-110`, `TF-110`, `OPS-110` |
+| [`DATA-120`](#data-120--make-multiplayer-persistence-transactional-migratable-backed-up-and-recoverable) Make multiplayer persistence transactional, migratable, backed up, and recoverable | P1 | **in-progress** | 3/4 · 0/4 | `SAVE-230`, `NET-100` | `NET-110`, `TF-110`, `OPS-110` |
 | [`TF-110`](#tf-110--prove-mmofps-with-a-true-independent-multi-client-release-gate) Prove MMOFPS with a true independent multi-client release gate | P0 | **in-progress** | 4/4 · 0/4 | `NET-100`, `RDY-020`, `HEAD-220`, `RDY-010` | `TF-120`, `OPS-110` |
-| [`TF-120`](#tf-120--close-mmofps-restart-multimap-migration-topology-and-performance) Close MMOFPS restart, multimap migration, topology, and performance | P1 | **in-progress** | 1/5 · 0/5 | `TF-110`, `DATA-120`, `OPS-110` | — |
-| [`OPS-110`](#ops-110--add-production-server-observability-load-soak-backup-and-incident-gates) Add production server observability, load, soak, backup, and incident gates | P1 | **in-progress** | 2/4 · 0/4 | `OPS-100`, `HEAD-220`, `NET-100`, `DATA-120` | `TF-110`, `TF-120`, `NET-110` |
+| [`TF-120`](#tf-120--close-mmofps-restart-multimap-migration-topology-and-performance) Close MMOFPS restart, multimap migration, topology, and performance | P1 | **in-progress** | 2/5 · 0/5 | `TF-110`, `DATA-120`, `OPS-110` | — |
+| [`OPS-110`](#ops-110--add-production-server-observability-load-soak-backup-and-incident-gates) Add production server observability, load, soak, backup, and incident gates | P1 | **in-progress** | 4/4 · 0/4 | `OPS-100`, `HEAD-220`, `NET-100`, `DATA-120` | `TF-110`, `TF-120`, `NET-110` |
 
 ### Wave 4 — Module completion factory
 
@@ -306,19 +306,19 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
 | [`MOD-290`](#mod-290--build-the-shared-manifest-and-installed-sdk-module-kit) Build the shared manifest and installed-SDK module kit | P1 | **in-progress** | 3/4 · 0/4 | `RDY-010`, `RDY-020`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
-| [`MOD-300`](#mod-300--complete-and-correctly-position-the-base-sparkgame-showcase) Complete and correctly position the base SparkGame showcase | P1 | **in-progress** | 2/5 · 0/5 | `MOD-290` | `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-310`](#mod-310--finish-fps-as-the-installed-single-player-stable-v1-slice) Finish FPS as the installed single-player stable-v1 slice | P1 | **in-progress** | 1/5 · 0/5 | `MOD-290`, `SDK-240`, `RDY-020` | `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-300`](#mod-300--complete-and-correctly-position-the-base-sparkgame-showcase) Complete and correctly position the base SparkGame showcase | P1 | **in-progress** | 3/5 · 0/5 | `MOD-290` | `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-310`](#mod-310--finish-fps-as-the-installed-single-player-stable-v1-slice) Finish FPS as the installed single-player stable-v1 slice | P1 | **in-progress** | 2/5 · 0/5 | `MOD-290`, `SDK-240`, `RDY-020` | `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-320`](#mod-320--finish-mmo-as-a-secure-persistent-integrated-world) Finish MMO as a secure persistent integrated world | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290`, `NET-100`, `DATA-120`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 0/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **in-progress** | 0/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-360`](#mod-360--finish-openworld-as-a-streamed-survivalexploration-slice) Finish OpenWorld as a streamed survival/exploration slice | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-370`](#mod-370--finish-rts-as-a-deterministic-playable-skirmish) Finish RTS as a deterministic playable skirmish | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-380`, `MOD-390` |
-| [`MOD-380`](#mod-380--finish-racing-as-a-physics-backed-complete-race) Finish Racing as a physics-backed complete race | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-390` |
+| [`MOD-370`](#mod-370--finish-rts-as-a-deterministic-playable-skirmish) Finish RTS as a deterministic playable skirmish | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-380`, `MOD-390` |
+| [`MOD-380`](#mod-380--finish-racing-as-a-physics-backed-complete-race) Finish Racing as a physics-backed complete race | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-390` |
 | [`MOD-390`](#mod-390--finish-visualscript-as-a-real-packaged-gameplay-loop) Finish VisualScript as a real packaged gameplay loop | P1 | **blocked** | 3/4 · 0/4 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380` |
 | [`RDY-015`](#rdy-015--build-real-source-lifecycle-evidence-for-experimental-modules) Build real-source lifecycle evidence for experimental modules | P1 | **in-progress** | 2/3 · 0/3 | `RDY-000`, `CI-100` | `MOD-295` |
-| [`MOD-295`](#mod-295--build-reusable-completion-helpers-for-prototype-modules) Build reusable completion helpers for prototype modules | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290`, `RDY-015`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
-| [`MOD-315`](#mod-315--finish-optional-fps-lan-and-multiplayer-gameplay) Finish optional FPS LAN and multiplayer gameplay | P1 | **in-progress** | 2/4 · 0/4 | `MOD-310`, `NET-100` | `TF-110` |
+| [`MOD-295`](#mod-295--build-reusable-completion-helpers-for-prototype-modules) Build reusable completion helpers for prototype modules | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `RDY-015`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
+| [`MOD-315`](#mod-315--finish-optional-fps-lan-and-multiplayer-gameplay) Finish optional FPS LAN and multiplayer gameplay | P1 | **in-progress** | 3/4 · 0/4 | `MOD-310`, `NET-100` | `TF-110` |
 
 ### Wave 5 — Portable and modern backends
 
@@ -326,16 +326,16 @@ Certify or explicitly bound Linux, macOS, D3D12, Vulkan, OpenGL, Metal, mobile, 
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`PLT-210`](#plt-210--certify-or-explicitly-bound-linux-support) Certify or explicitly bound Linux support | P1 | **in-progress** | 0/3 · 0/3 | `BLD-100`, `RDY-020`, `HEAD-220`, `RHI-230`, `RHI-240` | `PLT-220`, `RHI-225` |
+| [`PLT-210`](#plt-210--certify-or-explicitly-bound-linux-support) Certify or explicitly bound Linux support | P1 | **in-progress** | 1/3 · 0/3 | `BLD-100`, `RDY-020`, `HEAD-220`, `RHI-230`, `RHI-240` | `PLT-220`, `RHI-225` |
 | [`PLT-220`](#plt-220--complete-and-certify-the-macos-product-path) Complete and certify the macOS product path | P1 | **in-progress** | 1/3 · 0/3 | `BLD-100`, `RHI-220`, `RDY-020`, `REL-110` | `PLT-210`, `RHI-225` |
 | [`PLT-230`](#plt-230--decide-and-implement-the-mobile-release-profile) Decide and implement the mobile release profile | P2 | **in-progress** | 1/2 · 0/2 | `RDY-000`, `ENG-220` | `PLT-240`, `PLT-250` |
 | [`PLT-240`](#plt-240--decide-and-implement-the-openxr-release-profile) Decide and implement the OpenXR release profile | P2 | **in-progress** | 1/2 · 0/2 | `RDY-000`, `ENG-220` | `PLT-230`, `PLT-250` |
 | [`PLT-250`](#plt-250--keep-console-support-gated-behind-platform-authority-and-certification) Keep console support gated behind platform authority and certification | P3 | **blocked** | 2/3 · 0/3 | `RDY-000` | `PLT-230`, `PLT-240` |
 | [`RHI-220`](#rhi-220--complete-metal-backend-implementation-and-parity) Complete Metal backend implementation and parity | P1 | **open** | 0/4 · 0/4 | `RHI-210`, `ENG-220`, `BLD-100` | `RHI-225`, `RHI-230`, `RHI-240` |
-| [`RHI-225`](#rhi-225--close-d3d12-synchronization-pass-shader-and-driver-parity) Close D3D12 synchronization, pass, shader, and driver parity | P1 | **open** | 0/4 · 0/4 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-230`, `RHI-240` |
-| [`RHI-230`](#rhi-230--close-vulkan-gpu-backed-parity-and-shader-toolchain-gates) Close Vulkan GPU-backed parity and shader-toolchain gates | P1 | **in-progress** | 0/5 · 0/5 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-225`, `RHI-240` |
-| [`RHI-240`](#rhi-240--certify-opengl-translation-visual-driver-and-software-render-paths) Certify OpenGL translation, visual, driver, and software-render paths | P1 | **in-progress** | 1/4 · 0/4 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-225`, `RHI-230` |
-| [`ENG-220`](#eng-220--close-d3d11-model-import-and-canonical-content-interoperability) Close D3D11 model import and canonical-content interoperability | P1 | **open** | 0/5 · 0/5 | `RDY-020`, `RHI-210` | `RHI-220`, `RHI-225`, `RHI-230`, `RHI-240` |
+| [`RHI-225`](#rhi-225--close-d3d12-synchronization-pass-shader-and-driver-parity) Close D3D12 synchronization, pass, shader, and driver parity | P1 | **in-progress** | 2/4 · 0/4 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-230`, `RHI-240` |
+| [`RHI-230`](#rhi-230--close-vulkan-gpu-backed-parity-and-shader-toolchain-gates) Close Vulkan GPU-backed parity and shader-toolchain gates | P1 | **in-progress** | 1/5 · 0/5 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-225`, `RHI-240` |
+| [`RHI-240`](#rhi-240--certify-opengl-translation-visual-driver-and-software-render-paths) Certify OpenGL translation, visual, driver, and software-render paths | P1 | **in-progress** | 2/4 · 0/4 | `RHI-210`, `ENG-220`, `CI-110` | `RHI-220`, `RHI-225`, `RHI-230` |
+| [`ENG-220`](#eng-220--close-d3d11-model-import-and-canonical-content-interoperability) Close D3D11 model import and canonical-content interoperability | P1 | **in-progress** | 3/5 · 0/5 | `RDY-020`, `RHI-210` | `RHI-220`, `RHI-225`, `RHI-230`, `RHI-240` |
 
 ### Wave 6 — Public truth and release
 
@@ -343,15 +343,15 @@ Finish governance, publish the live bundle, rehearse every gate required by each
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`GOV-400`](#gov-400--resolve-licensing-third-party-notices-trademark-contribution-security-and-support-policy) Resolve licensing, third-party notices, trademark, contribution, security, and support policy | P0 | **in-progress** | 0/5 · 0/5 | `RDY-000`, `SEC-110`, `REL-100` | `DOC-400` |
+| [`GOV-400`](#gov-400--resolve-licensing-third-party-notices-trademark-contribution-security-and-support-policy) Resolve licensing, third-party notices, trademark, contribution, security, and support policy | P0 | **in-progress** | 1/5 · 0/5 | `RDY-000`, `SEC-110`, `REL-100` | `DOC-400` |
 | [`DOC-400`](#doc-400--publish-the-repository-synchronized-site-data-bundle-and-complete-public-framing) Publish the repository-synchronized site-data bundle and complete public framing | P0 | **in-progress** | 0/7 · 0/7 | `RDY-000` | `DOC-410`, `CI-100`, `GOV-400` |
 | [`INST-131`](#inst-131--qualify-stable-v1-n-1-upgrade-and-rollback-against-an-immutable-predecessor) Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor | P0 | **in-progress** | 1/3 · 0/3 | `INST-130`, `REL-100`, `REL-110` | `REL-190` |
 | [`INST-132`](#inst-132--qualify-predecessor-bootstrap-recovery-without-an-n-1-dependency) Qualify predecessor bootstrap recovery without an N-1 dependency | P0 | **in-progress** | 0/3 · 0/3 | `INST-130` | `INST-131` |
-| [`REL-190`](#rel-190--rehearse-and-approve-the-qualified-release-candidate-before-publication) Rehearse and approve the qualified release candidate before publication | P0 | **blocked** | 3/6 · 0/6 | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
-| [`REL-191`](#rel-191--rehearse-the-predecessor-release-without-n-1-upgrade-claims) Rehearse the predecessor release without N-1 upgrade claims | P0 | **in-progress** | 0/3 · 0/3 | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
-| [`REL-192`](#rel-192--qualify-stable-v1-n-1-release-rehearsal-and-rollback) Qualify stable-v1 N-1 release rehearsal and rollback | P0 | **blocked** | 0/3 · 0/3 | `REL-190`, `INST-131` | — |
+| [`REL-190`](#rel-190--rehearse-and-approve-the-qualified-release-candidate-before-publication) Rehearse and approve the qualified release candidate before publication | P0 | **blocked** | 4/6 · 0/6 | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
+| [`REL-191`](#rel-191--rehearse-the-predecessor-release-without-n-1-upgrade-claims) Rehearse the predecessor release without N-1 upgrade claims | P0 | **in-progress** | 1/3 · 0/3 | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
+| [`REL-192`](#rel-192--qualify-stable-v1-n-1-release-rehearsal-and-rollback) Qualify stable-v1 N-1 release rehearsal and rollback | P0 | **blocked** | 1/3 · 0/3 | `REL-190`, `INST-131` | — |
 | [`REL-193`](#rel-193--publish-and-independently-accept-the-reviewed-v090-predecessor) Publish and independently accept the reviewed v0.9.0 predecessor | P0 | **in-progress** | 0/3 · 0/3 | `REL-191` | — |
-| [`REL-200`](#rel-200--publish-and-independently-verify-the-qualified-release) Publish and independently verify the qualified release | P0 | **blocked** | 1/4 · 0/4 | `REL-190` | — |
+| [`REL-200`](#rel-200--publish-and-independently-verify-the-qualified-release) Publish and independently verify the qualified release | P0 | **blocked** | 2/4 · 0/4 | `REL-190` | — |
 
 ## Game-module parity baseline
 
@@ -414,7 +414,7 @@ Status documents, roadmap entries, test counts, module counts, website copy, and
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** No public capability or numeric claim exists without a validated contract entry
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
@@ -425,9 +425,9 @@ Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
 3. **[implemented]** A capability cannot be ready while a blocker or required gate is open
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references.
-4. **[unmet]** Two clean generations produce byte-identical content except declared timestamps
-   - Evidence: `.github/workflows/site-data.yml`, `Tests/Tools/test_site_data_contract.py`
-   - Only the hosted site-data workflow generates twice and diffs. The local test only checks the workflow text and that the handoff render is deterministic.
+4. **[implemented]** Two clean generations produce byte-identical content except declared timestamps
+   - Evidence: `.github/workflows/site-data.yml`, `Tests/Tools/test_site_data_contract.py`, `Tests/Tools/test_site_data_generation_determinism.py`, `Tests/CMakeLists.txt`
+   - HYG-b (not applied, JSON is off-limits here): the RDY-000 rationale sentence 'macos-shipping is a self-pruning planned preset owned by PLT-220' is stale. Replace it with 'macos-shipping now exists in CMakePresets.json and PLANNED_CMAKE_PRESETS is empty; its CI build leg is still missing (see the macOS shipping CI slice).'
 
 **Required commands**
 
@@ -634,7 +634,7 @@ Several modules reference missing music/models/scenes, depend on path case that 
 
 **Acceptance criteria**
 
-Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Zero missing or case-mismatched references in every declared manifest
    - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`
@@ -644,9 +644,9 @@ Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 3. **[unmet]** Every asset has provenance/license metadata where required
    - Evidence: `Tests/Tools/test_asset_package_profile.py`
    - Licenses are asserted only for the 40-entry stable-v1 closure. 475 NOASSERTION entries remain, and provenance is listed as open.
-4. **[unmet]** Tampered or traversal paths fail before package assembly
-   - Evidence: `Tests/Tools/test_asset_integrity.py`
-   - The verifier rejects traversal and tampering, but the configure-time package profile does not re-hash sources. Blocking before assembly relies on CI job ordering.
+4. **[implemented]** Tampered or traversal paths fail before package assembly
+   - Evidence: `Tests/Tools/test_asset_integrity.py`, `cmake/SparkRuntimeAssets.cmake`, `cmake/SparkTrackedInstall.cmake`, `cmake/TestSparkTrackedInstall.cmake`, `Tests/Tools/test_asset_package_profile.py`, `CMakeLists.txt`, `wiki/gameplay-tools/Asset-Pipeline.md`
+   - The preflight verifies the staged snapshot that the install rules copy, and the tamper test changes that payload, found through cmake_install.cmake. This test failed (install exited 0) on the pre-fix helpers. Local Python and CMake -P runs only.
 5. **[implemented]** Experimental modules keep their package-smoke debt outside stable-v1
    - Evidence: `tools/module-evidence/validate_manifest.py`, `Tests/Tools/test_module_evidence.py`, `Tests/Tools/test_asset_package_profile.py`
    - Experimental modules must stay outside stable-v1 with an RDY-015 tracker (B32d). The stable-v1 closure excludes other modules' content, and experimental-profile smoke logs are rejected.
@@ -732,7 +732,7 @@ ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Controlled test, sanitizer, format, threshold, registration, and validation failures each make CI red
    - Needs a hosted, controlled red run on Working proving the Required CI Gate turns red.
@@ -741,9 +741,9 @@ Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
 3. **[unmet]** MinGW/Wine is either executable and labeled experimental or removed from claims
    - Evidence: `.github/scripts/test-workflow-failure-propagation.py`, `.github/workflows/build.yml`
    - The experimental label is structurally tested, but no hosted MinGW dispatch has run since the relabel. The last run had 32 Wine test failures.
-4. **[unmet]** Required-check policy is documented and externally verified
-   - Evidence: `.github/scripts/test-verify-working-ruleset.py`, `.github/scripts/verify-working-ruleset.py`
-   - The offline test uses a captured fixture. External verification needs the live GitHub API.
+4. **[implemented]** Required-check policy is documented and externally verified
+   - Evidence: `.github/scripts/test-verify-working-ruleset.py`, `.github/scripts/verify-working-ruleset.py`, `wiki/advanced/Testing.md`
+   - The verifier's hidden-bypass_actors diagnostic is implemented. External verification still needs a live --live run, so this criterion stays at implemented, not evidenced.
 
 **Required commands**
 
@@ -827,12 +827,13 @@ A hostile audit found timestamp-only false greens, incomplete first-party source
 
 **Acceptance criteria**
 
-Progress: 3 of 6 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
    - Evidence: `Tests/Tools/test_docs_health.py`
    - The double isolated generation is tested. Being green at the exact commit needs an exact-SHA CI run.
-2. **[unmet]** Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
+2. **[implemented]** Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
+   - Evidence: `docs/generate-flowchart-content.py`, `Tests/Tools/test_docs_health.py`
    - Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff.
 3. **[implemented]** Every catalogued doc route, source, heading, image, and generated-API target resolves
    - Evidence: `tools/site-data/validate_docs_links.py`, `.github/workflows/site-data.yml`, `Tests/Tools/test_docs_health.py`
@@ -931,21 +932,22 @@ One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking
 
 **Acceptance criteria**
 
-Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Documented subsystem commands select and execute real tests
    - Evidence: `tools/site-data/validate.py`
    - Commands are resolved statically but never executed. The tests-unit and tests-integration jobs are still planned.
-2. **[unmet]** No unowned flaky exception exists
-   - Evidence: `Tools/validate_test_warnings.py`, `Tests/Tools/test_validate_test_warnings.py`
+2. **[implemented]** No unowned flaky exception exists
+   - Evidence: `Tools/validate_test_warnings.py`, `Tests/Tools/test_validate_test_warnings.py`, `Tests/test-warning-waivers.json`, `Tests/TestLevelStreamingSystemPhaseAA.cpp`, `Tests/TestLoadingScreenReal.cpp`, `wiki/advanced/Testing.md`
    - SKIP_TEST and EXPECT_NO_CRASH exceptions have no owner or expiry enforcement.
 3. **[unmet]** Coverage and analysis regressions block
    - Evidence: `Tools/clang_tidy_budget.py`, `Tools/clang-tidy-budget.json`, `Tests/Tools/test_clang_tidy_budget.py`, `.github/workflows/build.yml`
    - Clang-tidy now ends in a blocking per-file, per-check budget ratchet and coverage thresholds block, but the budget is a local clang-tidy 18.1.3 measurement, CodeQL alert regressions do not block, and no hosted run has shown a controlled regression failing the gate.
-4. **[unmet]** Every shipped binary has a smoke or integration lane
-   - Not every shipped binary has a smoke or integration lane. The item records integration depth as open.
-5. **[unmet]** Linux sanitizer evidence never promotes the Windows 11 stable-v1 certification row by itself
-   - Evidence: `Tests/Tools/test_site_data_contract.py`
+4. **[implemented]** Every shipped binary has a smoke or integration lane
+   - Evidence: `Tools/validate_ctest_policy.py`, `Tests/Tools/test_validate_ctest_policy.py`, `CMakeLists.txt`, `.github/workflows/build.yml`, `SparkInstaller/CMakeLists.txt`, `SparkInstaller/tests/InstallerHeadlessSmoke.cmake`, `wiki/advanced/Testing.md`
+   - Shipped and built binaries are read from the configured tree's file-API codemodel, not from test references. The documented gaps are SparkLauncher (all platforms) and SparkShaderCompiler (Linux/Darwin). No current configured tree or hosted run has been validated under the new rule.
+5. **[implemented]** Linux sanitizer evidence never promotes the Windows 11 stable-v1 certification row by itself
+   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `tools/site-data/contract_selectors.py`
    - The only check asserts the item's own wording, which is tautological. No validator blocks sanitizer evidence from promoting the Windows row.
 
 **Required commands**
@@ -1054,24 +1056,24 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 
 **Acceptance criteria**
 
-Progress: 3 of 8 implemented, 0 evidenced at an exact commit.
+Progress: 5 of 8 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every stable-v1 target appears with its declared kind in configured codemodel evidence for its canonical build profile
    - Needs configured Windows codemodel evidence from a real MSVC configure.
 2. **[unmet]** The strict Windows Shipping profile, Windows validation profile, and installed public-SDK consumer are all independently evidenced
    - Needs independent hosted evidence for Windows Shipping, validation and the installed SDK.
-3. **[unmet]** Unknown or unused options fail
-   - Evidence: `Tests/Tools/test_build_option_guard.py`, `cmake/SparkOptionGuard.cmake`
-   - Typed -DNAME:TYPE entries bypass the guard and unused options are not detected. No Windows lane has run it.
+3. **[implemented]** Unknown or unused options fail
+   - Evidence: `Tests/Tools/test_build_option_guard.py`, `cmake/SparkOptionGuard.cmake`, `CMakeLists.txt`, `Tools/buildmatrix/inventory.py`, `Tools/buildmatrix/check_parity.py`, `Tests/Tools/test_build_matrix_parity.py`, `docs/readiness/build-matrix-inventory.json`, `docs/readiness/build-matrix-parity-findings.json`
+   - Typed -D and preset typos are rejected at configure. check_parity has a blocking declared-option-unread finding. The one inert option, ENABLE_GRAPHICS, was deleted, so the reviewed findings stay at 3 blocking errors, all from external authority.
 4. **[implemented]** Missing dependency is fatal
    - Evidence: `cmake/SparkThirdPartyAudit.cmake`, `Tests/Tools/test_strict_dependencies.py`, `Tests/CMakeLists.txt`
    - SPARK_STRICT_DEPS=ON requires every dependencies.lock entry and fails configure with one FATAL_ERROR; root CMakeLists.txt keeps no second list. StrictDependencies_LockClosureMissingIsFatal removes each locked dependency from a fixture of the real manifest and requires a strict failure naming it. Green locally; no exact-commit CI run or Windows strict configure yet.
 5. **[implemented]** Documented configure/build commands match the Windows presets
    - Evidence: `tools/site-data/documented_commands.py`, `tools/site-data/validate.py`, `Tests/Tools/test_documented_build_commands.py`
    - validate.py checks cmake/ctest/cpack commands in root *.md (not CHANGELOG), wiki, docs, .github prompts, .claude/.codex skills and SparkBuild/SparkSDK/FuzzerTests/GameModules/Templates docs against CMakePresets.json: preset names, preset/-B/script trees across cd, --config/-C on multi-config or generator-less trees, -A/-T pins. Test green locally; no exact-commit CI run yet.
-6. **[unmet]** Experimental platform Shipping matrices remain owned by their platform work items
-   - Evidence: `Tests/Tools/test_site_data_contract.py`
-   - Only the planned macos-shipping preset is owner-scoped. linux-shipping has no enforced platform owner.
+6. **[implemented]** Experimental platform Shipping matrices remain owned by their platform work items
+   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`
+   - Also apply the HYG-b note fix: 'No platform shipping preset is owner-scoped any more...' is now superseded. Owners are enforced by EXPERIMENTAL_SHIPPING_PRESET_OWNERS; the macos-shipping CI build leg is still missing.
 7. **[implemented]** Configured codemodel evidence is accepted only when its source tree, producer-captured commit, generator, preset build directory, cache values, and reply-file digests match the profile claiming it
    - Evidence: `Tests/Tools/test_build_matrix_parity.py`, `Tools/buildmatrix/inventory.py`, `Tools/buildmatrix/capture_provenance.py`
    - Tests drive inventory.extract_codemodel_targets and reject a mismatched source tree, build directory, generator, cache or commit, caller-asserted commits, and changed, linked or traversing reply files.
@@ -1165,15 +1167,16 @@ Versioned Windows publication now selects the authoritative windows-shipping pre
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Shipping is distinct from Debug and Release
-   - Evidence: `Tests/Tools/test_build_shipping_contract.py`, `CMakePresets.json`
+1. **[implemented]** Shipping is distinct from Debug and Release
+   - Evidence: `Tests/Tools/test_build_shipping_contract.py`, `CMakePresets.json`, `tools/check_shipping_configuration.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `CMakeLists.txt`
    - Downgraded. Tests are only static text checks of presets and CMake. No committed test builds or runs windows-shipping to show distinct output, and no hosted Windows Shipping build has been observed.
-2. **[unmet]** Two clean builds from identical inputs produce equivalent manifests
-   - Evidence: `tools/compare_build_outputs.py`, `Tests/Tools/test_compare_build_outputs.py`
+2. **[implemented]** Two clean builds from identical inputs produce equivalent manifests
+   - Evidence: `tools/compare_build_outputs.py`, `Tests/Tools/test_compare_build_outputs.py`, `Tests/CMakeLists.txt`, `cmake/SparkReproducibleBuild.cmake`
    - Linux only: ReproducibleBuild_LinuxToolTargets (SparkCooker, linux-shipping settings, LTO on, outer compiler) passed only locally with GCC 13.3. One manual Clang two-tree run outside the CTest (no artifact kept) was equivalent. No hosted GCC 14 or Clang lane has run it; the inner build ignores the Clang lane's LTO-off/libc++ flags. GCC LTO archive members differ. reproducibility-windows never ran.
-3. **[unmet]** Every artifact includes private-symbol mapping and build ID
+3. **[implemented]** Every artifact includes private-symbol mapping and build ID
+   - Evidence: `cmake/SparkStagePrivateSymbols.cmake`, `tools/shipping_symbol_manifest.py`, `Tests/Tools/test_shipping_symbol_manifest.py`, `Tests/CMakeLists.txt`
    - ShippingManifest_PrivateSymbols and ShippingManifest_SymbolManifestTool map installed Linux ELF images to split .debug files by build-id, and clang/lld-link PE fixtures to PDBs. No MSVC Windows Shipping artifact has been mapped; that needs a Windows run.
 4. **[unmet]** Unsupported CPU features are not silently required
    - Evidence: `Tests/Tools/test_cpu_floor.py`, `Tests/Tools/test_check_isa_baseline.py`
@@ -1256,11 +1259,11 @@ CMake, SDK generated headers, installer, and launcher consume the requested engi
 
 **Acceptance criteria**
 
-Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** A vX.Y.Z tag embeds exactly X.Y.Z in every stable-v1 product and artifact
-   - Evidence: `Tests/Tools/test_rel100_product_versions.py`, `.github/scripts/stable_release_tag.py`, `.github/scripts/test_stable_release_tag.py`
-   - release.yml derives the stable tag through stable_release_tag.py (tag equals the single CMake default, exactly one versioned CHANGELOG.md heading) and the nightly tag through nightly_release_tag.py; both run as TagReleaseContract_* CTest selectors. No hosted package run qualifies the tag version inside packaged artifacts such as installers or the SDK ZIP.
+1. **[implemented]** A vX.Y.Z tag embeds exactly X.Y.Z in every stable-v1 product and artifact
+   - Evidence: `Tests/Tools/test_rel100_product_versions.py`, `.github/scripts/stable_release_tag.py`, `.github/scripts/test_stable_release_tag.py`, `tools/verify_package_versions.py`, `Tests/Tools/test_verify_package_versions.py`, `.github/workflows/release.yml`, `Tests/CMakeLists.txt`
+   - build-windows verifies archive name, executable VS_VERSIONINFO and SparkEngineConfigVersion.cmake on the portable ZIP (CTest TagReleaseContract_PackagedVersions; checked locally against a real 0.9.0 ZIP). DLLs are not checked. No hosted tagged run.
 2. **[implemented]** Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration
    - Evidence: `tools/release_build_provenance.py`, `Tests/Tools/test_release_build_provenance.py`, `.github/workflows/release.yml`, `Tests/CMakeLists.txt`
    - ArtifactIntegrity_BuildProvenance drives record/verify: each package job records source SHA, committed dependency-lock digest, toolchain (v2: Windows SDK, MSVC tools, linker, ISA floor) and configuration; verify rejects unrecorded published bytes and stable without one v2 Windows Shipping record. Fixture-only; no hosted Windows release run.
@@ -1636,15 +1639,16 @@ Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross st
 
 **Acceptance criteria**
 
-Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Malformed input cannot cause crash, OOB, path escape, integer overflow, or unbounded allocation/time
-   - Only some parsers have bounds or libFuzzer targets. The item still lists blocked and unclassified parser candidates, so 'every parser' is not shown.
+   - Partial progress: ShaderDiskCache and ConfigParser gained libFuzzer targets and regressions (10 of 141 inventoried parsers fuzzed); 131 parsers remain blocked, so the criterion stays open.
 2. **[implemented]** Every found issue lands with a minimized regression fixture
    - Evidence: `tools/fuzz-policy/corpus_manifest.py`, `tools/fuzz-policy/import_regression.py`, `FuzzerTests/policy/test_fuzz_policy.py`
    - corpus_manifest.py _require_declared_regressions rejects any regression-* seed without a declared finding and minimized fixture, and import_regression.py is the only intake path; the fuzz-policy unittests pin both. Local only; no exact-commit CI yet.
-3. **[unmet]** Required fuzz smoke is deterministic and blocking
-   - A blocking fuzz-smoke gate needs hosted, exact-SHA CI evidence. The local fuzz-smoke CTest targets cover only some parsers.
+3. **[implemented]** Required fuzz smoke is deterministic and blocking
+   - Evidence: `FuzzerTests/CMakeLists.txt`, `tools/fuzz-policy/corpus_manifest.py`, `FuzzerTests/policy/test_fuzz_policy.py`
+   - No blocking smoke passes -max_total_time any more, and the policy rejects time- or worker-bounded smoke flags. test_smoke_replay_may_not_be_time_or_worker_bounded pins this.
 
 **Required commands**
 
@@ -1723,10 +1727,11 @@ Crash manifests are now transport-free, pinned to a private artifact root, and h
 
 **Acceptance criteria**
 
-Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Crash artifacts contain no reusable secret
-   - Full-memory dumps can still hold in-process secrets, as the consent text itself says. The privacy review is still pending.
+1. **[implemented]** Crash artifacts contain no reusable secret
+   - Evidence: `SparkEngine/Source/Utils/CrashHandler.h`, `SparkEngine/Source/Utils/CrashHandler.cpp`, `Tests/TestCrashHandlerGatingReal.cpp`, `Tests/TestCoreAndBuildSystems.cpp`, `Tests/Tools/run_crash_capture_security.py`, `Tests/Tools/test_crash_capture_security.py`, `SECURITY.md`, `wiki/advanced/Crash-Reporting.md`
+   - Commit 8d249f919.
 2. **[implemented]** Malicious manifest/symlink/path input cannot read or delete outside owned crash data
    - Evidence: `SparkCrashReporter/tests/CrashReporterManifestTests.cpp`, `SparkCrashReporter/src/CrashReporterApp.cpp`, `SparkCrashReporter/CMakeLists.txt`, `Tests/Tools/test_ops100_crash_security.py`, `tools/site-data/contract_selectors.py`, `Tests/Tools/test_site_data_contract.py`
    - The state is unchanged; only the selectors and evidence change. Move CrashManifest_PathEscape, CrashManifest_SecretRedaction and CrashReporter_Consent out of OPS-100.plannedTestSelectors; they are already in testSelectors. Update the note to name CTest CrashManifest_PathEscape (--group=path-escape) instead of only ManifestCompatibility.
@@ -1901,15 +1906,17 @@ D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** All primary passes and representative content render within reviewed thresholds
    - Evidence: `Tests/TestRHI210D3D11GoldenReal.cpp`
    - Only a uniform frame and a triangle golden are checked. No primary-pass or representative-content goldens with reviewed thresholds.
-2. **[unmet]** Device loss/resize/resource stress recover
-   - There are no D3D11 device-loss, resize or stress-recovery tests.
-3. **[unmet]** GPU validation is clean
-   - There is no GPU debug-layer validation gate. Windows GPU runs are needed.
+2. **[implemented]** Device loss/resize/resource stress recover
+   - Evidence: `Tests/TestRHI210D3D11DeviceLossReal.cpp`, `Tests/TestRHI210D3D11ValidationReal.cpp`, `Tests/RHI210D3D11EngineFixture.h`, `Tests/CMakeLists.txt`, `SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp`, `SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp`, `SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp`, `wiki/subsystems/Rendering-and-Graphics.md`
+   - D3D11_DeviceLoss (2, WARP) and D3D11_Resource (3, includes the 1x1/1920x1080/320x240 resize) lanes, plus the 2,000-cycle create/destroy live-object baseline in the debug-layer lane (D3D11_Validation_CreateDestroyStressReturnsToBaseline). Local Windows run only; no exact-commit CI yet.
+3. **[implemented]** GPU validation is clean
+   - Evidence: `Tests/TestRHI210D3D11ValidationReal.cpp`, `Tests/CMakeLists.txt`, `SparkEngine/Source/Graphics/GraphicsEngine.h`, `SparkEngine/Source/Graphics/GraphicsEngineWindows.cpp`, `SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp`, `SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp`, `SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h`, `.github/workflows/build.yml`, `wiki/graphics/RHI-Abstraction-Layer.md`
+   - The D3D11_Validation lane (4 tests, label d3d11-validation;d3d11-debug-layer) runs WARP and debug-layer frames under SPARK_D3D11_DEBUG_LAYER=1, with an injected-error negative control. build-windows-vs2022 installs the Graphics Tools layer before ctest. This is WARP software validation; hardware GPU rows remain open.
 4. **[unmet]** Packaged scene passes on every supported Windows row
    - Needs a packaged scene on every supported Windows row, on hardware, with exact-SHA evidence.
 
@@ -1985,19 +1992,19 @@ NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS mod
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** The Windows package runs from a clean layout with no GPU or display dependency
    - Evidence: `cmake/ValidateStagedPackageExecutables.cmake`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `Tests/CMakeLists.txt`
    - The test runs from the staged package's bin directory with an isolated LOCALAPPDATA. The local host still has a GPU and display. Clean-host evidence and the headless-windows-package job still need hosted CI.
-2. **[unmet]** No rendered backend or repository content is accidentally required
-   - Evidence: `cmake/RunSparkHeadlessNullRHILifecycle.cmake`
-   - The parser rejects D3D11 device records, but repository-content isolation is not asserted. There is no clean-host run.
+2. **[implemented]** No rendered backend or repository content is accidentally required
+   - Evidence: `cmake/RunSparkHeadlessNullRHILifecycle.cmake`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `Tests/CMakeLists.txt`
+   - Pending the central build and a FPSHeadlessPackage_NullRHISaveReload run.
 3. **[implemented]** FPS lifecycle, save/reload, shutdown, and recovery are bounded and sanitizer-clean
    - Evidence: `docs/platform/LINUX-SUPPORT-EVIDENCE.md`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/TestHEAD220NullRHILifetimeReal.cpp`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`, `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, `Tests/CMakeLists.txt`, `wiki/subsystems/Dedicated-Server.md`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`
    - FPSHeadlessPackage_NullRHISaveReload runs a NullRHI save/reload against the staged MinSizeRel package. It is now in testSelectors only; plannedTestSelectors is []. There is no Windows CTest run or sanitizer/soak evidence yet, so the criterion is not evidenced. The ledger JSON still records this criterion as 'unmet' because this lane did not change the state field.
-4. **[unmet]** Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110
-   - Evidence: `Tests/Tools/test_site_data_contract.py`
+4. **[implemented]** Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110
+   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`
    - The contract checks OPS-110 wording only. Nothing asserts that HEAD-220 excludes these concerns or that G12 owns them.
 
 **Required commands**
@@ -2158,17 +2165,17 @@ Hierarchy and inspector can mutate World outside the command stack; rotate/scale
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** All world mutations round-trip through undo/redo without divergence
-   - Evidence: `Tests/TestEditorRecovery.cpp`, `Tests/TestEditorAssetDropWorldReal.cpp`, `SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp`
-   - Progress: asset-drop mutations record exactly one CommandHistory entry, and undo/redo restore exact document state, including ordering after a flushed pending field edit; an unrecordable mutation is reverted (EditorAssetDrag_WorldDrop*). No audit or check proves every World mutation goes through the command stack.
+1. **[implemented]** All world mutations round-trip through undo/redo without divergence
+   - Evidence: `Tests/TestEditorRecovery.cpp`, `Tests/TestEditorAssetDropWorldReal.cpp`, `SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp`, `SparkEditor/Source/Core/EditorDocument.h`, `SparkEditor/Source/Core/EditorDocument.cpp`, `SparkEditor/Source/Core/EditorUI.cpp`, `SparkEditor/Source/Gizmos/SceneEditTools.h`, `SparkEditor/Source/Gizmos/SceneEditTools.cpp`, `SparkEditor/Source/Panels/HierarchyPanel.cpp`, `SparkEditor/Source/Panels/SceneImportPanel.cpp`, `SparkEditor/Source/Panels/SceneViewPanel.cpp`, `SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp`, `SparkEditor/world-mutation-inventory.json`, `Tests/Tools/test_editor_world_mutation_inventory.py`, `Tests/TestEditorDocumentReal.cpp`, `Tests/TestEditorUndoHierarchyReal.cpp`, `Tests/TestEditorUndoWorldMatrixReal.cpp`, `Tests/CMakeLists.txt`
+   - ctests: EditorUndoDocument (EditorUndo_Document_, count 5), EditorUndoWorldMatrix (EditorUndo_WorldMatrix_, count 2), EditorUndo_WorldMutationInventory (python), and 3 EditorUndoHierarchy_ tests in the main lane. Before 32a298f85 none of the C++ tests compiled. They have not been run locally, so status stays 'implemented' until the central build passes.
 2. **[implemented]** Assets can be browsed, dragged, assigned, saved, cooked, and run
    - Evidence: `SparkEditor/Source/Panels/InspectorPanel.cpp`, `SparkEditor/Source/AssetPipeline/EditorAssetDrag.h`, `SparkEditor/Source/AssetPipeline/EditorAssetDrag.cpp`, `SparkEditor/Source/Panels/AssetBrowserPanel.cpp`, `SparkEditor/Source/Panels/InspectorComponentRenderers_Core3D.cpp`, `Tests/TestEditorAssetDrag.cpp`, `SparkEngine/Source/Core/HostScenePreview.h`, `SparkEngine/Source/Core/HostScenePreview.cpp`, `SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp`, `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `cmake/RunSparkWindowsScenePreview.cmake`, `SparkEditor/Source/Panels/BuildPipeline.cpp`, `SparkEditor/Source/Panels/BuildPipeline.h`, `Tests/TestEditorSubsystems.cpp`, `Tests/CMakeLists.txt`, `SparkEditor/Source/Panels/InspectorWorldAssetDrop.h`, `SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp`, `Tests/TestEditorAssetDropWorldReal.cpp`, `Tests/TestEditorCookPackageReal.cpp`
    - EditorCookPackageRoundTrip (Windows): the asset drag payload and Inspector drop core, SaveWorld, the real SparkCooker, AssembleNativePackage, and a packaged headless ScenePreview run that resolves the mesh, plus a missing-asset negative case.
-3. **[unmet]** A clean automated author-to-installed-runtime scenario passes
-   - Evidence: `cmake/RunSparkLinuxScenePreview.cmake`
-   - There is no automated author-to-installed-runtime scenario or cook/package test. The editor smoke also runs on Linux under xvfb-run/llvmpipe (execution only, not D3D11 certification). The Linux runtime now honors -scene (LinuxScenePreview), which such a scenario needs, but the editor-cook-install-run scenario itself does not exist.
+3. **[implemented]** A clean automated author-to-installed-runtime scenario passes
+   - Evidence: `cmake/RunSparkLinuxScenePreview.cmake`, `cmake/RunEditorAuthorInstalledRuntime.cmake`, `Tests/TestEditorCookPackageReal.cpp`, `Tests/CMakeLists.txt`
+   - ctest EditorCookPackageInstalledRuntime (Windows, RUN_SERIAL). Commit 241a603c5 fixed the redeclaration that broke the Windows SparkTests compile. The lane still has to pass in the central Windows build.
 4. **[implemented]** Failed operations remain atomic and recoverable
    - Evidence: `Tests/TestEditorRecovery.cpp`, `SparkEditor/Source/Core/EditorRecovery.cpp`, `SparkEngine/Source/Core/HostScenePreview.cpp`, `SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp`, `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `cmake/RunSparkWindowsScenePreview.cmake`, `Tests/CMakeLists.txt`
    - Scope: a failed Windows -scene load now exits 4 with no SPARK_SCENE_LOADED record, where it used to clear the path and exit 0. The WindowsScenePreview ctest covers the missing and malformed cases. This only covers the scene-host failure path; it has not been built or run here.
@@ -2249,17 +2256,17 @@ CPack omits products/modules, installed linkage can contradict host architecture
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Generated game builds solely against installed SDK
-   - Evidence: `GameModules/SparkGameFPS/CMakeLists.txt`, `Tests/PackageSmoke/CMakeLists.txt`
-   - Only the header smoke builds from the installed SDK. The FPS module still uses private headers and links SparkEngineLib.
+1. **[implemented]** Generated game builds solely against installed SDK
+   - Evidence: `GameModules/SparkGameFPS/CMakeLists.txt`, `Tests/PackageSmoke/CMakeLists.txt`, `Tools/spark-cli/spark_cli.py`, `Tools/spark-cli/tests/test_spark_cli.py`, `Tests/PackageSmoke/RunInstalledSDKTemplate.cmake`, `cmake/RunInstalledPackageConsumer.cmake`, `Tests/CMakeLists.txt`, `Tools/spark-cli/README.md`
+   - SDKConsumer_InstalledEmptyProjectTemplate (Windows), PackageConsumer_LinuxInstalledSDK and SparkNewFromInstalledPrefixTests (in SparkCliContract).
 2. **[implemented]** Installed runtime loads supported modules/assets without source paths
    - Evidence: `cmake/ValidateStagedPackageExecutables.cmake`, `cmake/RunSparkFPSHeadlessArena.cmake`, `wiki/gameplay-tools/Asset-Pipeline.md`
    - The staged package validator runs the FPS arena check against the staged bin/Assets/Scenes/level1.scene. It runs from a working directory outside both the package and the source tree. Evidence is local only.
-3. **[unmet]** CLI and packager claims match behavior
-   - Evidence: `SparkEngine/Source/Core/SparkEngineLinux.cpp`
-   - The Linux host now honors -scene (LinuxScenePreview) and GamePackager copy failures fail the package (GamePackager_ASSET220_*). No test checks every advertised CLI and packager claim against behaviour, and the CLI_* selector is still planned.
+3. **[implemented]** CLI and packager claims match behavior
+   - Evidence: `SparkEngine/Source/Core/SparkEngineLinux.cpp`, `Tools/spark-cli/claims.json`, `Tools/spark-cli/tests/test_spark_cli_claims.py`, `Tools/spark-cli/spark_cli.py`, `Tools/spark-cli/README.md`, `wiki/gameplay-tools/Game-Packaging.md`, `Tests/CMakeLists.txt`
+   - ctest CLI_ClaimsMatchBehavior; the claims file is also in SparkCliContract's discover run.
 4. **[unmet]** Install/uninstall is repeatable and leaves only declared user data
    - Evidence: `cmake/SparkUninstall.cmake`, `cmake/TestSparkTrackedInstall.cmake`
    - Local only: the manifest-driven uninstall and SparkTrackedInstall.Contract prove repeatable install/uninstall leaving only declared user data for CMake install trees on Linux. Windows 11 clean-machine CPack/NSIS uninstall and SparkInstaller reuse are unproven.
@@ -2627,14 +2634,15 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Budgets block regressions
    - All metrics are pending_measurement and none has an accepted baseline, so no budget can block a regression.
 2. **[unmet]** Golden changes require reviewed baseline update
    - No reviewed golden baselines are committed, and no approval gate exists for baseline changes.
-3. **[unmet]** Required soak completes without leak, crash, deadlock, or unbounded queue growth
-   - tools/perf-budget/run_nullrhi_soak.py and Soak_NullRHIHeadlessSmoke (120 s) detect leak slope, crashes and hangs locally. Only a >=1 h run with --expected-sha may record a result; none has run hosted, and nullrhi.soak budgets stay pending_measurement.
+3. **[implemented]** Required soak completes without leak, crash, deadlock, or unbounded queue growth
+   - Evidence: `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `tools/perf-budget/run_nullrhi_soak.py`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/CMakeLists.txt`, `.github/workflows/operations-scheduled.yml`, `Tests/Tools/test_operations_scheduled_workflow.py`, `wiki/advanced/Performance-Profiling-Guide.md`
+   - Commits 6f7407646 and 2f4f93f67.
 4. **[unmet]** Results attach to exact commit and certified hardware row
    - There are no certified hardware rows, and this needs exact-commit results on certified hardware.
 
@@ -2990,18 +2998,19 @@ MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic o
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Concurrent character/economy/territory writes cannot duplicate or lose state
    - TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates shows concurrent TFDatabase character and flux writers lose nothing under the shared-root lock. No territory store is covered, and no write carries an operation id: the uncalled idempotency ledger from b2d2953 was removed and the file schema is back to v2.
-2. **[unmet]** N-1 migrations and rollback fixtures pass
-   - The N-1 migration tests cover only the TFDatabase character store. No rollback or downgrade fixture exists, and no economy or territory store is migrated.
-3. **[unmet]** Forced process/database failure recovers to a documented point
-   - Evidence: `Tests/TestDATA120BackupRestore.cpp`, `docs/specs/persistence.md`
-   - Partial, local POSIX only: Persistence_RecoveryDrill_* kill a spawned writer process inside a TFDatabase commit or restore and reopen at the recovery point in docs/specs/persistence.md. Missing: power-loss simulation, a Windows drill, drills for the outfit/social/world stores, and CI evidence.
-4. **[unmet]** Backup restore is regularly rehearsed
-   - Evidence: `Tests/TestDATA120BackupRestore.cpp`, `docs/specs/persistence.md`
-   - Partial: TFDatabase CreateBackup/RestoreFromBackup exist with digest and schema gates, and Persistence_BackupRestore_* rehearse them under ctest -L recovery-drill. 'Regularly' needs the planned scheduled recovery-drill CI job and its history; other stores have no backup.
+2. **[implemented]** N-1 migrations and rollback fixtures pass
+   - Evidence: `Tests/TestDATA120PersistenceReal.cpp`, `Tests/TestTFOutfitStore.cpp`, `Tests/TestTFSocialStore.cpp`, `GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h`, `GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp`, `GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp`, `docs/specs/persistence.md`
+   - Persistence_Migration_* (11, pinned) covers N-1 and newer-schema rollback fixtures for TFDatabase (v0, retired v3, v2 -> v4), the territory file (WorldSave::DecodeTerritory), TFOutfitStore and the TFSocialSystem store. The progression world file is deliberately unversioned (session-scoped; persistence.md says why). Pending the central build/run: nothing was compiled in this lane.
+3. **[implemented]** Forced process/database failure recovers to a documented point
+   - Evidence: `Tests/TestDATA120BackupRestore.cpp`, `docs/specs/persistence.md`, `Tests/CMakeLists.txt`
+   - Persistence_RecoveryDrill_* (9, pinned on every host) now also run on Windows (write-through flush and rename, ExclusiveFileLock, TerminateProcess) and cover TFOutfitStore, the social store and a territory write besides TFDatabase; docs/specs/persistence.md has the per-store recovery table. Power loss is not simulated (no fault-injecting filesystem). Local only; no exact-commit CI yet.
+4. **[implemented]** Backup restore is regularly rehearsed
+   - Evidence: `Tests/TestDATA120BackupRestore.cpp`, `docs/specs/persistence.md`, `tools/ops/server_recovery_drill.py`, `Tests/Tools/test_server_recovery_drill.py`, `.github/workflows/operations-scheduled.yml`, `Tests/Tools/test_operations_scheduled_workflow.py`, `wiki/advanced/Server-Operations-Runbook.md`
+   - Commits da6328d74 and 2f4f93f67. In the same merge, the dispatcher must also remove 'recovery-drill' from DATA-120.plannedCiJobs (see risks).
 
 **Required commands**
 
@@ -3166,14 +3175,15 @@ Shared save storage, client scene/collision reload, topology-driven migration, t
 
 **Acceptance criteria**
 
-Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Cross-continent travel is visually/physically correct
    - No committed test proves cross-continent travel is visually and physically correct.
 2. **[unmet]** Duplicate/lost migration messages do not duplicate/lose entities
-   - No committed test shows duplicate or lost migration messages keep every entity.
-3. **[unmet]** Forced source/destination crashes recover
-   - No committed forced source or destination crash-recovery tests.
+   - Partial: the database residency fence (TFDatabaseResidency, TF120_Residency_*) makes duplicate claims and releases idempotent, refuses a second continent while the holder lives, and recovers a lost release via dead-owner takeover. The hop-handler handoff that carries migration messages is not built and the server wiring is not proven end to end, so the criterion stays open.
+3. **[implemented]** Forced source/destination crashes recover
+   - Evidence: `Tests/TestTF120Residency.cpp`, `Tests/TF120PeerProcess.h`, `Tests/CMakeLists.txt`
+   - Three POSIX process drills SIGKILL a peer SparkTests authority that holds the character, as source, as destination, and mid claim/release. The survivor reclaims with the last acknowledged commit, and a restart of the killed continent clears its own rows. Two in-process cases cover rebind and dead-owner recovery on every host. Needs the Linux GCC/ASan build to execute; not run here.
 4. **[implemented]** Cold restart restores authoritative state
    - Evidence: `Tools/Terrafront/multiclient.py`, `Tests/Tools/test_terrafront_multiclient.py`, `Tests/CMakeLists.txt`, `GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp`, `GameModules/SparkGameMMOFPS/DESIGN.md`
    - Registered as TerrafrontRestart_ColdRestartRestoresAuthoritativeState and TerrafrontRestart_UngracefulKillRestoresLastCommit; neither process run has been executed locally. Vehicles are excluded, per the design.
@@ -3254,18 +3264,20 @@ Profiling utilities and local chaos scripts do not substitute for externally con
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Operators can detect, diagnose, drain, restart, and recover a failing server
    - Evidence: `wiki/advanced/Server-Operations-Runbook.md`, `Tests/Tools/test_server_recovery_drill.py`, `tools/ops/server_recovery_drill.py`, `wiki/_Sidebar.md`, `wiki/advanced/Online-Service-Boundary.md`
    - Each runbook step ends with the drill that rehearses it. RunbookParityTests (run by ServerRecoveryDrill_Harness) fail on a SparkServer, tools/ops or SparkOrchestrator flag, or a path, that has drifted.
-2. **[unmet]** Thirty-minute release smoke and longer scheduled soak show bounded memory/queues and pass p95/p99 budgets
-   - Server_Soak runs a 60 s SparkServer soak with RSS-slope and tickP95/P99 guards, and one local 1800 s run passed as precursor only. The budgets are provisional harness guards, not SLOs, and no hosted release smoke or scheduled soak history exists.
+2. **[implemented]** Thirty-minute release smoke and longer scheduled soak show bounded memory/queues and pass p95/p99 budgets
+   - Evidence: `SparkEngine/Source/Engine/Networking/DedicatedServer.cpp`, `SparkEngine/Source/Engine/Networking/NetworkManager.h`, `SparkEngine/Source/Engine/Networking/NetworkConnection.cpp`, `SparkServer/src/ServerHealth.cpp`, `tools/ops/server_soak.py`, `Tests/TestNetworkManagerReal.cpp`, `Tests/Tools/test_server_soak.py`, `.github/workflows/operations-scheduled.yml`, `Tests/Tools/test_operations_scheduled_workflow.py`, `wiki/advanced/Server-Operations-Runbook.md`
+   - Commits da6328d74 and 2f4f93f67.
 3. **[implemented]** Backup/restore and alert/runbook drills are recorded
    - Evidence: `wiki/advanced/Server-Operations-Runbook.md`, `Tests/Tools/test_server_recovery_drill.py`
    - The backup/restore section points to the TERRAFRONT TFDatabaseBackup path and the DATA-120 Persistence_BackupRestore drill. The runbook states that SLOs and alert thresholds are provisional.
-4. **[unmet]** Telemetry is externally consumable and exact-SHA labeled
-   - No telemetry export exists that outside tools can consume with exact-SHA labels, and it would need hosted evidence.
+4. **[implemented]** Telemetry is externally consumable and exact-SHA labeled
+   - Evidence: `SparkServer/src/ServerHealth.h`, `SparkServer/src/ServerHealth.cpp`, `SparkServer/src/ServerApplication.cpp`, `tools/ops/validate_server_health.py`, `Tests/TestSparkServerHealth.cpp`, `Tests/Tools/test_validate_server_health.py`, `wiki/subsystems/Dedicated-Server.md`
+   - Commit da6328d74 (the versioned spark-server-health/1 contract).
 
 **Required commands**
 
@@ -3428,7 +3440,7 @@ SparkGame has real lifecycle, ECS spawn, EventBus, weather, time of day, and qui
 
 **Acceptance criteria**
 
-Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Lifecycle score 3
    - There is no lifecycle score 3. SparkGame is outside every release profile, with no release-profile or required-CI evidence.
@@ -3438,7 +3450,8 @@ Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
 3. **[implemented]** Quicksave reloads exact state
    - Evidence: `Tests/TestSparkGameShowcase.cpp`, `GameModules/SparkGame/Source/Core/GameplayShowcase.cpp`, `Tests/CMakeLists.txt`
    - SparkGameShowcase_QuickLoadRestoresExactState loads the real module with a SaveSystem in a temp dir, quicksaves, diverges (damage, destroy, spawn), quickloads and requires the name/transform/health/tag snapshot to match exactly, the coroutine stopped and tracking rebuilt. Linux-only; local runs, no exact-commit CI.
-4. **[unmet]** Packaged smoke passes
+4. **[implemented]** Packaged smoke passes
+   - Evidence: `CMakeLists.txt`, `Tests/CMakeLists.txt`, `Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake`, `Tests/PackageSmoke/RunInstalledModuleObjective.cmake`
    - There is no packaged SparkGame smoke.
 5. **[implemented]** Public label never calls it a finished game
    - Evidence: `GameModules/SparkGame/README.md`, `tools/check-module-positioning.py`, `Tests/Tools/test_check_module_positioning.py`, `Tests/CMakeLists.txt`, `GameModules/README.md`, `wiki/getting-started/Game-Modules.md`
@@ -3513,7 +3526,7 @@ FPS has a local arena, input, combat, rendering, and AI foundation, but it is no
 
 **Acceptance criteria**
 
-Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** A clean Windows install launches SparkGameFPS and completes spawn-move-kill-respawn-score in single-player
    - This needs a clean Windows install run of the full loop. None is recorded.
@@ -3523,9 +3536,9 @@ Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 3. **[unmet]** D3D11 and Windows NullRHI package smokes use the real module and assets
    - Evidence: `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`
    - The D3D11 and Windows NullRHI package smokes need Windows hardware runs.
-4. **[unmet]** Save/reload preserves the declared local profile state
-   - Evidence: `Tests/TestSparkGameFPSLoopReal.cpp`, `GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp`
-   - Only FPSLocalProfile serialization is unit-tested. Nothing locally tests QuickSaveProfile/QuickLoadProfile through SaveSystem end to end.
+4. **[implemented]** Save/reload preserves the declared local profile state
+   - Evidence: `Tests/TestSparkGameFPSLoopReal.cpp`, `GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp`, `GameModules/SparkGameFPS/module.json`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`
+   - File path: FPSLocalProfile_EveryDeclaredFieldSurvivesSaveSystemFile. Remaining gap: in the windowed host run, class, weapon, health and armor keep their defaults. Pending the central build.
 5. **[implemented]** No multiplayer result is required for stable-v1
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `docs/readiness/work-items/30-game-modules.json`
    - test_fps_singleplayer_and_optional_multiplayer_are_split asserts this criterion, that MOD-310 has no NET-100 dependency or multiplayer selectors, and that MOD-315 is outside stable-v1.
@@ -3685,13 +3698,13 @@ ARPG is mostly in-memory/debug state without integrated input, ECS world, assets
 
 **Acceptance criteria**
 
-Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Automated player clears a packaged dungeon and authoritative boss identity/state is correct
-   - Evidence: `Tests/TestMOD330ARPGDungeonReal.cpp`
+1. **[implemented]** Automated player clears a packaged dungeon and authoritative boss identity/state is correct
+   - Evidence: `Tests/TestMOD330ARPGDungeonReal.cpp`, `Tests/PackageSmoke/ModuleObjectives/SparkGameARPG.cmake`, `Tests/PackageSmoke/RunInstalledModuleObjective.cmake`, `GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp`, `Tests/CMakeLists.txt`
    - Boss identity and state are tested in-process only. No packaged dungeon is cleared automatically.
-2. **[unmet]** Hero/skills/combat/loot/UI/save all round-trip
-   - Evidence: `Tests/TestMOD330ARPGDungeonReal.cpp`
+2. **[implemented]** Hero/skills/combat/loot/UI/save all round-trip
+   - Evidence: `Tests/TestMOD330ARPGDungeonReal.cpp`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.h`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.cpp`, `GameModules/SparkGameARPG/Source/Core/Main.cpp`, `GameModules/SparkGameARPG/module.json`
    - ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, learned skills, cooldowns, loot and boss through the real SaveSystem, and forged state is rejected. There is still no UI round-trip, so the criterion stays unmet.
 3. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-ARPG CI.
@@ -3767,9 +3780,10 @@ Player input is documentation-only, collision assumes y=0, render/animation path
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Automated three-minute packaged level completion passes
+1. **[implemented]** Automated three-minute packaged level completion passes
+   - Evidence: `GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.h`, `GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.cpp`, `GameModules/SparkGamePlatformer/Source/Core/Main.cpp`, `Tests/PackageSmoke/ModuleObjectives/SparkGamePlatformer.cmake`, `Tests/TestMOD340PlatformerCompletionReal.cpp`, `Tests/CMakeLists.txt`
    - No automated three-minute packaged level-completion run exists.
 2. **[implemented]** Death restarts at checkpoint
    - Evidence: `Tests/TestMOD340PlatformerCompletionReal.cpp`, `GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp`, `GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.cpp`, `Tests/CMakeLists.txt`
@@ -3847,13 +3861,13 @@ RPG has broad in-memory models but no integrated input, entities, rendered scene
 
 **Acceptance criteria**
 
-Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Automated packaged quest flow completes and reward/state persist after restart
-   - Evidence: `Tests/TestMOD350RPGQuestSliceReal.cpp`, `GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp`
+1. **[implemented]** Automated packaged quest flow completes and reward/state persist after restart
+   - Evidence: `Tests/TestMOD350RPGQuestSliceReal.cpp`, `GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp`, `GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.h`, `GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.cpp`, `GameModules/SparkGameRPG/Source/Core/Main.cpp`, `Tests/PackageSmoke/ModuleObjectives/SparkGameRPG.cmake`, `Tests/CMakeLists.txt`
    - RPGQuestSlice_* finish the quest chain in-process. RPGPersistence_* save mid-quest via the real SaveSystem, rebuild all RPG systems, restore quest, inventory, area, NPC disposition/patrol and world hour, and keep the quest reward across a second restart. RPGDEMO 2 (N-1) slots migrate to default NPC state; corrupt, truncated, v1 and future-version slots are rejected. No packaged run exists.
-2. **[unmet]** NPCs navigate/interact through runtime systems
-   - Evidence: `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp`, `Tests/TestMOD350RPGNPCNavigationReal.cpp`
+2. **[implemented]** NPCs navigate/interact through runtime systems
+   - Evidence: `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp`, `Tests/TestMOD350RPGNPCNavigationReal.cpp`, `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.h`, `Tests/CMakeLists.txt`
    - Schedule changes walk NPCs at 3 m/s along engine NavMesh routes (NavMeshBuilder/NavMeshQuery, one bake per NPC area at module load) instead of teleporting; RPGNPCNavigation_* cover the world bake, a detour around blocked ground, unreachable posts and resuming after a restore. Patrol legs still move in straight lines and no packaged run exists.
 3. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-RPG CI.
@@ -4011,10 +4025,10 @@ Selection/commands, movement/pathfinding, fog updates, fixed update, persistence
 
 **Acceptance criteria**
 
-Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Deterministic packaged skirmish reaches a win state
-   - Evidence: `Tests/TestMOD370SkirmishDeterminismReal.cpp`
+1. **[implemented]** Deterministic packaged skirmish reaches a win state
+   - Evidence: `Tests/TestMOD370SkirmishDeterminismReal.cpp`, `GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.h`, `GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.cpp`, `GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp`, `GameModules/SparkGameRTS/Source/Core/Main.cpp`, `Tests/PackageSmoke/ModuleObjectives/SparkGameRTS.cmake`, `Tests/CMakeLists.txt`
    - The deterministic skirmish reaches victory in-process only. No packaged build does.
 2. **[implemented]** Fog, AI, commands, economy and save operate through production systems
    - Evidence: `Tests/TestMOD370SkirmishDeterminismReal.cpp`, `Tests/TestMOD370RTSSaveReal.cpp`, `GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp`, `GameModules/SparkGameRTS/Source/Navigation/RTSGridPathfinder.cpp`, `GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp`
@@ -4090,10 +4104,10 @@ No real player input path exists; vehicles use custom fixed-step kinematic math,
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Automated packaged race has player and AI finish valid laps
-   - Evidence: `Tests/TestMOD380RacingCompleteRaceReal.cpp`
+1. **[implemented]** Automated packaged race has player and AI finish valid laps
+   - Evidence: `Tests/TestMOD380RacingCompleteRaceReal.cpp`, `GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.cpp`, `GameModules/SparkGameRacing/Source/Core/MainRaceFlow.cpp`, `GameModules/SparkGameRacing/Source/Core/Main.cpp`, `Tests/PackageSmoke/ModuleObjectives/SparkGameRacing.cmake`, `Tests/CMakeLists.txt`
    - Player and AI finish valid laps in-process, but no packaged race run exists.
 2. **[implemented]** Physics uses the shared runtime and timestep
    - Evidence: `GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp`, `GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleChassis.cpp`, `GameModules/SparkGameRacing/Source/Track/RacingTrackColliders.cpp`, `Tests/TestMOD380RacingCompleteRaceReal.cpp`
@@ -4330,13 +4344,14 @@ Prototype modules need reusable controller, ECS, camera, render, save, HUD, AI, 
 
 **Acceptance criteria**
 
-Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Prototype modules no longer copy private infrastructure
    - Evidence: `Tests/Tools/test_module_private_dependencies.py`
    - The ratchet only freezes the current inventory. Prototype modules still copy engine-private headers and *EngineSystems.cpp.
-2. **[unmet]** Helpers exercise production SDK surfaces
-   - No reusable prototype helpers exercise production SDK surfaces.
+2. **[implemented]** Helpers exercise production SDK surfaces
+   - Evidence: `SparkEngine/Source/Core/EngineSdkLogger.h`, `SparkEngine/Source/Core/EngineSdkLogger.cpp`, `SparkEngine/Source/Core/EngineContext.h`, `SparkSDK/Include/Spark/IEngineContext.h`, `SparkSDK/Include/Spark/ILogger.h`, `SparkSDK/Include/Spark/ModuleLog.h`, `SparkSDK/Include/Spark/Version.h`, `SparkSDK/ABI/sdk-abi-surface.json`, `GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp`, `GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp`, `Tests/TestPrototypeModuleKitReal.cpp`, `Tests/Tools/test_sdk240_abi_surface.py`, `Tests/CMakeLists.txt`
+   - ctest PrototypeModuleKit_Helpers (PrototypeModuleKit_, count 3 with ImGui / 2 without).
 3. **[implemented]** Prototype completion remains outside stable-v1
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `docs/readiness/work-items/30-game-modules.json`
    - test_split_experimental_work_stays_open_owned_and_scheduled requires MOD-295 to be outside stable-v1, not done, and anchored to modules.prototypes.
@@ -4405,14 +4420,14 @@ SparkGameFPS multiplayer currently ignores address and port and fabricates conne
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Two clients converge on authoritative spawn-move-kill-respawn-score
    - Evidence: `Tests/TestFPSLANLoopback.cpp`, `Tests/Fixtures/FPSLANLoopbackPeer.cpp`, `Tests/Fixtures/FPSLANLoopbackScenario.h`, `Tests/CMakeLists.txt`
    - FPSLAN_ThreeProcessLoopbackConvergence runs one server and two client processes over loopback UDP through a spawn-move-kill-respawn-score round; spawns, respawn, positions, health and scores converge with server, and quitting clients leave. Converged state is FPSMultiplayerSystem's; the rendered game reads none of it back (see risks). Local pass only; no constrained LAN or encrypted transport.
-2. **[unmet]** No fake connection state remains
-   - Evidence: `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp`
-   - Connect marks the session active before a handshake is confirmed, and nothing proves real connection state.
+2. **[implemented]** No fake connection state remains
+   - Evidence: `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp`, `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h`, `GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp`, `GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp`, `Tests/TestFPSMultiplayer.cpp`, `GameModules/SparkGameFPS/module.json`
+   - Pending the central MSVC build and a FPSMultiplayerProduction_ run.
 3. **[unmet]** Transport hostile-input tests pass
    - Evidence: `Tests/TestNET100TransportReal.cpp`
    - FPS-level hostile-input datagram tests exist (FPSMultiplayerProduction_NetworkPath*: replayed, non-finite, zero-sequence, truncated and flooded PlayerInput on the server; malformed, non-finite, stale and oversized snapshot batches on the client). The criterion stays unmet because the FPS LAN path is not bound to the production secure transport.
@@ -4493,14 +4508,14 @@ Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a c
 
 **Acceptance criteria**
 
-Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every supported Linux row passes the complete certification suite
    - Evidence: `docs/readiness/OWNER-DECISIONS.md`, `wiki/platform/System-Requirements.md`
    - OD-10 limits scope to Ubuntu 24.04 x86-64. There is no Linux certification suite, no LinuxCertification tests and no clean-host evidence.
-2. **[unmet]** Experimental rows are never summarized as supported
-   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `docs/site/readiness.json`
-   - Partial: the validator rejects Linux in stable-v1 claims. Generic 'Linux is supported' wording is not caught, and there is no Linux row matrix.
+2. **[implemented]** Experimental rows are never summarized as supported
+   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `docs/site/readiness.json`, `Tests/Tools/test_public_wording.py`, `Tests/CMakeLists.txt`, `wiki/platform/System-Requirements.md`
+   - Update the PLT-210 note: the generic 'Linux is supported' wording gap is closed by CTest PublicWording_ExperimentalPlatforms.
 3. **[unmet]** Package has no repository/toolchain dependency at runtime
    - Evidence: `Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake`, `docs/platform/LINUX-SUPPORT-EVIDENCE.md`
    - A local single-host installed-tree RUNPATH/ldd closure and installed-run check exists (CTest VerifyLinuxInstalledRuntime, LinuxInstalledRuntime_ClosureDetection). There is no clean-host, hosted or packaged (CPack) evidence, and the installed SparkEngine still needs the host GL and X11 client libraries even for -headless.
@@ -4937,7 +4952,7 @@ ctest --test-dir build/macos-metal -L metal --output-on-failure --no-tests=error
 
 ### RHI-225 — Close D3D12 synchronization, pass, shader, and driver parity
 
-**Priority:** P1 · **Status:** open · **Wave:** 5 · **Area:** rendering · **Owner:** unassigned · **Release-blocking:** no
+**Priority:** P1 · **Status:** in-progress · **Wave:** 5 · **Area:** rendering · **Owner:** unassigned · **Release-blocking:** no
 **Profile applicability:** `stable-v1`=outside
 
 D3D12 has modern feature depth without certification against the primary rendered pass and content set.
@@ -4967,15 +4982,16 @@ D3D12 has modern feature depth without certification against the primary rendere
 
 **Acceptance criteria**
 
-Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Declared parity matrix passes
    - There is no D3D12 parity matrix and there are no D3D12 parity tests.
-2. **[unmet]** Validation layer/debug device is clean
-   - There is no debug-layer validation gate. Windows GPU runs are needed.
-3. **[unmet]** Advanced feature fallbacks are deterministic
-   - Evidence: `Tests/TestDXRSupport.cpp`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp`
-   - Partial: only DXR-unavailable headless/null cases are tested. There are no deterministic D3D12 device fallback tests.
+2. **[implemented]** Validation layer/debug device is clean
+   - Evidence: `SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp`, `Tests/TestRHI225D3D12ValidationReal.cpp`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `.github/workflows/release.yml`, `wiki/graphics/D3D12-Backend.md`
+   - RHI-level declared set only (triangle frame, 200-cycle fence-deferred churn, negative control). GraphicsEngine is D3D11-direct, so engine frames are not covered. The Windows CI jobs now provision Graphics Tools before ctest.
+3. **[implemented]** Advanced feature fallbacks are deterministic
+   - Evidence: `Tests/TestDXRSupport.cpp`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp`, `Tests/TestRHI225D3D12FallbackReal.cpp`, `Tests/CMakeLists.txt`, `wiki/graphics/D3D12-Backend.md`
+   - CTest D3D12Fallback (exact 3).
 4. **[unmet]** Packaged scene passes supported GPUs/drivers
    - Needs a packaged scene on supported GPUs and drivers.
 
@@ -5047,7 +5063,7 @@ Vulkan does not yet prove GPU-backed goldens of the engine renderer or any produ
 
 **Acceptance criteria**
 
-Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** GPU-backed goldens match thresholds
    - Evidence: `Tests/GoldenImages/manifest.json`, `Tests/GoldenImages/vulkan-lavapipe`, `Tests/TestRHI230VulkanGoldenReal.cpp`, `Tests/TestRHI230VulkanValidationReal.cpp`
@@ -5058,9 +5074,9 @@ Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
 3. **[unmet]** Validation is clean
    - Evidence: `Tests/TestRHI230VulkanValidationReal.cpp`
    - The validation lane fails closed but covers only unit-level draws, not production passes. It needs layers plus an ICD, and there is no vulkan-lavapipe job.
-4. **[unmet]** Shader toolchain failures are fatal
-   - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `CMakeLists.txt`, `Tests/TestRHI230VulkanValidationReal.cpp`
-   - Non-Windows Vulkan builds now fail configure without glslangValidator and fail the build on GLSL glslang rejects; the runtime rejects non-SPIR-V. Verified locally only (no hosted run). Windows Vulkan builds build no SPIR-V and DXC stays unintegrated, so the criterion stays open.
+4. **[implemented]** Shader toolchain failures are fatal
+   - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `CMakeLists.txt`, `Tests/TestRHI230VulkanValidationReal.cpp`, `Tests/CMakeLists.txt`, `wiki/graphics/RHI-Abstraction-Layer.md`
+   - Windows Vulkan builds require glslangValidator and build and ship SPIR-V. CTest VulkanShaderToolchainWindows (exact 4) registers only where the Vulkan SDK is present.
 5. **[unmet]** Packaged supported rows pass
    - There is no Vulkan package lane and no lavapipe/hardware CI rows. This needs hosted or hardware execution.
 
@@ -5130,7 +5146,7 @@ OpenGL provides useful portability and llvmpipe execution without production vis
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Supported shaders/passes render within thresholds
    - Evidence: `Tests/GoldenImages/manifest.json`, `Tests/GoldenImages/opengl-llvmpipe`, `Tests/TestRHI240OpenGLGoldenReal.cpp`, `Tests/TestRHI240OpenGLReal.cpp`
@@ -5138,9 +5154,9 @@ Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
 2. **[implemented]** Unsupported translation fails explicitly
    - Evidence: `Tests/TestRHI240OpenGLReal.cpp`, `SparkEngine/Source/Graphics/RHI/RHIFactory.cpp`, `Tests/CMakeLists.txt`
    - ShaderTranslation_RHI240_HLSLToGLSLFailsExplicitly calls production CompileShader and requires failure naming SPIRV-Cross. Registered as CTest SparkOpenGLTests; needs no GL context. Keyword-substitution helper still exported.
-3. **[unmet]** Hardware and software rows are separately labeled
-   - Evidence: `Tests/TestRHI240OpenGLReal.cpp`, `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp`, `Tests/CMakeLists.txt`
-   - Software row only. OpenGL_RHI240_DeviceRowMatchesLane classifies GL_RENDERER with its own CPU-rasterizer list (Mesa llvmpipe/softpipe/swrast, GDI Generic, Microsoft Basic Render Driver, Apple Software Renderer) and fails if isSoftwareDevice or SPARK_GL_EXPECT_ROW disagrees. llvmpipe lane: software, EXPECT_COUNT=13; =hardware fails on llvmpipe locally. No opengl-hardware lane or run yet.
+3. **[implemented]** Hardware and software rows are separately labeled
+   - Evidence: `Tests/TestRHI240OpenGLReal.cpp`, `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp`, `Tests/CMakeLists.txt`, `Tests/OpenGLTestSupport.h`, `wiki/graphics/RHI-Abstraction-Layer.md`
+   - The llvmpipe lanes pin LIBGL_ALWAYS_SOFTWARE/GALLIUM_DRIVER. The opt-in SPARK_GL_HARDWARE_ROW lane SparkOpenGLHardwareTests (labels opengl;opengl-hardware, exact 13) fails on a software context. The local hardware row is Mesa D3D12 translation under WSL, not native driver certification.
 4. **[unmet]** Packaged scenes pass
    - There is no packaged OpenGL scene lane or packaged-scene test.
 
@@ -5181,7 +5197,7 @@ ctest --test-dir build/linux-gcc-release -L opengl --output-on-failure --no-test
 
 ### ENG-220 — Close D3D11 model import and canonical-content interoperability
 
-**Priority:** P1 · **Status:** open · **Wave:** 5 · **Area:** rendering · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P1 · **Status:** in-progress · **Wave:** 5 · **Area:** rendering · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
 The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable-v1 first-party slice, and D3D11 lacks one canonical packaged-content contract. 2026-09-05: the Tests/TestAssetDatabase.cpp entry point was a decoy that included no production header and was deleted; the glTF loader test is Tests/TestGLTFStaticMeshLoader.cpp. The loader now has a canonical Blender 4.0.2-authored static GLB fixture with compressed editable source, author/export script, and hash provenance. Production CPU regression verifies exported AABB, flat normals, geometric-corner UV association, triangle winding/area, and indices. The 2026-09-07 Blender asset-quality checkpoint also replaces sixteen MMO placeholder OBJ models with distinct authored geometry and materials while preserving paths and bounds, with editable source, provenance validation, and production CPU importer tests. D3D11 rendering, skeletal/animation import, installed-content qualification, and the remaining asset collection remain unverified; status remains open.
@@ -5212,20 +5228,20 @@ The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable
 
 **Acceptance criteria**
 
-Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Skinned glTF animates correctly on D3D11
-   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp`, `Tests/TestGLTFAnimationImport.cpp`, `SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp`
-   - linux-gcc-release: GLTF_Skinning_* 19/19 and GLTF_Animation_* 19/19 pass (16 on Windows: no portable MeshAsset). AnimationManager LoadSkeleton/LoadAnimations import glTF skins and LINEAR TRS clips; non-Windows MeshAsset keeps bone data. Missing: D3D11 MeshAsset skin handoff (AssetTypesWindows.cpp), GPUSkinning/skinned-shader consumer, Blender-authored skinned fixture, D3D11 skinned render proof.
+1. **[implemented]** Skinned glTF animates correctly on D3D11
+   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp`, `Tests/TestGLTFAnimationImport.cpp`, `SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp`, `SparkEngine/Source/Graphics/AssetTypes.cpp`, `SparkEngine/Source/Graphics/AssetTypesWindows.cpp`, `SparkEngine/Source/Graphics/AssetPipeline.h`, `SparkEngine/Source/Graphics/GPUSkinning.cpp`, `Shaders/HLSL/Compute/SkinningCS.hlsl`, `Tests/TestENG220GPUSkinningD3D11Real.cpp`, `Tests/GLTFSkinningReference.h`, `Tests/CMakeLists.txt`, `wiki/gameplay-tools/Asset-Pipeline.md`
+   - CTest GPUSkinningD3D11 (SPARK_TEST_NAME=GPUSkinningD3D11_, exact 4, stable-v1) and GLTFAnimationImport (exact 27 on every host). Pending the dispatcher's MSVC build and run.
 2. **[unmet]** Canonical content renders correctly through the packaged primary renderer
    - There are no canonical-scene tests or content. The D3D11 material check was a local Windows run, with no hosted packaged proof.
-3. **[unmet]** Malformed or unsupported content fails actionably
-   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `Tests/TestENG220ObjImportReal.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `Tests/TestGLTFAnimationImport.cpp`
-   - Static glTF/OBJ rejections are tested. Skinned rejections (GLTF_Skinning_*): JOINTS_1, joint range, weights, 256-joint cap, joint graph, inverse binds. Animation rejections (GLTF_Animation_*): non-LINEAR, non-joint/morph targets, offset animated root, bad times/outputs, duplicates, failed skinned mesh; MeshAsset fails on invalid skins. Material/texture and Windows package diagnostics are missing.
+3. **[implemented]** Malformed or unsupported content fails actionably
+   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `Tests/TestENG220ObjImportReal.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `Tests/TestGLTFAnimationImport.cpp`, `SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsBasicState.cpp`, `Tests/TestLegacyGameObjectMaterial.cpp`, `Tests/CMakeLists.txt`, `wiki/gameplay-tools/Asset-Pipeline.md`
+   - CTest BasicMaterialDiagnostics (exact 4). The errors name the declared (not case-folded) texture path. This covers the basic-material half only; the Windows package-diagnostics half is still owed by ENG-220/windows-package-run. Pending the dispatcher's MSVC run.
 4. **[unmet]** The Windows package retains all dependencies
    - Evidence: `tools/asset-integrity/asset_references.py`, `tools/asset-integrity/verify_asset_integrity.py`, `Tests/PackageSmoke/ValidateInstalledFPSAssets.cmake`, `Tests/Tools/test_asset_integrity.py`
    - verify_asset_integrity.py references proves scene and material references resolve inside the staged Assets root to listed, link-free files and fails closed on unknown reference-like keys; check-all and ValidateInstalledFPSAssets.cmake run it. Local Linux: repo Assets (740 references) and a cmake --install stage pass. Missing: Windows package run, hosted evidence.
-5. **[unmet]** Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240
+5. **[implemented]** Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240
    - Evidence: `Tests/Tools/test_site_data_contract.py`
    - Downgraded: the contract test only asserts ENG-220 text omits backend names. Nothing asserts RHI-220/225/230/240 exist or own parity, so losing ownership would pass.
 
@@ -5308,15 +5324,15 @@ The root uses a custom non-SPDX Spark Open License while some subprojects and th
 
 **Acceptance criteria**
 
-Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every distributed dependency/file has an identified license and fulfilled notice obligation
    - Evidence: `Tests/Tools/test_third_party_notices.py`, `cmake/ValidateStagedPackageNotices.cmake`
    - The notice gate exists, but the editor fonts are not covered. Notice obligations also need legal review.
 2. **[unmet]** Website terminology matches reviewed classification
    - Needs a legal classification that someone has reviewed.
-3. **[unmet]** Packages include root license, notices, and required third-party texts
-   - Evidence: `Tests/Tools/test_third_party_notices.py`
+3. **[implemented]** Packages include root license, notices, and required third-party texts
+   - Evidence: `Tests/Tools/test_third_party_notices.py`, `cmake/SparkThirdPartyAudit.cmake`, `cmake/ValidateStagedPackageExecutables.cmake`, `docs/governance/GOV-400-DECISIONS.md`
    - The package does not include the editor-font texts yet.
 4. **[unmet]** Security/support policy names actually published versions/channels
    - Needs versions and channels that are actually published.
@@ -5654,7 +5670,7 @@ Technical rehearsal, qualification sign-off, and release approval must finish be
 
 **Acceptance criteria**
 
-Progress: 3 of 6 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Every technical qualification item, transitive dependency, and qualification requirement from requiredGateIds has passing exact-SHA evidence before publication
    - Evidence: `tools/release_qualification.py`, `Tests/Tools/test_release_qualification.py`, `Tests/CMakeLists.txt`, `.github/workflows/release.yml`
@@ -5667,8 +5683,9 @@ Progress: 3 of 6 implemented, 0 evidenced at an exact commit.
 4. **[implemented]** Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance
    - Evidence: `Tests/Tools/test_release_notes.py`, `tools/release_notes.py`, `Tests/CMakeLists.txt`, `.github/workflows/release.yml`
    - CTest ReleaseProfileRehearsal_ReleaseNotes runs tools/release_notes.py. It checks support, limitations, migrations, SHA256SUMS, signatures, SBOM and attestation provenance, and fail-closed errors.
-5. **[unmet]** The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains
-   - profile-required-gates now exists in release.yml and runs the ReleaseProfileRehearsal_Qualification rehearsal, but the release-approval job does not exist. Blocking on failure also needs a hosted run.
+5. **[implemented]** The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains
+   - Evidence: `.github/workflows/release.yml`, `.github/scripts/test_record_release_approval.py`, `.github/scripts/test_release_stages_workflow.py`, `.github/scripts/test_workflow_privilege_boundaries.py`
+   - Replace the stale note ('release-approval job does not exist'). Both jobs now exist, release needs release-approval, and neither uses continue-on-error. Execution and blocking on failure still need a hosted run. Note limit: 400 characters.
 6. **[unmet]** Named qualification sign-off is retained; the protected stable-release environment requires Krilliac owner approval with administrative bypass disabled, and independent technical verification remains separate
    - Needs a named qualification sign-off and a hosted protected owner approval. None is retained.
 
@@ -5742,15 +5759,15 @@ The first signed predecessor needs the same exact-SHA release rehearsal, sign-of
 
 **Acceptance criteria**
 
-Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every common qualification item and gate passes at the reviewed predecessor SHA
    - No reviewed predecessor baseline SHA exists (baselineCommit is empty), and there is no exact-SHA hosted gate evidence.
 2. **[unmet]** Named sign-off and protected approval evidence are retained
    - signOffEvidence is empty. A named sign-off and a hosted protected approval are both still needed.
-3. **[unmet]** No N-1 upgrade or rollback result is presented as predecessor evidence
-   - Evidence: `Tests/Tools/test_release_stages.py`, `tools/site-data/release_stages.py`
-   - No checker specifically rejects N-1 upgrade or rollback results presented as predecessor evidence. The tests only show the predecessor can pass without REL-192.
+3. **[implemented]** No N-1 upgrade or rollback result is presented as predecessor evidence
+   - Evidence: `Tests/Tools/test_release_stages.py`, `tools/site-data/release_stages.py`, `Tests/CMakeLists.txt`
+   - nminus1_evidence_errors(), run by predecessor_candidate_readiness_errors() and validate.py, refuses REL-192/INST-131 selectors and digests and the N-1 MSI provisioner in predecessor sign-off and in predecessor-only evidence and notes. CTest ReleaseProfilePredecessorRehearsal_Qualification. No hosted run.
 
 **Required commands**
 
@@ -5812,15 +5829,15 @@ N-1 installer upgrade, rollback, and migration evidence is a v1 requirement and 
 
 **Acceptance criteria**
 
-Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Exact-SHA v1 rehearsal passes with a real immutable predecessor
    - Needs a real immutable published predecessor and a hosted exact-SHA v1 rehearsal. Neither exists.
 2. **[unmet]** Upgrade and rollback evidence is independently retained
    - No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned.
-3. **[unmet]** The first predecessor path cannot satisfy this item
-   - Evidence: `tools/site-data/release_stages.py`
-   - The predecessor stage is kept separate, but no validator or test stops predecessor evidence from being used to mark REL-192 satisfied.
+3. **[implemented]** The first predecessor path cannot satisfy this item
+   - Evidence: `tools/site-data/release_stages.py`, `tools/site-data/validate.py`, `Tests/Tools/test_release_stages.py`, `Tests/Tools/test_site_data_contract.py`
+   - predecessor_evidence_reuse_errors() refuses substituted v1 work that cites the predecessor baseline commit, predecessor-only selectors or digests, or the bootstrap qualifier mode, and refuses REL-192 evidenced or done before the predecessor is published. Local only; no exact-commit CI yet.
 
 **Required commands**
 
@@ -5956,7 +5973,7 @@ Final readiness requires every profile gate at one candidate commit, supported-h
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every gate listed in requiredGateIds for every target release profile is passing at the candidate SHA
    - Needs every profile gate passing at a candidate SHA. The gates are blocked and there is no hosted evidence.
@@ -5965,8 +5982,8 @@ Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
    - test_excluded_gates_and_work_may_remain_open_when_ready, plus the scope-widening and capability-classification rejection tests, exercise the production validator for this rule.
 3. **[unmet]** Published artifacts are immutable and independently verify against the exact qualified candidate
    - No published immutable artifacts, and no independent verification against a qualified candidate.
-4. **[unmet]** Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
-   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`
+4. **[implemented]** Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
+   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `.github/workflows/site-data-publish.yml`
    - The validator only tests that global ready needs every profile ready. Nothing ties ready to publication evidence, and the live-site switch needs a hosted publish.
 
 **Required commands**

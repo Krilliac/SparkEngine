@@ -329,9 +329,12 @@
         },
         {
           "criterionDigest": "sha256:6b0f854510e7",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_third_party_notices.py"
+            "Tests/Tools/test_third_party_notices.py",
+            "cmake/SparkThirdPartyAudit.cmake",
+            "cmake/ValidateStagedPackageExecutables.cmake",
+            "docs/governance/GOV-400-DECISIONS.md"
           ],
           "note": "The package does not include the editor-font texts yet."
         },
@@ -455,8 +458,11 @@
         },
         {
           "criterionDigest": "sha256:59ac611c1455",
-          "state": "unmet",
-          "evidence": [],
+          "state": "implemented",
+          "evidence": [
+            "docs/generate-flowchart-content.py",
+            "Tests/Tools/test_docs_health.py"
+          ],
           "note": "Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff."
         },
         {

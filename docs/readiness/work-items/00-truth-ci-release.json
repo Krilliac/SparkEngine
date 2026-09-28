@@ -76,12 +76,14 @@
         },
         {
           "criterionDigest": "sha256:7f44777314f5",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             ".github/workflows/site-data.yml",
-            "Tests/Tools/test_site_data_contract.py"
+            "Tests/Tools/test_site_data_contract.py",
+            "Tests/Tools/test_site_data_generation_determinism.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Only the hosted site-data workflow generates twice and diffs. The local test only checks the workflow text and that the handoff render is deterministic."
+          "note": "HYG-b (not applied, JSON is off-limits here): the RDY-000 rationale sentence 'macos-shipping is a self-pruning planned preset owned by PLT-220' is stale. Replace it with 'macos-shipping now exists in CMakePresets.json and PLANNED_CMAKE_PRESETS is empty; its CI build leg is still missing (see the macOS shipping CI slice).'"
         }
       ],
       "commands": [
@@ -365,11 +367,17 @@
         },
         {
           "criterionDigest": "sha256:3467a81033d4",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_asset_integrity.py"
+            "Tests/Tools/test_asset_integrity.py",
+            "cmake/SparkRuntimeAssets.cmake",
+            "cmake/SparkTrackedInstall.cmake",
+            "cmake/TestSparkTrackedInstall.cmake",
+            "Tests/Tools/test_asset_package_profile.py",
+            "CMakeLists.txt",
+            "wiki/gameplay-tools/Asset-Pipeline.md"
           ],
-          "note": "The verifier rejects traversal and tampering, but the configure-time package profile does not re-hash sources. Blocking before assembly relies on CI job ordering."
+          "note": "The preflight verifies the staged snapshot that the install rules copy, and the tamper test changes that payload, found through cmake_install.cmake. This test failed (install exited 0) on the pre-fix helpers. Local Python and CMake -P runs only."
         },
         {
           "criterionDigest": "sha256:d2fc0972e07f",
@@ -516,12 +524,13 @@
         },
         {
           "criterionDigest": "sha256:3918ed579816",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             ".github/scripts/test-verify-working-ruleset.py",
-            ".github/scripts/verify-working-ruleset.py"
+            ".github/scripts/verify-working-ruleset.py",
+            "wiki/advanced/Testing.md"
           ],
-          "note": "The offline test uses a captured fixture. External verification needs the live GitHub API."
+          "note": "The verifier's hidden-bypass_actors diagnostic is implemented. External verification still needs a live --live run, so this criterion stays at implemented, not evidenced."
         }
       ],
       "commands": [
@@ -632,10 +641,14 @@
         },
         {
           "criterionDigest": "sha256:6023a2a14b43",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tools/validate_test_warnings.py",
-            "Tests/Tools/test_validate_test_warnings.py"
+            "Tests/Tools/test_validate_test_warnings.py",
+            "Tests/test-warning-waivers.json",
+            "Tests/TestLevelStreamingSystemPhaseAA.cpp",
+            "Tests/TestLoadingScreenReal.cpp",
+            "wiki/advanced/Testing.md"
           ],
           "note": "SKIP_TEST and EXPECT_NO_CRASH exceptions have no owner or expiry enforcement."
         },
@@ -652,15 +665,25 @@
         },
         {
           "criterionDigest": "sha256:ed39e09a09dc",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Not every shipped binary has a smoke or integration lane. The item records integration depth as open."
+          "state": "implemented",
+          "evidence": [
+            "Tools/validate_ctest_policy.py",
+            "Tests/Tools/test_validate_ctest_policy.py",
+            "CMakeLists.txt",
+            ".github/workflows/build.yml",
+            "SparkInstaller/CMakeLists.txt",
+            "SparkInstaller/tests/InstallerHeadlessSmoke.cmake",
+            "wiki/advanced/Testing.md"
+          ],
+          "note": "Shipped and built binaries are read from the configured tree's file-API codemodel, not from test references. The documented gaps are SparkLauncher (all platforms) and SparkShaderCompiler (Linux/Darwin). No current configured tree or hosted run has been validated under the new rule."
         },
         {
           "criterionDigest": "sha256:c7cfdec66128",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_site_data_contract.py"
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "tools/site-data/contract_selectors.py"
           ],
           "note": "The only check asserts the item's own wording, which is tautological. No validator blocks sanitizer evidence from promoting the Windows row."
         }
@@ -814,12 +837,18 @@
         },
         {
           "criterionDigest": "sha256:7acb0e5f3398",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_build_option_guard.py",
-            "cmake/SparkOptionGuard.cmake"
+            "cmake/SparkOptionGuard.cmake",
+            "CMakeLists.txt",
+            "Tools/buildmatrix/inventory.py",
+            "Tools/buildmatrix/check_parity.py",
+            "Tests/Tools/test_build_matrix_parity.py",
+            "docs/readiness/build-matrix-inventory.json",
+            "docs/readiness/build-matrix-parity-findings.json"
           ],
-          "note": "Typed -DNAME:TYPE entries bypass the guard and unused options are not detected. No Windows lane has run it."
+          "note": "Typed -D and preset typos are rejected at configure. check_parity has a blocking declared-option-unread finding. The one inert option, ENABLE_GRAPHICS, was deleted, so the reviewed findings stay at 3 blocking errors, all from external authority."
         },
         {
           "criterionDigest": "sha256:4edcdfd4db9c",
@@ -843,11 +872,12 @@
         },
         {
           "criterionDigest": "sha256:029af64cb513",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_site_data_contract.py"
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py"
           ],
-          "note": "Only the planned macos-shipping preset is owner-scoped. linux-shipping has no enforced platform owner."
+          "note": "Also apply the HYG-b note fix: 'No platform shipping preset is owner-scoped any more...' is now superseded. Owners are enforced by EXPERIMENTAL_SHIPPING_PRESET_OWNERS; the macos-shipping CI build leg is still missing."
         },
         {
           "criterionDigest": "sha256:78f73e6e4ef8",
@@ -969,26 +999,37 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:bb21f83f989b",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_build_shipping_contract.py",
-            "CMakePresets.json"
+            "CMakePresets.json",
+            "tools/check_shipping_configuration.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            "CMakeLists.txt"
           ],
           "note": "Downgraded. Tests are only static text checks of presets and CMake. No committed test builds or runs windows-shipping to show distinct output, and no hosted Windows Shipping build has been observed."
         },
         {
           "criterionDigest": "sha256:fee036747503",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "tools/compare_build_outputs.py",
-            "Tests/Tools/test_compare_build_outputs.py"
+            "Tests/Tools/test_compare_build_outputs.py",
+            "Tests/CMakeLists.txt",
+            "cmake/SparkReproducibleBuild.cmake"
           ],
           "note": "Linux only: ReproducibleBuild_LinuxToolTargets (SparkCooker, linux-shipping settings, LTO on, outer compiler) passed only locally with GCC 13.3. One manual Clang two-tree run outside the CTest (no artifact kept) was equivalent. No hosted GCC 14 or Clang lane has run it; the inner build ignores the Clang lane's LTO-off/libc++ flags. GCC LTO archive members differ. reproducibility-windows never ran."
         },
         {
           "criterionDigest": "sha256:8ddf41e62b9f",
-          "state": "unmet",
-          "evidence": [],
+          "state": "implemented",
+          "evidence": [
+            "cmake/SparkStagePrivateSymbols.cmake",
+            "tools/shipping_symbol_manifest.py",
+            "Tests/Tools/test_shipping_symbol_manifest.py",
+            "Tests/CMakeLists.txt"
+          ],
           "note": "ShippingManifest_PrivateSymbols and ShippingManifest_SymbolManifestTool map installed Linux ELF images to split .debug files by build-id, and clang/lld-link PE fixtures to PDBs. No MSVC Windows Shipping artifact has been mapped; that needs a Windows run."
         },
         {
@@ -1096,13 +1137,17 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:be5103107a9b",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_rel100_product_versions.py",
             ".github/scripts/stable_release_tag.py",
-            ".github/scripts/test_stable_release_tag.py"
+            ".github/scripts/test_stable_release_tag.py",
+            "tools/verify_package_versions.py",
+            "Tests/Tools/test_verify_package_versions.py",
+            ".github/workflows/release.yml",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "release.yml derives the stable tag through stable_release_tag.py (tag equals the single CMake default, exactly one versioned CHANGELOG.md heading) and the nightly tag through nightly_release_tag.py; both run as TagReleaseContract_* CTest selectors. No hosted package run qualifies the tag version inside packaged artifacts such as installers or the SDK ZIP."
+          "note": "build-windows verifies archive name, executable VS_VERSIONINFO and SparkEngineConfigVersion.cmake on the portable ZIP (CTest TagReleaseContract_PackagedVersions; checked locally against a real 0.9.0 ZIP). DLLs are not checked. No hosted tagged run."
         },
         {
           "criterionDigest": "sha256:a060209998d6",
@@ -1353,12 +1398,13 @@
         },
         {
           "criterionDigest": "sha256:a94d3e17f34f",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_release_stages.py",
-            "tools/site-data/release_stages.py"
+            "tools/site-data/release_stages.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "No checker specifically rejects N-1 upgrade or rollback results presented as predecessor evidence. The tests only show the predecessor can pass without REL-192."
+          "note": "nminus1_evidence_errors(), run by predecessor_candidate_readiness_errors() and validate.py, refuses REL-192/INST-131 selectors and digests and the N-1 MSI provisioner in predecessor sign-off and in predecessor-only evidence and notes. CTest ReleaseProfilePredecessorRehearsal_Qualification. No hosted run."
         }
       ],
       "commands": ["python3 tools/site-data/validate.py --require-predecessor-candidate"],
@@ -1406,14 +1452,7 @@
           "evidence": [],
           "note": "No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned."
         },
-        {
-          "criterionDigest": "sha256:81b1fd86d0c3",
-          "state": "unmet",
-          "evidence": [
-            "tools/site-data/release_stages.py"
-          ],
-          "note": "The predecessor stage is kept separate, but no validator or test stops predecessor evidence from being used to mark REL-192 satisfied."
-        }
+        {"criterionDigest": "sha256:81b1fd86d0c3", "state": "implemented", "evidence": ["tools/site-data/release_stages.py", "tools/site-data/validate.py", "Tests/Tools/test_release_stages.py", "Tests/Tools/test_site_data_contract.py"], "note": "predecessor_evidence_reuse_errors() refuses substituted v1 work that cites the predecessor baseline commit, predecessor-only selectors or digests, or the bootstrap qualifier mode, and refuses REL-192 evidenced or done before the predecessor is published. Local only; no exact-commit CI yet."}
       ],
       "commands": ["python3 tools/site-data/validate.py --require-candidate-ready"],
       "testSelectors": ["ReleaseProfileNMinusOneRehearsal_*"],
@@ -1556,9 +1595,14 @@
         },
         {
           "criterionDigest": "sha256:f24b9e8fd483",
-          "state": "unmet",
-          "evidence": [],
-          "note": "profile-required-gates now exists in release.yml and runs the ReleaseProfileRehearsal_Qualification rehearsal, but the release-approval job does not exist. Blocking on failure also needs a hosted run."
+          "state": "implemented",
+          "evidence": [
+            ".github/workflows/release.yml",
+            ".github/scripts/test_record_release_approval.py",
+            ".github/scripts/test_release_stages_workflow.py",
+            ".github/scripts/test_workflow_privilege_boundaries.py"
+          ],
+          "note": "Replace the stale note ('release-approval job does not exist'). Both jobs now exist, release needs release-approval, and neither uses continue-on-error. Execution and blocking on failure still need a hosted run. Note limit: 400 characters."
         },
         {
           "criterionDigest": "sha256:90bdc7c18dcd",
@@ -1642,10 +1686,11 @@
         },
         {
           "criterionDigest": "sha256:3b70b5b3a40d",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_site_data_contract.py",
-            "tools/site-data/validate.py"
+            "tools/site-data/validate.py",
+            ".github/workflows/site-data-publish.yml"
           ],
           "note": "The validator only tests that global ready needs every profile ready. Nothing ties ready to publication evidence, and the live-site switch needs a hosted publish."
         }
