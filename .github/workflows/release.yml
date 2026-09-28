@@ -564,6 +564,10 @@ jobs:
         }
         python .github/scripts/validate-extracted-package.py --preflight-archive "$($archives[0].FullName)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        # REL-100: every packaged Spark executable, the archive name and the SDK
+        # ConfigVersion embed exactly the release version.
+        python tools/verify_package_versions.py --version "${{ needs.prepare.outputs.cmake_version }}" "$($archives[0].FullName)"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Remove-Item -LiteralPath ${{ matrix.build_dir }}/packages/_CPack_Packages -Recurse -Force -ErrorAction SilentlyContinue
         $extractRoot = Join-Path "${{ github.workspace }}" "package-extract"
         New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null

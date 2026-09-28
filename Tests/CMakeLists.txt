@@ -4846,6 +4846,16 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(TagReleaseContract_NightlyTag PROPERTIES
         LABELS "release;version;unit;python"
         TIMEOUT 60)
+    # REL-100: tools/verify_package_versions.py, which release.yml build-windows
+    # runs on the CPack ZIP: archive name, every Spark executable's
+    # VS_VERSIONINFO and the SDK ConfigVersion embed exactly X.Y.Z.
+    add_test(
+        NAME TagReleaseContract_PackagedVersions
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_verify_package_versions.py -v)
+    set_tests_properties(TagReleaseContract_PackagedVersions PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "release;version;unit;python"
+        TIMEOUT 60)
 
     # CI-120: the root option guard rejects undeclared -D ENABLE_*/SPARK_*/BUILD_*
     # names (fixture configures of cmake/SparkOptionGuard.cmake + preset audit).
