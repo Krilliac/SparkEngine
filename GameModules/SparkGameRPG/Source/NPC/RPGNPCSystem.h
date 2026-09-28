@@ -109,9 +109,6 @@ namespace RPG
         float posZ = 0.0f;
         int currentWaypointIndex = 0;
         float waypointWaitTimer = 0.0f;
-        /// Runtime only: the current waypoint has no NavMesh path, so the NPC waits in place instead of
-        /// replanning every frame. Cleared when the waypoint changes, on RestoreState and on a NavMesh rebake.
-        bool patrolBlocked = false;
     };
 
     /// @brief World clock plus every registered NPC's mutable state, ordered by NPC id
