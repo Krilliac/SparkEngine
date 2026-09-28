@@ -312,13 +312,13 @@
       "parser_id": "mesh-gltf-loader",
       "corpus_dir": "FuzzerTests/corpora/mesh-gltf-loader",
       "last_verified": "2026-09-28",
-      "content_digest": "b35adc7f2b9d1806d275e126eb2fc17ac6d86cd487beb09f3a3b29bdaf599b83",
+      "content_digest": "f394360e2d0ae75c1447f5265c333145fbd539220c101877560f9cf325c67fb1",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,
         "max_memory_mb": 256,
         "max_depth": 256,
-        "max_corpus_entries": 10,
+        "max_corpus_entries": 12,
         "max_corpus_bytes": 16384,
         "smoke_seconds": 10
       },
@@ -327,6 +327,18 @@
           "file": "regression-data-uri-length-overclaim.gltf",
           "finding": "A base64 data URI declaring a 300 MB byteLength made cgltf_load_buffers allocate the declared size (up to 1 GiB) from a 373-byte file before decoding; ValidateDocumentStructure now rejects a byteLength the payload cannot fill.",
           "found_by": "smoke",
+          "guard_test": "FuzzGltfSmoke"
+        },
+        {
+          "file": "regression-misaligned-index-accessor.glb",
+          "finding": "A uint16 index accessor at an odd buffer-view byteOffset made cgltf_validate read indices through a misaligned typed pointer (UBSan); ValidateAccessorBounds now requires view offset, accessor offset and stride to be multiples of the component size.",
+          "found_by": "campaign",
+          "guard_test": "FuzzGltfSmoke"
+        },
+        {
+          "file": "regression-glb-bin-unaligned.glb",
+          "finding": "A GLB whose JSON chunk length is not a multiple of 4 placed the in-place BIN buffer at an odd address, so every typed accessor read was misaligned (UBSan); ValidateDocumentStructure now rejects an unaligned BIN chunk.",
+          "found_by": "review",
           "guard_test": "FuzzGltfSmoke"
         }
       ]

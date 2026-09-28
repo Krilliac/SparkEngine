@@ -223,6 +223,18 @@ namespace Spark::Graphics::Detail::GLTF
                 return false;
             }
 
+            // cgltf reads components through typed pointers at buffer + view offset + accessor
+            // offset + i * stride, so every term must be a multiple of the component size (the
+            // glTF 2.0 accessor alignment rule); the buffer bases themselves are checked in
+            // ValidateDocumentStructure.
+            const cgltf_size componentSize = cgltf_component_size(accessor.component_type);
+            if (componentSize == 0 || view.offset % componentSize != 0 || accessor.offset % componentSize != 0 ||
+                accessor.stride % componentSize != 0)
+            {
+                error = "accessor data is not aligned to its component size";
+                return false;
+            }
+
             const cgltf_size remainingElements = accessor.count - 1;
             if (MultiplyWouldOverflow(accessor.stride, remainingElements))
             {
@@ -254,6 +266,16 @@ namespace Spark::Graphics::Detail::GLTF
         if (data.meshes_count == 0)
         {
             error = "glTF contains no meshes";
+            return false;
+        }
+
+        // A GLB's BIN chunk becomes buffer 0 in place, at file offset 12 + 8 + JSON length + 8.
+        // glTF requires 4-byte chunk alignment but cgltf accepts any JSON length, so check it
+        // here: every other buffer is a fresh allocation and already aligned.
+        if (data.bin && data.file_data &&
+            (static_cast<const char*>(data.bin) - static_cast<const char*>(data.file_data)) % 4 != 0)
+        {
+            error = "GLB BIN chunk is not 4-byte aligned";
             return false;
         }
 

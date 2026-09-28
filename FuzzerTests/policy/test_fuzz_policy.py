@@ -1949,7 +1949,7 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Gltf",
                 "Spark::Graphics::Detail::LoadGLTFStaticMesh",
                 "mesh-gltf-loader",
-                10,
+                12,
             ),
             "audio-sound-effect": (
                 "SoundWav",

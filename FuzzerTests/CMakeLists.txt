@@ -957,7 +957,7 @@ add_test(
         -rss_limit_mb=256
         # Replay every reviewed seed exactly once; mutation campaigns belong
         # to scheduled jobs and must not make this merge gate time-dependent.
-        -runs=10
+        -runs=12
         "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mesh-gltf-loader"
 )
 set_tests_properties(FuzzGltfSmoke PROPERTIES

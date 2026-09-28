@@ -68,7 +68,7 @@ class GLBBuilder:
     def add_floats(self, values: list[float], count: int, kind: str) -> int:
         return self.add(floats(values), FLOAT, count, kind)
 
-    def finish(self, tail: dict) -> bytes:
+    def finish(self, tail: dict, *, bin_skew: int = 0) -> bytes:
         document = {
             "asset": {"version": "2.0"},
             "buffers": [{"byteLength": len(self.bin)}],
@@ -77,7 +77,7 @@ class GLBBuilder:
             **tail,
         }
         chunk = compact(document)
-        chunk += b" " * (-len(chunk) % 4)
+        chunk += b" " * (-len(chunk) % 4 + bin_skew)
         total = 12 + 8 + len(chunk) + 8 + len(self.bin)
         return (
             struct.pack("<III", 0x46546C67, 2, total)
@@ -88,16 +88,20 @@ class GLBBuilder:
         )
 
 
-def static_glb(indices: list[int]) -> bytes:
+def static_glb(indices: list[int], *, index_skew: int = 0, bin_skew: int = 0) -> bytes:
+    """``index_skew`` shifts the index view off its 2-byte alignment; ``bin_skew`` pads the
+    JSON chunk past its 4-byte boundary, which moves the BIN chunk with it."""
     builder = GLBBuilder()
     positions = builder.add_floats(TRIANGLE, 3, "VEC3")
+    builder.bin += bytes(index_skew)
     index_bytes = struct.pack(f"<{len(indices)}H", *indices)
     index_accessor = builder.add(index_bytes, UNSIGNED_SHORT, len(indices), "SCALAR")
     return builder.finish(
         {
             "meshes": [{"primitives": [{"attributes": {"POSITION": positions}, "indices": index_accessor}]}],
             "nodes": [{"mesh": 0}],
-        }
+        },
+        bin_skew=bin_skew,
     )
 
 
@@ -209,6 +213,13 @@ def main() -> int:
         "regression-data-uri-length-overclaim.gltf": external_gltf(
             data_uri(floats(TRIANGLE)), byte_length=300_000_000
         ),
+        # A uint16 index view at byte offset 37. cgltf_validate reads indices
+        # through a typed pointer, so before the fix UBSan reported a misaligned
+        # load (the local mutation campaign's finding, rebuilt from this corpus).
+        "regression-misaligned-index-accessor.glb": static_glb([0, 1, 2], index_skew=1),
+        # One byte of JSON padding past the 4-byte boundary places the BIN chunk,
+        # which cgltf uses in place as buffer 0, at an odd file offset.
+        "regression-glb-bin-unaligned.glb": static_glb([0, 1, 2], bin_skew=1),
     }
 
     args.output.mkdir(parents=True, exist_ok=True)
