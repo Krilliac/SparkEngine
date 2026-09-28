@@ -3111,6 +3111,19 @@ set_tests_properties(GLTFAnimationImport PROPERTIES
     LABELS "assets;gltf;unit"
     TIMEOUT 30)
 
+# ENG-220: basic-material texture diagnostics on a WARP GraphicsEngine. A rejected (rooted,
+# absolute or escaping) declared texture fails the material; a missing or undecodable one logs an
+# error naming the material, key, path and reason, and the editor-import retry still recovers it.
+# Also selects the fresh-render-thread COM load. Exact count: a dropped test fails.
+if(WIN32)
+    add_test(NAME BasicMaterialDiagnostics COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(BasicMaterialDiagnostics PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=BasicMaterial_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "gltf-d3d11;assets;d3d11"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
+
 # ENG-220: DirectXMath quaternion slerp/multiply, rotation-axis and XMMatrixDecompose semantics
 # against closed-form values, plus the animation slerp and BlendTransforms paths built on them.
 # Real DirectXMath on Windows, PlatformDirectXMathStubs.h elsewhere. Exact count: a dropped test fails.

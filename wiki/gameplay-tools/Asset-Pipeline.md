@@ -226,6 +226,19 @@ that staged content is closed under its references. It does not prove that a
 runtime consumer loads every JSON-dialect path. Windows package evidence
 stays external.
 
+At runtime the D3D11 `GetOrLoadBasicMaterial` also refuses to hide a bad
+texture reference. A declared `albedo`, `normal` or string `roughness` path
+that is rooted, absolute or escapes the project fails the whole material: it
+logs an error naming the material JSON, the key and the declared path, is
+negative-cached, and returns `nullptr` (the object draws with the default
+material). A declared texture that is missing or fails to decode logs an
+error naming the material, key, path and reason (`missing file` or
+`decode failure`); the material stays cached so that an editor import of the
+texture (`InvalidateBasicTexture`) is picked up on the next lookup. Transient
+COM or allocation failures are retried silently. Ctest
+`BasicMaterialDiagnostics` (Windows, `BasicMaterial_*`, exact count) covers
+all three cases on WARP.
+
 ### stable-v1 package asset profile (OD-09)
 
 The stable-v1 package ships only the runtime asset closure of its in-profile
