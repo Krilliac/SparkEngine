@@ -40,7 +40,9 @@ namespace MMO
     std::optional<ClientStateRequest> DecodeClientStateRequest(std::span<const uint8_t> payload)
     {
         if (payload.size() != kClientStateRequestSize)
+        {
             return std::nullopt;
+        }
 
         Spark::Net::NetBuffer buffer;
         buffer.WriteBytes(payload.data(), payload.size());
@@ -51,10 +53,14 @@ namespace MMO
         request.velocity = buffer.ReadVector3();
         const uint16_t propertyCount = buffer.ReadUint16();
         if (buffer.HasError() || buffer.RemainingBytes() != 0 || propertyCount != 0)
+        {
             return std::nullopt;
+        }
         if (!IsPlausibleCoordinate(request.position) || !IsPlausibleRotation(request.rotation) ||
             !IsPlausibleVelocity(request.velocity))
+        {
             return std::nullopt;
+        }
         return request;
     }
 } // namespace MMO

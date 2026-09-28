@@ -22,11 +22,15 @@ namespace MMO
         event.position = buf.ReadVector3();
         (void)buf.ReadVector3(); // Rotation is not shown in the MMO player summary.
         if (buf.HasError())
+        {
             return std::nullopt;
+        }
         // The position seeds a remote player's current and target position; a NaN or
         // infinity there would poison every interpolation step that follows.
         if (!std::isfinite(event.position.x) || !std::isfinite(event.position.y) || !std::isfinite(event.position.z))
+        {
             return std::nullopt;
+        }
         return event;
     }
 
@@ -36,7 +40,9 @@ namespace MMO
         buf.WriteBytes(payload.data(), payload.size());
         const uint32_t networkId = buf.ReadUint32();
         if (buf.HasError())
+        {
             return std::nullopt;
+        }
         return networkId;
     }
 } // namespace MMO

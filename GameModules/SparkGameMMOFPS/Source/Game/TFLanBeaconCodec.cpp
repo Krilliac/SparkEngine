@@ -18,12 +18,16 @@ namespace Terrafront
     std::optional<TF_LanBeacon> DecodeLanBeacon(std::span<const uint8_t> datagram)
     {
         if (datagram.size() != sizeof(TF_LanBeacon))
+        {
             return std::nullopt; // not ours (or a future/past size)
+        }
 
         TF_LanBeacon beacon{};
         std::memcpy(&beacon, datagram.data(), sizeof(beacon));
         if (beacon.magic != kTFLanBeaconMagic || beacon.version != kTFLanBeaconVersion || beacon.gamePort == 0)
+        {
             return std::nullopt;
+        }
         return beacon;
     }
 
@@ -52,7 +56,9 @@ namespace Terrafront
         if (entry == nullptr)
         {
             if (servers.size() >= kTFLanMaxServers)
+            {
                 return false;
+            }
             entry = &servers.emplace_back();
             entry->ip = srcIp;
             entry->gamePort = beacon.gamePort;
