@@ -708,20 +708,29 @@ def local_store_production_claim_errors(surfaces: dict[str, str]) -> list[str]:
     """
     errors: list[str] = []
     for location, text in sorted(surfaces.items()):
-        for number, line in enumerate(text.splitlines(), start=1):
-            is_table_row = line.lstrip().startswith("|")
-            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
-                claim = LOCAL_STORE_PRODUCTION_CLAIM.search(unit)
-                if claim is None or _SERVICE_CLAIM_NEGATION.search(unit):
-                    continue
-                noun = LOCAL_STORE_NOUN.search(unit)
-                if noun is None:
-                    continue
-                errors.append(
-                    f"{location}:{number}: markets {noun.group(0)!r} as {claim.group(0)!r}; local stores, "
-                    "demo services and reference processes are not production infrastructure (NET-110)"
-                )
+        errors.extend(_local_store_surface_errors(location, text))
     return errors
+
+
+# Pure in (location, text), so memoized: the contract suite runs the full validator once
+# per hostile case over the same unchanged documentation tree.
+@functools.lru_cache(maxsize=16384)
+def _local_store_surface_errors(location: str, text: str) -> tuple[str, ...]:
+    errors: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        is_table_row = line.lstrip().startswith("|")
+        for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+            claim = LOCAL_STORE_PRODUCTION_CLAIM.search(unit)
+            if claim is None or _SERVICE_CLAIM_NEGATION.search(unit):
+                continue
+            noun = LOCAL_STORE_NOUN.search(unit)
+            if noun is None:
+                continue
+            errors.append(
+                f"{location}:{number}: markets {noun.group(0)!r} as {claim.group(0)!r}; local stores, "
+                "demo services and reference processes are not production infrastructure (NET-110)"
+            )
+    return tuple(errors)
 
 
 def _json_strings(value: Any) -> Iterable[str]:
@@ -1098,33 +1107,43 @@ def console_certification_implication_errors(files: dict[str, str]) -> list[str]
         if not isinstance(text, str):
             errors.append(f"{location}: console-certification source must be text")
             continue
-        identifier_surface = _is_console_identifier_surface(location)
-        if not identifier_surface and CONSOLE_CERTIFICATION_TERM.search(text) is None:
-            continue
-        for number, line in enumerate(text.splitlines(), start=1):
-            if identifier_surface:
-                if line.lstrip().startswith("#"):
-                    continue
-                console = CONSOLE_PLATFORM_IDENTIFIER.search(line)
-                if console is not None:
-                    errors.append(
-                        f"{location}:{number}: {console.group(0)!r} names a console build lane; console support "
-                        "is planned and uncertified (OD-12, PLT-250), so CI and CMake carry no console runner, "
-                        "job, matrix value, option or preset"
-                    )
-                continue
-            is_table_row = line.lstrip().startswith("|")
-            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
-                console = CONSOLE_CERTIFICATION_PLATFORM.search(unit)
-                term = CONSOLE_CERTIFICATION_TERM.search(unit)
-                if console is None or term is None or _DEFERRED_PLATFORM_QUALIFIER.search(unit):
-                    continue
-                errors.append(
-                    f"{location}:{number}: {console.group(0)!r} with {term.group(0)!r} implies console "
-                    "certification; console support is planned and uncertified (OD-12, PLT-250), so the "
-                    "wording must say planned, unsupported or not certified"
-                )
+        errors.extend(_console_certification_file_errors(location, text))
     return errors
+
+
+# Pure in (location, text), so memoized: the governed tree is ~28 MB of source and
+# docs, and the contract suite runs the full validator once per hostile case over
+# the same unchanged tree. The case-insensitive whole-text scan dominated each run.
+@functools.lru_cache(maxsize=16384)
+def _console_certification_file_errors(location: str, text: str) -> tuple[str, ...]:
+    identifier_surface = _is_console_identifier_surface(location)
+    if not identifier_surface and CONSOLE_CERTIFICATION_TERM.search(text) is None:
+        return ()
+    errors: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if identifier_surface:
+            if line.lstrip().startswith("#"):
+                continue
+            console = CONSOLE_PLATFORM_IDENTIFIER.search(line)
+            if console is not None:
+                errors.append(
+                    f"{location}:{number}: {console.group(0)!r} names a console build lane; console support "
+                    "is planned and uncertified (OD-12, PLT-250), so CI and CMake carry no console runner, "
+                    "job, matrix value, option or preset"
+                )
+            continue
+        is_table_row = line.lstrip().startswith("|")
+        for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+            console = CONSOLE_CERTIFICATION_PLATFORM.search(unit)
+            term = CONSOLE_CERTIFICATION_TERM.search(unit)
+            if console is None or term is None or _DEFERRED_PLATFORM_QUALIFIER.search(unit):
+                continue
+            errors.append(
+                f"{location}:{number}: {console.group(0)!r} with {term.group(0)!r} implies console "
+                "certification; console support is planned and uncertified (OD-12, PLT-250), so the "
+                "wording must say planned, unsupported or not certified"
+            )
+    return tuple(errors)
 
 
 def console_certification_surfaces(repo_root: Path) -> dict[str, str]:
@@ -1135,30 +1154,29 @@ def console_certification_surfaces(repo_root: Path) -> dict[str, str]:
     editor, SDK, console, shader-compiler and game-module C++ source.
     """
 
-    paths: set[Path] = set()
-    workflows = repo_root / ".github" / "workflows"
-    if workflows.is_dir():
-        paths.update(path for path in workflows.iterdir() if path.suffix in {".yml", ".yaml"})
-    paths.update(repo_root / name for name in ("CMakeLists.txt", "CMakePresets.json"))
-    cmake_dir = repo_root / "cmake"
-    if cmake_dir.is_dir():
-        paths.update(cmake_dir.rglob("*.cmake"))
-    paths.update(repo_root / relative for relative in REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES)
-    for root in _CONSOLE_DOC_ROOTS:
-        if (repo_root / root).is_dir():
-            paths.update((repo_root / root).rglob("*.md"))
-    for root in CONSOLE_SOURCE_ROOTS:
-        base = repo_root / root
-        if not base.is_dir():
-            continue
-        paths.update(base.rglob("CMakeLists.txt"))
-        paths.update(path for path in base.rglob("*") if path.suffix in _CONSOLE_SOURCE_SUFFIXES)
+    source_roots = tuple(f"{root}/" for root in CONSOLE_SOURCE_ROOTS)
+    doc_roots = tuple(f"{root}/" for root in _CONSOLE_DOC_ROOTS)
+    relatives = {"CMakeLists.txt", "CMakePresets.json", *REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES}
+    for relative in tracked_paths():
+        directory, _, name = relative.rpartition("/")
+        suffix = name[name.rfind("."):] if "." in name else ""
+        if (
+            (directory == ".github/workflows" and suffix in {".yml", ".yaml"})
+            or (relative.startswith("cmake/") and suffix == ".cmake")
+            or (relative.startswith(doc_roots) and suffix == ".md")
+            or (
+                relative.startswith(source_roots)
+                and (name == "CMakeLists.txt" or suffix in _CONSOLE_SOURCE_SUFFIXES)
+            )
+        ):
+            relatives.add(relative)
     surfaces: dict[str, str] = {}
-    for path in sorted(paths):
-        relative = path.relative_to(repo_root).as_posix()
-        if relative.startswith(_CONSOLE_DOC_EXCLUDED_PREFIXES) or not path.is_file():
+    for relative in sorted(relatives):
+        if relative.startswith(_CONSOLE_DOC_EXCLUDED_PREFIXES):
             continue
-        surfaces[relative] = path.read_text(encoding="utf-8", errors="replace")
+        text = _cached_source_text(repo_root / relative)
+        if text is not None:
+            surfaces[relative] = text
     return surfaces
 
 
