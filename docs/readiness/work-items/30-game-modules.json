@@ -741,11 +741,15 @@
         },
         {
           "criterionDigest": "sha256:0505105fa4f9",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake"
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
+            "Tests/CMakeLists.txt",
+            "Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake",
+            "GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp",
+            "Tests/TestSEC2GameModules.cpp"
           ],
-          "note": "The D3D11 and Windows NullRHI package smokes need Windows hardware runs."
+          "note": "Local Windows run at clean 38fe8f1b0: FPSPackage_InstalledRuntime (D3D11/WARP phase), FPSHeadlessPackage_NullRHISaveReload, FPSPublicSDK_InstalledConsumers and PEImportClosure_Contract pass (9/9 with the selector family) against the installed SparkGameFPS module and assets. Needed the whole-percent XP bonus fix. No exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:8011beba4f11",

@@ -197,9 +197,13 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:825cc23dea53",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Needs a hosted Windows D3D11 lifecycle run at the exact commit. None has been observed."
+          "state": "implemented",
+          "evidence": [
+            "Tests/CMakeLists.txt",
+            "Tests/Fixtures/SecureTestPeer.h",
+            "Tests/TestFPSMultiplayer.cpp"
+          ],
+          "note": "Local windows-shipping MinSizeRel build with BUILD_TESTS: ModuleProfileLifecycle_SparkGameFPS_D3D11 passes (all module phases evidenced) and -L module-profile is 4/4. SparkTests now builds with networking off (fixture guards). stable-v1 declares only SparkGameFPS. No exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:9fe198aadd95",

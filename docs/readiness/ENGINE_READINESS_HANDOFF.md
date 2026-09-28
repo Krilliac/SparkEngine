@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **158 implemented** (61%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **160 implemented** (62%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -247,7 +247,7 @@ Establish the only source of readiness truth and make CI report reality.
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 3/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
-| [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
+| [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 3/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 2/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
 | [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 4/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
@@ -307,7 +307,7 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 |---|---|---|---|---|---|
 | [`MOD-290`](#mod-290--build-the-shared-manifest-and-installed-sdk-module-kit) Build the shared manifest and installed-SDK module kit | P1 | **in-progress** | 3/4 · 0/4 | `RDY-010`, `RDY-020`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
 | [`MOD-300`](#mod-300--complete-and-correctly-position-the-base-sparkgame-showcase) Complete and correctly position the base SparkGame showcase | P1 | **in-progress** | 3/5 · 0/5 | `MOD-290` | `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-310`](#mod-310--finish-fps-as-the-installed-single-player-stable-v1-slice) Finish FPS as the installed single-player stable-v1 slice | P1 | **in-progress** | 2/5 · 0/5 | `MOD-290`, `SDK-240`, `RDY-020` | `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-310`](#mod-310--finish-fps-as-the-installed-single-player-stable-v1-slice) Finish FPS as the installed single-player stable-v1 slice | P1 | **in-progress** | 3/5 · 0/5 | `MOD-290`, `SDK-240`, `RDY-020` | `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-320`](#mod-320--finish-mmo-as-a-secure-persistent-integrated-world) Finish MMO as a secure persistent integrated world | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290`, `NET-100`, `DATA-120`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
@@ -526,10 +526,11 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Every module included by a declared profile builds and executes through its real lifecycle
-   - Needs a hosted Windows D3D11 lifecycle run at the exact commit. None has been observed.
+1. **[implemented]** Every module included by a declared profile builds and executes through its real lifecycle
+   - Evidence: `Tests/CMakeLists.txt`, `Tests/Fixtures/SecureTestPeer.h`, `Tests/TestFPSMultiplayer.cpp`
+   - Local windows-shipping MinSizeRel build with BUILD_TESTS: ModuleProfileLifecycle_SparkGameFPS_D3D11 passes (all module phases evidenced) and -L module-profile is 4/4. SparkTests now builds with networking off (fixture guards). stable-v1 declares only SparkGameFPS. No exact-commit CI yet.
 2. **[implemented]** No copied model or tautological test can satisfy a release-profile gate
    - Evidence: `Tests/Tools/test_module_evidence.py`, `Tools/test_source_census.py`, `Tests/Tools/test_source_census_profile.py`, `tools/site-data/module_content.py`, `Tests/Tools/test_module_manifest.py`
    - CTest TestSourceCensus_ProfileSelectors rejects any profile selector that reaches a mirror or tautological TEST. module_content.py fails a manifest whose prefix selects a TEST outside tests.files, lists a census mirror, or selects an EXPECT_TRUE(true)/EXPECT_NO_CRASH-only body; test_module_manifest.py mutates each rule. 11 mirrors retired, ~159 remain outside the gates. Local evidence only.
@@ -3526,16 +3527,16 @@ FPS has a local arena, input, combat, rendering, and AI foundation, but it is no
 
 **Acceptance criteria**
 
-Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** A clean Windows install launches SparkGameFPS and completes spawn-move-kill-respawn-score in single-player
    - This needs a clean Windows install run of the full loop. None is recorded.
 2. **[unmet]** The module builds without SparkEngineLib or engine-source include paths
    - Evidence: `GameModules/SparkGameFPS/CMakeLists.txt`
    - The module still links SparkEngineLib and uses engine-source include paths.
-3. **[unmet]** D3D11 and Windows NullRHI package smokes use the real module and assets
-   - Evidence: `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`
-   - The D3D11 and Windows NullRHI package smokes need Windows hardware runs.
+3. **[implemented]** D3D11 and Windows NullRHI package smokes use the real module and assets
+   - Evidence: `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `Tests/CMakeLists.txt`, `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, `GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp`, `Tests/TestSEC2GameModules.cpp`
+   - Local Windows run at clean 38fe8f1b0: FPSPackage_InstalledRuntime (D3D11/WARP phase), FPSHeadlessPackage_NullRHISaveReload, FPSPublicSDK_InstalledConsumers and PEImportClosure_Contract pass (9/9 with the selector family) against the installed SparkGameFPS module and assets. Needed the whole-percent XP bonus fix. No exact-commit CI yet.
 4. **[implemented]** Save/reload preserves the declared local profile state
    - Evidence: `Tests/TestSparkGameFPSLoopReal.cpp`, `GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp`, `GameModules/SparkGameFPS/module.json`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`
    - File path: FPSLocalProfile_EveryDeclaredFieldSurvivesSaveSystemFile. Remaining gap: in the windowed host run, class, weapon, health and armor keep their defaults. Pending the central build.
