@@ -272,27 +272,41 @@ namespace Spark
         template <std::floating_point T> std::optional<T> ParseFloatingExact(std::string_view text)
         {
             if (text.empty() || text.front() == '+' || std::isspace(static_cast<unsigned char>(text.front())))
+            {
                 return std::nullopt;
+            }
             const std::string_view unsignedText = text.front() == '-' ? text.substr(1) : text;
             if (unsignedText.size() >= 2 && unsignedText[0] == '0' && (unsignedText[1] | 0x20) == 'x')
+            {
                 return std::nullopt;
+            }
 
             const std::string terminated(text);
             char* parsedEnd = nullptr;
             errno = 0;
             T value{};
             if constexpr (std::is_same_v<T, float>)
+            {
                 value = std::strtof(terminated.c_str(), &parsedEnd);
+            }
             else if constexpr (std::is_same_v<T, double>)
+            {
                 value = std::strtod(terminated.c_str(), &parsedEnd);
+            }
             else
+            {
                 value = std::strtold(terminated.c_str(), &parsedEnd);
+            }
 
             if (parsedEnd != terminated.c_str() + terminated.size())
+            {
                 return std::nullopt;
+            }
             // from_chars reports result_out_of_range when the value overflows or underflows to zero.
             if (errno == ERANGE && (std::isinf(value) || value == T{}))
+            {
                 return std::nullopt;
+            }
             return value;
         }
 
