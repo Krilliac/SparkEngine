@@ -2375,7 +2375,7 @@ ctest --test-dir build/windows-release -C Release -L installer --output-on-failu
 **Automated evidence**
 
 - Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Interrupted`, `Installer_Uninstall`
-- Required CI jobs: `installer-windows`
+- Required CI jobs: `build-installer`, `build-windows`
 - Performance / reliability budgets:
   - Install/update time and disk overhead budgets are recorded
 
@@ -5536,7 +5536,7 @@ ctest --test-dir build/windows-release -C Release -L installer --output-on-failu
 **Automated evidence**
 
 - Test selectors: `Installer_Upgrade`, `Installer_Rollback`, `Installer_Interrupted`
-- Required CI jobs: `installer-windows`
+- Required CI jobs: `build-installer`, `build-windows`
 - Performance / reliability budgets:
 
 **Same-change updates**
@@ -5610,7 +5610,7 @@ ctest --test-dir build/windows-release -C Release -L installer --output-on-failu
 **Automated evidence**
 
 - Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Interrupted`, `Installer_Uninstall`
-- Required CI jobs: `installer-windows`
+- Required CI jobs: `build-installer`, `build-windows`
 - Performance / reliability budgets:
 
 **Same-change updates**

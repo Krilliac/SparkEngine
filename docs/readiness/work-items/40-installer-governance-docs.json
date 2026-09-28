@@ -116,7 +116,8 @@
         "Installer_Uninstall"
       ],
       "requiredCiJobs": [
-        "installer-windows"
+        "build-installer",
+        "build-windows"
       ],
       "performanceBudgets": [
         "Install/update time and disk overhead budgets are recorded"
@@ -149,9 +150,7 @@
       "profileApplicability": {
         "stable-v1": "required"
       },
-      "plannedCiJobs": [
-        "installer-windows"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -197,7 +196,7 @@
       ],
       "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Upgrade", "Installer_Rollback", "Installer_Interrupted"],
-      "requiredCiJobs": ["installer-windows"],
+      "requiredCiJobs": ["build-installer", "build-windows"],
       "performanceBudgets": [],
       "documentationUpdates": ["SparkInstaller/README.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
       "readinessChanges": ["G05", "G08", "G17"],
@@ -206,7 +205,7 @@
       "outOfScope": ["Bootstrapping the first signed predecessor"],
       "definitionOfDone": ["Hosted exact-SHA upgrade and rollback evidence passes against a signed immutable predecessor"],
       "profileApplicability": {"stable-v1": "required"},
-      "plannedCiJobs": ["installer-windows"],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -249,7 +248,7 @@
       ],
       "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Tamper", "Installer_AtomicUpdate", "Installer_Interrupted", "Installer_Uninstall"],
-      "requiredCiJobs": ["installer-windows"],
+      "requiredCiJobs": ["build-installer", "build-windows"],
       "performanceBudgets": [],
       "documentationUpdates": ["SparkInstaller/README.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
       "readinessChanges": ["G05", "G08", "G17"],
@@ -259,7 +258,7 @@
       "definitionOfDone": ["Exact-SHA bootstrap recovery evidence passes and is reviewed"],
       "profileApplicability": {"stable-v1": "outside"},
       "predecessorOnly": true,
-      "plannedCiJobs": ["installer-windows"],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
