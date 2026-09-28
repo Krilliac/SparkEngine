@@ -168,6 +168,44 @@ TEST(ExecScript_SchedulerRunsInDueOrderAndKeepsFileOrderForTies)
     std::filesystem::remove(auditPath, error);
 }
 
+// A command that prints more than a few lines must still carry its own marker in its
+// audit block: the installed ARPG objective failed because arpg_load's output pushed
+// its marker out of a fixed 8-line window.
+TEST(ExecScript_AuditBlockStartsAtItsOwnMarkerForLongOutput)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    EXPECT_TRUE(console.Initialize());
+    console.RegisterCommand("exec_chatty_probe",
+                            [&](const std::vector<std::string>&)
+                            {
+                                for (int line = 0; line < 12; ++line)
+                                    console.LogInfo("exec_chatty_probe line " + std::to_string(line));
+                                return std::string{};
+                            });
+
+    const auto auditPath = UniqueTempPath("spark-exec-chatty") += ".log";
+    Spark::ExecScriptPlayer player;
+    player.SetAuditPath(auditPath.string());
+    player.Load(Parse("exec_chatty_probe\n"
+                      "1 exec_chatty_probe\n"));
+    EXPECT_EQ(player.RunDueAt(0, 0.0, console), size_t{1});
+    EXPECT_EQ(player.RunDueAt(1, 0.1, console), size_t{1});
+
+    // The second block holds its own marker and all twelve lines, and nothing before the marker.
+    const std::string audit = ReadWholeFile(auditPath);
+    const size_t secondBlock = audit.find("frame 1 t=0.1s | ok  | exec_chatty_probe\n");
+    ASSERT_TRUE(secondBlock != std::string::npos);
+    const std::string block = audit.substr(secondBlock);
+    const std::string marker = "    > [exec] frame 1 (t=0.1s, entry=1): exec_chatty_probe\n";
+    EXPECT_EQ(block.find(marker), block.find('\n') + 1);
+    EXPECT_STR_CONTAINS(block, "    > exec_chatty_probe line 0\n");
+    EXPECT_STR_CONTAINS(block, "    > exec_chatty_probe line 11\n");
+
+    EXPECT_TRUE(console.UnregisterCommand("exec_chatty_probe"));
+    std::error_code error;
+    std::filesystem::remove(auditPath, error);
+}
+
 TEST(ExecScript_UnknownCommandIsAuditedAsError)
 {
     auto& console = Spark::SimpleConsole::GetInstance();

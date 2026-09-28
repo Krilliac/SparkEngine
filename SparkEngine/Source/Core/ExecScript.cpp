@@ -181,10 +181,11 @@ namespace Spark
             const std::string shown = console.RedactSensitiveArguments(command);
             // The schedule index distinguishes repeated commands caught up in
             // one frame, including equal due times and rounded elapsed times.
-            console.LogInfo(
-                std::format("[exec] frame {} (t={:.1f}s, entry={}): {}", frameCount, elapsedSeconds, m_next, shown));
+            const std::string marker =
+                std::format("[exec] frame {} (t={:.1f}s, entry={}): {}", frameCount, elapsedSeconds, m_next, shown);
+            console.LogInfo(marker);
             const bool ok = console.ExecuteCommand(command);
-            AppendAudit(frameCount, elapsedSeconds, ok, shown, console);
+            AppendAudit(frameCount, elapsedSeconds, ok, shown, marker, console);
             ++m_next;
             ++executed;
         }
@@ -192,7 +193,7 @@ namespace Spark
     }
 
     void ExecScriptPlayer::AppendAudit(int frameCount, double elapsedSeconds, bool ok, const std::string& shownCommand,
-                                       SimpleConsole& console) const
+                                       const std::string& marker, SimpleConsole& console) const
     {
         // Automated smokes read this trail: the Windows GUI build has no
         // stdout and the file logger does not carry console traffic. Binary mode
@@ -206,10 +207,22 @@ namespace Spark
 
         // Append the command's console output. The first scripted command dumps
         // the whole boot history (module-loading diagnostics); later ones append
-        // just the most recent entries.
+        // everything from their own marker on (entry=N makes it unique), however
+        // many lines the command printed. A marker the capped history already
+        // evicted leaves the whole history, and the consumer's marker check fails.
         const auto history = console.GetLogHistory();
-        const size_t window = (m_next == 0) ? history.size() : 8;
-        const size_t start = history.size() > window ? history.size() - window : 0;
+        size_t start = 0;
+        if (m_next != 0)
+        {
+            for (size_t i = history.size(); i > 0; --i)
+            {
+                if (history[i - 1].message == marker)
+                {
+                    start = i - 1;
+                    break;
+                }
+            }
+        }
         for (size_t i = start; i < history.size(); ++i)
             audit << "    > " << history[i].message << '\n';
     }

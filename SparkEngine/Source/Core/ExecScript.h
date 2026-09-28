@@ -20,7 +20,8 @@
  * redacted in both the `[exec]` console line and the audit file.
  * Each console marker includes `entry=N`, the zero-based index in the parsed,
  * due-ordered schedule (not the source line or frame). It resets on Load.
- * Audit blocks may repeat older markers from the console history window.
+ * Each audit block after the first starts at its own marker and carries everything
+ * the command printed.
  */
 #pragma once
 
@@ -120,7 +121,7 @@ namespace Spark
 
       private:
         void AppendAudit(int frameCount, double elapsedSeconds, bool ok, const std::string& shownCommand,
-                         SimpleConsole& console) const;
+                         const std::string& marker, SimpleConsole& console) const;
 
         std::vector<ScriptedCommand> m_commands;
         size_t m_next = 0;
