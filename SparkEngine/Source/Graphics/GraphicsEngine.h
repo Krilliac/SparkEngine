@@ -17,6 +17,7 @@
 #include <windows.h>
 #include <wrl/client.h>
 #include <d3d11_1.h>
+#include <d3d11sdklayers.h>
 #include <dxgi1_3.h>
 #include <dxgidebug.h>
 #include "Core/Platform.h"
@@ -429,6 +430,37 @@ class GraphicsEngine
 
     /** @brief Get the depth buffer SRV for HiZ construction and post-process reads. */
     ID3D11ShaderResourceView* GetDepthSRV() const { return m_depthStencilSRV.Get(); }
+
+    // ========================================================================
+    // D3D11 DEBUG-LAYER VALIDATION (RHI-210)
+    // ========================================================================
+
+    /// @brief D3D11 debug-layer message totals by severity, accumulated across device recreations.
+    struct ValidationCounts
+    {
+        uint64_t corruption = 0;
+        uint64_t errors = 0;
+        uint64_t warnings = 0;
+    };
+
+    /**
+     * @brief Drain the debug layer's stored messages and return the running totals.
+     *
+     * The layer is on in _DEBUG builds and whenever SPARK_D3D11_DEBUG_LAYER=1.
+     * Game thread only (the thread that calls EndFrame, which drains once per frame).
+     *
+     * @return std::nullopt when the debug layer is off, so a caller cannot read
+     *         "not validated" as "clean".
+     */
+    std::optional<ValidationCounts> GetValidationCounts();
+
+    /**
+     * @brief Classify every message stored in @p queue into @p counts, then clear the queue.
+     *
+     * Errors and corruption are also logged (the first 32 of them). Shared with the
+     * RHI-level debug-layer tests so both count with the same rule. No-op for nullptr.
+     */
+    static void AccumulateValidationMessages(ID3D11InfoQueue* queue, ValidationCounts& counts);
 #endif // SPARK_PLATFORM_WINDOWS
 
     // ========================================================================
@@ -675,6 +707,8 @@ class GraphicsEngine
     void Console_SetDebugMode(bool enabled);
     void Console_SetClearColor(float r, float g, float b, float a);
     void Console_SetRenderScale(float scale);
+    /// gfx_reset_device: on Windows, run the full device-lost recovery (new device, swap chain and
+    /// device-dependent resources) as if Present had returned DXGI_ERROR_DEVICE_RESET.
     void Console_ResetDevice();
     void Console_ForceGarbageCollection();
     void Console_ApplySettings(const GraphicsSettings& settings);
@@ -987,6 +1021,11 @@ class GraphicsEngine
     ComPtr<ID3D11ShaderResourceView> m_backBufferSRV;
     ComPtr<ID3D11DepthStencilView> m_depthStencilView;
 
+#ifdef SPARK_PLATFORM_WINDOWS
+    ComPtr<ID3D11InfoQueue> m_infoQueue; ///< Non-null only while the D3D11 debug layer is on
+    ValidationCounts m_validationCounts; ///< Running totals drained from m_infoQueue
+#endif
+
     /// True when this GraphicsEngine was set up via InitializeFromDevice()
     /// (attached to a caller-owned device, no swapchain/backbuffer). Guards
     /// swapchain-dependent entry points (BeginFrame/EndFrame/Resize) so they
@@ -1211,6 +1250,15 @@ class GraphicsEngine
     // ========================================================================
 
     // --- Device recovery ---
+    /**
+     * @brief Respond to a removed/reset device: log the reason, then recover within MAX_DEVICE_RECOVERY.
+     *
+     * EndFrame calls it when Present reports DXGI_ERROR_DEVICE_REMOVED/RESET, and
+     * Console_ResetDevice (gfx_reset_device) injects DXGI_ERROR_DEVICE_RESET so the
+     * console, -exec scripts and tests drive the same teardown and recreation.
+     * @return true when a new device, swap chain and device-dependent resources exist.
+     */
+    bool HandleDeviceLost(HRESULT presentResult);
     bool RecoverFromDeviceLost();                      ///< Attempt to recreate D3D11 device after device-lost event.
     void ReleaseAllDeviceResources();                  ///< Release all COM resources for device recreation.
     uint32_t m_deviceLostRecoveryAttempts = 0;         ///< Number of device-lost recovery attempts

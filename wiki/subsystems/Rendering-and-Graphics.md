@@ -673,6 +673,35 @@ graphics.ProcessDrawList(viewMatrix, projMatrix);
 
 ---
 
+## D3D11 Device Health: Validation and Device-Loss Recovery (RHI-210)
+
+**Debug-layer validation.** `SPARK_D3D11_DEBUG_LAYER=1` turns the D3D11 debug layer on in any build (`_DEBUG` builds always have it). Any other value makes `GraphicsEngine::Initialize` fail with `E_INVALIDARG`. When the layer is requested but the Windows "Graphics Tools" optional feature is missing, device creation fails with `DXGI_ERROR_SDK_COMPONENT_MISSING` and a named fatal log. The engine never retries without the layer, so an unvalidated run cannot report itself as clean.
+
+With the layer on:
+- The engine keeps the device's `ID3D11InfoQueue`, which never breaks into the debugger.
+- `EndFrame` drains the queue every frame into running corruption, error and warning totals. The first 32 errors are logged with their text.
+- `GetValidationCounts()` returns the totals, or `std::nullopt` when the layer is off.
+- `Shutdown` prints one logger-free record: `SPARK_D3D11_VALIDATION corruption=N errors=N warnings=N`.
+
+**Device-loss recovery.** Both `EndFrame` (when `Present` returns `DXGI_ERROR_DEVICE_REMOVED` or `DXGI_ERROR_DEVICE_RESET`) and `gfx_reset_device` (`Console_ResetDevice`) go through `HandleDeviceLost`. The console command injects `DXGI_ERROR_DEVICE_RESET` at that HRESULT boundary, because a real driver TDR cannot be forced from inside the process. Recovery then does three things:
+1. It releases every device-owned object, including the post-processing, temporal, upscaling, VRAM-monitor and GPU-driven subsystems, the lazily created basic-path states and textures, and the basic texture and material caches.
+2. It creates a new device and swap chain for the stored window.
+3. It re-runs `CreateDeviceDependentResources`.
+
+It gives up after `MAX_DEVICE_RECOVERY` (3) consecutive failures. In device-attach mode (`InitializeFromDevice`) there is no window, so recovery refuses before releasing anything.
+
+The `AssetPipeline` is rebuilt empty on the new device, so mesh owners must load their meshes again. Game-module meshes that hold buffers from the lost device are not reloaded automatically yet (RHI-210 packaged-recovery slice).
+
+| CTest | Tests | Needs |
+|-------|-------|-------|
+| `D3D11_Validation` | `D3D11_Validation_*` (3): 16 WARP engine frames around a resize are clean, the counter sees an injected `CreateBuffer` error, and the RHI golden triangle is clean | Graphics Tools debug layer |
+| `D3D11_DeviceLoss` | `D3D11_DeviceLoss_*` (2): the reset creates a new, healthy device that renders the same frame again; attach mode refuses without teardown | WARP |
+| `D3D11_Resource` | `D3D11_Resource_*` (4): the render-target contracts, rendering after a resize to 1x1, 1920x1080 and 320x240, and 2,000 texture, buffer and pipeline create/destroy cycles returning to the debug layer's live-object baseline | Graphics Tools debug layer (the stress test) |
+
+`D3D11_Validation_` and `D3D11_Resource_` are excluded from the main `SparkEngineTests` run. On a host without the debug layer they fail in their own lanes and nowhere else. The fixture lives in `Tests/RHI210D3D11EngineFixture.h`.
+
+---
+
 ## Console Commands
 
 The graphics engine registers 200+ debug commands. Common ones:

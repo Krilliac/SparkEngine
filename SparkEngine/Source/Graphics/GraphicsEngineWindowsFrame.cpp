@@ -275,39 +275,11 @@ void GraphicsEngine::EndFrame()
                                 static_cast<long>(hr));
 
         if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
-        {
-            if (hr == DXGI_ERROR_DEVICE_REMOVED)
-            {
-                HRESULT reason = m_device ? m_device->GetDeviceRemovedReason() : E_FAIL;
-                SPARK_LOG_FATAL("Graphics",
-                                "GPU DEVICE REMOVED -- Reason HR=0x%08lX. "
-                                "Possible causes: driver crash, GPU hang, TDR timeout, or hardware fault",
-                                static_cast<long>(reason));
-            }
-            else
-            {
-                SPARK_LOG_FATAL("Graphics", "GPU DEVICE RESET -- The GPU device was reset. "
-                                            "This may indicate a driver update or GPU resource exhaustion");
-            }
-
-            // Attempt automatic recovery
-            if (m_deviceLostRecoveryAttempts < MAX_DEVICE_RECOVERY)
-            {
-                if (!RecoverFromDeviceLost())
-                {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                    "DEVICE LOST RECOVERY: Failed — engine will continue in degraded mode");
-                }
-            }
-            else
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                "DEVICE LOST RECOVERY: Max attempts (%u) exhausted — "
-                                "engine will continue without GPU rendering",
-                                MAX_DEVICE_RECOVERY);
-            }
-        }
+            HandleDeviceLost(hr);
     }
+
+    // RHI-210: classify this frame's debug-layer messages (no-op when the layer is off).
+    AccumulateValidationMessages(m_infoQueue.Get(), m_validationCounts);
 
     auto frameEndTime = std::chrono::high_resolution_clock::now();
 

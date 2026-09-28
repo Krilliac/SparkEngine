@@ -419,44 +419,23 @@ void GraphicsEngine::Console_ResetDevice()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device reset requested via console", L"WARNING");
 
-    if (!m_device || !m_swapChain)
+    if (!m_device)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device not available for reset", L"ERROR");
         return;
     }
 
+    // Inject a device reset at the HRESULT boundary Present reports it through,
+    // so this command exercises the same full teardown and recreation a real
+    // removal does (a driver TDR cannot be forced from inside the process).
+    // RecoverFromDeviceLost refuses, without tearing anything down, when there
+    // is no window to rebuild the swap chain for (device-attach mode).
     try
     {
-        m_context->OMSetRenderTargets(0, nullptr, nullptr);
-        m_renderTargetView.Reset();
-        m_depthStencilView.Reset();
-
-        HRESULT hr = m_swapChain->ResizeBuffers(0, m_windowWidth, m_windowHeight, DXGI_FORMAT_UNKNOWN, 0);
-        if (FAILED(hr))
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to resize buffers during device reset", L"ERROR");
-            return;
-        }
-
-        hr = CreateRenderTargetView();
-        if (FAILED(hr))
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to recreate render target view", L"ERROR");
-            return;
-        }
-
-        hr = CreateDepthStencilView();
-        if (FAILED(hr))
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to recreate depth stencil view", L"ERROR");
-            return;
-        }
-
-        SetViewport();
-        ApplyGraphicsState();
-        ApplyAdvancedGraphicsState();
-
-        LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device reset complete", L"SUCCESS");
+        if (HandleDeviceLost(DXGI_ERROR_DEVICE_RESET))
+            LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device reset complete: new device and resources created", L"SUCCESS");
+        else
+            LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device reset failed; see the DEVICE LOST RECOVERY log", L"ERROR");
     }
     catch (const std::exception& e)
     {

@@ -810,6 +810,18 @@ namespace Spark
                 if (FAILED(hr))
                     return false;
 
+                if (desc.enableDebugLayer)
+                {
+                    // A debug device always exposes its info queue; failing here means
+                    // validation was requested but cannot be observed. The default
+                    // storage limit stays: nothing drains this queue every frame.
+                    hr = m_device.As(&m_infoQueue);
+                    if (FAILED(hr))
+                        return false;
+                    m_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, FALSE);
+                    m_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, FALSE);
+                }
+
                 // Get DXGI factory
                 ComPtr<IDXGIDevice> dxgiDevice;
                 hr = m_device.As(&dxgiDevice);
@@ -916,6 +928,7 @@ namespace Spark
                 m_immediateCommandList.reset();
                 m_immediateContext.Reset();
                 m_dxgiFactory.Reset();
+                m_infoQueue.Reset();
                 m_device.Reset();
             }
 
