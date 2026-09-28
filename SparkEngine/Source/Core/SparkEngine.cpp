@@ -378,7 +378,7 @@ bool ShutdownEngineAfterPreflight()
             // Keep modules mapped until process exit in this mode. The manager
             // destructor never runs, so publish its lifecycle evidence here.
             rt.moduleManager->PublishLifecycleEvidence();
-            rt.residentModuleManagers.push_back(rt.moduleManager.release());
+            EngineRuntime::ResidentModuleManagers().push_back(rt.moduleManager.release());
         }
         else
         {

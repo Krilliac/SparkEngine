@@ -66,19 +66,24 @@ struct EngineRuntime
     EngineRuntime(const EngineRuntime&) = delete;
     EngineRuntime& operator=(const EngineRuntime&) = delete;
 
+    /**
+     * [shutdown thread] Managers that headless POSIX teardown keeps alive, with their
+     * module images, until process exit instead of unloading them (one per teardown,
+     * so a repeated teardown never orphans an earlier manager). Never deleted.
+     *
+     * The list itself is immortal rather than a member: the static EngineRuntime is
+     * destroyed before LeakSanitizer's exit-time scan, and a member vector would free
+     * the only pointers to these deliberate process-lifetime objects first.
+     * Caveat: LeakSanitizer treats all module-owned heap reachable from these
+     * managers as live, so it cannot see module-side leaks on this path.
+     */
+    static std::vector<ModuleManager*>& ResidentModuleManagers();
+
     std::unique_ptr<GraphicsEngine> graphics;
     std::unique_ptr<InputManager> input;
     std::unique_ptr<Timer> timer;
     std::unique_ptr<Spark::EventBus> eventBus;
     std::unique_ptr<ModuleManager> moduleManager;
-    /// Headless POSIX teardown keeps each manager and its module images alive
-    /// until process exit instead of unloading them. Holding the pointers here
-    /// keeps those deliberate process-lifetime objects reachable (one per
-    /// teardown, so a repeated teardown never orphans an earlier manager).
-    /// Caveat: LeakSanitizer also treats all module-owned heap reachable from
-    /// these managers as live, so it cannot see module-side leaks on this path.
-    /// Never deleted.
-    std::vector<ModuleManager*> residentModuleManagers;
     std::unique_ptr<AudioEngine> audioEngine;
     std::unique_ptr<Spark::Audio::IAudioBackend> audioBackend;
     std::unique_ptr<Spark::ModuleHotReloadManager> moduleHotReload;
