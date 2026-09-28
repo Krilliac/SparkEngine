@@ -104,6 +104,14 @@ namespace Spark::Daemon::Wire
         [[nodiscard]] size_t Remaining() const noexcept { return m_bytes.size() - m_position; }
         [[nodiscard]] bool Finished() const noexcept { return m_position == m_bytes.size(); }
 
+        /// True when @p count records of at least @p minimumRecordBytes each still fit
+        /// in the unread bytes. Decoders check a wire count with it before reserving,
+        /// so a few bytes claiming thousands of records allocate nothing.
+        [[nodiscard]] bool CanHold(uint32_t count, size_t minimumRecordBytes) const noexcept
+        {
+            return count <= Remaining() / minimumRecordBytes;
+        }
+
       private:
         const std::vector<uint8_t>& m_bytes;
         size_t m_position = 0;

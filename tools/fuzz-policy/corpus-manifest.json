@@ -694,6 +694,30 @@
           "guard_test": "DaemonFraming_RecvFrameAllocationTracksReceivedBytes"
         }
       ]
+    },
+    {
+      "id": "daemon-bounded-wire-codec-corpus",
+      "parser_id": "daemon-bounded-wire-codec",
+      "corpus_dir": "FuzzerTests/corpora/daemon-bounded-wire-codec",
+      "last_verified": "2026-09-28",
+      "content_digest": "4ee0db8c7b37ac58de524f45681e09165240863ae52e2fffcc905ceda77e3076",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-snapshot-edit-count-overclaim.bin",
+          "finding": "DecodeSnapshot reserved up to 65,536 peers, locks or edits from the wire count before checking the bytes existed, so a 20-byte snapshot reserved several MiB; process status and argument lists were sized the same way.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests"
+        }
+      ]
     }
   ]
 }

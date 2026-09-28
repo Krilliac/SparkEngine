@@ -567,6 +567,62 @@ set_tests_properties(FuzzDaemonFrameSmoke PROPERTIES
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
 
+# The daemon's collaboration and orchestration DTO codecs are header-only
+# (SparkDaemon/src CollaborationProtocol.h and OrchestrationProtocol.h over
+# BoundedWireCodec.h), so the adapter compiles every production decoder.
+add_executable(SparkFuzzDaemonWire
+    FuzzDaemonWire.cpp
+    FuzzDaemonWireProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the decoders it compiles use libc++ and meet the
+# driver only at the C ABI in FuzzDaemonWireProduction.h.
+set_source_files_properties(
+    FuzzDaemonWireProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzDaemonWire PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src"
+)
+target_compile_features(SparkFuzzDaemonWire PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzDaemonWire PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzDaemonWire PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzDaemonWire PRIVATE Threads::Threads c++ c++abi)
+
+# The count-overclaim seeds claim up to 65,536 snapshot records in a few bytes.
+# Everything a valid message under -max_len decodes to stays far below 1 MiB,
+# while reserving 65,536 locks or edits takes 2-4 MiB, so -malloc_limit_mb=1
+# fails a decoder that reserved before checking the bytes present.
+add_test(
+    NAME FuzzDaemonWireSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzDaemonWire>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -malloc_limit_mb=1
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=10
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/daemon-bounded-wire-codec"
+)
+set_tests_properties(FuzzDaemonWireSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
 # ConfigParser::LoadFromString and SaveToString are header-inline
 # (Utils/ConfigParser.h over Utils/StringUtils.h), so the adapter compiles the
 # whole production parser; ConfigParser.cpp only adds the LocalFileCache I/O.

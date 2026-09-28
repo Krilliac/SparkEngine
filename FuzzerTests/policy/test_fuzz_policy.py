@@ -124,6 +124,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzSparkTerrain",
     "SparkFuzzAssetServiceProtocol",
     "SparkFuzzDaemonFrame",
+    "SparkFuzzDaemonWire",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2061,6 +2062,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::Daemon::RecvFrame",
                 "daemon-protocol-frame",
                 7,
+            ),
+            "daemon-bounded-wire-codec": (
+                "DaemonWire",
+                "Spark::Daemon::DecodeSnapshot",
+                "daemon-bounded-wire-codec",
+                10,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)
