@@ -1067,18 +1067,7 @@
         "Applicable scores reach 3"
       ],
       "acceptanceStatus": [
-        {
-          "criterionDigest": "sha256:57ffda3b6ee4",
-          "state": "implemented",
-          "evidence": [
-            "Tests/TestMOD330ARPGDungeonReal.cpp",
-            "Tests/PackageSmoke/ModuleObjectives/SparkGameARPG.cmake",
-            "Tests/PackageSmoke/RunInstalledModuleObjective.cmake",
-            "GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp",
-            "Tests/CMakeLists.txt"
-          ],
-          "note": "Boss identity and state are tested in-process only. No packaged dungeon is cleared automatically."
-        },
+        {"criterionDigest": "sha256:57ffda3b6ee4", "state": "unmet", "evidence": [], "note": "ARPGDungeonPackage_ClearAndRestart (opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS) clears the dungeon and saves on Windows, then the installed SparkEngine hits an access violation during shutdown (child exit 1), so the packaged run fails. Stays open until the teardown crash is fixed."},
         {
           "criterionDigest": "sha256:a2753a909b88",
           "state": "implemented",
@@ -1189,19 +1178,7 @@
         "Applicable scores reach 3"
       ],
       "acceptanceStatus": [
-        {
-          "criterionDigest": "sha256:23dedc4ed8b4",
-          "state": "implemented",
-          "evidence": [
-            "GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.h",
-            "GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.cpp",
-            "GameModules/SparkGamePlatformer/Source/Core/Main.cpp",
-            "Tests/PackageSmoke/ModuleObjectives/SparkGamePlatformer.cmake",
-            "Tests/TestMOD340PlatformerCompletionReal.cpp",
-            "Tests/CMakeLists.txt"
-          ],
-          "note": "No automated three-minute packaged level-completion run exists."
-        },
+        {"criterionDigest": "sha256:23dedc4ed8b4", "state": "implemented", "evidence": ["GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.h", "GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.cpp", "GameModules/SparkGamePlatformer/Source/Core/Main.cpp", "Tests/PackageSmoke/ModuleObjectives/SparkGamePlatformer.cmake", "Tests/TestMOD340PlatformerCompletionReal.cpp", "Tests/CMakeLists.txt"], "note": "PlatformerCompletionPackage_Level0ThreeMinutes installs the runtime and module and completes level 0 headless in 195 s on Windows (opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS; not in hosted CI yet)."},
         {
           "criterionDigest": "sha256:8ca86e86fcec",
           "state": "implemented",
@@ -1317,20 +1294,7 @@
         "Applicable scores reach 3"
       ],
       "acceptanceStatus": [
-        {
-          "criterionDigest": "sha256:7a3b148c732e",
-          "state": "implemented",
-          "evidence": [
-            "Tests/TestMOD350RPGQuestSliceReal.cpp",
-            "GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp",
-            "GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.h",
-            "GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.cpp",
-            "GameModules/SparkGameRPG/Source/Core/Main.cpp",
-            "Tests/PackageSmoke/ModuleObjectives/SparkGameRPG.cmake",
-            "Tests/CMakeLists.txt"
-          ],
-          "note": "RPGQuestSlice_* finish the quest chain in-process. RPGPersistence_* save mid-quest via the real SaveSystem, rebuild all RPG systems, restore quest, inventory, area, NPC disposition/patrol and world hour, and keep the quest reward across a second restart. RPGDEMO 2 (N-1) slots migrate to default NPC state; corrupt, truncated, v1 and future-version slots are rejected. No packaged run exists."
-        },
+        {"criterionDigest": "sha256:7a3b148c732e", "state": "unmet", "evidence": [], "note": "RPGQuestSlicePackage_WolfHuntRestart (opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS) fails on Windows: the installed SparkEngine hits an access violation during shutdown after the quest phase (child exit 1). Stays open until the teardown crash is fixed."},
         {
           "criterionDigest": "sha256:63d66a74b7a8",
           "state": "implemented",
@@ -1570,20 +1534,7 @@
         "Applicable scores reach 3"
       ],
       "acceptanceStatus": [
-        {
-          "criterionDigest": "sha256:311c6dcb8387",
-          "state": "implemented",
-          "evidence": [
-            "Tests/TestMOD370SkirmishDeterminismReal.cpp",
-            "GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.h",
-            "GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.cpp",
-            "GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp",
-            "GameModules/SparkGameRTS/Source/Core/Main.cpp",
-            "Tests/PackageSmoke/ModuleObjectives/SparkGameRTS.cmake",
-            "Tests/CMakeLists.txt"
-          ],
-          "note": "The deterministic skirmish reaches victory in-process only. No packaged build does."
-        },
+        {"criterionDigest": "sha256:311c6dcb8387", "state": "implemented", "evidence": ["Tests/TestMOD370SkirmishDeterminismReal.cpp", "GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.h", "GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.cpp", "GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp", "GameModules/SparkGameRTS/Source/Core/Main.cpp", "Tests/PackageSmoke/ModuleObjectives/SparkGameRTS.cmake", "Tests/CMakeLists.txt"], "note": "RTSSkirmishPackage_DeterministicVictory reaches the scripted victory from the installed package in 1220 s on Windows (opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS; not in hosted CI yet)."},
         {
           "criterionDigest": "sha256:27616ca3f8b9",
           "state": "implemented",
@@ -1691,19 +1642,7 @@
         "Applicable scores reach 3"
       ],
       "acceptanceStatus": [
-        {
-          "criterionDigest": "sha256:2a64ef1c2cac",
-          "state": "implemented",
-          "evidence": [
-            "Tests/TestMOD380RacingCompleteRaceReal.cpp",
-            "GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.cpp",
-            "GameModules/SparkGameRacing/Source/Core/MainRaceFlow.cpp",
-            "GameModules/SparkGameRacing/Source/Core/Main.cpp",
-            "Tests/PackageSmoke/ModuleObjectives/SparkGameRacing.cmake",
-            "Tests/CMakeLists.txt"
-          ],
-          "note": "Player and AI finish valid laps in-process, but no packaged race run exists."
-        },
+        {"criterionDigest": "sha256:2a64ef1c2cac", "state": "implemented", "evidence": ["Tests/TestMOD380RacingCompleteRaceReal.cpp", "GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.cpp", "GameModules/SparkGameRacing/Source/Core/MainRaceFlow.cpp", "GameModules/SparkGameRacing/Source/Core/Main.cpp", "Tests/PackageSmoke/ModuleObjectives/SparkGameRacing.cmake", "Tests/CMakeLists.txt"], "note": "RacingCompleteRacePackage_Circuit finishes player and AI laps from the installed package in 443 s on Windows (opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS; not in hosted CI yet)."},
         {
           "criterionDigest": "sha256:e800cc13bee9",
           "state": "implemented",
