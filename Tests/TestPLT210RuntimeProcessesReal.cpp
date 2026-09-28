@@ -14,6 +14,8 @@
 
 #include "TestFramework.h"
 
+#include "Fixtures/ScopedUnboundedFileSize.h"
+
 #if defined(__linux__)
 
 #include "Graphics/GraphicsEngine.h"
@@ -25,8 +27,6 @@
 #include <string>
 #include <thread>
 
-#include <sys/resource.h>
-
 namespace
 {
     std::filesystem::path TestBinaryDirectory()
@@ -36,36 +36,7 @@ namespace
         return error ? std::filesystem::path{} : exe.parent_path();
     }
 
-    // The sanitizer wrapper caps the soft RLIMIT_FSIZE at 16 MiB (inherited by children) and
-    // leaves the hard limit so tests can lift it. ModuleManager copies the module into a private
-    // staging directory before dlopen, and a sanitizer-instrumented Debug libSparkGameMMOFPS.so is
-    // larger than that cap, so the child's copy fails with EFBIG. Lift the soft limit to the hard
-    // limit for the child's lifetime and restore it afterwards.
-    class ScopedUnboundedFileSize
-    {
-      public:
-        ScopedUnboundedFileSize()
-        {
-            m_saved = ::getrlimit(RLIMIT_FSIZE, &m_previous) == 0;
-            if (m_saved && m_previous.rlim_cur != m_previous.rlim_max)
-            {
-                rlimit raised = m_previous;
-                raised.rlim_cur = m_previous.rlim_max;
-                ::setrlimit(RLIMIT_FSIZE, &raised);
-            }
-        }
-        ~ScopedUnboundedFileSize()
-        {
-            if (m_saved)
-                ::setrlimit(RLIMIT_FSIZE, &m_previous);
-        }
-        ScopedUnboundedFileSize(const ScopedUnboundedFileSize&) = delete;
-        ScopedUnboundedFileSize& operator=(const ScopedUnboundedFileSize&) = delete;
-
-      private:
-        rlimit m_previous{};
-        bool m_saved = false;
-    };
+    using SparkTestFixtures::ScopedUnboundedFileSize;
 } // namespace
 
 TEST(PLT210_GraphicsBasicPath_MMOFPSSurfaceDefinedOnLinux)

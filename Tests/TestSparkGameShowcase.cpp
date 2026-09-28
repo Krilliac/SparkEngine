@@ -13,6 +13,7 @@
 
 #if !defined(_WIN32) && defined(SPARK_TEST_SPARK_GAME_MODULE_PATH)
 
+#include "Fixtures/ScopedUnboundedFileSize.h"
 #include "Core/ModuleManager.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/ECS/Components.h"
@@ -146,6 +147,9 @@ namespace
             manager.UnloadAll();
         }
 
+        // Declared first so it outlives the load: ModuleManager stages a copy of the image before
+        // dlopen, and the sanitizer-instrumented Debug libSparkGame exceeds the wrapper's 16 MiB cap.
+        SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
         ModuleManager manager;
         World& world;
         Spark::EventBus& eventBus;

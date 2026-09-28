@@ -12,6 +12,8 @@
 
 #include "TestFramework.h"
 
+#include "Fixtures/ScopedUnboundedFileSize.h"
+
 #include "Core/ExecScript.h"
 #include "Utils/SparkConsole.h"
 
@@ -29,7 +31,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <netinet/in.h>
-#include <sys/resource.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
@@ -342,32 +343,7 @@ namespace
         return port;
     }
 
-    /// Lift RLIMIT_FSIZE for the child: the module copy can exceed the sanitizer wrapper's soft cap.
-    class ScopedUnboundedFileSize
-    {
-      public:
-        ScopedUnboundedFileSize()
-        {
-            m_saved = ::getrlimit(RLIMIT_FSIZE, &m_previous) == 0;
-            if (m_saved && m_previous.rlim_cur != m_previous.rlim_max)
-            {
-                rlimit raised = m_previous;
-                raised.rlim_cur = m_previous.rlim_max;
-                ::setrlimit(RLIMIT_FSIZE, &raised);
-            }
-        }
-        ~ScopedUnboundedFileSize()
-        {
-            if (m_saved)
-                ::setrlimit(RLIMIT_FSIZE, &m_previous);
-        }
-        ScopedUnboundedFileSize(const ScopedUnboundedFileSize&) = delete;
-        ScopedUnboundedFileSize& operator=(const ScopedUnboundedFileSize&) = delete;
-
-      private:
-        rlimit m_previous{};
-        bool m_saved = false;
-    };
+    using SparkTestFixtures::ScopedUnboundedFileSize;
 } // namespace
 
 TEST(ExecScript_LinuxHeadlessRunsTimelineWithRedactedAudit)

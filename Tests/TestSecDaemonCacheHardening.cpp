@@ -15,6 +15,8 @@
 
 #include "TestFramework.h"
 
+#include "Fixtures/ScopedUnboundedFileSize.h"
+
 #include "AssetService.h"
 #include "ShaderService.h"
 
@@ -29,48 +31,11 @@
 #include <thread>
 #include <vector>
 
-#if !defined(_WIN32)
-#include <sys/resource.h>
-#endif
-
 namespace
 {
     using namespace Spark::Daemon;
 
-    /// The sanitizer wrapper caps the soft RLIMIT_FSIZE at 16 MiB, which silently
-    /// truncates the oversize fixtures to exactly kMaxPayloadSize and makes them
-    /// legal. Lift the soft limit to the hard limit while a fixture is written.
-    class ScopedUnboundedFileSize
-    {
-      public:
-        ScopedUnboundedFileSize()
-        {
-#if !defined(_WIN32)
-            m_saved = ::getrlimit(RLIMIT_FSIZE, &m_previous) == 0;
-            if (m_saved && m_previous.rlim_cur != m_previous.rlim_max)
-            {
-                rlimit raised = m_previous;
-                raised.rlim_cur = m_previous.rlim_max;
-                ::setrlimit(RLIMIT_FSIZE, &raised);
-            }
-#endif
-        }
-        ~ScopedUnboundedFileSize()
-        {
-#if !defined(_WIN32)
-            if (m_saved)
-                ::setrlimit(RLIMIT_FSIZE, &m_previous);
-#endif
-        }
-        ScopedUnboundedFileSize(const ScopedUnboundedFileSize&) = delete;
-        ScopedUnboundedFileSize& operator=(const ScopedUnboundedFileSize&) = delete;
-
-      private:
-#if !defined(_WIN32)
-        rlimit m_previous{};
-        bool m_saved = false;
-#endif
-    };
+    using SparkTestFixtures::ScopedUnboundedFileSize;
 
     /// Fresh, empty scratch directory under the system temp directory.
     std::filesystem::path SecCacheDir(const char* tag)
