@@ -79,6 +79,12 @@ void GraphicsEngine::BeginFrame()
     Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
     if (cmd)
     {
+        // The frame records into the device's immediate list, which EndFrame closes and
+        // submits. A Vulkan command buffer must be begun before anything is recorded into it
+        // (EndFrame submits nothing that was never begun), so the frame opens the list here.
+        // OpenGL executes immediately and NullRHI only resets its per-list counters.
+        cmd->Begin();
+
         Spark::RHI::IRHITexture* backBuffer = rhi.bridge.GetBackBuffer();
         Spark::RHI::IRHITexture* depthBuffer = rhi.bridge.GetDepthBuffer();
 
@@ -199,14 +205,15 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
     m_statistics.visibleObjects = visibleCount;
     m_statistics.culledObjects = m_statistics.totalObjects - visibleCount;
 
+    // Draw and drain the ECS draw list (SubmitMeshForRendering) through the forward pass, as
+    // the Windows RenderScene does. Without the drain the list grows every frame.
+    ProcessDrawList(viewMatrix, projMatrix);
+
     cmd->EndEvent();
 }
 
-// SubmitMeshForRendering lives in the shared GraphicsEngineSubmit.cpp so
-// Linux/macOS builds can drive the draw list too. ProcessDrawList (D3D11-
-// specific) stays Windows-only; on Linux/macOS the draw list accumulates
-// but is consumed by the RHI bridge path or the Metal RT scene feeder
-// (`Graphics/HybridRT/RTSceneFeeder.h`).
+// SubmitMeshForRendering and the non-Windows ProcessDrawList live in the
+// shared GraphicsEngineSubmit.cpp.
 
 // ============================================================================
 // HybridRT GBuffer binding — Linux/macOS
