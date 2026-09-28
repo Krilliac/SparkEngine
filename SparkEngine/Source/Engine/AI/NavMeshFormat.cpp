@@ -50,7 +50,9 @@ namespace Spark::AI
                     return false;
                 }
                 if (count == 0)
+                {
                     return true;
+                }
                 m_stream.read(static_cast<char*>(destination), static_cast<std::streamsize>(count));
                 if (!m_stream.good())
                 {
@@ -67,7 +69,9 @@ namespace Spark::AI
             {
                 float values[3] = {};
                 if (!Read(values, sizeof(values)))
+                {
                     return false;
+                }
                 out = XMFLOAT3{values[0], values[1], values[2]};
                 return true;
             }
@@ -256,16 +260,22 @@ namespace Spark::AI
                         const uint32_t viIdx = navMesh.triangles[i].indices[ei];
                         const uint32_t vjIdx = navMesh.triangles[j].indices[ej];
                         if (viIdx >= vertexCount || vjIdx >= vertexCount)
+                        {
                             continue;
+                        }
                         const auto& vi = navMesh.vertices[viIdx].position;
                         const auto& vj = navMesh.vertices[vjIdx].position;
                         const float dx = vi.x - vj.x, dy = vi.y - vj.y, dz = vi.z - vj.z;
                         if (dx * dx + dy * dy + dz * dz < 0.001f)
+                        {
                             shared++;
+                        }
                     }
                 }
                 if (shared < 2)
+                {
                     continue;
+                }
                 for (int e = 0; e < 3; ++e)
                 {
                     if (navMesh.triangles[i].neighborTriangles[e] == UINT32_MAX)

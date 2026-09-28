@@ -129,7 +129,9 @@ namespace Spark::Graphics::SparkTerrain
             // cursor stays aligned with the writer.
             float layerFloats[8] = {};
             for (float& value : layerFloats)
+            {
                 reader.ReadF32(value);
+            }
 
             terrain.layerDiffusePaths.push_back(std::move(diffuseTexture));
         }
