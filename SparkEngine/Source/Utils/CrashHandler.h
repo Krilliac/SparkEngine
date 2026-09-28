@@ -49,7 +49,6 @@ struct CrashConfig
     bool captureScreenshot = true;                ///< Whether to capture a screenshot at crash time
     bool captureSystemInfo = true;                ///< Whether to collect OS/GPU/memory information
     bool captureAllThreads = true;                ///< Whether to dump call stacks for all threads
-    bool captureFullMemoryDump = false;           ///< Opt-in full-memory dump; always kept local
     bool triggerCrashOnAssert = false;            ///< Whether assertion failures should generate a full crash report
     bool requireConsent = true;                   ///< Ask before a screenshot is packaged with the report
     bool headlessMode = false;                    ///< Skip all dialog boxes and the reporter (CI/testing/headless)
@@ -64,7 +63,8 @@ struct CrashConfig
  * @brief Install the crash handler with the given configuration
  *
  * On Windows: registers an SEH unhandled-exception filter that catches crashes
- * and generates minimal process dumps unless local-only full-memory capture was explicitly enabled. On Linux:
+ * and generates memory-filtered minidumps: thread stacks keep only the pointer values needed to rebuild
+ * call stacks, so no stack-resident secret (password, key, session token) reaches the .dmp. On Linux:
  * installs signal handlers for SIGSEGV, SIGFPE, SIGABRT, etc. On other platforms: a no-op stub.
  *
  * @param cfg Configuration controlling crash report behavior

@@ -4,6 +4,12 @@ Spark's crash path writes a local manifest and artifacts, then launches `SparkCr
 
 **Sources:** `SparkEngine/Source/Utils/CrashHandler.cpp`, `SparkCrashReporter/src/CrashReporterApp.cpp`
 
+## Dump contents
+
+On Windows the engine crash handler (`WriteMiniDump` in `CrashHandler.cpp`) writes every minidump as `MiniDumpNormal | MiniDumpFilterMemory`. Thread stacks keep only the pointer values DbgHelp needs to rebuild call stacks, and no heap or data segment is captured, so a password, SCRAM key or session token that is live on a stack when the process fails does not reach the `.dmp`. The trade-off is debuggability: local variables cannot be inspected from these dumps. There is no full-memory option; the manifest's `fullMemoryDump` field is always `false` and stays only for reporter schema compatibility. The editor's crash handler (`EditorCrashHandler.cpp`) and OS-collected dumps (a Linux core file, Windows Error Reporting LocalDumps) are separate producers and are not covered here.
+
+The production producer test `CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot` holds a random `SPARKCANARY-<16 hex>` canary on its own stack and on the heap while it writes a real report, then fails if any file in the artifact directory contains it as ASCII or UTF-16LE. `CrashCapturePackageSecurity` supplies the canary through `SPARK_TEST_CRASH_CANARY` and repeats the scan on the untouched artifacts after the producer exits. The retention and privacy review of what a filtered dump still contains (module list, register context, pointer values) is an owner decision and is not closed by this test.
+
 ## Trust boundary
 
 The crash directory is an authoritative local root, not a hint. Runtime code opens that directory without following its final symlink/reparse point, opens immediate child names relative to the pinned root, rejects non-regular files and hard links, and compares file identities before later use. Artifact references are filenames in the root; nested or escaping paths are invalid.

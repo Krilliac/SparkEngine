@@ -453,7 +453,6 @@ TEST(CrashConfig_DefaultConstruction)
     EXPECT_TRUE(cfg.captureScreenshot);
     EXPECT_TRUE(cfg.captureSystemInfo);
     EXPECT_TRUE(cfg.captureAllThreads);
-    EXPECT_FALSE(cfg.captureFullMemoryDump);
     EXPECT_FALSE(cfg.triggerCrashOnAssert);
     EXPECT_TRUE(cfg.requireConsent);
     EXPECT_FALSE(cfg.headlessMode);

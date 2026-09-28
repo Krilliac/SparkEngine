@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Validate untouched production crash artifacts through both existing consumers."""
+"""Validate untouched production crash artifacts through both existing consumers.
+
+The producer also holds a per-run canary on its stack and heap while it writes
+the report (OPS-100); no captured artifact may contain it as ASCII or UTF-16LE.
+"""
 from __future__ import annotations
 
 import argparse
@@ -8,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import stat
 import subprocess
 import sys
@@ -39,6 +44,9 @@ VALIDATOR = OPS / "validate_crash_package.py"
 WINDOWS_PRODUCER_FIELDS = ("logFile", "dumpFile")
 POSIX_PRODUCER_FIELDS = ("logFile",)
 PRODUCER_ARTIFACT_FIELDS = WINDOWS_PRODUCER_FIELDS if os.name == "nt" else POSIX_PRODUCER_FIELDS
+# OPS-100: the producer holds this per-run secret on its stack and heap while it
+# writes the report; no captured artifact may contain it in any encoding.
+CANARY_PREFIX = "SPARKCANARY-"
 MAX_PROCESS_OUTPUT = 1024 * 1024
 PROCESS_POLL_INTERVAL = 0.02
 PROCESS_KILL_TIMEOUT = 2.0
@@ -56,13 +64,30 @@ def directory_identity(path: Path) -> tuple[int, int]:
     return info.st_dev, info.st_ino
 
 
-def producer_environment(temp_root: Path) -> dict[str, str]:
+def make_canary() -> str:
+    return CANARY_PREFIX + secrets.token_hex(8)
+
+
+def producer_environment(temp_root: Path, canary: str) -> dict[str, str]:
     env = {key: value for key, value in os.environ.items()
            if not key.upper().startswith("SPARK_TEST_")}
     env.update(TEMP=str(temp_root), TMP=str(temp_root), TMPDIR=str(temp_root),
                SPARK_TEST_NAME=PRODUCER_TEST, SPARK_TEST_EXPECT_COUNT="1",
-               SPARK_TEST_KEEP_CRASH_ARTIFACTS="1")
+               SPARK_TEST_KEEP_CRASH_ARTIFACTS="1", SPARK_TEST_CRASH_CANARY=canary)
     return env
+
+
+def artifacts_containing(root: Path, canary: str) -> list[str]:
+    """Names of captured files holding the canary as ASCII/UTF-8 or UTF-16LE bytes."""
+    needles = (canary.encode("ascii"), canary.encode("utf-16-le"))
+    hits = []
+    deadline = time.monotonic() + 15
+    with SecureRoot(root) as pinned:
+        for name in sorted(pinned.iter_names(max_entries=MAX_DIRECTORY_ENTRIES, deadline=deadline)):
+            data, _ = pinned.read_file(name, max_bytes=MAX_ARTIFACT_BYTES, deadline=deadline)
+            if any(needle in data for needle in needles):
+                hits.append(name)
+    return hits
 
 
 def run_process(command: list[str], cwd: Path, *, env: dict[str, str] | None = None,
@@ -286,13 +311,17 @@ def capture_security(producer: Path, reporter: Path, *, keep_work: bool = False)
     try:
         temp_root = work / "tmp"
         temp_root.mkdir(mode=0o700)
+        canary = make_canary()
         pid, status, _ = run_process([str(producer), "--warn-is-error", "--empty-is-error"], work,
-                                    env=producer_environment(temp_root), timeout=40)
+                                    env=producer_environment(temp_root, canary), timeout=40)
         if status != 0:
             raise CaptureError("isolated production capture test failed")
         artifact_root = discover_capture(temp_root, pid)
         manifest_name, manifest = read_manifest(artifact_root, pid)
         before = snapshot(artifact_root)
+        leaked = artifacts_containing(artifact_root, canary)
+        if leaked:
+            raise CaptureError("crash artifacts hold the producer's stack/heap canary: " + ", ".join(leaked))
         _, status, _ = run_process([str(reporter), "--report", str(artifact_root / manifest_name)], work)
         if status != 0:
             raise CaptureError("native reporter rejected untouched producer output")
@@ -331,7 +360,7 @@ def capture_security(producer: Path, reporter: Path, *, keep_work: bool = False)
         validate_package(legacy, work, expected_check="writer-field")
         if snapshot(legacy) != case_before or snapshot(artifact_root) != before:
             raise CaptureError("negative controls changed original or copied artifacts")
-        result = {"passed": True, "producer_pid": pid, "artifact_count": len(before[1]),
+        result = {"passed": True, "producer_pid": pid, "artifact_count": len(before[1]), "canary_absent": True,
                   "native_and_python_read_only": True, "traversal_rejected": True,
                   "legacy_field_native_accepted_python_rejected": True,
                   "work_root": str(work) if keep_work else None}

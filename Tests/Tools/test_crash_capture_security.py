@@ -45,7 +45,7 @@ class CrashCaptureDriverTests(unittest.TestCase):
     def test_child_environment_removes_inherited_selection_and_owns_temp(self):
         with mock.patch.dict(os.environ, {"SPARK_TEST_LIMIT": "0", "SPARK_TEST_EXCLUDE": "Crash",
                                           "SPARK_TEST_FILE": "wrong.cpp"}):
-            env = driver.producer_environment(self.root)
+            env = driver.producer_environment(self.root, "SPARKCANARY-0123456789abcdef")
         self.assertNotIn("SPARK_TEST_LIMIT", env)
         self.assertNotIn("SPARK_TEST_EXCLUDE", env)
         self.assertNotIn("SPARK_TEST_FILE", env)
@@ -53,6 +53,17 @@ class CrashCaptureDriverTests(unittest.TestCase):
         self.assertEqual(env["SPARK_TEST_EXPECT_COUNT"], "1")
         self.assertEqual(env["TEMP"], str(self.root))
         self.assertEqual(env["TMP"], str(self.root))
+        self.assertEqual(env["SPARK_TEST_CRASH_CANARY"], "SPARKCANARY-0123456789abcdef")
+
+    def test_canary_is_fresh_and_found_in_either_encoding(self):
+        canary = driver.make_canary()
+        self.assertRegex(canary, r"^SPARKCANARY-[0-9a-f]{16}$")
+        self.assertNotEqual(canary, driver.make_canary())
+        (self.root / "clean.log").write_bytes(b"no secret here")
+        self.assertEqual(driver.artifacts_containing(self.root, canary), [])
+        (self.root / "a.dmp").write_bytes(b"\x00stack:" + canary.encode("ascii") + b"\x00")
+        (self.root / "b.log").write_bytes(canary.encode("utf-16-le"))
+        self.assertEqual(driver.artifacts_containing(self.root, canary), ["a.dmp", "b.log"])
 
     def test_discovery_requires_exact_pid_name_and_single_directory(self):
         (self.root / ("spark_crash_999_" + "a" * 32)).mkdir()

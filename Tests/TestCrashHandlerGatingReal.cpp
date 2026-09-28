@@ -10,10 +10,15 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
+#include <memory>
+#include <random>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
@@ -252,6 +257,54 @@ namespace
         }
         return matches;
     }
+
+    constexpr std::string_view kCanaryPrefix = "SPARKCANARY-";
+    constexpr size_t kCanaryHexDigits = 16;
+
+    /// Per-run secret stand-in. Tests/Tools/run_crash_capture_security.py supplies it through
+    /// SPARK_TEST_CRASH_CANARY so it can rescan the untouched artifacts after this process exits.
+    std::string MakeCrashCanary()
+    {
+        if (const char* supplied = std::getenv("SPARK_TEST_CRASH_CANARY"))
+        {
+            const std::string value(supplied);
+            if (value.size() == kCanaryPrefix.size() + kCanaryHexDigits && value.starts_with(kCanaryPrefix))
+                return value;
+        }
+        std::random_device device;
+        std::uniform_int_distribution<int> nibble(0, 15);
+        std::string canary(kCanaryPrefix);
+        for (size_t digit = 0; digit < kCanaryHexDigits; ++digit)
+            canary += "0123456789abcdef"[nibble(device)];
+        return canary;
+    }
+
+    /// Names of the files in @p directory holding @p canary as ASCII or UTF-16LE bytes.
+    std::vector<std::string> FilesContainingCanary(const std::filesystem::path& directory, const std::string& canary)
+    {
+        namespace fs = std::filesystem;
+        std::string utf16;
+        for (const char character : canary)
+        {
+            utf16 += character;
+            utf16 += '\0';
+        }
+
+        std::vector<std::string> hits;
+        std::error_code error;
+        for (fs::directory_iterator it(directory, error), end; !error && it != end; it.increment(error))
+        {
+            if (!it->is_regular_file(error))
+                continue;
+            std::ifstream artifact(it->path(), std::ios::binary);
+            std::ostringstream contents;
+            contents << artifact.rdbuf();
+            const std::string bytes = contents.str();
+            if (bytes.find(canary) != std::string::npos || bytes.find(utf16) != std::string::npos)
+                hits.push_back(it->path().filename().string());
+        }
+        return hits;
+    }
 } // namespace
 
 TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
@@ -291,11 +344,29 @@ TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
     TriggerCrashHandler("gated-entry-probe-a1b2c3");
     EXPECT_EQ(CountReportsContaining(artifacts, "gated-entry-probe-a1b2c3"), static_cast<size_t>(0));
 
+    // OPS-100: a secret live on this thread's stack and on the heap while the
+    // report is written must not reach any artifact (dump, log or manifest).
+    const std::string canary = MakeCrashCanary();
+    volatile char stackSecret[64] = {};
+    for (size_t index = 0; index < canary.size(); ++index)
+        stackSecret[index] = canary[index];
+    auto heapSecret = std::make_unique<char[]>(canary.size());
+    std::memcpy(heapSecret.get(), canary.data(), canary.size());
+
     // Ungated entry point: this is the one FreezeDetector::OnCriticalFreeze and
     // Assert::Fail rely on, and it must leave an artifact on disk. A stubbed or
     // re-gated TriggerCrashReport fails here.
     TriggerCrashReport("ungated-entry-probe-d4e5f6");
     EXPECT_EQ(CountReportsContaining(artifacts, "ungated-entry-probe-d4e5f6"), static_cast<size_t>(1));
+
+    const std::vector<std::string> leaked = FilesContainingCanary(artifacts, canary);
+    for (const std::string& file : leaked)
+        std::cerr << "  crash artifact holds the stack/heap canary: " << file << '\n';
+    EXPECT_TRUE(leaked.empty());
+    // Both copies stay live across the report, so the optimizer cannot drop them.
+    const char stackFirst = stackSecret[0];
+    EXPECT_EQ(stackFirst, 'S');
+    EXPECT_EQ(heapSecret[0], 'S');
 
     // One report per process: the duplicate a fatal assert produces (gated call
     // followed by ungated call) must not write a second dump/log pair.

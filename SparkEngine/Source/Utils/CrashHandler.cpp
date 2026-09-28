@@ -698,7 +698,8 @@ static std::string MakeManifestJson(const std::string& dumpFile, const std::stri
     j << "  \"requireConsent\": " << (g_cfg.requireConsent ? "true" : "false") << ",\n";
     j << "  \"allowScreenshotRefusal\": " << (g_cfg.allowScreenshotRefusal ? "true" : "false") << ",\n";
     j << "  \"promptUserDescription\": " << (g_cfg.promptUserDescription ? "true" : "false") << ",\n";
-    j << "  \"fullMemoryDump\": " << (g_cfg.captureFullMemoryDump ? "true" : "false") << "\n";
+    // The producer never writes full-memory dumps; the field stays for reporter schema compatibility.
+    j << "  \"fullMemoryDump\": false\n";
     j << "}\n";
     return j.str();
 }
@@ -1261,17 +1262,16 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWOR
     }
 
     MINIDUMP_EXCEPTION_INFORMATION info{GetCurrentThreadId(), ep, TRUE};
-    MINIDUMP_TYPE dumpType = MiniDumpNormal;
-    if (g_cfg.captureFullMemoryDump)
-    {
-        dumpType =
-            static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData | MiniDumpWithUnloadedModules);
-    }
+    // OPS-100: MiniDumpNormal alone copies raw thread-stack memory, so a password,
+    // SCRAM key or session token live on any stack would land in the .dmp.
+    // MiniDumpFilterMemory keeps only the pointer values needed to rebuild the
+    // stack traces; locals are not recoverable from these dumps by design.
+    constexpr MINIDUMP_TYPE dumpType = static_cast<MINIDUMP_TYPE>(MiniDumpNormal | MiniDumpFilterMemory);
     BOOL result = FALSE;
     DWORD error = ERROR_SUCCESS;
-    // A normal minidump can race a transiently inaccessible page on a live
-    // process. Retry that one DbgHelp error once using the same private file;
-    // no failed or partial dump is ever advertised in the manifest.
+    // A minidump can race a transiently inaccessible page on a live process.
+    // Retry that one DbgHelp error once using the same private file; no failed
+    // or partial dump is ever advertised in the manifest.
     for (int attempt = 0; attempt < 2; ++attempt)
     {
         if (attempt != 0)
@@ -1286,7 +1286,7 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWOR
         SetLastError(ERROR_SUCCESS);
         result = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, nullptr);
         error = result ? ERROR_SUCCESS : GetLastError();
-        if (result || dumpType != MiniDumpNormal ||
+        if (result ||
             (error != ERROR_PARTIAL_COPY && error != static_cast<DWORD>(HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))))
             break;
     }

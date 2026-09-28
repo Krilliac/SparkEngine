@@ -172,7 +172,6 @@ cfg.dumpPrefix          = L"SparkEngine"; // Minidump filename prefix
 cfg.captureScreenshot   = true;   // Capture last rendered frame
 cfg.captureSystemInfo   = true;   // Collect OS, GPU, memory info
 cfg.captureAllThreads   = true;   // Dump all thread call stacks
-cfg.captureFullMemoryDump = false; // Opt-in, local-only full-memory dump
 cfg.triggerCrashOnAssert = false; // Whether Assert::Fail generates a full crash report
 cfg.headlessMode        = false;  // true = no dialogs (CI/servers)
 
@@ -190,6 +189,7 @@ InstallCrashHandler(cfg);
 ### Shipped behavior (2026-09 sweep)
 
 - **The engine never uploads a crash report.** The in-process GitHub/SMTP/FTP/Dropbox/HTTP/relay uploader and every credential-bearing setting (`UploadURL`, `ProxyURL`, `GitHub*`, `Smtp*`, `Email*`, and the `SPARK_GITHUB_TOKEN`/`SPARK_SMTP_PASS`/`SPARK_CRASH_UPLOAD_URL` environment overrides) were removed for OPS-100. Stale keys in an existing `settings.ini` or `settings.local.ini` are dropped on load and never written back. The handler writes local artifacts and launches the read-only `SparkCrashReporter` (see [Crash Reporting](Crash-Reporting.md)).
+- **Minidumps are memory-filtered** (`MiniDumpNormal | MiniDumpFilterMemory`): stacks keep only the pointer values needed for call stacks, so locals are not inspectable from an engine dump and no stack-resident secret reaches it. There is no full-memory option (OPS-100; see [Crash Reporting](Crash-Reporting.md#dump-contents)).
 - Faulting-thread frame lines in the crash log start with `FRAME `; the per-thread stacks written by `ThreadStacks()` are unmarked, so a reader can tell the faulting stack apart.
 - **One report per process.** `HandleCrashInternal` carries a once-guard, so an assertion that reaches both `TriggerCrashHandler` and `TriggerCrashReport` writes a single dump/log/manifest; any later trigger in the same process is ignored (a note goes to `OutputDebugString`).
 - `TriggerCrashReportUnattended()` (`CrashReportDelivery::ArtifactOnly`) writes dump/log/manifest with **no screenshot, no consent or description dialog and no in-process upload**. The freeze watchdog uses it so `terminateOnFreeze` really terminates; delivery of that report is left to the crash reporter or the next launch's pending-manifest sweep.
