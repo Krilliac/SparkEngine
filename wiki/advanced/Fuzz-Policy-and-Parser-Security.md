@@ -6,22 +6,26 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository now has ten structurally
+SEC-120 remains open and release-blocking. The repository now has fourteen structurally
 validated production fuzz targets and bounded seed corpora for `json-utils`,
 `crash-manifest-parser`, `texture-stex-compressor`, `neural-weights-nnw`,
 `scene-manifest`, `sparkpak-reader`, `shader-daemon-blob`, `shader-service-protocol`,
-`config-parser`, and `telemetry-spool-format`, but
+`config-parser`, `telemetry-spool-format`, `sparkbuild-archive-download`,
+`exec-script-file`, `sparkbuild-config`, and `visual-script-graph`, but
 exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
 crash-free-duration evidence remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **141 explicitly inventoried parsers, 10
-fuzzed and 131 blocked**, **10 bound corpora with 79 seeds (35296 bytes)**, **0 deferred
-candidates and 114 OD-21 exemptions**, and **2088 source files scanned across 17
+For the recorded source-tree state it reports **136 explicitly inventoried parsers, 14
+fuzzed and 122 blocked**, **14 bound corpora with 111 seeds (118099 bytes)**, **0 deferred
+candidates and 118 OD-21 exemptions**, and **2101 source files scanned across 17
 first-party roots**. The unwired material file import path (`Material::LoadFromFile`,
 `Material::LoadTexture` and `MaterialSystem::LoadTextureFromFile`, inventoried as
 `pbr-material-file`, `wic-pbr-material-texture` and `wic-material-texture`) was deleted
-rather than fuzzed, so those three parsers left the inventory. Those counts are not fuzz coverage.
+rather than fuzzed, so those three parsers left the inventory. Five more blocked records
+decoded no untrusted bytes and were reclassified rather than given a harness that would
+inflate the fuzzed count (see [Retired and reclassified records](#retired-and-reclassified-records)).
+Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
 
@@ -164,6 +168,63 @@ structurally bound on Windows and awaits its first Linux Clang build and smoke r
   `SceneManager_LegacySphereRejectsDegenerateOrHugeTessellation` and
   `SceneManager_TextParsersRejectNodeCountAboveCap` pin the bounds and the cap.
 
+### SparkBuild, `-exec` and `.vscript` targets
+
+Unlike the hardening targets above, these four were built with Clang 21 and libFuzzer on a
+local Linux (WSL Ubuntu) clone, their corpora replayed clean through the registered CTest
+smokes, and each oracle was shown to fire by a one-line mutation of the production code
+in that clone only (a RED proof). They have no hosted runtime evidence yet, and none found
+a defect in the existing parser.
+
+- **`sparkbuild-archive-download`** (`SparkFuzzZipListing`, `FuzzZipListingSmoke`,
+  `-runs=9`, `-max_len=131072`) writes the input to a memfd and lists it with the shipped
+  `SparkBuild::ArchiveExtraction::ListZipMembers`, which SparkBuild runs on every downloaded
+  ZIP before an extractor sees it. For an accepted listing the adapter aborts when it
+  exceeds `kMaxZipEntries` or 46 central bytes per member, when a name passes the ZIP member
+  policy but an independent walk (both separators, `..`, leading separator, drive prefix,
+  NUL, `:`) says it could leave the root, when a ZIP-safe name fails the TAR policy, or when
+  `ValidateMemberNames` disagrees with the per-name policy. The seeds come from
+  `tools/fuzz-policy/generate_zip_corpus.py`; the largest carries a 65535-byte comment with a
+  decoy end record inside it, which is why `-max_len` is 131072. `*.zip` is gitignored, so
+  the seeds are force-added. The target builds `ArchiveExtraction.cpp` as C++17, like
+  SparkBuild. A 60-second campaign ran 523,739 inputs clean.
+- **`exec-script-file`** (`SparkFuzzExecScript`, `FuzzExecScriptSmoke`, `-runs=7`) feeds
+  `Spark::ParseExecScript`. It aborts on an `atSec` that is neither the -1 sentinel nor a
+  finite time >= 0, a negative frame, an empty command or one that keeps a line feed or a
+  trailing CR/space, a schedule out of due-time order, or more commands than lines. GNU ld
+  reports undefined symbols even in sections `--gc-sections` drops, so the parser moved
+  verbatim into `Core/ExecScriptParse.cpp`, apart from the `SimpleConsole`-calling player.
+  A 60-second campaign ran 417,914 inputs clean.
+- **`sparkbuild-config`** (`SparkFuzzSparkBuildConfig`, `FuzzSparkBuildConfigSmoke`,
+  `-runs=8`) feeds `SparkBuild::ConfigManager::LoadFromStream` and then builds both cmake
+  commands that ProcessRunner runs through `/bin/sh -c`. It aborts when a rejected
+  document changed the loaded config, when a builder refuses without an unquotable value,
+  when an independent sh word split finds an unquoted metacharacter, an expansion or escape
+  inside quotes or an unterminated quote, or when a path or preset is not exactly one whole
+  argv word in its place. `ConfigManager::Load` previously read `sparkbuild.ini` without a
+  bound; it now refuses a file over `kMaxConfigBytes` (64 KiB) before parsing
+  (`SparkBuildConfig_LoadRejectsOversizedFile`, `SparkBuildConfig_LoadFromStreamMatchesLoad`).
+  A 60-second campaign ran 192,912 inputs clean.
+- **`visual-script-graph`** (`SparkFuzzVisualScriptGraph`, `FuzzVisualScriptGraphSmoke`,
+  `-runs=8`) feeds `Spark::Scripting::VisualScriptGraphIO::Parse`. For an accepted graph it
+  aborts when the canonical `Serialize` output does not parse again or is not stable across
+  a reload, when a node id leaves `[1, kMaxNodeId]`, or when a body, node or graph exceeds the
+  decoder's caps. The seeds are the shipped `GameManager.vscript` and the MOD-390 test's
+  minimal document with one defect each. A 90-second campaign ran 473,683 inputs clean.
+
+### Retired and reclassified records
+
+Five blocked records described code that decodes no untrusted bytes. Each now carries its
+reviewed classification, and none counts as fuzzed:
+
+| Former record | Outcome |
+|---|---|
+| `svg-renderer` | `Graphics/SVGRenderer.h` had no include anywhere; deleted as unwired code |
+| `input-bindings` | `InputBindingManager::LoadFromFile`/`SaveToFile` (a `std::regex` reader with no size cap) had no caller; deleted, so the attack surface is gone rather than covered |
+| `texture-basis-transcoder` | no basisu backend is linked and `ParseHeader`/`Transcode` read nothing; exempted as `not-a-parser` |
+| `archive-resource-provider` | forwards to `SparkPakReader`; both files exempted as `delegating-call-site` of the fuzzed `sparkpak-reader` (the reader opens `.spk` only, not `.pak`/`.zip`) |
+| `texture-streaming-container` | `TextureStreaming.cpp` only queues `TextureSystem::LoadTextureFromFile` calls (the `texture-loader-*` records); no detector hits it, so the record was dropped rather than exempted |
+
 Two gates, deliberately separate:
 
 | Gate | Command | Blocks | Today |
@@ -176,7 +237,7 @@ belongs to ENG-200 behind G11, including `.as` script-file ingestion under
 `SparkEngine/Source/Engine/Scripting`. Their subtrees are named as ticketed, owned,
 expiring exclusions rather than silently omitted. A file an inventoried parser owns is
 never hidden by a subtree exclusion: the `.vscript` graph decoder in the scripting
-subtree is the blocked `visual-script-graph` parser.
+subtree is the `visual-script-graph` parser, fuzzed by `SparkFuzzVisualScriptGraph`.
 
 ## What the Gate Proves
 
@@ -226,7 +287,7 @@ The gate proves that:
   a non-blocking status, while blockers remain.
 
 The gate does **not** prove that the regex scanner finds every possible parser, or that
-declared limits hold at runtime. The full inventory report records 35 inventoried files
+declared limits hold at runtime. The full inventory report records 33 inventoried files
 that no detector pattern matches, found by human review, so that limitation is a number
 rather than an assumption.
 
@@ -474,7 +535,7 @@ change *is* the review record.
 - build and replay the four SEC-120 hardening targets (`shader-daemon-blob`,
   `shader-service-protocol`, `config-parser`, `telemetry-spool-format`) on Linux Clang for
   the first time, then retain exact-SHA sanitizer smoke for all ten targets;
-- implement production entry-point fuzz targets for the remaining 131 blocked parsers, starting
+- implement production entry-point fuzz targets for the remaining 122 blocked parsers, starting
   with the highest-risk binary readers (`terrain-sparkterrain`,
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`). `asset-service-protocol` and
@@ -492,8 +553,8 @@ change *is* the review record.
   `fuzzed`);
 - independently review that each harness reaches production parsing code and that
   allocation, depth, path, integer, and time bounds are enforced by that code;
-- extend the detector so the 35 known blind spots shrink;
-- have an independent security reviewer re-check the 114 OD-21 exemptions; they are
+- extend the detector so the 33 known blind spots shrink;
+- have an independent security reviewer re-check the 118 OD-21 exemptions; they are
   recorded judgement, not proof of unreachability.
 
 ## Source & Freshness
@@ -502,5 +563,6 @@ Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocki
 `fuzz-policy` job in `.github/workflows/build.yml`, the non-blocking `fuzz-scheduled`
 campaign in `.github/workflows/fuzz-scheduled.yml`, and the closure step in
 `.github/workflows/release.yml`. The OD-21 classification and the counts above were
-re-verified structurally 2026-09-27 (SEC-120 hardening pass); rerun the CI command for
+re-verified structurally 2026-09-28 (SparkBuild, `-exec` and `.vscript` targets and the
+record reclassification); rerun the CI command for
 current counts and exact-SHA runtime evidence.
