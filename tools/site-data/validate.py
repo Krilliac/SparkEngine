@@ -1061,6 +1061,81 @@ _NON_WINDOWS_INSTALLER_WORDING = re.compile(
 )
 
 
+# REL-200: the live bundle turns globally ready only on exact-commit publication evidence.
+PUBLICATION_JOB = "verify-stable-publication"
+WORKFLOW_ROOT = REPO_ROOT / ".github" / "workflows"
+
+
+def publication_workflows() -> set[str]:
+    """Workflow file names that define the stable publication verification job."""
+    return {
+        path.name
+        for path in sorted(WORKFLOW_ROOT.glob("*.yml"))
+        if path.is_file() and PUBLICATION_JOB in workflow_jobs(path)
+    }
+
+
+def publication_evidence_errors(contract: dict[str, Any], workflows: set[str] | None = None) -> list[str]:
+    """A ready profile, or a globally ready release, carries same-commit publication evidence.
+
+    Every publicationFinalization work item must require the publication
+    verification job and evidence each criterion with a ``ci:<workflow>/<run>@<sha>``
+    reference from a workflow defining that job; all such citations share one
+    commit, and the finalization gate is passing with evidence.
+    """
+    readiness = contract.get("readiness", {})
+    global_ready = readiness.get("globalRelease", {}).get("state") == "ready"
+    if not global_ready and not any(
+        isinstance(profile, dict) and profile.get("state") == "ready" for profile in readiness.get("releaseProfiles", [])
+    ):
+        return []
+    if workflows is None:
+        workflows = publication_workflows()
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    gates = {gate.get("id"): gate for gate in readiness.get("gates", []) if isinstance(gate, dict)}
+    errors: list[str] = []
+    if not workflows:
+        return [f"publicationEvidence: no workflow defines the {PUBLICATION_JOB} job"]
+    for profile in readiness.get("releaseProfiles", []):
+        if not isinstance(profile, dict) or (profile.get("state") != "ready" and not global_ready):
+            continue
+        finalization = profile.get("publicationFinalization")
+        location = f"publicationEvidence.{profile.get('id')}"
+        if not isinstance(finalization, dict):
+            errors.append(f"{location}: a ready profile requires publicationFinalization")
+            continue
+        commits: set[str] = set()
+        for work_id in finalization.get("workItemIds", []):
+            item = items.get(work_id)
+            if item is None:
+                errors.append(f"{location}.{work_id}: finalization work item is missing")
+                continue
+            if PUBLICATION_JOB not in item.get("requiredCiJobs", []):
+                errors.append(f"{location}.{work_id}: requiredCiJobs must include {PUBLICATION_JOB}")
+            for index, entry in enumerate(item.get("acceptanceStatus", [])):
+                references = [
+                    value
+                    for value in (entry.get("evidence", []) if isinstance(entry, dict) else [])
+                    if isinstance(value, str)
+                    and ACCEPTANCE_CI_REFERENCE.match(value)
+                    and value[len("ci:"):].split("/", 1)[0] in workflows
+                ]
+                if not isinstance(entry, dict) or entry.get("state") != "evidenced" or not references:
+                    errors.append(
+                        f"{location}.{work_id}.acceptanceStatus[{index}]: must be evidenced by a "
+                        f"ci:<{'|'.join(sorted(workflows))}>/<run>@<sha> publication reference"
+                    )
+                commits.update(reference.rsplit("@", 1)[1] for reference in references)
+        if len(commits) > 1:
+            errors.append(f"{location}: publication evidence cites different commits {sorted(commits)}")
+        gate = gates.get(finalization.get("gateId"))
+        if gate is None or gate.get("state") != "passing" or not gate.get("evidence"):
+            errors.append(
+                f"{location}: finalization gate {finalization.get('gateId')} must be passing with evidence"
+            )
+    return errors
+
+
 WINDOWS_CERTIFICATION_CAPABILITY = "platform.windows"
 _SANITIZER_ARTIFACT = re.compile(r"sanitizer|(?<![a-z])[atm]san(?![a-z])", re.IGNORECASE)
 
@@ -3989,6 +4064,7 @@ class Validator:
         profile_ids = self.validate_release_profiles(item_ids, capability_ids, gate_ids)
         for message in finalization_contract_errors(self.contract):
             self.error("publicationFinalization", message)
+        self.errors.extend(publication_evidence_errors(self.contract))
         if require_candidate_ready:
             for message in candidate_readiness_errors(self.contract):
                 self.error("candidate readiness", message)

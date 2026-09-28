@@ -100,12 +100,14 @@ class ContractTestCase(unittest.TestCase):
             if gate["id"] in required:
                 gate["state"] = "passing"
         declared = set(profile["blockingWorkItemIds"])
+        finalizers = set(profile["publicationFinalization"]["workItemIds"])
         for item in contract["workItems"]:
             if item["id"] in declared:
                 item["status"] = "done"
+                reference = PUBLICATION_CI_REFERENCE if item["id"] in finalizers else EXACT_CI_REFERENCE
                 for entry in item["acceptanceStatus"]:
                     entry["state"] = "evidenced"
-                    entry["evidence"] = ["README.md", EXACT_CI_REFERENCE]
+                    entry["evidence"] = ["README.md", reference]
                 if item["id"] == "GOV-400":
                     contract["content"]["legal"]["policyGaps"] = []
                 for key in ("entryPoints", "documentationUpdates"):
@@ -139,6 +141,7 @@ class ContractTestCase(unittest.TestCase):
 
 
 EXACT_CI_REFERENCE = "ci:build.yml/1@" + "0" * 40
+PUBLICATION_CI_REFERENCE = "ci:release.yml/1@" + "0" * 40
 
 # ENG-220 certifies only the D3D11 path; each experimental backend's parity is
 # owned by its own rendering work item (backend name, accepted title words).
@@ -1258,6 +1261,65 @@ class ReadyPromotionTests(ContractTestCase):
         self.promote_ready(unsigned)
         self.profile_of(unsigned)["signOffEvidence"] = []
         self.assert_rejected(unsigned, "ready profile requires sign-off evidence")
+
+    def test_global_ready_requires_same_commit_publication_evidence(self) -> None:
+        self.assertEqual(site_data_validate.publication_workflows(), {"release.yml"})
+        self.assertEqual(site_data_validate.publication_evidence_errors(self.mutable), [])
+        self.promote_ready(self.mutable)
+        self.assertEqual(site_data_validate.publication_evidence_errors(self.mutable), [])
+
+        def finalizer(contract: dict[str, Any]) -> dict[str, Any]:
+            return self.items_of(contract)["REL-200"]
+
+        def build_only(contract: dict[str, Any]) -> None:
+            for entry in finalizer(contract)["acceptanceStatus"]:
+                entry["evidence"] = ["README.md", EXACT_CI_REFERENCE]
+
+        def split_commits(contract: dict[str, Any]) -> None:
+            finalizer(contract)["acceptanceStatus"][-1]["evidence"] = [
+                "README.md",
+                "ci:release.yml/2@" + "1" * 40,
+            ]
+
+        def no_publication_job(contract: dict[str, Any]) -> None:
+            finalizer(contract)["requiredCiJobs"].remove("verify-stable-publication")
+
+        def gate_not_passing(contract: dict[str, Any]) -> None:
+            self.gates_of(contract)["G17"]["state"] = "blocked"
+
+        cases = {
+            "build-workflow-only": (build_only, "must be evidenced by a ci:<release.yml>/<run>@<sha>"),
+            "two-commits": (split_commits, "publication evidence cites different commits"),
+            "no-publication-job": (no_publication_job, "requiredCiJobs must include verify-stable-publication"),
+            "g17-not-passing": (gate_not_passing, "finalization gate G17 must be passing with evidence"),
+        }
+        for name, (mutate, fragment) in cases.items():
+            with self.subTest(mutation=name):
+                contract = copy.deepcopy(self.mutable)
+                mutate(contract)
+                errors = site_data_validate.publication_evidence_errors(contract)
+                self.assertTrue(any(fragment in error for error in errors), errors)
+                if name == "build-workflow-only":
+                    # The full validator runs the rule, so --require-ready cannot pass without it.
+                    self.assert_rejected(contract, fragment)
+
+    def test_ready_bundle_deploy_runs_the_require_ready_gate(self) -> None:
+        try:
+            import yaml  # noqa: PLC0415
+        except ImportError:
+            self.skipTest("PyYAML is not installed")
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github" / "workflows" / "site-data-publish.yml").read_text(encoding="utf-8")
+        )
+        deploy = next(
+            step["run"]
+            for step in workflow["jobs"]["site-data-publish"]["steps"]
+            if 'git init "$PUBLISH_REPO"' in step.get("run", "")
+        )
+        gate = deploy.index('validate.py" --require-ready')
+        self.assertLess(gate, deploy.index('git init "$PUBLISH_REPO"'))
+        self.assertIn('["globalRelease"]["state"] != "ready"', deploy[:gate])
+        self.assertLess(deploy.index("--require-exact-evidence"), gate)
 
 
 class ScopeNarrowingTests(ContractTestCase):

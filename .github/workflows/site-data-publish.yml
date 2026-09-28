@@ -439,6 +439,13 @@ jobs:
           GH_TOKEN="$GITHUB_TOKEN" \
           TARGET_SHA="$SOURCE_COMMIT" \
             python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-exact-required-gate.py"
+          # REL-200: a globally ready contract deploys only through the strict
+          # ready gate, which demands same-commit release-workflow evidence. The
+          # payload's exact evidence was verified by the --published call above.
+          if python3 -I -c 'import json, sys; sys.exit(json.load(open(sys.argv[1], encoding="utf-8"))["globalRelease"]["state"] != "ready")' \
+               "$GITHUB_WORKSPACE/trusted-source/docs/site/readiness.json"; then
+            python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/validate.py" --require-ready
+          fi
 
           git init "$PUBLISH_REPO"
           git -C "$PUBLISH_REPO" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
