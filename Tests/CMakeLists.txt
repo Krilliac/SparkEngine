@@ -2225,6 +2225,18 @@ set_tests_properties(TF120_Residency PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 120)
 
+# DATA-120 / TF-120: authority processes sharing one TF_SAVE_ROOT database. The
+# two spawned-peer cases (TF120PeerProcess.h) run on every platform, so the
+# count is the same everywhere; a peer that cannot spawn SKIPs and fails
+# --warn-is-error. RUN_SERIAL: fixed Saves/ paths, and on Windows the peers
+# inherit a scoped copy of this process's environment.
+add_test(NAME TF120_SharedRoot COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(TF120_SharedRoot PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_SharedRoot_;SPARK_TEST_EXPECT_COUNT=8"
+    LABELS "persistence;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 240)
+
 # Security: SparkDaemon shader/asset cache hardening. The pinned count fails the
 # lane if the family silently stops being compiled in.
 add_test(NAME SecDaemonCacheHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
