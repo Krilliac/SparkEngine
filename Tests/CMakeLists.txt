@@ -381,6 +381,7 @@ add_executable(SparkTests
     TestSceneSerializerReal.cpp
     TestMusicManager.cpp
     TestAngelScriptEngine.cpp
+    TestAngelScriptStackAlignmentReal.cpp
     TestENG200ScriptFaultsReal.cpp
     TestENG200ScriptBindingsReal.cpp
     TestENG200ScriptAudioAnimationReal.cpp
@@ -1468,6 +1469,17 @@ if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
 endif()
 # ENG-200: script playSound()/playAnimation() through the real AudioUpdateSystem and
 # AnimationUpdateSystem (TestENG200ScriptAudioAnimationReal.cpp); needs no physics.
+# AngelScript stack alignment: value objects (script string locals, return slots,
+# a 12-byte value type) reach native code 8-byte aligned through odd dword offsets,
+# stack-block growth, nested contexts, suspend/resume, exceptions and bytecode
+# save/load (TestAngelScriptStackAlignmentReal.cpp; raw API on the patched core).
+if(SPARK_ANGELSCRIPT_AVAILABLE)
+    add_test(NAME AngelScriptStackAlignment COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(AngelScriptStackAlignment PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AngelScriptStackAlignment_;SPARK_TEST_EXPECT_COUNT=11"
+        LABELS "scripting;unit"
+        TIMEOUT 120)
+endif()
 if(SPARK_ANGELSCRIPT_AVAILABLE)
     add_test(NAME ScriptMediaBindingsReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(ScriptMediaBindingsReal PROPERTIES
