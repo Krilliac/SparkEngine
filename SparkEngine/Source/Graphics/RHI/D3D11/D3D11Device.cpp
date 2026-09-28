@@ -851,6 +851,10 @@ namespace Spark
                 m_capabilities.deviceName = deviceName;
                 m_capabilities.dedicatedVideoMemory = adapterDesc.DedicatedVideoMemory;
                 m_capabilities.sharedSystemMemory = adapterDesc.SharedSystemMemory;
+                // On a GPU-less host the hardware driver type succeeds on the Microsoft Basic Render
+                // Driver (1414:008C), which is WARP: report it as software like the explicit fallback.
+                if (adapterDesc.VendorId == 0x1414 && adapterDesc.DeviceId == 0x8C)
+                    m_isSoftwareDevice = true;
 
                 switch (adapterDesc.VendorId)
                 {
