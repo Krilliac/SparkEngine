@@ -99,10 +99,12 @@ namespace SparkEditor
         /**
          * @brief MINIDUMP_TYPE flags every editor crash dump is written with.
          *
-         * Stacks, thread and module lists only: a full-memory dump would carry
-         * the whole editor heap (session tokens, project credentials, clipboard
-         * contents) into a file users are asked to share. Matches the engine
-         * crash handler's MiniDumpNormal default.
+         * Thread and module lists only: a full-memory dump would carry the whole
+         * editor heap (session tokens, project credentials, clipboard contents)
+         * into a file users are asked to share. SaveCrashDump writes it through
+         * Spark::CrashDump::WriteWithoutStacks, which also removes every thread's
+         * stack memory (MiniDumpFilterMemory alone still copies stack bytes), as
+         * the engine crash handler does.
          */
         static std::uint32_t CrashDumpType();
 #endif

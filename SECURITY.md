@@ -58,12 +58,13 @@ database or save files. Operators who run a server are responsible for placing i
 on host full-disk-encrypted storage; see `wiki/gameplay-tools/Persistence-System.md`. A plaintext password, session
 token, or credential found in any first-party persisted file or shipped config is in scope as a vulnerability.
 
-Crash artifacts (work item OPS-100): the engine crash handler writes Windows minidumps with
-`MiniDumpNormal | MiniDumpFilterMemory`, so thread stacks keep only the pointer values needed to rebuild call stacks
-and no heap is captured; it has no full-memory dump option. The `crash-security` CTest label holds a random canary on
-the reporting thread's stack and on the heap while a real report is written, and fails if any dump, log or manifest
-contains it. The editor's own crash handler and OS-collected dumps (a Linux core file, Windows Error Reporting
-LocalDumps) are outside this guarantee. A reusable secret found in an engine crash artifact is in scope as a
+Crash artifacts (work item OPS-100): the engine and editor crash handlers write Windows minidumps without any
+thread-stack memory (each stack range is removed during the write; `MiniDumpFilterMemory` alone still copies stack
+bytes) and capture no heap. Only a local `SPARK_CRASH_FULL_DUMP=1` engine debugging run keeps stacks, and its
+manifest discloses it. The `crash-security` CTest label holds a random canary on the reporting thread's stack and
+on the heap while a real report is written, and fails if any dump, log or manifest contains it; an editor test
+does the same for the editor's dump writer. OS-collected dumps (a Linux core file, Windows Error Reporting
+LocalDumps) are outside this guarantee. A reusable secret found in an engine or editor crash artifact is in scope as a
 vulnerability.
 
 The following are considered security vulnerabilities:

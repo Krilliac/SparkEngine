@@ -25,6 +25,8 @@
 #include <string>
 
 #ifdef _WIN32
+#include "Utils/MiniDumpWithoutStacks.h"
+
 #include <dbghelp.h>
 #endif
 
@@ -213,11 +215,66 @@ TEST(EditorCrashHandler_DefaultDumpExcludesFullMemory)
     EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithHandleData), 0u);
     EXPECT_NE(dumpType & static_cast<std::uint32_t>(MiniDumpWithThreadInfo), 0u);
 
-    // The writer must use that selection, not a hard-coded full-memory type.
+    // The writer must use that selection, not a hard-coded full-memory type, and must go through
+    // the stack-removing writer rather than a raw MiniDumpWriteDump that copies every stack.
     const std::string source = ReadSourceFile("SparkEditor/Source/Core/EditorCrashHandler.cpp");
     ASSERT_FALSE(source.empty());
     EXPECT_TRUE(source.contains("static_cast<MINIDUMP_TYPE>(CrashDumpType())"));
     EXPECT_FALSE(source.contains("MiniDumpWithFullMemory"));
+    EXPECT_TRUE(
+        source.contains("Spark::CrashDump::WriteWithoutStacks(hFile, static_cast<MINIDUMP_TYPE>(CrashDumpType())"));
+    EXPECT_FALSE(source.contains("MiniDumpWriteDump("));
+}
+
+// OPS-100: a secret live on the dumping thread's stack must not reach an editor dump. The control
+// dump (same type, raw MiniDumpWriteDump) must contain it, which proves the scan can see a leak.
+TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
+{
+    const std::string canary = "SPARKEDITORCANARY-7f3a91c2d4e5b608";
+    volatile char stackSecret[64] = {};
+    for (size_t index = 0; index < canary.size(); ++index)
+        stackSecret[index] = canary[index];
+
+    CONTEXT context{};
+    RtlCaptureContext(&context);
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = EXCEPTION_BREAKPOINT;
+    EXCEPTION_POINTERS pointers{&record, &context};
+    MINIDUMP_EXCEPTION_INFORMATION exception{GetCurrentThreadId(), &pointers, FALSE};
+    const auto dumpType = static_cast<MINIDUMP_TYPE>(SparkEditor::EditorCrashHandler::CrashDumpType());
+
+    ScratchCrashDir dir("stack_canary");
+    const auto writeDump = [&](const std::filesystem::path& file, bool removeStacks) -> std::string
+    {
+        HANDLE handle =
+            CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle == INVALID_HANDLE_VALUE)
+            return {};
+        BOOL written = FALSE;
+        {
+            Spark::StackTrace::SymbolLockLease symbolLock(true);
+            if (symbolLock.owns_lock())
+            {
+                written = removeStacks ? Spark::CrashDump::WriteWithoutStacks(handle, dumpType, &exception, nullptr)
+                                       : MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), handle, dumpType,
+                                                           &exception, nullptr, nullptr);
+            }
+        }
+        CloseHandle(handle);
+        if (!written)
+            return {};
+        std::ifstream in(file, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+
+    const std::string control = writeDump(std::filesystem::path(dir.Path()) / "control.dmp", false);
+    ASSERT_FALSE(control.empty());
+    EXPECT_TRUE(control.find(canary) != std::string::npos);
+
+    const std::string filtered = writeDump(std::filesystem::path(dir.Path()) / "editor.dmp", true);
+    ASSERT_FALSE(filtered.empty());
+    EXPECT_TRUE(filtered.find(canary) == std::string::npos);
+    EXPECT_EQ(stackSecret[0], 'S');
 }
 
 #else

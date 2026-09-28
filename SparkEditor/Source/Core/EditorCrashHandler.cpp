@@ -7,6 +7,7 @@
 
 #include "EditorCrashHandler.h"
 #include "EditorLogger.h"
+#include "Utils/MiniDumpWithoutStacks.h"
 #include "Utils/StackTrace.h"
 #include "Utils/Validate.h"
 #include <iostream>
@@ -694,8 +695,9 @@ namespace SparkEditor
         mei.ExceptionPointers = exceptionPointers;
         mei.ClientPointers = TRUE;
 
-        BOOL success = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile,
-                                         static_cast<MINIDUMP_TYPE>(CrashDumpType()), &mei, nullptr, nullptr);
+        // OPS-100: every thread's stack range is removed, so no stack-resident secret reaches the .dmp.
+        BOOL success =
+            Spark::CrashDump::WriteWithoutStacks(hFile, static_cast<MINIDUMP_TYPE>(CrashDumpType()), &mei, nullptr);
 
         CloseHandle(hFile);
 
