@@ -366,7 +366,12 @@ RAW_SOCKET_ALLOWLIST = (
         "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp",
         "TFLanDiscovery::UpdateScanner",
         (("recvfrom", 2),),
-        (r"recvfrom\s*\(", r"m_endpointPolicy\.AllowsPeerAddress\s*\(", r"std::memcpy\s*\(\s*&beacon"),
+        (
+            r"recvfrom\s*\(",
+            r"m_endpointPolicy\.AllowsPeerAddress\s*\(",
+            r"DecodeLanBeacon\s*\(",
+            r"UpsertLanServer\s*\(",
+        ),
     ),
     RawSocketAllowance(
         "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.cpp",
