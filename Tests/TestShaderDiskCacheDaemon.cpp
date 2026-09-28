@@ -249,6 +249,48 @@ TEST(ShaderDiskCache_NoDaemonBehavesAsBefore)
     std::filesystem::remove_all(localDir, ec);
 }
 
+TEST(ShaderDiskCache_OversizedBlobIsAMiss)
+{
+    // SEC-120: the local cache file's length is untrusted. A blob one byte past
+    // the daemon bytecode cap (grown sparse, so the test itself allocates
+    // nothing) must be reported as a miss instead of sizing an allocation.
+    auto localDir = UniqueLocalCache("oversized");
+    Spark::Graphics::ShaderDiskCache cache;
+    cache.Initialize(localDir);
+
+    auto src = MakeSampleSource();
+    cache.Store(src, Spark::Graphics::ShaderTarget::DXBC, MakeSampleBlob({0xD0, 0xD1, 0xD2}));
+    ASSERT_TRUE(cache.Lookup(src, Spark::Graphics::ShaderTarget::DXBC).has_value());
+
+    std::filesystem::path blobPath;
+    size_t blobFiles = 0;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(localDir, ec))
+    {
+        if (entry.path().extension() == ".blob")
+        {
+            blobPath = entry.path();
+            ++blobFiles;
+        }
+    }
+    ASSERT_EQ(blobFiles, static_cast<size_t>(1));
+
+    std::filesystem::resize_file(blobPath, Spark::Graphics::kMaxShaderDaemonBytecodeBytes + 1ull, ec);
+    ASSERT_FALSE(static_cast<bool>(ec));
+
+    EXPECT_FALSE(cache.Lookup(src, Spark::Graphics::ShaderTarget::DXBC).has_value());
+
+    // Exactly at the cap the blob is still served, so the bound is not an
+    // off-by-one that would reject legitimately large shaders.
+    std::filesystem::resize_file(blobPath, Spark::Graphics::kMaxShaderDaemonBytecodeBytes, ec);
+    ASSERT_FALSE(static_cast<bool>(ec));
+    auto atCap = cache.Lookup(src, Spark::Graphics::ShaderTarget::DXBC);
+    ASSERT_TRUE(atCap.has_value());
+    EXPECT_EQ(atCap->bytecode.size(), static_cast<size_t>(Spark::Graphics::kMaxShaderDaemonBytecodeBytes));
+
+    std::filesystem::remove_all(localDir, ec);
+}
+
 // =========================================================================
 // DaemonConnection singleton
 // =========================================================================
