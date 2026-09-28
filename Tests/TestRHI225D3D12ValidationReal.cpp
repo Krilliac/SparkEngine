@@ -9,6 +9,11 @@
  * clean. Scope: the declared RHI-level set below, not engine frames (GraphicsEngine is
  * D3D11-direct on Windows). The lane (CTest D3D12_Validation) is excluded from the main suite
  * because enabling the debug layer is process-wide.
+ *
+ * The constant-buffer and sampled-texture draws pin resource binding: a root CBV per b-slot
+ * and SRV/sampler tables copied into shader-visible pages per draw. Before that path existed
+ * SetConstantBuffer targeted a descriptor-table parameter (a debug-layer error) and
+ * SetShaderResource/SetSampler did nothing, so a textured draw sampled nothing.
  */
 
 #include "TestFramework.h"
@@ -25,9 +30,11 @@
 #include <d3d12sdklayers.h>
 #include <wrl/client.h>
 
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -54,6 +61,41 @@ float4 main(float3 position : POSITION) : SV_Position
 float4 main() : SV_Target
 {
     return float4(1.0, 0.0, 0.0, 1.0);
+}
+)";
+
+    constexpr const char* kTexturedVertexShader = R"(
+struct Output
+{
+    float2 uv : TEXCOORD;
+    float4 position : SV_Position;
+};
+Output main(float3 position : POSITION, float2 uv : TEXCOORD)
+{
+    Output output;
+    output.uv = uv;
+    output.position = float4(position, 1.0);
+    return output;
+}
+)";
+
+    constexpr const char* kConstantColorPixelShader = R"(
+cbuffer Material : register(b0)
+{
+    float4 color;
+};
+float4 main() : SV_Target
+{
+    return color;
+}
+)";
+
+    constexpr const char* kSampledPixelShader = R"(
+Texture2D source : register(t0);
+SamplerState pointSampler : register(s0);
+float4 main(float2 uv : TEXCOORD) : SV_Target
+{
+    return source.Sample(pointSampler, uv);
 }
 )";
 
@@ -99,7 +141,8 @@ float4 main() : SV_Target
             DumpMessages(device.GetD3D12Device());
     }
 
-    /// Solid-colour triangle pipeline, vertex buffer and a colour target with a READBACK copy.
+    /// A triangle (or, textured, a full-target quad with UVs), a pipeline around @p pixelShaderSource,
+    /// and a colour target with a READBACK copy.
     struct TriangleScene
     {
         std::unique_ptr<IRHIShader> vertexShader;
@@ -108,17 +151,18 @@ float4 main() : SV_Target
         std::unique_ptr<IRHIBuffer> vertices;
         std::unique_ptr<IRHITexture> target;
         ComPtr<ID3D12Resource> readback;
+        uint32_t vertexCount = 3;
 
-        explicit TriangleScene(D3D12Device& device)
+        explicit TriangleScene(D3D12Device& device, const char* pixelShaderSource = kPixelShader, bool textured = false)
         {
             RHIShaderDesc vs;
             vs.stage = RHIShaderStage::Vertex;
-            vs.sourceCode = kVertexShader;
+            vs.sourceCode = textured ? kTexturedVertexShader : kVertexShader;
             vs.filePath = "RHI225TriangleVS";
             vertexShader = device.CreateShader(vs);
             RHIShaderDesc ps;
             ps.stage = RHIShaderStage::Pixel;
-            ps.sourceCode = kPixelShader;
+            ps.sourceCode = pixelShaderSource;
             ps.filePath = "RHI225TrianglePS";
             pixelShader = device.CreateShader(ps);
             ASSERT_TRUE(vertexShader != nullptr && pixelShader != nullptr);
@@ -128,6 +172,14 @@ float4 main() : SV_Target
             position.semanticName = "POSITION";
             position.format = RHIVertexFormat::Float3;
             pso.inputLayout.elements.push_back(position);
+            if (textured)
+            {
+                RHIInputElement uv;
+                uv.semanticName = "TEXCOORD";
+                uv.format = RHIVertexFormat::Float2;
+                uv.byteOffset = 3 * sizeof(float);
+                pso.inputLayout.elements.push_back(uv);
+            }
             pso.rasterizer.cullMode = RHICullMode::None;
             pso.depthStencil.depthEnable = false;
             pso.depthStencil.depthWrite = false;
@@ -137,14 +189,19 @@ float4 main() : SV_Target
             pipeline = device.CreatePipelineState(pso, vertexShader.get(), pixelShader.get());
             ASSERT_TRUE(pipeline != nullptr);
 
-            // Covers the centre pixel, leaves the corners at the clear colour.
+            // The triangle covers the centre pixel and leaves the corners at the clear colour;
+            // the textured quad covers the whole target, UV (0,0) at the top-left.
             const float triangle[9] = {-0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f, 0.5f, -0.5f, 0.0f};
+            const float quad[30] = {-1.0f, 1.0f,  0.0f, 0.0f, 0.0f, 1.0f,  1.0f,  0.0f, 1.0f, 0.0f,
+                                    -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
+                                    1.0f,  1.0f,  0.0f, 1.0f, 0.0f, 1.0f,  -1.0f, 0.0f, 1.0f, 1.0f};
+            vertexCount = textured ? 6u : 3u;
             RHIBufferDesc vb;
-            vb.size = sizeof(triangle);
-            vb.stride = 3 * sizeof(float);
+            vb.size = textured ? sizeof(quad) : sizeof(triangle);
+            vb.stride = (textured ? 5u : 3u) * static_cast<uint32_t>(sizeof(float));
             vb.usage = RHIBufferUsage::Vertex;
             vb.access = RHIBufferAccess::Dynamic;
-            vb.initialData = triangle;
+            vb.initialData = textured ? static_cast<const void*>(quad) : static_cast<const void*>(triangle);
             vb.debugName = "RHI225TriangleVB";
             vertices = device.CreateBuffer(vb);
             ASSERT_TRUE(vertices != nullptr);
@@ -174,7 +231,8 @@ float4 main() : SV_Target
         }
 
         /// Records clear + draw + copy-to-readback on the immediate list, submits it and waits.
-        void RenderFrame(D3D12Device& device)
+        /// @p bind runs after the pipeline is set, before the draw.
+        void RenderFrame(D3D12Device& device, const std::function<void(IRHICommandList&)>& bind = {})
         {
             device.BeginFrame();
             auto* cmd = static_cast<D3D12CommandList*>(device.GetImmediateCommandList());
@@ -197,7 +255,9 @@ float4 main() : SV_Target
             cmd->SetPipelineState(pipeline.get());
             cmd->SetPrimitiveTopology(RHIPrimitiveTopology::TriangleList);
             cmd->SetVertexBuffer(vertices.get(), 0, 0);
-            cmd->Draw(3, 0);
+            if (bind)
+                bind(*cmd);
+            cmd->Draw(vertexCount, 0);
 
             cmd->TransitionBarrier(color, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
             cmd->FlushBarriers();
@@ -254,6 +314,101 @@ TEST(D3D12_Validation_TriangleFrameIsClean)
             EXPECT_EQ(scene.Pixel(kSize / 2, kSize / 2), kOpaqueRed);
             EXPECT_EQ(scene.Pixel(0, 0), kOpaqueBlack);
         }
+        EXPECT_TRUE(SUCCEEDED(device.GetD3D12Device()->GetDeviceRemovedReason()));
+        ExpectClean(device);
+    }
+    device.Shutdown();
+}
+
+TEST(D3D12_Validation_ConstantBufferColorDrawIsClean)
+{
+    D3D12Device device;
+    InitializeValidated(device);
+    {
+        TriangleScene scene(device, kConstantColorPixelShader);
+        // Exact 8-bit values (51, 102, 204) so the probe needs no tolerance.
+        std::array<float, 64> constants = {}; // 256 bytes: one CBV-sized block
+        constants[0] = 51.0f / 255.0f;
+        constants[1] = 102.0f / 255.0f;
+        constants[2] = 204.0f / 255.0f;
+        constants[3] = 1.0f;
+        RHIBufferDesc cb;
+        cb.size = sizeof(constants);
+        cb.usage = RHIBufferUsage::Constant;
+        cb.access = RHIBufferAccess::Dynamic;
+        cb.initialData = constants.data();
+        cb.debugName = "RHI225MaterialCB";
+        auto material = device.CreateBuffer(cb);
+        ASSERT_TRUE(material != nullptr);
+
+        for (int frame = 0; frame < 2; ++frame)
+        {
+            scene.RenderFrame(device, [&](IRHICommandList& cmd)
+                              { cmd.SetConstantBuffer(RHIShaderStage::Pixel, 0, material.get()); });
+            EXPECT_EQ(scene.Pixel(kSize / 2, kSize / 2), 0xFFCC6633u); // R=0x33 G=0x66 B=0xCC A=0xFF
+            EXPECT_EQ(scene.Pixel(0, 0), kOpaqueBlack);
+        }
+        EXPECT_TRUE(SUCCEEDED(device.GetD3D12Device()->GetDeviceRemovedReason()));
+        ExpectClean(device);
+    }
+    device.Shutdown();
+}
+
+TEST(D3D12_Validation_SampledTextureDrawIsClean)
+{
+    D3D12Device device;
+    InitializeValidated(device);
+    {
+        TriangleScene scene(device, kSampledPixelShader, /*textured=*/true);
+
+        // 4x4 texels, all distinct; the full-target quad maps each to a 16x16 block.
+        constexpr uint32_t kTexels = 4;
+        const auto texel = [](uint32_t x, uint32_t y)
+        { return 0xFF000000u | ((x + y) * 20u) << 16 | (40u + 50u * y) << 8 | (40u + 50u * x); };
+        std::vector<uint32_t> texels(kTexels * kTexels);
+        for (uint32_t y = 0; y < kTexels; ++y)
+            for (uint32_t x = 0; x < kTexels; ++x)
+                texels[y * kTexels + x] = texel(x, y);
+        RHITextureDesc desc;
+        desc.width = kTexels;
+        desc.height = kTexels;
+        desc.format = PixelFormat::R8G8B8A8_UNORM;
+        desc.usage = RHITextureUsage::ShaderResource;
+        desc.debugName = "RHI225SampledTexture";
+        auto texture = device.CreateTexture(desc);
+        ASSERT_TRUE(texture != nullptr);
+        device.UpdateTexture(texture.get(), texels.data(), 0, 0);
+
+        RHISamplerDesc pointClamp;
+        pointClamp.minFilter = RHIFilterMode::Nearest;
+        pointClamp.magFilter = RHIFilterMode::Nearest;
+        pointClamp.mipFilter = RHIFilterMode::Nearest;
+        pointClamp.addressU = RHIAddressMode::Clamp;
+        pointClamp.addressV = RHIAddressMode::Clamp;
+        pointClamp.addressW = RHIAddressMode::Clamp;
+        auto sampler = device.CreateSampler(pointClamp);
+        ASSERT_TRUE(sampler != nullptr);
+
+        for (int frame = 0; frame < 2; ++frame)
+        {
+            scene.RenderFrame(device,
+                              [&](IRHICommandList& cmd)
+                              {
+                                  cmd.SetShaderResource(RHIShaderStage::Pixel, 0, texture.get());
+                                  cmd.SetSampler(RHIShaderStage::Pixel, 0, sampler.get());
+                              });
+            const uint32_t block = kSize / kTexels;
+            for (uint32_t y = 0; y < kTexels; ++y)
+                for (uint32_t x = 0; x < kTexels; ++x)
+                    EXPECT_EQ(scene.Pixel(x * block + block / 2, y * block + block / 2), texel(x, y));
+        }
+
+        // Every table page the two frames used came back once the GPU finished with it.
+        device.WaitForIdle();
+        EXPECT_EQ(device.GetDescriptorTables()->shaderResources.GetFreePageCount(),
+                  size_t(Spark::RHI::D3D12::SRV_TABLE_PAGE_COUNT));
+        EXPECT_EQ(device.GetDescriptorTables()->samplers.GetFreePageCount(),
+                  size_t(Spark::RHI::D3D12::SAMPLER_TABLE_PAGE_COUNT));
         EXPECT_TRUE(SUCCEEDED(device.GetD3D12Device()->GetDeviceRemovedReason()));
         ExpectClean(device);
     }

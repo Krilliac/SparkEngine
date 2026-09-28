@@ -179,17 +179,21 @@ namespace Spark
                 // -- Root signature helpers -----------------------------------------------
 
                 /**
-                 * @brief Creates a default root signature suitable for most shaders.
+                 * @brief Creates the root signature layout D3D12CommandList binds against
+                 *        (DefaultRootLayout). CreatePipelineState() shares one instance of it.
                  *
-                 * The layout provides:
-                 *   - Root parameter 0: CBV descriptor table (b0-b13, all stages)
-                 *   - Root parameter 1: SRV descriptor table (t0-t31, PS)
-                 *   - Root parameter 2: Sampler descriptor table (s0-s15, PS)
-                 *   - Root parameter 3: UAV descriptor table (u0-u7, all stages)
+                 * The layout provides (all parameters visible to every stage):
+                 *   - Root parameters 0-7: root CBVs b0-b7 (data volatile, as on D3D11)
+                 *   - Root parameter 8: SRV descriptor table t0-t31
+                 *   - Root parameter 9: sampler descriptor table s0-s15
+                 *   - Root parameter 10: UAV descriptor table u0-u7
                  *
                  * @return The created root signature, or nullptr on failure.
                  */
                 ComPtr<ID3D12RootSignature> CreateDefaultRootSignature() const;
+
+                /// Shader-visible table pools (test seam: free-page counts prove pages recycle).
+                D3D12DescriptorTables* GetDescriptorTables() const { return m_descriptorTables.get(); }
 
                 /**
                  * @brief Creates a root signature from a serialized blob.
@@ -206,6 +210,7 @@ namespace Spark
                 bool CreateCommandQueues();
                 bool CreateDescriptorHeaps();
                 bool CreateFrameResources();
+                bool CreateDescriptorTables();
                 void DetectCapabilities();
                 void DetectDXRSupport();
 
@@ -247,11 +252,20 @@ namespace Spark
                 std::mutex m_submitMutex;
 
                 // -- Descriptor heaps -----------------------------------------------------
+                // All CPU-only: CopyDescriptors cannot read from a shader-visible heap, so views
+                // live here and command lists copy them into m_descriptorTables per draw.
 
                 DescriptorHeapAllocator m_cbvSrvUavHeap;
                 DescriptorHeapAllocator m_rtvHeap;
                 DescriptorHeapAllocator m_dsvHeap;
                 DescriptorHeapAllocator m_samplerHeap;
+
+                /// Shader-visible table pages shared with every command list (see D3D12CommandList).
+                std::shared_ptr<D3D12DescriptorTables> m_descriptorTables;
+
+                /// DefaultRootLayout instance shared by every pipeline, so switching pipelines
+                /// does not change the root signature and invalidate the staged root arguments.
+                ComPtr<ID3D12RootSignature> m_defaultRootSignature;
 
                 // -- Per-frame resources --------------------------------------------------
 

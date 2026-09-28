@@ -12,7 +12,8 @@ SparkEngine's D3D12 backend provides a modern, low-level graphics API implementa
 ## Architecture
 
 - **Namespace:** `Spark::RHI::D3D12`
-- **Files:** `Graphics/RHI/D3D12/D3D12Device.h`, `D3D12Device.cpp`
+- **Files:** `Graphics/RHI/D3D12/D3D12Device.h`, `D3D12Device.cpp`, `D3D12Types.h`,
+  `D3D12CommandList.cpp`, `D3D12DescriptorHeap.cpp` (descriptor heaps and per-draw table binding)
 - **Guard:** `#ifdef _WIN32`
 
 ## Key Classes
@@ -23,14 +24,16 @@ SparkEngine's D3D12 backend provides a modern, low-level graphics API implementa
 | `D3D12CommandList` | Command recording — implements `IRHICommandList` |
 | `D3D12SwapChain` | DXGI swap chain — implements `IRHISwapChain` |
 | `D3D12Buffer/Texture/Shader/Sampler/PipelineState` | GPU resources |
-| `DescriptorHeapAllocator` | Free-list descriptor heap management |
+| `DescriptorHeapAllocator` | Free-list allocator over a CPU-only descriptor heap |
+| `D3D12DescriptorPagePool` | Fence-recycled pages of a shader-visible heap that draws carve tables from |
 | `D3D12Fence` | RAII CPU/GPU synchronization |
 
 ## Features
 
 - **Debug Layer:** Optional validation with GPU-based validation support
 - **3 Command Queues:** Direct (graphics), Copy, Compute
-- **4 Descriptor Heaps:** CBV/SRV/UAV (1M), RTV (256), DSV (64), Sampler (2048)
+- **4 CPU-only Descriptor Heaps:** CBV/SRV/UAV (1M), RTV (256), DSV (64), Sampler (2048)
+- **2 Shader-Visible Table Heaps:** CBV/SRV/UAV (64 pages x 1024) and Sampler (16 pages x 128)
 - **Flip-Model Swap Chain:** DXGI 1.5+ with `FLIP_DISCARD` and tearing support
 - **Deferred Deletion:** Resources queued with fence values, released when GPU completes
 - **Per-Frame Resources:** Double-buffered command allocators with fence sync
@@ -72,11 +75,56 @@ path), so for those only the reported flag is verified.
 
 ## Root Signature Layout
 
-The default root signature provides:
-- **Param 0:** CBV table (b0-b13, all stages)
-- **Param 1:** SRV table (t0-t31, pixel shader)
-- **Param 2:** Sampler table (s0-s15, pixel shader)
-- **Param 3:** UAV table (u0-u7, all stages)
+Every RHI graphics pipeline shares one root signature (`DefaultRootLayout` in
+`D3D12Types.h`; 19 of the 64 root DWORDs), visible to all stages:
+- **Params 0-7:** root CBVs b0-b7 (data volatile)
+- **Param 8:** SRV table t0-t31 (data volatile)
+- **Param 9:** Sampler table s0-s15
+- **Param 10:** UAV table u0-u7 (declared; the RHI has no UAV binding call yet)
+
+Because every stage sees every parameter, the `RHIShaderStage` argument of the
+binding calls selects no separate slot space on D3D12 (it does on D3D11): one
+slot number is one register for all stages.
+
+## Resource Binding
+
+`IRHICommandList` binding calls stage state; each draw applies what changed
+(`D3D12CommandList::PrepareDraw`, `D3D12DescriptorHeap.cpp`):
+
+| Call | D3D12 behaviour |
+|------|-----------------|
+| `SetConstantBuffer(stage, slot, buffer)` | Stages the buffer's GPU address for root CBV `slot`; slot >= 8 logs a rate-limited error and drops the binding |
+| `SetShaderResource(stage, slot, texture)` | Stages the texture's CPU SRV handle for t`slot` and batches a transition to a shader-read state (as D3D11 does implicitly); a texture without an SRV logs an error and leaves the slot unbound |
+| `SetSampler(stage, slot, sampler)` | Stages the sampler's CPU handle for s`slot` |
+| `SetRenderTargets`, `ClearRenderTarget`, `ClearDepthStencil` | Batch transitions of the targets to `RENDER_TARGET`/`DEPTH_WRITE`; a depth clear sets the stencil flag only for formats with stencil |
+
+Views and samplers live in CPU-only heaps because `CopyDescriptors` cannot read
+from a shader-visible heap. Before a draw with dirty SRV or sampler slots, the
+list copies all 32 (or 16) slots, with a null Texture2D SRV or a point/clamp
+sampler in unbound slots, into a table carved linearly from its current page
+of the shader-visible heap, then calls `SetGraphicsRootDescriptorTable`.
+`Begin()`/`Reset()` bind the two shader-visible heaps once and clear the
+staged bindings (bindings do not survive a reset).
+`D3D12Device::ExecuteCommandList` hands the pages a list filled back to their
+pool tagged with the next frame-fence value; a page is reused only after the
+GPU passes it. Pages are the only shared state, so several lists can record at
+once. There is no per-draw heap allocation; when no page is free (or one list
+holds 32 pages without submitting) the draw is logged and skipped rather than
+bound to stale descriptors. Compute root signatures are out of scope:
+`Dispatch` binds nothing.
+
+`CreateBuffer` with `RHIBufferAccess::Static` and initial data copies the data
+into the DEFAULT-heap buffer through the immediate list and waits, like
+`UpdateTexture`. Before this, the data was staged into an upload buffer that
+was never copied, so static buffers read zeros. Both calls reuse the immediate
+list and must not run while it is recording.
+
+Known differences from D3D11 that callers must handle:
+
+- D3D12 always scissor-tests (`rasterizer.scissorEnable` is ignored), so set a
+  scissor rect covering the target.
+- The swap-chain back buffers get no `PRESENT` transition; the Windows renderer
+  presents through D3D11.
 
 ## RHI Factory Registration
 
@@ -148,14 +196,18 @@ Copy and compute queues run concurrently with the direct queue, enabling texture
 
 ## Descriptor Heap Management
 
-The `DescriptorHeapAllocator` manages GPU-visible descriptor heaps using a free-list allocator:
+The `DescriptorHeapAllocator` manages the CPU-only heaps views are created in,
+using a free-list allocator; the shader-visible heaps are the table pages
+described under [Resource Binding](#resource-binding):
 
 | Heap Type | Capacity | Visibility |
 |-----------|----------|------------|
-| CBV/SRV/UAV | 1,000,000 | Shader-visible |
+| CBV/SRV/UAV | 1,000,000 | CPU-only |
 | RTV | 256 | CPU-only |
 | DSV | 64 | CPU-only |
-| Sampler | 2,048 | Shader-visible |
+| Sampler | 2,048 | CPU-only |
+| CBV/SRV/UAV tables | 64 x 1,024 | Shader-visible |
+| Sampler tables | 16 x 128 | Shader-visible (2,048 is the D3D12 limit) |
 
 ```cpp
 // Allocate a range of descriptors
@@ -188,7 +240,7 @@ With the layer active, `D3D12Device`:
   discard occurred, otherwise "clean".
 
 **Validation evidence (RHI-225).** CTest `D3D12_Validation` (Windows MSVC,
-`D3D12_Validation_*`, exact count 3, labels `d3d12;d3d12-validation`) runs
+`D3D12_Validation_*`, exact count 5, labels `d3d12;d3d12-validation`) runs
 `Tests/TestRHI225D3D12ValidationReal.cpp` with the debug layer and GPU-based
 validation on whichever adapter `D3D12Device` selects (hardware, or WARP on a
 GPU-less host):
@@ -196,6 +248,8 @@ GPU-less host):
 | Test | Declared scope |
 |------|----------------|
 | `D3D12_Validation_TriangleFrameIsClean` | HLSL VS/PS compiled through `CreateShader`, PSO without depth, dynamic vertex buffer, render-target transitions, clear, draw and a READBACK copy, recorded twice into the reset immediate list; the centre pixel must be the triangle colour, so an empty frame cannot pass |
+| `D3D12_Validation_ConstantBufferColorDrawIsClean` | A pixel shader reading its colour from `cbuffer` b0, bound with `SetConstantBuffer`; the centre pixel must equal the constant-buffer colour exactly |
+| `D3D12_Validation_SampledTextureDrawIsClean` | A 4x4 texture uploaded with `UpdateTexture`, bound with `SetShaderResource` and a point `SetSampler`, drawn on a full-target quad; all 16 texel blocks must read back exactly, and after `WaitForIdle` every table page must be free again |
 | `D3D12_Validation_ResourceChurnIsClean` | 200 frames that create dynamic and static buffers and a render-target texture, use the texture on the GPU and destroy all three while that work is in flight (fence-deferred release) |
 | `D3D12_Validation_CounterSeesInjectedError` | Negative control: an invalid `CreateCommittedResource` through the native device raises the error count and the process survives |
 
@@ -220,6 +274,14 @@ root signature cached, so re-recording the same pipeline skipped its bind on a
 freshly reset list. The immediate command list owns a single allocator: it must
 be idle (for example after `WaitForIdle()`) before its next `Begin()`.
 
+The two binding tests fail at the commit before the binding path (b76a7e55a),
+run on an RTX 5070 Ti: the constant-buffer draw raised debug-layer error 710
+("parameter [0] with type descriptor table, so it is invalid to set a root CBV
+here") plus a GPU-based-validation "uninitialized root argument" error and read
+back black, and the sampled draw read black in all 16 blocks with
+"uninitialized root argument" errors, because `SetShaderResource` and
+`SetSampler` were empty.
+
 Other tooling:
 
 - **DRED (Device Removed Extended Data)** — Provides detailed crash diagnostics
@@ -235,7 +297,8 @@ The D3D12 backend exposes resource, command-list, and capability-query paths thr
 - Command list recording: thread-safe (one list per thread)
 - Command submission: serialized via `m_submitMutex`
 - Deferred deletion: frame-fenced, processed on main thread
-- Descriptor allocation: lock-free within pre-allocated ranges
+- Descriptor allocation: CPU heaps take a mutex per allocation; per-draw tables are carved from
+  a page the recording list owns, and only page acquire/retire touch the shared pool (mutex)
 
 ## Console Commands
 
@@ -410,12 +473,13 @@ The `D3D12Device` selects appropriate initial states based on buffer access patt
 The engine provides a default root signature via `CreateDefaultRootSignature()` that covers the majority of shader needs:
 
 ```cpp
-// Root parameter layout:
-// [0] CBV table:     b0-b13 (14 constant buffers, all shader stages)
-// [1] SRV table:     t0-t31 (32 textures/buffers, pixel shader)
-// [2] Sampler table: s0-s15 (16 samplers, pixel shader)
-// [3] UAV table:     u0-u7  (8 UAVs, all shader stages)
+// Root parameter layout (DefaultRootLayout, all shader stages):
+// [0-7] root CBVs:     b0-b7
+// [8]   SRV table:     t0-t31
+// [9]   Sampler table: s0-s15
+// [10]  UAV table:     u0-u7
 
+// CreatePipelineState() shares one instance; this creates another with the same layout.
 ComPtr<ID3D12RootSignature> rootSig = device->CreateDefaultRootSignature();
 ```
 
