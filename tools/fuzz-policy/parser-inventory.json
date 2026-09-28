@@ -2433,10 +2433,16 @@
       "formats": [
         "shader-daemon-blob"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzShaderBlob.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzShaderBlob",
+        "test_selector": "FuzzShaderBlobSmoke",
+        "corpus_id": "shader-daemon-blob-corpus",
+        "entry_symbol": "Spark::Graphics::DecodeCompiledShaderBlob",
+        "binding_source": "FuzzerTests/FuzzShaderBlobProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeShaderBlob"
       }
     },
     {

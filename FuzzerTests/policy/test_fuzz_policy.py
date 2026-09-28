@@ -89,6 +89,19 @@ add_test(NAME FuzzExampleParserSmoke
 set_tests_properties(FuzzExampleParserSmoke PROPERTIES LABELS "fuzz;security" TIMEOUT 5)
 """
 
+# The one fuzz-policy CI step that builds every inventoried fuzz target, in the
+# order .github/workflows/build.yml lists them.
+FUZZ_SMOKE_TARGETS = (
+    "SparkFuzzJsonUtils",
+    "SparkFuzzCrashManifest",
+    "SparkFuzzNeuralWeights",
+    "SparkFuzzTextureStex",
+    "SparkFuzzSceneManifest",
+    "SparkFuzzArchive",
+    "SparkFuzzShaderBlob",
+)
+FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
+
 SEEDS = {
     "empty-object.json": b"{}",
     "nested.json": b'{"a":{"b":[1,2,3]}}',
@@ -1574,7 +1587,7 @@ class TestWorkflowBinding(unittest.TestCase):
     def test_run_commands_preserve_execution_order(self) -> None:
         block = check_fuzz_policy._job_block(self.workflow, check_fuzz_policy.FUZZ_JOB)
         commands = check_fuzz_policy._run_commands_in_order(block)
-        build = "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive"
+        build = FUZZ_BUILD_COMMAND
         all_tests = "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release"
         smoke = "ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release"
         self.assertLess(commands.index(build), commands.index(all_tests))
@@ -1739,7 +1752,7 @@ class TestCiBindingMutations(unittest.TestCase):
     def test_inventory_fuzz_target_missing_from_build_command_is_rejected(self) -> None:
         self.fixture.patch(
             ".github/workflows/build.yml",
-            "      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive",
+            "      run: " + FUZZ_BUILD_COMMAND,
             "      # cmake --build build/fuzz-policy --target SparkFuzzCrashManifest\n"
             "      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights",
         )
@@ -1753,7 +1766,7 @@ class TestCiBindingMutations(unittest.TestCase):
     def test_inventory_fuzz_build_after_ctest_is_rejected(self) -> None:
         path = self.fixture.root / ".github/workflows/build.yml"
         text = path.read_text(encoding="utf-8")
-        build = "      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive"
+        build = "      run: " + FUZZ_BUILD_COMMAND
         all_tests = "      run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release"
         smoke = "      run: ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release"
         self.assertLess(text.index(build), text.index(all_tests))
@@ -1875,6 +1888,38 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertEqual(corpus.budget.max_corpus_bytes, 4096)
         self.assertEqual(corpus.budget.smoke_seconds, 10)
 
+    def test_adapter_bound_targets_keep_their_production_bindings(self) -> None:
+        # parser id -> (target stem, production entry symbol, corpus directory, seed count)
+        expected = {
+            "shader-daemon-blob": (
+                "ShaderBlob",
+                "Spark::Graphics::DecodeCompiledShaderBlob",
+                "shader-daemon-blob",
+                7,
+            ),
+        }
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        corpora = {corpus.parser_id: corpus for corpus in corpus_manifest.load_corpora(REPO_ROOT, inventory)}
+        cmake = (REPO_ROOT / "FuzzerTests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        for parser_id, (stem, entry_symbol, corpus_name, seeds) in expected.items():
+            with self.subTest(parser=parser_id):
+                parser = next(item for item in inventory.parsers if item.parser_id == parser_id)
+                self.assertEqual(parser.status, "fuzzed")
+                self.assertEqual(parser.target["harness"], f"FuzzerTests/Fuzz{stem}.cpp")
+                self.assertEqual(parser.target["binding_source"], f"FuzzerTests/Fuzz{stem}Production.cpp")
+                self.assertEqual(parser.target["cmake_target"], f"SparkFuzz{stem}")
+                self.assertEqual(parser.target["test_selector"], f"Fuzz{stem}Smoke")
+                self.assertEqual(parser.target["entry_symbol"], entry_symbol)
+                self.assertIn(f"SparkFuzz{stem}", FUZZ_SMOKE_TARGETS)
+                self.assertEqual(corpora[parser_id].corpus_dir, f"FuzzerTests/corpora/{corpus_name}")
+                self.assertEqual(corpora[parser_id].seed_count, seeds)
+                # The production adapter is compiled against libc++ and meets the
+                # libstdc++ libFuzzer driver only at its C ABI.
+                target = cmake.split(f"add_executable(SparkFuzz{stem}\n", 1)[1].split("add_test(", 1)[0]
+                self.assertIn(f"Fuzz{stem}Production.cpp", target)
+                self.assertIn('PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"', target)
+                self.assertIn("Threads::Threads c++ c++abi", target)
+
     def test_json_utils_fuzzer_link_keeps_compiler_runtimes_abi_compatible(self) -> None:
         cmake = (REPO_ROOT / "FuzzerTests" / "CMakeLists.txt").read_text(encoding="utf-8")
         production = (REPO_ROOT / "FuzzerTests" / "FuzzJsonUtilsProduction.cpp").read_text(encoding="utf-8")
@@ -1900,7 +1945,7 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertIn('LDFLAGS: "-stdlib=libstdc++"', block_text)
         build_commands = check_fuzz_policy._run_commands(block)
         self.assertIn(
-            "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive",
+            FUZZ_BUILD_COMMAND,
             build_commands,
         )
         self.assertIn(

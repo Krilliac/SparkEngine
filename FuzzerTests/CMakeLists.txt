@@ -352,3 +352,57 @@ set_tests_properties(FuzzArchiveSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+add_executable(SparkFuzzShaderBlob
+    FuzzShaderBlob.cpp
+    FuzzShaderBlobProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzShaderBlob.cpp
+# use libstdc++; the production codec and the adapter use libc++ and meet the
+# driver only at the C ABI in FuzzShaderBlobProduction.h.
+set_source_files_properties(
+    FuzzShaderBlobProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzShaderBlob PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzShaderBlob PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzShaderBlob PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzShaderBlob PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzShaderBlob PRIVATE Threads::Threads c++ c++abi)
+
+# length-overclaim.bin claims a 4 GiB bytecode run in a few bytes; libFuzzer's
+# -rss_limit_mb also caps a single malloc at 256 MB, so a decoder that sized the
+# allocation before bounding it by the bytes present and the 16 MiB cap would
+# fail this test deterministically.
+add_test(
+    NAME FuzzShaderBlobSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzShaderBlob>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/shader-daemon-blob"
+)
+set_tests_properties(FuzzShaderBlobSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

@@ -139,6 +139,23 @@
           "fixed_commit": "721cc1935a289f03f25f874a5fd66195e8c0fd2d"
         }
       ]
+    },
+    {
+      "id": "shader-daemon-blob-corpus",
+      "parser_id": "shader-daemon-blob",
+      "corpus_dir": "FuzzerTests/corpora/shader-daemon-blob",
+      "last_verified": "2026-09-27",
+      "content_digest": "cfdedcfa2b1abbee8e93560a2da91b25a41d2ebb67a14457ab40ea83c77ebfb9",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

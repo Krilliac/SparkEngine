@@ -72,6 +72,22 @@ short of it (`regression-toc-ratio-bomb.spk`, pinned by
 mutation run with the 32 MB quarantine then completed 3.68M executions (peak RSS 112 MB)
 with no finding.
 
+### SEC-120 hardening targets
+
+These targets were added after the first six and all use the libc++ adapter split of
+`SparkFuzzJsonUtils`. None has hosted runtime evidence yet: each was authored and
+structurally bound on Windows and awaits its first Linux Clang build and smoke replay.
+
+- **`shader-daemon-blob`** (`SparkFuzzShaderBlob`, `FuzzShaderBlobSmoke`, `-runs=7`)
+  feeds `Spark::Graphics::DecodeCompiledShaderBlob`, the decoder `ShaderDiskCache::Lookup`
+  runs on bytes the shader daemon returns. The adapter aborts when an accepted blob
+  carries bytecode above `kMaxShaderDaemonBytecodeBytes` or more payload than the input,
+  when its re-encoding differs from the consumed input prefix (success byte normalised)
+  or fails to decode to equal fields, and when a rejected blob modified the caller's
+  output. The seeds include a 4 GiB bytecode length claim in 16 bytes; the local-disk
+  path in `ShaderDiskCache::Lookup` now applies the same 16 MiB cap to the cached file's
+  length (`ShaderDiskCache_OversizedBlobIsAMiss`).
+
 Two gates, deliberately separate:
 
 | Gate | Command | Blocks | Today |
