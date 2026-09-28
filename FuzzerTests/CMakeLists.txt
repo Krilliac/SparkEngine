@@ -1276,30 +1276,8 @@ set_tests_properties(FuzzTFLanBeaconSmoke PROPERTIES
 )
 
 # MMOChatSystem.h reaches Spark/Version.h, which includes the configure-time
-# Spark/GeneratedVersion.h. A root-project build (the linux-fuzz preset) has
-# already generated it; the standalone tools/fuzz-policy project generates it
-# from the same template and the SPARK_ENGINE_VERSION the root CMakeLists sets.
-if(NOT DEFINED SPARK_GENERATED_INCLUDE_DIR)
-    set(SPARK_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
-    file(STRINGS "${SPARK_FUZZ_PROJECT_ROOT}/CMakeLists.txt" _spark_fuzz_version_line
-        REGEX "^set\\(SPARK_ENGINE_VERSION \"[0-9]+\\.[0-9]+\\.[0-9]+\"")
-    if(NOT _spark_fuzz_version_line MATCHES "\"([0-9]+)\\.([0-9]+)\\.([0-9]+)\"")
-        message(FATAL_ERROR "[SEC-120] cannot read SPARK_ENGINE_VERSION from ${SPARK_FUZZ_PROJECT_ROOT}/CMakeLists.txt")
-    endif()
-    block()
-        set(PROJECT_VERSION_MAJOR "${CMAKE_MATCH_1}")
-        set(PROJECT_VERSION_MINOR "${CMAKE_MATCH_2}")
-        set(PROJECT_VERSION_PATCH "${CMAKE_MATCH_3}")
-        # Relative to this directory: the fuzz policy's CMake reader resolves no
-        # variable in a command's first argument.
-        configure_file(
-            "../cmake/SparkGeneratedVersion.h.in"
-            "${SPARK_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
-            @ONLY
-        )
-    endblock()
-endif()
-
+# Spark/GeneratedVersion.h; the chat target reuses the header generated above
+# for SparkFuzzReflectedScene (SPARK_FUZZ_GENERATED_INCLUDE_DIR).
 add_executable(SparkFuzzMMOChatWire
     FuzzMMOChatWire.cpp
     FuzzMMOChatWireProduction.cpp
@@ -1316,7 +1294,7 @@ set_source_files_properties(
 target_include_directories(SparkFuzzMMOChatWire PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
-    "${SPARK_GENERATED_INCLUDE_DIR}"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
     "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source"
 )
 target_compile_features(SparkFuzzMMOChatWire PRIVATE cxx_std_23)
