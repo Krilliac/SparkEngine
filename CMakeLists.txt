@@ -1145,11 +1145,13 @@ endif()
 # VulkanDevice::CreateShader accepts SPIR-V only, and the non-Windows renderer
 # registers the SPIR-V that section 9.4 builds from Shaders/GLSL. A build that
 # compiles the Vulkan backend in without glslangValidator would ship a backend
-# that cannot load one shipped shader, so configure fails instead.
-if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
+# that cannot load one shipped shader, so configure fails instead. Windows is
+# no exception: a Windows build with the Vulkan backend builds and installs the
+# same SPIR-V (the LunarG SDK ships glslangValidator in $VULKAN_SDK/Bin).
+if(SPARK_VULKAN_AVAILABLE)
     find_program(SPARK_GLSLANG_VALIDATOR
         NAMES glslangValidator
-        HINTS "$ENV{VULKAN_SDK}/bin"
+        HINTS "$ENV{VULKAN_SDK}/bin" "$ENV{VULKAN_SDK}/Bin"
         DOC "glslangValidator that compiles Shaders/GLSL to SPIR-V for the Vulkan backend")
     if(NOT SPARK_GLSLANG_VALIDATOR)
         message(FATAL_ERROR
@@ -1158,6 +1160,7 @@ if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
             "  Ubuntu/Debian : sudo apt install glslang-tools\n"
             "  Fedora        : sudo dnf install glslang\n"
             "  macOS         : brew install glslang (or the LunarG Vulkan SDK)\n"
+            "  Windows       : the LunarG Vulkan SDK (sets VULKAN_SDK; glslangValidator is in its Bin)\n"
             "Or configure with -DENABLE_VULKAN=OFF to build without the Vulkan backend.")
     endif()
     message(STATUS "Vulkan shader toolchain: ${SPARK_GLSLANG_VALIDATOR}")
@@ -1882,7 +1885,7 @@ unset(_SPARK_SHADER_STAGE_COMMANDS)
 # "binding = N" on a sampler means texture slot N on both GL and Vulkan.
 # Utils.glsl is an include-only library with no entry point and is not listed.
 set(SPARK_SPIRV_OUTPUTS "")
-if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
+if(SPARK_VULKAN_AVAILABLE)
     set(_SPARK_SPIRV_STAGES
         BasicVS:vert BasicPS:frag
         BloomExtract:frag DebugVisualize:frag GaussianBlur:frag PBRSurface:frag PostProcess:frag SSAO:frag

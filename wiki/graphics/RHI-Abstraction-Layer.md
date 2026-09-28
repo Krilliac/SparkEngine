@@ -482,13 +482,13 @@ What has real test coverage today (Lavapipe, see the lane below): frame fencing 
 
 1. GPU-backed golden images of the engine renderer: no engine-pass baselines and no hardware row exist. The only Vulkan baselines are the software-row shader goldens below.
 2. Production pass execution: SPIR-V is now built for every shipped shader stage (below), but the Linux engine passes still record unbound draws, so the shadow/deferred/post passes do not render on Vulkan.
-3. Shader toolchain beyond the Linux Vulkan row: glslang is a hard configure-time dependency only for non-Windows builds with the Vulkan backend. DXC HLSL-to-SPIR-V and runtime GLSL compilation remain unintegrated.
+3. Shader toolchain beyond GLSL: glslang is a hard configure-time dependency for every build with the Vulkan backend, Windows included, and a GLSL error fails the build. HLSL-to-SPIR-V through DXC is not integrated and fails explicitly (`ShaderCompilerReal_VulkanTargetReportsNotIntegrated`); runtime GLSL compilation is not integrated either.
 
 These items remain documented here by design and should be removed only when the Vulkan path is verified feature-complete against D3D11.
 
 ### Shipped-shader SPIR-V build (RHI-230)
 
-`VulkanDevice::CreateShader` accepts SPIR-V only, so the shipped GLSL is compiled at build time. When the Vulkan backend is compiled in on a non-Windows build, the root `CMakeLists.txt` requires `glslangValidator` (`glslang-tools` on Ubuntu, or `$VULKAN_SDK/bin`) and configure fails without it; `-DENABLE_VULKAN=OFF` is the explicit way to build without Vulkan. Section 9.4 compiles every stage of `Shaders/GLSL/*.glsl` (except the include-only `Utils.glsl`) to `<build>/Shaders/SPIRV/<Name>.<vert|frag>.spv` and the `SparkSpirvShaders` target stages them beside `SparkEngine` in `bin/Shaders/SPIRV/`. Install puts them in `bin/Shaders/SPIRV/`. A `.glsl` file with no stage entry in the list is a configure error, and a GLSL error fails the build.
+`VulkanDevice::CreateShader` accepts SPIR-V only, so the shipped GLSL is compiled at build time. Whenever the Vulkan backend is compiled in, on Windows as on Linux and macOS, the root `CMakeLists.txt` requires `glslangValidator` (`glslang-tools` on Ubuntu, or `$VULKAN_SDK/bin` / `$VULKAN_SDK/Bin` from the LunarG SDK) and configure fails without it; `-DENABLE_VULKAN=OFF` is the explicit way to build without Vulkan. Section 9.4 compiles every stage of `Shaders/GLSL/*.glsl` (except the include-only `Utils.glsl`) to `<build>/Shaders/SPIRV/<Name>.<vert|frag>.spv` and the `SparkSpirvShaders` target stages them beside `SparkEngine` in `bin/Shaders/SPIRV/`. Install puts them in `bin/Shaders/SPIRV/`. A `.glsl` file with no stage entry in the list is a configure error, and a GLSL error fails the build.
 
 - Stage selection uses the same `VERTEX_SHADER` / `FRAGMENT_SHADER` macros that `OpenGLDevice` injects. glslang predefines `VULKAN`, which `FullscreenQuad.glsl` uses to read `gl_VertexIndex` and skip the OpenGL texcoord flip.
 - `--shift-texture-binding 14` moves GLSL sampler `binding = N` to descriptor binding `14 + N`. That matches `VulkanDevice`'s fixed layout (bindings 0-13 uniform buffers, 14-29 combined image samplers). Uniform blocks keep their binding numbers.
@@ -496,6 +496,8 @@ These items remain documented here by design and should be removed only when the
 - `VulkanShaderToolchain_ShippedProgramsCreatePipelines` creates a shader module and a graphics pipeline for each of the 11 shipped programs under the validation layer. It also requires the built `.spv` set to match its program table exactly. `VulkanShaderToolchain_ShaderCacheLoadsShippedSpirv` loads the basic pair through `ShaderCache` using the renderer's relative paths, and checks that the GLSL-only fallback is refused.
 
 Only the default variant of each stage is built. Define-selected variants (`BLUR_HORIZONTAL`, `FXAA_PASS`, `TONEMAP_*`, ...) have no SPIR-V yet.
+
+**Windows toolchain lane.** Hosted `windows-2022` runners have no Vulkan SDK, so `SPARK_VULKAN_AVAILABLE` stays FALSE there and nothing changes for them. On a Windows host with the LunarG SDK (for example `VULKAN_SDK=C:/VulkanSDK/1.4.357.0`), the build compiles and stages the same 17 SPIR-V modules and registers CTest `VulkanShaderToolchainWindows` (`VulkanShaderToolchain_*`, exact count 4, labels `vulkan;vulkan-hardware`, `SPARK_REQUIRE_VULKAN_VALIDATION=1`), which runs the toolchain family on the host's Vulkan ICD. The SDK's glslangValidator compiles all 17 shipped stages with the build's flags and exits non-zero on a broken stage (checked locally with the 1.4.357.0 SDK).
 
 ### Validation-layer lane (RHI-230)
 

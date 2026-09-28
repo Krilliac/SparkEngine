@@ -2481,6 +2481,23 @@ if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         TIMEOUT 120)
 endif()
 
+# RHI-230: the Windows Vulkan shader toolchain. A Windows build with the Vulkan backend
+# requires glslangValidator and builds the same SPIR-V (root CMakeLists.txt section 9.4),
+# so the toolchain family runs there too: malformed SPIR-V rejected, valid SPIR-V accepted,
+# every shipped module creates its pipeline, and the shader cache loads the staged SPIR-V.
+# Needs a Vulkan ICD and VK_LAYER_KHRONOS_validation (the LunarG SDK); hosted windows
+# runners have no Vulkan SDK, so SPARK_VULKAN_AVAILABLE is FALSE there and this lane is
+# not registered. Exact count: equal to the Linux VulkanShaderToolchain_ family.
+if(WIN32 AND SPARK_VULKAN_AVAILABLE AND TARGET SparkSpirvShaders)
+    add_test(NAME VulkanShaderToolchainWindows COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(VulkanShaderToolchainWindows PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_NAME_PREFIX=VulkanShaderToolchain_;SPARK_TEST_EXPECT_COUNT=4;SPARK_REQUIRE_VULKAN_VALIDATION=1"
+        LABELS "vulkan;vulkan-hardware"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
 # RHI-230: shipped-shader goldens on the vulkan-lavapipe row. Renders the
 # FullscreenQuad post-process programs from the SPIR-V the build compiles
 # (SparkSpirvShaders) through VulkanDevice under the validation layer, and
