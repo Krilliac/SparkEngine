@@ -127,10 +127,14 @@ class SectionGrammarTests(unittest.TestCase):
         self.assert_refused(section(*records), f"more than {symbolicate.MAX_FRAMES}")
 
     def test_oversized_log_is_refused(self) -> None:
-        with tempfile.NamedTemporaryFile() as handle:
-            handle.truncate(symbolicate.MAX_LOG_BYTES + 1)
+        # A closed file in a private directory: NamedTemporaryFile keeps its handle open without share-delete on
+        # Windows, so the tool would refuse the reopen ("cannot read") before the size check under test.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "crash.log"
+            with open(path, "wb") as handle:
+                handle.truncate(symbolicate.MAX_LOG_BYTES + 1)
             with self.assertRaisesRegex(symbolicate.SymbolicationError, "exceeds"):
-                symbolicate.read_crash_log(Path(handle.name))
+                symbolicate.read_crash_log(path)
 
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "ELF build-id symbolication is Linux-only")
