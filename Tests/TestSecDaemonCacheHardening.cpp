@@ -29,9 +29,48 @@
 #include <thread>
 #include <vector>
 
+#if !defined(_WIN32)
+#include <sys/resource.h>
+#endif
+
 namespace
 {
     using namespace Spark::Daemon;
+
+    /// The sanitizer wrapper caps the soft RLIMIT_FSIZE at 16 MiB, which silently
+    /// truncates the oversize fixtures to exactly kMaxPayloadSize and makes them
+    /// legal. Lift the soft limit to the hard limit while a fixture is written.
+    class ScopedUnboundedFileSize
+    {
+      public:
+        ScopedUnboundedFileSize()
+        {
+#if !defined(_WIN32)
+            m_saved = ::getrlimit(RLIMIT_FSIZE, &m_previous) == 0;
+            if (m_saved && m_previous.rlim_cur != m_previous.rlim_max)
+            {
+                rlimit raised = m_previous;
+                raised.rlim_cur = m_previous.rlim_max;
+                ::setrlimit(RLIMIT_FSIZE, &raised);
+            }
+#endif
+        }
+        ~ScopedUnboundedFileSize()
+        {
+#if !defined(_WIN32)
+            if (m_saved)
+                ::setrlimit(RLIMIT_FSIZE, &m_previous);
+#endif
+        }
+        ScopedUnboundedFileSize(const ScopedUnboundedFileSize&) = delete;
+        ScopedUnboundedFileSize& operator=(const ScopedUnboundedFileSize&) = delete;
+
+      private:
+#if !defined(_WIN32)
+        rlimit m_previous{};
+        bool m_saved = false;
+#endif
+    };
 
     /// Fresh, empty scratch directory under the system temp directory.
     std::filesystem::path SecCacheDir(const char* tag)
@@ -120,7 +159,12 @@ TEST(SecDaemonCache_AssetFileLargerThanOneFrameIsRejected)
     // No PutAsset can produce an entry larger than one wire frame, so a bigger
     // file is corrupt or planted and must not be loaded into memory.
     const auto dir = SecCacheDir("asset-oversize");
-    WriteAssetFile(dir / AssetName(1), 7u, "big.png", kMaxPayloadSize);
+    {
+        ScopedUnboundedFileSize unbounded;
+        WriteAssetFile(dir / AssetName(1), 7u, "big.png", kMaxPayloadSize);
+    }
+    // A truncated fixture would be legal and prove nothing.
+    ASSERT_EQ(std::filesystem::file_size(dir / AssetName(1)), 4u + 7u + kMaxPayloadSize);
     WriteAssetFile(dir / AssetName(2), 9u, "small.png", 16);
 
     AssetService svc;
@@ -148,7 +192,12 @@ TEST(SecDaemonCache_AssetBudgetSetBeforeInitializeBoundsStartupLoad)
 TEST(SecDaemonCache_ShaderFileLargerThanOneFrameIsRejected)
 {
     const auto dir = SecCacheDir("shader-oversize");
-    WriteRawFile(dir / ShaderName(1), static_cast<size_t>(kMaxPayloadSize) + 1);
+    {
+        ScopedUnboundedFileSize unbounded;
+        WriteRawFile(dir / ShaderName(1), static_cast<size_t>(kMaxPayloadSize) + 1);
+    }
+    // A truncated fixture would be legal and prove nothing.
+    ASSERT_EQ(std::filesystem::file_size(dir / ShaderName(1)), static_cast<std::uintmax_t>(kMaxPayloadSize) + 1u);
     WriteRawFile(dir / ShaderName(2), 32);
 
     ShaderService svc;
