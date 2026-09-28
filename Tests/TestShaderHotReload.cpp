@@ -150,22 +150,29 @@ TEST(ShaderHotReload_RemoveWatchDirectory_CanonicalizesEquivalentPaths)
 // Poll interval
 // ============================================================================
 
+// These tests watch the small fixture directory, not ".": the working directory is the
+// repository root, and walking it (ThirdParty, .git, Assets) cost up to 24 s per test in
+// the sanitizer lane without exercising anything the assertions check.
 TEST(ShaderHotReload_SetPollInterval)
 {
+    auto dir = CreateTempShaderDir();
     auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
-    hr.Initialize(".");
+    hr.Initialize(dir);
     hr.SetPollInterval(2.0f);
     EXPECT_NEAR(hr.GetPollInterval(), 2.0f, 0.001f);
     hr.Shutdown();
+    CleanupTempShaderDir(dir);
 }
 
 TEST(ShaderHotReload_SetPollInterval_ClampMinimum)
 {
+    auto dir = CreateTempShaderDir();
     auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
-    hr.Initialize(".");
+    hr.Initialize(dir);
     hr.SetPollInterval(0.01f);
     EXPECT_GE(hr.GetPollInterval(), 0.05f);
     hr.Shutdown();
+    CleanupTempShaderDir(dir);
 }
 
 // ============================================================================
@@ -174,8 +181,9 @@ TEST(ShaderHotReload_SetPollInterval_ClampMinimum)
 
 TEST(ShaderHotReload_SetEnabled)
 {
+    auto dir = CreateTempShaderDir();
     auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
-    hr.Initialize(".");
+    hr.Initialize(dir);
     EXPECT_TRUE(hr.IsEnabled());
 
     hr.SetEnabled(false);
@@ -185,6 +193,7 @@ TEST(ShaderHotReload_SetEnabled)
     EXPECT_TRUE(hr.IsEnabled());
 
     hr.Shutdown();
+    CleanupTempShaderDir(dir);
 }
 
 // ============================================================================
