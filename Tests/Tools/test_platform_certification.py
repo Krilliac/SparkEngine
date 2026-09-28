@@ -1831,8 +1831,12 @@ class TestPackageWalk(PackageTestCase):
             self.walk()
         self.assertIn("holds no executable image", str(raised.exception))
 
-    @unittest.skipIf(os.name == "nt", "case-insensitive filesystem cannot hold both names")
     def test_case_aliased_images_are_refused(self) -> None:
+        # Probe the filesystem, not the OS: Windows and default macOS APFS both fold case.
+        self.stage("case-probe", b"")
+        if (self.package / "CASE-PROBE").exists():
+            self.skipTest("case-insensitive filesystem cannot hold both names")
+        (self.package / "case-probe").unlink()
         self.stage("SparkEngine.exe", build_pe(["msvcp140.dll"]))
         self.stage("helper.dll", build_pe())
         self.stage("HELPER.dll", build_pe())

@@ -5151,12 +5151,18 @@ if(Python3_Interpreter_FOUND)
     # boundaries and the openssl CLI, so they run in the Linux ctest lanes;
     # Windows keeps its native Authenticode gate in the release workflow.
     if(NOT WIN32)
-        add_test(
-            NAME ArtifactIntegrity_PublishedStableRelease
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_published_stable_release.py)
-        set_tests_properties(ArtifactIntegrity_PublishedStableRelease PROPERTIES
-            LABELS "release;integrity;python"
-            TIMEOUT 120)
+        # The consumer receipt publisher (receipt_publication.py) supports
+        # only Linux O_TMPFILE and Windows handles, and refuses every other
+        # POSIX system by design, so its suite is registered on Linux only.
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            add_test(
+                NAME ArtifactIntegrity_PublishedStableRelease
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_published_stable_release.py)
+            set_tests_properties(ArtifactIntegrity_PublishedStableRelease PROPERTIES
+                LABELS "release;integrity;python"
+                TIMEOUT 120)
+        endif()
         add_test(
             NAME ArtifactIntegrity_ReleaseBundle
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_release_bundle.py)
