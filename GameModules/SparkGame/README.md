@@ -100,7 +100,9 @@ and no output naming the source or build tree. The installed tree carries `Asset
 post-build copy and the runtime install both include; the showcase loads it relative to the working directory.
 Phases `runA` and `runB` are two more processes that print `showcase_outcome` at 7 s: each must report a complete
 coroutine sequence (`target_hp=100 damage_events=1`) and `exhibit=4/4` from the installed meshes, and runB's line must
-equal runA's apart from `hour`, which follows wall-clock-paced frames. The packaged run does not check what is drawn.
+equal runA's apart from `hour`, which follows wall-clock-paced frames. The headless package host registers no
+`WeatherSystem` or `TimeOfDaySystem`, so those runs report `weather=n/a hour=n/a`. The packaged run does not check what
+is drawn.
 
 `ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload` (`Tests/TestModuleABI.cpp`) checks that
 `OnUnload()` releases the validation rules this module registers.
