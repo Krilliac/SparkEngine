@@ -217,9 +217,12 @@ def _ar_members(handle, file_size: int) -> list[dict]:
             name = "<long-names>"
         elif raw_name.startswith("/") and raw_name[1:].isdigit():
             start = int(raw_name[1:])
-            end = long_names.find(b"\n", start)
-            if start >= len(long_names) or end < 0:
+            # GNU/BSD ar ends each long name with "/\n"; the COFF archives
+            # MSVC lib.exe and llvm-lib write end each one with a NUL.
+            ends = [end for end in (long_names.find(b"\n", start), long_names.find(b"\x00", start)) if end >= 0]
+            if start >= len(long_names) or not ends:
                 raise FormatError("archive long name points outside the name table")
+            end = min(ends)
             name = long_names[start:end].decode("utf-8", "replace").rstrip("/")
         elif raw_name in ("/", "/SYM64/"):
             name = "<symbol-index>"

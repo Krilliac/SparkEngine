@@ -9,6 +9,8 @@ The tests run the tool on real and crafted fixtures:
 * an executable whose code differs is reported at its first differing content
   section, with the GNU build-id change, not at the derived build-id note;
 * ar archives differing only in a member timestamp are reported at that member;
+  long member names resolve through both the GNU ("/\\n") and the COFF (NUL,
+  MSVC lib.exe) "//" name table;
 * PE images differing only in the COFF timestamp are reported at that header
   timestamp with a changed timestamp identity when not linked with /Brepro,
   and at the content section when /Brepro derives the timestamp; CodeView RSDS
@@ -80,6 +82,24 @@ def _ar_archive(member_data: bytes, mtime: int) -> bytes:
     return b"!<arch>\n" + header + member_data + (b"\n" if len(member_data) % 2 else b"")
 
 
+def _long_name_archive(names: list[str], terminator: bytes) -> bytes:
+    """An archive whose members all use the "//" long-name table.
+
+    GNU ar ends each table entry with "/\\n"; MSVC lib.exe and llvm-lib end it
+    with a NUL (PE/COFF archive format).
+    """
+
+    def member(name: str, data: bytes) -> bytes:
+        header = f"{name:<16}{0:<12}{0:<6}{0:<6}{'644':<8}{len(data):<10}`\n".encode("ascii")
+        return header + data + (b"\n" if len(data) % 2 else b"")
+
+    table, members = b"", []
+    for index, name in enumerate(names):
+        members.append(member(f"/{len(table)}", bytes([index + 1]) * 3))
+        table += name.encode("ascii") + terminator
+    return b"!<arch>\n" + member("//", table) + b"".join(members)
+
+
 def _pe_image(timestamp: int, text: bytes, guid: uuid.UUID, pdb: str, repro: bool = False) -> bytes:
     """A minimal PE32+ image with one .text section, a CodeView RSDS record and, for /Brepro, a REPRO entry."""
     file_alignment = 0x200
@@ -137,6 +157,20 @@ class ManifestSchemaTests(unittest.TestCase):
         self.assertFalse(report["equivalent"])
         self.assertEqual(len(report["differing"]), 1)
         self.assertTrue(report["differing"][0]["firstDifference"].startswith("obj.o "))
+
+    def test_archive_long_names_resolve_in_gnu_and_coff_tables(self) -> None:
+        names = ["miniz.dir\\MinSizeRel\\miniz_zip.obj", "miniz.dir\\MinSizeRel\\miniz_tinfl.obj"]
+        for terminator in (b"/\n", b"\x00"):
+            with self.subTest(terminator=terminator):
+                root = self._tree(f"t{len(terminator)}", {"lib/miniz.lib": _long_name_archive(names, terminator)})
+                (entry,) = tool.build_manifest(root)["entries"]
+                self.assertEqual([section["name"] for section in entry["sections"]], ["<long-names>", *names])
+        broken = bytearray(_long_name_archive(names, b"\x00"))
+        # Point the second member past the end of the name table.
+        second = broken.index(b"/" + str(len(names[0]) + 1).encode("ascii") + b" ")
+        broken[second : second + 16] = f"{'/999':<16}".encode("ascii")
+        with self.assertRaisesRegex(tool.InputError, "long name points outside the name table"):
+            tool.build_manifest(self._tree("bad", {"lib/bad.lib": bytes(broken)}))
 
     def test_pe_timestamp_and_codeview_identity(self) -> None:
         guid = uuid.UUID("12345678-1234-5678-9abc-def012345678")
