@@ -134,7 +134,14 @@ structurally bound on Windows and awaits its first Linux Clang build and smoke r
   freed JSON trees alone reaches 256 MB in a campaign. SceneManager's versioned-text, INI
   and legacy object-line readers are a separate blocked record, `scene-manager-text`.
   Disabling `World::SetParent`'s cycle check makes the `parent-cycle-and-unknown-parent`
-  seed abort the smoke.
+  seed abort the smoke. **Open finding (not fixed):** a document whose entities form one
+  parent chain loads in super-linear time, because `DeserializeInto` links each child
+  through `World::SetParent`, whose cycle check walks the whole ancestor chain and
+  `std::find`s a visited vector on every step. Measured under the fuzz build: 1,000
+  chained entities 2.2 s, 2,000 13.4 s, 4,100 (a 64 KiB input) 94 s; with the visited
+  search removed the remaining ancestor walk still takes 26 s at 4,100. The seed corpus
+  therefore uses a balanced 200-entity tree, and a mutation campaign reports chain inputs
+  as timeouts until the loader validates the hierarchy in one linear pass.
 
 Two gates, deliberately separate:
 

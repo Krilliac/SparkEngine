@@ -261,7 +261,7 @@
       "parser_id": "scene-serializer",
       "corpus_dir": "FuzzerTests/corpora/reflected-scene",
       "last_verified": "2026-09-28",
-      "content_digest": "dcde9adbc4379c95d8d31919c41de4b1d83b1825a7848a1d7e71d210c4b26030",
+      "content_digest": "779bc48bc6e81a9fdba3ac8f7a72d3b5aa222b411689192dadd3bfa67eb3da88",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,
