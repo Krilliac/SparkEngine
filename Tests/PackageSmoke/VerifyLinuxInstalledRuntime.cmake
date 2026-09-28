@@ -527,6 +527,8 @@ if(SPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST)
         "does not hash the installed module")
 
     _spark_stage_engine("${_test_root}/symlink" "$ORIGIN/../lib" TRUE)
+    # lib/ exists only when the build ships SDL2; the link needs it regardless.
+    file(MAKE_DIRECTORY "${_test_root}/symlink/lib")
     file(CREATE_LINK "${_fixture_bin}" "${_test_root}/symlink/lib/outside" SYMBOLIC)
     _spark_expect_closure(symlink-out-of-prefix "${_test_root}/symlink" "symlink leaves the prefix")
 
