@@ -158,6 +158,10 @@ namespace Spark
         void RecalculateBonuses();
         void BuildUnlockTable();
 
+        /// Whole-percent XP bonus at the current level (+1% per level above 1). AwardXP scales with
+        /// this integer so the award is exact; xpMultiplier is its float mirror for display.
+        int XPBonusPercent() const { return m_level - 1; }
+
         int m_level{1};
         int m_currentXP{0};
         int m_maxLevel{50};

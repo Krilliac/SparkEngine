@@ -74,6 +74,18 @@ TEST(SEC2GM_ProgressionAwardSaturatesInsteadOfOverflowing)
     ordinary.Initialize();
     ordinary.AwardXP(Spark::ProgressionSystem::XP_PER_KILL, "kill");
     EXPECT_EQ(ordinary.GetCurrentXP(), Spark::ProgressionSystem::XP_PER_KILL);
+
+    // The level bonus is an exact whole percentage: at level 3 (+2%) 500 XP is 510, not the 509 that
+    // widening the float multiplier 1.02f (1.01999998...) to double and truncating produced.
+    Spark::ProgressionSystem bonused;
+    bonused.Initialize();
+    bonused.AwardXP(600, "kill");
+    EXPECT_EQ(bonused.GetLevel(), 3);
+    int bonusedModified = -1;
+    bonused.GetCallbacks().onXPAwarded = [&](int, const std::string&, int modified) { bonusedModified = modified; };
+    bonused.AwardXP(500, "kill");
+    EXPECT_EQ(bonusedModified, 510);
+    EXPECT_EQ(bonused.GetCurrentXP(), 1110);
 }
 
 TEST(SEC2GM_ProgressionIgnoresNonPositiveAwards)

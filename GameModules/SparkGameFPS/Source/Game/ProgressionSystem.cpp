@@ -58,19 +58,16 @@ namespace Spark
         if (m_level >= m_maxLevel || amount <= 0)
             return;
 
-        // Scale in double and saturate before narrowing: float(INT_MAX) rounds up to 2^31, and casting
-        // that back to int is undefined, as is overflowing the running total.
+        // Scale in 64-bit integers and saturate before narrowing: the old float product could round
+        // float(INT_MAX) up to 2^31, and casting that back to int is undefined, as is overflowing the
+        // running total. The bonus is a whole percentage, so the integer product is exact; widening the
+        // float multiplier instead would turn 1.02f into 1.01999998 and truncate 500 XP to 509.
         const int baseAmount = std::min(amount, MAX_SINGLE_AWARD);
-        const double scaled = static_cast<double>(baseAmount) * static_cast<double>(m_currentBonuses.xpMultiplier);
-        if (!std::isfinite(scaled) || scaled < 1.0)
-        {
-            return;
-        }
         constexpr int64_t kMaxXP = std::numeric_limits<int>::max();
+        const int64_t scaled = static_cast<int64_t>(baseAmount) * (100 + XPBonusPercent()) / 100;
         const int64_t current = std::max<int64_t>(m_currentXP, 0);
         const int64_t headroom = kMaxXP - current;
-        const int64_t wanted = static_cast<int64_t>(std::min(scaled, static_cast<double>(kMaxXP)));
-        const int modified = static_cast<int>(std::min(wanted, headroom));
+        const int modified = static_cast<int>(std::min(scaled, headroom));
         if (modified <= 0)
         {
             return;
@@ -164,7 +161,7 @@ namespace Spark
         m_currentBonuses.shieldRegenBonus = (m_level - 1) * 0.5f;
         m_currentBonuses.energyRegenBonus = (m_level - 1) * 0.3f;
         m_currentBonuses.cooldownReduction = std::min((m_level - 1) * 0.01f, 0.3f); // Cap at 30%
-        m_currentBonuses.xpMultiplier = 1.0f + (m_level - 1) * 0.01f;
+        m_currentBonuses.xpMultiplier = static_cast<float>(100 + XPBonusPercent()) / 100.0f;
     }
 
     void ProgressionSystem::BuildUnlockTable()
