@@ -127,6 +127,13 @@ namespace Spark
                 if (key.empty())
                     return false;
 
+                // A byte-order mark is only a marker at the start of the document.
+                // A key that begins with one mid-document would be re-emitted at the
+                // start of SaveToString() output and silently renamed (or emptied)
+                // on the next load, so it is malformed.
+                if (key.starts_with("\xEF\xBB\xBF"))
+                    return false;
+
                 std::string value = Trim(line.substr(eq + 1));
                 parsedSections[currentSection][key] = value;
                 ++parsedKeyOccurrences[currentSection][key];

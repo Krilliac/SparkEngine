@@ -103,6 +103,29 @@ TEST(ConfigParserReal_MalformedReloadIsRejectedTransactionally)
     EXPECT_EQ(cfg.GetInt("Graphics", "width"), 1280);
 }
 
+TEST(ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected)
+{
+    // SEC-120 (config-parser fuzz round-trip oracle): a BOM is only stripped at
+    // the start of the document. A global key that began with one mid-document
+    // was accepted, then SaveToString() emitted it as the first line and the
+    // next load stripped it, so "\xEF\xBB\xBF=1" no longer loaded at all.
+    Spark::ConfigParser cfg;
+    EXPECT_TRUE(cfg.LoadFromString("[Graphics]\nwidth = 1280\n"));
+
+    EXPECT_FALSE(cfg.LoadFromString("\n\xEF\xBB\xBFkey = 1\n"));
+    EXPECT_FALSE(cfg.LoadFromString("\n\xEF\xBB\xBF= 1\n"));
+    EXPECT_FALSE(cfg.LoadFromString("[Audio]\n\xEF\xBB\xBFvolume = 0.5\n"));
+    EXPECT_EQ(cfg.GetInt("Graphics", "width"), 1280);
+
+    // The leading document BOM is still accepted and every save reloads byte-stable.
+    EXPECT_TRUE(cfg.LoadFromString("\xEF\xBB\xBFkey = 1\n[Audio]\nvolume = 0.5\n"));
+    const std::string saved = cfg.SaveToString();
+    Spark::ConfigParser reloaded;
+    EXPECT_TRUE(reloaded.LoadFromString(saved));
+    EXPECT_EQ(reloaded.SaveToString(), saved);
+    EXPECT_EQ(reloaded.GetInt("", "key"), 1);
+}
+
 TEST(ConfigParserReal_StrictParserPreservesSupportedValueForms)
 {
     Spark::ConfigParser cfg;
