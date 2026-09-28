@@ -140,6 +140,12 @@ namespace Platformer
         /// @brief Set jump-button state; a rising edge queues a buffered jump.
         void SetJumpInput(bool held);
 
+        /**
+         * @brief While set, Update() stops polling the InputManager, so input written through
+         *        SetMovementInput/SetJumpInput (the automated route runner) is not overwritten by idle keys.
+         */
+        void SetExternalInputDriven(bool driven) { m_externalInputDriven = driven; }
+
         /// @brief Queue a dash for the next fixed update.
         void RequestDash();
 
@@ -239,6 +245,7 @@ namespace Platformer
         bool m_dashInputHeld{false};
         bool m_groundPoundInputHeld{false};
         bool m_respawnInputHeld{false};
+        bool m_externalInputDriven{false};
         float m_moveInput{0.0f};
         bool m_runHeld{false};
 

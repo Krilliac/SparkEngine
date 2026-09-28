@@ -6,8 +6,8 @@
  * (PlatformerLevelSystem::StepPlatforms, then PlatformerPlayerController::FixedUpdate) against level 0
  * ("Green Hills"), plus a sweep of every level's spawn and checkpoints. The scripted-run tests drive
  * PlatformerLevelFlow itself -- the same StepFrame/StepFixed the module's OnUpdate/OnFixedUpdate call --
- * with a route-following input script. No test presses the respawn key: restarts must come from the kill
- * plane and the game-over timer alone.
+ * with the module's own PlatformerRouteRunner (the automated player behind `platformer_autoplay`). No test
+ * presses the respawn key: restarts must come from the kill plane and the game-over timer alone.
  */
 
 #include "TestFramework.h"
@@ -20,6 +20,7 @@
 #include "../GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.h"
 #include "../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h"
 #include "../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h"
+#include "../GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.h"
 
 #include <algorithm>
 #include <cmath>
@@ -381,139 +382,8 @@ namespace
         }
     };
 
-    // Level 0 colliders are authored in route order: start, two stepping stones, moving platform, bouncy
-    // pad, high platform, two falling platforms, two descent ledges, goal platform.
+    // Level 0 goal platform index (colliders are authored in route order).
     constexpr size_t kGoalPlatform = 10;
-    constexpr float kHalfWidth = 0.4f; // Player AABB half width (PlatformerPlayerCollision.cpp)
-    constexpr float kGravity = 30.0f;  // PlatformerPlayerController gravity magnitude
-    constexpr float kRunSpeed = 12.0f; // Move speed 8 x run multiplier 1.5
-
-    /**
-     * Scripted player: reads only what a human sees (player position, grounded state, platform boxes)
-     * and writes only the controller's input API (SetMovementInput / SetJumpInput). It runs right along
-     * the level 0 route, jumps at platform edges, steers in the air towards the next platform without
-     * entering it from below, and waits for / rides the moving platform.
-     */
-    class RouteRunner
-    {
-      public:
-        /// While finite, stand still at this x on the platform that contains it instead of advancing.
-        float loiterX = std::nanf("");
-
-        void Drive(PlatformerFlowRig& rig)
-        {
-            const PlayerPosition position = rig.player.GetPlayerPosition();
-            const auto& colliders = rig.level.GetActiveColliders();
-
-            // A checkpoint restart teleports the player: resume the route at the platform beneath them.
-            if (std::abs(position.x - m_lastX) > 3.0f || std::abs(position.y - m_lastY) > 3.0f)
-                m_routeIndex = RouteIndexBelow(colliders, position);
-            m_lastX = position.x;
-            m_lastY = position.y;
-
-            // Route progress and footing are judged from position, not IsGrounded(): a bouncy pad never leaves
-            // the player grounded, and an updraft briefly lifts a player riding the moving platform.
-            const float verticalSpeed = rig.player.GetPlayerVelocity().y;
-            const size_t touching = RouteIndexUnderFeet(colliders, position);
-            if (touching != kNone)
-                m_routeIndex = touching;
-            const size_t standingOn = std::abs(verticalSpeed) < 1.0f ? touching : kNone;
-
-            float move = 0.0f;
-            bool jump = false;
-            const size_t next = std::min(m_routeIndex + 1, kGoalPlatform);
-            const PlatformCollider& target = colliders[next];
-            const float targetCentre = (target.minX + target.maxX) * 0.5f;
-
-            if (standingOn != kNone)
-            {
-                const PlatformCollider& ground = colliders[standingOn];
-                const float groundCentre = (ground.minX + ground.maxX) * 0.5f;
-                if (std::isfinite(loiterX) && position.x > ground.minX - kHalfWidth &&
-                    position.x < ground.maxX + kHalfWidth && loiterX > ground.minX && loiterX < ground.maxX)
-                {
-                    move = Toward(position.x, loiterX);
-                }
-                else if (standingOn == kGoalPlatform)
-                {
-                    move = Toward(position.x, groundCentre);
-                }
-                else if (next == kMovingPlatform && target.minX > ground.maxX + 1.5f)
-                {
-                    // Wait near the edge until the moving platform comes back within jumping range.
-                    move = Toward(position.x, ground.maxX - 1.0f);
-                }
-                else if (standingOn == kMovingPlatform && groundCentre < 38.5f)
-                {
-                    // Ride the moving platform to the far end of its track.
-                    move = Toward(position.x, groundCentre);
-                }
-                else
-                {
-                    move = 1.0f;
-                    jump = position.x >= ground.maxX - 0.6f;
-                }
-            }
-            else
-            {
-                // Airborne: stay clear of the target's underside and side until above its top, and pick the
-                // horizontal speed that arrives over the aim point when the fall reaches the target's top.
-                float aimX = targetCentre;
-                if (position.y < target.maxY + 0.05f)
-                    aimX = std::min(aimX, target.minX - kHalfWidth - 0.3f);
-                const float discriminant = verticalSpeed * verticalSpeed + 2.0f * kGravity * (position.y - target.maxY);
-                const float timeToTop =
-                    discriminant > 0.0f ? (verticalSpeed + std::sqrt(discriminant)) / kGravity : 0.25f;
-                move = std::clamp((aimX - position.x) / std::max(timeToTop, 0.15f) / kRunSpeed, -1.0f, 1.0f);
-                jump = verticalSpeed > 0.0f && m_jumpHeld;
-            }
-
-            // Release the button for one frame after a jump so the next press registers as a new jump.
-            if (jump && m_jumpHeld && standingOn != kNone)
-                jump = false;
-            m_jumpHeld = jump;
-            rig.player.SetMovementInput(move, true);
-            rig.player.SetJumpInput(jump);
-        }
-
-      private:
-        static constexpr size_t kNone = static_cast<size_t>(-1);
-
-        static float Toward(float from, float to)
-        {
-            const float delta = to - from;
-            if (std::abs(delta) < 0.1f)
-                return 0.0f;
-            return std::clamp(delta, -1.0f, 1.0f);
-        }
-
-        static size_t RouteIndexUnderFeet(const std::vector<PlatformCollider>& colliders, const PlayerPosition& p)
-        {
-            for (size_t i = 0; i <= kGoalPlatform; ++i)
-            {
-                const PlatformCollider& c = colliders[i];
-                if (p.x + kHalfWidth > c.minX && p.x - kHalfWidth < c.maxX && std::abs(p.y - c.maxY) < 0.1f)
-                    return i;
-            }
-            return kNone;
-        }
-
-        static size_t RouteIndexBelow(const std::vector<PlatformCollider>& colliders, const PlayerPosition& p)
-        {
-            for (size_t i = 0; i <= kGoalPlatform; ++i)
-            {
-                const PlatformCollider& c = colliders[i];
-                if (p.x + kHalfWidth > c.minX && p.x - kHalfWidth < c.maxX && p.y >= c.maxY - 0.1f)
-                    return i > 0 ? i - 1 : 0;
-            }
-            return 0;
-        }
-
-        size_t m_routeIndex = 0;
-        float m_lastX = 0.0f;
-        float m_lastY = 0.0f;
-        bool m_jumpHeld = false;
-    };
 
     /// Outcome of one scripted run of level 0 through PlatformerLevelFlow.
     struct ScriptedRun
@@ -532,7 +402,8 @@ namespace
      * @param loiterAtSecondCheckpoint Stand in the sawblade's patrol at the second checkpoint (55, 13) once it
      *        activates, until hazards cause a game over, then carry on to the goal.
      */
-    ScriptedRun RunLevel0(PlatformerFlowRig& rig, RouteRunner& runner, float maxSeconds, bool loiterAtSecondCheckpoint)
+    ScriptedRun RunLevel0(PlatformerFlowRig& rig, PlatformerRouteRunner& runner, float maxSeconds,
+                          bool loiterAtSecondCheckpoint)
     {
         ScriptedRun run{};
         bool wasDead = false;
@@ -542,7 +413,7 @@ namespace
             const bool loiter =
                 loiterAtSecondCheckpoint && run.gameOverRestarts == 0 && rig.checkpoints.GetActivatedCount() >= 2;
             runner.loiterX = loiter ? rig.checkpoints.GetLastCheckpointPosition().x : std::nanf("");
-            runner.Drive(rig);
+            runner.Drive(rig.level, rig.player);
             rig.flow.StepFixed(kFixedDt);
             const LevelFrameResult result = rig.flow.StepFrame(kFixedDt);
             run.hazardHits += result.hazardDamage > 0 ? 1 : 0;
@@ -577,7 +448,7 @@ TEST(PlatformerCompletion_ScriptedRunCompletesLevel0WithinThreeMinutes)
     ASSERT_TRUE(rig.flow.StartLevel(0));
     ASSERT_TRUE(rig.level.IsLevelActive());
 
-    RouteRunner runner;
+    PlatformerRouteRunner runner;
     const ScriptedRun run = RunLevel0(rig, runner, 180.0f, false);
     std::printf("  level 0 scripted run: completed=%d time=%.2fs hazardHits=%d pickups=%u restarts=%d lives=%d\n",
                 run.completed ? 1 : 0, run.completionTime, run.hazardHits, run.pickups, run.gameOverRestarts,
@@ -595,7 +466,7 @@ TEST(PlatformerCompletion_ScriptedRunCompletesLevel0WithinThreeMinutes)
     // The goal fired at the goal platform, not from below it: the player settles on its top.
     for (int i = 0; i < 60; ++i)
     {
-        runner.Drive(rig);
+        runner.Drive(rig.level, rig.player);
         rig.flow.StepFixed(kFixedDt);
         rig.flow.StepFrame(kFixedDt);
     }
@@ -608,6 +479,12 @@ TEST(PlatformerCompletion_ScriptedRunCompletesLevel0WithinThreeMinutes)
     // Completion is recorded as level progress and unlocks the next level.
     const std::string levels = rig.level.GetLevelListString();
     EXPECT_TRUE(levels.find("Green Hills (11 platforms) [DONE]") != std::string::npos);
+
+    // The runner's route is authored for level 0 only: on level 1 it must leave the controller alone.
+    // Record a three-star level 0 result so level 1 unlocks whatever this run's time was.
+    rig.level.CompleteLevel(0.0f, 0);
+    ASSERT_TRUE(rig.flow.StartLevel(1));
+    EXPECT_FALSE(runner.Drive(rig.level, rig.player));
 }
 
 TEST(PlatformerCompletion_HazardDeathMidRunRestartsAtCheckpointAndStillCompletes)
@@ -618,7 +495,7 @@ TEST(PlatformerCompletion_HazardDeathMidRunRestartsAtCheckpointAndStillCompletes
     // Once the second checkpoint (55, 13) is live the player stands in the sawblade's patrol; the flow's
     // hazard checks must take every life, the game-over timer must restart them at that checkpoint, and the
     // scripted run must still reach the goal inside the three-minute budget.
-    RouteRunner runner;
+    PlatformerRouteRunner runner;
     const ScriptedRun run = RunLevel0(rig, runner, 180.0f, true);
     std::printf("  level 0 run with game over: completed=%d time=%.2fs hazardHits=%d (loitering %d) restarts=%d "
                 "atCheckpoint=%d\n",

@@ -29,6 +29,7 @@ namespace Platformer
     class PlatformerCameraSystem;
     class PlatformerEngineSystems;
     class PlatformerLevelFlow;
+    class PlatformerRouteRunner;
 } // namespace Platformer
 
 /**
@@ -76,6 +77,7 @@ class SparkGamePlatformerModule : public Spark::IModule
     std::unique_ptr<Platformer::PlatformerCameraSystem> m_cameraSystem;
     std::unique_ptr<Platformer::PlatformerEngineSystems> m_engineSystems;
     std::unique_ptr<Platformer::PlatformerLevelFlow> m_levelFlow; ///< Per-frame orchestration over the systems above
+    std::unique_ptr<Platformer::PlatformerRouteRunner> m_routeRunner; ///< Non-null while platformer_autoplay is on
 };
 
 // Module exports

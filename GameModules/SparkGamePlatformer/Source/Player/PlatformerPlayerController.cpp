@@ -91,7 +91,7 @@ namespace Platformer
         (void)deltaTime;
 
         InputManager* input = m_context ? m_context->GetInput() : nullptr;
-        if (!input)
+        if (!input || m_externalInputDriven)
             return;
 
         constexpr int kShift = 0x10;

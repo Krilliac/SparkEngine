@@ -10,6 +10,7 @@
 #include "PlatformerEngineSystems.h"
 #include "PlatformerLevelFlow.h"
 #include "Player/PlatformerPlayerController.h"
+#include "Player/PlatformerRouteRunner.h"
 #include "Level/PlatformerLevelSystem.h"
 #include "Collectible/PlatformerCollectibleSystem.h"
 #include "Hazard/PlatformerHazardSystem.h"
@@ -25,6 +26,10 @@
 #include <Spark/ModuleDllMain.h>
 
 #include <cmath>
+#include <format>
+#include <memory>
+#include <string>
+#include <vector>
 
 // =============================================================================
 // Module exports
@@ -186,7 +191,8 @@ void SparkGamePlatformerModule::OnUnload()
     console.LogInfo("[Platformer] Unloading Spark Platformer module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module shutting down");
 
-    // Shutdown in reverse initialization order; the flow only references the systems below.
+    // Shutdown in reverse initialization order; the flow and runner only reference the systems below.
+    m_routeRunner.reset();
     m_levelFlow.reset();
     if (m_engineSystems)
     {
@@ -247,6 +253,8 @@ void SparkGamePlatformerModule::OnFixedUpdate(float fixedDeltaTime)
     if (!m_initialized || m_paused || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
         return;
 
+    if (m_routeRunner)
+        m_routeRunner->Drive(*m_levelSystem, *m_playerController);
     m_levelFlow->StepFixed(fixedDeltaTime);
 }
 
@@ -310,7 +318,31 @@ void SparkGamePlatformerModule::RegisterConsoleCommands()
                                 status += "Stars: " + std::to_string(m_collectibleSystem->GetStarsCollected()) + "\n";
                                 status +=
                                     "Checkpoints: " + std::to_string(m_checkpointSystem->GetActivatedCount()) + "\n";
+                                status += std::format("Level time: {:.2f}\n", m_levelSystem->GetLevelTimer());
                                 return status;
+                            });
+
+    // Automated player for packaged runs: the level 0 route runner drives the controller's input API each
+    // fixed step, and the controller stops polling the (idle) keyboard while it does.
+    console.RegisterCommand("platformer_autoplay",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+                                    return "Usage: platformer_autoplay on|off";
+                                if (args[0] == "off")
+                                {
+                                    m_routeRunner.reset();
+                                    m_playerController->SetExternalInputDriven(false);
+                                    m_playerController->SetMovementInput(0.0f);
+                                    m_playerController->SetJumpInput(false);
+                                    return "Autoplay off";
+                                }
+                                if (m_levelSystem->GetCurrentLevelIndex() !=
+                                    Platformer::PlatformerRouteRunner::kRouteLevel)
+                                    return "Autoplay follows the level 0 route only; load it with platformer_level 0";
+                                m_routeRunner = std::make_unique<Platformer::PlatformerRouteRunner>();
+                                m_playerController->SetExternalInputDriven(true);
+                                return "Autoplay on (level 0 route)";
                             });
 
     console.RegisterCommand("platformer_levels", [this](const std::vector<std::string>&) -> std::string

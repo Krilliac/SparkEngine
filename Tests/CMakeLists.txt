@@ -1328,6 +1328,7 @@ if(TARGET imgui)
     target_sources(SparkTests PRIVATE
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerCollision.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Player/PlatformerRouteRunner.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Level/PlatformerPlatformSimulation.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.cpp"

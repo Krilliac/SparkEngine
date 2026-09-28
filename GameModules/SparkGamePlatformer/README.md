@@ -17,6 +17,13 @@ ability unlocks, checkpoint activation, hazard damage and knockback, and the goa
 others). `plat_save` and `plat_load` save and restore progress through the engine bridge, and
 `plat_replay_start`, `plat_replay_stop`, and `plat_ghost` record a run and toggle ghost playback.
 
+`platformer_autoplay on|off` hands the player to `Source/Player/PlatformerRouteRunner`, an automated player for
+the level 0 ("Green Hills") route. Each fixed step, before `PlatformerLevelFlow::StepFixed`, it reads only the
+player's position and velocity and the level's platform boxes and writes only the controller's
+`SetMovementInput`/`SetJumpInput`; the controller stops polling the keyboard while it drives. Its route constants
+are authored for level 0, so it does nothing on any other level. `platformer_status` reports the level timer
+(`Level time:`).
+
 ## Level 0 toybox kit and music
 
 When the engine exposes a world, the module dresses each level with the Blender-authored kit in
@@ -60,8 +67,8 @@ deterministic movement, jump buffering, and dash.
 
 `Tests/TestMOD340PlatformerCompletionReal.cpp` (`PlatformerCompletion_*`) additionally compiles the level,
 collectible, hazard, and `PlatformerLevelFlow` sources. It covers platform collision, the kill plane, automatic
-checkpoint restart, and bouncy-pad launches, and it drives `PlatformerLevelFlow` with a route-following input
-script that completes level 0 inside a 180-second simulated budget, including one run that dies to hazards at
+checkpoint restart, and bouncy-pad launches, and it drives `PlatformerLevelFlow` with the production
+`PlatformerRouteRunner`, which completes level 0 inside a 180-second simulated budget, including one run that dies to hazards at
 the second checkpoint and restarts there. This is in-process evidence at 60 Hz, not a packaged run.
 
 `Tests/TestMOD340PlatformerProgressReal.cpp` (also `PlatformerCompletion_*`) saves earned progress through the
