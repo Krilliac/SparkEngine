@@ -30,8 +30,11 @@ corpus. The texture-stex and scene-manifest CTests replay their eight reviewed s
 same way, and the json-utils CTest replays its seven (`-runs=7`). The json-utils smoke
 previously mutated for `-max_total_time=4` with no `-runs`, so its execution count
 varied run to run (about 300,000) and it wrote several hundred mutated units into the
-tracked `FuzzerTests/corpora/json-utils/` directory. Every smoke now runs only the empty
-input plus its reviewed seeds. libFuzzer's leak check can still run one seed a second
+tracked `FuzzerTests/corpora/json-utils/` directory. The neural smoke also carried
+`-max_total_time=4` next to its `-runs=8` until the SEC-120 hardening pass removed it.
+The corpus binding (`_verify_replay_runs`) now rejects `-max_total_time=`, `-jobs=`,
+`-workers=` and `-fork=` on every blocking smoke, so a wall-clock or worker bound cannot
+return. Every smoke now runs only the empty input plus its reviewed seeds. libFuzzer's leak check can still run one seed a second
 time when malloc/free counts differ, so the `Done N runs` line may read one higher. The
 scene-manifest adapter aborts when an accepted asset path climbs out of the
 root under Windows separator semantics (its own lexical walk splits on both `/` and `\`,

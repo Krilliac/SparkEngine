@@ -70,6 +70,10 @@ MAX_FINDING_CHARS = 300
 GUARD_TEST_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
 COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 REPLAY_RUNS_FLAG = "-runs="
+# libFuzzer flags that make a replay depend on wall-clock time or on parallel
+# worker scheduling. A blocking smoke is a deterministic replay of the reviewed
+# seeds, so none of these may appear on its add_test.
+NONDETERMINISTIC_REPLAY_FLAGS = ("-max_total_time=", "-jobs=", "-workers=", "-fork=")
 
 # Guard tests resolve against first-party registrations: CTest names in any
 # CMake listfile and TEST/TEST_F cases under Tests/. Vendored and build trees
@@ -432,6 +436,14 @@ def _verify_replay_runs(root: Path, cmake_file: str, test_selector: str, seed_co
         raise PolicyError(f"{field}.cmake_file must be strict UTF-8") from exc
     for command in commands_named(parse_cmake(text, f"{field}.cmake_file"), "add_test"):
         if len(command.arguments) > 1 and command.arguments[0].upper() == "NAME" and command.arguments[1] == test_selector:
+            nondeterministic = [
+                argument for argument in command.arguments if argument.startswith(NONDETERMINISTIC_REPLAY_FLAGS)
+            ]
+            if nondeterministic:
+                raise PolicyError(
+                    f"{field} add_test {test_selector!r} passes {nondeterministic}; the blocking smoke must be a "
+                    "deterministic replay of the reviewed seeds, not a time- or worker-bounded campaign"
+                )
             runs = [argument for argument in command.arguments if argument.startswith(REPLAY_RUNS_FLAG)]
             expected = f"{REPLAY_RUNS_FLAG}{seed_count}"
             if runs != [expected]:

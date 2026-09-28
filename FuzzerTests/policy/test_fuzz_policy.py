@@ -1410,6 +1410,15 @@ class TestRegressionFixtures(FixtureTestCase):
         with self.assertPolicyError("must pass exactly -runs=4"):
             self.fixture.load_corpora()
 
+    def test_smoke_replay_may_not_be_time_or_worker_bounded(self) -> None:
+        # A wall-clock or parallel-worker bound turns the blocking replay into a
+        # campaign whose outcome depends on host speed and scheduling.
+        for flag in ("-max_total_time=4", "-jobs=2", "-workers=2", "-fork=1"):
+            with self.subTest(flag=flag):
+                self.fixture.rewrite_cmake(FUZZ_CMAKE.replace("-runs=3", f"-runs=3 {flag}"))
+                with self.assertPolicyError("deterministic replay"):
+                    self.fixture.load_corpora()
+
     def test_record_fields_are_strict(self) -> None:
         cases = (
             ({"found_by": "luck"}, "found_by must be one of"),
