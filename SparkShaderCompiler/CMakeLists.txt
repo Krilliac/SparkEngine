@@ -47,6 +47,10 @@ if(WIN32)
         list(APPEND RHI_SOURCES
             "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp"
             "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp"
+            # Descriptor heap allocator, shader-visible page pool and the
+            # D3D12CommandList binding methods (destructor, Set* overrides)
+            # live here; D3D12Device.cpp needs all of them to link.
+            "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D12/D3D12DescriptorHeap.cpp"
         )
     endif()
 endif()
