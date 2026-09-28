@@ -101,6 +101,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzShaderBlob",
     "SparkFuzzShaderServiceProtocol",
     "SparkFuzzConfigParser",
+    "SparkFuzzTelemetrySpool",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -1909,6 +1910,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "ConfigParser",
                 "Spark::ConfigParser::LoadFromString",
                 "config-parser",
+                8,
+            ),
+            "telemetry-spool-format": (
+                "TelemetrySpool",
+                "Spark::TelemetryDetail::Parse",
+                "telemetry-spool-format",
                 8,
             ),
         }

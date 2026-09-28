@@ -513,3 +513,57 @@ set_tests_properties(FuzzConfigParserSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+add_executable(SparkFuzzTelemetrySpool
+    FuzzTelemetrySpool.cpp
+    FuzzTelemetrySpoolProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/TelemetrySpoolFormat.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the production spool codec and the adapter use libc++ and meet the
+# driver only at the C ABI in FuzzTelemetrySpoolProduction.h.
+set_source_files_properties(
+    FuzzTelemetrySpoolProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/TelemetrySpoolFormat.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzTelemetrySpool PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+)
+target_compile_features(SparkFuzzTelemetrySpool PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzTelemetrySpool PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzTelemetrySpool PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzTelemetrySpool PRIVATE Threads::Threads c++ c++abi)
+
+# event-count-over-max.spool declares 100001 events (one over kAbsoluteMaxEvents)
+# and valid-5-events-over-small-cap.spool is valid but over the adapter's
+# 4-event caller cap, so both caps are exercised on every replay.
+add_test(
+    NAME FuzzTelemetrySpoolSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzTelemetrySpool>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/telemetry-spool-format"
+)
+set_tests_properties(FuzzTelemetrySpoolSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

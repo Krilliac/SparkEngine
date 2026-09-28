@@ -108,6 +108,14 @@ structurally bound on Windows and awaits its first Linux Clang build and smoke r
   rejecting `\xEF\xBB\xBF= 1` outright). `LoadFromString` now rejects such keys;
   `regression-midfile-bom-key.ini` and `ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected`
   pin it.
+- **`telemetry-spool-format`** (`SparkFuzzTelemetrySpool`, `FuzzTelemetrySpoolSmoke`,
+  `-runs=8`) feeds `Spark::TelemetryDetail::Parse`, which reads the local spool back after
+  a crash or restart, once with `kAbsoluteMaxEvents` and once with a 4-event caller cap.
+  The adapter aborts when the event count leaves `[1, maximumEvents]`, when the small cap
+  accepts a different set of spools than the absolute cap allows, when a rejected spool
+  modified the caller's vector, when an accepted event has no valid serialized size or
+  out-of-order sequences, and when `Serialize` does not reproduce the spool's length and
+  events. The link closure is `TelemetrySpoolFormat.cpp` alone.
 
 Two gates, deliberately separate:
 

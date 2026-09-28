@@ -197,6 +197,23 @@
           "guard_test": "ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected"
         }
       ]
+    },
+    {
+      "id": "telemetry-spool-format-corpus",
+      "parser_id": "telemetry-spool-format",
+      "corpus_dir": "FuzzerTests/corpora/telemetry-spool-format",
+      "last_verified": "2026-09-27",
+      "content_digest": "a74317f29019b5beebe7f1df5e937dcbb29ed6a4d2699f82220244196cd35f28",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

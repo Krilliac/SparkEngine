@@ -1893,10 +1893,16 @@
       "formats": [
         "telemetry-spool"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzTelemetrySpool.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzTelemetrySpool",
+        "test_selector": "FuzzTelemetrySpoolSmoke",
+        "corpus_id": "telemetry-spool-format-corpus",
+        "entry_symbol": "Spark::TelemetryDetail::Parse",
+        "binding_source": "FuzzerTests/FuzzTelemetrySpoolProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseTelemetrySpool"
       }
     },
     {
