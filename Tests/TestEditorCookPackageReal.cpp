@@ -6,7 +6,8 @@
  *   1. Author: a project document opened and rewritten by ProjectManager, a World entity
  *      with Transform and MeshRenderer, and the mesh assigned through the Asset Browser
  *      drag payload (MakeAssetDragReference, DecodeAssetDragPayload) and the Inspector's
- *      drop core (ApplyWorldAssetDrop) as exactly one CommandHistory entry, then saved with
+ *      drop core (ApplyWorldAssetDrop) as exactly one CommandHistory entry recorded by the
+ *      editor's EditorDocument, then saved with
  *      Spark::SaveWorld and recorded as the project's opened scene.
  *   2. Cook: BuildPipeline::StartCookOnly runs the real SparkCooker found beside the test
  *      host; the cook manifest must list the dragged mesh.
@@ -22,19 +23,24 @@
  * The negative case removes the cooked mesh from the package and requires the same run to
  * report it missing, so the asset record is not a constant.
  *
- * This is author, cook, package and run from a build tree. It is not an installed-runtime
- * scenario (installer or staged install); that remains open.
+ * Two lanes run this family. EditorCookPackageRoundTrip packages the build-tree
+ * SparkEngine. EditorCookPackageInstalledRuntime (cmake/RunEditorAuthorInstalledRuntime.cmake)
+ * installs the runtime component into a fresh prefix outside the source and build trees
+ * and packages that installed host; it also sets SPARK_ENGINE_INSTALLED_PREFIX, and the
+ * tests then require the host to lie under that prefix with no CMakeCache.txt above it,
+ * so a build-tree host cannot satisfy the installed-runtime lane.
  *
- * SPARK_ENGINE_EXECUTABLE is set by the EditorCookPackageRoundTrip ctest registration;
- * without it the tests fail rather than skip. That lane is Windows-only, so the tests are
- * compiled only under _WIN32: other hosts' whole-binary runs (sanitizers, coverage) never
- * see a family they cannot satisfy.
+ * SPARK_ENGINE_EXECUTABLE is set by both ctest registrations; without it the tests fail
+ * rather than skip. Both lanes are Windows-only, so the tests are compiled only under
+ * _WIN32: other hosts' whole-binary runs (sanitizers, coverage) never see a family they
+ * cannot satisfy.
  */
 
 #include "TestFramework.h"
 
 #include "AssetPipeline/EditorAssetDrag.h"
 #include "CommandHistory.h"
+#include "Core/EditorDocument.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "Fixtures/ScopedEditorProfile.h"
@@ -154,6 +160,7 @@ namespace
             ASSERT_TRUE(engine && *engine);
             const fs::path host(engine);
             ASSERT_TRUE(fs::is_regular_file(host));
+            ExpectInstalledHost(host);
 
             Author();
             Cook();
@@ -203,6 +210,35 @@ namespace
         }
 
       private:
+        /// Under the installed-runtime lane the host must come from the install prefix, and
+        /// no build tree (a CMakeCache.txt) may sit anywhere above it.
+        static void ExpectInstalledHost(const fs::path& host)
+        {
+            const char* installed = std::getenv("SPARK_ENGINE_INSTALLED_PREFIX");
+            if (!installed || !*installed)
+                return;
+            std::error_code ec;
+            const fs::path prefix = fs::weakly_canonical(fs::path(installed), ec);
+            ASSERT_FALSE(ec);
+            const fs::path hostPath = fs::weakly_canonical(host, ec);
+            ASSERT_FALSE(ec);
+            const fs::path relative = hostPath.lexically_relative(prefix);
+            const bool underPrefix = !relative.empty() && *relative.begin() != fs::path("..");
+            if (!underPrefix)
+                std::cerr << "  host " << Utf8(hostPath) << " is not under the installed prefix " << Utf8(prefix)
+                          << "\n";
+            ASSERT_TRUE(underPrefix);
+            for (fs::path directory = hostPath.parent_path(); !directory.empty(); directory = directory.parent_path())
+            {
+                const bool buildTree = fs::exists(directory / "CMakeCache.txt", ec);
+                if (buildTree)
+                    std::cerr << "  installed host sits below the build tree " << Utf8(directory) << "\n";
+                ASSERT_FALSE(buildTree);
+                if (directory == directory.parent_path())
+                    break;
+            }
+        }
+
         void Author()
         {
             const fs::path assets = m_project / "Assets";
@@ -221,10 +257,13 @@ namespace
             projects.Initialize();
             ASSERT_TRUE(projects.OpenProject(Utf8(document)));
 
-            ::World world;
-            const ::EntityID crate = world.CreateEntity("Crate");
-            world.AddComponent<::Transform>(crate);
-            world.AddComponent<::MeshRenderer>(crate);
+            SparkEditor::EditorDocument document;
+            auto authored = std::make_unique<::World>();
+            const ::EntityID crate = authored->CreateEntity("Crate");
+            authored->AddComponent<::Transform>(crate);
+            authored->AddComponent<::MeshRenderer>(crate);
+            document.ReplaceWorld(std::move(authored));
+            ::World& world = *document.GetWorld();
 
             // The Asset Browser's drag payload, received by the Inspector's mesh slot.
             const std::string reference = SparkEditor::MakeAssetDragReference(mesh, assets);
@@ -234,25 +273,12 @@ namespace
             ASSERT_TRUE(SparkEditor::DecodeAssetDragPayload(payload.data(), static_cast<int>(payload.size()),
                                                             SparkEditor::EditorAssetKind::Mesh, received));
 
-            // The drop commits through the Inspector's snapshot command, as EditorUI records it.
+            // The drop commits through the document's applied-edit command, as EditorUI records it.
             History().Clear();
-            const auto snapshot = [&world]() { return Spark::SerializeWorld(world); };
-            const auto restore = [&world](const std::string& json)
-            {
-                auto restored = std::make_unique<::World>();
-                if (Spark::DeserializeInto(*restored, json))
-                    world.GetRegistry() = std::move(restored->GetRegistry());
-            };
+            const auto snapshot = [&document]() { return document.Capture(); };
             const SparkEditor::InspectorPendingWorldEdit::CommitFn commit =
-                [&](const std::string& before, const std::string& description)
-            {
-                const std::string after = Spark::SerializeWorld(world);
-                if (before.empty() || after == before)
-                    return false;
-                History().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                    [restore, after]() { restore(after); }, [restore, before]() { restore(before); }, description));
-                return true;
-            };
+                [&document](const std::string& before, const std::string& description)
+            { return document.RecordApplied(before, description); };
             ASSERT_EQ(static_cast<int>(SparkEditor::ApplyWorldAssetDrop(world, crate, "MeshRenderer", "meshPath",
                                                                         received, snapshot, commit)),
                       static_cast<int>(SparkEditor::AssetDropResult::Applied));
@@ -265,7 +291,7 @@ namespace
             EXPECT_STR_CONTAINS(ReadText(document), "\"lastOpenedScene\": \"Scenes/Default.sparkscene\"");
             projects.RemoveRecentProject(Utf8(document));
             projects.CloseProject();
-            // The recorded commands capture this function's World.
+            // The recorded commands capture this function's document.
             History().Clear();
         }
 

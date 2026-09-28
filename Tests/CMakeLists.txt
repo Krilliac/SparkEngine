@@ -2912,6 +2912,23 @@ if(WIN32 AND TARGET SparkEngine AND TARGET SparkCooker AND SPARK_HEADLESS_SUPPOR
         LABELS "editor;editor-integration;editor-package-roundtrip;process"
         RUN_SERIAL TRUE
         TIMEOUT 300)
+    # EDT-210: the same author -> cook -> package -> run family against an INSTALLED
+    # runtime: the runtime component is installed into a fresh prefix outside the source
+    # and build trees, and the tests require the packaged host to come from it.
+    add_test(
+        NAME EditorCookPackageInstalledRuntime
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TESTS_EXECUTABLE=$<TARGET_FILE:SparkTests>"
+            "-DSPARK_ENGINE_EXECUTABLE_NAME=$<TARGET_FILE_NAME:SparkEngine>"
+            -DSPARK_STAGE_TIMEOUT=420
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunEditorAuthorInstalledRuntime.cmake)
+    set_tests_properties(EditorCookPackageInstalledRuntime PROPERTIES
+        LABELS "editor;editor-integration;editor-package-roundtrip;installed-runtime;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 900)
 endif()
 
 # SEC3: an -exec script that cannot be loaded (missing, or a directory) fails the
