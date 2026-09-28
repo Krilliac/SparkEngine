@@ -366,7 +366,9 @@ TEST(SEC4NarrowPath_GamePackagerCopiesNonAnsiAsset)
 
 TEST(SEC4NarrowPath_MaterialScanSkipsOnlyUnopenableMaterial)
 {
-    NarrowPathFixture fixture("materials", ".sparkmat", "roughness = 0.5\n");
+    // ParseFile rejects a material without a name, so a nameless fixture never loads on any
+    // platform and the narrow-spellable (Linux) expectation below could never hold.
+    NarrowPathFixture fixture("materials", ".sparkmat", "name = SEC4NarrowMaterial\nroughness = 0.5\n");
     if (fixture.narrowRoot.empty())
     {
         SKIP_TEST("temp directory has no narrow spelling");
