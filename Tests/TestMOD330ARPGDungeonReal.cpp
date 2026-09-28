@@ -245,6 +245,9 @@ TEST(ARPGDungeon_ScriptedHeroClearsBossFloorAndCompletes)
     EXPECT_EQ(run.dungeon.GetCurrentFloorNumber(), ARPGDemoEncounter::RunGoalFloor);
     EXPECT_TRUE(run.dungeon.GetCurrentFloor()->hasBoss);
     EXPECT_EQ(run.encounter.GetState().killsOnFloor, 0u);
+    // The status line (what arpg_encounter/arpg_attack print) names the authoritative boss and its rank.
+    EXPECT_TRUE(run.encounter.GetStatusString().find("Target: " + run.encounter.GetTarget()->name + " [Boss] Lv") !=
+                std::string::npos);
 
     ASSERT_TRUE(run.FinishRun());
 

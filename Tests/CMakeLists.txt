@@ -3413,6 +3413,7 @@ function(spark_add_module_package_run test_name module short_label timeout)
         RUN_SERIAL TRUE
         TIMEOUT ${timeout})
 endfunction()
+spark_add_module_package_run(ARPGDungeonPackage_ClearAndRestart SparkGameARPG arpg 600)
 
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)

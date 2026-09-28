@@ -30,6 +30,10 @@ Skill learning and casting are validated against the authoritative hero ID, clas
 
 The example also registers four engine-native abilities, four auras, and the Fire Mastery proc through `AbilitySystem`. Successful basic attacks and casts drive a real `AnimationStateMachine`; one-shot Attack and Cast states return to Idle through `CoroutineScheduler`, with a deterministic local-timer fallback for stripped/headless contexts. Use `arpg_abilities` or the ARPG Engine Integration debug panel to inspect those bridges live.
 
+## Packaged dungeon run
+
+`ARPGDungeonPackage_ClearAndRestart` (registered with `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON`; run it with `ctest -L module-package-run`) installs the runtime and samples components and drives the installed `SparkEngine` and `SparkGameARPG` headless on NullRHI through `Tests/PackageSmoke/ModuleObjectives/SparkGameARPG.cmake`. A writer process alternates `arpg_cast` and `arpg_attack` twenty times a second for 75 s of real module frames, then must print `Dungeon cleared: boss defeated on floor 5` with 13 kills and save; every floor-5 status line from the boss's arrival to the clear must name the same `[Boss]` target with health that never rises. A second process starts on a fresh floor 1, loads the save, and must print the writer's cleared status byte for byte. `arpg_encounter`, `arpg_attack` and `arpg_cast` print the target's rank (`Target: <name> [Boss] Lv..`). This is a local opt-in run, not hosted CI evidence.
+
 ## Example boundary
 
 This is a deterministic vertical slice, not a content-complete ARPG. Its purpose is to demonstrate a real cross-system loop with stable IDs and testable progression while leaving presentation, authored maps, and larger ability content to projects built from the template.

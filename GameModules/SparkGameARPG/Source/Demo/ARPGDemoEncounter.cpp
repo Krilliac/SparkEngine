@@ -456,8 +456,8 @@ namespace ARPG
         if (m_state.runComplete)
             status << "Dungeon cleared: boss defeated on floor " << RunGoalFloor << " (press R to run again)\n";
         else if (target)
-            status << "Target: " << target->name << " Lv" << target->level << " HP " << target->health << "/"
-                   << target->maxHealth << "\n";
+            status << "Target: " << target->name << " [" << GetMonsterRankName(target->rank) << "] Lv" << target->level
+                   << " HP " << target->health << "/" << target->maxHealth << "\n";
         status << "Controls: Space basic attack, Q primary skill, R restart encounter";
         return status.str();
     }
