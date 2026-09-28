@@ -102,6 +102,10 @@ _run_checked("Install configured FPS runtime component" 90
 _run_checked("Install configured FPS module component" 90
     "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
     --config "${SPARK_CONFIG}" --prefix "${_install_root}" --component samples)
+# ENG-220: the packaged Visual C++ runtime (CMakeLists.txt, "redist" component).
+_run_checked("Install configured FPS Visual C++ runtime component" 90
+    "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
+    --config "${SPARK_CONFIG}" --prefix "${_install_root}" --component redist)
 
 if(SPARK_FPS_PACKAGE_MODE STREQUAL "full")
     _run_checked("Exercise installed FPS playtester entry point" 120
@@ -133,6 +137,20 @@ _run_checked("Validate installed FPS runtime package" 120
     "-DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST=${_expected_manifest}"
     "-DSPARK_EXECUTABLE_SUFFIX=.exe"
     -P "${SPARK_SOURCE_ROOT}/cmake/ValidateStagedPackageExecutables.cmake")
+
+# ENG-220: every DLL a staged EXE/DLL imports (or delay-imports) must sit beside
+# it, be an API set, or be an allowlisted OS DLL present in System32. PATH and
+# the build tree are never consulted, so a DLL this developer machine happens
+# to have installed does not hide a dependency a clean machine lacks. Debug
+# images import the Debug CRT, which is not redistributable, so a Debug stage
+# is a developer layout and is not checked.
+if(SPARK_CONFIG STREQUAL "Debug")
+    message(STATUS "PE import closure not checked: Debug packages import the non-redistributable Debug CRT")
+else()
+    find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
+    _run_checked("Validate installed FPS package DLL import closure" 120
+        "${Python3_EXECUTABLE}" -B "${SPARK_SOURCE_ROOT}/tools/pe_import_closure.py" "${_install_root}")
+endif()
 
 if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
     # The staged executable and module run on NullRHI with no D3D11 device; the

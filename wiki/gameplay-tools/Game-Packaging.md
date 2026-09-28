@@ -32,6 +32,29 @@ claim names a missing test or a documented surface has no claim.
 > derived stable-v1 manifest; see
 > [Asset Pipeline](Asset-Pipeline.md#stable-v1-package-asset-profile-od-09).
 > `GamePackager` does not apply package profiles.
+>
+> **Binary dependencies (ENG-220).** Every MSVC image links the `/MD` CRT, so
+> it imports `vcruntime140.dll`, `vcruntime140_1.dll` and `msvcp140.dll`,
+> which a clean Windows machine does not have. The root `CMakeLists.txt`
+> installs them app-local into `bin/` through `InstallRequiredSystemLibraries`,
+> as the separate `redist` install component. It is separate because the
+> BLD-100 symbol map (`tools/shipping_symbol_manifest.py`) stages
+> `runtime`/`tools`/`samples` and requires a first-party PDB for every image,
+> and Microsoft's DLLs have none in this build. CPack still packs `redist`
+> into the ZIP and the MSI/NSIS installers (`cmake/SparkCPackOptions.cmake`).
+> A manual stage must add it:
+> `cmake --install <build> --config Release --component redist --prefix <stage>`.
+>
+> `tools/pe_import_closure.py <stage>` proves the stage's import closure. It
+> parses every `*.exe`/`*.dll` import and delay-import table. Each imported
+> DLL must sit beside its importer, be an API set (`api-ms-win-*`,
+> `ext-ms-*`), or be an allowlisted OS DLL that is present in `System32`. The
+> check never reads PATH, the build tree or the source tree, and a malformed
+> image or an empty stage fails. `FPSPackage_InstalledRuntime` and
+> `FPSHeadlessPackage_NullRHISaveReload` run it on the staged runtime, samples
+> and redist components. `PEImportClosure_Contract` covers the checker with
+> synthetic PE fixtures on every host. Debug stages are not checked, because
+> the Debug CRT is not redistributable.
 
 | Class | Responsibility |
 |-------|---------------|

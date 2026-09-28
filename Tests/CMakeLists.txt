@@ -4403,6 +4403,18 @@ set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
     LABELS "build;shipping;unit;python"
     TIMEOUT 300)
 
+# ENG-220: tools/pe_import_closure.py fails a staged Windows package whose
+# EXE/DLL imports or delay-imports a DLL that is neither beside it, an API set,
+# nor an allowlisted System32 DLL. Synthetic in-memory PE fixtures, so it runs
+# on every host; FPSPackage_InstalledRuntime runs the checker on the real stage.
+add_test(
+    NAME PEImportClosure_Contract
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_pe_import_closure -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(PEImportClosure_Contract PROPERTIES
+    LABELS "package;unit;python"
+    TIMEOUT 120)
+
 include("${CMAKE_SOURCE_DIR}/cmake/SparkCpuFloor.cmake")
 spark_cpu_floor_enforced(_spark_isa_floor_enforced)
 if(_spark_isa_floor_enforced AND CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")

@@ -2781,6 +2781,27 @@ set(SPARK_INSTALL_COMPONENT_SDK "sdk")
 set(SPARK_INSTALL_COMPONENT_TOOLS "tools")
 set(SPARK_INSTALL_COMPONENT_TEMPLATES "templates")
 set(SPARK_INSTALL_COMPONENT_SAMPLES "samples")
+set(SPARK_INSTALL_COMPONENT_REDIST "redist")
+
+# ENG-220: every image links the /MD CRT (CMAKE_MSVC_RUNTIME_LIBRARY above), so
+# it imports vcruntime140*.dll and msvcp140.dll, which a clean Windows machine
+# does not have. Ship them app-local beside the executables. They are Microsoft
+# images with no PDB in this build, so they live in their own "redist" component
+# rather than "runtime": the BLD-100 symbol map stages runtime/tools/samples and
+# requires a private PDB for every image it finds. CPack packages the component
+# (CPACK_COMPONENTS_ALL below and cmake/SparkCPackOptions.cmake), and
+# tools/pe_import_closure.py proves the staged package's import closure.
+# The Debug CRT is not redistributable, so Debug packages stay developer-only.
+if(MSVC)
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION bin)
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_COMPONENT ${SPARK_INSTALL_COMPONENT_REDIST})
+    include(InstallRequiredSystemLibraries)
+    if(NOT CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS MATCHES "vcruntime140\\.dll")
+        message(WARNING
+            "InstallRequiredSystemLibraries found no Visual C++ runtime to ship; Windows packages "
+            "will not run on a clean machine (tools/pe_import_closure.py will fail them)")
+    endif()
+endif()
 
 function(_spark_install_tracked_source_directory source_directory destination component)
     set(_spark_absolute_source "${source_directory}")
@@ -3669,10 +3690,18 @@ set(CPACK_COMPONENTS_ALL
     ${SPARK_INSTALL_COMPONENT_TEMPLATES}
     ${SPARK_INSTALL_COMPONENT_SAMPLES}
 )
+if(MSVC)
+    list(APPEND CPACK_COMPONENTS_ALL ${SPARK_INSTALL_COMPONENT_REDIST})
+endif()
 
 set(CPACK_COMPONENT_RUNTIME_DISPLAY_NAME "Runtime Binaries")
 set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "SparkEngine runtime executable, runtime shaders, and required binaries")
 set(CPACK_COMPONENT_RUNTIME_REQUIRED ON)
+
+set(CPACK_COMPONENT_REDIST_DISPLAY_NAME "Microsoft Visual C++ Runtime")
+set(CPACK_COMPONENT_REDIST_DESCRIPTION "App-local Visual C++ runtime DLLs the SparkEngine binaries import")
+set(CPACK_COMPONENT_REDIST_REQUIRED ON)
+set(CPACK_COMPONENT_REDIST_HIDDEN ON)
 
 set(CPACK_COMPONENT_SDK_DISPLAY_NAME "Headers and SDK")
 set(CPACK_COMPONENT_SDK_DESCRIPTION "SparkEngine static library, CMake package files, and public headers")

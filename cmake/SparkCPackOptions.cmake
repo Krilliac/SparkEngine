@@ -20,7 +20,8 @@ if(CPACK_GENERATOR STREQUAL "ZIP" OR CPACK_GENERATOR STREQUAL "TGZ")
 endif()
 
 if(CPACK_GENERATOR STREQUAL "NSIS" OR CPACK_GENERATOR STREQUAL "WIX")
-    set(CPACK_COMPONENTS_ALL runtime tools samples)
+    # redist: the app-local Visual C++ runtime the binaries import (ENG-220).
+    set(CPACK_COMPONENTS_ALL runtime redist tools samples)
     if(NOT CPACK_PACKAGE_FILE_NAME MATCHES "-Runtime$")
         string(APPEND CPACK_PACKAGE_FILE_NAME "-Runtime")
     endif()
