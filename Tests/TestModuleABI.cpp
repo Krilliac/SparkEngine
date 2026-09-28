@@ -168,102 +168,6 @@ namespace
         std::filesystem::remove(modulePath, ec);
     }
 
-    void SetSentinelEnvironment(const std::string& path)
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_MODULE_ABI_SENTINEL", path.c_str());
-#else
-        setenv("SPARK_MODULE_ABI_SENTINEL", path.c_str(), 1);
-#endif
-    }
-
-    void ClearSentinelEnvironment()
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_MODULE_ABI_SENTINEL", "");
-#else
-        unsetenv("SPARK_MODULE_ABI_SENTINEL");
-#endif
-    }
-
-    void SetFailOnLoadEnvironment(bool enabled)
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_MODULE_ABI_FAIL_ON_LOAD", enabled ? "1" : "");
-#else
-        if (enabled)
-            setenv("SPARK_MODULE_ABI_FAIL_ON_LOAD", "1", 1);
-        else
-            unsetenv("SPARK_MODULE_ABI_FAIL_ON_LOAD");
-#endif
-    }
-
-    void SetGameKindEnvironment(bool enabled)
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_MODULE_ABI_KIND_GAME", enabled ? "1" : "");
-#else
-        if (enabled)
-            setenv("SPARK_MODULE_ABI_KIND_GAME", "1", 1);
-        else
-            unsetenv("SPARK_MODULE_ABI_KIND_GAME");
-#endif
-    }
-
-    void SetVetoUnloadEnvironment(bool enabled)
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_MODULE_ABI_VETO_UNLOAD", enabled ? "1" : "");
-#else
-        if (enabled)
-            setenv("SPARK_MODULE_ABI_VETO_UNLOAD", "1", 1);
-        else
-            unsetenv("SPARK_MODULE_ABI_VETO_UNLOAD");
-#endif
-    }
-
-    void SetSupportsHotReloadEnvironment(bool enabled)
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_MODULE_ABI_VETO_HOT_RELOAD", enabled ? "1" : "");
-#else
-        if (enabled)
-            setenv("SPARK_MODULE_ABI_VETO_HOT_RELOAD", "1", 1);
-        else
-            unsetenv("SPARK_MODULE_ABI_VETO_HOT_RELOAD");
-#endif
-    }
-
-    void SetRegistryFixtureThrowOnLoadEnvironment(bool enabled)
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", enabled ? "1" : "");
-#else
-        if (enabled)
-            setenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", "1", 1);
-        else
-            unsetenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD");
-#endif
-    }
-
-    void SetRegistryFixtureLifecycleSentinel(const std::filesystem::path& path)
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", path.string().c_str());
-#else
-        setenv("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", path.string().c_str(), 1);
-#endif
-    }
-
-    void ClearRegistryFixtureLifecycleSentinel()
-    {
-#ifdef _WIN32
-        _putenv_s("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", "");
-#else
-        unsetenv("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL");
-#endif
-    }
-
     void SetTestEnvironment(const char* name, const std::string& value)
     {
 #ifdef _WIN32
@@ -276,18 +180,36 @@ namespace
 #endif
     }
 
-    /// Sets one fixture switch for a scope and clears it on exit, including an early ASSERT return.
-    struct ScopedTestEnvironment final
+    /**
+     * @brief Sets one fixture switch for a scope and restores its previous value on exit.
+     *
+     * The fixtures read process-global switches, so a raw set/reset pair leaked
+     * the value into every later test (and --shuffle reorders them) whenever an
+     * ASSERT return or an exception skipped the reset. Set() retoggles within
+     * the scope; an empty value unsets the variable.
+     */
+    class ScopedTestEnvironment final
     {
-        ScopedTestEnvironment(const char* variable, const std::string& value) : name(variable)
+      public:
+        ScopedTestEnvironment(const char* variable, const std::string& value) : m_name(variable)
         {
-            SetTestEnvironment(name, value);
+            if (const char* existing = std::getenv(variable))
+            {
+                m_hadValue = true;
+                m_previous = existing;
+            }
+            Set(value);
         }
-        ~ScopedTestEnvironment() { SetTestEnvironment(name, ""); }
+        ~ScopedTestEnvironment() { Set(m_hadValue ? m_previous : std::string{}); }
         ScopedTestEnvironment(const ScopedTestEnvironment&) = delete;
         ScopedTestEnvironment& operator=(const ScopedTestEnvironment&) = delete;
 
-        const char* name;
+        void Set(const std::string& value) const { SetTestEnvironment(m_name, value); }
+
+      private:
+        const char* m_name;
+        bool m_hadValue = false;
+        std::string m_previous;
     };
 
     std::string ReadBinaryFile(const std::filesystem::path& path)
@@ -405,8 +327,8 @@ TEST(ModuleABI_LoadErrorTracksDirectoryFailureAndClearsAfterSuccess)
 
 TEST(ModuleABI_FailedGameInitializationIsNotReportedAsUsable)
 {
-    SetGameKindEnvironment(true);
-    SetFailOnLoadEnvironment(true);
+    const ScopedTestEnvironment gameKind("SPARK_MODULE_ABI_KIND_GAME", "1");
+    const ScopedTestEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", "1");
 
     NullEngineContext context;
     ModuleManager manager;
@@ -414,8 +336,8 @@ TEST(ModuleABI_FailedGameInitializationIsNotReportedAsUsable)
     EXPECT_FALSE(manager.GetGameModuleName().empty());
     manager.InitializeAll(&context);
 
-    SetFailOnLoadEnvironment(false);
-    SetGameKindEnvironment(false);
+    failOnLoad.Set("");
+    gameKind.Set("");
     EXPECT_TRUE(manager.GetInitializedGameModuleName().empty());
 
     // The failed entry survives only to keep its DLL mapped. It must not be
@@ -435,14 +357,14 @@ TEST(ModuleABI_DiscoveryDoesNotExecuteCandidate)
     const std::filesystem::path sentinelPath = ProcessScratchRoot() / "spark-module-abi-discovery-sentinel.txt";
     std::error_code ec;
     std::filesystem::remove(sentinelPath, ec);
-    SetSentinelEnvironment(sentinelPath.string());
+    const ScopedTestEnvironment sentinel("SPARK_MODULE_ABI_SENTINEL", sentinelPath.string());
 
     ModuleManager manager;
     const auto discovered = manager.DiscoverModules(fixturePath.parent_path().string());
     const bool found = std::any_of(discovered.begin(), discovered.end(), [&](const DiscoveredModule& module)
                                    { return std::filesystem::path(module.path).filename() == fixturePath.filename(); });
 
-    ClearSentinelEnvironment();
+    sentinel.Set("");
     EXPECT_TRUE(found);
     EXPECT_FALSE(std::filesystem::exists(sentinelPath));
 }
@@ -513,12 +435,12 @@ TEST(ModuleABI_MismatchRejectedBeforeStaticConstructorInjectionOrFactory)
     const std::filesystem::path sentinelPath = ProcessScratchRoot() / "spark-module-abi-load-sentinel.txt";
     std::error_code ec;
     std::filesystem::remove(sentinelPath, ec);
-    SetSentinelEnvironment(sentinelPath.string());
+    const ScopedTestEnvironment sentinel("SPARK_MODULE_ABI_SENTINEL", sentinelPath.string());
 
     ModuleManager manager;
     const bool loaded = manager.LoadModule(fixturePath.string());
 
-    ClearSentinelEnvironment();
+    sentinel.Set("");
     EXPECT_FALSE(loaded);
     EXPECT_FALSE(std::filesystem::exists(sentinelPath));
     EXPECT_TRUE(manager.GetLoadedModuleInfo().empty());
@@ -543,10 +465,10 @@ TEST(ModuleABI_ModifiedBinaryRejectedByHashBeforeDllMainOrStaticConstructor)
         tamper.put('\0');
     }
 
-    SetSentinelEnvironment(sentinelPath.string());
+    const ScopedTestEnvironment sentinel("SPARK_MODULE_ABI_SENTINEL", sentinelPath.string());
     ModuleManager manager;
     const bool loaded = manager.LoadModule(copiedPath.string());
-    ClearSentinelEnvironment();
+    sentinel.Set("");
 
     EXPECT_FALSE(loaded);
     EXPECT_FALSE(std::filesystem::exists(sentinelPath));
@@ -676,14 +598,14 @@ TEST(ModuleABI_UnloadVetoPreservesInitializedWorkingModule)
     manager.InitializeAll(&context);
 
     Spark::IModule* const workingInstance = manager.GetModule("Spark Compatible ABI Fixture");
-    SetVetoUnloadEnvironment(true);
+    const ScopedTestEnvironment vetoUnload("SPARK_MODULE_ABI_VETO_UNLOAD", "1");
     EXPECT_FALSE(manager.ShutdownAll());
     EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
     EXPECT_FALSE(manager.ReloadModule("Spark Compatible ABI Fixture", &context));
     EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "refused hot reload");
     EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
 
-    SetVetoUnloadEnvironment(false);
+    vetoUnload.Set("");
     EXPECT_TRUE(manager.ShutdownAll());
     manager.UnloadAll();
     RemoveModuleCopy(modulePath);
@@ -703,9 +625,11 @@ TEST(ModuleABI_ReplacementHotReloadVetoPreservesInitializedWorkingModule)
     // The already-loaded image captured the allow decision at construction.
     // Only the staged replacement sees this veto, so the test covers the
     // replacement-side contract rather than the existing-image preflight.
-    SetSupportsHotReloadEnvironment(true);
-    const bool reloadSucceeded = manager.ReloadModule("Spark Compatible ABI Fixture", &context);
-    SetSupportsHotReloadEnvironment(false);
+    bool reloadSucceeded = false;
+    {
+        const ScopedTestEnvironment vetoHotReload("SPARK_MODULE_ABI_VETO_HOT_RELOAD", "1");
+        reloadSucceeded = manager.ReloadModule("Spark Compatible ABI Fixture", &context);
+    }
 
     EXPECT_FALSE(reloadSucceeded);
     EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "replacement");
@@ -726,14 +650,14 @@ TEST(ModuleABI_CommittedShutdownDoesNotRepeatFalliblePreflight)
     ASSERT_TRUE(manager.LoadModule(modulePath.string()));
     manager.InitializeAll(&context);
 
-    SetVetoUnloadEnvironment(false);
+    const ScopedTestEnvironment vetoUnload("SPARK_MODULE_ABI_VETO_UNLOAD", "");
     ASSERT_TRUE(manager.CanShutdownAll());
     // Once the owner commits shutdown, a later environmental change must not
     // strand a partially torn-down dependency graph behind a second gate.
-    SetVetoUnloadEnvironment(true);
+    vetoUnload.Set("1");
     manager.ShutdownAllAfterPreflight();
     manager.UnloadAll();
-    SetVetoUnloadEnvironment(false);
+    vetoUnload.Set("");
     RemoveModuleCopy(modulePath);
 }
 
@@ -745,10 +669,10 @@ TEST(ModuleABI_StartupRollbackTearsDownVetoingUncommittedModule)
     ASSERT_TRUE(manager.LoadModule(modulePath.string()));
     manager.InitializeAll(&context);
 
-    SetVetoUnloadEnvironment(true);
+    const ScopedTestEnvironment vetoUnload("SPARK_MODULE_ABI_VETO_UNLOAD", "1");
     EXPECT_FALSE(manager.CanShutdownAll());
     manager.RollbackStartup();
-    SetVetoUnloadEnvironment(false);
+    vetoUnload.Set("");
 
     manager.UnloadAll();
     EXPECT_EQ(manager.GetModuleCount(), size_t{0});
@@ -970,11 +894,7 @@ TEST(ModuleABI_OnUnloadSeesEngineServicesBeforeImageTeardown)
     const std::filesystem::path sentinel = ProcessScratchRoot() / "SparkRegistryLifecycleServicesAlive.txt";
     std::error_code cleanupError;
     std::filesystem::remove(sentinel, cleanupError);
-    SetRegistryFixtureLifecycleSentinel(sentinel);
-    struct SentinelGuard final
-    {
-        ~SentinelGuard() { ClearRegistryFixtureLifecycleSentinel(); }
-    } sentinelGuard;
+    const ScopedTestEnvironment sentinelSwitch("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", sentinel.string());
 
     int serviceStorage = 0;
     NullEngineContext context(nullptr, reinterpret_cast<Spark::WeatherSystem*>(&serviceStorage),
@@ -1034,10 +954,11 @@ TEST(ModuleABI_ThrownOnLoadCleansPartialHostRegistryState)
     ModuleManager manager;
     ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
 
-    SetRegistryFixtureThrowOnLoadEnvironment(true);
     bool initializeResult = true;
-    EXPECT_NO_THROW(initializeResult = manager.InitializeAll(&context));
-    SetRegistryFixtureThrowOnLoadEnvironment(false);
+    {
+        const ScopedTestEnvironment throwOnLoad("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", "1");
+        EXPECT_NO_THROW(initializeResult = manager.InitializeAll(&context));
+    }
 
     EXPECT_FALSE(initializeResult);
     EXPECT_FALSE(manager.HasInitializedModules());
@@ -1060,9 +981,11 @@ TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
     Spark::IModule* const workingInstance = manager.GetModule("Spark Compatible ABI Fixture");
     EXPECT_TRUE(workingInstance != nullptr);
 
-    SetFailOnLoadEnvironment(true);
-    const bool reloadSucceeded = manager.ReloadModule("Spark Compatible ABI Fixture", &context);
-    SetFailOnLoadEnvironment(false);
+    bool reloadSucceeded = false;
+    {
+        const ScopedTestEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", "1");
+        reloadSucceeded = manager.ReloadModule("Spark Compatible ABI Fixture", &context);
+    }
 
     EXPECT_FALSE(reloadSucceeded);
     EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "initialization failed");

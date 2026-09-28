@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -126,17 +127,43 @@ namespace
         std::filesystem::remove(modulePath, ignored);
     }
 
-    void SetContradictInfoSdkEnvironment(bool enabled)
+    /**
+     * @brief Makes the compatible fixture contradict its descriptor for one scope.
+     *
+     * The fixture reads a process-global switch. A raw set/reset pair leaked it
+     * into every later test (LoadModule of the fixture then fails) whenever an
+     * exception skipped the reset. The previous value is restored on exit.
+     */
+    class ScopedContradictInfoSdk final
     {
+      public:
+        ScopedContradictInfoSdk()
+        {
+            if (const char* existing = std::getenv(kName))
+                m_previous = existing;
+            Apply("1");
+        }
+        ~ScopedContradictInfoSdk() { Apply(m_previous.value_or(std::string{})); }
+        ScopedContradictInfoSdk(const ScopedContradictInfoSdk&) = delete;
+        ScopedContradictInfoSdk& operator=(const ScopedContradictInfoSdk&) = delete;
+
+      private:
+        static constexpr const char* kName = "SPARK_MODULE_ABI_CONTRADICT_INFO_SDK";
+
+        static void Apply(const std::string& value)
+        {
 #ifdef _WIN32
-        _putenv_s("SPARK_MODULE_ABI_CONTRADICT_INFO_SDK", enabled ? "1" : "");
+            _putenv_s(kName, value.c_str());
 #else
-        if (enabled)
-            setenv("SPARK_MODULE_ABI_CONTRADICT_INFO_SDK", "1", 1);
-        else
-            unsetenv("SPARK_MODULE_ABI_CONTRADICT_INFO_SDK");
+            if (value.empty())
+                unsetenv(kName);
+            else
+                setenv(kName, value.c_str(), 1);
 #endif
-    }
+        }
+
+        std::optional<std::string> m_previous;
+    };
 
     const std::string kPlaceholderHash(64, '0');
 } // namespace
@@ -250,12 +277,16 @@ TEST(ModuleABI_InImageDescriptorMismatchNamesBothSdkVersions)
 
 TEST(ModuleABI_ModuleInfoSdkContradictionNamesBothVersions)
 {
-    SetContradictInfoSdkEnvironment(true);
-    ModuleManager manager;
-    const bool loaded = manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH);
-    const std::string error = manager.GetLastLoadError();
-    const bool anyLoaded = !manager.GetLoadedModuleInfo().empty();
-    SetContradictInfoSdkEnvironment(false);
+    bool loaded = false;
+    std::string error;
+    bool anyLoaded = false;
+    {
+        const ScopedContradictInfoSdk contradictInfoSdk;
+        ModuleManager manager;
+        loaded = manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+        error = manager.GetLastLoadError();
+        anyLoaded = !manager.GetLoadedModuleInfo().empty();
+    }
 
     EXPECT_FALSE(loaded);
     EXPECT_FALSE(anyLoaded);

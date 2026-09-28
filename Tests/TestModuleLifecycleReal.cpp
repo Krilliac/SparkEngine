@@ -126,6 +126,28 @@ namespace
     };
 
     /**
+     * @brief Every switch the compatible fixture reads, cleared for one test.
+     *
+     * CompatibleModule.cpp reads seven process-global SPARK_MODULE_ABI_*
+     * variables. Scoping only the ones a test sets let a value inherited from
+     * the parent environment, or leaked by an earlier test (--shuffle reorders
+     * them), change the outcome: CONTRADICT_INFO_SDK fails LoadModule and
+     * DEPENDS_ON fails initialization. A test that holds this owns the whole
+     * fixture configuration, sets what it needs through the members, and gets
+     * the previous values back on exit.
+     */
+    struct CompatibleFixtureEnvironment
+    {
+        ScopedModuleEnvironment kindGame{"SPARK_MODULE_ABI_KIND_GAME", false};
+        ScopedModuleEnvironment failOnLoad{"SPARK_MODULE_ABI_FAIL_ON_LOAD", false};
+        ScopedModuleEnvironment dependsOn{"SPARK_MODULE_ABI_DEPENDS_ON", false};
+        ScopedModuleEnvironment vetoUnload{"SPARK_MODULE_ABI_VETO_UNLOAD", false};
+        ScopedModuleEnvironment vetoHotReload{"SPARK_MODULE_ABI_VETO_HOT_RELOAD", false};
+        ScopedModuleEnvironment contradictInfoSdk{"SPARK_MODULE_ABI_CONTRADICT_INFO_SDK", false};
+        ScopedModuleEnvironment sentinel{"SPARK_MODULE_ABI_SENTINEL", false};
+    };
+
+    /**
      * @brief Fresh, empty scratch directory removed and recreated per test.
      *
      * The directory name carries this process id. A module whose OnLoad fails
@@ -186,8 +208,9 @@ namespace
 
 TEST(ModuleLifecycle_FailedGameLoadDoesNotBlockAReplacementGameModule)
 {
-    const ScopedModuleEnvironment kindGame("SPARK_MODULE_ABI_KIND_GAME", true);
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+    const CompatibleFixtureEnvironment fixture;
+    fixture.kindGame.Set(true);
+    fixture.failOnLoad.Set(true);
 
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleLifecycleGhostEntry");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
@@ -207,7 +230,7 @@ TEST(ModuleLifecycle_FailedGameLoadDoesNotBlockAReplacementGameModule)
     // stays. Before the fix GetGameModuleName() still named it, so the
     // single-game-module policy REFUSED every subsequent Game-kind module for
     // the rest of the process lifetime.
-    failOnLoad.Set(false);
+    fixture.failOnLoad.Set(false);
     EXPECT_TRUE(manager.GetGameModuleName().empty());
     EXPECT_FALSE(manager.HasInitializedModules());
 
@@ -216,7 +239,7 @@ TEST(ModuleLifecycle_FailedGameLoadDoesNotBlockAReplacementGameModule)
     EXPECT_FALSE(manager.GetInitializedGameModuleName().empty());
     EXPECT_TRUE(manager.HasInitializedModules());
 
-    kindGame.Set(false);
+    fixture.kindGame.Set(false);
     manager.ShutdownAll();
     manager.UnloadAll();
 
@@ -226,6 +249,7 @@ TEST(ModuleLifecycle_FailedGameLoadDoesNotBlockAReplacementGameModule)
 
 TEST(ModuleLifecycle_ManifestResolvesAForeignPlatformModulePath)
 {
+    const CompatibleFixtureEnvironment fixture;
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleLifecycleManifestRemap");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
     const std::filesystem::path hostImage = directory / source.filename();
@@ -265,7 +289,7 @@ TEST(ModuleLifecycle_ManifestStillReportsATrulyMissingModule)
 
 TEST(ModuleLifecycle_RecordsSuccessfulNewStyleModuleCallbacks)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
+    const CompatibleFixtureEnvironment fixture;
 
     NullEngineContext context;
     ModuleManager manager;
@@ -292,7 +316,8 @@ TEST(ModuleLifecycle_RecordsSuccessfulNewStyleModuleCallbacks)
 
 TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+    const CompatibleFixtureEnvironment fixture;
+    fixture.failOnLoad.Set(true);
 
     NullEngineContext context;
     ModuleManager manager;
@@ -312,7 +337,8 @@ TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
 
 TEST(ModuleLifecycle_InitializeAllReturnsFailureWhenOnLoadFails)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+    const CompatibleFixtureEnvironment fixture;
+    fixture.failOnLoad.Set(true);
 
     NullEngineContext context;
     ModuleManager manager;
@@ -326,6 +352,7 @@ TEST(ModuleLifecycle_InitializeAllReturnsFailureWhenOnLoadFails)
 
 TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
 {
+    const CompatibleFixtureEnvironment fixture;
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadRetry");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
     std::filesystem::path modulePath = directory / "RetryableModule";
@@ -337,7 +364,7 @@ TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
     ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
     manager.InitializeAll(&context);
     ASSERT_TRUE(manager.HasInitializedModules());
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+    fixture.failOnLoad.Set(true);
 
     auto& console = Spark::SimpleConsole::GetInstance();
     const bool consoleWasInitialized = console.IsInitialized();
@@ -390,6 +417,7 @@ TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
 
 TEST(ModuleHotReload_PollChangesContainsNonStandardCallbackExceptions)
 {
+    const CompatibleFixtureEnvironment fixture;
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadPollCallbackException");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
     std::filesystem::path modulePath = directory / "PollCallbackExceptionModule";
@@ -454,6 +482,7 @@ TEST(ModuleHotReload_PollChangesContainsNonStandardCallbackExceptions)
 
 TEST(ModuleHotReload_ForceReloadContainsStandardCallbackExceptions)
 {
+    const CompatibleFixtureEnvironment fixture;
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadForceCallbackException");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
     std::filesystem::path modulePath = directory / "ForceCallbackExceptionModule";
@@ -544,8 +573,8 @@ TEST(ModuleLegacyAdapter_FailedLoadCleanupCreatesNoLifecycleRecord)
 
 TEST(ModuleLifecycleRecord_CarriesLoadedLibraryPathAndKind)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
-    const ScopedModuleEnvironment gameKind("SPARK_MODULE_ABI_KIND_GAME", true);
+    const CompatibleFixtureEnvironment fixture;
+    fixture.kindGame.Set(true);
 
     NullEngineContext context;
     ModuleManager manager;
@@ -564,8 +593,7 @@ TEST(ModuleLifecycleRecord_CarriesLoadedLibraryPathAndKind)
 
 TEST(ModuleLifecycleRecord_AddonIsNotReportedAsTheGameModule)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
-    const ScopedModuleEnvironment gameKind("SPARK_MODULE_ABI_KIND_GAME", false);
+    const CompatibleFixtureEnvironment fixture;
 
     NullEngineContext context;
     ModuleManager manager;
@@ -620,8 +648,8 @@ TEST(ModuleLifecycleRecord_FormatsTheHostRecordByteCompatibly)
 
 TEST(ModuleLifecycleRecord_RetainedManagerCanPublishItsEvidence)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
-    const ScopedModuleEnvironment gameKind("SPARK_MODULE_ABI_KIND_GAME", true);
+    const CompatibleFixtureEnvironment fixture;
+    fixture.kindGame.Set(true);
 
     NullEngineContext context;
     ModuleManager manager;
