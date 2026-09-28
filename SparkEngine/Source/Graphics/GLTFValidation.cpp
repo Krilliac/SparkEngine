@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <limits>
 #include <new>
@@ -167,6 +168,24 @@ namespace Spark::Graphics::Detail::GLTF
             return left != 0 && right > std::numeric_limits<cgltf_size>::max() / left;
         }
 
+        /**
+         * cgltf_load_buffers allocates a data URI buffer's declared byteLength before decoding it,
+         * so a few base64 characters could otherwise claim up to kMaxSourceBytes. Every 4 base64
+         * characters decode to at most 3 bytes; a byteLength the payload cannot fill is rejected
+         * before anything is allocated.
+         */
+        bool DataUriCanHoldDeclaredSize(const char* uri, cgltf_size declaredSize)
+        {
+            const char* comma = std::strchr(uri, ',');
+            if (!comma)
+            {
+                return true; // cgltf rejects a data URI without a payload before allocating
+            }
+            const cgltf_size payloadChars = std::strlen(comma + 1);
+            const cgltf_size decodableBytes = payloadChars / 4 * 3 + payloadChars % 4 * 3 / 4;
+            return declaredSize <= decodableBytes;
+        }
+
         bool ValidateAccessorBounds(const cgltf_accessor& accessor, std::string& error)
         {
             if (accessor.count == 0)
@@ -251,6 +270,12 @@ namespace Spark::Graphics::Detail::GLTF
             if (totalBufferBytes > kMaxSourceBytes)
             {
                 error = "combined glTF buffers exceed the import limit";
+                return false;
+            }
+            if (buffer.uri && std::strncmp(buffer.uri, "data:", 5) == 0 &&
+                !DataUriCanHoldDeclaredSize(buffer.uri, buffer.size))
+            {
+                error = "glTF data URI holds fewer bytes than its buffer byteLength";
                 return false;
             }
         }
