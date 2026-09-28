@@ -881,8 +881,7 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "persistence-integration",
-        "recovery-drill"
+        "persistence-integration"
       ],
       "plannedTestSelectors": [
         "Persistence_Transaction",
@@ -1194,9 +1193,7 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "server-soak",
         "load-test",
-        "recovery-drill",
         "observability-canary"
       ],
       "plannedTestSelectors": [
@@ -1333,8 +1330,7 @@
       },
       "plannedCiJobs": [
         "performance-regression",
-        "golden-d3d11",
-        "soak-scheduled"
+        "golden-d3d11"
       ],
       "plannedTestSelectors": []
     }

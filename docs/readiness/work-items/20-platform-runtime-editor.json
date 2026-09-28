@@ -816,9 +816,7 @@
         "golden-d3d11",
         "d3d11-stress"
       ],
-      "plannedTestSelectors": [
-        "D3D11_DeviceLoss_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "RHI-220",
@@ -1043,9 +1041,7 @@
         "d3d12-golden",
         "d3d12-stress"
       ],
-      "plannedTestSelectors": [
-        "D3D12_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "RHI-230",
@@ -2012,9 +2008,7 @@
         "package-consumer-linux",
         "package-consumer-windows"
       ],
-      "plannedTestSelectors": [
-        "CLI_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "SAVE-230",
