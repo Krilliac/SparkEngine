@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed check that public docs label each game module as what it is (MOD-300).
+"""Fail-closed check that public docs label each game module as what it is (MOD-300/340/360).
 
 A module's public label is what README.md, GameModules/README.md, the module's own
 README and the wiki say it is. Each rule in ``RULES`` names a module, the labels it
@@ -51,6 +51,24 @@ RULES: tuple[PositioningRule, ...] = (
         required=(
             ("GameModules/SparkGame/README.md", "it is not a game"),
             ("GameModules/SparkGame/README.md", "**Release classification:** experimental showcase"),
+        ),
+    ),
+    PositioningRule(
+        module="SparkGamePlatformer",
+        work_item="MOD-340",
+        forbidden=((_GAME_CLAIM, "SparkGamePlatformer is an experimental prototype, not a finished game"),),
+        required=(
+            ("GameModules/SparkGamePlatformer/README.md", "**Release classification:** experimental prototype"),
+            ("GameModules/SparkGamePlatformer/README.md", "not a packaged run"),
+        ),
+    ),
+    PositioningRule(
+        module="SparkGameOpenWorld",
+        work_item="MOD-360",
+        forbidden=((_GAME_CLAIM, "SparkGameOpenWorld is an experimental prototype, not a finished game"),),
+        required=(
+            ("GameModules/SparkGameOpenWorld/README.md", "**Release classification:** experimental prototype"),
+            ("GameModules/SparkGameOpenWorld/README.md", "not a packaged run"),
         ),
     ),
 )

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""MOD-300: tools/check-module-positioning.py keeps SparkGame labelled as a showcase.
+"""MOD-300/340/360: tools/check-module-positioning.py keeps SparkGame labelled as a showcase and
+SparkGamePlatformer and SparkGameOpenWorld as experimental prototypes whose READMEs keep their boundaries.
 
 Fixture repositories plant each mislabel the checker must reject -- the catalog row
 that called SparkGame an FPS arena showcase, a prose claim that it is a finished
@@ -24,6 +25,11 @@ GOOD_MODULE_README = (
     "# SparkGame\n\n"
     "SparkGame is the base showcase module; it is not a game.\n\n"
     "**Release classification:** experimental showcase, outside the stable-v1 release profile.\n"
+)
+GOOD_PROTOTYPE_README = (
+    "# {module}\n\n"
+    "**Release classification:** experimental prototype, outside the stable-v1 release profile.\n\n"
+    "- Completion is in-process evidence, not a packaged run.\n"
 )
 GOOD_CATALOG = (
     "| Module | Description | Load Order |\n"
@@ -50,6 +56,8 @@ class PositioningFixtureTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.write("GameModules/SparkGame/README.md", GOOD_MODULE_README)
+        for module in ("SparkGamePlatformer", "SparkGameOpenWorld"):
+            self.write(f"GameModules/{module}/README.md", GOOD_PROTOTYPE_README.format(module=module))
         self.write("GameModules/README.md", GOOD_CATALOG)
         self.write("README.md", "# SparkEngine\n")
         self.write("wiki/getting-started/Game-Modules.md", "# Game Modules\n")
@@ -117,7 +125,41 @@ class PositioningFixtureTests(unittest.TestCase):
         self.assertEqual(0, status, output)
 
 
+    def test_prototype_boundary_sentence_is_required(self) -> None:
+        self.write(
+            "GameModules/SparkGameOpenWorld/README.md",
+            GOOD_PROTOTYPE_README.format(module="SparkGameOpenWorld").replace(", not a packaged run", ""),
+        )
+        status, output = self.run_checker()
+        self.assertEqual(1, status)
+        self.assertIn(
+            "GameModules/SparkGameOpenWorld/README.md:1: MOD-360 SparkGameOpenWorld disclaimer missing: "
+            "'not a packaged run'",
+            output,
+        )
+
+    def test_prototype_game_claim_fails(self) -> None:
+        self.write(
+            "wiki/getting-started/Game-Modules.md", "# Game Modules\n\nSparkGamePlatformer is a playable game.\n"
+        )
+        status, output = self.run_checker()
+        self.assertEqual(1, status)
+        self.assertIn(
+            "wiki/getting-started/Game-Modules.md:3: MOD-340 forbidden label 'playable game' for SparkGamePlatformer",
+            output,
+        )
+
+
 class RepositoryTests(unittest.TestCase):
+    def test_repository_labels_platformer_and_openworld_as_prototypes(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = CHECKER.main(["--root", str(REPO_ROOT)])
+        self.assertEqual(0, status, output.getvalue())
+        self.assertIn(f"{len(CHECKER.RULES)} rule(s) clean", output.getvalue())
+        self.assertEqual({"SparkGame", "SparkGamePlatformer", "SparkGameOpenWorld"},
+                         {rule.module for rule in CHECKER.RULES})
+
     def test_repository_labels_sparkgame_as_a_showcase(self) -> None:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

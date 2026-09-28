@@ -61,6 +61,8 @@ and a clean NullRHI lifecycle. It is a local opt-in run; there is no hosted CI l
 
 ## Known limitations
 
+- Level completion is proven in-process at 60 Hz, not a packaged run in hosted CI: the packaged level 0 run above
+  is local and opt-in. Kit placement has not been observed in a running engine.
 - Localization resources are missing. `PlatformerEngineSystems::SetupLocalization()` loads
   `Data/Localization/platformer_en.json`, `_fr`, `_de`, and `_ja`, and then logs that four languages loaded, but
   none of those files exists anywhere in the repository.

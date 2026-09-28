@@ -38,8 +38,9 @@ differs in case, is composed at run time, or disagrees with that record or `Asse
 
 ## Known limitations
 
-- There is no input-driven player controller; movement happens through `SetPosition`, fast travel and console
-  commands.
+- Movement is input-driven through `Source/Player/OWPlayerController`, but there is no rendered or collidable
+  player body. Traversal is in-process evidence, not a packaged run, and settlement visits are session-only (they
+  are not saved).
 - `MusicManager` does not decode audio files, so registering the tracks does not prove audible playback.
 - The procedural ground tiles and music loops need owner acceptance, or replacement with authored content, before
   a release-quality claim.
@@ -54,3 +55,7 @@ wildlife, and persistence systems, including rejection of malformed save payload
 (`OpenWorldPersistence_*`) and requires every music track and area-manifest path the real systems register to
 exist (`OpenWorldAssets_AllRegisteredAssetsExist`). `Tests/Tools/test_check_module_asset_refs.py`
 (`OpenWorldAssets_ReferenceCheckFailsClosed`) covers the reference checker.
+`Tests/TestMOD360OpenWorldTraversalReal.cpp` (`OpenWorldTraversal_*`, CTest
+`ModuleManifest_SparkGameOpenWorld_OpenWorldTraversal`) drives the real systems through `OWPlayerController`
+input from Emerald Meadows into Ironwood Forest: visiting Meadowbrook, harvesting, completing the Timberhold
+harvest festival and visiting Timberhold.
