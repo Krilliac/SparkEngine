@@ -78,8 +78,16 @@ require_private_dir() {
     local canonical
     canonical="$(cd -P -- "$dir" && pwd -P)" || fail "build directory $dir cannot be resolved"
     [[ "$canonical" == "$dir" ]] || fail "build directory $dir is not canonical (resolves to $canonical)"
-    [[ "$(stat -c %u -- "$dir")" == "$EUID" ]] || fail "build directory $dir is not owned by uid $EUID"
-    (( ( 8#$(stat -c %a -- "$dir") & 8#022 ) == 0 )) || fail "build directory $dir is group- or world-writable"
+
+    # GNU stat takes -c; BSD/macOS stat takes -f, where %Mp%Lp is the octal mode with the sticky bit.
+    # An unreadable owner or mode still fails the checks below.
+    local -a owner_of=(stat -c %u --) mode_of=(stat -c %a --)
+    if ! stat -c %u -- / >/dev/null 2>&1; then
+        owner_of=(stat -f %u --)
+        mode_of=(stat -f %Mp%Lp --)
+    fi
+    [[ "$("${owner_of[@]}" "$dir")" == "$EUID" ]] || fail "build directory $dir is not owned by uid $EUID"
+    (( ( 8#$("${mode_of[@]}" "$dir") & 8#022 ) == 0 )) || fail "build directory $dir is group- or world-writable"
 
     # An ancestor that others can write to without the sticky bit lets them rename the directory away and
     # substitute their own.
@@ -87,12 +95,12 @@ require_private_dir() {
     while [[ "$ancestor" != "/" ]]; do
         ancestor="$(dirname -- "$ancestor")"
         local owner
-        owner="$(stat -c %u -- "$ancestor")"
+        owner="$("${owner_of[@]}" "$ancestor")"
         if [[ "$owner" != "0" && "$owner" != "$EUID" ]]; then
             fail "build directory ancestor $ancestor is owned by uid $owner, not root or uid $EUID"
         fi
         local mode
-        mode=$(( 8#$(stat -c %a -- "$ancestor") ))
+        mode=$(( 8#$("${mode_of[@]}" "$ancestor") ))
         if (( (mode & 8#022) != 0 && (mode & 8#1000) == 0 )); then
             fail "build directory ancestor $ancestor is writable by others and not sticky"
         fi
