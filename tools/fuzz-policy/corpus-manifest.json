@@ -670,6 +670,30 @@
           "guard_test": "AssetServiceProtocol_RejectedDecodeLeavesOutputUntouched"
         }
       ]
+    },
+    {
+      "id": "daemon-protocol-frame-corpus",
+      "parser_id": "daemon-protocol-frame",
+      "corpus_dir": "FuzzerTests/corpora/daemon-protocol-frame",
+      "last_verified": "2026-09-28",
+      "content_digest": "872e86c5b535e7c49c3390120aa549b938f81b2a052ef19a293fc229bd08cb3c",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-header-claims-max-payload.bin",
+          "finding": "RecvFrame resized the payload to the header's claimed size before any payload byte arrived, so an 8-byte header from any local peer forced a 16 MiB allocation per frame.",
+          "found_by": "review",
+          "guard_test": "DaemonFraming_RecvFrameAllocationTracksReceivedBytes"
+        }
+      ]
     }
   ]
 }

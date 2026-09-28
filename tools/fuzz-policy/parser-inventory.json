@@ -2553,18 +2553,25 @@
     },
     {
       "id": "daemon-protocol-frame",
-      "description": "Daemon IPC frame header and daemon stats decoders.",
+      "description": "Daemon IPC frame receive path (RecvFrame over the frame header decoder) and daemon stats decoder.",
       "trust_boundary": "untrusted-ipc",
       "source_files": [
-        "SparkEngine/Source/Utils/DaemonProtocol.h"
+        "SparkEngine/Source/Utils/DaemonProtocol.h",
+        "SparkEngine/Source/Utils/DaemonFraming.h"
       ],
       "formats": [
         "daemon-frame"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzDaemonFrame.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzDaemonFrame",
+        "test_selector": "FuzzDaemonFrameSmoke",
+        "corpus_id": "daemon-protocol-frame-corpus",
+        "entry_symbol": "Spark::Daemon::RecvFrame",
+        "binding_source": "FuzzerTests/FuzzDaemonFrameProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzRecvDaemonFrames"
       }
     }
   ],

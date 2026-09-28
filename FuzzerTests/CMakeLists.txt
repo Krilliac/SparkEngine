@@ -514,6 +514,59 @@ set_tests_properties(FuzzAssetServiceProtocolSmoke PROPERTIES
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
 
+# The daemon frame receive path is header-only (Utils/DaemonFraming.h over
+# Utils/DaemonProtocol.h); the adapter drives the POSIX branch of RecvFrame
+# through a Unix socket pair.
+add_executable(SparkFuzzDaemonFrame
+    FuzzDaemonFrame.cpp
+    FuzzDaemonFrameProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the receive path it compiles use libc++ and meet
+# the driver only at the C ABI in FuzzDaemonFrameProduction.h.
+set_source_files_properties(
+    FuzzDaemonFrameProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzDaemonFrame PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzDaemonFrame PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzDaemonFrame PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzDaemonFrame PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzDaemonFrame PRIVATE Threads::Threads c++ c++abi)
+
+# regression-header-claims-max-payload.bin claims 16 MiB and sends ten bytes;
+# the adapter aborts if the payload buffer grows past what actually arrived.
+add_test(
+    NAME FuzzDaemonFrameSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzDaemonFrame>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/daemon-protocol-frame"
+)
+set_tests_properties(FuzzDaemonFrameSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
 # ConfigParser::LoadFromString and SaveToString are header-inline
 # (Utils/ConfigParser.h over Utils/StringUtils.h), so the adapter compiles the
 # whole production parser; ConfigParser.cpp only adds the LocalFileCache I/O.

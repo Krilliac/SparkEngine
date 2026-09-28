@@ -70,6 +70,7 @@ FuzzerTests/corpora/visual-script-graph/** -text
 FuzzerTests/corpora/navmesh-loader/** -text
 FuzzerTests/corpora/terrain-sparkterrain/** -text
 FuzzerTests/corpora/asset-service-protocol/** -text
+FuzzerTests/corpora/daemon-protocol-frame/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before
