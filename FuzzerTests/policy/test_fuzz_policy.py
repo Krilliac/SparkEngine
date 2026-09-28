@@ -116,6 +116,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzMMOChatWire",
     "SparkFuzzMMOClientState",
     "SparkFuzzMMOEntityEvents",
+    "SparkFuzzZipListing",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2005,6 +2006,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "MMO::DecodeEntitySpawn",
                 "mmo-player-entity-events",
                 7,
+            ),
+            "sparkbuild-archive-download": (
+                "ZipListing",
+                "SparkBuild::ArchiveExtraction::ListZipMembers",
+                "sparkbuild-archive-download",
+                9,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

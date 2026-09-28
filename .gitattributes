@@ -63,6 +63,7 @@ FuzzerTests/corpora/tf-lan-discovery-beacon/** -text
 FuzzerTests/corpora/mmo-chat-wire/** -text
 FuzzerTests/corpora/mmo-client-state-request/** -text
 FuzzerTests/corpora/mmo-player-entity-events/** -text
+FuzzerTests/corpora/sparkbuild-archive-download/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

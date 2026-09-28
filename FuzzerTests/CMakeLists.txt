@@ -1472,3 +1472,65 @@ set_tests_properties(FuzzMMOEntityEventsSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# SparkBuild lists a downloaded ZIP in process before any extractor runs. The
+# adapter compiles the shipped ArchiveExtraction.cpp; --gc-sections drops the
+# staging and commit helpers it never calls.
+add_executable(SparkFuzzZipListing
+    FuzzZipListing.cpp
+    FuzzZipListingProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkBuild/src/ArchiveExtraction.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the SparkBuild archive code and the adapter use libc++ and meet
+# the driver only at the C ABI in FuzzZipListingProduction.h.
+set_source_files_properties(
+    FuzzZipListingProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkBuild/src/ArchiveExtraction.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzZipListing PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkBuild/src")
+# SparkBuild compiles as C++17 (SparkBuild/CMakeLists.txt), and ArchiveExtraction.cpp
+# relies on C++17 semantics (path::generic_u8string returns std::string), so the
+# fuzz target builds the shipped source under the same standard.
+set_target_properties(SparkFuzzZipListing PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+target_compile_options(SparkFuzzZipListing PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzZipListing PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzZipListing PRIVATE Threads::Threads c++ c++abi)
+
+# comment-65535.zip carries the largest legal archive comment with a decoy end
+# record planted inside it, so -max_len admits it (131072, not 65536).
+# entry-count-overclaim.zip and cd-offset-past-eof.zip are refused before the
+# directory is read.
+add_test(
+    NAME FuzzZipListingSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzZipListing>
+        -max_len=131072
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/sparkbuild-archive-download"
+)
+set_tests_properties(FuzzZipListingSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

@@ -2187,10 +2187,16 @@
         ".zip",
         ".tar.gz"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzZipListing.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzZipListing",
+        "test_selector": "FuzzZipListingSmoke",
+        "corpus_id": "sparkbuild-archive-download-corpus",
+        "entry_symbol": "SparkBuild::ArchiveExtraction::ListZipMembers",
+        "binding_source": "FuzzerTests/FuzzZipListingProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzListZipMembers"
       }
     },
     {
