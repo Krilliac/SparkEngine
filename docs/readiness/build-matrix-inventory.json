@@ -2983,6 +2983,26 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzReflectedScene",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 605,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzSceneManagerText",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 671,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzSceneManifest",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -4934,6 +4954,42 @@
       ]
     },
     {
+      "target": "SparkFuzzReflectedScene",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 605,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzSceneManagerText",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 671,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzSceneManifest",
       "kind": "executable",
       "buildable": true,
@@ -6703,7 +6759,7 @@
           },
           {
             "index": 2,
-            "name": "Check out the miniz submodule",
+            "name": "Check out the miniz and EnTT submodules",
             "id": "",
             "uses": "",
             "shell": "",
@@ -6711,7 +6767,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "99b2e87570470231"
+            "runDigest": "8de5edb93125ce76"
           },
           {
             "index": 3,
@@ -6750,7 +6806,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "9e532f4e05b6bd42"
+            "runDigest": "25fe0fcfa23db9e2"
           },
           {
             "index": 6,
@@ -13172,7 +13228,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzArchive",
@@ -13180,6 +13236,8 @@
           "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
           "SparkFuzzNeuralWeights",
+          "SparkFuzzReflectedScene",
+          "SparkFuzzSceneManagerText",
           "SparkFuzzSceneManifest",
           "SparkFuzzShaderBlob",
           "SparkFuzzShaderServiceProtocol",
@@ -17398,7 +17456,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzArchive",
@@ -17406,6 +17464,8 @@
           "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
           "SparkFuzzNeuralWeights",
+          "SparkFuzzReflectedScene",
+          "SparkFuzzSceneManagerText",
           "SparkFuzzSceneManifest",
           "SparkFuzzShaderBlob",
           "SparkFuzzShaderServiceProtocol",
