@@ -144,10 +144,16 @@
       "formats": [
         ".obj"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzObjStatic.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzObjStatic",
+        "test_selector": "FuzzObjStaticSmoke",
+        "corpus_id": "mesh-obj-static-loader-corpus",
+        "entry_symbol": "Spark::Graphics::Detail::LoadOBJStaticMesh",
+        "binding_source": "FuzzerTests/FuzzObjStaticProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadObjStatic"
       }
     },
     {
@@ -187,10 +193,16 @@
         ".tga",
         ".hdr"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzTextureLinux.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzTextureLinux",
+        "test_selector": "FuzzTextureLinuxSmoke",
+        "corpus_id": "texture-loader-linux-corpus",
+        "entry_symbol": "Texture::CreateFromFile",
+        "binding_source": "FuzzerTests/FuzzTextureLinuxProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzCreateTextureFromFile"
       }
     },
     {
@@ -203,10 +215,16 @@
       "formats": [
         ".exr"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzExr.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzExr",
+        "test_selector": "FuzzExrSmoke",
+        "corpus_id": "texture-exr-loader-corpus",
+        "entry_symbol": "Spark::Graphics::EXRLoader::Load",
+        "binding_source": "FuzzerTests/FuzzExrProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadExr"
       }
     },
     {

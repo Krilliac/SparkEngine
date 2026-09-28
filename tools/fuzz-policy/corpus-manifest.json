@@ -365,6 +365,90 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "texture-exr-loader-corpus",
+      "parser_id": "texture-exr-loader",
+      "corpus_dir": "FuzzerTests/corpora/texture-exr-loader",
+      "last_verified": "2026-09-28",
+      "content_digest": "f162ac167941efc979bdbebac6a46307b963e313af6cae30c20e805999c62a4b",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 10,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-header-error-leak.exr",
+          "finding": "EXRLoader passed an error out-parameter to ParseEXRHeaderFromMemory, which overwrites its first strdup'd message when a second header check also fails, so every such file leaked it.",
+          "found_by": "campaign",
+          "guard_test": "FuzzExrSmoke"
+        }
+      ]
+    },
+    {
+      "id": "texture-loader-linux-corpus",
+      "parser_id": "texture-loader-linux",
+      "corpus_dir": "FuzzerTests/corpora/texture-loader-linux",
+      "last_verified": "2026-09-28",
+      "content_digest": "99d6094959461954533b4f3e41ae17c84aa45578ddbffbda597ac1aedea6994f",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 9,
+        "max_corpus_bytes": 65536,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-undecodable-reports-loaded.png",
+          "finding": "Texture::CreateFromFile returned S_OK for a file stb_image could not decode and marked it loaded with a size estimated from the requested description, so TextureSystem cached a texture that held no pixels.",
+          "found_by": "review",
+          "guard_test": "AssetSec_TextureUndecodableFileFailsClosed"
+        }
+      ]
+    },
+    {
+      "id": "mesh-obj-static-loader-corpus",
+      "parser_id": "mesh-obj-static-loader",
+      "corpus_dir": "FuzzerTests/corpora/mesh-obj-static-loader",
+      "last_verified": "2026-09-28",
+      "content_digest": "d7630dc44e821e2de0373cedf51413e0b08b5513c957b1de52dda27f20df7f39",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 11,
+        "max_corpus_bytes": 65536,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-mtllib-parent-escape.obj",
+          "finding": "tinyobjloader's default material reader joined any mtllib name onto the OBJ's directory, so a ../ name read a file outside the asset tree (and ../../dev/zero an unbounded device).",
+          "found_by": "review",
+          "guard_test": "AssetSec_ObjStaticRejectsMtllibOutsideDirectory"
+        },
+        {
+          "file": "regression-ngon-quadratic-time.obj",
+          "finding": "Every polygon was ear-clipped in O(n^2): one 3000-corner star in a 49 KiB file took over 4 s under ASan, and larger files grew without bound. Polygons over 96 corners are now fanned.",
+          "found_by": "review",
+          "guard_test": "FuzzObjStaticSmoke"
+        },
+        {
+          "file": "regression-normal-float-overflow.obj",
+          "finding": "Normals were normalized in float: a finite authored component such as 1e20 squared to infinity and gave a zero normal, and large positions gave NaN face normals.",
+          "found_by": "review",
+          "guard_test": "FuzzObjStaticSmoke"
+        }
+      ]
     }
   ]
 }

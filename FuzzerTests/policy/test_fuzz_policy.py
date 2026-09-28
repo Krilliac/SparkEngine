@@ -109,6 +109,9 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzFbx",
     "SparkFuzzGltf",
     "SparkFuzzSoundWav",
+    "SparkFuzzExr",
+    "SparkFuzzTextureLinux",
+    "SparkFuzzObjStatic",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -1956,6 +1959,24 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "SoundEffect::LoadFromMemory",
                 "audio-sound-effect",
                 8,
+            ),
+            "texture-exr-loader": (
+                "Exr",
+                "Spark::Graphics::EXRLoader::Load",
+                "texture-exr-loader",
+                10,
+            ),
+            "texture-loader-linux": (
+                "TextureLinux",
+                "Texture::CreateFromFile",
+                "texture-loader-linux",
+                9,
+            ),
+            "mesh-obj-static-loader": (
+                "ObjStatic",
+                "Spark::Graphics::Detail::LoadOBJStaticMesh",
+                "mesh-obj-static-loader",
+                11,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

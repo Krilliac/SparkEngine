@@ -1030,3 +1030,188 @@ set_tests_properties(FuzzSoundWavSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# The vendored decoders behind the texture and OBJ loaders (tinyexr over
+# SparkFuzzMiniz for its deflate path, the stb_image stub, tinyobjloader) are
+# compiled into their fuzz targets with the fuzzer's instrumentation, so
+# libFuzzer steers through them and ASan sees their buffer use.
+#
+# EXRLoader::Load is header-only (Graphics/EXRLoader.h), so the adapter compiles
+# the whole production loader over the instrumented tinyexr.
+add_executable(SparkFuzzExr
+    FuzzExr.cpp
+    FuzzExrProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/tinyexr/tinyexr_impl.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzExr.cpp use
+# libstdc++; the loader, tinyexr and the adapter use libc++ and meet the driver
+# only at the C ABI in FuzzExrProduction.h.
+set_source_files_properties(
+    FuzzExrProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/tinyexr/tinyexr_impl.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzExr PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/tinyexr"
+)
+target_compile_features(SparkFuzzExr PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzExr PRIVATE SPARK_HAS_TINYEXR=1)
+target_compile_options(SparkFuzzExr PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzExr PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzExr PRIVATE SparkFuzzMiniz Threads::Threads c++ c++abi)
+
+# data-window-overclaim-small-body.exr declares a 16384x16384 float image (inside
+# the per-side cap) with a one-entry chunk table; libFuzzer's -rss_limit_mb also
+# caps a single malloc at 256 MB, so a loader without EXRLoader's working-set
+# bound lets tinyexr allocate a 1 GiB channel plane and fails this test.
+# regression-header-error-leak.exr fails two header checks, which made tinyexr
+# overwrite (leak) its first error string; LeakSanitizer fails the replay.
+add_test(
+    NAME FuzzExrSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzExr>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=10
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/texture-exr-loader"
+)
+set_tests_properties(FuzzExrSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+add_executable(SparkFuzzTextureLinux
+    FuzzTextureLinux.cpp
+    FuzzTextureLinuxProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TextureSystemLinuxTexture.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/stb/stb_impl.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/tinyexr/tinyexr_impl.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzTextureLinux.cpp
+# use libstdc++; the texture loader, stb_image, tinyexr and the adapter use libc++
+# and meet the driver only at the C ABI in FuzzTextureLinuxProduction.h.
+set_source_files_properties(
+    FuzzTextureLinuxProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TextureSystemLinuxTexture.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/stb/stb_impl.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/tinyexr/tinyexr_impl.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzTextureLinux PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/stb"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/tinyexr"
+)
+target_compile_features(SparkFuzzTextureLinux PRIVATE cxx_std_23)
+# The engine defines both macros when it links stb_image and tinyexr.
+target_compile_definitions(SparkFuzzTextureLinux PRIVATE SPARK_HAS_STB_IMAGE=1 SPARK_HAS_TINYEXR=1)
+target_compile_options(SparkFuzzTextureLinux PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzTextureLinux PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzTextureLinux PRIVATE SparkFuzzMiniz Threads::Threads c++ c++abi)
+
+# regression-undecodable-reports-loaded.png is a PNG signature the stb_image stub
+# cannot decode: the pre-fix loader returned S_OK with a zero-sized "loaded"
+# texture, which the adapter aborts on.
+add_test(
+    NAME FuzzTextureLinuxSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzTextureLinux>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/texture-loader-linux"
+)
+set_tests_properties(FuzzTextureLinuxSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+add_executable(SparkFuzzObjStatic
+    FuzzObjStatic.cpp
+    FuzzObjStaticProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/OBJStaticMeshLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/TinyObjImpl.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzObjStatic.cpp use
+# libstdc++; the OBJ loader, tinyobjloader and the adapter use libc++ and meet the
+# driver only at the C ABI in FuzzObjStaticProduction.h.
+set_source_files_properties(
+    FuzzObjStaticProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/OBJStaticMeshLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/TinyObjImpl.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzObjStatic PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/tinyobjloader/include"
+)
+target_compile_features(SparkFuzzObjStatic PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzObjStatic PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzObjStatic PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzObjStatic PRIVATE Threads::Threads c++ c++abi)
+
+# regression-mtllib-parent-escape.obj names ../canary.mtl, the adapter's library
+# outside the asset directory: the pre-fix loader read it, so the face's material
+# changed with the canary's presence, which the adapter aborts on.
+# regression-ngon-quadratic-time.obj (one 3000-corner polygon) took over 4 s to
+# ear-clip, past -timeout=1; regression-normal-float-overflow.obj produced zero
+# and NaN normals, which the adapter's unit-normal check aborts on.
+add_test(
+    NAME FuzzObjStaticSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzObjStatic>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=11
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mesh-obj-static-loader"
+)
+set_tests_properties(FuzzObjStaticSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
