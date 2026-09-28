@@ -13,7 +13,7 @@ manifest of the mapping:
 * PE images carry a CodeView RSDS record in the debug directory: PDB GUID, age
   and PDB file name. The symbol file is the PDB whose info stream has that GUID
   and whose DBI stream has that age. The recorded PDB name must be a bare file
-  name (/PDBALTPATH:%_PDB%), never a build-machine path.
+  name (/PDBALTPATH:<name>.pdb), never a build-machine path.
 
 The run fails (exit 1), and writes no manifest, when an image has no build ID,
 still carries debug information or a symbol table, has no symbol file or more

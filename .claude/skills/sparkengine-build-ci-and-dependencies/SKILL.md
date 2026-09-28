@@ -345,8 +345,9 @@ advisory, but configure/compile failures block). Canonical required-vs-advisory
 fine print: `sparkengine-validation-and-qa` §10.
 
 **Shipping symbols (BLD-100):** `STRIP_DEBUG_SYMBOLS=ON` keeps symbols out of the runtime
-*package*, not out of the build. MSVC always links `/DEBUG` (`/PDBALTPATH:%_PDB%` outside Debug:
-the image records only the PDB name plus GUID/age). ELF images link `-Wl,--build-id=sha1`; with the
+*package*, not out of the build. MSVC always links `/DEBUG` (`/PDBALTPATH:$<TARGET_PDB_FILE_NAME:...>` outside
+Debug: the image records only the PDB name plus GUID/age; never the linker's `%_PDB%` macro, which
+the Visual Studio generator escapes into a literal `%%%<name>.pdb%%%`). ELF images link `-Wl,--build-id=sha1`; with the
 option on everything compiles `-g`; only `SPARK_SHIPPED_IMAGE_TARGETS` get
 `cmake/SparkSplitDebugLink.cmake` as their per-target `LINKER_LAUNCHER`, which splits
 `<image>.debug` off and strips the image at link time, before any `POST_BUILD` step. Every other
