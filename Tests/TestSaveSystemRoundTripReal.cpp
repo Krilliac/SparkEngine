@@ -18,8 +18,10 @@
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Spark/PersistedSchema.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -293,6 +295,68 @@ TEST(SaveSystemRoundTripReal_SlotSurvivingOnlyAsItsRetainedCopyStaysVisibleAndLo
     World recovered;
     ASSERT_TRUE(saveSystem.Load("survivor", recovered));
     EXPECT_TRUE(FindNamed(recovered, "survivor-entity") != entt::null);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystemRoundTripReal_MetadataCarriageReturnSlotFallsBackToTheRetainedCopy)
+{
+    // SEC-120 fuzz finding (FuzzerTests/corpora/save-system/regression-metadata-carriage-return.save):
+    // getline keeps a carriage return inside a metadata line, but the writer refuses one, so
+    // DeserializeWorld rejected every such file after ReadFromFile had accepted it. The slot was
+    // listed with that metadata, Load failed without trying the retained copy, and the next
+    // Save rotated the unloadable primary over the good retained copy.
+    const std::string dir = MakeTempDir("metadata_cr");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World good;
+    good.AddComponent<Transform>(good.CreateEntity("good-revision"));
+    SaveMetadata goodMetadata;
+    goodMetadata.saveName = "Good revision";
+    ASSERT_TRUE(saveSystem.Save("carriage", good, goodMetadata));
+    ASSERT_TRUE(saveSystem.Save("carriage", good, goodMetadata));
+
+    const auto slotPath = std::filesystem::path(dir) / "carriage.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "carriage.spark_save.bak";
+    ASSERT_TRUE(std::filesystem::exists(backupPath));
+
+    // A structurally complete v3 (N-1, no trailer) file whose sceneName line is "\revel02".
+    const std::string metadata = "Seed\n\revel02\nSoldier\n\n1700000000\n125.5\n80\n25\n1 2.5 -3\n7\n2\n";
+    std::string bytes = "SPRK";
+    const auto appendU32 = [&bytes](uint32_t value)
+    {
+        for (int shift = 0; shift < 32; shift += 8)
+            bytes.push_back(static_cast<char>((value >> shift) & 0xFFu));
+    };
+    appendU32(3);
+    appendU32(static_cast<uint32_t>(metadata.size()));
+    bytes += metadata;
+    appendU32(0); // entities
+    appendU32(0); // custom-state entries
+    {
+        std::ofstream primary(slotPath, std::ios::binary | std::ios::trunc);
+        primary.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    }
+
+    SaveMetadata listed;
+    EXPECT_FALSE(saveSystem.GetSaveMetadata("carriage", listed));
+
+    World recovered;
+    ASSERT_TRUE(saveSystem.Load("carriage", recovered));
+    EXPECT_TRUE(FindNamed(recovered, "good-revision") != entt::null);
+
+    // Saving over the unreadable primary must keep the retained copy byte-identical.
+    const auto readAll = [](const std::filesystem::path& path)
+    {
+        std::ifstream stream(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+    };
+    const std::string retainedBefore = readAll(backupPath);
+    World next;
+    next.AddComponent<Transform>(next.CreateEntity("next-revision"));
+    ASSERT_TRUE(saveSystem.Save("carriage", next, goodMetadata));
+    EXPECT_TRUE(readAll(backupPath) == retainedBefore);
 
     std::filesystem::remove_all(dir);
 }

@@ -140,46 +140,6 @@ namespace Spark
             return true;
         }
 
-        bool ParseMetadataBlock(uint32_t sourceVersion, const std::string& metadataBlock, SaveMetadata& outMetadata)
-        {
-            SaveMetadata parsedMetadata;
-            parsedMetadata.version = sourceVersion;
-
-            std::istringstream stream(metadataBlock);
-            if (!std::getline(stream, parsedMetadata.saveName) || !std::getline(stream, parsedMetadata.sceneName) ||
-                !std::getline(stream, parsedMetadata.playerClass))
-            {
-                return false;
-            }
-
-            if (!std::getline(stream, parsedMetadata.screenshotPath))
-                return false;
-
-            stream >> parsedMetadata.timestamp;
-            stream >> parsedMetadata.playTime;
-            stream >> parsedMetadata.playerHealth;
-            stream >> parsedMetadata.playerArmor;
-            stream >> parsedMetadata.playerPosition.x >> parsedMetadata.playerPosition.y >>
-                parsedMetadata.playerPosition.z;
-            stream >> parsedMetadata.playerKills;
-            stream >> parsedMetadata.playerDeaths;
-            if (!stream)
-                return false;
-            if (!std::isfinite(parsedMetadata.playTime) || !std::isfinite(parsedMetadata.playerHealth) ||
-                !std::isfinite(parsedMetadata.playerArmor) || !std::isfinite(parsedMetadata.playerPosition.x) ||
-                !std::isfinite(parsedMetadata.playerPosition.y) || !std::isfinite(parsedMetadata.playerPosition.z))
-            {
-                return false;
-            }
-
-            stream >> std::ws;
-            if (!stream.eof())
-                return false;
-
-            outMetadata = std::move(parsedMetadata);
-            return true;
-        }
-
         bool BuildMetadataBlock(const SaveMetadata& metadata, const char* operation, std::string& outBlock)
         {
             auto rejectNewline = [&](const std::string& value, const char* field)
@@ -219,6 +179,57 @@ namespace Spark
             stream << metadata.playerKills << "\n";
             stream << metadata.playerDeaths << "\n";
             outBlock = stream.str();
+            return true;
+        }
+
+        bool ParseMetadataBlock(uint32_t sourceVersion, const std::string& metadataBlock, const char* operation,
+                                SaveMetadata& outMetadata)
+        {
+            SaveMetadata parsedMetadata;
+            parsedMetadata.version = sourceVersion;
+
+            std::istringstream stream(metadataBlock);
+            if (!std::getline(stream, parsedMetadata.saveName) || !std::getline(stream, parsedMetadata.sceneName) ||
+                !std::getline(stream, parsedMetadata.playerClass))
+            {
+                return false;
+            }
+
+            if (!std::getline(stream, parsedMetadata.screenshotPath))
+                return false;
+
+            stream >> parsedMetadata.timestamp;
+            stream >> parsedMetadata.playTime;
+            stream >> parsedMetadata.playerHealth;
+            stream >> parsedMetadata.playerArmor;
+            stream >> parsedMetadata.playerPosition.x >> parsedMetadata.playerPosition.y >>
+                parsedMetadata.playerPosition.z;
+            stream >> parsedMetadata.playerKills;
+            stream >> parsedMetadata.playerDeaths;
+            if (!stream)
+                return false;
+            if (!std::isfinite(parsedMetadata.playTime) || !std::isfinite(parsedMetadata.playerHealth) ||
+                !std::isfinite(parsedMetadata.playerArmor) || !std::isfinite(parsedMetadata.playerPosition.x) ||
+                !std::isfinite(parsedMetadata.playerPosition.y) || !std::isfinite(parsedMetadata.playerPosition.z))
+            {
+                return false;
+            }
+
+            stream >> std::ws;
+            if (!stream.eof())
+                return false;
+
+            // Accept only metadata this build can write again. DeserializeWorld and WriteToFile
+            // re-render the block through BuildMetadataBlock, so a field the writer refuses (an
+            // embedded carriage return survives getline) or a block that re-renders past the
+            // size cap would otherwise list and read a slot that no Load can ever restore.
+            std::string rendered;
+            if (!BuildMetadataBlock(parsedMetadata, operation, rendered) ||
+                !SaveRepresentationLimits::SupportsMetadataBytes(rendered.size()))
+            {
+                return false;
+            }
+            outMetadata = std::move(parsedMetadata);
             return true;
         }
 
@@ -440,7 +451,7 @@ namespace Spark
             std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
             offset += metaSize;
 
-            if (!ParseMetadataBlock(version, metaStr, parsedData.metadata))
+            if (!ParseMetadataBlock(version, metaStr, "ReadFromFile", parsedData.metadata))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Save, "ReadFromFile: save '%s' has malformed version %u metadata",
                                filepath.c_str(), version);
@@ -588,8 +599,11 @@ namespace Spark
             if (offset != payloadEnd)
                 return false;
 
+            // The block as stored must fit the budget, and the snapshot must also pass the exact
+            // validation DeserializeWorld and WriteToFile run, so an accepted file can always be
+            // restored and saved again.
             if (!ValidateSaveRepresentation(parsedData, metaStr.size(), "ReadFromFile") ||
-                !ValidateSerializedWorldStructure(parsedData, "ReadFromFile"))
+                !ValidateSaveDataShape(parsedData, "ReadFromFile"))
             {
                 return false;
             }
@@ -630,7 +644,7 @@ namespace Spark
 
             const std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
 
-            if (!ParseMetadataBlock(version, metaStr, parsedMetadata))
+            if (!ParseMetadataBlock(version, metaStr, "ReadMetadataOnly", parsedMetadata))
                 return false;
 
             SaveData metadataOnly;
