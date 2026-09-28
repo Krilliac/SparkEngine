@@ -2868,9 +2868,20 @@
       ]
     },
     {
+      "source_file": "SparkEditor/Source/Core/EditorDocument.cpp",
+      "classification": "delegating-call-site",
+      "justification": "EditorDocument::Restore passes undo/redo and play-mode snapshots, produced by Spark::SerializeWorld in this same process, to Spark::DeserializeInto (ReflectedSceneSerializer) in TrustedSnapshot mode; the file decodes no scene bytes itself, so the reader risk stays with the scene-serializer record.",
+      "detected_by": [
+        "deserialize"
+      ],
+      "delegates_to": [
+        "scene-serializer"
+      ]
+    },
+    {
       "source_file": "SparkEditor/Source/Core/EditorUI.cpp",
       "classification": "delegating-call-site",
-      "justification": "Recovery restore calls DeserializeRecoverySnapshotIntoFreshWorld and world snapshots go through Spark::DeserializeInto (ReflectedSceneSerializer); ImportLayout reads only a filename. Play-mode and undo snapshots it restores were serialized by this same process.",
+      "justification": "Recovery restore calls DeserializeRecoverySnapshotIntoFreshWorld and play-mode/undo snapshot restores forward to EditorDocument::Restore, which uses Spark::DeserializeInto (ReflectedSceneSerializer); ImportLayout reads only a filename. The snapshots it restores were serialized by this same process.",
       "detected_by": [
         "deserialize",
         "stream-slurp"
