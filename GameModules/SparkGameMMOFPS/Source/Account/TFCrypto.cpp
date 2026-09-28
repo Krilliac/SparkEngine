@@ -189,6 +189,59 @@ namespace Terrafront::Crypto
             }
         };
 
+        // HMAC-SHA256 key schedule (RFC 2104): the SHA-256 states after absorbing K ^ ipad
+        // and K ^ opad. PBKDF2 derives every round with one schedule, so a round costs two
+        // compression-function calls instead of re-absorbing both pad blocks (four calls).
+        struct HmacSha256Key
+        {
+            Sha256State inner;
+            Sha256State outer;
+        };
+
+        void PrepareHmacSha256Key(HmacSha256Key& prepared, const uint8_t* key, size_t keyLen)
+        {
+            constexpr size_t kBlockSize = 64;
+            uint8_t keyBlock[kBlockSize] = {};
+            const EraseOnExit clearKeyBlock(keyBlock, sizeof(keyBlock));
+
+            if (keyLen > kBlockSize)
+            {
+                Sha256State keyHash;
+                const EraseOnExit clearKeyHash(&keyHash, sizeof(keyHash));
+                keyHash.Update(key, keyLen);
+                Sha256Digest hashedKey = keyHash.Finalize();
+                const EraseOnExit clearHashedKey(hashedKey.data(), hashedKey.size());
+                std::memcpy(keyBlock, hashedKey.data(), hashedKey.size());
+            }
+            else if (keyLen > 0)
+            {
+                std::memcpy(keyBlock, key, keyLen);
+            }
+
+            uint8_t pad[kBlockSize];
+            const EraseOnExit clearPad(pad, sizeof(pad));
+            for (size_t i = 0; i < kBlockSize; ++i)
+                pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x36);
+            prepared.inner.Update(pad, kBlockSize);
+            for (size_t i = 0; i < kBlockSize; ++i)
+                pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x5c);
+            prepared.outer.Update(pad, kBlockSize);
+        }
+
+        Sha256Digest HmacSha256WithKey(const HmacSha256Key& prepared, const uint8_t* data, size_t dataLen)
+        {
+            Sha256State inner = prepared.inner;
+            const EraseOnExit clearInner(&inner, sizeof(inner));
+            inner.Update(data, dataLen);
+            Sha256Digest innerHash = inner.Finalize();
+            const EraseOnExit clearInnerHash(innerHash.data(), innerHash.size());
+
+            Sha256State outer = prepared.outer;
+            const EraseOnExit clearOuter(&outer, sizeof(outer));
+            outer.Update(innerHash.data(), innerHash.size());
+            return outer.Finalize();
+        }
+
         int HexNibble(char c)
         {
             if (c >= '0' && c <= '9')
@@ -217,42 +270,10 @@ namespace Terrafront::Crypto
 
     Sha256Digest HmacSha256(const uint8_t* key, size_t keyLen, const uint8_t* data, size_t dataLen)
     {
-        constexpr size_t kBlockSize = 64;
-        uint8_t keyBlock[kBlockSize] = {};
-        const EraseOnExit clearKeyBlock(keyBlock, sizeof(keyBlock));
-
-        if (keyLen > kBlockSize)
-        {
-            Sha256Digest hashedKey = Sha256(key, keyLen);
-            const EraseOnExit clearHashedKey(hashedKey.data(), hashedKey.size());
-            std::memcpy(keyBlock, hashedKey.data(), hashedKey.size());
-        }
-        else if (keyLen > 0)
-        {
-            std::memcpy(keyBlock, key, keyLen);
-        }
-
-        uint8_t ipad[kBlockSize], opad[kBlockSize];
-        const EraseOnExit clearIpad(ipad, sizeof(ipad));
-        const EraseOnExit clearOpad(opad, sizeof(opad));
-        for (size_t i = 0; i < kBlockSize; ++i)
-        {
-            ipad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x36);
-            opad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x5c);
-        }
-
-        Sha256State inner;
-        const EraseOnExit clearInner(&inner, sizeof(inner));
-        inner.Update(ipad, kBlockSize);
-        inner.Update(data, dataLen);
-        Sha256Digest innerHash = inner.Finalize();
-        const EraseOnExit clearInnerHash(innerHash.data(), innerHash.size());
-
-        Sha256State outer;
-        const EraseOnExit clearOuter(&outer, sizeof(outer));
-        outer.Update(opad, kBlockSize);
-        outer.Update(innerHash.data(), innerHash.size());
-        return outer.Finalize();
+        HmacSha256Key prepared;
+        const EraseOnExit clearPrepared(&prepared, sizeof(prepared));
+        PrepareHmacSha256Key(prepared, key, keyLen);
+        return HmacSha256WithKey(prepared, data, dataLen);
     }
 
     Sha256Digest HmacSha256(const std::string& key, const std::string& data)
@@ -269,8 +290,9 @@ namespace Terrafront::Crypto
         EraseVectorOnFailure clearDerivedKeyOnFailure(dk);
         dk.reserve(dkLen);
 
-        const uint8_t* pw = reinterpret_cast<const uint8_t*>(password.data());
-        const size_t pwLen = password.size();
+        HmacSha256Key prepared;
+        const EraseOnExit clearPrepared(&prepared, sizeof(prepared));
+        PrepareHmacSha256Key(prepared, reinterpret_cast<const uint8_t*>(password.data()), password.size());
         const uint32_t blockCount = static_cast<uint32_t>((dkLen + kHLen - 1) / kHLen);
 
         for (uint32_t i = 1; i <= blockCount; ++i)
@@ -281,13 +303,13 @@ namespace Terrafront::Crypto
             saltIdx.push_back(static_cast<uint8_t>(i >> 8));
             saltIdx.push_back(static_cast<uint8_t>(i));
 
-            Sha256Digest u = HmacSha256(pw, pwLen, saltIdx.data(), saltIdx.size());
+            Sha256Digest u = HmacSha256WithKey(prepared, saltIdx.data(), saltIdx.size());
             Sha256Digest t = u;
             const EraseOnExit clearU(u.data(), u.size());
             const EraseOnExit clearT(t.data(), t.size());
             for (uint32_t round = 1; round < iterations; ++round)
             {
-                Sha256Digest nextU = HmacSha256(pw, pwLen, u.data(), u.size());
+                Sha256Digest nextU = HmacSha256WithKey(prepared, u.data(), u.size());
                 const EraseOnExit clearNextU(nextU.data(), nextU.size());
                 u = nextU;
                 for (size_t k = 0; k < t.size(); ++k)
