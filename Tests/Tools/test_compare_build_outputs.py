@@ -28,6 +28,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 import uuid
 from pathlib import Path
 
@@ -234,6 +235,50 @@ class ManifestSchemaTests(unittest.TestCase):
         path = self.temp / "bad.json"
         path.write_text("{not json", encoding="utf-8")
         self.assertEqual(_run_tool("compare", path, path).returncode, 2)
+
+
+class TwoTreeCommandTests(unittest.TestCase):
+    """two-tree's configure and build commands, with the CMake runs recorded instead of executed."""
+
+    def setUp(self) -> None:
+        self.temp = Path(tempfile.mkdtemp(prefix="spark-two-tree-"))
+        self.source = self.temp / "source"
+        self.source.mkdir()
+        (self.source / "CMakeLists.txt").write_text("project(Fixture NONE)\n", encoding="utf-8")
+        self.commands: list[list[str]] = []
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.temp, ignore_errors=True)
+
+    def record(self, command: list[str], log: Path, environment: dict[str, str]) -> None:
+        self.commands.append(command)
+        if "--build" in command:
+            output = Path(command[command.index("--build") + 1]) / "bin" / "fixture.a"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(_ar_archive(b"same", 0))
+
+    def run_two_tree(self, *extra: str) -> list[list[str]]:
+        argv = ["two-tree", "--source", str(self.source), "--work", str(self.temp / "work"),
+                "--cmake", "cmake", "--jobs", "2", "--target", "SparkCooker", "--scan", "bin", *extra,
+                "--", "-G", "Visual Studio 17 2022"]
+        with unittest.mock.patch.object(tool, "_run_logged", side_effect=self.record):
+            self.assertEqual(tool.main(argv), 0)
+        return [command for command in self.commands if "--build" in command]
+
+    def test_config_reaches_both_builds(self) -> None:
+        builds = self.run_two_tree("--config", "MinSizeRel")
+        self.assertEqual(len(builds), 2)
+        for command in builds:
+            self.assertEqual(command[command.index("--config") + 1], "MinSizeRel")
+            self.assertEqual(command[-2:], ["--target", "SparkCooker"])
+        configures = [command for command in self.commands if "-S" in command]
+        self.assertEqual([command[-2:] for command in configures], [["-G", "Visual Studio 17 2022"]] * 2)
+
+    def test_no_config_sends_none(self) -> None:
+        builds = self.run_two_tree()
+        self.assertEqual(len(builds), 2)
+        for command in builds:
+            self.assertNotIn("--config", command)
 
 
 @unittest.skipUnless(ELF_TOOLS, "requires gcc and readelf on Linux")

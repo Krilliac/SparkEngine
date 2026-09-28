@@ -22,8 +22,9 @@
 # Tests/Tools/test_build_shipping_contract.py pins these flags.
 # tools/compare_build_outputs.py compares two builds: the
 # ReproducibleBuild_LinuxToolTargets CTest builds SparkCooker in two source and
-# build trees on Linux; Windows equivalence is proven only by the
-# reproducibility-windows CI job.
+# build trees on Linux, ReproducibleBuild_WindowsToolTargets does the same on an
+# MSVC tree in MinSizeRel (run with `ctest -C MinSizeRel`), and the
+# reproducibility-windows CI job compares two hosted windows-shipping builds.
 
 include_guard(GLOBAL)
 

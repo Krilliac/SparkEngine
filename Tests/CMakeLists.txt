@@ -4094,6 +4094,59 @@ if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF" AND CMAKE_OBJCOPY)
         RUN_SERIAL TRUE
         TIMEOUT 3600)
 endif()
+# ReproducibleBuild_WindowsToolTargets is the MSVC counterpart: two source
+# copies configured with this tree's generator and the windows-shipping cache
+# values, SparkCooker built in MinSizeRel (the only configuration with /Brepro
+# and /d1trimfile among the ones Shipping uses) without any compiler cache, and
+# bin/MinSizeRel compared: PE sections, COFF timestamp and RSDS identity. PDBs
+# are not compared (not byte-reproducible; the image's RSDS record names them).
+# It runs only under `ctest -C MinSizeRel`, so the Debug/Release CI lanes do not
+# pay for two clean MSVC builds; the reproducibility-windows job compares two
+# hosted windows-shipping builds.
+if(MSVC)
+    set(_spark_repro_generator_args -G ${CMAKE_GENERATOR})
+    if(CMAKE_GENERATOR_PLATFORM)
+        list(APPEND _spark_repro_generator_args -A ${CMAKE_GENERATOR_PLATFORM})
+    endif()
+    if(CMAKE_GENERATOR_TOOLSET)
+        list(APPEND _spark_repro_generator_args -T ${CMAKE_GENERATOR_TOOLSET})
+    endif()
+    if(NOT CMAKE_GENERATOR MATCHES "^Visual Studio")
+        # Ninja and Makefile generators take the compiler from the cache, not the IDE.
+        list(APPEND _spark_repro_generator_args
+            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
+    endif()
+    add_test(
+        NAME ReproducibleBuild_WindowsToolTargets
+        CONFIGURATIONS MinSizeRel
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/compare_build_outputs.py two-tree
+            --source ${CMAKE_SOURCE_DIR}
+            --work ${CMAKE_BINARY_DIR}/reproducible-build-trees
+            --exclude ${CMAKE_SOURCE_DIR}/build
+            --exclude ${CMAKE_BINARY_DIR}
+            --cmake ${CMAKE_COMMAND}
+            --jobs 4
+            --target SparkCooker
+            --config MinSizeRel
+            --scan bin/MinSizeRel
+            --
+            ${_spark_repro_generator_args}
+            -DCMAKE_CONFIGURATION_TYPES=MinSizeRel
+            -DENABLE_LTO=OFF
+            -DSTRIP_DEBUG_SYMBOLS=ON
+            -DSPARK_NATIVE_ARCH=OFF
+            -DENABLE_EDITOR=OFF
+            -DENABLE_PROFILING=OFF
+            -DENABLE_CONSOLE_IN_SHIPPING=OFF
+            -DENABLE_DEVCOMMANDS_IN_SHIPPING=OFF
+            -DENABLE_ANGELSCRIPT=OFF
+            -DBUILD_GAME_MODULES=OFF
+            -DBUILD_TESTS=OFF)
+    set_tests_properties(ReproducibleBuild_WindowsToolTargets PROPERTIES
+        LABELS "build;reproducibility;shipping;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 3600)
+endif()
 
 # The packaged components (runtime, tools, samples) and the private "symbols"
 # component install to separate roots, as a release stages them

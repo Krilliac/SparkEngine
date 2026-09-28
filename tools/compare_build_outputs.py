@@ -27,10 +27,11 @@ Subcommands:
     manifest ROOT --output FILE        write the manifest of ROOT
     compare  A.json B.json [--report]  compare two manifests
     trees    ROOT_A ROOT_B [--report]  manifest both roots and compare them
-    two-tree --source DIR --work DIR --target T [--scan REL] [-- CMAKE ARGS]
+    two-tree --source DIR --work DIR --target T [--scan REL] [--config CFG]
+             [-- CMAKE ARGS]
              copy DIR into two differently named and nested source trees,
-             configure and build T in each, and compare the scanned output
-             dirs. The inner builds drop compiler launchers (no cache can
+             configure and build T (in configuration CFG of a multi-config
+             tree) in each, and compare the scanned output dirs. The inner builds drop compiler launchers (no cache can
              mask a difference) and CFLAGS/CXXFLAGS/LDFLAGS from the
              environment: only the configure arguments choose flags. On an
              equivalent result the copies and build trees are deleted and
@@ -549,8 +550,11 @@ def two_tree(args: argparse.Namespace) -> int:
             [args.cmake, "-S", str(tree_source), "-B", str(tree_build),
              "-DCMAKE_C_COMPILER_LAUNCHER=", "-DCMAKE_CXX_COMPILER_LAUNCHER=", *args.cmake_args],
             log, environment)
+        # A multi-config tree (Visual Studio, Ninja Multi-Config) builds Debug
+        # unless told otherwise, and Debug skips /Brepro and /d1trimfile.
+        config = ["--config", args.config] if args.config else []
         _run_logged(
-            [args.cmake, "--build", str(tree_build), "--parallel", str(args.jobs), "--target", *args.target],
+            [args.cmake, "--build", str(tree_build), *config, "--parallel", str(args.jobs), "--target", *args.target],
             log, environment)
 
     manifests = []
@@ -604,6 +608,7 @@ def main(argv: list[str] | None = None) -> int:
     two_tree_parser.add_argument("--exclude", type=Path, action="append", default=[], help="source path not copied")
     two_tree_parser.add_argument("--cmake", default=shutil.which("cmake") or "cmake")
     two_tree_parser.add_argument("--jobs", type=int, default=os.cpu_count() or 2)
+    two_tree_parser.add_argument("--config", help="configuration to build in a multi-config tree")
     two_tree_parser.add_argument("cmake_args", nargs=argparse.REMAINDER, help="-- then configure arguments")
 
     args = parser.parse_args(argv)
