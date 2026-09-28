@@ -200,6 +200,76 @@ GENERATED_PATHS = {"docs/readiness/ENGINE_READINESS_HANDOFF.md"}
 # references is an error.
 PLANNED_CMAKE_PRESETS: dict[str, str] = {}
 
+# CI-120: every platform Shipping preset outside the stable-v1 build matrix stays
+# owned by its experimental platform work item, so a Linux or macOS Shipping
+# matrix can never slide into Windows release scope unowned.
+EXPERIMENTAL_SHIPPING_PRESET_OWNERS = {"linux-shipping": "PLT-210", "macos-shipping": "PLT-220"}
+STABLE_SHIPPING_PROFILE = "stable-v1"
+
+
+def experimental_shipping_preset_errors(contract: dict[str, Any], configure_presets: Iterable[str]) -> list[str]:
+    """Every experimental ``*-shipping`` configure preset has one open, experimental owner."""
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    profile = next(
+        (
+            entry
+            for entry in contract.get("readiness", {}).get("releaseProfiles", [])
+            if isinstance(entry, dict) and entry.get("id") == STABLE_SHIPPING_PROFILE
+        ),
+        {},
+    )
+    configurations = [entry for entry in profile.get("buildConfigurations", []) if isinstance(entry, dict)]
+    stable_presets = {entry.get("preset") for entry in configurations if entry.get("preset")}
+    configuration_presets = {entry.get("id"): entry.get("preset") for entry in configurations}
+    product_presets = {
+        configuration_presets.get(product.get("buildProfile"), product.get("buildProfile"))
+        for product in profile.get("buildProducts", [])
+        if isinstance(product, dict)
+    }
+
+    configurers: dict[str, set[str]] = {}
+    for identifier, item in items.items():
+        for command in item.get("commands", []):
+            if not isinstance(command, str):
+                continue
+            for reference in preset_references(command):
+                if reference.tool == "cmake" and reference.kind == "configure":
+                    configurers.setdefault(reference.name, set()).add(identifier)
+
+    errors: list[str] = []
+    shipping = {name for name in configure_presets if name.endswith("-shipping")}
+    for preset in sorted(shipping - stable_presets - set(EXPERIMENTAL_SHIPPING_PRESET_OWNERS)):
+        errors.append(
+            f"experimentalShipping.{preset}: Shipping preset is outside {STABLE_SHIPPING_PROFILE} and has no "
+            "owning platform work item in EXPERIMENTAL_SHIPPING_PRESET_OWNERS"
+        )
+    for preset, owner_id in sorted(EXPERIMENTAL_SHIPPING_PRESET_OWNERS.items()):
+        location = f"experimentalShipping.{preset}"
+        if preset not in shipping:
+            errors.append(f"{location}: preset no longer exists in CMakePresets.json; remove the owner entry")
+            continue
+        if preset in stable_presets or preset in product_presets:
+            errors.append(f"{location}: experimental Shipping preset is in {STABLE_SHIPPING_PROFILE} build scope")
+        owner = items.get(owner_id)
+        if owner is None:
+            errors.append(f"{location}: owner {owner_id} is not a work item")
+            continue
+        if owner.get("status") == "done" and any(
+            entry.get("state") != "evidenced" for entry in owner.get("acceptanceStatus", []) if isinstance(entry, dict)
+        ):
+            errors.append(f"{location}: owner {owner_id} is done without evidenced criteria")
+        if owner.get("profileApplicability", {}).get(STABLE_SHIPPING_PROFILE) == "required":
+            errors.append(f"{location}: owner {owner_id} must not be required by {STABLE_SHIPPING_PROFILE}")
+        if owner_id not in configurers.get(preset, set()):
+            errors.append(f"{location}: owner {owner_id} must configure the preset in its own commands")
+        related = {*owner.get("parallelWith", []), *owner.get("dependencies", []), owner_id}
+        for stranger in sorted(configurers.get(preset, set()) - related):
+            errors.append(
+                f"{location}: {stranger} configures an experimental Shipping preset owned by {owner_id}; "
+                f"list it in {owner_id}.parallelWith or dependencies"
+            )
+    return errors
+
 WORK_ITEM_REQUIRED_KEYS = {
     "id", "title", "priority", "status", "blocking", "wave", "area", "owner",
     "profileApplicability",
@@ -2468,6 +2538,9 @@ class Validator:
             self.validate_selectors(item, location)
             self.validate_acceptance_status(item, location)
         self.validate_planned_presets(by_id, planned_preset_uses)
+        self.errors.extend(
+            experimental_shipping_preset_errors(self.contract, cmake_preset_index().names["configure"])
+        )
 
         visiting: set[str] = set()
         visited: set[str] = set()

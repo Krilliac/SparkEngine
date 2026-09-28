@@ -693,6 +693,49 @@ class WorkItemPresetResolutionTests(ContractTestCase):
             [],
         )
 
+    def shipping_errors(self, contract: dict[str, Any], extra_presets: tuple[str, ...] = ()) -> list[str]:
+        presets = {*contract_selectors.cmake_preset_index().names["configure"], *extra_presets}
+        return site_data_validate.experimental_shipping_preset_errors(contract, presets)
+
+    def assert_shipping_error(self, errors: list[str], fragment: str) -> None:
+        self.assertTrue(any(fragment in error for error in errors), errors)
+
+    def test_experimental_shipping_presets_stay_platform_owned(self) -> None:
+        self.assertEqual(self.shipping_errors(self.mutable), [])
+
+        self.assert_shipping_error(
+            self.shipping_errors(self.mutable, ("android-shipping",)),
+            "experimentalShipping.android-shipping: Shipping preset is outside stable-v1",
+        )
+
+        promoted = copy.deepcopy(self.contract)
+        self.profile_of(promoted)["buildConfigurations"].append(
+            {"id": "linux-shipping", "preset": "linux-shipping", "configuration": "Release", "purpose": "shipping"}
+        )
+        self.assert_shipping_error(
+            self.shipping_errors(promoted), "experimentalShipping.linux-shipping: experimental Shipping preset is in"
+        )
+
+        unowned = copy.deepcopy(self.contract)
+        platform = self.items_of(unowned)["PLT-210"]
+        platform["commands"] = [command for command in platform["commands"] if "--preset linux-shipping" not in command]
+        self.assert_shipping_error(
+            self.shipping_errors(unowned), "owner PLT-210 must configure the preset in its own commands"
+        )
+
+        required = copy.deepcopy(self.contract)
+        self.items_of(required)["PLT-220"]["profileApplicability"]["stable-v1"] = "required"
+        self.assert_shipping_error(self.shipping_errors(required), "owner PLT-220 must not be required by stable-v1")
+
+        stranger = copy.deepcopy(self.contract)
+        self.items_of(stranger)["HEAD-220"]["commands"].append("cmake --preset macos-shipping")
+        self.assert_shipping_error(
+            self.shipping_errors(stranger), "HEAD-220 configures an experimental Shipping preset owned by PLT-220"
+        )
+
+        # The rule is wired into the full validator, not only callable.
+        self.assert_rejected(promoted, "experimental Shipping preset is in stable-v1 build scope")
+
 
 class LegalContractConsistencyTests(ContractTestCase):
     """GOV-400 legal data stays explicit while its policy work is open."""
