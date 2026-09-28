@@ -10,11 +10,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <exception>
 #include <fstream>
 #include <limits>
 #include <map>
 #include <new>
 #include <optional>
+#include <string>
 #include <system_error>
 #include <utility>
 
@@ -38,6 +40,68 @@ namespace Spark::Graphics::Detail
                 {
                     return false;
                 }
+            }
+            return true;
+        }
+
+        /// Strict RFC 3629 UTF-8: no overlong forms, surrogates, or code points
+        /// above U+10FFFF. MSVC's path(std::u8string) converts with
+        /// MB_ERR_INVALID_CHARS and throws std::system_error on anything else,
+        /// so an untrusted `mtllib` name is checked before it becomes a path.
+        bool IsValidUtf8(const std::string& text)
+        {
+            size_t i = 0;
+            while (i < text.size())
+            {
+                const auto lead = static_cast<unsigned char>(text[i]);
+                if (lead < 0x80)
+                {
+                    ++i;
+                    continue;
+                }
+
+                size_t length = 0;
+                unsigned char minSecond = 0x80;
+                unsigned char maxSecond = 0xBF;
+                if (lead >= 0xC2 && lead <= 0xDF)
+                {
+                    length = 2;
+                }
+                else if (lead >= 0xE0 && lead <= 0xEF)
+                {
+                    length = 3;
+                    minSecond = lead == 0xE0 ? 0xA0 : 0x80; // overlong
+                    maxSecond = lead == 0xED ? 0x9F : 0xBF; // UTF-16 surrogates
+                }
+                else if (lead >= 0xF0 && lead <= 0xF4)
+                {
+                    length = 4;
+                    minSecond = lead == 0xF0 ? 0x90 : 0x80; // overlong
+                    maxSecond = lead == 0xF4 ? 0x8F : 0xBF; // above U+10FFFF
+                }
+                else
+                {
+                    return false;
+                }
+                if (text.size() - i < length)
+                {
+                    return false;
+                }
+
+                const auto second = static_cast<unsigned char>(text[i + 1]);
+                if (second < minSecond || second > maxSecond)
+                {
+                    return false;
+                }
+                for (size_t k = 2; k < length; ++k)
+                {
+                    const auto continuation = static_cast<unsigned char>(text[i + k]);
+                    if (continuation < 0x80 || continuation > 0xBF)
+                    {
+                        return false;
+                    }
+                }
+                i += length;
             }
             return true;
         }
@@ -77,8 +141,10 @@ namespace Spark::Graphics::Detail
             std::optional<std::filesystem::path> Resolve(const std::string& name) const
             {
                 // A backslash is a Windows separator or drive form; OBJ files
-                // from any platform name libraries with '/'.
-                if (name.empty() || name.find('\\') != std::string::npos)
+                // from any platform name libraries with '/'. A name that is not
+                // UTF-8 (a Latin-1 name from an old exporter, or hostile bytes)
+                // is refused on every platform alike.
+                if (name.empty() || name.find('\\') != std::string::npos || !IsValidUtf8(name))
                 {
                     return std::nullopt;
                 }
@@ -500,6 +566,14 @@ namespace Spark::Graphics::Detail
         {
             meshData = {};
             error = "out of memory while loading OBJ static mesh";
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            // Backstop: tinyobj and the material reader run on untrusted bytes
+            // and no caller catches, so any other throw fails the load closed.
+            meshData = {};
+            error = std::string("OBJ static mesh load failed: ") + exception.what();
             return false;
         }
 

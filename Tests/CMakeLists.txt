@@ -1920,7 +1920,7 @@ endif()
 # only apply to one platform still register everywhere, so the count is fixed.
 add_test(NAME SparkAssetParserHardeningTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkAssetParserHardeningTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AssetSec_;SPARK_TEST_EXPECT_COUNT=14"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AssetSec_;SPARK_TEST_EXPECT_COUNT=15"
     LABELS "security;assets;unit"
     TIMEOUT 120)
 

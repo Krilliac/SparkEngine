@@ -366,6 +366,70 @@ TEST(AssetSec_ObjStaticRejectsMtllibOutsideDirectory)
     RemoveAssetSecDir();
 }
 
+TEST(AssetSec_ObjStaticRefusesNonUtf8MtllibName)
+{
+    // MSVC's path(std::u8string) throws std::system_error on invalid UTF-8, and
+    // LoadOBJStaticMesh's callers do not catch, so "mtllib \xff.mtl" in an
+    // untrusted OBJ terminated the process. Such names are now refused before
+    // they become paths, identically on every platform.
+    const auto modelDir = AssetSecDir() / "objutf8";
+    std::error_code ec;
+    std::filesystem::create_directories(modelDir, ec);
+    const std::string triangle = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+    const auto writeObj = [&](const std::string& name, const std::string& library)
+    {
+        const auto path = modelDir / name;
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << "mtllib " << library << "\nusemtl m\n" << triangle;
+        return path;
+    };
+
+#ifndef SPARK_PLATFORM_WINDOWS
+    // POSIX names are raw bytes, so a library literally named "\xff.mtl" can
+    // sit beside the OBJ; it must still be refused, as on Windows.
+    {
+        std::ofstream lib(modelDir / std::string("\xff.mtl"), std::ios::binary | std::ios::trunc);
+        lib << "newmtl m\nKd 1 0 0\n";
+    }
+#endif
+
+    // Invalid lead byte, Latin-1, an encoded UTF-16 surrogate, and an overlong "..".
+    const std::vector<std::string> invalidNames = {"\xff.mtl", "caf\xe9.mtl", "\xed\xa0\x80.mtl",
+                                                   "\xc0\xae\xc0\xae/x.mtl"};
+    for (size_t i = 0; i < invalidNames.size(); ++i)
+    {
+        const auto obj = writeObj("bad" + std::to_string(i) + ".obj", invalidNames[i]);
+        Spark::Graphics::Detail::OBJStaticMeshData mesh;
+        std::string error;
+        bool loaded = false;
+        EXPECT_NO_THROW(loaded = Spark::Graphics::Detail::LoadOBJStaticMesh(obj, mesh, error));
+        EXPECT_TRUE(loaded);
+        EXPECT_EQ(mesh.submeshes.size(), 1u);
+        for (const auto& submesh : mesh.submeshes)
+        {
+            EXPECT_EQ(submesh.materialId, -1);
+        }
+    }
+
+    // Control: a valid non-ASCII UTF-8 name ("caf" + U+00E9 + ".mtl") beside the OBJ resolves.
+    const std::string cafe = "caf\xc3\xa9.mtl";
+    {
+        std::ofstream lib(modelDir / std::filesystem::path(std::u8string(cafe.begin(), cafe.end())),
+                          std::ios::binary | std::ios::trunc);
+        lib << "newmtl m\nKd 1 0 0\n";
+    }
+    const auto good = writeObj("good.obj", cafe);
+    Spark::Graphics::Detail::OBJStaticMeshData mesh;
+    std::string error;
+    EXPECT_TRUE(Spark::Graphics::Detail::LoadOBJStaticMesh(good, mesh, error));
+    EXPECT_EQ(mesh.submeshes.size(), 1u);
+    if (!mesh.submeshes.empty())
+    {
+        EXPECT_EQ(mesh.submeshes[0].materialId, 0);
+    }
+    RemoveAssetSecDir();
+}
+
 TEST(AssetSec_ObjStaticRejectsOversizedFile)
 {
     // A valid 32-byte triangle followed by a sparse tail one byte over the cap.
