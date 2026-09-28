@@ -9,6 +9,7 @@
  * Utils/SparkConsole.h and Utils/LogMacros.h.
  */
 
+#include "ScopedLoggerBaseline.h"
 #include "TestFramework.h"
 
 #include "Core/EngineContext.h"
@@ -53,24 +54,20 @@ namespace
     };
 
     /// The engine Logger in synchronous mode with only the capture sink, restored on scope exit.
+    ///
+    /// The baseline shuts the Logger down and re-initializes it, which is what resets the
+    /// per-category levels: a test that ran the engine lifecycle before this one leaves them at the
+    /// configured global level (Info), and Initialize() on an already-initialized Logger is a no-op,
+    /// so Debug lines were silently dropped depending on test order.
     class ScopedLoggerCapture
     {
       public:
-        ScopedLoggerCapture() : m_previousLevel(Spark::Logger::Get().GetGlobalLevel())
+        ScopedLoggerCapture()
         {
             auto& logger = Spark::Logger::Get();
             logger.ClearSinks();
-            logger.Initialize(false); // synchronous: a message is in the sink when Log() returns
             logger.SetGlobalLevel(Spark::LogLevel::Trace);
             logger.AddSink(std::make_unique<CaptureSink>(m_lines));
-        }
-
-        ~ScopedLoggerCapture()
-        {
-            auto& logger = Spark::Logger::Get();
-            logger.ClearSinks();
-            logger.Shutdown();
-            logger.SetGlobalLevel(m_previousLevel);
         }
 
         ScopedLoggerCapture(const ScopedLoggerCapture&) = delete;
@@ -79,8 +76,8 @@ namespace
         const std::vector<CapturedLine>& Lines() const { return *m_lines; }
 
       private:
+        ScopedLoggerBaseline m_baseline; // synchronous Logger in TestMain's state, before and after
         std::shared_ptr<std::vector<CapturedLine>> m_lines = std::make_shared<std::vector<CapturedLine>>();
-        Spark::LogLevel m_previousLevel;
     };
 
     /// An ILogger that records every call, for a module driven outside the engine.
