@@ -2549,6 +2549,14 @@ if(TARGET SparkGame AND NOT WIN32)
         LABELS "module;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)
+    # showcase_outcome reports the same record (coroutine, events, weather, time of day, exhibit meshes
+    # resolved on disk, spawn count) for two fresh loads at 1/64 s and one at 1/60 s.
+    add_test(NAME SparkGameShowcase_OutcomeIsDeterministic COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SparkGameShowcase_OutcomeIsDeterministic PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=SparkGameShowcase_OutcomeIsDeterministic;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "module;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
 endif()
 
 # RHI-230: Vulkan backend under VK_LAYER_KHRONOS_validation (Lavapipe on CI).

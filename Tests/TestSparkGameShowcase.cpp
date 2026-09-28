@@ -1,8 +1,9 @@
 /**
  * @file TestSparkGameShowcase.cpp
  * @brief MOD-300: the SparkGame showcase, loaded as the real module image, drives its coroutine sequence
- *        through IEngineContext::GetCoroutineScheduler(), restores its exact state on quickload, and
- *        localizes its status output through IEngineContext::GetLocalization().
+ *        through IEngineContext::GetCoroutineScheduler(), restores its exact state on quickload,
+ *        localizes its status output through IEngineContext::GetLocalization(), and reports the same
+ *        showcase_outcome record on every run.
  *
  * Each test loads the built libSparkGame image through ModuleManager with a host context that supplies a real
  * World, EventBus and the engine CoroutineScheduler, then steps the scheduler with an exactly representable
@@ -20,12 +21,15 @@
 #include "Engine/Events/EventSystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/World/TimeOfDaySystem.h"
+#include "Graphics/WeatherSystem.h"
 #include "Utils/EventBus.h"
 #include "Utils/SparkConsole.h"
 #include <Spark/IEngineContext.h>
 #include <Spark/Version.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -52,9 +56,10 @@ namespace
     {
       public:
         ShowcaseHostContext(World* world, Spark::EventBus* eventBus, Spark::CoroutineScheduler* scheduler,
-                            Spark::SaveSystem* saveSystem = nullptr, Spark::LocalizationSystem* localization = nullptr)
+                            Spark::SaveSystem* saveSystem = nullptr, Spark::LocalizationSystem* localization = nullptr,
+                            Spark::WeatherSystem* weather = nullptr, Spark::TimeOfDaySystem* timeOfDay = nullptr)
             : m_world(world), m_eventBus(eventBus), m_scheduler(scheduler), m_saveSystem(saveSystem),
-              m_localization(localization)
+              m_localization(localization), m_weather(weather), m_timeOfDay(timeOfDay)
         {
         }
 
@@ -78,6 +83,10 @@ namespace
         const Spark::SaveSystem* GetSaveSystem() const override { return m_saveSystem; }
         Spark::LocalizationSystem* GetLocalization() override { return m_localization; }
         const Spark::LocalizationSystem* GetLocalization() const override { return m_localization; }
+        Spark::WeatherSystem* GetWeather() override { return m_weather; }
+        const Spark::WeatherSystem* GetWeather() const override { return m_weather; }
+        Spark::TimeOfDaySystem* GetTimeOfDay() override { return m_timeOfDay; }
+        const Spark::TimeOfDaySystem* GetTimeOfDay() const override { return m_timeOfDay; }
         uint32_t GetEngineVersion() const override { return SPARK_ENGINE_VERSION_PACKED; }
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
 
@@ -87,6 +96,8 @@ namespace
         Spark::CoroutineScheduler* m_scheduler;
         Spark::SaveSystem* m_saveSystem;
         Spark::LocalizationSystem* m_localization;
+        Spark::WeatherSystem* m_weather;
+        Spark::TimeOfDaySystem* m_timeOfDay;
     };
 
     /// Makes the repository root the working directory, where the module resolves its content paths.
@@ -580,6 +591,69 @@ TEST(SparkGameShowcase_StatusIsLocalized)
         EXPECT_EQ(StatusLine(consoleScope.console, "Language: "), std::string("Language: en"));
     }
     localization.SetCurrentLanguage(previousLanguage);
+}
+
+namespace
+{
+    /// One fresh host (World, EventBus, scheduler, WeatherSystem, TimeOfDaySystem) with the real SparkGame image,
+    /// stepped the way the engine frame does for @p seconds of simulated time; returns its showcase_outcome line.
+    std::string RunShowcaseOutcome(Spark::SimpleConsole& console, float stepSeconds, float seconds)
+    {
+        auto& scheduler = CleanScheduler();
+        World world;
+        Spark::EventBus eventBus;
+        Spark::WeatherSystem weather;
+        weather.SetEventBus(&eventBus);
+        // The engine's only TimeOfDaySystem is the singleton; the showcase sets its hour, scale and pause on load.
+        auto& timeOfDay = Spark::TimeOfDaySystem::GetInstance();
+        ShowcaseHostContext context(&world, &eventBus, &scheduler, nullptr, nullptr, &weather, &timeOfDay);
+
+        LoadedShowcase showcase(world, eventBus);
+        if (!showcase.manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH))
+            return "<load failed>";
+        showcase.manager.InitializeAll(&context);
+        if (showcase.manager.GetModule(MODULE_NAME) == nullptr)
+            return "<module not initialized>";
+
+        const int updates = static_cast<int>(std::lround(seconds / stepSeconds));
+        for (int update = 0; update < updates; ++update)
+        {
+            showcase.manager.UpdateAll(stepSeconds);
+            scheduler.Update(stepSeconds);
+            weather.Update(stepSeconds);
+            timeOfDay.Update(stepSeconds);
+        }
+        return CommandResult(console, "showcase_outcome");
+    }
+} // namespace
+
+TEST(SparkGameShowcase_OutcomeIsDeterministic)
+{
+    ConsoleScope consoleScope;
+    // The exhibit meshes resolve relative to the working directory, as they do from an installed bin directory.
+    ScopedWorkingDirectory workingDirectory(SPARK_TEST_SOURCE_DIR);
+    auto& timeOfDay = Spark::TimeOfDaySystem::GetInstance();
+    const float previousHour = timeOfDay.GetTimeOfDay();
+    const float previousScale = timeOfDay.GetTimeScale();
+    const bool previousPaused = timeOfDay.IsPaused();
+
+    // 40 s: the coroutine finished at 5 s, and the one weather change (Clear -> Rain, requested at 30 s) has
+    // finished its 5 s transition well before the read, so no field is sampled on a step boundary.
+    // Time of day starts at 08:00 at 60x: 8 h + 40 min = 8.67 h. Player, Enemy_Alpha, Enemy_Bravo and the
+    // coroutine target are the four tracked entities.
+    const std::string expected = "SPARK_SHOWCASE_OUTCOME stage=complete target_hp=100 damage_events=1 kill_events=0 "
+                                 "weather_changes=1 weather=Rain hour=8.67 exhibit=4/4 spawned=4";
+    const std::string first = RunShowcaseOutcome(consoleScope.console, STEP_SECONDS, 40.0f);
+    const std::string second = RunShowcaseOutcome(consoleScope.console, STEP_SECONDS, 40.0f);
+    EXPECT_EQ(first, expected);
+    EXPECT_EQ(second, first);
+
+    // A different frame rate reaches the same outcome: nothing in it depends on how the time was sliced.
+    EXPECT_EQ(RunShowcaseOutcome(consoleScope.console, 1.0f / 60.0f, 40.0f), expected);
+
+    timeOfDay.SetTimeOfDay(previousHour);
+    timeOfDay.SetTimeScale(previousScale);
+    timeOfDay.SetPaused(previousPaused);
 }
 
 #endif
