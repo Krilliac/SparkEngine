@@ -3705,6 +3705,34 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND SPARK_HEA
     set_tests_properties(LinuxInstalledRuntime_ClosureDetection PROPERTIES
         LABELS "package;linux;unit"
         TIMEOUT 120)
+
+    # PLT-210: the same closure, lifecycle and isolation checks on the extracted
+    # CPack TGZ archive (the package a user downloads) instead of an install.
+    add_test(NAME VerifyLinuxPackagedRuntime
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_PACKAGE_ARCHIVE_BUILD=ON
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/linux-packaged-runtime/${_spark_linux_runtime_config}"
+            -P "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake")
+    set_tests_properties(VerifyLinuxPackagedRuntime PROPERTIES
+        LABELS "package;linux;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 1200)
+
+    # Packaged mode must fail, not pass vacuously, when there is nothing to package.
+    add_test(NAME LinuxPackagedRuntime_RequiresCPackConfig
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_PACKAGE_ARCHIVE_BUILD=ON
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/linux-packaged-runtime-no-cpack"
+            -P "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake")
+    set_tests_properties(LinuxPackagedRuntime_RequiresCPackConfig PROPERTIES
+        LABELS "package;linux;unit"
+        PASS_REGULAR_EXPRESSION "has[ \n]+no[ \n]+CPackConfig\\.cmake"
+        TIMEOUT 60)
 endif()
 
 

@@ -6,9 +6,13 @@ cmake_minimum_required(VERSION 3.25)
 # repository or the toolchain at runtime:
 #
 #   1. Install mode: `cmake --install` SPARK_ENGINE_BUILD_DIR into a fresh
-#      <SPARK_TEST_ROOT>/prefix. Standalone mode: verify an existing
-#      SPARK_INSTALL_PREFIX read-only, for example a linux-shipping install
-#      (that preset sets BUILD_TESTS=OFF, so it has no CTest of its own).
+#      <SPARK_TEST_ROOT>/prefix. Packaged mode (-DSPARK_PACKAGE_ARCHIVE_BUILD=ON
+#      with SPARK_ENGINE_BUILD_DIR): `cpack -G TGZ` the build, require exactly
+#      one archive and extract it into <SPARK_TEST_ROOT>/archive-prefix; the
+#      checks below then run on the extracted top-level directory. Standalone
+#      mode: verify an existing SPARK_INSTALL_PREFIX read-only, for example a
+#      linux-shipping install (that preset sets BUILD_TESTS=OFF, so it has no
+#      CTest of its own).
 #   2. For every ELF file in the prefix (readelf -d): each RUNPATH/RPATH entry
 #      must be $ORIGIN-relative and stay inside the prefix; an absolute entry,
 #      an empty entry or one that escapes the prefix fails.
@@ -37,7 +41,7 @@ cmake_minimum_required(VERSION 3.25)
 # this host only, not a distribution range.
 #
 # Required: SPARK_SOURCE_ROOT SPARK_TEST_ROOT and one of
-#           SPARK_ENGINE_BUILD_DIR (install mode) or SPARK_INSTALL_PREFIX.
+#           SPARK_ENGINE_BUILD_DIR (install or packaged mode) or SPARK_INSTALL_PREFIX.
 # Optional: SPARK_CONFIG (install --config), SPARK_FORBIDDEN_ROOTS (extra
 #           build trees, e.g. build/linux-shipping in standalone mode).
 # Self test: -DSPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST=ON with
@@ -595,7 +599,56 @@ if(NOT DEFINED SPARK_SOURCE_ROOT OR NOT IS_DIRECTORY "${SPARK_SOURCE_ROOT}")
 endif()
 set(_forbidden "${SPARK_SOURCE_ROOT}" ${SPARK_FORBIDDEN_ROOTS})
 
-if(DEFINED SPARK_ENGINE_BUILD_DIR AND NOT SPARK_ENGINE_BUILD_DIR STREQUAL "")
+if(SPARK_PACKAGE_ARCHIVE_BUILD)
+    # Packaged mode: build the CPack TGZ from the configured build and verify the
+    # extracted archive, so the check covers what a user downloads rather than
+    # a cmake --install of the same tree.
+    if(NOT DEFINED SPARK_ENGINE_BUILD_DIR OR NOT EXISTS "${SPARK_ENGINE_BUILD_DIR}/CPackConfig.cmake")
+        message(FATAL_ERROR
+            "Packaged mode needs a configured SPARK_ENGINE_BUILD_DIR; '${SPARK_ENGINE_BUILD_DIR}' "
+            "has no CPackConfig.cmake")
+    endif()
+    list(APPEND _forbidden "${SPARK_ENGINE_BUILD_DIR}")
+    file(REMOVE_RECURSE "${_test_root}")
+    file(MAKE_DIRECTORY "${_test_root}/cpack" "${_test_root}/archive-prefix")
+    cmake_path(GET CMAKE_COMMAND PARENT_PATH _cmake_bin)
+    find_program(SPARK_CPACK NAMES cpack HINTS "${_cmake_bin}" NO_DEFAULT_PATH)
+    if(NOT SPARK_CPACK)
+        find_program(SPARK_CPACK NAMES cpack REQUIRED)
+    endif()
+    set(_cpack "${SPARK_CPACK}" -G TGZ --config "${SPARK_ENGINE_BUILD_DIR}/CPackConfig.cmake"
+        -B "${_test_root}/cpack")
+    if(DEFINED SPARK_CONFIG AND NOT SPARK_CONFIG STREQUAL "")
+        list(APPEND _cpack -C "${SPARK_CONFIG}")
+    endif()
+    execute_process(COMMAND ${_cpack}
+        RESULT_VARIABLE _cpack_result OUTPUT_VARIABLE _cpack_output ERROR_VARIABLE _cpack_error TIMEOUT 900)
+    file(WRITE "${_test_root}/cpack.log" "${_cpack_output}\n${_cpack_error}")
+    if(NOT _cpack_result EQUAL 0)
+        message(FATAL_ERROR "cpack -G TGZ failed (${_cpack_result}); log: ${_test_root}/cpack.log\n${_cpack_error}")
+    endif()
+    # ALL_COMPONENTS_IN_ONE grouping produces exactly one archive; zero or
+    # several means this is not the package users receive.
+    file(GLOB _archives LIST_DIRECTORIES false "${_test_root}/cpack/*.tar.gz")
+    list(LENGTH _archives _archive_count)
+    if(NOT _archive_count EQUAL 1)
+        message(FATAL_ERROR "cpack -G TGZ must produce exactly one .tar.gz, produced ${_archive_count}: ${_archives}")
+    endif()
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E tar xzf "${_archives}"
+        WORKING_DIRECTORY "${_test_root}/archive-prefix"
+        RESULT_VARIABLE _extract_result ERROR_VARIABLE _extract_error TIMEOUT 600)
+    if(NOT _extract_result EQUAL 0)
+        message(FATAL_ERROR "Could not extract ${_archives}: ${_extract_error}")
+    endif()
+    # CPack archives hold one top-level <CPACK_PACKAGE_FILE_NAME> directory.
+    file(GLOB _archive_top LIST_DIRECTORIES true "${_test_root}/archive-prefix/*")
+    list(LENGTH _archive_top _archive_top_count)
+    if(NOT _archive_top_count EQUAL 1 OR NOT IS_DIRECTORY "${_archive_top}" OR IS_SYMLINK "${_archive_top}")
+        message(FATAL_ERROR "The archive must hold exactly one top-level directory, found: ${_archive_top}")
+    endif()
+    set(_prefix "${_archive_top}")
+    message(STATUS "Verifying the extracted CPack archive ${_archives}")
+elseif(DEFINED SPARK_ENGINE_BUILD_DIR AND NOT SPARK_ENGINE_BUILD_DIR STREQUAL "")
     list(APPEND _forbidden "${SPARK_ENGINE_BUILD_DIR}")
     set(_prefix "${_test_root}/prefix")
     file(REMOVE_RECURSE "${_test_root}")
@@ -757,6 +810,9 @@ endif()
 file(REMOVE_RECURSE "${_home}" "${_test_root}/tmp")
 if(DEFINED SPARK_ENGINE_BUILD_DIR AND NOT SPARK_ENGINE_BUILD_DIR STREQUAL "")
     file(REMOVE_RECURSE "${_prefix}")
+endif()
+if(SPARK_PACKAGE_ARCHIVE_BUILD)
+    file(REMOVE_RECURSE "${_test_root}/cpack" "${_test_root}/archive-prefix")
 endif()
 message(STATUS "Installed Linux tree runtime closure passed: ${_elf_count} ELF images under ${_prefix}; "
     "report: ${_test_root}/runtime-closure-report.txt")
