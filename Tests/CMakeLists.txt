@@ -2111,12 +2111,9 @@ endforeach()
 # under persistence;recovery-drill, so `ctest -L recovery-drill` rehearses a
 # verified backup, a restore, and reopening after a writer dies inside a commit.
 # The drill cases exec a fresh SparkTests child that _exit()s mid-commit or is
-# SIGKILLed, so they exist only on POSIX; Windows crash recovery needs its own
-# hosted run.
-set(_spark_data120_recovery_selectors "Persistence_BackupRestore_=7")
-if(NOT WIN32)
-    list(APPEND _spark_data120_recovery_selectors "Persistence_RecoveryDrill_=4")
-endif()
+# killed (SIGKILL / TerminateProcess), on every platform: 4 TFDatabase drills
+# plus outfit (2), social (2) and territory (1) store drills.
+set(_spark_data120_recovery_selectors "Persistence_BackupRestore_=7" "Persistence_RecoveryDrill_=9")
 foreach(_spark_data120_selector IN LISTS _spark_data120_recovery_selectors)
     string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")
     list(GET _spark_data120_parts 0 _spark_data120_prefix)

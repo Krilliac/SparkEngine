@@ -8,25 +8,24 @@
  * of a quarantined corrupt primary, and a running authority that must not
  * serve the rolled-back rows.
  *
- * Persistence_RecoveryDrill_* (POSIX) spawn a fresh SparkTests process (exec,
- * not a bare fork of this multi-threaded runner) that really dies inside a
- * commit: it _exit()s at a SavePaths::DurableCommitStage (between staging and
- * rename, and between rename and directory sync), or is SIGKILLed while
- * committing in a loop. The parent must then reopen the database at the
- * documented recovery point (docs/specs/persistence.md) and keep committing.
+ * Persistence_RecoveryDrill_* (POSIX and Windows) spawn a fresh SparkTests
+ * process (exec, not a bare fork of this multi-threaded runner) that really
+ * dies inside a commit: it _exit()s at a SavePaths::DurableCommitStage
+ * (between staging and rename, and between rename and directory sync), or is
+ * killed (SIGKILL / TerminateProcess) while committing in a loop. The parent
+ * must then reopen the store at the documented recovery point
+ * (docs/specs/persistence.md) and keep committing. The TFDatabase drills are
+ * joined by one per other durable store: TFOutfitStore, the TFSocialSystem
+ * store and the WorldSave territory file.
  */
 #include "TestFramework.h"
 #include "Account/TFCrypto.h"
+#include "Game/TFSocialSystem.h"
 #include "Persistence/TFDatabase.h"
+#include "Persistence/TFOutfitStore.h"
 #include "Persistence/TFSavePaths.h"
+#include "Persistence/TFWorldSave.h"
 #include "Utils/JsonUtils.h"
-
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <string>
-
-#ifndef _WIN32
 #include "Utils/Process.h"
 
 #include <algorithm>
@@ -34,9 +33,23 @@
 #include <cstdio>
 #include <cstdlib>
 #include <expected>
+#include <filesystem>
+#include <fstream>
+#include <memory>
 #include <optional>
+#include <sstream>
+#include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
+#include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
 #include <unistd.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -408,7 +421,6 @@ TEST(Persistence_BackupRestore_RunningAuthorityCannotOverwriteRestoredRows)
     fs::remove_all(dir);
 }
 
-#ifndef _WIN32
 namespace
 {
     constexpr int kCrashExitCode = 86;
@@ -418,6 +430,9 @@ namespace
     constexpr const char* kDrillDbEnv = "SPARK_DATA120_DRILL_DB";
     constexpr const char* kDrillBackupEnv = "SPARK_DATA120_DRILL_BACKUP";
     constexpr const char* kDrillCharEnv = "SPARK_DATA120_DRILL_CHAR";
+    /// The parent's test selection, dropped so the child runs exactly one test.
+    constexpr const char* kParentSelection[] = {"SPARK_TEST_FILE", "SPARK_TEST_EXPECT_COUNT", "SPARK_TEST_EXCLUDE",
+                                                "SPARK_TEST_LIMIT"};
 
     SavePaths::DurableCommitStage s_crashStage = SavePaths::DurableCommitStage::StagedAndSynced;
     fs::path s_crashTarget;
@@ -430,7 +445,23 @@ namespace
 
     fs::path TestBinaryPath()
     {
-#ifdef __APPLE__
+#ifdef _WIN32
+        std::wstring buffer(512, L'\0');
+        for (;;)
+        {
+            const DWORD size = ::GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+            if (size == 0)
+                return {};
+            if (size < buffer.size() - 1)
+            {
+                buffer.resize(size);
+                return fs::path(buffer);
+            }
+            if (buffer.size() >= 32768)
+                return {};
+            buffer.resize(buffer.size() * 2);
+        }
+#elif defined(__APPLE__)
         uint32_t size = 0;
         _NSGetExecutablePath(nullptr, &size);
         std::string buffer(size, '\0');
@@ -444,11 +475,47 @@ namespace
 #endif
     }
 
+#ifdef _WIN32
+    /// Sets (or, for an empty value, removes) one variable of this process's environment and restores it.
+    /// Spark::Process::Builder has no environment API; a child launched inside the scope inherits it.
+    class ScopedEnvironmentVariable
+    {
+      public:
+        ScopedEnvironmentVariable(const char* name, const std::string& value) : m_name(name)
+        {
+            if (const char* previous = std::getenv(name))
+            {
+                m_wasSet = true;
+                m_previous = previous;
+            }
+            _putenv_s(m_name, value.c_str());
+        }
+        ~ScopedEnvironmentVariable() { _putenv_s(m_name, m_wasSet ? m_previous.c_str() : ""); }
+        ScopedEnvironmentVariable(const ScopedEnvironmentVariable&) = delete;
+        ScopedEnvironmentVariable& operator=(const ScopedEnvironmentVariable&) = delete;
+
+      private:
+        const char* m_name;
+        bool m_wasSet = false;
+        std::string m_previous;
+    };
+
+    /// UTF-8 form of a path, as Spark::Process::Builder expects on Windows.
+    std::string Utf8(const fs::path& path)
+    {
+        const std::u8string text = path.u8string();
+        return std::string(text.begin(), text.end());
+    }
+#endif
+
     /// Launch a fresh SparkTests process that runs only `testName`, which sees
     /// `role` in SPARK_DATA120_DRILL_ROLE and plays the dying writer. The child
     /// is exec'd rather than a bare fork() of this runner: the runner's other
     /// threads (async logger, job workers) may hold locks at fork time, and a
-    /// forked child that logs or allocates could deadlock.
+    /// forked child that logs or allocates could deadlock. On Windows the child
+    /// inherits a scoped copy of this process's environment (the drill CTests
+    /// run RUN_SERIAL, so nothing else reads it meanwhile); on POSIX it goes
+    /// through env(1).
     std::expected<Spark::Process, std::string> SpawnDrillChild(const char* testName, const std::string& role,
                                                                const fs::path& db, uint64_t charId,
                                                                const fs::path& backup = {})
@@ -457,22 +524,30 @@ namespace
         if (self.empty())
             return std::unexpected(std::string("cannot resolve the test binary path"));
 
+        const std::pair<const char*, std::string> drillEnvironment[] = {
+            {"SPARK_TEST_NAME", testName},
+            {kDrillRoleEnv, role},
+            {kDrillDbEnv, fs::absolute(db).string()},
+            {kDrillBackupEnv, backup.empty() ? std::string() : fs::absolute(backup).string()},
+            {kDrillCharEnv, std::to_string(charId)},
+        };
+#ifdef _WIN32
+        std::vector<std::unique_ptr<ScopedEnvironmentVariable>> scoped;
+        for (const char* selection : kParentSelection)
+            scoped.push_back(std::make_unique<ScopedEnvironmentVariable>(selection, std::string()));
+        for (const auto& [name, value] : drillEnvironment)
+            scoped.push_back(std::make_unique<ScopedEnvironmentVariable>(name, value));
+        Spark::Process::Builder builder(Utf8(self));
+        builder.WorkingDirectory(Utf8(fs::current_path()));
+#else
         Spark::Process::Builder builder("env");
-        // Drop the parent's test selection so the child runs exactly one test.
-        for (const char* selection :
-             {"SPARK_TEST_FILE", "SPARK_TEST_EXPECT_COUNT", "SPARK_TEST_EXCLUDE", "SPARK_TEST_LIMIT"})
-        {
+        for (const char* selection : kParentSelection)
             builder.Arg("-u").Arg(selection);
-        }
-        builder.Arg(std::string("SPARK_TEST_NAME=") + testName)
-            .Arg(std::string(kDrillRoleEnv) + "=" + role)
-            .Arg(std::string(kDrillDbEnv) + "=" + fs::absolute(db).string())
-            .Arg(std::string(kDrillBackupEnv) + "=" + (backup.empty() ? "" : fs::absolute(backup).string()))
-            .Arg(std::string(kDrillCharEnv) + "=" + std::to_string(charId))
-            .Arg(self.string())
-            .WorkingDirectory(fs::current_path().string())
-            .CaptureStdout()
-            .MergeStderrIntoStdout();
+        for (const auto& [name, value] : drillEnvironment)
+            builder.Arg(std::string(name) + "=" + value);
+        builder.Arg(self.string()).WorkingDirectory(fs::current_path().string());
+#endif
+        builder.CaptureStdout().MergeStderrIntoStdout();
         return builder.Launch();
     }
 
@@ -517,19 +592,46 @@ namespace
     {
         const fs::path db = EnvOrEmpty(kDrillDbEnv);
         const uint64_t charId = std::strtoull(EnvOrEmpty(kDrillCharEnv).c_str(), nullptr, 10);
+        // "<store>-staged" dies before the rename, "<store>-renamed" (and plain "renamed") after it.
+        const SavePaths::DurableCommitStage stage = role.ends_with("renamed")
+                                                        ? SavePaths::DurableCommitStage::Renamed
+                                                        : SavePaths::DurableCommitStage::StagedAndSynced;
+        ArmCrashAt(stage, db);
         if (role == "restore")
         {
-            ArmCrashAt(SavePaths::DurableCommitStage::StagedAndSynced, db);
             TFBackupInfo info;
             (void)TFDatabase::RestoreFromBackup(EnvOrEmpty(kDrillBackupEnv), db, info);
-            return;
         }
-        ArmCrashAt(role == "renamed" ? SavePaths::DurableCommitStage::Renamed
-                                     : SavePaths::DurableCommitStage::StagedAndSynced,
-                   db);
-        TFDatabase child;
-        if (child.Open(db))
-            (void)child.SaveCharacterProgress(charId, 0, 1, 200, 0);
+        else if (role.starts_with("outfit-"))
+        {
+            // The store takes its lifetime lock in Open; the process dies holding it.
+            TFOutfitStore store;
+            if (store.Open(db) && store.AddMember(1, 2002, "Vex", TFOutfitRank::Member, 7))
+                (void)store.SaveNow();
+        }
+        else if (role.starts_with("social-"))
+        {
+            // Load the committed v0 store and write it back through the production serializer, which
+            // stamps the current schema: the new commit differs from the old one byte for byte.
+            (void)TFSocialSystem::ResaveStoreForTesting(db);
+        }
+        else if (role.starts_with("territory-"))
+        {
+            Spark::Json::Value root;
+            std::string detail;
+            if (WorldSave::ReadJson(db, "drill_continent", "Drill", false, root, detail) ==
+                WorldSave::ReadStatus::Loaded)
+            {
+                root["owners"][size_t{1}] = Spark::Json::Value(3);
+                (void)WorldSave::WriteJson(db, root, detail);
+            }
+        }
+        else
+        {
+            TFDatabase child;
+            if (child.Open(db))
+                (void)child.SaveCharacterProgress(charId, 0, 1, 200, 0);
+        }
     }
 
     /// Run `testName` in a child playing `role`; returns its exit code and
@@ -751,4 +853,201 @@ TEST(Persistence_RecoveryDrill_KilledWriterReopensToLastAcknowledgedCommit)
     survivor.Close();
     fs::remove_all(dir);
 }
-#endif
+
+// ---------------------------------------------------------------------------
+// The other stores that commit through WriteDurableReplace: the outfit store,
+// the social store and the WorldSave territory file. Each child opens the real
+// store, commits one mutation and dies at a commit stage.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    /// Seed outfit 1 with its leader only, committed and closed.
+    bool SeedOutfitStore(const fs::path& path)
+    {
+        TFOutfitStore store;
+        return store.Open(path) && store.Create("Iron Vultures", "IVLT", 1001, "Raska", 5) != nullptr && store.Close();
+    }
+
+    /// Members of outfit 1 as a fresh authority sees them, or -1 when the store cannot open.
+    int OutfitMembersOnDisk(const fs::path& path)
+    {
+        TFOutfitStore store;
+        if (!store.Open(path))
+            return -1;
+        const TFOutfitRecord* outfit = store.FindById(1);
+        const int members = outfit ? static_cast<int>(outfit->members.size()) : -1;
+        return store.Close() ? members : -1;
+    }
+
+    /// A pre-versioning (v0) social store with one character row.
+    constexpr const char* kSocialV0 =
+        R"({"characters":[{"charId":42,"friends":["Alice One"],"blocked":[],"recent":[]}]})";
+
+    Spark::Json::Value TerritoryDocument()
+    {
+        Spark::Json::Value root = Spark::Json::Value::MakeObject();
+        root["version"] = Spark::Json::Value(static_cast<int>(WorldSave::kTerritorySchemaVersion));
+        root["continentKey"] = Spark::Json::Value("drill_continent");
+        root["continent"] = Spark::Json::Value("Drill");
+        root["regionCount"] = Spark::Json::Value(3);
+        Spark::Json::Value owners = Spark::Json::Value::MakeArray();
+        for (const int owner : {1, 2, 1})
+            owners.PushBack(Spark::Json::Value(owner));
+        root["owners"] = std::move(owners);
+        Spark::Json::Value dominion = Spark::Json::Value::MakeObject();
+        dominion["active"] = Spark::Json::Value(false);
+        dominion["faction"] = Spark::Json::Value(0);
+        dominion["remainingSec"] = Spark::Json::Value(0.0);
+        root["dominion"] = std::move(dominion);
+        return root;
+    }
+
+    /// Owner of region 1 in the committed territory file, or -1 when it does not load.
+    int TerritoryOwnerOnDisk(const fs::path& path)
+    {
+        Spark::Json::Value root;
+        std::string detail;
+        uint32_t owner = 0;
+        if (WorldSave::ReadJson(path, "drill_continent", "Drill", false, root, detail) !=
+                WorldSave::ReadStatus::Loaded ||
+            !WorldSave::ReadUint32(root["owners"][size_t{1}], owner))
+            return -1;
+        return static_cast<int>(owner);
+    }
+} // namespace
+
+TEST(Persistence_RecoveryDrill_OutfitCrashBeforeRename)
+{
+    if (const std::string role = EnvOrEmpty(kDrillRoleEnv); !role.empty())
+    {
+        RunCrashRole(role);
+        return;
+    }
+
+    const fs::path dir = FreshDir("test_data120_drill_outfit_staged");
+    const fs::path store = dir / "outfits.json";
+    ASSERT_TRUE(SeedOutfitStore(store));
+    const std::string committed = ReadFile(store);
+
+    ASSERT_EQ(RunCrashChild("Persistence_RecoveryDrill_OutfitCrashBeforeRename", "outfit-staged", store, 0),
+              kCrashExitCode);
+
+    // The previous commit is intact, and the dead writer's lifetime lock died with it.
+    EXPECT_TRUE(fs::exists(WithSuffix(store, ".tmp")));
+    EXPECT_TRUE(ReadFile(store) == committed);
+    EXPECT_EQ(OutfitMembersOnDisk(store), 1);
+
+    TFOutfitStore survivor;
+    ASSERT_TRUE(survivor.Open(store));
+    EXPECT_TRUE(survivor.AddMember(1, 2003, "Zap", TFOutfitRank::Member, 8));
+    EXPECT_TRUE(survivor.Close());
+    EXPECT_FALSE(fs::exists(WithSuffix(store, ".tmp")));
+    EXPECT_EQ(OutfitMembersOnDisk(store), 2);
+    fs::remove_all(dir);
+}
+
+TEST(Persistence_RecoveryDrill_OutfitCrashAfterRename)
+{
+    if (const std::string role = EnvOrEmpty(kDrillRoleEnv); !role.empty())
+    {
+        RunCrashRole(role);
+        return;
+    }
+
+    const fs::path dir = FreshDir("test_data120_drill_outfit_renamed");
+    const fs::path store = dir / "outfits.json";
+    ASSERT_TRUE(SeedOutfitStore(store));
+
+    ASSERT_EQ(RunCrashChild("Persistence_RecoveryDrill_OutfitCrashAfterRename", "outfit-renamed", store, 0),
+              kCrashExitCode);
+
+    // A process death after the rename keeps the new commit, and the lock is free again.
+    EXPECT_FALSE(fs::exists(WithSuffix(store, ".tmp")));
+    EXPECT_EQ(OutfitMembersOnDisk(store), 2);
+
+    TFOutfitStore survivor;
+    ASSERT_TRUE(survivor.Open(store));
+    EXPECT_TRUE(survivor.AddMember(1, 2003, "Zap", TFOutfitRank::Member, 8));
+    EXPECT_TRUE(survivor.Close());
+    EXPECT_EQ(OutfitMembersOnDisk(store), 3);
+    fs::remove_all(dir);
+}
+
+TEST(Persistence_RecoveryDrill_SocialCrashBeforeRename)
+{
+    if (const std::string role = EnvOrEmpty(kDrillRoleEnv); !role.empty())
+    {
+        RunCrashRole(role);
+        return;
+    }
+
+    const fs::path dir = FreshDir("test_data120_drill_social_staged");
+    const fs::path store = dir / "terrafront_social.json";
+    WriteFile(store, kSocialV0);
+
+    ASSERT_EQ(RunCrashChild("Persistence_RecoveryDrill_SocialCrashBeforeRename", "social-staged", store, 0),
+              kCrashExitCode);
+
+    EXPECT_TRUE(fs::exists(WithSuffix(store, ".tmp")));
+    EXPECT_TRUE(ReadFile(store) == kSocialV0);
+    const auto reopened = TFSocialSystem::LoadStoreForTesting(store);
+    EXPECT_TRUE(reopened.accepted);
+    EXPECT_EQ(reopened.recordCount, size_t{1});
+
+    // The next commit replaces the stale staging file.
+    ASSERT_TRUE(TFSocialSystem::ResaveStoreForTesting(store));
+    EXPECT_FALSE(fs::exists(WithSuffix(store, ".tmp")));
+    EXPECT_TRUE(ReadFile(store).find("schemaVersion") != std::string::npos);
+    fs::remove_all(dir);
+}
+
+TEST(Persistence_RecoveryDrill_SocialCrashAfterRename)
+{
+    if (const std::string role = EnvOrEmpty(kDrillRoleEnv); !role.empty())
+    {
+        RunCrashRole(role);
+        return;
+    }
+
+    const fs::path dir = FreshDir("test_data120_drill_social_renamed");
+    const fs::path store = dir / "terrafront_social.json";
+    WriteFile(store, kSocialV0);
+
+    ASSERT_EQ(RunCrashChild("Persistence_RecoveryDrill_SocialCrashAfterRename", "social-renamed", store, 0),
+              kCrashExitCode);
+
+    EXPECT_FALSE(fs::exists(WithSuffix(store, ".tmp")));
+    EXPECT_TRUE(ReadFile(store).find("schemaVersion") != std::string::npos);
+    const auto reopened = TFSocialSystem::LoadStoreForTesting(store);
+    EXPECT_TRUE(reopened.accepted);
+    EXPECT_EQ(reopened.recordCount, size_t{1});
+    EXPECT_TRUE(TFSocialSystem::ResaveStoreForTesting(store));
+    fs::remove_all(dir);
+}
+
+TEST(Persistence_RecoveryDrill_TerritoryWriteCrashAfterRename)
+{
+    if (const std::string role = EnvOrEmpty(kDrillRoleEnv); !role.empty())
+    {
+        RunCrashRole(role);
+        return;
+    }
+
+    const fs::path dir = FreshDir("test_data120_drill_territory");
+    const fs::path territory = dir / "terrafront_territory.drill_continent.json";
+    std::string detail;
+    ASSERT_TRUE(WorldSave::WriteJson(territory, TerritoryDocument(), detail));
+    ASSERT_EQ(TerritoryOwnerOnDisk(territory), 2);
+
+    ASSERT_EQ(
+        RunCrashChild("Persistence_RecoveryDrill_TerritoryWriteCrashAfterRename", "territory-renamed", territory, 0),
+        kCrashExitCode);
+
+    // The region flip the dead authority committed is what a restarted authority loads.
+    EXPECT_FALSE(fs::exists(WithSuffix(territory, ".tmp")));
+    EXPECT_EQ(TerritoryOwnerOnDisk(territory), 3);
+    ASSERT_TRUE(WorldSave::WriteJson(territory, TerritoryDocument(), detail));
+    EXPECT_EQ(TerritoryOwnerOnDisk(territory), 2);
+    fs::remove_all(dir);
+}
