@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 # CI-120: reset typed -D ENABLE_*/SPARK_*/BUILD_* entries so the option guard at the end
 # of this file also rejects typed typos. Must run before any option() or cache declaration.
 include("${CMAKE_SOURCE_DIR}/cmake/SparkOptionGuard.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/SparkSourceFilter.cmake")
 spark_capture_cli_options()
 
 # All targets need PIC since game modules are shared libraries that link SparkEngineLib
@@ -727,7 +728,7 @@ if(EXISTS "${MINIZ_ROOT}")
         "${MINIZ_ROOT}/*.c"
         "${MINIZ_ROOT}/*.h"
     )
-    list(FILTER MINIZ_SOURCES EXCLUDE REGEX ".*test.*|.*example.*|.*tool.*")
+    spark_exclude_sources_matching(MINIZ_SOURCES "${MINIZ_ROOT}" ".*test.*|.*example.*|.*tool.*")
 endif()
 
 if(MINIZ_SOURCES)
@@ -1360,8 +1361,8 @@ if(APPLE AND SPARK_METAL_AVAILABLE)
     )
     list(APPEND SPARK_ENGINE_SOURCES ${SPARK_ENGINE_OBJCXX_SOURCES})
 endif()
-list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*/[Tt]est[^a-z].*|.*/[Tt]ests/.*")
-list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
+spark_exclude_sources_matching(SPARK_ENGINE_SOURCES "${CMAKE_SOURCE_DIR}/SparkEngine/Source" ".*/[Tt]est[^a-z].*|.*/[Tt]ests/.*")
+spark_exclude_sources_matching(SPARK_ENGINE_SOURCES "${CMAKE_SOURCE_DIR}/SparkEngine/Source" ".*[Ee]xample.*")
 
 # Separate entry point files from library sources
 # SparkEngine*.cpp contains wWinMain/main + shared globals — they go in the exe only

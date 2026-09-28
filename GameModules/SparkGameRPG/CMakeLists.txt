@@ -79,8 +79,8 @@ file(GLOB_RECURSE SPARK_GAME_RPG_SOURCES
     "Source/*.h"
     "Source/*.hpp"
 )
-list(FILTER SPARK_GAME_RPG_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
-list(FILTER SPARK_GAME_RPG_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
+spark_exclude_sources_matching(SPARK_GAME_RPG_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Tt]est.*")
+spark_exclude_sources_matching(SPARK_GAME_RPG_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Ee]xample.*")
 
 # ---------------------------------------------------------------------
 # Create the game as a SHARED library (DLL)

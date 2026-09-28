@@ -25,7 +25,7 @@ file(GLOB_RECURSE DAEMON_SOURCES
 
 # Collaboration accepts a different trust class of traffic and intentionally
 # runs in its own process. Keep its implementation out of SparkDaemon.
-list(FILTER DAEMON_SOURCES EXCLUDE REGEX ".*/Collaboration.*")
+spark_exclude_sources_matching(DAEMON_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*/Collaboration.*")
 list(FILTER DAEMON_SOURCES EXCLUDE REGEX ".*/CollabServerMain\\.cpp$")
 list(FILTER DAEMON_SOURCES EXCLUDE REGEX ".*/OrchestratorMain\\.cpp$")
 list(FILTER DAEMON_SOURCES EXCLUDE REGEX ".*/OrchestratorIdentity\\.cpp$")
