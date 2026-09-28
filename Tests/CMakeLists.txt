@@ -2145,8 +2145,9 @@ set_tests_properties(UnwiredSystemRemoval PROPERTIES
     TIMEOUT 60)
 
 # DATA-120: TFDatabase multi-row transactions, schema migration, the TERRAFRONT
-# durable-commit primitive (SavePaths::WriteDurableReplace), and the real
-# AsyncDatabase KV flush run under the persistence label, so `ctest -L persistence`
+# durable-commit primitive (SavePaths::WriteDurableReplace), concurrent writers
+# (Persistence_Concurrency_: leased world files, contested creates, stale debits),
+# and the real AsyncDatabase KV flush run under the persistence label, so `ctest -L persistence`
 # executes the C++ evidence and not only the static Python durability contract.
 # Counts are exact per family: a dropped or renamed case fails its CTest instead
 # of shrinking the evidence. RUN_SERIAL because the fixtures reuse fixed paths
@@ -2163,6 +2164,7 @@ set(_spark_data120_persistence_selectors
     "Persistence_Transaction_=3"
     "Persistence_Migration_=11"
     "Persistence_Durable_=${_spark_data120_durable_count}"
+    "Persistence_Concurrency_=4"
     "AsyncDatabaseReal_=1")
 foreach(_spark_data120_selector IN LISTS _spark_data120_persistence_selectors)
     string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")

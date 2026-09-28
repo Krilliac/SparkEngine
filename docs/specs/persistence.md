@@ -18,6 +18,16 @@ A character is in world on at most one continent authority sharing the save root
 - Leave world (`TFCharacterSystem::LeaveWorld`) releases the residency only after the character's final progress and meta are durable. A disconnect whose meta flush fails parks the meta, and the character stays resident until the progression sweep commits (or discards) the parked row; `TFProgressionSystem::SaveNow` then releases it. A lost progress flush leaves the character resident on this continent, where it can still re-enter, until the continent's next bind.
 - Tests: `TF120_Residency_*` (`Tests/TestTF120Residency.cpp`).
 
+## Concurrent writers
+
+Several authority processes may share one save root. No store duplicates or loses state when two of them write at once:
+
+- **Character database (characters and the flux economy).** Multi-writer. Every call is a transaction under `<db>.lock` against a freshly reloaded file, so creates allocate ids and check the unique account and character names against every authority's rows: two contested creates of one name commit exactly once. Absolute character writes (progress, meta, `CommitCharacterUpdates`) are optimistic. A row that changed since the writer's baseline is refused with `Conflict` and nothing is written, so two authorities that both read a 10-flux wallet cannot both spend it. Retries are guarded by these absolute-value revision checks and by unique names, not by an operation-id ledger.
+- **World files (`terrafront_territory.<continent>.json`, `terrafront_state.<continent>.json`).** Single-writer. `WorldSave::WriteJson` takes the caller's `SavePaths::ExclusiveFileLock` and refuses, before any I/O, unless that lease is held on exactly the destination; there is no leaseless overload. `TFRegionSystem::LoadPersisted` and `TFProgressionSystem::LoadFromDisk` take the lease before they read or migrate anything. A second authority for the same continent fails to take it, latches its writes off, and its checkpoints report failure, so it can never report a successful save. The lease is held until `Shutdown` after the final checkpoint, and the OS releases it when the process dies. These files are guarded independently of the continent bind above, because territory loads at initialization, before the database binds lazily on the first login.
+- **Outfit and social stores.** Single-writer behind a lifetime lock taken at open (`TFOutfitStore_ExclusivePersistenceLockRejectsSecondAuthority`).
+- **MMO `AsyncDatabase` store.** A single worker applies writes in FIFO order, and the `SQLiteConnection` authority lock refuses a second authority (`SEC2Persist_AsyncDatabaseRejectsSecondAuthority`).
+- Tests: `Persistence_Concurrency_*` (4 cases, `Tests/TestDATA120PersistenceReal.cpp`) cover the lease check on world-file writes, a refused second world-file writer and the handover to it, a contested create and a stale double spend. `TF120_SharedRoot_*` (`Tests/TestTF120SharedSaveRoot.cpp`) interleaves spawned authority processes on one database with no lost flux, xp or unlock writes. Its spawned-peer cases are POSIX-only, so Windows runs only the in-process cases. `Persistence_Transaction_*` covers atomic unlock purchases and currency transfers.
+
 ## Schema versions of the other stores
 
 Every store reads schema N and N-1, writes N, and fails closed on anything newer, so an older binary never loads and rewrites a file a newer build wrote (a rollback would silently drop the newer fields).
@@ -53,7 +63,7 @@ The other stores commit whole files through the same primitive, so they reopen a
 |-------|-------------------------|------------------------|-----------------|-------|
 | `TFOutfitStore` (`outfits.json`) | previous roster, stale `.tmp` replaced by the next save | new roster | lifetime lock released by the OS; the next `Open` succeeds | `Persistence_RecoveryDrill_Outfit*` |
 | `TFSocialSystem` store (`terrafront_social.json`) | previous document byte for byte | new document | not held by the drilled serializer (the system takes it at `Initialize`) | `Persistence_RecoveryDrill_Social*` |
-| `WorldSave` territory file | not drilled separately (same primitive, same staging path) | the new region owners load on restart | the territory file has no lock | `Persistence_RecoveryDrill_TerritoryWriteCrashAfterRename` |
+| `WorldSave` territory file | not drilled separately (same primitive, same staging path) | the new region owners load on restart | writer lease released by the OS; the restarted authority takes it and writes | `Persistence_RecoveryDrill_TerritoryWriteCrashAfterRename` |
 
 If the reopened file fails validation, `Open` quarantines it as `<db>.corrupt-<ms>.bak` and latches off. If the primary is missing while such a quarantine file exists, `Open` refuses to start empty. Both cases are recovered by restoring a backup (below).
 

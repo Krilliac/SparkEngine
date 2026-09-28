@@ -46,7 +46,8 @@ namespace Terrafront::SavePaths
      * same process. Stores use it transaction-scoped (TFDatabase: lock,
      * reload, validate, apply, atomic write, unlock) so several authority
      * processes can share one TF_SAVE_ROOT, or lifetime-scoped where a store
-     * still assumes a single authority (TFOutfitStore, TFSocialSystem).
+     * still assumes a single authority (TFOutfitStore, TFSocialSystem, and the
+     * per-continent world files written through WorldSave::WriteJson).
      */
     class ExclusiveFileLock
     {
@@ -96,6 +97,7 @@ namespace Terrafront::SavePaths
                 return false;
             }
 #endif
+            m_target = target;
             ec.clear();
             return true;
         }
@@ -137,6 +139,7 @@ namespace Terrafront::SavePaths
             }
 #endif
             m_lockPath.clear();
+            m_target.clear();
         }
 
         bool IsLocked() const noexcept
@@ -147,6 +150,12 @@ namespace Terrafront::SavePaths
             return m_fd >= 0;
 #endif
         }
+
+        /**
+         * The target this guard holds (the path passed to TryLock/Lock, not the `.lock` file), or an empty
+         * path while unlocked. Lease-checked writers (WorldSave::WriteJson) compare it with their destination.
+         */
+        const std::filesystem::path& LockedTarget() const noexcept { return m_target; }
 
       private:
         static bool IsContention(const std::error_code& ec) noexcept
@@ -160,6 +169,7 @@ namespace Terrafront::SavePaths
         }
 
         std::filesystem::path m_lockPath;
+        std::filesystem::path m_target; ///< set only while locked
 #ifdef _WIN32
         HANDLE m_handle = INVALID_HANDLE_VALUE;
 #else

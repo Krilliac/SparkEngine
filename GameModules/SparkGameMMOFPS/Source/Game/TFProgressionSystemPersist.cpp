@@ -48,6 +48,18 @@ namespace Terrafront
             return false;
         }
 
+        // The state file is single-writer (SaveNow read-modify-writes it). Take the lease before anything is
+        // read or migrated, so a second authority for this continent can never report a successful save.
+        std::error_code leaseEc;
+        if (m_saveLease.LockedTarget() != saveFile && !m_saveLease.TryLock(saveFile, leaseEc))
+        {
+            m_persistenceBlocked = true;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] progression save %s is owned by another authority; writes latched off (%s)",
+                            SavePaths::Utf8ForLog(saveFile).c_str(), leaseEc.message().c_str());
+            return false;
+        }
+
         Spark::Json::Value root;
         std::string detail;
         ReadStatus status = WorldSave::ReadJson(saveFile, continent.key, continent.name, false, root, detail);
@@ -229,7 +241,7 @@ namespace Terrafront
             return false;
         }
 
-        if (!WorldSave::WriteJson(saveFile, root, detail))
+        if (!WorldSave::WriteJson(m_saveLease, saveFile, root, detail))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] progression save failed for %s (%s)",
                             SavePaths::Utf8ForLog(saveFile).c_str(), detail.c_str());

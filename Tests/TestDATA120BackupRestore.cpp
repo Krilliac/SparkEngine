@@ -618,13 +618,16 @@ namespace
         }
         else if (role.starts_with("territory-"))
         {
+            // Like TFRegionSystem: take the writer lease before reading; the process dies holding it.
+            SavePaths::ExclusiveFileLock lease;
+            std::error_code leaseEc;
             Spark::Json::Value root;
             std::string detail;
-            if (WorldSave::ReadJson(db, "drill_continent", "Drill", false, root, detail) ==
-                WorldSave::ReadStatus::Loaded)
+            if (lease.TryLock(db, leaseEc) && WorldSave::ReadJson(db, "drill_continent", "Drill", false, root,
+                                                                  detail) == WorldSave::ReadStatus::Loaded)
             {
                 root["owners"][size_t{1}] = Spark::Json::Value(3);
-                (void)WorldSave::WriteJson(db, root, detail);
+                (void)WorldSave::WriteJson(lease, db, root, detail);
             }
         }
         else
@@ -1038,7 +1041,13 @@ TEST(Persistence_RecoveryDrill_TerritoryWriteCrashAfterRename)
     const fs::path dir = FreshDir("test_data120_drill_territory");
     const fs::path territory = dir / "terrafront_territory.drill_continent.json";
     std::string detail;
-    ASSERT_TRUE(WorldSave::WriteJson(territory, TerritoryDocument(), detail));
+    std::error_code leaseEc;
+    {
+        // Released before the child runs: the child authority takes the lease itself.
+        SavePaths::ExclusiveFileLock lease;
+        ASSERT_TRUE(lease.TryLock(territory, leaseEc));
+        ASSERT_TRUE(WorldSave::WriteJson(lease, territory, TerritoryDocument(), detail));
+    }
     ASSERT_EQ(TerritoryOwnerOnDisk(territory), 2);
 
     ASSERT_EQ(
@@ -1048,7 +1057,11 @@ TEST(Persistence_RecoveryDrill_TerritoryWriteCrashAfterRename)
     // The region flip the dead authority committed is what a restarted authority loads.
     EXPECT_FALSE(fs::exists(WithSuffix(territory, ".tmp")));
     EXPECT_EQ(TerritoryOwnerOnDisk(territory), 3);
-    ASSERT_TRUE(WorldSave::WriteJson(territory, TerritoryDocument(), detail));
+    // The dead writer's lease died with it, so a restarted authority takes it and writes again.
+    SavePaths::ExclusiveFileLock restarted;
+    ASSERT_TRUE(restarted.TryLock(territory, leaseEc));
+    ASSERT_TRUE(WorldSave::WriteJson(restarted, territory, TerritoryDocument(), detail));
     EXPECT_EQ(TerritoryOwnerOnDisk(territory), 2);
+    restarted.Unlock();
     fs::remove_all(dir);
 }

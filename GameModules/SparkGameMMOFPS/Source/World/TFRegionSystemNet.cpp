@@ -2,7 +2,7 @@
  * @file TFRegionSystemNet.cpp
  * @brief TFRegionSystem wire + persistence: TF_RegionState/TF_CaptureTick
  *        broadcasts, late-join full bursts, the client mirror handlers, and
- *        the temp-file-replaced terrafront_territory.<continent-key>.json save. Core
+ *        the leased, temp-file-replaced terrafront_territory.<continent-key>.json save. Core
  *        capture loop lives in TFRegionSystem.cpp (same class, split per the
  *        repo file-size rules — mirrors the TFReplication/-Client split).
  */
@@ -47,6 +47,19 @@ namespace Terrafront
         {
             m_persistBlocked = true;
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory persistence refused: invalid continent key");
+            return false;
+        }
+
+        // The territory file is single-writer. Take the lease before anything is read or migrated, so a
+        // second authority for this continent can neither load a snapshot it would later overwrite nor
+        // report a successful save.
+        std::error_code leaseEc;
+        if (m_saveLease.LockedTarget() != path && !m_saveLease.TryLock(path, leaseEc))
+        {
+            m_persistBlocked = true;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] territory save %s is owned by another authority; writes latched off (%s)",
+                            SavePaths::Utf8ForLog(path).c_str(), leaseEc.message().c_str());
             return false;
         }
 
@@ -180,7 +193,7 @@ namespace Terrafront
 
         const std::filesystem::path path = SavePath();
         std::string detail;
-        if (!WorldSave::WriteJson(path, root, detail))
+        if (!WorldSave::WriteJson(m_saveLease, path, root, detail))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory save failed for %s (%s)",
                             SavePaths::Utf8ForLog(path).c_str(), detail.c_str());

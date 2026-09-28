@@ -608,3 +608,187 @@ TEST(Persistence_Durable_DirectorySyncFailureAfterRenameStillReportsCommit)
     fs::remove_all(dir);
 }
 #endif
+
+// ---------------------------------------------------------------------------
+// Persistence_Concurrency_*: two writers on one store can neither duplicate nor lose state. The world
+// files (territory, progression state) are single-writer behind a lifetime lease; the character database
+// is multi-writer, serialized per call, with unique-name creates and revision-checked absolute writes.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    Spark::Json::Value TerritoryWithOwner(int contestedOwner)
+    {
+        Spark::Json::Value root = Spark::Json::Value::MakeObject();
+        root["version"] = Spark::Json::Value(static_cast<int>(WorldSave::kTerritorySchemaVersion));
+        root["continentKey"] = Spark::Json::Value(std::string("concurrency_continent"));
+        root["continent"] = Spark::Json::Value(std::string("Concurrency"));
+        root["regionCount"] = Spark::Json::Value(3);
+        Spark::Json::Value owners = Spark::Json::Value::MakeArray();
+        owners.PushBack(Spark::Json::Value(1));
+        owners.PushBack(Spark::Json::Value(contestedOwner));
+        owners.PushBack(Spark::Json::Value(0));
+        root["owners"] = std::move(owners);
+        return root;
+    }
+
+    int ContestedOwnerOnDisk(const fs::path& path)
+    {
+        Spark::Json::Value root;
+        std::string detail;
+        if (WorldSave::ReadJson(path, "concurrency_continent", "Concurrency", false, root, detail) !=
+            WorldSave::ReadStatus::Loaded)
+            return -1;
+        return static_cast<int>(root["owners"][size_t{1}].AsNumber(-1.0));
+    }
+} // namespace
+
+TEST(Persistence_Concurrency_WorldFileWriteRequiresHeldLease)
+{
+    const fs::path path = FreshDbPath("test_data120_lease_territory.json");
+    const fs::path other = FreshDbPath("test_data120_lease_other.json");
+    std::string detail;
+
+    // Never locked: refused before any I/O, nothing created.
+    SavePaths::ExclusiveFileLock unlocked;
+    EXPECT_TRUE(unlocked.LockedTarget().empty());
+    EXPECT_FALSE(WorldSave::WriteJson(unlocked, path, TerritoryWithOwner(2), detail));
+    EXPECT_TRUE(detail == "world file writer lease not held");
+    EXPECT_FALSE(fs::exists(path));
+
+    // A lease on another file does not authorize this one.
+    SavePaths::ExclusiveFileLock wrongFile;
+    std::error_code ec;
+    ASSERT_TRUE(wrongFile.TryLock(other, ec));
+    EXPECT_TRUE(wrongFile.LockedTarget() == other);
+    EXPECT_FALSE(WorldSave::WriteJson(wrongFile, path, TerritoryWithOwner(2), detail));
+    EXPECT_TRUE(detail == "world file writer lease not held");
+    EXPECT_FALSE(fs::exists(path));
+
+    // The held lease commits; once released, the same guard is refused and the bytes stay put.
+    SavePaths::ExclusiveFileLock lease;
+    ASSERT_TRUE(lease.TryLock(path, ec));
+    ASSERT_TRUE(WorldSave::WriteJson(lease, path, TerritoryWithOwner(2), detail));
+    const std::string committed = ReadFile(path);
+    lease.Unlock();
+    EXPECT_TRUE(lease.LockedTarget().empty());
+    EXPECT_FALSE(WorldSave::WriteJson(lease, path, TerritoryWithOwner(3), detail));
+    EXPECT_TRUE(detail == "world file writer lease not held");
+    EXPECT_FALSE(WorldSave::WriteJson(wrongFile, path, TerritoryWithOwner(3), detail));
+    EXPECT_TRUE(ReadFile(path) == committed);
+    EXPECT_FALSE(fs::exists(StagingBlocker(path)));
+
+    wrongFile.Unlock();
+    fs::remove(path);
+    fs::remove(other);
+}
+
+TEST(Persistence_Concurrency_SecondWorldFileWriterIsRefusedAndSeesFirstCommit)
+{
+    const fs::path path = FreshDbPath("test_data120_lease_contended.json");
+    std::string detail;
+    std::error_code ec;
+
+    SavePaths::ExclusiveFileLock first;
+    SavePaths::ExclusiveFileLock second;
+    ASSERT_TRUE(first.TryLock(path, ec));
+    EXPECT_FALSE(second.TryLock(path, ec)); // a second authority for the continent cannot take the lease
+    EXPECT_FALSE(second.IsLocked());
+
+    ASSERT_TRUE(WorldSave::WriteJson(first, path, TerritoryWithOwner(2), detail));
+    EXPECT_FALSE(WorldSave::WriteJson(second, path, TerritoryWithOwner(3), detail));
+    EXPECT_EQ(ContestedOwnerOnDisk(path), 2);
+    ASSERT_TRUE(WorldSave::WriteJson(first, path, TerritoryWithOwner(1), detail));
+    EXPECT_EQ(ContestedOwnerOnDisk(path), 1);
+
+    // Handover: the next owner starts from the first owner's last commit, so nothing is lost.
+    first.Unlock();
+    ASSERT_TRUE(second.TryLock(path, ec));
+    EXPECT_EQ(ContestedOwnerOnDisk(path), 1);
+    EXPECT_FALSE(WorldSave::WriteJson(first, path, TerritoryWithOwner(2), detail));
+    ASSERT_TRUE(WorldSave::WriteJson(second, path, TerritoryWithOwner(3), detail));
+    EXPECT_EQ(ContestedOwnerOnDisk(path), 3);
+
+    second.Unlock();
+    fs::remove(path);
+}
+
+TEST(Persistence_Concurrency_ContestedCharacterNameCreatesOnce)
+{
+    const fs::path path = FreshDbPath("test_data120_contested_create.db");
+    TFDatabase continentA;
+    TFDatabase continentB;
+    // Both open the empty store before either creates, so each one's own view is stale for the other.
+    ASSERT_TRUE(continentA.Open(path));
+    ASSERT_TRUE(continentB.Open(path));
+
+    TFAccountRecord onA;
+    TFAccountRecord onB;
+    const int accountsCreated = (continentA.CreateAccount("racer", "salt", "hash", onA) ? 1 : 0) +
+                                (continentB.CreateAccount("racer", "salt", "hash", onB) ? 1 : 0);
+    EXPECT_EQ(accountsCreated, 1);
+    TFAccountRecord account;
+    ASSERT_TRUE(continentB.FindAccountByUsername("racer", account));
+
+    TFCharacterRecord charA;
+    TFCharacterRecord charB;
+    const bool createdOnA = continentA.CreateCharacter(account.id, "Racer", FactionId::MRA, charA);
+    const bool createdOnB = continentB.CreateCharacter(account.id, "Racer", FactionId::MRA, charB);
+    EXPECT_EQ((createdOnA ? 1 : 0) + (createdOnB ? 1 : 0), 1);
+    EXPECT_TRUE(continentA.Close());
+    EXPECT_TRUE(continentB.Close());
+
+    TFDatabase observer;
+    ASSERT_TRUE(observer.Open(path));
+    TFAccountRecord seen;
+    ASSERT_TRUE(observer.FindAccountByUsername("racer", seen));
+    EXPECT_EQ(seen.id, account.id);
+    const std::vector<TFCharacterRecord> characters = observer.ListCharacters(account.id);
+    ASSERT_EQ(characters.size(), size_t{1});
+    EXPECT_TRUE(characters[0].name == "Racer");
+    EXPECT_EQ(characters[0].id, createdOnA ? charA.id : charB.id);
+    EXPECT_TRUE(observer.Close());
+    fs::remove(path);
+}
+
+TEST(Persistence_Concurrency_StaleFluxDebitCannotDoubleSpend)
+{
+    const fs::path path = FreshDbPath("test_data120_double_spend.db");
+    uint64_t charId = 0;
+    {
+        TFDatabase seed;
+        ASSERT_TRUE(seed.Open(path));
+        charId = SeedCharacter(seed, "spender", "Spender", 10);
+        ASSERT_TRUE(charId != 0);
+        EXPECT_TRUE(seed.Close());
+    }
+
+    TFDatabase continentA;
+    TFDatabase continentB;
+    ASSERT_TRUE(continentA.Open(path));
+    ASSERT_TRUE(continentB.Open(path));
+    TFCharacterRecord onA;
+    TFCharacterRecord onB;
+    ASSERT_TRUE(continentA.AcquireCharacter(charId, onA));
+    ASSERT_TRUE(continentB.AcquireCharacter(charId, onB));
+    ASSERT_EQ(onA.flux, uint32_t{10});
+    ASSERT_EQ(onB.flux, uint32_t{10});
+
+    // Both spend the same 10 flux, each computing the new balance from its own read.
+    EXPECT_TRUE(continentA.CommitCharacterUpdates({Purchase(charId, onA.flux - 10, "smg_basic")}));
+    const std::string afterFirst = ReadFile(path);
+    EXPECT_FALSE(continentB.CommitCharacterUpdates({Purchase(charId, onB.flux - 10, "shotgun_basic")}));
+    EXPECT_TRUE(continentB.LastStatus() == TFDatabaseStatus::Conflict);
+    EXPECT_EQ(continentB.ConflictedCharacter(), charId);
+    EXPECT_TRUE(ReadFile(path) == afterFirst);
+
+    // The loser re-acquires and sees the spent wallet, so the second purchase can no longer be afforded.
+    TFCharacterRecord reacquired;
+    ASSERT_TRUE(continentB.AcquireCharacter(charId, reacquired));
+    EXPECT_EQ(reacquired.flux, uint32_t{0});
+    ASSERT_EQ(reacquired.unlocks.size(), size_t{1});
+    EXPECT_TRUE(reacquired.unlocks[0] == "smg_basic");
+    EXPECT_TRUE(continentA.Close());
+    EXPECT_TRUE(continentB.Close());
+    fs::remove(path);
+}

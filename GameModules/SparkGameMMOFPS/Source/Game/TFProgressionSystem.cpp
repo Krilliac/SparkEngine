@@ -154,6 +154,7 @@ namespace Terrafront
         m_players.clear();
         m_meta.Clear();
         m_persistenceBlocked = false;
+        m_saveLease.Unlock(); // after the final checkpoint: a reloaded module takes it again in LoadFromDisk
         m_initialized = false;
         return true;
     }

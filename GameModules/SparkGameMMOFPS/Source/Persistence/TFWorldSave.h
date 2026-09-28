@@ -284,12 +284,26 @@ namespace Terrafront::WorldSave
         return ReadStatus::Loaded;
     }
 
-    inline bool WriteJson(const std::filesystem::path& path, const Spark::Json::Value& root, std::string& detail)
+    /**
+     * Durably replace one per-continent world file (territory, progression state).
+     *
+     * `writerLease` is the caller's lifetime ExclusiveFileLock on exactly `path`: the world files are
+     * single-writer stores, so a write without the lease, or with a lease on another file, is refused
+     * before any I/O (detail "world file writer lease not held") and the file is left untouched. There is
+     * deliberately no leaseless overload.
+     */
+    inline bool WriteJson(const SavePaths::ExclusiveFileLock& writerLease, const std::filesystem::path& path,
+                          const Spark::Json::Value& root, std::string& detail)
     {
         detail.clear();
         if (path.empty())
         {
             detail = "empty destination";
+            return false;
+        }
+        if (!writerLease.IsLocked() || writerLease.LockedTarget() != path)
+        {
+            detail = "world file writer lease not held";
             return false;
         }
 
