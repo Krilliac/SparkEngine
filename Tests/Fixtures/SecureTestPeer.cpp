@@ -180,7 +180,12 @@ namespace SparkTestFixtures
             return std::nullopt;
         }
 
+        // A ConnectRejected ends the handshake just as it ends a real client's. Stop pumping on it:
+        // every PumpUntil step advances the singleton's clock by a fixed 16 ms while sleeping only
+        // ~2 ms, so waiting out the window after a refusal would age every other client on the
+        // server by ~10 simulated seconds and time out the ones that are silent in the test.
         std::optional<WireMessage> accepted;
+        bool rejected = false;
         PumpUntil(
             server,
             [&]
@@ -194,9 +199,13 @@ namespace SparkTestFixtures
                         {
                             accepted = std::move(message);
                         }
+                        else if (message && message->type == MessageType::ConnectRejected)
+                        {
+                            rejected = true;
+                        }
                     }
                 }
-                return accepted.has_value();
+                return accepted.has_value() || rejected;
             },
             window);
         constexpr size_t kPrefix = CONNECT_ACCEPT_PREFIX_SIZE;
