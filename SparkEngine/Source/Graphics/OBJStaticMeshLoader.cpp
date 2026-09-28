@@ -7,12 +7,16 @@
 
 #include <tiny_obj_loader.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <new>
+#include <optional>
 #include <system_error>
+#include <utility>
 
 namespace Spark::Graphics::Detail
 {
@@ -20,6 +24,11 @@ namespace Spark::Graphics::Detail
     {
         constexpr size_t kMaxVertices = 16ull * 1024ull * 1024ull;
         constexpr size_t kMaxIndices = kMaxVertices * 3ull;
+        /// Ear clipping costs O(n^2) per polygon, so a 64 KiB file holding one
+        /// 2400-corner polygon took a second under ASan and a larger file
+        /// grows without bound. Larger polygons are fanned instead. The cap
+        /// sits above the repository's largest authored n-gon (74 corners).
+        constexpr size_t kMaxEarClipCorners = 96;
 
         bool IsFinite(const std::vector<tinyobj::real_t>& values)
         {
@@ -33,6 +42,85 @@ namespace Spark::Graphics::Detail
             return true;
         }
 
+        /// Resolves `mtllib` names only inside the OBJ's own directory.
+        /// tinyobjloader's MaterialFileReader joins any name onto the search
+        /// path, so `mtllib ../canary.mtl` read files outside the asset tree
+        /// and `mtllib ../../../../dev/zero` read an unbounded device.
+        class ConfinedMaterialReader final : public tinyobj::MaterialReader
+        {
+          public:
+            explicit ConfinedMaterialReader(std::filesystem::path directory) : m_directory(std::move(directory)) {}
+
+            bool operator()(const std::string& name, std::vector<tinyobj::material_t>* materials,
+                            std::map<std::string, int>* materialMap, std::string* warn, std::string* err) override
+            {
+                const std::optional<std::filesystem::path> resolved = Resolve(name);
+                if (!resolved)
+                {
+                    if (warn)
+                    {
+                        *warn += "material file [ " + name +
+                                 " ] refused: not a bounded regular file inside the OBJ directory\n";
+                    }
+                    return false;
+                }
+                std::ifstream stream(*resolved);
+                if (!stream)
+                {
+                    return false;
+                }
+                tinyobj::LoadMtl(materialMap, materials, &stream, warn, err);
+                return true;
+            }
+
+          private:
+            std::optional<std::filesystem::path> Resolve(const std::string& name) const
+            {
+                // A backslash is a Windows separator or drive form; OBJ files
+                // from any platform name libraries with '/'.
+                if (name.empty() || name.find('\\') != std::string::npos)
+                {
+                    return std::nullopt;
+                }
+                const std::filesystem::path relative(std::u8string(name.begin(), name.end()));
+                if (relative.has_root_name() || relative.has_root_directory())
+                {
+                    return std::nullopt;
+                }
+                for (const std::filesystem::path& component : relative)
+                {
+                    if (component == "..")
+                    {
+                        return std::nullopt;
+                    }
+                }
+
+                // weakly_canonical resolves symlinks, so a link inside the
+                // directory that points out of it is refused here too.
+                std::error_code ec;
+                const std::filesystem::path resolved = std::filesystem::weakly_canonical(m_directory / relative, ec);
+                if (ec)
+                {
+                    return std::nullopt;
+                }
+                const auto [directoryEnd, resolvedEnd] =
+                    std::mismatch(m_directory.begin(), m_directory.end(), resolved.begin(), resolved.end());
+                (void)resolvedEnd;
+                if (directoryEnd != m_directory.end() || !std::filesystem::is_regular_file(resolved, ec) || ec)
+                {
+                    return std::nullopt;
+                }
+                const std::uintmax_t bytes = std::filesystem::file_size(resolved, ec);
+                if (ec || bytes > kMaxOBJFileBytes)
+                {
+                    return std::nullopt;
+                }
+                return resolved;
+            }
+
+            std::filesystem::path m_directory; ///< Canonical directory that holds the OBJ.
+        };
+
         std::array<float, 3> Position(const tinyobj::attrib_t& attrib, int index)
         {
             const size_t base = static_cast<size_t>(index) * 3;
@@ -40,22 +128,33 @@ namespace Spark::Graphics::Detail
                     static_cast<float>(attrib.vertices[base + 2])};
         }
 
+        /// Normalizes in double precision: squaring a large but finite float
+        /// component (1e20) overflows float to infinity, which turned authored
+        /// normals into zero vectors and face normals into NaN. Every finite
+        /// float input stays finite here. Returns false for a near-zero vector.
+        bool Normalize(double x, double y, double z, std::array<float, 3>& out)
+        {
+            const double length = std::sqrt(x * x + y * y + z * z);
+            if (!(length > 1.0e-12))
+            {
+                return false;
+            }
+            out = {static_cast<float>(x / length), static_cast<float>(y / length), static_cast<float>(z / length)};
+            return true;
+        }
+
         std::array<float, 3> FaceNormal(const std::array<float, 3>& p0, const std::array<float, 3>& p1,
                                         const std::array<float, 3>& p2)
         {
-            const float e1x = p1[0] - p0[0];
-            const float e1y = p1[1] - p0[1];
-            const float e1z = p1[2] - p0[2];
-            const float e2x = p2[0] - p0[0];
-            const float e2y = p2[1] - p0[1];
-            const float e2z = p2[2] - p0[2];
-            const std::array<float, 3> n = {e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z, e1x * e2y - e1y * e2x};
-            const float length = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-            if (!(length > 1.0e-12f))
-            {
-                return {0.0f, 1.0f, 0.0f};
-            }
-            return {n[0] / length, n[1] / length, n[2] / length};
+            const double e1x = double(p1[0]) - p0[0];
+            const double e1y = double(p1[1]) - p0[1];
+            const double e1z = double(p1[2]) - p0[2];
+            const double e2x = double(p2[0]) - p0[0];
+            const double e2y = double(p2[1]) - p0[1];
+            const double e2z = double(p2[2]) - p0[2];
+            std::array<float, 3> normal{0.0f, 1.0f, 0.0f};
+            Normalize(e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z, e1x * e2y - e1y * e2x, normal);
+            return normal;
         }
 
         /// Triangulates one polygon into exactly (n - 2) triangles of local
@@ -65,7 +164,8 @@ namespace Spark::Graphics::Detail
         /// clips them here. Ear clipping runs in the plane that drops the
         /// dominant axis of the Newell normal; if no ear can be found (for
         /// example a polygon with collinear runs), the remainder is fanned so
-        /// no authored area is discarded.
+        /// no authored area is discarded. Polygons over kMaxEarClipCorners are
+        /// fanned outright.
         void TriangulatePolygon(const std::vector<std::array<float, 3>>& points,
                                 std::vector<std::array<size_t, 3>>& triangles)
         {
@@ -121,7 +221,7 @@ namespace Spark::Graphics::Detail
                 return (abx * acy - aby * acx) * (sign >= 0.0 ? 1.0 : -1.0);
             };
 
-            if (sign != 0.0)
+            if (sign != 0.0 && count <= kMaxEarClipCorners)
             {
                 while (remaining.size() > 3)
                 {
@@ -218,28 +318,46 @@ namespace Spark::Graphics::Detail
             error = "OBJ source is not a regular file";
             return false;
         }
+        const std::uintmax_t fileBytes = std::filesystem::file_size(path, ec);
+        if (ec || fileBytes > kMaxOBJFileBytes)
+        {
+            error = "OBJ file exceeds the import size limit";
+            return false;
+        }
+        const std::filesystem::path canonicalPath = std::filesystem::canonical(path, ec);
+        if (ec)
+        {
+            error = "OBJ path cannot be resolved";
+            return false;
+        }
 
         try
         {
-            const std::u8string utf8Path = path.u8string();
-            const std::u8string utf8Dir = path.parent_path().u8string();
+            std::ifstream objStream(canonicalPath);
+            if (!objStream)
+            {
+                error = "OBJ file cannot be opened";
+                return false;
+            }
 
-            tinyobj::ObjReaderConfig config;
-            config.triangulate = false; // see TriangulatePolygon
-            config.mtl_search_path = std::string(utf8Dir.begin(), utf8Dir.end());
-
-            tinyobj::ObjReader reader;
-            if (!reader.ParseFromFile(std::string(utf8Path.begin(), utf8Path.end()), config))
+            tinyobj::attrib_t attrib;
+            std::vector<tinyobj::shape_t> shapes;
+            std::vector<tinyobj::material_t> materials;
+            std::string warning;
+            std::string parseError;
+            ConfinedMaterialReader materialReader(canonicalPath.parent_path());
+            // Polygons stay untriangulated here; see TriangulatePolygon.
+            if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warning, &parseError, &objStream, &materialReader,
+                                  /*triangulate=*/false))
             {
                 error = "tinyobj parse failed";
-                if (!reader.Error().empty())
+                if (!parseError.empty())
                 {
-                    error += ": " + reader.Error();
+                    error += ": " + parseError;
                 }
                 return false;
             }
 
-            const tinyobj::attrib_t& attrib = reader.GetAttrib();
             if (!IsFinite(attrib.vertices) || !IsFinite(attrib.normals) || !IsFinite(attrib.texcoords))
             {
                 error = "OBJ contains non-finite vertex data";
@@ -255,7 +373,7 @@ namespace Spark::Graphics::Detail
             // get their own vertex because their generated normal is per face.
             std::map<std::array<int, 3>, uint32_t> sharedVertices;
 
-            for (const tinyobj::shape_t& shape : reader.GetShapes())
+            for (const tinyobj::shape_t& shape : shapes)
             {
                 const auto& faceVertexCounts = shape.mesh.num_face_vertices;
                 const auto& indices = shape.mesh.indices;
@@ -337,16 +455,14 @@ namespace Spark::Graphics::Detail
                             if (hasNormal)
                             {
                                 const size_t base = static_cast<size_t>(index.normal_index) * 3;
-                                const float nx = static_cast<float>(attrib.normals[base]);
-                                const float ny = static_cast<float>(attrib.normals[base + 1]);
-                                const float nz = static_cast<float>(attrib.normals[base + 2]);
                                 // OBJ does not require unit normals (Kenney's
                                 // repair_tool.obj export writes length 0.5).
-                                const float length = std::sqrt(nx * nx + ny * ny + nz * nz);
-                                vertex.normal =
-                                    length > 1.0e-12f
-                                        ? std::array<float, 3>{nx / length, ny / length, nz / length}
-                                        : FaceNormal(polygon[triangle[0]], polygon[triangle[1]], polygon[triangle[2]]);
+                                if (!Normalize(attrib.normals[base], attrib.normals[base + 1], attrib.normals[base + 2],
+                                               vertex.normal))
+                                {
+                                    vertex.normal =
+                                        FaceNormal(polygon[triangle[0]], polygon[triangle[1]], polygon[triangle[2]]);
+                                }
                             }
                             else
                             {

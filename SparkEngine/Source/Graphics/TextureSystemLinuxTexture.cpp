@@ -112,10 +112,12 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* /*dev
     }
     fprintf(stderr, "[TextureSystem] stb_image failed to load: %s (%s)\n", filePath.c_str(), stbi_failure_reason());
 #endif
-    // Fallback: mark as loaded with estimated size
-    m_loaded = true;
-    m_memoryUsage = static_cast<size_t>(static_cast<uint64_t>(m_desc.width) * m_desc.height * 4u);
-    return S_OK;
+    // A missing, corrupt, truncated or unsupported file fails closed. Reporting
+    // it as loaded (with a size estimated from the requested desc) would let
+    // callers cache and bind a texture that holds no decoded pixels.
+    m_loaded = false;
+    m_memoryUsage = 0;
+    return E_FAIL;
 }
 
 HRESULT Texture::CreateFromData(const void* data, size_t dataSize, ID3D11Device* /*device*/)

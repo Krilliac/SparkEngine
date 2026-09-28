@@ -1915,11 +1915,12 @@ endif()
 
 # SEC-assets: untrusted asset-parser regressions (SparkPak TOC binding and bounds,
 # the repo-authored stb_image stub BMP/TGA decoders, OBJ face-index validation,
-# the Windows TGA texture loader and the non-Windows EXR texture path). Tests that
+# the OBJ static-mesh size cap and mtllib confinement, the Windows TGA texture
+# loader and the non-Windows EXR and undecodable-file texture paths). Tests that
 # only apply to one platform still register everywhere, so the count is fixed.
 add_test(NAME SparkAssetParserHardeningTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkAssetParserHardeningTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AssetSec_;SPARK_TEST_EXPECT_COUNT=11"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AssetSec_;SPARK_TEST_EXPECT_COUNT=14"
     LABELS "security;assets;unit"
     TIMEOUT 120)
 

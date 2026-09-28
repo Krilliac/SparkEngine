@@ -1,7 +1,8 @@
 // TestAssetParserHardening.cpp — SEC-assets regressions for engine-side asset
 // parsers that consume untrusted content files: OBJ face indices walked by the
-// tinyobjloader consumers, the Windows TGA texture loader, and the non-Windows
-// EXR texture path. All tests share the AssetSec_ prefix, pinned in
+// tinyobjloader consumers, the shared OBJ static-mesh loader's size cap and
+// mtllib confinement, the Windows TGA texture loader, and the non-Windows
+// texture paths (EXR, undecodable files). All tests share the AssetSec_ prefix, pinned in
 // Tests/CMakeLists.txt (SparkAssetParserHardeningTests) together with the
 // AssetSec_ SparkPak and stb_image tests.
 
@@ -10,6 +11,7 @@
 #include "Core/Platform.h"
 #include "Game/Model.h"
 #include "Graphics/Mesh.h"
+#include "Graphics/OBJStaticMeshLoader.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Graphics/AssetPipeline.h"
@@ -250,4 +252,141 @@ TEST(AssetSec_TextureExrUsesBoundedLoader)
     // there is no EXR path to bound.
     EXPECT_TRUE(true);
 #endif
+}
+
+// ============================================================================
+// Non-Windows texture path: an undecodable file must not report "loaded"
+// ============================================================================
+
+TEST(AssetSec_TextureUndecodableFileFailsClosed)
+{
+#ifndef SPARK_PLATFORM_WINDOWS
+    // A PNG signature the stb_image build here cannot decode. CreateFromFile
+    // fell through to "mark as loaded with estimated size" and returned S_OK,
+    // so TextureSystem cached a texture that held no pixels.
+    const auto png =
+        WriteBytes("undecodable.png", {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H'});
+    {
+        TextureDesc desc;
+        desc.width = 64;
+        desc.height = 64;
+        Texture texture("undecodable", desc);
+        EXPECT_TRUE(FAILED(texture.CreateFromFile(png.string(), nullptr)));
+        EXPECT_FALSE(texture.IsLoaded());
+        EXPECT_EQ(texture.GetMemoryUsage(), 0u);
+    }
+
+    // A path that does not exist fails the same way.
+    {
+        Texture texture("missing", TextureDesc{});
+        EXPECT_TRUE(FAILED(texture.CreateFromFile((AssetSecDir() / "missing.tga").string(), nullptr)));
+        EXPECT_FALSE(texture.IsLoaded());
+    }
+
+    // Control: a complete 2x1 24-bit BMP still decodes with its real size.
+    std::vector<uint8_t> bmp(54, 0);
+    bmp[0] = 'B';
+    bmp[1] = 'M';
+    bmp[10] = 54;                                                            // pixel data offset
+    bmp[14] = 40;                                                            // BITMAPINFOHEADER size
+    bmp[18] = 2;                                                             // width
+    bmp[22] = 1;                                                             // height
+    bmp[26] = 1;                                                             // planes
+    bmp[28] = 24;                                                            // bits per pixel
+    bmp.insert(bmp.end(), {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x00, 0x00}); // one row padded to 8 bytes
+    const auto bmpPath = WriteBytes("valid.bmp", bmp);
+    {
+        Texture texture("valid", TextureDesc{});
+        EXPECT_TRUE(SUCCEEDED(texture.CreateFromFile(bmpPath.string(), nullptr)));
+        EXPECT_TRUE(texture.IsLoaded());
+        EXPECT_EQ(texture.GetDesc().width, 2u);
+        EXPECT_EQ(texture.GetMemoryUsage(), static_cast<size_t>(2u * 1u * 4u));
+    }
+    RemoveAssetSecDir();
+#else
+    // Windows textures load through TextureAsset and the D3D11 loaders, which
+    // fall back to an explicit checkerboard (AssetSec_TextureTgaRejectsHeaderLargerThanFile).
+    EXPECT_TRUE(true);
+#endif
+}
+
+// ============================================================================
+// Shared OBJ static-mesh loader: mtllib confinement and file-size cap
+// ============================================================================
+
+TEST(AssetSec_ObjStaticRejectsMtllibOutsideDirectory)
+{
+    // tinyobjloader's default material reader joined any mtllib name onto the
+    // OBJ's directory, so "../canary.mtl" read a file outside the asset tree
+    // (and "../../../dev/zero" an unbounded device).
+    const auto modelDir = AssetSecDir() / "objroot";
+    std::error_code ec;
+    std::filesystem::create_directories(modelDir, ec);
+    WriteFile("canary.mtl", "newmtl SPARK_CANARY\nKd 1 0 0\n");
+    const std::string triangle = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+    const auto writeObj = [&](const std::string& name, const std::string& header)
+    {
+        const auto path = modelDir / name;
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << header << triangle;
+        return path;
+    };
+
+    Spark::Graphics::Detail::OBJStaticMeshData mesh;
+    std::string error;
+    const auto escape = writeObj("escape.obj", "mtllib ../canary.mtl\nusemtl SPARK_CANARY\n");
+    EXPECT_TRUE(Spark::Graphics::Detail::LoadOBJStaticMesh(escape, mesh, error));
+    EXPECT_EQ(mesh.submeshes.size(), 1u);
+    for (const auto& submesh : mesh.submeshes)
+    {
+        EXPECT_EQ(submesh.materialId, -1);
+    }
+
+    // An absolute name is refused as well.
+    const std::string canaryPath = std::filesystem::absolute(AssetSecDir() / "canary.mtl").generic_string();
+    const auto absolute = writeObj("absolute.obj", "mtllib " + canaryPath + "\nusemtl SPARK_CANARY\n");
+    EXPECT_TRUE(Spark::Graphics::Detail::LoadOBJStaticMesh(absolute, mesh, error));
+    for (const auto& submesh : mesh.submeshes)
+    {
+        EXPECT_EQ(submesh.materialId, -1);
+    }
+
+    // Control: a library beside the OBJ still resolves its materials.
+    {
+        std::ofstream lib(modelDir / "local.mtl", std::ios::binary | std::ios::trunc);
+        lib << "newmtl local_red\nKd 1 0 0\n";
+    }
+    const auto local = writeObj("local.obj", "mtllib local.mtl\nusemtl local_red\n");
+    EXPECT_TRUE(Spark::Graphics::Detail::LoadOBJStaticMesh(local, mesh, error));
+    EXPECT_EQ(mesh.submeshes.size(), 1u);
+    if (!mesh.submeshes.empty())
+    {
+        EXPECT_EQ(mesh.submeshes[0].materialId, 0);
+    }
+    RemoveAssetSecDir();
+}
+
+TEST(AssetSec_ObjStaticRejectsOversizedFile)
+{
+    // A valid 32-byte triangle followed by a sparse tail one byte over the cap.
+    // The loader read files of any size (tinyobj buffers each whole line), so
+    // this parsed and loaded; the cap now rejects it before a byte is read.
+    const std::string triangle = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+    const auto path = WriteFile("oversized.obj", triangle);
+    std::error_code ec;
+    std::filesystem::resize_file(path, Spark::Graphics::Detail::kMaxOBJFileBytes + 1, ec);
+    EXPECT_FALSE(static_cast<bool>(ec));
+
+    Spark::Graphics::Detail::OBJStaticMeshData mesh;
+    std::string error;
+    EXPECT_FALSE(Spark::Graphics::Detail::LoadOBJStaticMesh(path, mesh, error));
+    EXPECT_TRUE(mesh.vertices.empty());
+    EXPECT_TRUE(mesh.indices.empty());
+
+    // Control: the same triangle at its real size loads.
+    std::filesystem::resize_file(path, triangle.size(), ec);
+    EXPECT_FALSE(static_cast<bool>(ec));
+    EXPECT_TRUE(Spark::Graphics::Detail::LoadOBJStaticMesh(path, mesh, error));
+    EXPECT_EQ(mesh.indices.size(), 3u);
+    RemoveAssetSecDir();
 }

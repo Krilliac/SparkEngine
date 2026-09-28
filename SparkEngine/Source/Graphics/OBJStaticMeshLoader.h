@@ -44,6 +44,9 @@ namespace Spark::Graphics::Detail
         std::vector<OBJStaticSubmesh> submeshes;
     };
 
+    /// Largest .obj (and each referenced .mtl) the loader reads; matches FBXImporter's kMaxFBXFileBytes.
+    inline constexpr std::uintmax_t kMaxOBJFileBytes = 256ull * 1024ull * 1024ull;
+
     /**
      * @brief Load triangulated OBJ geometry without creating GPU resources.
      *
@@ -54,6 +57,16 @@ namespace Spark::Graphics::Detail
      * authored normal receive their triangle's geometric normal. Polygons are
      * triangulated locally into exactly n - 2 triangles. Out-of-range indices,
      * non-finite values, and files that produce no triangles are rejected.
+     *
+     * Files over kMaxOBJFileBytes are rejected before parsing. An `mtllib`
+     * reference is honoured only when it names a regular file, within the same
+     * size cap, inside the OBJ's own directory: absolute names, `..`
+     * components, backslashes, and names whose resolved path (after symlinks)
+     * leaves that directory load no materials, and the faces that use them get
+     * materialId -1.
+     *
+     * Thread affinity: any thread (no shared state). Allocation: heap, bounded
+     * by the file-size cap and the vertex/index limits.
      *
      * @param path Source .obj path.
      * @param meshData Replaced with validated geometry on success; cleared on failure.
