@@ -83,6 +83,9 @@ class Fixture:
 
     def __init__(self, base: Path, extra_files: dict[str, bytes] | None = None,
                  module_source: str = FIXTURE_MODULE_SOURCE) -> None:
+        # Callers pass a resolved base: macOS temporary directories sit under
+        # the /var -> /private/var symlink, which the manifest generator's
+        # root-ancestry check correctly refuses.
         self.repo = base / "repo"
         self.assets = self.repo / "Assets"
         self.policy_path = self.repo / "provenance.json"
@@ -179,7 +182,7 @@ class Fixture:
 class ClosureTests(unittest.TestCase):
     def test_closure_is_module_literals_plus_seeds(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary), extra_files={"Models/unused.obj": b"o unused\n"})
+            fixture = Fixture(Path(temporary).resolve(), extra_files={"Models/unused.obj": b"o unused\n"})
             closure = fixture.closure()
             self.assertEqual(sorted(closure), list(Fixture.CLOSURE))
             self.assertEqual(closure["Models/kept.obj"], ["GameModules/FixtureGame/Source/Game.cpp:3"])
@@ -197,7 +200,7 @@ class ClosureTests(unittest.TestCase):
                                "layers": [{"normal": "Models/normal.png"}]}).encode()
         source = 'const char* kScene = "Scenes/level.scene";\n'
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary), module_source=source, extra_files={
+            fixture = Fixture(Path(temporary).resolve(), module_source=source, extra_files={
                 "Scenes/level.scene": scene,
                 "Models/crate.obj": b"o crate\n",
                 "Models/normal.png": b"normal\n",
@@ -221,7 +224,7 @@ class ClosureTests(unittest.TestCase):
         }
         for literal, message in cases.items():
             with self.subTest(literal=literal), tempfile.TemporaryDirectory() as temporary:
-                fixture = Fixture(Path(temporary), module_source=f'auto path = "{literal}";\n')
+                fixture = Fixture(Path(temporary).resolve(), module_source=f'auto path = "{literal}";\n')
                 with self.assertRaisesRegex(vai.ManifestFormatError, message):
                     fixture.closure()
 
@@ -229,14 +232,14 @@ class ClosureTests(unittest.TestCase):
         # C++ source escapes a backslash as two; both spellings name Models/kept.obj.
         for literal in ("Models\\\\kept.obj", "./Models/kept.obj", ".\\\\Assets\\\\Models\\\\kept.obj"):
             with self.subTest(literal=literal), tempfile.TemporaryDirectory() as temporary:
-                fixture = Fixture(Path(temporary), module_source=f'auto path = "{literal}";\n')
+                fixture = Fixture(Path(temporary).resolve(), module_source=f'auto path = "{literal}";\n')
                 self.assertEqual(sorted(fixture.closure()), ["Models/kept.obj", "README.md"])
 
     def test_engine_source_literals_join_the_closure(self) -> None:
         # Engine code the module runs on (for example a primitive's default OBJ
         # model) is part of the closure even though no module source names it.
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary), module_source="int unused;\n",
+            fixture = Fixture(Path(temporary).resolve(), module_source="int unused;\n",
                               extra_files={"Models/Cube.obj": b"o cube\n"})
             fixture.engine_source.write_text(
                 'std::wstring m_modelPath = L"Assets/Models/Cube.obj";\n', encoding="utf-8")
@@ -247,7 +250,7 @@ class ClosureTests(unittest.TestCase):
     def test_unshipped_references_must_be_reviewed_and_current(self) -> None:
         reason = "Stored in a field no code reads"
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary), module_source='auto path = "Models/never_opened.dds";\n')
+            fixture = Fixture(Path(temporary).resolve(), module_source='auto path = "Models/never_opened.dds";\n')
             with self.assertRaisesRegex(vai.ManifestFormatError, "does not declare"):
                 fixture.closure()
             fixture.write_profiles(["FixtureGame"], [{"path": "README.md", "reason": "README"}],
@@ -272,7 +275,7 @@ class ClosureTests(unittest.TestCase):
         # Fail-closed: OD-09 forbids shipping it, and silently dropping it would
         # ship a package that cannot load its own content.
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary), module_source='auto t = "Textures/Unrecorded/two.png";\n')
+            fixture = Fixture(Path(temporary).resolve(), module_source='auto t = "Textures/Unrecorded/two.png";\n')
             with self.assertRaisesRegex(vai.ManifestFormatError, r"Textures/Unrecorded/two\.png.*NOASSERTION"):
                 fixture.closure()
             with self.assertRaisesRegex(vai.ManifestFormatError, "NOASSERTION"):
@@ -280,7 +283,7 @@ class ClosureTests(unittest.TestCase):
 
     def test_profile_modules_must_match_the_module_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary))
+            fixture = Fixture(Path(temporary).resolve())
             fixture.write_inventory({"stable-v1": "excluded"})
             with self.assertRaisesRegex(vai.ManifestFormatError, "do not match the module inventory"):
                 fixture.closure()
@@ -294,7 +297,7 @@ class ClosureTests(unittest.TestCase):
 
     def test_default_profile_has_no_closure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary))
+            fixture = Fixture(Path(temporary).resolve())
             self.assertEqual(vai.derive_profile_closure(fixture.repo, fixture.manifest, "default"), (None, []))
 
 
@@ -323,7 +326,7 @@ class LiteralLexerTests(unittest.TestCase):
 class DerivationTests(unittest.TestCase):
     def test_stable_v1_drops_every_noassertion_entry(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary))
+            fixture = Fixture(Path(temporary).resolve())
             derived, excluded = vai.derive_package_manifest(fixture.manifest, "stable-v1")
             self.assertEqual(sorted(excluded), sorted(Fixture.UNRECORDED_FILES))
             paths = [entry["path"] for entry in derived["entries"]]
@@ -334,7 +337,7 @@ class DerivationTests(unittest.TestCase):
 
     def test_default_profile_keeps_every_entry(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary))
+            fixture = Fixture(Path(temporary).resolve())
             derived, excluded = vai.derive_package_manifest(fixture.manifest, "default")
             self.assertEqual(excluded, [])
             self.assertEqual(derived["entries"], fixture.manifest["entries"])
@@ -348,7 +351,7 @@ class DerivationTests(unittest.TestCase):
 
     def test_exclusions_collapse_only_directories_without_kept_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary))
+            fixture = Fixture(Path(temporary).resolve())
             _, excluded = vai.derive_package_manifest(fixture.manifest, "stable-v1")
             prefixes = vai.package_exclusion_prefixes(
                 (entry["path"] for entry in fixture.manifest["entries"]), excluded)
@@ -356,15 +359,15 @@ class DerivationTests(unittest.TestCase):
 
     def test_cli_writes_manifest_and_exclusions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary))
-            output = Path(temporary) / "stable.json"
-            exclusions = Path(temporary) / "excluded.txt"
+            fixture = Fixture(Path(temporary).resolve())
+            output = Path(temporary).resolve() / "stable.json"
+            exclusions = Path(temporary).resolve() / "excluded.txt"
             result = run_verifier(
                 "package-profile", str(fixture.manifest_path), "--profile", "stable-v1",
                 "--output", str(output), "--exclusions", str(exclusions), "--repo-root", str(fixture.repo),
-                "--inputs", str(Path(temporary) / "inputs.txt"))
+                "--inputs", str(Path(temporary).resolve() / "inputs.txt"))
             self.assertEqual(result.returncode, 0, result.stderr)
-            inputs = (Path(temporary) / "inputs.txt").read_text(encoding="utf-8").splitlines()
+            inputs = (Path(temporary).resolve() / "inputs.txt").read_text(encoding="utf-8").splitlines()
             # Source directories, not individual C/C++ files, are re-derivation inputs.
             self.assertIn(fixture.module_source.parent.as_posix(), inputs)
             self.assertIn(fixture.engine_source.parent.as_posix(), inputs)
@@ -387,7 +390,7 @@ class PackageCheckTests(unittest.TestCase):
         # Fail-before: the unfiltered tree and manifest that every package
         # carried before OD-09 was enforced.
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary))
+            fixture = Fixture(Path(temporary).resolve())
             plain = run_verifier("verify", str(fixture.manifest_path), "--root", str(fixture.assets))
             self.assertEqual(plain.returncode, 0, plain.stderr)
             result = run_verifier(
@@ -402,7 +405,7 @@ class PackageCheckTests(unittest.TestCase):
 
     def test_relabelled_unreviewed_and_altered_entries_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary))
+            fixture = Fixture(Path(temporary).resolve())
             derived, _ = vai.derive_package_manifest(fixture.manifest, "stable-v1")
             source_unrecorded = next(
                 entry for entry in fixture.manifest["entries"] if entry["path"] == "Textures/Unrecorded/two.png")
@@ -429,9 +432,9 @@ class PackageCheckTests(unittest.TestCase):
         # Fail-before: a package built by NOASSERTION exclusion alone ships every
         # asserted file, including content no in-profile module loads.
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary), extra_files={"Models/unused.obj": b"o unused\n"})
+            fixture = Fixture(Path(temporary).resolve(), extra_files={"Models/unused.obj": b"o unused\n"})
             asserted, _ = vai.derive_package_manifest(fixture.manifest, "stable-v1")
-            package = Path(temporary) / "package" / "Assets"
+            package = Path(temporary).resolve() / "package" / "Assets"
             for entry in asserted["entries"]:
                 target = package / entry["path"]
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -459,18 +462,18 @@ class PackageCheckTests(unittest.TestCase):
         # Fail-before: a source manifest outside a checkout with profile
         # definitions silently skipped profile-outside-closure/-incomplete.
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = Fixture(Path(temporary), extra_files={"Models/unused.obj": b"o unused\n"})
+            fixture = Fixture(Path(temporary).resolve(), extra_files={"Models/unused.obj": b"o unused\n"})
             asserted, _ = vai.derive_package_manifest(fixture.manifest, "stable-v1")
-            package = Path(temporary) / "package" / "Assets"
+            package = Path(temporary).resolve() / "package" / "Assets"
             for entry in asserted["entries"]:
                 target = package / entry["path"]
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(fixture.assets / entry["path"], target)
             manifest_path = package / vai.MANIFEST_FILENAME
             vai.write_manifest(asserted, manifest_path)
-            standalone = Path(temporary) / "copied-source.json"
+            standalone = Path(temporary).resolve() / "copied-source.json"
             shutil.copyfile(fixture.manifest_path, standalone)
-            no_definitions = Path(temporary) / "empty-checkout"
+            no_definitions = Path(temporary).resolve() / "empty-checkout"
             no_definitions.mkdir()
             original = vai.REPO_ROOT
             try:
@@ -626,7 +629,7 @@ class InstallRuleTests(unittest.TestCase):
         # payload the install rules copy is changed.
         for profile in ("stable-v1", "default"):
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as temporary:
-                base = Path(temporary)
+                base = Path(temporary).resolve()
                 fixture = Fixture(base)
                 self._prepare_project(fixture)
                 build = self._configure(fixture, base, profile)
@@ -638,7 +641,7 @@ class InstallRuleTests(unittest.TestCase):
         # The source tree and its manifest agree again, but the derived manifest
         # configure staged for installation no longer describes them.
         with tempfile.TemporaryDirectory() as temporary:
-            base = Path(temporary)
+            base = Path(temporary).resolve()
             fixture = Fixture(base)
             self._prepare_project(fixture)
             self._configure(fixture, base, "stable-v1")
@@ -655,7 +658,7 @@ class InstallRuleTests(unittest.TestCase):
     def test_traversal_manifest_entry_after_configure_fails_before_assembly(self) -> None:
         for profile in ("stable-v1", "default"):
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as temporary:
-                base = Path(temporary)
+                base = Path(temporary).resolve()
                 fixture = Fixture(base)
                 self._prepare_project(fixture)
                 self._configure(fixture, base, profile)
@@ -685,7 +688,7 @@ class InstallRuleTests(unittest.TestCase):
 
     def test_stable_v1_install_excludes_noassertion_and_verifies(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            base = Path(temporary)
+            base = Path(temporary).resolve()
             fixture = Fixture(base)
             self._prepare_project(fixture)
 

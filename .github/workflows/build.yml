@@ -3318,6 +3318,11 @@ jobs:
 
     - name: Run Tests
       if: matrix.config == 'Release'
+      env:
+        # The default macOS TMPDIR sits under the /var -> /private/var symlink,
+        # which the receipt, site-data and asset tools refuse as a symlinked
+        # ancestor by design. The runner temp directory has no symlink.
+        TMPDIR: ${{ runner.temp }}
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
