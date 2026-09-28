@@ -7,12 +7,21 @@ that this parser rejects takes both required lanes down. These tests pin the
 shape SparkTests actually emits (Tests/TestMain.cpp WriteJUnitXml) alongside the
 archived Known-flaky <skipped> shape, and pin the terminal-Results arithmetic
 that reconciles the two.
+
+They also pin parity between run-sanitizer-tests.sh's grep witnesses and the
+verifier's patterns (a disagreement is itself a verification failure), and
+trip on engine string literals that would read as a crash to both scanners.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import os
+import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -157,6 +166,131 @@ class JUnitShapeRejectionTests(unittest.TestCase):
             any("multiple outcome elements" in error for error in errors),
             errors,
         )
+
+
+RUNNER = Path(__file__).with_name("run-sanitizer-tests.sh")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RUNNER_SCAN_PATTERN = re.compile(r"^(\w+)_scan_status=\"\$\(scan '([^']*)'", re.MULTILINE)
+VERIFIER_PATTERN_FOR_SCAN = {
+    "signature": MODULE.ANY_SANITIZER_PATTERN,
+    "warning": MODULE.WARNING_PATTERN,
+    "failure": MODULE.FAILURE_PATTERN,
+    "crash": MODULE.CRASH_PATTERN,
+    "infrastructure": MODULE.INFRASTRUCTURE_PATTERN,
+}
+SCANNER_PROBES = (
+    "Segmentation fault (core dumped)",
+    "segmentation FAULT",
+    "hot-reload aborted: x",
+    "ABORTED",
+    "Aborted",
+    "Aborted:",
+    "(Aborted)",
+    "_Aborted_",
+    "Coroutine_AbortedSequence",
+    "terminate called after throwing an instance of 'std::runtime_error'",
+    "libc++abi: terminating due to Uncaught Exception",
+    "AddressSanitizer:DEADLYSIGNAL",
+    "Tests: 1 passed, 10 failed, 11 total",
+    "Tests: 11 passed, 0 failed, 11 total",
+    "Tests:3 failed",
+    "Tests: x10 failed",
+    "Tests: 2 failedness",
+    "Assertions: 5 passed, 2 FAILED",
+    "Assertions: 7 passed, 0 failed",
+    "[  FAILED  ] Contract_Two",
+    "[ WARN ] Known flaky",
+    "::warning title=Flaky test: x",
+    "Runtime Error: shift exponent",
+    "runtime error: signed integer overflow",
+    "WARNING: threadsanitizer: data race",
+    "ERROR: AddressSanitizer: heap-buffer-overflow",
+    "SUMMARY: LeakSanitizer: 8 byte(s) leaked",
+    "ThreadSanitizer instrumentation enabled",
+    "bash: foo: command not found",
+    "Permission Denied",
+    "Failed to start process",
+    "all clean",
+)
+
+
+class ScannerParityTests(unittest.TestCase):
+    """run-sanitizer-tests.sh's grep witnesses must agree with the verifier.
+
+    verify_scan turns any disagreement into a verification failure (exit 70), so
+    the shell scan and the Python pattern have to classify every line alike.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.grep = shutil.which("grep")
+        cls.scans = dict(RUNNER_SCAN_PATTERN.findall(RUNNER.read_text(encoding="utf-8")))
+
+    def test_runner_has_exactly_the_five_verified_scans(self) -> None:
+        self.assertEqual(set(self.scans), set(VERIFIER_PATTERN_FOR_SCAN))
+        self.assertEqual(len(RUNNER_SCAN_PATTERN.findall(RUNNER.read_text(encoding="utf-8"))), 5)
+
+    def test_runner_scans_are_case_insensitive(self) -> None:
+        self.assertIn('grep -qiE "$pattern"', RUNNER.read_text(encoding="utf-8"))
+
+    def test_grep_and_verifier_agree_on_every_probe(self) -> None:
+        if self.grep is None:
+            if os.name == "posix":
+                self.fail("grep is required to check scanner parity")
+            self.skipTest("grep is not on PATH on this non-POSIX host")
+        with tempfile.TemporaryDirectory(prefix="spark-scanner-parity-") as scratch:
+            probe_file = Path(scratch) / "probe.txt"
+            disagreements = []
+            for probe in SCANNER_PROBES:
+                probe_file.write_bytes((probe + "\n").encode("utf-8"))
+                for name, pattern in sorted(self.scans.items()):
+                    status = subprocess.run(
+                        [self.grep, "-qiE", pattern, str(probe_file)], check=False
+                    ).returncode
+                    self.assertIn(status, (0, 1), f"grep failed on the {name} pattern")
+                    python_match = bool(VERIFIER_PATTERN_FOR_SCAN[name].search(probe))
+                    if (status == 0) != python_match:
+                        disagreements.append(f"{name}: {probe!r} grep={status == 0} python={python_match}")
+            self.assertEqual(disagreements, [])
+
+
+# Engine string literals that match a crash or sanitizer signature make every log
+# that prints them look like a crash to both scanners (the 4edbe38d5 incident).
+# CrashHandler.cpp prints its signal names only on a real crash.
+CRASH_TEXT_ALLOWLIST = {"SparkEngine/Source/Utils/CrashHandler.cpp"}
+CRASH_TEXT_ROOTS = ("SparkEngine/Source", "SparkEditor/Source", "SparkServer/src", "GameModules")
+CPP_STRING_LITERAL = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
+
+
+class EngineLiteralTripwireTests(unittest.TestCase):
+    def test_no_engine_string_literal_matches_a_crash_or_sanitizer_signature(self) -> None:
+        # Scan the committed tree, not the working copy, so in-flight edits in a
+        # shared checkout cannot change the verdict.
+        # A plain git pathspec's * crosses directories, so root/*.cpp is recursive.
+        pathspecs = [f"{root}/*.{ext}" for root in CRASH_TEXT_ROOTS for ext in ("cpp", "h", "hpp", "inl")]
+        prefilter = (
+            "segmentation fault|core dumped|deadlysignal|terminate called|uncaught exception|"
+            "aborted|sanitizer:|runtime error:"
+        )
+        result = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "grep", "-I", "-i", "-n", "-E", prefilter, "HEAD", "--", *pathspecs],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        self.assertIn(result.returncode, (0, 1), result.stderr)
+        hits = []
+        for line in result.stdout.splitlines():
+            _, path, number, text = line.split(":", 3)
+            for literal in CPP_STRING_LITERAL.findall(text):
+                if MODULE.CRASH_PATTERN.search(literal) or MODULE.ANY_SANITIZER_PATTERN.search(literal):
+                    hits.append((path, int(number), literal))
+        unexpected = [hit for hit in hits if hit[0] not in CRASH_TEXT_ALLOWLIST]
+        self.assertEqual(unexpected, [])
+        # The allowlist stays exact: an entry that no longer matches must be removed.
+        self.assertEqual({hit[0] for hit in hits}, CRASH_TEXT_ALLOWLIST)
 
 
 if __name__ == "__main__":

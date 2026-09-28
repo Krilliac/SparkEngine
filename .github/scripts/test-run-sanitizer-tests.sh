@@ -237,6 +237,11 @@ XML
     plain-sanitizer-prose)
         write_clean "ThreadSanitizer instrumentation enabled"
         ;;
+    prose-aborted)
+        # Lower-case "aborted:" matches the verifier's case-insensitive \bAborted\b;
+        # the runner witness must agree rather than turn prose into a verification failure.
+        write_clean "Hot-reload aborted: recompilation failed"
+        ;;
     report-signature)
         write_clean
         printf 'ERROR: AddressSanitizer: report-only heap-buffer-overflow\n' >> "$report"
@@ -892,6 +897,11 @@ expect_contains "$CASE_DIR/metadata.json" '"classification": "incomplete-run"' \
     "a suite that died mid-run is not reported as a completed sanitizer finding"
 run_case plain-sanitizer-prose
 expect_status 0 "$CASE_STATUS" "plain sanitizer prose is not a finding"
+run_case prose-aborted
+[[ "$CASE_STATUS" -ne 70 ]] && pass "prose-aborted is not a verification failure" \
+    || fail "prose-aborted is not a verification failure (runner and verifier crash scanners disagree)"
+expect_contains "$CASE_DIR/metadata.json" '"crash": true' "prose-aborted crash text is recorded"
+expect_contains "$CASE_DIR/metadata.json" '"crash": 0' "prose-aborted crash scanner agrees with the verifier"
 run_case runtime
 expect_status 1 "$CASE_STATUS" "parseable private ASan runtime log overrides exit zero"
 expect_contains "$CASE_DIR/metadata.json" '"runtimeEvidence": true' "runtime evidence recorded"

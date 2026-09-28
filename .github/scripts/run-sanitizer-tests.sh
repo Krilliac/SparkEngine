@@ -369,7 +369,9 @@ scan() {
         return 0
     }
     set +e
-    grep -qE "$pattern" "${scan_files[@]}" >/dev/null 2>&1
+    # Case-insensitive, like verify-sanitizer-evidence.py's patterns: the verifier
+    # rejects any disagreement, so this witness must classify the same text.
+    grep -qiE "$pattern" "${scan_files[@]}" >/dev/null 2>&1
     local status="$?"
     set -e
     printf '%s' "$status"
@@ -377,8 +379,9 @@ scan() {
 
 signature_scan_status="$(scan 'ERROR:[[:space:]]*(Address|Leak|Thread|Memory)Sanitizer:|WARNING:[[:space:]]*(Thread|Memory)Sanitizer:|SUMMARY:[[:space:]]*(Address|Leak|Thread|Memory)Sanitizer:|AddressSanitizer:DEADLYSIGNAL|runtime error:' 1)"
 warning_scan_status="$(scan '^\[[[:space:]]*WARN[[:space:]]*\]|Known flaky|::warning title=Flaky test:')"
-failure_scan_status="$(scan '^\[[[:space:]]*FAILED[[:space:]]*\]|^Tests:.*[1-9][0-9]* failed|^Assertions:.*[1-9][0-9]* failed')"
-crash_scan_status="$(scan 'Segmentation fault|core dumped|AddressSanitizer:DEADLYSIGNAL|terminate called|uncaught exception|(^|[[:space:]])Aborted([[:space:]]|$)')"
+# (^|[^[:alnum:]_]) ... ([^[:alnum:]_]|$) is the verifier's \b for ASCII text.
+failure_scan_status="$(scan '^\[[[:space:]]*FAILED[[:space:]]*\]|^Tests:(.*[^[:alnum:]_])?[1-9][0-9]* failed([^[:alnum:]_]|$)|^Assertions:(.*[^[:alnum:]_])?[1-9][0-9]* failed([^[:alnum:]_]|$)')"
+crash_scan_status="$(scan 'Segmentation fault|core dumped|AddressSanitizer:DEADLYSIGNAL|terminate called|uncaught exception|(^|[^[:alnum:]_])Aborted([^[:alnum:]_]|$)')"
 infrastructure_scan_status="$(scan 'command not found|No such file or directory|cannot execute|Permission denied|failed to start process')"
 
 set +e
