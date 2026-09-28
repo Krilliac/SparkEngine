@@ -138,6 +138,17 @@ declared limits hold at runtime. The full inventory report records 28 inventorie
 that no detector pattern matches, found by human review, so that limitation is a number
 rather than an assumption.
 
+Two detectors cover decoders that name no parse call: `binary-reader` (a
+`Spark::BinaryReader` constructed over the input) and `bounded-field-read` (a
+hand-rolled `ReadU8`/`ReadU16`/`ReadU32`/`ReadU64`/`ReadI32`/`ReadF32` field reader). When
+they landed they surfaced five first-party decoders that were outside the inventory: the
+daemon IPC codecs `shader-daemon-blob` (`ShaderDaemonBridge.cpp`),
+`shader-service-protocol`, `asset-service-protocol` and `daemon-protocol-frame`, now
+blocked `untrusted-ipc` records, and the terrain field reader `TerrainAssetFormat.h`,
+folded into `terrain-sparkterrain`. Three play-mode snapshot exemptions gained
+`bounded-field-read` in their reviewed `detected_by`. The `save-system` record's format
+is `.spark_save`, the extension `SaveSystem::GetSavePath` writes.
+
 ## OD-21 Candidate Classification
 
 Owner decision OD-21 fixes how a detected candidate is classified, one entry per file,

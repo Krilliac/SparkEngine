@@ -336,8 +336,7 @@
         "SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h"
       ],
       "formats": [
-        ".sav",
-        ".save"
+        ".spark_save"
       ],
       "status": "blocked",
       "blocker": {
@@ -1003,7 +1002,8 @@
       "description": "Binary .sparkterrain heightmap/splatmap reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEngine/Source/Graphics/TerrainRenderer.cpp"
+        "SparkEngine/Source/Graphics/TerrainRenderer.cpp",
+        "SparkEngine/Source/Graphics/TerrainAssetFormat.h"
       ],
       "formats": [
         ".sparkterrain"
@@ -2422,6 +2422,70 @@
         "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
         "ticket": "SEC-120"
       }
+    },
+    {
+      "id": "shader-daemon-blob",
+      "description": "CompiledShaderBlob decoder for bytes returned by the shader daemon over local IPC.",
+      "trust_boundary": "untrusted-ipc",
+      "source_files": [
+        "SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp"
+      ],
+      "formats": [
+        "shader-daemon-blob"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "shader-service-protocol",
+      "description": "Shader daemon cache request/response and stats message decoders.",
+      "trust_boundary": "untrusted-ipc",
+      "source_files": [
+        "SparkEngine/Source/Utils/ShaderServiceProtocol.h"
+      ],
+      "formats": [
+        "shader-service-message"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "asset-service-protocol",
+      "description": "Asset daemon get/put/invalidate request, response and stats message decoders.",
+      "trust_boundary": "untrusted-ipc",
+      "source_files": [
+        "SparkEngine/Source/Utils/AssetServiceProtocol.h"
+      ],
+      "formats": [
+        "asset-service-message"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "daemon-protocol-frame",
+      "description": "Daemon IPC frame header and daemon stats decoders.",
+      "trust_boundary": "untrusted-ipc",
+      "source_files": [
+        "SparkEngine/Source/Utils/DaemonProtocol.h"
+      ],
+      "formats": [
+        "daemon-frame"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     }
   ],
   "deferred_candidates": [],
@@ -3088,6 +3152,7 @@
       "classification": "same-process-data",
       "justification": "Play-mode snapshot codec: PlayModeManager serializes the live registry into an in-memory vector at Play and restores that same vector at Stop; the bytes are never written to or read from disk, network, or another process.",
       "detected_by": [
+        "bounded-field-read",
         "deserialize",
         "parser-like-filename"
       ]
@@ -3113,6 +3178,7 @@
       "classification": "same-process-data",
       "justification": "Play-mode snapshot codec: PlayModeManager serializes the live registry into an in-memory vector at Play and restores that same vector at Stop; the bytes are never written to or read from disk, network, or another process.",
       "detected_by": [
+        "bounded-field-read",
         "deserialize",
         "parser-like-filename"
       ]
@@ -3131,6 +3197,7 @@
       "justification": "Serialize/Deserialize pair whose only caller is PlayModeManager's in-memory Play/Stop snapshot; the magic check guards bytes this process wrote moments earlier.",
       "detected_by": [
         "binary-magic-compare",
+        "bounded-field-read",
         "deserialize",
         "parser-like-filename"
       ]

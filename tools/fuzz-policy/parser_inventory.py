@@ -117,6 +117,11 @@ CONTENT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     # is a parser even when nothing in its name says so.
     ("binary-stream-read", re.compile(r"\.read\s*\(\s*reinterpret_cast\s*<")),
     ("stdio-binary-read", re.compile(r"\bfread\s*\(")),
+    # A decoder built on the engine's bounded Spark::BinaryReader, or on a
+    # hand-rolled ReadU32-style field reader, names no parse call either: the
+    # daemon IPC codecs and the terrain reader were invisible without these.
+    ("binary-reader", re.compile(r"\bBinaryReader\s+[A-Za-z_]\w*\s*[({]")),
+    ("bounded-field-read", re.compile(r"\bRead(?:U8|U16|U32|U64|I32|F32)\s*\(")),
     (
         "binary-magic-compare",
         re.compile(

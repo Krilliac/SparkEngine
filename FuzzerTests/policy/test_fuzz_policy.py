@@ -844,6 +844,36 @@ class TestBoundedScanner(FixtureTestCase):
         reasons = {item["source_file"]: item["reasons"] for item in scan.candidates}
         self.assertIn("binary-stream-read", reasons["src/Blob.cpp"])
 
+    def test_binary_reader_decoder_fails_closed_until_classified(self) -> None:
+        # A decoder over Spark::BinaryReader, or a hand-rolled ReadU32-style
+        # field reader, names no parse call; each must surface as an
+        # unclassified candidate rather than slip past the inventory.
+        (self.root / "src" / "IpcMessages.h").write_text(
+            "inline bool DecodeThing(const std::vector<uint8_t>& bytes, Thing& out)\n"
+            "{\n    Spark::BinaryReader r(bytes);\n    out.id = r.Read<uint32_t>();\n    return !r.HasError();\n}\n",
+            encoding="utf-8",
+        )
+        (self.root / "src" / "TileFormat.h").write_text(
+            "inline bool Next(Cursor& c, Tile& t) { return ReadU32(c, t.width) && ReadU32(c, t.height); }\n",
+            encoding="utf-8",
+        )
+        scan = parser_inventory.scan_source_tree(self.root, self.fixture.load().scope)
+        reasons = {item["source_file"]: item["reasons"] for item in scan.candidates}
+        self.assertEqual(reasons["src/IpcMessages.h"], ["binary-reader"])
+        self.assertEqual(reasons["src/TileFormat.h"], ["bounded-field-read"])
+        with self.assertPolicyError("unclassified parser candidates: src/IpcMessages.h, src/TileFormat.h"):
+            parser_inventory.build_inventory_report(self.root)
+
+    def test_binary_reader_encoder_is_not_a_candidate(self) -> None:
+        # Writing a message and merely naming the reader type are not decoding.
+        (self.root / "src" / "IpcEncode.h").write_text(
+            "class BinaryReader;\n"
+            "inline std::vector<uint8_t> EncodeThing(const Thing& t) { BinaryWriter w; w.Write(t.id); return w.Take(); }\n",
+            encoding="utf-8",
+        )
+        scan = parser_inventory.scan_source_tree(self.root, self.fixture.load().scope)
+        self.assertNotIn("src/IpcEncode.h", {item["source_file"] for item in scan.candidates})
+
     def test_network_payload_decoder_is_detected(self) -> None:
         # A fixed-size decoder over a received NetworkMessage names no parse call
         # and lives in no parser-like file; loading the payload into a read cursor
@@ -1894,6 +1924,30 @@ class TestRepositoryIntegration(unittest.TestCase):
             "SparkEngine/Source/Graphics/Neural/NeuralWeights.cpp",
         ):
             self.assertIn(path, owned, f"{path} is not inventoried")
+
+    def test_repo_has_no_uninventoried_binary_reader_decoder(self) -> None:
+        # The BinaryReader and ReadU32-style detectors found these five
+        # first-party decoders outside the inventory; they stay parser records
+        # (never exemptions), and every other hit is classified.
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        owned = {source: parser for parser in inventory.parsers for source in parser.source_files}
+        for path, boundary in (
+            ("SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp", "untrusted-ipc"),
+            ("SparkEngine/Source/Utils/ShaderServiceProtocol.h", "untrusted-ipc"),
+            ("SparkEngine/Source/Utils/AssetServiceProtocol.h", "untrusted-ipc"),
+            ("SparkEngine/Source/Utils/DaemonProtocol.h", "untrusted-ipc"),
+            ("SparkEngine/Source/Graphics/TerrainAssetFormat.h", "untrusted-file"),
+        ):
+            self.assertIn(path, owned, f"{path} is not inventoried")
+            self.assertEqual(owned[path].trust_boundary, boundary, path)
+        classified = set(owned) | {exemption.source_file for exemption in inventory.exempt_candidates}
+        scan = parser_inventory.scan_source_tree(REPO_ROOT, inventory.scope, inventoried=frozenset(owned))
+        unclassified = [
+            item["source_file"]
+            for item in scan.candidates
+            if {"binary-reader", "bounded-field-read"} & set(item["reasons"]) and item["source_file"] not in classified
+        ]
+        self.assertEqual(unclassified, [])
 
     def test_service_roots_are_scanned(self) -> None:
         roots = set(parser_inventory.load_inventory(REPO_ROOT).scope.roots)
