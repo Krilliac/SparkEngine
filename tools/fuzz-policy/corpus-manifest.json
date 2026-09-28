@@ -265,10 +265,27 @@
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,
-        "max_memory_mb": 512,
+        "max_memory_mb": 256,
         "max_depth": 256,
         "max_corpus_entries": 10,
         "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "scene-manager-text-corpus",
+      "parser_id": "scene-manager-text",
+      "corpus_dir": "FuzzerTests/corpora/scene-manager-text",
+      "last_verified": "2026-09-28",
+      "content_digest": "c1b5b8c11d07364cd86f9a1a32d8e8db4257e769bf8ca90a80cd3d9d4d6c31c5",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 10,
+        "max_corpus_bytes": 16384,
         "smoke_seconds": 10
       },
       "regressions": []

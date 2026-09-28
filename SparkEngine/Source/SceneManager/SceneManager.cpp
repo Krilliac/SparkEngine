@@ -18,10 +18,10 @@
 #include "../Utils/ConsoleProcessManager.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/FileUtils.h"
+#include "SceneManager/SceneTextFormat.h"
 
 #include <fstream>
 #include <sstream>
-#include <iomanip>
 #include <chrono>
 #include <thread>
 #include <algorithm>
@@ -75,50 +75,6 @@ static std::optional<std::string> NarrowPathIfRoundTrips(const std::wstring& wid
 
 namespace
 {
-    bool IsFinite(const DirectX::XMFLOAT3& value)
-    {
-        return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-    }
-
-    // Rebuild the derived child lists only after every parent reference has
-    // been read. This deliberately permits forward references in the stable
-    // line-oriented format while rejecting dangling/cyclic hierarchies.
-    bool ValidateAndRebuildHierarchy(std::vector<SceneNode>& nodes)
-    {
-        for (auto& node : nodes)
-            node.childIndices.clear();
-
-        for (size_t i = 0; i < nodes.size(); ++i)
-        {
-            auto& node = nodes[i];
-            if (node.type.empty() || node.name.empty() || !IsFinite(node.position) || !IsFinite(node.rotation) ||
-                !IsFinite(node.scale))
-                return false;
-            if (node.parentIndex < -1 || node.parentIndex >= static_cast<int>(nodes.size()) ||
-                node.parentIndex == static_cast<int>(i))
-                return false;
-            if (node.parentIndex >= 0)
-                nodes[static_cast<size_t>(node.parentIndex)].childIndices.push_back(static_cast<int>(i));
-        }
-
-        // A parent chain must terminate at a root. Besides catching cycles,
-        // this bounds validation independently of scene size.
-        for (size_t i = 0; i < nodes.size(); ++i)
-        {
-            size_t current = i;
-            for (size_t steps = 0; steps <= nodes.size(); ++steps)
-            {
-                const int parent = nodes[current].parentIndex;
-                if (parent < 0)
-                    break;
-                current = static_cast<size_t>(parent);
-                if (steps == nodes.size())
-                    return false;
-            }
-        }
-        return true;
-    }
-
     bool FlushFileDurably(const std::filesystem::path& path, std::error_code& error)
     {
 #if defined(_WIN32)
@@ -867,99 +823,6 @@ int SceneManager::FindNode(const std::string& name) const
 }
 
 // ============================================================================
-// Prefab System
-// ============================================================================
-
-bool SceneManager::SavePrefab(int nodeIndex, const std::wstring& filepath) const
-{
-    if (nodeIndex < 0 || nodeIndex >= static_cast<int>(m_sceneNodes.size()))
-    {
-        SPARK_LOG_WARN(Spark::LogCategory::Scene, "SavePrefab: nodeIndex %d out of range [0, %zu)", nodeIndex,
-                       m_sceneNodes.size());
-        return false;
-    }
-
-    std::string narrowPath = WideToNarrow(filepath);
-    std::ofstream file(narrowPath);
-    if (!file.is_open())
-    {
-        SPARK_LOG_ERROR(Spark::LogCategory::Scene, "SavePrefab: failed to open '%s' for writing (errno=%d)",
-                        narrowPath.c_str(), errno);
-        return false;
-    }
-
-    // Write prefab header
-    file << "# SparkEngine Prefab v1.0\n";
-
-    // Collect the node subtree
-    std::vector<int> subtree;
-    std::function<void(int)> collectNodes = [&](int idx)
-    {
-        subtree.push_back(idx);
-        if (idx < static_cast<int>(m_sceneNodes.size()))
-        {
-            for (int child : m_sceneNodes[idx].childIndices)
-                collectNodes(child);
-        }
-    };
-    collectNodes(nodeIndex);
-
-    // Write each node
-    for (int idx : subtree)
-    {
-        const auto& node = m_sceneNodes[idx];
-        file << node.type << " " << node.name << " " << node.position.x << " " << node.position.y << " "
-             << node.position.z << " " << node.rotation.x << " " << node.rotation.y << " " << node.rotation.z << " "
-             << node.scale.x << " " << node.scale.y << " " << node.scale.z << " "
-             << (idx == nodeIndex ? -1 : node.parentIndex) << "\n";
-    }
-
-    file.close();
-    return true;
-}
-
-int SceneManager::LoadPrefab(const std::wstring& filepath, const DirectX::XMFLOAT3& position)
-{
-    std::string narrowPath = WideToNarrow(filepath);
-    std::ifstream file(narrowPath);
-    if (!file.is_open())
-    {
-        SPARK_LOG_ERROR(Spark::LogCategory::Scene, "LoadPrefab: failed to open prefab '%s' (errno=%d)",
-                        narrowPath.c_str(), errno);
-        return -1;
-    }
-
-    std::string line;
-    int rootIndex = -1;
-
-    while (std::getline(file, line))
-    {
-        if (line.empty() || line[0] == '#')
-            continue;
-
-        std::istringstream ss(line);
-        SceneNode node;
-        ss >> node.type >> node.name >> node.position.x >> node.position.y >> node.position.z >> node.rotation.x >>
-            node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >> node.scale.z >> node.parentIndex;
-
-        // Offset position for the root node
-        if (rootIndex < 0)
-        {
-            node.position.x += position.x;
-            node.position.y += position.y;
-            node.position.z += position.z;
-        }
-
-        int idx = AddNode(node);
-        if (rootIndex < 0)
-            rootIndex = idx;
-    }
-
-    InstantiateNodes();
-    return rootIndex;
-}
-
-// ============================================================================
 // Scene State
 // ============================================================================
 
@@ -1045,97 +908,12 @@ bool SceneManager::LoadJSON(const std::wstring& path)
         file.close();
     }
 
-    // Simple text-based scene format (not actual JSON despite the method name):
-    //   Lines starting with # are comments/metadata
-    //   Data lines: type name posX posY posZ [rotX rotY rotZ scaleX scaleY scaleZ parentIndex]
-    // Parse into isolated state. A malformed row must not clear or partially
-    // replace the live scene (LoadScene also preserves the object graph).
+    // The versioned text format (not JSON despite the method name) is parsed
+    // into isolated state: a malformed row must not clear or partially replace
+    // the live scene (LoadScene also preserves the object graph).
     SceneMetadata stagedMetadata = m_metadata;
     std::vector<SceneNode> stagedNodes;
-    std::istringstream ss(content);
-    std::string line;
-
-    // Parse metadata from comment headers
-    while (std::getline(ss, line))
-    {
-        if (line.empty())
-            continue;
-        if (line[0] == '#')
-        {
-            // Parse metadata comments like "# name: MyScene"
-            if (line.find("# name:") == 0)
-                stagedMetadata.sceneName = line.substr(8);
-            else if (line.find("# gravity:") == 0)
-            {
-                std::istringstream gs(line.substr(11));
-                if (!(gs >> stagedMetadata.gravityX >> stagedMetadata.gravityY >> stagedMetadata.gravityZ) ||
-                    !std::isfinite(stagedMetadata.gravityX) || !std::isfinite(stagedMetadata.gravityY) ||
-                    !std::isfinite(stagedMetadata.gravityZ))
-                    return false;
-            }
-            else if (line.find("# author:") == 0)
-                stagedMetadata.author = line.substr(10);
-            else if (line.find("# version:") == 0)
-                stagedMetadata.version = line.substr(11);
-            else if (line.find("# description:") == 0)
-                stagedMetadata.description = line.substr(15);
-            else if (line.find("# ambient:") == 0)
-            {
-                std::istringstream as(line.substr(11));
-                if (!(as >> stagedMetadata.ambientLightR >> stagedMetadata.ambientLightG >>
-                      stagedMetadata.ambientLightB) ||
-                    !std::isfinite(stagedMetadata.ambientLightR) || !std::isfinite(stagedMetadata.ambientLightG) ||
-                    !std::isfinite(stagedMetadata.ambientLightB))
-                    return false;
-            }
-            continue;
-        }
-        if (line[0] == '/' || line[0] == '{' || line[0] == '}')
-            continue;
-
-        // Parse node line: type name posX posY posZ [rotX rotY rotZ scaleX scaleY scaleZ parentIndex]
-        std::istringstream ls(line);
-        SceneNode node;
-        // std::quoted also accepts historical unquoted names, while new saves
-        // can round-trip names containing whitespace and quotes.
-        if (!(ls >> node.type >> std::quoted(node.name) >> node.position.x >> node.position.y >> node.position.z) ||
-            node.type.empty() || node.name.empty() || !IsFinite(node.position))
-            return false;
-
-        // Extended fields are optional as required for old line-oriented files,
-        // but once present they are an all-or-nothing, finite record. Previously
-        // a bad coordinate caused extraction to fail and silently left defaults.
-        ls >> std::ws;
-        if (!ls.eof())
-        {
-            if (!(ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >>
-                  node.scale.z >> node.parentIndex) ||
-                !IsFinite(node.rotation) || !IsFinite(node.scale))
-                return false;
-
-            ls >> std::ws;
-            if (!ls.eof())
-            {
-                size_t propertyCount = 0;
-                if (!(ls >> std::quoted(node.modelPath) >> std::quoted(node.materialPath) >> propertyCount))
-                    return false;
-                for (size_t property = 0; property < propertyCount; ++property)
-                {
-                    std::string key;
-                    std::string value;
-                    if (!(ls >> std::quoted(key) >> std::quoted(value)))
-                        return false;
-                    node.properties.emplace(std::move(key), std::move(value));
-                }
-                ls >> std::ws;
-                if (!ls.eof())
-                    return false;
-            }
-        }
-        stagedNodes.push_back(std::move(node));
-    }
-
-    if (stagedNodes.empty() || !ValidateAndRebuildHierarchy(stagedNodes))
+    if (!Spark::ParseVersionedSceneText(content, stagedMetadata, stagedNodes))
         return false;
 
     Clear();
@@ -1150,61 +928,11 @@ bool SceneManager::LoadJSON(const std::wstring& path)
 
 bool SceneManager::SerializeSceneText(std::string& text, const std::wstring& pathForLog) const
 {
-    std::vector<SceneNode> nodes;
-    nodes.reserve(m_sceneNodes.size());
-    std::vector<int> remap(m_sceneNodes.size(), -1);
-    for (size_t oldIndex = 0; oldIndex < m_sceneNodes.size(); ++oldIndex)
-    {
-        if (!m_sceneNodes[oldIndex].type.empty())
-        {
-            remap[oldIndex] = static_cast<int>(nodes.size());
-            nodes.push_back(m_sceneNodes[oldIndex]);
-        }
-    }
-    for (auto& node : nodes)
-    {
-        if (node.parentIndex >= 0 && node.parentIndex < static_cast<int>(remap.size()))
-        {
-            const int mappedParent = remap[static_cast<size_t>(node.parentIndex)];
-            node.parentIndex = mappedParent >= 0 ? mappedParent : -2;
-        }
-        else if (node.parentIndex < -1)
-            node.parentIndex = -2; // validation below reports this as malformed
-    }
-    if (nodes.empty() || !ValidateAndRebuildHierarchy(nodes) || !std::isfinite(m_metadata.gravityX) ||
-        !std::isfinite(m_metadata.gravityY) || !std::isfinite(m_metadata.gravityZ) ||
-        !std::isfinite(m_metadata.ambientLightR) || !std::isfinite(m_metadata.ambientLightG) ||
-        !std::isfinite(m_metadata.ambientLightB))
+    if (!Spark::SerializeVersionedSceneText(m_metadata, m_sceneNodes, text))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save malformed scene hierarchy: " + pathForLog, L"ERROR");
         return false;
     }
-
-    std::ostringstream serialized;
-    serialized << "# SparkEngine Scene v1.0\n";
-    serialized << "# name: " << m_metadata.sceneName << "\n";
-    serialized << "# author: " << m_metadata.author << "\n";
-    serialized << "# version: " << m_metadata.version << "\n";
-    serialized << "# description: " << m_metadata.description << "\n";
-    serialized << "# gravity: " << m_metadata.gravityX << " " << m_metadata.gravityY << " " << m_metadata.gravityZ
-               << "\n";
-    serialized << "# ambient: " << m_metadata.ambientLightR << " " << m_metadata.ambientLightG << " "
-               << m_metadata.ambientLightB << "\n\n";
-
-    for (const auto& node : nodes)
-    {
-        serialized << node.type << " " << std::quoted(node.name) << " " << std::fixed << std::setprecision(3)
-                   << node.position.x << " " << node.position.y << " " << node.position.z << " " << node.rotation.x
-                   << " " << node.rotation.y << " " << node.rotation.z << " " << node.scale.x << " " << node.scale.y
-                   << " " << node.scale.z << " " << node.parentIndex << " " << std::quoted(node.modelPath) << " "
-                   << std::quoted(node.materialPath) << " " << node.properties.size();
-        std::vector<std::pair<std::string, std::string>> properties(node.properties.begin(), node.properties.end());
-        std::sort(properties.begin(), properties.end());
-        for (const auto& [key, value] : properties)
-            serialized << " " << std::quoted(key) << " " << std::quoted(value);
-        serialized << "\n";
-    }
-    text = serialized.str();
     return true;
 }
 
@@ -1356,218 +1084,31 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         return false;
     }
 
-    // Peek at the first non-empty, non-comment line to detect format
     std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
-    // SaveScene writes the versioned text format for both .json and .scene.
-    // Route its own .scene output back through the matching loader before
-    // trying either older scene syntax; otherwise the legacy object parser
-    // silently discards authored camera, spawn, material, and property data.
-    constexpr char kSerializedHeader[] = "# SparkEngine Scene v1.0";
-    constexpr size_t kHeaderLength = sizeof(kSerializedHeader) - 1;
-    if (content.compare(0, kHeaderLength, kSerializedHeader) == 0 &&
-        (content.size() == kHeaderLength || content[kHeaderLength] == '\r' || content[kHeaderLength] == '\n'))
+    switch (Spark::DetectSceneTextDialect(content))
+    {
+    case Spark::SceneTextDialect::Versioned:
         return LoadJSON(path);
 
-    bool isINIFormat = (content.contains("[Scene]") || content.contains("[Object]") || content.contains("[Camera]") ||
-                        content.contains("[SpawnPoint]"));
-
-    if (isINIFormat)
+    case Spark::SceneTextDialect::Ini:
     {
-        // Parse into isolated state.  A malformed field invalidates the whole
-        // candidate; this prevents a valid prefix from being published as a
-        // partly loaded scene.
-        SceneMetadata stagedMetadata{};
-        std::vector<SceneNode> stagedNodes;
-        std::istringstream ss(content);
-        std::string line;
-        std::string currentSection;
-        SceneNode currentNode;
-        bool hasNode = false;
-        bool nodeHasPosition = false;
-        bool nodeInvalid = false;
-        bool parseError = false;
-
-        auto trim = [](std::string value)
-        {
-            const auto first = value.find_first_not_of(" \t\r");
-            if (first == std::string::npos)
-                return std::string{};
-            const auto last = value.find_last_not_of(" \t\r");
-            return value.substr(first, last - first + 1);
-        };
-        auto parseVector = [&](const std::string& value, DirectX::XMFLOAT3& output)
-        {
-            std::string normalized = value;
-            const auto comment = normalized.find('#');
-            if (comment != std::string::npos)
-                normalized.erase(comment);
-            for (char& c : normalized)
-                if (c == ',')
-                    c = ' ';
-            std::istringstream values(normalized);
-            DirectX::XMFLOAT3 parsed{};
-            if (!(values >> parsed.x >> parsed.y >> parsed.z))
-                return false;
-            values >> std::ws;
-            if (!values.eof() || !IsFinite(parsed))
-                return false;
-            output = parsed;
-            return true;
-        };
-
-        auto flushNode = [&]()
-        {
-            if (!hasNode)
-                return;
-            const bool requiresPosition = currentNode.type == "Camera" || currentNode.type == "SpawnPoint";
-            if (nodeInvalid || currentNode.type.empty() || (requiresPosition && !nodeHasPosition))
-            {
-                parseError = true;
-            }
-            else
-            {
-                if (currentNode.name.empty())
-                    currentNode.name = currentNode.type + "_" + std::to_string(stagedNodes.size());
-                if (currentNode.type == "SpawnPoint")
-                {
-                    const auto tag = currentNode.properties.find("tag");
-                    if (tag == currentNode.properties.end() || tag->second.empty())
-                    {
-                        parseError = true;
-                    }
-                }
-                stagedNodes.push_back(std::move(currentNode));
-            }
-            currentNode = SceneNode{};
-            hasNode = false;
-            nodeHasPosition = false;
-            nodeInvalid = false;
-        };
-
-        while (std::getline(ss, line))
-        {
-            // Trim whitespace
-            line = trim(line);
-            if (line.empty() || line[0] == '#' || line[0] == ';')
-                continue;
-
-            // Section header
-            if (line.front() == '[')
-            {
-                if (line.back() != ']')
-                {
-                    parseError = true;
-                    continue;
-                }
-                flushNode();
-                currentSection = trim(line.substr(1, line.size() - 2));
-
-                if (currentSection == "Object" || currentSection == "Terrain" || currentSection == "SpawnPoint" ||
-                    currentSection == "Camera")
-                {
-                    hasNode = true;
-                    if (currentSection == "SpawnPoint" || currentSection == "Camera")
-                        currentNode.type = currentSection;
-                }
-                continue;
-            }
-
-            // Key=Value pair
-            auto eqPos = line.find('=');
-            if (eqPos == std::string::npos)
-            {
-                if (hasNode || currentSection == "Scene")
-                {
-                    parseError = true;
-                }
-                continue;
-            }
-            std::string key = trim(line.substr(0, eqPos));
-            std::string value = trim(line.substr(eqPos + 1));
-            if (key.empty())
-            {
-                parseError = true;
-                continue;
-            }
-
-            if (currentSection == "Scene")
-            {
-                if (key == "name")
-                    stagedMetadata.sceneName = value;
-                else if (key == "author")
-                    stagedMetadata.author = value;
-                else if (key == "version")
-                    stagedMetadata.version = value;
-                else if (key == "description")
-                    stagedMetadata.description = value;
-                else if (key == "ambientLight")
-                {
-                    XMFLOAT3 ambient;
-                    if (!parseVector(value, ambient))
-                    {
-                        parseError = true;
-                    }
-                    else
-                        stagedMetadata.ambientLightR = ambient.x, stagedMetadata.ambientLightG = ambient.y,
-                        stagedMetadata.ambientLightB = ambient.z;
-                }
-                else if (key == "gravity")
-                {
-                    XMFLOAT3 grav;
-                    if (!parseVector(value, grav))
-                    {
-                        parseError = true;
-                    }
-                    else
-                        stagedMetadata.gravityX = grav.x, stagedMetadata.gravityY = grav.y,
-                        stagedMetadata.gravityZ = grav.z;
-                }
-            }
-            else if (hasNode)
-            {
-                if (key == "type")
-                {
-                    if (currentSection == "Camera" || currentSection == "SpawnPoint")
-                        currentNode.properties[key] = value;
-                    else
-                        currentNode.type = value;
-                }
-                else if (key == "name")
-                    currentNode.name = value;
-                else if (key == "model")
-                    currentNode.modelPath = value;
-                else if (key == "position")
-                {
-                    nodeHasPosition = true;
-                    nodeInvalid = !parseVector(value, currentNode.position) || nodeInvalid;
-                }
-                else if (key == "rotation")
-                    nodeInvalid = !parseVector(value, currentNode.rotation) || nodeInvalid;
-                else if (key == "scale")
-                    nodeInvalid = !parseVector(value, currentNode.scale) || nodeInvalid;
-                else if (key == "material")
-                    currentNode.materialPath = value;
-                else
-                    currentNode.properties[key] = value;
-            }
-        }
-        flushNode();
-
-        if (parseError || stagedNodes.empty() || !ValidateAndRebuildHierarchy(stagedNodes))
+        SceneMetadata metadata;
+        std::vector<SceneNode> nodes;
+        if (!Spark::ParseIniSceneText(content, metadata, nodes))
             return false;
-        std::unordered_map<std::string, int> stagedNameIndex;
-        for (int i = 0; i < static_cast<int>(stagedNodes.size()); ++i)
-            if (!stagedNameIndex.emplace(stagedNodes[static_cast<size_t>(i)].name, i).second)
-                return false;
         Clear();
-        m_metadata = std::move(stagedMetadata);
-        m_sceneNodes = std::move(stagedNodes);
-        m_nodeNameIndex = std::move(stagedNameIndex);
+        m_metadata = std::move(metadata);
+        m_sceneNodes = std::move(nodes);
+        m_nodeNameIndex.clear();
+        for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
+            m_nodeNameIndex.emplace(m_sceneNodes[static_cast<size_t>(i)].name, i);
         InstantiateNodes();
+        break;
     }
-    else
+
+    case Spark::SceneTextDialect::LegacyObjects:
     {
         // Legacy space-delimited format: Type X Y Z [params...]
         if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext())
@@ -1576,114 +1117,58 @@ bool SceneManager::LoadCustom(const std::wstring& path)
                                      L"ERROR");
             return false;
         }
+        std::vector<Spark::LegacyObjectRow> rows;
+        if (!Spark::ParseLegacyObjectLines(content, rows))
+            return false;
+
         std::vector<SceneNode> stagedNodes;
         std::vector<std::unique_ptr<GameObject>> stagedObjects;
-        std::istringstream ss(content);
-        std::string line;
-        int lineNum = 0;
-
-        while (std::getline(ss, line))
+        for (const Spark::LegacyObjectRow& row : rows)
         {
-            ++lineNum;
-            // Trim
-            const auto comment = line.find('#');
-            if (comment != std::string::npos)
-                line.erase(comment);
-            while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t'))
-                line.pop_back();
-            if (line.empty())
-                continue;
-
-            std::istringstream ls(line);
-            std::string type;
-            ls >> type;
-            float x = 0, y = 0, z = 0;
-            if (type.empty() || !(ls >> x >> y >> z) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
-                return false;
-            ls >> std::ws;
-
+            // The parser guarantees every dimension and tessellation value the
+            // primitive constructors require.
             std::unique_ptr<GameObject> obj;
-
-            auto finiteFloat = [&ls](float& value) { return bool(ls >> value) && std::isfinite(value); };
-
-            if (type == "Cube")
-            {
-                float size = 1.0f;
-                if (ls.peek() != EOF && !finiteFloat(size))
-                    return false;
-                obj = std::make_unique<CubeObject>(size);
-            }
-            else if (type == "Plane")
-            {
-                float width = 10.0f, depth = 10.0f;
-                if (ls.peek() != EOF && (!finiteFloat(width) || !finiteFloat(depth)))
-                    return false;
-                obj = std::make_unique<PlaneObject>(width, depth);
-            }
-            else if (type == "Sphere")
-            {
-                float radius = 0.5f;
-                int slices = 16, stacks = 16;
-                if (ls.peek() != EOF &&
-                    (!finiteFloat(radius) || !(ls >> slices) || !(ls >> stacks) || slices <= 0 || stacks <= 0))
-                    return false;
-                obj = std::make_unique<SphereObject>(radius, slices, stacks);
-            }
-            else if (type == "Pyramid")
-            {
-                float size = 1.0f;
-                if (ls.peek() != EOF && !finiteFloat(size))
-                    return false;
-                obj = std::make_unique<PyramidObject>(size);
-            }
-            else if (type == "Ramp")
-            {
-                float length = 2.0f, height = 1.0f;
-                if (ls.peek() != EOF && (!finiteFloat(length) || !finiteFloat(height)))
-                    return false;
-                obj = std::make_unique<RampObject>(length, height);
-            }
-            else if (type == "Wall")
-            {
-                float width = 1.0f, height = 2.0f;
-                if (ls.peek() != EOF && (!finiteFloat(width) || !finiteFloat(height)))
-                    return false;
-                obj = std::make_unique<WallObject>(width, height);
-            }
+            if (row.type == "Cube")
+                obj = std::make_unique<CubeObject>(row.primary);
+            else if (row.type == "Plane")
+                obj = std::make_unique<PlaneObject>(row.primary, row.secondary);
+            else if (row.type == "Sphere")
+                obj = std::make_unique<SphereObject>(row.primary, row.slices, row.stacks);
+            else if (row.type == "Pyramid")
+                obj = std::make_unique<PyramidObject>(row.primary);
+            else if (row.type == "Ramp")
+                obj = std::make_unique<RampObject>(row.primary, row.secondary);
             else
-                return false;
-
-            ls >> std::ws;
-            if (!ls.eof())
-                return false;
+                obj = std::make_unique<WallObject>(row.primary, row.secondary);
 
             HRESULT hr = obj->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
             if (FAILED(hr))
             {
-                LOG_TO_CONSOLE(L"SceneManager: object Initialize failed on line " + std::to_wstring(lineNum), L"ERROR");
+                LOG_TO_CONSOLE(L"SceneManager: object Initialize failed on line " + std::to_wstring(row.lineNumber),
+                               L"ERROR");
                 return false;
             }
 
-            std::string lowerType = type;
+            std::string lowerType = row.type;
             std::transform(lowerType.begin(), lowerType.end(), lowerType.begin(), ::tolower);
             std::wstring meshPath = L"Assets\\Models\\" + std::wstring(lowerType.begin(), lowerType.end()) + L".obj";
             LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(), meshPath);
-            obj->SetPosition({x, y, z});
+            obj->SetPosition(row.position);
             SceneNode node;
-            node.type = type;
-            node.name = type + "_" + std::to_string(lineNum);
-            node.position = {x, y, z};
+            node.type = row.type;
+            node.name = row.type + "_" + std::to_string(row.lineNumber);
+            node.position = row.position;
             stagedNodes.push_back(std::move(node));
             stagedObjects.push_back(std::move(obj));
         }
-        if (stagedNodes.empty())
-            return false;
         Clear();
         m_sceneNodes = std::move(stagedNodes);
         m_objects = std::move(stagedObjects);
         m_nodeNameIndex.clear();
         for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
             m_nodeNameIndex.emplace(m_sceneNodes[static_cast<size_t>(i)].name, i);
+        break;
+    }
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Loaded " + std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");

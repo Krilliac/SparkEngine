@@ -105,6 +105,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzSaveSystem",
     "SparkFuzzEditorPrefab",
     "SparkFuzzReflectedScene",
+    "SparkFuzzSceneManagerText",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -1927,6 +1928,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "ReflectedScene",
                 "Spark::DeserializeInto",
                 "reflected-scene",
+                10,
+            ),
+            "scene-manager-text": (
+                "SceneManagerText",
+                "Spark::ParseVersionedSceneText",
+                "scene-manager-text",
                 10,
             ),
         }

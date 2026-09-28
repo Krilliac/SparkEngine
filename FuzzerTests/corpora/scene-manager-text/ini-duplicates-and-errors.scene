@@ -1,0 +1,14 @@
+; comment
+[Object]
+type = Cube
+name = Twin
+[Object]
+type = Sphere
+name = Twin
+[SpawnPoint]
+position = 1 2 3
+[Camera]
+[Object
+type = Wall
+position = nan 0 0
+=orphan

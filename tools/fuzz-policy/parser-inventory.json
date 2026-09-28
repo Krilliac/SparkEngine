@@ -337,16 +337,24 @@
       "description": "SceneManager versioned text, INI and legacy object-line scene readers.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEngine/Source/SceneManager/SceneManager.cpp"
+        "SparkEngine/Source/SceneManager/SceneManager.cpp",
+        "SparkEngine/Source/SceneManager/SceneTextFormat.cpp",
+        "SparkEngine/Source/SceneManager/SceneTextFormat.h"
       ],
       "formats": [
         ".scene",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzSceneManagerText.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzSceneManagerText",
+        "test_selector": "FuzzSceneManagerTextSmoke",
+        "corpus_id": "scene-manager-text-corpus",
+        "entry_symbol": "Spark::ParseVersionedSceneText",
+        "binding_source": "FuzzerTests/FuzzSceneManagerTextProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseSceneManagerText"
       }
     },
     {

@@ -104,7 +104,6 @@ namespace Spark
  * ### Responsibilities
  * - **Serialization**: JSON and legacy binary round-trip via `LoadJSON`/`SaveJSON`/`LoadCustom`.
  * - **Hierarchy management**: Add, remove, reparent nodes; maintain index invariants.
- * - **Prefab system**: Save/load subtrees as reusable prefab assets.
  * - **Async loading**: Background scene transitions via `LoadSceneAsync`.
  * - **Console integration**: Runtime inspection and manipulation from the debug console.
  *
@@ -319,41 +318,6 @@ class SceneManager
      * Valid indices for `GetNode()`, `RemoveNode()`, etc. are [0, GetNodeCount()).
      */
     int GetNodeCount() const { return static_cast<int>(m_sceneNodes.size()); }
-
-    // =========================================================================
-    // Prefab System
-    // =========================================================================
-
-    /**
-     * @brief Serialize a node and its entire subtree to a standalone prefab file.
-     *
-     * The prefab file uses the same JSON format as a scene but contains only the
-     * specified subtree. Saved prefabs can later be loaded with `LoadPrefab()`.
-     *
-     * @param nodeIndex  Root node of the subtree to export as a prefab. Must be valid.
-     * @param filepath   Destination path for the prefab file (e.g. `"Assets/Prefabs/Tree.prefab"`).
-     * @return           `true` on success; `false` on I/O error or invalid `nodeIndex`.
-     */
-    bool SavePrefab(int nodeIndex, const std::wstring& filepath) const;
-
-    /**
-     * @brief Instantiate a saved prefab into the current scene at the given position.
-     *
-     * Reads the prefab file, offsets all node positions by `position` relative to
-     * the prefab's internal origin, and appends the subtree to `m_sceneNodes`. The
-     * dirty flag is set. The returned index is the root of the instantiated subtree.
-     *
-     * @param filepath  Path to a prefab file previously saved with `SavePrefab()`.
-     * @param position  World-space offset applied to all nodes in the prefab.
-     * @return          Index of the root node of the instantiated prefab, or -1 on failure.
-     *
-     * @code
-     *   int treeIdx = mgr.LoadPrefab(L"Assets/Prefabs/Tree.prefab", {10.f, 0.f, 5.f});
-     *   if (treeIdx < 0)
-     *       LOG_ERROR("Failed to load tree prefab");
-     * @endcode
-     */
-    int LoadPrefab(const std::wstring& filepath, const DirectX::XMFLOAT3& position = {0, 0, 0});
 
     // =========================================================================
     // Scene State

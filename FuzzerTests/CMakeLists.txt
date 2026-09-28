@@ -767,25 +767,71 @@ target_link_options(SparkFuzzReflectedScene PRIVATE
 )
 target_link_libraries(SparkFuzzReflectedScene PRIVATE Threads::Threads c++ c++abi)
 
-# Every input parses a JSON tree, builds a World and serializes it twice, so
-# ASan's default 256 MB quarantine of freed blocks alone fills a 256 MB budget
-# during a mutation campaign (measured: RSS plateaus near 490 MB over 60,000
-# runs, and stays under 100 MB with an 8 MB quarantine). 512 MB keeps the
-# campaign runner, which reuses these limits, from reporting that as an OOM;
-# -malloc_limit_mb defaults to the same value, so one oversized allocation
-# still fails.
 add_test(
     NAME FuzzReflectedSceneSmoke
     COMMAND $<TARGET_FILE:SparkFuzzReflectedScene>
         -max_len=65536
         -timeout=1
-        -rss_limit_mb=512
+        -rss_limit_mb=256
         # Replay every reviewed seed exactly once; mutation campaigns belong
         # to scheduled jobs and must not make this merge gate time-dependent.
         -runs=10
         "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/reflected-scene"
 )
 set_tests_properties(FuzzReflectedSceneSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# SceneManager's versioned-row, INI and legacy object-line readers live in
+# SceneManager/SceneTextFormat.cpp, which depends only on the scene node types,
+# so that one source is the whole production closure.
+add_executable(SparkFuzzSceneManagerText
+    FuzzSceneManagerText.cpp
+    FuzzSceneManagerTextProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/SceneTextFormat.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the parsers and the adapter use libc++ and meet the driver only at
+# the C ABI in FuzzSceneManagerTextProduction.h.
+set_source_files_properties(
+    FuzzSceneManagerTextProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/SceneTextFormat.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzSceneManagerText PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzSceneManagerText PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzSceneManagerText PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzSceneManagerText PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzSceneManagerText PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzSceneManagerTextSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzSceneManagerText>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=10
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/scene-manager-text"
+)
+set_tests_properties(FuzzSceneManagerTextSmoke PROPERTIES
     LABELS "fuzz;fuzz-smoke;security"
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"

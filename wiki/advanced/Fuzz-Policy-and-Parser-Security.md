@@ -130,9 +130,8 @@ structurally bound on Windows and awaits its first Linux Clang build and smoke r
   `ComponentReflection.cpp` (the static registrations that fill `ComponentFactory` and
   `TypeRegistry`) and the logger, over the pinned EnTT submodule; the adapter defines the
   `Assert::Fail` fatal sink as print-and-abort instead of linking the crash handler and
-  console. Its smoke uses `-rss_limit_mb=512` because ASan's default 256 MB quarantine of
-  freed JSON trees alone reaches 256 MB in a campaign. SceneManager's versioned-text, INI
-  and legacy object-line readers are a separate blocked record, `scene-manager-text`.
+  console. SceneManager's versioned-text, INI and legacy object-line readers are a
+  separate record, `scene-manager-text`.
   Disabling `World::SetParent`'s cycle check makes the `parent-cycle-and-unknown-parent`
   seed abort the smoke. **Open finding (not fixed):** a document whose entities form one
   parent chain loads in super-linear time, because `DeserializeInto` links each child
@@ -142,6 +141,28 @@ structurally bound on Windows and awaits its first Linux Clang build and smoke r
   search removed the remaining ancestor walk still takes 26 s at 4,100. The seed corpus
   therefore uses a balanced 200-entity tree, and a mutation campaign reports chain inputs
   as timeouts until the loader validates the hierarchy in one linear pass.
+- **`scene-manager-text`** (`SparkFuzzSceneManagerText`, `FuzzSceneManagerTextSmoke`,
+  `-runs=10`) covers SceneManager's three text dialects, now pure functions in
+  `SceneManager/SceneTextFormat.cpp` (`ParseVersionedSceneText`, `ParseIniSceneText`,
+  `ParseLegacyObjectLines`, `SerializeVersionedSceneText`) that `LoadJSON`, `LoadCustom`
+  and `SaveScene` call. Every input goes to the versioned reader (the `.json` path) and
+  then to the parser `DetectSceneTextDialect` picks (the `.scene` path). The adapter aborts
+  when a rejected document changed the caller's outputs, when an accepted node list is
+  empty, over `kMaxSceneTextNodes` (100,000), has a missing type or name, a non-finite
+  transform, a parent index outside `[-1, n)` or on itself, a parent cycle (bounded walk
+  here) or `childIndices` that disagree with the parent indices, when INI names repeat,
+  when a legacy row has a non-positive or non-finite dimension or sphere tessellation
+  outside `[3|2, 256]`, or when an accepted versioned scene does not write, reload and
+  rewrite byte for byte. The extraction fixed three defects: the legacy reader accepted a
+  line such as `Sphere 0 0 0 1 1 1` or `Cube 0 0 0 0` and handed it to a primitive
+  constructor whose `SPARK_REQUIRE` aborts on it (read from the code; the loader only
+  constructs objects with a graphics device, so the fuzz oracle checks the accepted
+  parameters instead), sphere tessellation was unbounded (`2147483647` slices), and the
+  hierarchy check walked every node's ancestor chain (a 100,000-node chain took 32.7 s at
+  `-O2`, now 0.5 s). `SceneManager::LoadPrefab`/`SavePrefab`, which had no caller and
+  parsed rows without finite or parent checks, were removed.
+  `SceneManager_LegacySphereRejectsDegenerateOrHugeTessellation` and
+  `SceneManager_TextParsersRejectNodeCountAboveCap` pin the bounds and the cap.
 
 Two gates, deliberately separate:
 
@@ -281,7 +302,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
