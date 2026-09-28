@@ -146,9 +146,10 @@ Work-item schema (every field required by `validate.py`): `id`, `title`, `priori
 `rationale`, `sourceContext`, `entryPoints`, `implementationScope`, `acceptanceCriteria`,
 `commands`, `testSelectors`, `requiredCiJobs`, `performanceBudgets`,
 `documentationUpdates`, `readinessChanges`, `websiteImpact`, `risks`, `outOfScope`,
-`definitionOfDone`. Validation is fail-closed: every referenced path must exist unless
-listed in `FUTURE_ACCEPTANCE_PATHS` inside `validate.py` (deliberate outputs of
-unfinished items).
+`definitionOfDone`. Validation is fail-closed: every `entryPoints`,
+`documentationUpdates`, `sourceContext` and docs-catalog path must exist, for open and
+done items alike. A planned output is referenced only after it lands; use
+`plannedTestSelectors` / `plannedCiJobs` for tests and jobs that do not exist yet.
 
 **`plannedCiJobs` / `plannedTestSelectors` — the honest way to reference something that does not
 exist yet.** `requiredCiJobs` must name a job that really exists in `.github/workflows/`, and

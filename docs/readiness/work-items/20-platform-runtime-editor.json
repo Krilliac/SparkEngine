@@ -423,7 +423,7 @@
         "wiki/platform/Mobile-Platform.md"
       ],
       "entryPoints": [
-        "SparkEngine/Source/Platform",
+        "SparkEngine/Source/Engine/Mobile",
         "CMakeLists.txt"
       ],
       "implementationScope": [
@@ -1790,7 +1790,7 @@
       ],
       "entryPoints": [
         "SparkEditor/Source/Panels",
-        "SparkEditor/Source/Commands"
+        "SparkEditor/Source/UndoRedo"
       ],
       "implementationScope": [
         "Route all create/delete/rename/component/transform operations through commands",
@@ -2506,8 +2506,8 @@
         "Per-frame script time/allocation budgets and runaway execution limits"
       ],
       "documentationUpdates": [
-        "wiki/subsystems/Scripting.md",
-        "wiki/gameplay-tools/Visual-Scripting.md"
+        "wiki/subsystems/Scripting-with-AngelScript.md",
+        "wiki/subsystems/Visual-Scripting.md"
       ],
       "readinessChanges": [
         "G11",

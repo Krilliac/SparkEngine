@@ -261,7 +261,7 @@
       "entryPoints": [
         "SparkSDK/Include",
         "GameModules",
-        "Tests/ModuleKit"
+        "Tests/Tools/test_module_manifest.py"
       ],
       "implementationScope": [
         "Require module.json for every discovered module",
@@ -388,7 +388,7 @@
       ],
       "entryPoints": [
         "SparkSDK/Include",
-        "Tests/ModuleKit"
+        "Tests/TestPrototypeModuleKitReal.cpp"
       ],
       "implementationScope": [
         "Provide prototype controller, ECS bootstrap, camera/render, save, HUD/debug, AI/nav, and package helpers",
@@ -782,7 +782,7 @@
         "Tests/TestFPSMultiplayer.cpp"
       ],
       "entryPoints": [
-        "GameModules/SparkGameFPS/Source/Multiplayer"
+        "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h"
       ],
       "implementationScope": [
         "Use the production encrypted transport",
@@ -1517,8 +1517,8 @@
       "entryPoints": [
         "GameModules/SparkGameRTS/Source/Command",
         "GameModules/SparkGameRTS/Source/Unit",
-        "GameModules/SparkGameRTS/Source/Fog",
-        "GameModules/SparkGameRTS/Source/AI"
+        "GameModules/SparkGameRTS/Source/FogOfWar",
+        "GameModules/SparkGameRTS/Source/Simulation"
       ],
       "implementationScope": [
         "Camera/selection/raycast",
@@ -1835,7 +1835,7 @@
       ],
       "documentationUpdates": [
         "GameModules/SparkGameVisualScript/README.md",
-        "wiki/gameplay-tools/Visual-Scripting.md"
+        "wiki/subsystems/Visual-Scripting.md"
       ],
       "readinessChanges": [
         "G11",

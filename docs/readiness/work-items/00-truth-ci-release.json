@@ -10,7 +10,7 @@
       "wave": 0,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim. 2026-09-24 local progress: validate.py now resolves every work-item --preset against its CMakePresets.json family and every build/<dir> tree against a configure preset binaryDir (inheritance resolved through Tools/buildmatrix/inventory.py), and rejects CTest runs against a preset that sets BUILD_TESTS=OFF unless the same item configures it with -DBUILD_TESTS=ON; 51 commands were moved to test-building presets (windows-release, linux-gcc-release, ci-linux-asan/tsan, macos-metal) or given -DBUILD_TESTS=ON, and macos-shipping is a self-pruning planned preset owned by PLT-220.",
+      "rationale": "Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim. 2026-09-24 local progress: validate.py now resolves every work-item --preset against its CMakePresets.json family and every build/<dir> tree against a configure preset binaryDir (inheritance resolved through Tools/buildmatrix/inventory.py), and rejects CTest runs against a preset that sets BUILD_TESTS=OFF unless the same item configures it with -DBUILD_TESTS=ON; 51 commands were moved to test-building presets (windows-release, linux-gcc-release, ci-linux-asan/tsan, macos-metal) or given -DBUILD_TESTS=ON; macos-shipping now exists in CMakePresets.json (PLANNED_CMAKE_PRESETS is empty), EXPERIMENTAL_SHIPPING_PRESET_OWNERS assigns it to PLT-220, and build.yml runs it in the advisory build-macos-shipping job.",
       "dependencies": [],
       "parallelWith": [
         "CI-100",
@@ -62,7 +62,7 @@
             "tools/site-data/validate.py",
             "Tests/Tools/test_site_data_contract.py"
           ],
-          "note": "Cross-references are validated, but FUTURE_ACCEPTANCE_PATHS deliberately lets unfinished items reference paths that do not exist."
+          "note": "FUTURE_ACCEPTANCE_PATHS is retired: every entryPoints/documentationUpdates/sourceContext and docs-catalog path must exist for open and done items alike (MissingReferencedPathTests in readiness-cross-references). Gates, work items, metrics and capabilities were already cross-validated. Local only; no hosted run."
         },
         {
           "criterionDigest": "sha256:2c8c4a1437af",
@@ -83,7 +83,7 @@
             "Tests/Tools/test_site_data_generation_determinism.py",
             "Tests/CMakeLists.txt"
           ],
-          "note": "HYG-b (not applied, JSON is off-limits here): the RDY-000 rationale sentence 'macos-shipping is a self-pruning planned preset owned by PLT-220' is stale. Replace it with 'macos-shipping now exists in CMakePresets.json and PLANNED_CMAKE_PRESETS is empty; its CI build leg is still missing (see the macOS shipping CI slice).'"
+          "note": "Tests/Tools/test_site_data_generation_determinism.py runs generate.py twice and compares the bundles byte for byte; comparator mutation cases prove a one-byte or file-set drift fails. Registered as CTest site-data-generation-determinism (Linux, LABELS readiness;site-data;python;slow, TIMEOUT 900); site-data.yml also generates twice. Local only; no hosted run."
         }
       ],
       "commands": [
@@ -877,7 +877,7 @@
             "Tests/Tools/test_site_data_contract.py",
             "tools/site-data/validate.py"
           ],
-          "note": "Also apply the HYG-b note fix: 'No platform shipping preset is owner-scoped any more...' is now superseded. Owners are enforced by EXPERIMENTAL_SHIPPING_PRESET_OWNERS; the macos-shipping CI build leg is still missing."
+          "note": "EXPERIMENTAL_SHIPPING_PRESET_OWNERS maps linux-shipping to PLT-210 and macos-shipping to PLT-220; experimental_shipping_preset_errors rejects an unmapped *-shipping preset, one in stable-v1 build scope, a missing or done-but-unevidenced owner, and an owner that no longer configures its preset. macos-shipping has an advisory build-macos-shipping job (continue-on-error), no hosted run yet."
         },
         {
           "criterionDigest": "sha256:78f73e6e4ef8",
@@ -1062,7 +1062,7 @@
       "documentationUpdates": [
         "README.md",
         "wiki/development/CI-Reproducible-Builds.md",
-        "wiki/getting-started/Building-from-Source.md"
+        "wiki/Build-Guide.md"
       ],
       "readinessChanges": [
         "G02",

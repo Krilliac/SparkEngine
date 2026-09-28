@@ -5441,7 +5441,7 @@ if(Python3_Interpreter_FOUND)
 
         # RDY-000: the fast cross-reference subset -- the checked-in contract under
         # the strict validator, dependency closure, promotion evidence, selector and
-        # future-path resolution, prose ID references, and the handoff being current.
+        # referenced-path existence, prose ID references, and the handoff being current.
         add_test(
             NAME readiness-cross-references
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_contract.py
@@ -5450,7 +5450,7 @@ if(Python3_Interpreter_FOUND)
                 ReadyPromotionTests
                 ReadyAndPassingEvidenceTests
                 SelectorResolutionTests
-                FutureAcceptancePathTests
+                MissingReferencedPathTests
                 ProseCrossReferenceTests
                 GenerationAndCiTests)
         set_tests_properties(readiness-cross-references PROPERTIES

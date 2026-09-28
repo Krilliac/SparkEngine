@@ -173,26 +173,6 @@ REQUIRED_NULLRHI_CONFLICTS = {
     "render in software",
 }
 
-# Deliberate outputs of unfinished work items. A missing path not listed here is
-# a contract error, not a soft warning. The list prunes itself: an entry that now
-# exists, or that no work item or docs-catalog entry still references, is an
-# error (Validator.validate_future_acceptance_paths), and a done work item never
-# resolves a reference through it.
-FUTURE_ACCEPTANCE_PATHS = {
-    "GameModules/SparkGameFPS/Source/Multiplayer",
-    "GameModules/SparkGameRTS/Source/AI",
-    "GameModules/SparkGameRTS/Source/Fog",
-    "SparkEditor/Source/Commands",
-    "SparkEngine/Source/Platform",
-    "Tests/Benchmarks",
-    "Tests/ModuleKit",
-    "docs/operations/server-runbook.md",
-    "wiki/gameplay-tools/Visual-Scripting.md",
-    "wiki/getting-started/Building-from-Source.md",
-    "wiki/subsystems/Scripting.md",
-}
-GENERATED_PATHS = {"docs/readiness/ENGINE_READINESS_HANDOFF.md"}
-
 # CMake presets a work item deliberately introduces, keyed to that owning item.
 # Only the owner's configure/build commands may name one, and never a CTest
 # test tree: an unwritten preset cannot prove it builds tests. The list prunes
@@ -2506,13 +2486,7 @@ class Validator:
                 self.error(location, f"duplicate id {value!r}")
         return {value for value in values if isinstance(value, str) and value}
 
-    @staticmethod
-    def is_future_path(value: str) -> bool:
-        return value in GENERATED_PATHS or any(
-            fnmatch.fnmatchcase(value, pattern) for pattern in FUTURE_ACCEPTANCE_PATHS
-        )
-
-    def require_path(self, value: Any, location: str, *, allow_future: bool = False) -> None:
+    def require_path(self, value: Any, location: str) -> None:
         if not isinstance(value, str) or not value:
             self.error(location, "path must be a non-empty string")
             return
@@ -2528,8 +2502,6 @@ class Validator:
             self.legacy_error(location, f"path pattern matches no file: {value}")
             return
         if (REPO_ROOT / path).exists():
-            return
-        if allow_future and self.is_future_path(value):
             return
         self.error(location, f"referenced path does not exist: {value}")
 
@@ -2820,12 +2792,12 @@ class Validator:
                 self.require(parallel != identifier, location, "cannot be parallel with itself")
             for index, source_path in enumerate(item.get("sourceContext", [])):
                 self.require_path(source_path, f"{location}.sourceContext[{index}]")
-            # A done item has delivered its outputs, so the future allowlist no
-            # longer excuses any of them.
-            allow_future = item.get("status") != "done"
+            # Open and done items alike: a planned output is referenced only after
+            # it lands (not-yet-written tests and jobs go in plannedTestSelectors
+            # and plannedCiJobs instead).
             for key in ("entryPoints", "documentationUpdates"):
                 for index, target_path in enumerate(item.get(key, [])):
-                    self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=allow_future)
+                    self.require_path(target_path, f"{location}.{key}[{index}]")
             self.validate_selectors(item, location)
             self.validate_acceptance_status(item, location)
         self.validate_planned_presets(by_id, planned_preset_uses)
@@ -4012,9 +3984,9 @@ class Validator:
         for index, rule in enumerate(catalog.get("classificationRules", [])):
             self.require(rule.get("section") in section_ids, f"docsCatalog.classificationRules[{index}]", f"unknown section {rule.get('section')}")
         for index, path in enumerate(catalog.get("featuredSourcePaths", [])):
-            self.require_path(path, f"docsCatalog.featuredSourcePaths[{index}]", allow_future=True)
+            self.require_path(path, f"docsCatalog.featuredSourcePaths[{index}]")
         for path in catalog.get("routeOverrides", {}):
-            self.require_path(path, f"docsCatalog.routeOverrides.{path}", allow_future=True)
+            self.require_path(path, f"docsCatalog.routeOverrides.{path}")
 
     def validate_prose_references(self, item_ids: set[str], gate_ids: set[str]) -> None:
         """Require every work-item or gate ID named in contract text to be declared.
@@ -4057,37 +4029,6 @@ class Validator:
             if key not in {"capabilities", "gates", "releaseProfiles"}:
                 walk(value, f"readiness.{key}")
         walk(self.contract["content"], "content")
-
-    def validate_future_acceptance_paths(self) -> None:
-        """Keep FUTURE_ACCEPTANCE_PATHS limited to planned outputs that are still missing.
-
-        Mirrors the plannedTestSelectors promotion rule: once a path exists, or
-        once nothing plans it any more, its allowlist entry is stale debt that
-        would silently excuse a later deletion or a typo.
-        """
-        catalog = self.contract["docsCatalog"]
-        # A done item never resolves through the allowlist (require_path rejects
-        # it), so only unfinished work keeps an entry alive.
-        references = [
-            path
-            for item in self.contract["workItems"]
-            if item.get("status") != "done"
-            for key in ("entryPoints", "documentationUpdates")
-            for path in item.get(key, [])
-            if isinstance(path, str)
-        ]
-        references.extend(path for path in catalog.get("featuredSourcePaths", []) if isinstance(path, str))
-        references.extend(path for path in catalog.get("routeOverrides", {}) if isinstance(path, str))
-        for entry in sorted(FUTURE_ACCEPTANCE_PATHS):
-            location = f"FUTURE_ACCEPTANCE_PATHS[{entry!r}]"
-            if any(REPO_ROOT.glob(entry)):
-                self.error(location, f"{entry} now exists and must be removed from FUTURE_ACCEPTANCE_PATHS")
-            if not any(fnmatch.fnmatchcase(reference, entry) for reference in references):
-                self.error(
-                    location,
-                    "referenced by no unfinished work item entryPoints/documentationUpdates or "
-                    "docs catalog path; remove the entry",
-                )
 
     def validate_modules(self) -> None:
         discovered = sorted(
@@ -4221,7 +4162,6 @@ class Validator:
         for location, message in validate_module_content(REPO_ROOT):
             self.error(location, message)
         self.validate_docs_catalog()
-        self.validate_future_acceptance_paths()
         self.validate_build_matrix_evidence()
         # CI-120: README/wiki/CLAUDE.md quick starts resolve against CMakePresets.json.
         for finding in check_documented_build_commands():

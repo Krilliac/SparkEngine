@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ast
 import copy
-import fnmatch
 import json
 import os
 import re
@@ -76,15 +75,8 @@ class ContractTestCase(unittest.TestCase):
             site_data_validate.Validator(contract).validate()
         self.assertIn(fragment, str(raised.exception))
 
-    def promote_ready(self, contract: dict[str, Any]) -> set[str]:
-        """Create a valid ready mutation without closing excluded work or gates.
-
-        Returns the FUTURE_ACCEPTANCE_PATHS entries the promotion delivered. A
-        done item must not reference a path that is still missing, and the suite
-        must not create repository files, so each undelivered output of a newly
-        done item is dropped here. The caller patches the returned entries out
-        of the allowlist, as the pull request that delivered them would.
-        """
+    def promote_ready(self, contract: dict[str, Any]) -> None:
+        """Create a valid ready mutation without closing excluded work or gates."""
         profile = self.profile_of(contract)
         profile["state"] = "ready"
         profile["owner"] = "release-engineering"
@@ -110,28 +102,10 @@ class ContractTestCase(unittest.TestCase):
                     entry["evidence"] = ["README.md", reference]
                 if item["id"] == "GOV-400":
                     contract["content"]["legal"]["policyGaps"] = []
-                for key in ("entryPoints", "documentationUpdates"):
-                    item[key] = [
-                        path for path in item[key]
-                        if (REPO_ROOT / path).exists() or not site_data_validate.Validator.is_future_path(path)
-                    ]
         contract["readiness"]["execution"]["firstUnblockedWorkItemId"] = None
         contract["readiness"]["globalRelease"]["state"] = "ready"
         # REL-192: N-1 work (now done above) presupposes a published predecessor.
         contract["readiness"]["predecessorRelease"]["state"] = "published"
-        still_planned = [
-            path
-            for item in contract["workItems"]
-            if item["status"] != "done"
-            for key in ("entryPoints", "documentationUpdates")
-            for path in item[key]
-        ]
-        still_planned.extend(contract["docsCatalog"].get("featuredSourcePaths", []))
-        still_planned.extend(contract["docsCatalog"].get("routeOverrides", {}))
-        return {
-            entry for entry in site_data_validate.FUTURE_ACCEPTANCE_PATHS
-            if not any(fnmatch.fnmatchcase(path, entry) for path in still_planned)
-        }
 
     @staticmethod
     def item_text(item: dict[str, Any], *fields: str) -> str:
@@ -1218,21 +1192,14 @@ class ReadyPromotionTests(ContractTestCase):
     """Frozen case 5: ready derives from profiles, not every ledger gate."""
 
     def test_excluded_gates_and_work_may_remain_open_when_ready(self) -> None:
-        delivered = self.promote_ready(self.mutable)
+        self.promote_ready(self.mutable)
         gates = self.gates_of(self.mutable)
         items = self.items_of(self.mutable)
         self.assertEqual(gates["G11"]["state"], "blocked")
         self.assertEqual(gates["G12"]["state"], "blocked")
         self.assertNotEqual(items["MOD-315"]["status"], "done")
         self.assertNotEqual(items["NET-100"]["status"], "done")
-        with mock.patch.object(
-            site_data_validate,
-            "FUTURE_ACCEPTANCE_PATHS",
-            site_data_validate.FUTURE_ACCEPTANCE_PATHS - delivered,
-        ):
-            site_data_validate.Validator(self.mutable, allow_legacy_contract=True).validate(
-                require_ready=True
-            )
+        site_data_validate.Validator(self.mutable, allow_legacy_contract=True).validate(require_ready=True)
 
     def test_a_required_gate_still_blocks_ready(self) -> None:
         self.promote_ready(self.mutable)
@@ -3030,7 +2997,7 @@ class SelectorResolutionTests(ContractTestCase):
 
     def test_glob_entry_point_must_match_a_real_file(self) -> None:
         validator = site_data_validate.Validator(self.mutable)
-        validator.require_path("GameModules/*/probe-that-matches-nothing.json", "probe.entryPoints[0]", allow_future=True)
+        validator.require_path("GameModules/*/probe-that-matches-nothing.json", "probe.entryPoints[0]")
         self.assertEqual(1, len(validator.errors))
         self.assertIn("path pattern matches no file", validator.errors[0])
 
@@ -3094,85 +3061,67 @@ class LegacyContractDebtTests(ContractTestCase):
         )
 
 
-class FutureAcceptancePathTests(ContractTestCase):
-    """FUTURE_ACCEPTANCE_PATHS excuses only paths that are planned and still missing."""
+class MissingReferencedPathTests(ContractTestCase):
+    """Every entryPoints/documentationUpdates and docs-catalog path must exist, for open work too.
 
-    # Synthetic, never-planned paths: a real planned path would stop testing the
-    # "missing" case the moment its work item lands the file.
-    UNPLANNED_PATH = "docs/specs/never-planned-probe.md"
+    A planned output is referenced only after it lands; not-yet-written tests and
+    CI jobs are declared in plannedTestSelectors/plannedCiJobs instead.
+    """
 
-    def with_live(self, *extra: str) -> set[str]:
-        return {*site_data_validate.FUTURE_ACCEPTANCE_PATHS, *extra}
+    # Retired from the old future-path allowlist, so the pre-retirement validator
+    # excused it on an unfinished item. Asserted missing so a later file of that
+    # name cannot turn these rejection cases into silent passes.
+    RETIRED_PLANNED_PATH = "docs/operations/server-runbook.md"
+    MISSING_MESSAGE = f"referenced path does not exist: {RETIRED_PLANNED_PATH}"
 
-    def future_path_errors(self, allowlist: set[str]) -> list[str]:
-        with mock.patch.object(site_data_validate, "FUTURE_ACCEPTANCE_PATHS", allowlist):
-            validator = site_data_validate.Validator(self.mutable)
-            validator.validate_future_acceptance_paths()
-        return validator.errors
-
-    def work_item_errors(self, allowlist: set[str]) -> list[str]:
-        with mock.patch.object(site_data_validate, "FUTURE_ACCEPTANCE_PATHS", allowlist):
-            validator = site_data_validate.Validator(self.mutable)
-            validator.validate_work_items()
-        return validator.errors
+    def setUp(self) -> None:
+        super().setUp()
+        self.assertFalse((REPO_ROOT / self.RETIRED_PLANNED_PATH).exists())
 
     def open_item(self) -> dict[str, Any]:
-        item = self.items_of(self.mutable)["ENG-200"]
+        item = self.items_of(self.mutable)["OPS-110"]
         self.assertNotEqual("done", item["status"])
         return item
 
-    def test_live_allowlist_is_missing_on_disk_and_referenced(self) -> None:
+    def work_item_errors(self) -> list[str]:
         validator = site_data_validate.Validator(self.mutable)
-        validator.validate_future_acceptance_paths()
-        self.assertEqual([], validator.errors)
+        validator.validate_work_items()
+        return validator.errors
 
-    def test_allowlist_entry_that_now_exists_must_be_removed(self) -> None:
-        self.open_item()["documentationUpdates"].append("README.md")
-        errors = self.future_path_errors({"README.md"})
-        self.assertEqual(1, len(errors), errors)
-        self.assertIn("README.md", errors[0])
-        self.assertIn("now exists and must be removed from FUTURE_ACCEPTANCE_PATHS", errors[0])
+    def docs_catalog_errors(self) -> list[str]:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_docs_catalog()
+        return validator.errors
 
-    def test_allowlist_entry_nothing_references_is_rejected(self) -> None:
-        errors = self.future_path_errors({self.UNPLANNED_PATH})
-        self.assertEqual(1, len(errors), errors)
-        self.assertIn(self.UNPLANNED_PATH, errors[0])
-        self.assertIn("referenced by no unfinished work item entryPoints/documentationUpdates", errors[0])
+    def assert_one_missing(self, errors: list[str], location: str) -> None:
+        matching = [error for error in errors if self.MISSING_MESSAGE in error]
+        self.assertEqual(1, len(matching), errors)
+        self.assertIn(location, matching[0])
 
-    def test_reference_from_a_done_work_item_does_not_keep_an_entry(self) -> None:
+    def test_missing_entry_point_on_an_open_item_is_rejected(self) -> None:
         item = self.open_item()
-        item["documentationUpdates"].append(self.UNPLANNED_PATH)
-        item["status"] = "done"
-        errors = self.future_path_errors({self.UNPLANNED_PATH})
-        self.assertEqual(1, len(errors), errors)
-        self.assertIn("referenced by no unfinished work item", errors[0])
+        item["entryPoints"].append(self.RETIRED_PLANNED_PATH)
+        index = len(item["entryPoints"]) - 1
+        self.assert_one_missing(self.work_item_errors(), f"workItems.OPS-110.entryPoints[{index}]")
 
-    def test_docs_catalog_reference_counts_as_a_planned_use(self) -> None:
-        self.mutable["docsCatalog"].setdefault("featuredSourcePaths", []).append(self.UNPLANNED_PATH)
-        self.assertEqual([], self.future_path_errors({self.UNPLANNED_PATH}))
-
-    def test_missing_referenced_entry_is_accepted_for_unfinished_work(self) -> None:
-        self.open_item()["documentationUpdates"].append(self.UNPLANNED_PATH)
-        self.assertEqual([], self.future_path_errors(self.with_live(self.UNPLANNED_PATH)))
-        # Only this path's resolution is under test; unrelated live-contract errors
-        # belong to LiveContractTests.
-        path_errors = [
-            error for error in self.work_item_errors(self.with_live(self.UNPLANNED_PATH))
-            if self.UNPLANNED_PATH in error
-        ]
-        self.assertEqual([], path_errors)
-
-    def test_done_work_item_cannot_resolve_through_the_future_allowlist(self) -> None:
+    def test_missing_documentation_update_on_an_open_item_is_rejected(self) -> None:
         item = self.open_item()
-        item["documentationUpdates"].append(self.UNPLANNED_PATH)
-        item["status"] = "done"
-        errors = self.work_item_errors(self.with_live(self.UNPLANNED_PATH))
-        self.assertTrue(
-            any(
-                "workItems.ENG-200.documentationUpdates" in error
-                and f"referenced path does not exist: {self.UNPLANNED_PATH}" in error
-                for error in errors
-            ),
+        item["documentationUpdates"].append(self.RETIRED_PLANNED_PATH)
+        index = len(item["documentationUpdates"]) - 1
+        self.assert_one_missing(self.work_item_errors(), f"workItems.OPS-110.documentationUpdates[{index}]")
+
+    def test_missing_docs_catalog_featured_path_is_rejected(self) -> None:
+        featured = self.mutable["docsCatalog"].setdefault("featuredSourcePaths", [])
+        featured.append(self.RETIRED_PLANNED_PATH)
+        self.assert_one_missing(
+            self.docs_catalog_errors(), f"docsCatalog.featuredSourcePaths[{len(featured) - 1}]"
+        )
+
+    def test_existing_path_on_an_open_item_is_accepted(self) -> None:
+        self.open_item()["documentationUpdates"].append("wiki/advanced/Server-Operations-Runbook.md")
+        errors = self.work_item_errors()
+        self.assertFalse(
+            any("Server-Operations-Runbook.md" in error for error in errors),
             errors,
         )
 
@@ -3262,18 +3211,19 @@ class LiveContractTests(ContractTestCase):
         validator.validate()
         self.assertEqual([], validator.legacy)
 
-    def test_validate_runs_the_future_path_and_prose_reference_checks(self) -> None:
-        unplanned = FutureAcceptancePathTests.UNPLANNED_PATH
+    def test_validate_runs_the_referenced_path_and_prose_reference_checks(self) -> None:
+        missing = MissingReferencedPathTests.RETIRED_PLANNED_PATH
+        item = self.items_of(self.mutable)["OPS-110"]
+        self.assertNotEqual("done", item["status"])
+        item["entryPoints"].append(missing)
+        index = len(item["entryPoints"]) - 1
         self.gates_of(self.mutable)["G00"]["summary"] += " Tracked by DOC-999."
-        with mock.patch.object(
-            site_data_validate,
-            "FUTURE_ACCEPTANCE_PATHS",
-            {*site_data_validate.FUTURE_ACCEPTANCE_PATHS, unplanned},
-        ):
-            with self.assertRaises(SiteDataError) as raised:
-                site_data_validate.Validator(self.mutable).validate()
+        with self.assertRaises(SiteDataError) as raised:
+            site_data_validate.Validator(self.mutable).validate()
         message = str(raised.exception)
-        self.assertIn(f"FUTURE_ACCEPTANCE_PATHS[{unplanned!r}]: referenced by no unfinished work item", message)
+        self.assertIn(
+            f"workItems.OPS-110.entryPoints[{index}]: referenced path does not exist: {missing}", message
+        )
         self.assertIn("gates.G00.summary: names unknown work item DOC-999", message)
 
 

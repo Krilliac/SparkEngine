@@ -58,13 +58,13 @@ Open **`RDY-000` — Establish the release profiles and capability ledger**. Its
    - The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open.
 2. **[unmet]** Every referenced path, gate, work item, metric, and capability exists
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
-   - Cross-references are validated, but FUTURE_ACCEPTANCE_PATHS deliberately lets unfinished items reference paths that do not exist.
+   - FUTURE_ACCEPTANCE_PATHS is retired: every entryPoints/documentationUpdates/sourceContext and docs-catalog path must exist for open and done items alike (MissingReferencedPathTests in readiness-cross-references). Gates, work items, metrics and capabilities were already cross-validated. Local only; no hosted run.
 3. **[implemented]** A capability cannot be ready while a blocker or required gate is open
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references.
 4. **[implemented]** Two clean generations produce byte-identical content except declared timestamps
    - Evidence: `.github/workflows/site-data.yml`, `Tests/Tools/test_site_data_contract.py`, `Tests/Tools/test_site_data_generation_determinism.py`, `Tests/CMakeLists.txt`
-   - HYG-b (not applied, JSON is off-limits here): the RDY-000 rationale sentence 'macos-shipping is a self-pruning planned preset owned by PLT-220' is stale. Replace it with 'macos-shipping now exists in CMakePresets.json and PLANNED_CMAKE_PRESETS is empty; its CI build leg is still missing (see the macOS shipping CI slice).'
+   - Tests/Tools/test_site_data_generation_determinism.py runs generate.py twice and compares the bundles byte for byte; comparator mutation cases prove a one-byte or file-set drift fails. Registered as CTest site-data-generation-determinism (Linux, LABELS readiness;site-data;python;slow, TIMEOUT 900); site-data.yml also generates twice. Local only; no hosted run.
 
 ### Session verification
 
@@ -380,7 +380,7 @@ Scores are evidence pointers, not percentages: `0` absent/dead, `1` data-model/m
 **Priority:** P0 · **Status:** in-progress · **Wave:** 0 · **Area:** governance · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim. 2026-09-24 local progress: validate.py now resolves every work-item --preset against its CMakePresets.json family and every build/<dir> tree against a configure preset binaryDir (inheritance resolved through Tools/buildmatrix/inventory.py), and rejects CTest runs against a preset that sets BUILD_TESTS=OFF unless the same item configures it with -DBUILD_TESTS=ON; 51 commands were moved to test-building presets (windows-release, linux-gcc-release, ci-linux-asan/tsan, macos-metal) or given -DBUILD_TESTS=ON, and macos-shipping is a self-pruning planned preset owned by PLT-220.
+Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim. 2026-09-24 local progress: validate.py now resolves every work-item --preset against its CMakePresets.json family and every build/<dir> tree against a configure preset binaryDir (inheritance resolved through Tools/buildmatrix/inventory.py), and rejects CTest runs against a preset that sets BUILD_TESTS=OFF unless the same item configures it with -DBUILD_TESTS=ON; 51 commands were moved to test-building presets (windows-release, linux-gcc-release, ci-linux-asan/tsan, macos-metal) or given -DBUILD_TESTS=ON; macos-shipping now exists in CMakePresets.json (PLANNED_CMAKE_PRESETS is empty), EXPERIMENTAL_SHIPPING_PRESET_OWNERS assigns it to PLT-220, and build.yml runs it in the advisory build-macos-shipping job.
 
 **Dependency contract**
 
@@ -421,13 +421,13 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open.
 2. **[unmet]** Every referenced path, gate, work item, metric, and capability exists
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
-   - Cross-references are validated, but FUTURE_ACCEPTANCE_PATHS deliberately lets unfinished items reference paths that do not exist.
+   - FUTURE_ACCEPTANCE_PATHS is retired: every entryPoints/documentationUpdates/sourceContext and docs-catalog path must exist for open and done items alike (MissingReferencedPathTests in readiness-cross-references). Gates, work items, metrics and capabilities were already cross-validated. Local only; no hosted run.
 3. **[implemented]** A capability cannot be ready while a blocker or required gate is open
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references.
 4. **[implemented]** Two clean generations produce byte-identical content except declared timestamps
    - Evidence: `.github/workflows/site-data.yml`, `Tests/Tools/test_site_data_contract.py`, `Tests/Tools/test_site_data_generation_determinism.py`, `Tests/CMakeLists.txt`
-   - HYG-b (not applied, JSON is off-limits here): the RDY-000 rationale sentence 'macos-shipping is a self-pruning planned preset owned by PLT-220' is stale. Replace it with 'macos-shipping now exists in CMakePresets.json and PLANNED_CMAKE_PRESETS is empty; its CI build leg is still missing (see the macOS shipping CI slice).'
+   - Tests/Tools/test_site_data_generation_determinism.py runs generate.py twice and compares the bundles byte for byte; comparator mutation cases prove a one-byte or file-set drift fails. Registered as CTest site-data-generation-determinism (Linux, LABELS readiness;site-data;python;slow, TIMEOUT 900); site-data.yml also generates twice. Local only; no hosted run.
 
 **Required commands**
 
@@ -1073,7 +1073,7 @@ Progress: 5 of 8 implemented, 0 evidenced at an exact commit.
    - validate.py checks cmake/ctest/cpack commands in root *.md (not CHANGELOG), wiki, docs, .github prompts, .claude/.codex skills and SparkBuild/SparkSDK/FuzzerTests/GameModules/Templates docs against CMakePresets.json: preset names, preset/-B/script trees across cd, --config/-C on multi-config or generator-less trees, -A/-T pins. Test green locally; no exact-commit CI run yet.
 6. **[implemented]** Experimental platform Shipping matrices remain owned by their platform work items
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`
-   - Also apply the HYG-b note fix: 'No platform shipping preset is owner-scoped any more...' is now superseded. Owners are enforced by EXPERIMENTAL_SHIPPING_PRESET_OWNERS; the macos-shipping CI build leg is still missing.
+   - EXPERIMENTAL_SHIPPING_PRESET_OWNERS maps linux-shipping to PLT-210 and macos-shipping to PLT-220; experimental_shipping_preset_errors rejects an unmapped *-shipping preset, one in stable-v1 build scope, a missing or done-but-unevidenced owner, and an owner that no longer configures its preset. macos-shipping has an advisory build-macos-shipping job (continue-on-error), no hosted run yet.
 7. **[implemented]** Configured codemodel evidence is accepted only when its source tree, producer-captured commit, generator, preset build directory, cache values, and reply-file digests match the profile claiming it
    - Evidence: `Tests/Tools/test_build_matrix_parity.py`, `Tools/buildmatrix/inventory.py`, `Tools/buildmatrix/capture_provenance.py`
    - Tests drive inventory.extract_codemodel_targets and reject a mismatched source tree, build directory, generator, cache or commit, caller-asserted commits, and changed, linked or traversing reply files.
@@ -1201,7 +1201,7 @@ cmake --build build/windows-shipping --config MinSizeRel --clean-first
 - Documentation:
   - `README.md`
   - `wiki/development/CI-Reproducible-Builds.md`
-  - `wiki/getting-started/Building-from-Source.md`
+  - `wiki/Build-Guide.md`
 - Readiness contract:
   - G02
   - G05
@@ -2153,7 +2153,7 @@ Hierarchy and inspector can mutate World outside the command stack; rotate/scale
 **Entry points**
 
 - `SparkEditor/Source/Panels`
-- `SparkEditor/Source/Commands`
+- `SparkEditor/Source/UndoRedo`
 
 **Implementation scope**
 
@@ -2617,7 +2617,7 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 
 **Entry points**
 
-- `Tests/Benchmarks`
+- `Tests/TestBenchmarkFramework.cpp`
 - `Tests/GoldenImages`
 - `Tests/Tools/test_perf_budget.py`
 - `Tests/Tools/test_perf_budget_hardening.py`
@@ -2753,8 +2753,8 @@ ctest --test-dir build/windows-release -C Release -L scripting-integration --out
 **Same-change updates**
 
 - Documentation:
-  - `wiki/subsystems/Scripting.md`
-  - `wiki/gameplay-tools/Visual-Scripting.md`
+  - `wiki/subsystems/Scripting-with-AngelScript.md`
+  - `wiki/subsystems/Visual-Scripting.md`
 - Readiness contract:
   - G11
   - scripting.angelscript
@@ -2878,7 +2878,7 @@ ctest --test-dir build/linux-gcc-release -L network-security --output-on-failure
 **Priority:** P1 · **Status:** in-progress · **Wave:** 3 · **Area:** services · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services. Owner decision OD-08 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): identity, matchmaking, fleet, entitlement and billing services are out of engine scope; the engine ships no hosted online services. This item owns documenting that service boundary. 2026-09-24 progress: wiki/advanced/Online-Service-Boundary.md (in wiki/_Sidebar.md) is the service-boundary contract: it lists what the engine provides (UDP transport, the IGatewayAuthenticator/KeyFileAuthenticator admission hook, sensitive-handler and PBKDF2 helpers, the SparkServer/SparkGateway/SparkDaemon/SparkCollabServer processes, and the IOnlinePlatform interface with its in-memory NullOnlinePlatform and compile-only platform stubs), what it does not provide (identity, matchmaking, fleet, entitlement, billing, hosted player data, operations), and the trust boundaries between them. wiki/gameplay-tools/Online-Services.md no longer claims nonexistent ENABLE_STEAM/ENABLE_EOS options or local-storage cloud saves. tools/site-data/validate.py now rejects (hosted_online_service_claim_errors) any non-negated claim of hosted, managed, or turnkey online services on every governed public claim surface, the two online-service pages, and docs/site/readiness.json; Tests/Tools/test_site_data_contract.py OnlineServiceBoundaryTests covers claims, negations, cross-sentence negation, and the live repository surfaces. 2026-09-25 progress: docs/specs/online-services.md (contract version 1.0) is the boundary specification. It separates the engine SDK interfaces (IOnlinePlatform/OnlineServiceManager, NetworkManager, DedicatedServer, SparkServer, the SparkGateway admission and area-control plane, SparkDaemon) from product-owned identity, matchmaking, fleet, moderation, entitlement, billing, player-data and operations services, and draws them in a Mermaid deployment diagram. It names trust boundaries B1-B9, gives per-call timeout/retry/circuit-breaker budgets and failure semantics, and labels every shipped adapter local/deterministic, local reference, or stub, never production. The spec states which budgets the code does not enforce yet (the IOnlinePlatform game-thread limit and circuit breaker). It is a governed surface of validate_online_service_boundary (ONLINE_SERVICE_BOUNDARY_SURFACES) and was removed from FUTURE_ACCEPTANCE_PATHS. 2026-09-25 conformance progress: Tests/TestOnlineServices.cpp OnlineServices_Contract_* (ctest OnlineServicesContract, label online-services, SPARK_TEST_EXPECT_COUNT=5) runs one templated IOnlinePlatform contract against NullOnlinePlatform, SteamPlatform, EpicPlatform and ConsolePlatform. A capability reported false must fail every call with a non-empty GetLastError() and leave no fabricated login, session, score, achievement, cloud slot or presence behind; the Steam, Epic and Console stubs return one constant GetLastError() string, so for them only its presence is checked. A capability reported true must succeed and be observable on read-back where the interface has a getter; friends and presence have none on the Null adapter, so they are checked for success and failure only. On the Null adapter every fallible call clears GetLastError() on entry, each failure sets its own exact reason and the suite compares against that exact reason, so an error left by an earlier call cannot satisfy a later check. Failures never echo the login token, Logout/LeaveSession are safe in any state, a capability-less adapter must be named (Stub), no adapter may call itself production, and Console_GetStatus() reports the adapter, its capability state and its last error. The suite does not test the spec's no-throw and no-local-corruption rules. A fifth test compares two fresh NullOnlinePlatform runs against one fixed expected transcript; the adapter now keeps boards, achievements and cloud slots in ordered maps and ranks score ties by submission order, so the transcript does not depend on the standard library. The suite found two Null adapter violations of the spec section 5.1 failure semantics, now fixed in OnlineServices.h: DeleteCloudSave of a missing slot returned false with no GetLastError(), and InviteToSession reported success with no recipient, no active session, or a recipient outside the (offline, always empty) friends list. 2026-09-25 degraded-dependency progress: OnlineServiceManager::GetPlatform() now returns GuardedOnlinePlatform, a front over the active adapter that enforces the spec section 5.1 failure semantics for every caller. An adapter exception (std::exception or any other type) becomes a failed call with a reason, a throwing Login never surfaces its token, and Logout/LeaveSession/Shutdown cannot be aborted by a throwing adapter. Each capability counts consecutive and total failures; after 5 consecutive failures its circuit opens and calls fail immediately without reaching the adapter for 30 s on the Update() clock, then one probe is allowed (success closes the circuit, failure reopens it). Logout and LeaveSession bypass open circuits. The circuit is disabled for the in-process NullOnlinePlatform, whose failures are caller errors, but its failures are still counted. Console_GetStatus() reports per-capability consecutive failures and circuit state (Health: ...), and GetCapabilityHealth() exposes the counters. Tests/TestOnlineServices.cpp OnlineServices_Degraded_* (ctest OnlineServicesDegraded, label online-services, SPARK_TEST_EXPECT_COUNT=7) drives a fault-injecting adapter through SetPlatform()/GetPlatform(); with the threshold mutated from 5 to 6, 4 of the 7 tests fail. The 5 ms game-thread and 10 s remote-request budgets are still adapter responsibilities with no watchdog, and no production adapter exists to measure them against. Still open: the SessionCompatibility_* tests, deterministic local adapters for identity/match/fleet/admin/moderation/entitlement, safe and observable failure of production adapters, and the service-contract and network-integration CI jobs.
+Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services. Owner decision OD-08 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): identity, matchmaking, fleet, entitlement and billing services are out of engine scope; the engine ships no hosted online services. This item owns documenting that service boundary. 2026-09-24 progress: wiki/advanced/Online-Service-Boundary.md (in wiki/_Sidebar.md) is the service-boundary contract: it lists what the engine provides (UDP transport, the IGatewayAuthenticator/KeyFileAuthenticator admission hook, sensitive-handler and PBKDF2 helpers, the SparkServer/SparkGateway/SparkDaemon/SparkCollabServer processes, and the IOnlinePlatform interface with its in-memory NullOnlinePlatform and compile-only platform stubs), what it does not provide (identity, matchmaking, fleet, entitlement, billing, hosted player data, operations), and the trust boundaries between them. wiki/gameplay-tools/Online-Services.md no longer claims nonexistent ENABLE_STEAM/ENABLE_EOS options or local-storage cloud saves. tools/site-data/validate.py now rejects (hosted_online_service_claim_errors) any non-negated claim of hosted, managed, or turnkey online services on every governed public claim surface, the two online-service pages, and docs/site/readiness.json; Tests/Tools/test_site_data_contract.py OnlineServiceBoundaryTests covers claims, negations, cross-sentence negation, and the live repository surfaces. 2026-09-25 progress: docs/specs/online-services.md (contract version 1.0) is the boundary specification. It separates the engine SDK interfaces (IOnlinePlatform/OnlineServiceManager, NetworkManager, DedicatedServer, SparkServer, the SparkGateway admission and area-control plane, SparkDaemon) from product-owned identity, matchmaking, fleet, moderation, entitlement, billing, player-data and operations services, and draws them in a Mermaid deployment diagram. It names trust boundaries B1-B9, gives per-call timeout/retry/circuit-breaker budgets and failure semantics, and labels every shipped adapter local/deterministic, local reference, or stub, never production. The spec states which budgets the code does not enforce yet (the IOnlinePlatform game-thread limit and circuit breaker). It is a governed surface of validate_online_service_boundary (ONLINE_SERVICE_BOUNDARY_SURFACES). 2026-09-25 conformance progress: Tests/TestOnlineServices.cpp OnlineServices_Contract_* (ctest OnlineServicesContract, label online-services, SPARK_TEST_EXPECT_COUNT=5) runs one templated IOnlinePlatform contract against NullOnlinePlatform, SteamPlatform, EpicPlatform and ConsolePlatform. A capability reported false must fail every call with a non-empty GetLastError() and leave no fabricated login, session, score, achievement, cloud slot or presence behind; the Steam, Epic and Console stubs return one constant GetLastError() string, so for them only its presence is checked. A capability reported true must succeed and be observable on read-back where the interface has a getter; friends and presence have none on the Null adapter, so they are checked for success and failure only. On the Null adapter every fallible call clears GetLastError() on entry, each failure sets its own exact reason and the suite compares against that exact reason, so an error left by an earlier call cannot satisfy a later check. Failures never echo the login token, Logout/LeaveSession are safe in any state, a capability-less adapter must be named (Stub), no adapter may call itself production, and Console_GetStatus() reports the adapter, its capability state and its last error. The suite does not test the spec's no-throw and no-local-corruption rules. A fifth test compares two fresh NullOnlinePlatform runs against one fixed expected transcript; the adapter now keeps boards, achievements and cloud slots in ordered maps and ranks score ties by submission order, so the transcript does not depend on the standard library. The suite found two Null adapter violations of the spec section 5.1 failure semantics, now fixed in OnlineServices.h: DeleteCloudSave of a missing slot returned false with no GetLastError(), and InviteToSession reported success with no recipient, no active session, or a recipient outside the (offline, always empty) friends list. 2026-09-25 degraded-dependency progress: OnlineServiceManager::GetPlatform() now returns GuardedOnlinePlatform, a front over the active adapter that enforces the spec section 5.1 failure semantics for every caller. An adapter exception (std::exception or any other type) becomes a failed call with a reason, a throwing Login never surfaces its token, and Logout/LeaveSession/Shutdown cannot be aborted by a throwing adapter. Each capability counts consecutive and total failures; after 5 consecutive failures its circuit opens and calls fail immediately without reaching the adapter for 30 s on the Update() clock, then one probe is allowed (success closes the circuit, failure reopens it). Logout and LeaveSession bypass open circuits. The circuit is disabled for the in-process NullOnlinePlatform, whose failures are caller errors, but its failures are still counted. Console_GetStatus() reports per-capability consecutive failures and circuit state (Health: ...), and GetCapabilityHealth() exposes the counters. Tests/TestOnlineServices.cpp OnlineServices_Degraded_* (ctest OnlineServicesDegraded, label online-services, SPARK_TEST_EXPECT_COUNT=7) drives a fault-injecting adapter through SetPlatform()/GetPlatform(); with the threshold mutated from 5 to 6, 4 of the 7 tests fail. The 5 ms game-thread and 10 s remote-request budgets are still adapter responsibilities with no watchdog, and no production adapter exists to measure them against. Still open: the SessionCompatibility_* tests, deterministic local adapters for identity/match/fleet/admin/moderation/entitlement, safe and observable failure of production adapters, and the service-contract and network-integration CI jobs.
 
 **Dependency contract**
 
@@ -3298,7 +3298,7 @@ ctest --test-dir build/linux-gcc-release -L observability --output-on-failure --
 
 - Documentation:
   - `wiki/advanced/Load-Test-Baseline.md`
-  - `docs/operations/server-runbook.md`
+  - `wiki/advanced/Server-Operations-Runbook.md`
 - Readiness contract:
   - G12
   - G14
@@ -3343,7 +3343,7 @@ Every discovered module needs a truthful manifest, while stable-v1 needs a small
 
 - `SparkSDK/Include`
 - `GameModules`
-- `Tests/ModuleKit`
+- `Tests/Tools/test_module_manifest.py`
 
 **Implementation scope**
 
@@ -4011,8 +4011,8 @@ Selection/commands, movement/pathfinding, fog updates, fixed update, persistence
 
 - `GameModules/SparkGameRTS/Source/Command`
 - `GameModules/SparkGameRTS/Source/Unit`
-- `GameModules/SparkGameRTS/Source/Fog`
-- `GameModules/SparkGameRTS/Source/AI`
+- `GameModules/SparkGameRTS/Source/FogOfWar`
+- `GameModules/SparkGameRTS/Source/Simulation`
 
 **Implementation scope**
 
@@ -4217,7 +4217,7 @@ ctest --test-dir build/windows-release -C Release -R VisualScriptGameplay --outp
 
 - Documentation:
   - `GameModules/SparkGameVisualScript/README.md`
-  - `wiki/gameplay-tools/Visual-Scripting.md`
+  - `wiki/subsystems/Visual-Scripting.md`
 - Readiness contract:
   - G11
   - G13
@@ -4334,7 +4334,7 @@ Prototype modules need reusable controller, ECS, camera, render, save, HUD, AI, 
 **Entry points**
 
 - `SparkSDK/Include`
-- `Tests/ModuleKit`
+- `Tests/TestPrototypeModuleKitReal.cpp`
 
 **Implementation scope**
 
@@ -4409,7 +4409,7 @@ SparkGameFPS multiplayer currently ignores address and port and fabricates conne
 
 **Entry points**
 
-- `GameModules/SparkGameFPS/Source/Multiplayer`
+- `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h`
 
 **Implementation scope**
 
@@ -4665,7 +4665,7 @@ Touch input and quality scaling are framework pieces, not an iOS/Android platfor
 
 **Entry points**
 
-- `SparkEngine/Source/Platform`
+- `SparkEngine/Source/Engine/Mobile`
 - `CMakeLists.txt`
 
 **Implementation scope**

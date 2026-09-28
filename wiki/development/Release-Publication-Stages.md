@@ -38,12 +38,11 @@ blocked ledger or substitutes fixture tests for real qualification evidence.
 `ready` only if it names at least one required gate and has evidence. A gate can
 be `passing` only if it has evidence. Every work-item ID (such as `RDY-000`) and
 gate ID (such as `G00`) named in contract text must be declared, including
-rationale, summaries, limitations and website copy. `FUTURE_ACCEPTANCE_PATHS` in
-`validate.py` may list only paths that are still missing on disk and still named
-by an unfinished work item's `entryPoints`/`documentationUpdates` or by the docs
-catalog; a reference from a `done` item does not count. When a path lands,
-delete its entry in the same change. A work item marked `done` never resolves a
-reference through that list.
+rationale, summaries, limitations and website copy. Every `entryPoints`,
+`documentationUpdates` and `sourceContext` path of a work item, open or `done`,
+and every docs-catalog path must exist on disk. A planned output is referenced
+only after it lands; tests and CI jobs that do not exist yet are declared in
+`plannedTestSelectors` and `plannedCiJobs` instead.
 
 Work-item `commands` are resolved against `CMakePresets.json`, using the
 inheritance resolver in `Tools/buildmatrix/inventory.py`. `cmake --preset <name>`
