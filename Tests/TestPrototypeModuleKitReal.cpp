@@ -1,12 +1,13 @@
 /**
  * @file TestPrototypeModuleKitReal.cpp
- * @brief MOD-295: prototype modules log through the public SDK logger.
+ * @brief MOD-295: prototype modules log and register console commands through the public SDK.
  *
  * IEngineContext::GetLogger() hands a module the host's Spark::ILogger
  * (EngineSdkLogger on the real EngineContext), and the Spark::ModuleLog helpers
- * in <Spark/ModuleLog.h> format through it. SparkGameRTS and SparkGamePlatformer
- * log their engine-system wiring this way instead of through the private
- * Utils/SparkConsole.h and Utils/LogMacros.h.
+ * in <Spark/ModuleLog.h> format through it. IEngineContext::GetConsole() hands it
+ * the host's Spark::IConsole (EngineSdkConsole), which registers into the host
+ * SimpleConsole. SparkGameRTS and SparkGamePlatformer use both instead of the
+ * private Utils/SparkConsole.h and Utils/LogMacros.h.
  */
 
 #include "ScopedLoggerBaseline.h"
@@ -14,7 +15,9 @@
 
 #include "Core/EngineContext.h"
 #include "Utils/Logger.h"
+#include "Utils/SparkConsole.h"
 
+#include <Spark/IConsole.h>
 #include <Spark/ModuleLog.h>
 
 #include <algorithm>
@@ -137,6 +140,34 @@ namespace
       private:
         Spark::ILogger* m_logger;
     };
+
+    /// Initializes the host console for the test if nothing else has, and removes the probe commands on exit.
+    struct ProbeConsoleScope final
+    {
+        Spark::SimpleConsole& console = Spark::SimpleConsole::GetInstance();
+        bool restoreUninitialized = !console.IsInitialized();
+
+        ProbeConsoleScope()
+        {
+            if (restoreUninitialized)
+                console.Initialize();
+            Clear();
+        }
+        ~ProbeConsoleScope()
+        {
+            Clear();
+            if (restoreUninitialized)
+                console.Shutdown();
+        }
+        ProbeConsoleScope(const ProbeConsoleScope&) = delete;
+        ProbeConsoleScope& operator=(const ProbeConsoleScope&) = delete;
+
+        void Clear()
+        {
+            for (const char* name : {"kit_probe", "kit_empty_handler", "kit_taken"})
+                console.UnregisterCommand(name);
+        }
+    };
 } // namespace
 
 TEST(PrototypeModuleKit_LoggerRoutesThroughEngineContext)
@@ -186,6 +217,58 @@ TEST(PrototypeModuleKit_NullContextIsSafe)
     EXPECT_TRUE(recorder.Saw("warn", "[Kit] routed 5"));
     EXPECT_EQ(recorder.Count(), static_cast<size_t>(1));
     EXPECT_TRUE(capture.Lines().empty());
+}
+
+TEST(PrototypeModuleKit_ConsoleRegistersThroughSdkContext)
+{
+    ProbeConsoleScope scope;
+    Spark::SimpleConsole& host = scope.console;
+    EngineContext context;
+    Spark::IEngineContext* moduleView = &context;
+    Spark::IConsole* console = moduleView->GetConsole();
+    ASSERT_TRUE(console != nullptr);
+
+    // A command registered through the SDK is dispatched by the host console, arguments and reply included.
+    std::vector<std::string> received;
+    ASSERT_TRUE(console->RegisterCommand(
+        "kit_probe",
+        [&received](const std::vector<std::string>& args) -> std::string
+        {
+            received = args;
+            return "kit_probe got " + std::to_string(args.size()) + " args";
+        },
+        "Probe command", "Kit", "kit_probe <a> <b>"));
+    EXPECT_TRUE(host.HasCommand("kit_probe"));
+    ASSERT_TRUE(host.ExecuteCommand("kit_probe alpha 7"));
+    EXPECT_TRUE(received == (std::vector<std::string>{"alpha", "7"}));
+    const auto history = host.GetLogHistory();
+    ASSERT_FALSE(history.empty());
+    EXPECT_EQ(history.back().message, std::string("kit_probe got 2 args"));
+
+    // Nameless and handler-less registrations are refused before they reach the registry.
+    EXPECT_FALSE(
+        console->RegisterCommand("", [](const std::vector<std::string>&) { return std::string(); }, "", "Kit", ""));
+    EXPECT_FALSE(console->RegisterCommand("kit_empty_handler", Spark::IConsole::CommandHandler{}, "", "Kit", ""));
+    EXPECT_FALSE(host.HasCommand("kit_empty_handler"));
+
+    // A name another registrant owns is refused, and the owner's handler stays in place.
+    ASSERT_TRUE(host.RegisterCommand(
+        "kit_taken", [](const std::vector<std::string>&) { return std::string("owner handler"); }, "", "Kit", "",
+        Spark::CommandPermission::Player, "other.module"));
+    EXPECT_FALSE(console->RegisterCommand(
+        "kit_taken", [](const std::vector<std::string>&) { return std::string("intruder"); }, "", "Kit", ""));
+    EXPECT_EQ(host.GetCommandOwner("kit_taken"), std::string("other.module"));
+    ASSERT_TRUE(host.ExecuteCommand("kit_taken"));
+    EXPECT_EQ(host.GetLogHistory().back().message, std::string("owner handler"));
+
+    // Unregistering through the SDK removes the command from the host; an unknown name is a no-op.
+    console->UnregisterCommand("kit_probe");
+    EXPECT_FALSE(host.HasCommand("kit_probe"));
+    received.clear();
+    EXPECT_FALSE(host.ExecuteCommand("kit_probe alpha 7"));
+    EXPECT_TRUE(received.empty());
+    console->UnregisterCommand("kit_never_registered");
+    EXPECT_TRUE(host.HasCommand("kit_taken"));
 }
 
 #ifdef SPARK_TEST_HAS_IMGUI

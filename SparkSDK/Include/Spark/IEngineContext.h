@@ -76,6 +76,7 @@ namespace Spark
 
     class VirtualFileSystem;
     class ILogger;
+    class IConsole;
 
     namespace Net
     {
@@ -353,6 +354,15 @@ namespace Spark
          * which format with std::format and do nothing when this returns nullptr.
          */
         virtual ILogger* GetLogger() { return nullptr; }
+
+        /**
+         * @brief Get the host's console command registry
+         *
+         * Modules register and unregister their console commands here instead of
+         * including the engine-private Utils/SparkConsole.h. Every command a module
+         * registers must be unregistered in its OnUnload (see <Spark/IConsole.h>).
+         */
+        virtual IConsole* GetConsole() { return nullptr; }
     };
 
     /**
@@ -368,9 +378,9 @@ namespace Spark
      * vtable changed without a SPARK_SDK_VERSION bump re-pinned in
      * SparkSDK/ABI/sdk-abi-surface.json.
      */
-    inline constexpr uint32_t EngineContextVirtualCount = 89;
+    inline constexpr uint32_t EngineContextVirtualCount = 90;
 
-    static_assert(EngineContextVirtualCount == 89 && SPARK_SDK_VERSION == 6,
+    static_assert(EngineContextVirtualCount == 90 && SPARK_SDK_VERSION == 7,
                   "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
                   "EngineContextVirtualCount together, or an old host will accept a module that "
                   "calls off the end of its vtable.");

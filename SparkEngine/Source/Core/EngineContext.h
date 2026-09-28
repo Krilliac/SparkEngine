@@ -19,6 +19,7 @@
 #include "Spark/IEngineContext.h"
 
 #include "Core/Contracts.h"
+#include "Core/EngineSdkConsole.h"
 #include "Core/EngineSdkLogger.h"
 
 #include <algorithm>
@@ -282,6 +283,9 @@ class EngineContext : public Spark::IEngineContext
     /// The SDK logger game modules use instead of the private console/log headers.
     Spark::ILogger* GetLogger() override { return &m_sdkLogger; }
 
+    /// The SDK console registry game modules use instead of the private Utils/SparkConsole.h.
+    Spark::IConsole* GetConsole() override { return &m_sdkConsole; }
+
     // =========================================================================
     // Named setters — delegate to generic registry (R1.1)
     // =========================================================================
@@ -420,4 +424,6 @@ class EngineContext : public Spark::IEngineContext
 
     // Stateless: forwards to the Logger singleton, so it is valid for the context's whole life.
     EngineSdkLogger m_sdkLogger;
+    // Stateless: forwards to the host SimpleConsole singleton.
+    EngineSdkConsole m_sdkConsole;
 };

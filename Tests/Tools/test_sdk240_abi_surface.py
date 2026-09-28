@@ -121,7 +121,7 @@ class SdkAbiSurfaceTests(unittest.TestCase):
         # Declaration order is vtable order; the destructor is declared first.
         self.assertTrue(slots[0].startswith("~IEngineContext"), slots[0])
         self.assertEqual(slots[1], "GraphicsEngine* GetGraphics()")
-        self.assertEqual(slots[-1], "ILogger* GetLogger()")
+        self.assertEqual(slots[-1], "IConsole* GetConsole()")
         header = (INCLUDE / "IEngineContext.h").read_text(encoding="utf-8")
         pinned = int(re.search(r"EngineContextVirtualCount = (\d+);", header).group(1))
         self.assertEqual(len(slots), pinned)

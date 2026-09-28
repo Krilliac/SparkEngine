@@ -25,7 +25,10 @@
 //     OD-01): EngineRuntime owns subsystem lifecycle, so every later slot moved.
 // v6: Appended IEngineContext::GetLogger() (one vtable slot, MOD-295) so modules
 //     log through the host's ILogger instead of the private console headers.
-#define SPARK_SDK_VERSION 6
+// v7: Appended IEngineContext::GetConsole() (one vtable slot, MOD-295) and the
+//     IConsole interface, so modules register console commands through the host
+//     instead of the private Utils/SparkConsole.h.
+#define SPARK_SDK_VERSION 7
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

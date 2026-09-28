@@ -4765,12 +4765,13 @@ set_tests_properties(PrototypeModuleKit_PrivateDependencyRatchet PROPERTIES
     TIMEOUT 120)
 
 # MOD-295: IEngineContext::GetLogger() and the Spark::ModuleLog helpers reach the
-# engine Logger, and SparkGameRTS's engine-system wiring logs through them. The RTS
-# case needs the module sources, which SparkTests compiles only with ImGui.
+# engine Logger, IEngineContext::GetConsole() registers into the host SimpleConsole,
+# and SparkGameRTS's engine-system wiring logs through them. The RTS case needs the
+# module sources, which SparkTests compiles only with ImGui.
 if(TARGET imgui)
-    set(_spark_prototype_kit_count 3)
+    set(_spark_prototype_kit_count 4)
 else()
-    set(_spark_prototype_kit_count 2)
+    set(_spark_prototype_kit_count 3)
 endif()
 add_test(NAME PrototypeModuleKit_Helpers COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(PrototypeModuleKit_Helpers PROPERTIES
