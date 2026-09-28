@@ -6,7 +6,9 @@
 # helper below renders that exact 40-character revision into the manifest at
 # configure/check time, avoiding a second SHA copy that Dependabot cannot edit.
 # Source archives without Git metadata retain an explicit descriptive marker.
-# Last sync: 2026-09-27 (NET-100: added the libsodium submodule at the 1.0.22-RELEASE
+# Last sync: 2026-09-28 (AngelScript build-tree patch now aligns 64-bit in-place
+# value objects and return slots to eight bytes; no source revision changed).
+# Previous sync: 2026-09-27 (NET-100: added the libsodium submodule at the 1.0.22-RELEASE
 # commit as the transport's only cryptographic library, owner decision OD-06).
 # Previous sync: 2026-09-24 (AngelScript build-tree patch now also skips zero-length
 # memcpy calls in asCString::Assign/Concatenate, whose source may be null for empty
