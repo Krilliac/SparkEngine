@@ -117,6 +117,24 @@ structurally bound on Windows and awaits its first Linux Clang build and smoke r
   modified the caller's vector, when an accepted event has no valid serialized size or
   out-of-order sequences, and when `Serialize` does not reproduce the spool's length and
   events. The link closure is `TelemetrySpoolFormat.cpp` alone.
+- **`scene-serializer`** (`SparkFuzzReflectedScene`, `FuzzReflectedSceneSmoke`,
+  `-runs=10`) feeds `Spark::DeserializeInto`, the reflected JSON reader behind `LoadWorld`
+  and editor crash recovery. The first input byte picks `Permissive` or `StrictRecovery`
+  (never `TrustedSnapshot`, which skips the untrusted-input caps). The adapter loads each
+  document into a fresh `World` and aborts when an accepted document creates a different
+  number of entities than its `entities` array holds, when a `Transform` parent names
+  itself or a missing entity, is not mirrored in the parent's `children`, or cycles (a
+  bounded walk independent of `World::SetParent`), when `TrySerializeWorld` refuses the
+  loaded world, or when `SerializeWorld` output does not reload to byte-identical text.
+  The link closure is `ReflectedSceneSerializer.cpp`, `ReflectedSceneValidation.cpp`,
+  `ComponentReflection.cpp` (the static registrations that fill `ComponentFactory` and
+  `TypeRegistry`) and the logger, over the pinned EnTT submodule; the adapter defines the
+  `Assert::Fail` fatal sink as print-and-abort instead of linking the crash handler and
+  console. Its smoke uses `-rss_limit_mb=512` because ASan's default 256 MB quarantine of
+  freed JSON trees alone reaches 256 MB in a campaign. SceneManager's versioned-text, INI
+  and legacy object-line readers are a separate blocked record, `scene-manager-text`.
+  Disabling `World::SetParent`'s cycle check makes the `parent-cycle-and-unknown-parent`
+  seed abort the smoke.
 
 Two gates, deliberately separate:
 
@@ -256,7 +274,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
@@ -433,11 +451,11 @@ change *is* the review record.
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`). `asset-service-protocol` and
   `daemon-protocol-frame` follow the `shader-service-protocol` template directly.
-  `rts-save-snapshot`, the reflected-scene path of `scene-serializer`, `save-system` and
+  `rts-save-snapshot`, `save-system` and
   `animation-skel-sanim` need a Linux build to settle their link closures first:
   `RTSPersistence::Deserialize` calls `Validate`, which shares a translation unit with
   `Capture`/`Apply` and calls `RTSCommandSystem::IsCommandValid` (ImGui and console code in
-  the same unit), and the scene, save and animation readers pull in the ECS, reflection
+  the same unit), and the save and animation readers pull in the ECS, reflection
   and glTF translation units;
 - commit bounded seed corpora under `FuzzerTests/corpora/` and minimized regressions;
 - retain the blocking ASan/UBSan smoke now wired for both targets and record hosted

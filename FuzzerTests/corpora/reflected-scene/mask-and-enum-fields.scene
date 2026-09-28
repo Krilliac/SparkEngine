@@ -1,0 +1,40 @@
+P{
+ "version": 1,
+ "entities": [
+  {
+   "id": 0,
+   "name": "Masks",
+   "components": [
+    {
+     "type": "CollisionMaskComponent",
+     "fields": {
+      "fromMask": "4294967295",
+      "intoMask": "-1"
+     }
+    },
+    {
+     "type": "VisibilityMaskComponent",
+     "fields": {
+      "mask": "255"
+     }
+    },
+    {
+     "type": "LightComponent",
+     "fields": {
+      "type": "2",
+      "intensity": "3.500000"
+     }
+    },
+    {
+     "type": "RigidBodyComponent",
+     "fields": {
+      "type": "1",
+      "mass": "10.000000",
+      "motionQuality": "1",
+      "isTrigger": "false"
+     }
+    }
+   ]
+  }
+ ]
+}

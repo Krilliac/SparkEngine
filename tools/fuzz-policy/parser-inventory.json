@@ -308,13 +308,36 @@
     },
     {
       "id": "scene-serializer",
-      "description": "Runtime scene and reflected-scene reader.",
+      "description": "Reflected-World JSON scene reader (LoadWorld and editor crash recovery via DeserializeInto).",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEngine/Source/SceneManager/SceneManager.cpp",
         "SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp",
         "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
-        "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h"
+        "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h",
+        "SparkEngine/Source/SceneManager/ReflectedSceneValidation.cpp",
+        "SparkEngine/Source/SceneManager/ReflectedSceneValidation.h"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzReflectedScene.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzReflectedScene",
+        "test_selector": "FuzzReflectedSceneSmoke",
+        "corpus_id": "scene-serializer-corpus",
+        "entry_symbol": "Spark::DeserializeInto",
+        "binding_source": "FuzzerTests/FuzzReflectedSceneProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDeserializeReflectedScene"
+      }
+    },
+    {
+      "id": "scene-manager-text",
+      "description": "SceneManager versioned text, INI and legacy object-line scene readers.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/SceneManager/SceneManager.cpp"
       ],
       "formats": [
         ".scene",
@@ -2548,7 +2571,7 @@
         "parse-entry"
       ],
       "delegates_to": [
-        "scene-serializer"
+        "scene-manager-text"
       ]
     },
     {
@@ -2559,7 +2582,7 @@
         "parse-entry"
       ],
       "delegates_to": [
-        "scene-serializer",
+        "scene-manager-text",
         "replay-system"
       ]
     },
@@ -2571,7 +2594,7 @@
         "parse-entry"
       ],
       "delegates_to": [
-        "scene-serializer"
+        "scene-manager-text"
       ]
     },
     {
@@ -2582,7 +2605,7 @@
         "parse-entry"
       ],
       "delegates_to": [
-        "scene-serializer"
+        "scene-manager-text"
       ]
     },
     {
@@ -2593,7 +2616,7 @@
         "parse-entry"
       ],
       "delegates_to": [
-        "scene-serializer"
+        "scene-manager-text"
       ]
     },
     {
@@ -3565,7 +3588,7 @@
         "parse-entry"
       ],
       "delegates_to": [
-        "scene-serializer"
+        "scene-manager-text"
       ]
     },
     {

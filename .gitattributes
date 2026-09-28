@@ -51,6 +51,7 @@ FuzzerTests/corpora/config-parser/** -text
 FuzzerTests/corpora/telemetry-spool-format/** -text
 FuzzerTests/corpora/save-system/** -text
 FuzzerTests/corpora/editor-prefab/** -text
+FuzzerTests/corpora/reflected-scene/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

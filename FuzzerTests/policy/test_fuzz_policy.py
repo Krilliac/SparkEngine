@@ -104,6 +104,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzTelemetrySpool",
     "SparkFuzzSaveSystem",
     "SparkFuzzEditorPrefab",
+    "SparkFuzzReflectedScene",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -1922,6 +1923,12 @@ class TestRepositoryIntegration(unittest.TestCase):
             ),
             "save-system": ("SaveSystem", "Spark::DecodeSaveFileBytes", "save-system", 12),
             "editor-prefab": ("EditorPrefab", "SparkEditor::PrefabTextFormat::Parse", "editor-prefab", 8),
+            "scene-serializer": (
+                "ReflectedScene",
+                "Spark::DeserializeInto",
+                "reflected-scene",
+                10,
+            ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)
         corpora = {corpus.parser_id: corpus for corpus in corpus_manifest.load_corpora(REPO_ROOT, inventory)}

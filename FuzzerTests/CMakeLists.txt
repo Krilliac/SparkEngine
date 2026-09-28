@@ -686,3 +686,107 @@ set_tests_properties(FuzzEditorPrefabSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# Spark::DeserializeInto is the reflected JSON scene reader behind LoadWorld and
+# editor crash recovery. Its closure is the serializer and validation sources,
+# the static component reflection registrations that populate ComponentFactory
+# and TypeRegistry (ComponentReflection.cpp) and the logger; World is
+# header-inline over the pinned EnTT submodule. World's SPARK_REQUIRE checks end
+# in Assert::Fail, whose production body (Utils/Assert.cpp) reaches the crash
+# handler and console; the adapter defines that fatal sink as print-and-abort,
+# which is what production does with suppression off (the default), so a
+# violated World precondition is a recorded crash here too.
+#
+# Core/EngineContext.h reaches the SDK's Version.h, which includes the
+# CMake-generated Spark/GeneratedVersion.h. Generate it here from the same
+# template and single version source the root project uses, so this target
+# builds from the standalone tools/fuzz-policy project as well.
+# (The fuzz-policy checker resolves only literal leading arguments, hence the
+# module-path include and the argument-free helper.)
+list(APPEND CMAKE_MODULE_PATH "${SPARK_FUZZ_PROJECT_ROOT}/cmake")
+include(SparkWindowsVersionInfo)
+set(SPARK_FUZZ_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+function(spark_fuzz_generate_version_header)
+    spark_resolve_engine_version(_spark_fuzz_engine_version)
+    string(REPLACE "." ";" _spark_fuzz_version_parts "${_spark_fuzz_engine_version}")
+    list(GET _spark_fuzz_version_parts 0 PROJECT_VERSION_MAJOR)
+    list(GET _spark_fuzz_version_parts 1 PROJECT_VERSION_MINOR)
+    list(GET _spark_fuzz_version_parts 2 PROJECT_VERSION_PATCH)
+    file(READ "${SPARK_FUZZ_PROJECT_ROOT}/cmake/SparkGeneratedVersion.h.in" _spark_fuzz_version_template)
+    file(CONFIGURE
+        OUTPUT "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
+        CONTENT "${_spark_fuzz_version_template}"
+        @ONLY
+    )
+endfunction()
+spark_fuzz_generate_version_header()
+
+add_executable(SparkFuzzReflectedScene
+    FuzzReflectedScene.cpp
+    FuzzReflectedSceneProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/ReflectedSceneValidation.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/ComponentReflection.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the reader, the reflection registry, the logger and the adapter
+# use libc++ and meet the driver only at the C ABI in
+# FuzzReflectedSceneProduction.h.
+set_source_files_properties(
+    FuzzReflectedSceneProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/ReflectedSceneValidation.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/ComponentReflection.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzReflectedScene PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/json"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/ECS/entt/single_include"
+)
+target_compile_features(SparkFuzzReflectedScene PRIVATE cxx_std_23)
+# Logger.cpp routes warnings/errors through DebugHookManager unless
+# SPARK_SHIPPING compiles the hooks out; the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzReflectedScene PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzReflectedScene PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzReflectedScene PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzReflectedScene PRIVATE Threads::Threads c++ c++abi)
+
+# Every input parses a JSON tree, builds a World and serializes it twice, so
+# ASan's default 256 MB quarantine of freed blocks alone fills a 256 MB budget
+# during a mutation campaign (measured: RSS plateaus near 490 MB over 60,000
+# runs, and stays under 100 MB with an 8 MB quarantine). 512 MB keeps the
+# campaign runner, which reuses these limits, from reporting that as an OOM;
+# -malloc_limit_mb defaults to the same value, so one oversized allocation
+# still fails.
+add_test(
+    NAME FuzzReflectedSceneSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzReflectedScene>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=512
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=10
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/reflected-scene"
+)
+set_tests_properties(FuzzReflectedSceneSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
