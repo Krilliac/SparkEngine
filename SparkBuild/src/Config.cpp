@@ -436,14 +436,37 @@ namespace SparkBuild
 
     bool ConfigManager::Load(const std::string& iniPath)
     {
-        std::ifstream file(iniPath);
+        std::ifstream file(iniPath, std::ios::binary);
         if (!file.is_open())
+        {
             return false;
+        }
 
+        // Read at most one byte past the bound, so an endless source (a pipe or
+        // /dev/zero) is refused without being drained. Trim strips the CR of a
+        // CRLF line, so binary mode parses the same values text mode did.
+        std::string text(kMaxConfigBytes + 1, '\0');
+        file.read(&text[0], static_cast<std::streamsize>(text.size()));
+        if (file.bad())
+        {
+            return false;
+        }
+        text.resize(static_cast<size_t>(file.gcount()));
+        if (text.size() > kMaxConfigBytes)
+        {
+            return false;
+        }
+
+        std::istringstream input(text);
+        return LoadFromStream(input);
+    }
+
+    bool ConfigManager::LoadFromStream(std::istream& input)
+    {
         BuildConfig parsed = config;
         std::string line, currentSection;
         std::unordered_set<std::string> seenKeys;
-        while (std::getline(file, line))
+        while (std::getline(input, line))
         {
             line = Trim(line);
             if (line.empty() || line[0] == ';' || line[0] == '#')

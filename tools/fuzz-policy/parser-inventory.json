@@ -803,18 +803,25 @@
     },
     {
       "id": "sparkbuild-config",
-      "description": "SparkBuild project configuration reader.",
+      "description": "SparkBuild sparkbuild.ini reader (ConfigManager::Load bounds the file to kMaxConfigBytes, LoadFromStream parses it) whose paths and preset become the cmake commands ProcessRunner runs through the shell.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkBuild/src/Config.cpp"
+        "SparkBuild/src/Config.cpp",
+        "SparkBuild/src/Config.h"
       ],
       "formats": [
-        ".json"
+        ".ini"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzSparkBuildConfig.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzSparkBuildConfig",
+        "test_selector": "FuzzSparkBuildConfigSmoke",
+        "corpus_id": "sparkbuild-config-corpus",
+        "entry_symbol": "SparkBuild::ConfigManager::LoadFromStream",
+        "binding_source": "FuzzerTests/FuzzSparkBuildConfigProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadSparkBuildConfig"
       }
     },
     {

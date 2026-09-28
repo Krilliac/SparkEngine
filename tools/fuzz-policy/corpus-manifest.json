@@ -558,6 +558,23 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "sparkbuild-config-corpus",
+      "parser_id": "sparkbuild-config",
+      "corpus_dir": "FuzzerTests/corpora/sparkbuild-config",
+      "last_verified": "2026-09-28",
+      "content_digest": "32bf6241668afc4b448b7a94da47f1e6d4485537aed78a77968a45d07997f31c",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

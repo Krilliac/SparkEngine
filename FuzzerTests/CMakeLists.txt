@@ -1590,3 +1590,63 @@ set_tests_properties(FuzzExecScriptSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# ConfigManager::LoadFromStream parses sparkbuild.ini; the adapter then builds
+# the cmake commands ProcessRunner runs through /bin/sh -c, so both the reader
+# and the shell quoting are under test. Config.cpp is SparkBuild's own source.
+add_executable(SparkFuzzSparkBuildConfig
+    FuzzSparkBuildConfig.cpp
+    FuzzSparkBuildConfigProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkBuild/src/Config.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the SparkBuild configuration code and the adapter use libc++ and
+# meet the driver only at the C ABI in FuzzSparkBuildConfigProduction.h.
+set_source_files_properties(
+    FuzzSparkBuildConfigProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkBuild/src/Config.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzSparkBuildConfig PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkBuild/src")
+# SparkBuild compiles as C++17 (SparkBuild/CMakeLists.txt); build its source the same way.
+set_target_properties(SparkFuzzSparkBuildConfig PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+target_compile_options(SparkFuzzSparkBuildConfig PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzSparkBuildConfig PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzSparkBuildConfig PRIVATE Threads::Threads c++ c++abi)
+
+# dollar-in-path, quote-in-path and backslash-path load but must be refused by
+# the command builder; duplicate-key, jobs-overflow and unknown-section are
+# rejected after earlier keys reached the draft, so the transactional-load
+# oracle runs on every replay.
+add_test(
+    NAME FuzzSparkBuildConfigSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzSparkBuildConfig>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/sparkbuild-config"
+)
+set_tests_properties(FuzzSparkBuildConfigSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

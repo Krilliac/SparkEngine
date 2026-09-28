@@ -118,6 +118,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzMMOEntityEvents",
     "SparkFuzzZipListing",
     "SparkFuzzExecScript",
+    "SparkFuzzSparkBuildConfig",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2019,6 +2020,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::ParseExecScript",
                 "exec-script-file",
                 7,
+            ),
+            "sparkbuild-config": (
+                "SparkBuildConfig",
+                "SparkBuild::ConfigManager::LoadFromStream",
+                "sparkbuild-config",
+                8,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)
