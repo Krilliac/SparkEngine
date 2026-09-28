@@ -269,6 +269,13 @@ RAW_SOCKET_ALLOWLIST = (
         family="unix",
     ),
     RawSocketAllowance(
+        "SparkEngine/Source/Utils/DaemonLifecycleSpawn.cpp",
+        "WaitForDaemonEndpoint",
+        (("socket", 1), ("connect", 1)),
+        (r"address\.sun_family\s*=\s*AF_UNIX", r"::socket\s*\(\s*AF_UNIX", r"::connect\s*\("),
+        family="unix",
+    ),
+    RawSocketAllowance(
         "SparkDaemon/src/DaemonServer.cpp",
         "EndpointIsActive",
         (("socket", 1), ("connect", 1)),
