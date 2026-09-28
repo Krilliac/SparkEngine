@@ -410,12 +410,19 @@ endfunction()
 
 set(_template_name "EmptyProject")
 set(_module_name "SparkGeneratedGame")
+
+# Work under the canonical spelling of the test root. The root lives in %TEMP%,
+# which on hosted runners is the 8.3 alias C:/Users/RUNNER~1/...; CMake expands
+# that alias in the consumer's include and library paths, so the "dumps mention
+# the prefix" guard below would never match a short-spelled prefix.
+file(REMOVE_RECURSE "${SPARK_TEST_ROOT}")
+file(MAKE_DIRECTORY "${SPARK_TEST_ROOT}")
+spark_real_path(SPARK_TEST_ROOT "${SPARK_TEST_ROOT}")
 set(_prefix "${SPARK_TEST_ROOT}/prefix")
 set(_projects "${SPARK_TEST_ROOT}/projects")
 set(_source "${_projects}/${_module_name}")
 set(_build "${SPARK_TEST_ROOT}/b")
 
-file(REMOVE_RECURSE "${SPARK_TEST_ROOT}")
 foreach(_component IN ITEMS sdk tools)
     _run_checked("Install the ${_component} component"
         "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
