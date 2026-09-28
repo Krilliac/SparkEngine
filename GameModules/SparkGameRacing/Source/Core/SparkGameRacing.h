@@ -77,6 +77,7 @@ class SparkGameRacingModule : public Spark::IModule
     std::unique_ptr<Racing::RacingEngineSystems> m_engineSystems;
     bool m_cameraCycleHeld{false};
     bool m_restartHeld{false};
+    bool m_autopilot{false}; ///< race_autopilot: the player car follows the racing line instead of the keys
 };
 
 // Module exports

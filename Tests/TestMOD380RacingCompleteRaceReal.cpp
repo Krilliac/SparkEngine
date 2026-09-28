@@ -79,21 +79,8 @@ namespace
             vehicles.FixedUpdate(kFrameDt);
         }
 
-        /// Player autopilot that follows the authored racing line, braking for corners like the AI does.
-        PlayerDriveInput Autopilot()
-        {
-            const VehicleInstance& player = *vehicles.GetPlayerVehicle();
-            PlayerDriveInput input;
-            input.throttle = 1.0f;
-            input.steer = ComputeTrackSteer(player, track);
-            const float limit = ComputeCornerSpeedLimit(player, track);
-            if (player.speed > limit)
-            {
-                input.throttle = 0.0f;
-                input.brake = std::clamp((player.speed - limit) / 20.0f, 0.2f, 1.0f);
-            }
-            return input;
-        }
+        /// The module's race_autopilot: follows the authored racing line, braking for corners like the AI does.
+        PlayerDriveInput Autopilot() { return ComputePlayerAutopilotInput(*vehicles.GetPlayerVehicle(), track); }
 
         /// Run until the race reaches Finished or the simulated time budget runs out.
         void RunToResults(float maxSeconds)

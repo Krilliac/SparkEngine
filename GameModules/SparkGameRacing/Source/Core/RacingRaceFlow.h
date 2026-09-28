@@ -64,6 +64,10 @@ namespace Racing
     /// on the authored centerline (circumradius of centerline samples against a fixed usable lateral grip).
     float ComputeCornerSpeedLimit(const VehicleInstance& vehicle, const RacingTrackSystem& trackSystem);
 
+    /// Player autopilot (`race_autopilot`): full throttle along the authored racing line (ComputeTrackSteer),
+    /// braking in proportion to the excess over ComputeCornerSpeedLimit, like the AI drivers do.
+    PlayerDriveInput ComputePlayerAutopilotInput(const VehicleInstance& vehicle, const RacingTrackSystem& trackSystem);
+
     /// Rebuild the player + AI roster as Jolt vehicles on the current track's starting grid and begin the
     /// countdown. Returns false when the vehicle system has no live physics world or a chassis cannot be built.
     bool SetupRaceRoster(const RaceSimulation& sim, Spark::IEngineContext* context);

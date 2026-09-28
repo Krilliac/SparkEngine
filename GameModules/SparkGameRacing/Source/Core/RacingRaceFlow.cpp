@@ -272,6 +272,20 @@ namespace Racing
         return std::clamp(headingError * 1.5f, -1.0f, 1.0f);
     }
 
+    PlayerDriveInput ComputePlayerAutopilotInput(const VehicleInstance& vehicle, const RacingTrackSystem& trackSystem)
+    {
+        PlayerDriveInput input;
+        input.throttle = 1.0f;
+        input.steer = ComputeTrackSteer(vehicle, trackSystem);
+        const float limit = ComputeCornerSpeedLimit(vehicle, trackSystem);
+        if (vehicle.speed > limit)
+        {
+            input.throttle = 0.0f;
+            input.brake = std::clamp((vehicle.speed - limit) / 20.0f, 0.2f, 1.0f);
+        }
+        return input;
+    }
+
     float ComputeCornerSpeedLimit(const VehicleInstance& vehicle, const RacingTrackSystem& trackSystem)
     {
         constexpr float kUsableLateralAccel = 0.8f * 9.81f; ///< m/s^2 of cornering the planner relies on

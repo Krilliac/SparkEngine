@@ -399,6 +399,23 @@ void SparkGameRacingModule::RegisterConsoleCommands()
                                 return m_engineSystems->SetWeather(args[0]);
                             });
 
+    // Automated player for packaged runs: restart the race with the player car on the production autopilot.
+    console.RegisterCommand("race_autopilot",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+                                    return "Usage: race_autopilot on|off";
+                                if (args[0] == "off")
+                                {
+                                    m_autopilot = false;
+                                    return "Autopilot off";
+                                }
+                                if (!SetupDefaultRaceRoster())
+                                    return "Autopilot failed: the race grid could not be rebuilt";
+                                m_autopilot = true;
+                                return "Autopilot on: race restarted with the player on the racing line";
+                            });
+
     console.RegisterCommand("race_restart",
                             [this](const std::vector<std::string>&) -> std::string
                             {
