@@ -197,7 +197,9 @@ void SparkGameDefaultModule::RegisterConsoleCommands()
         [this](const std::vector<std::string>&) -> std::string
         {
             if (!m_showcase)
+            {
                 return "Showcase not initialized";
+            }
             return GameplayShowcase::FormatOutcome(m_showcase->GetOutcome());
         },
         "Print the showcase outcome as one SPARK_SHOWCASE_OUTCOME line", "Showcase");

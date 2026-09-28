@@ -15,7 +15,9 @@ bool EngineSdkConsole::RegisterCommand(std::string_view name, CommandHandler han
 {
     // An empty name cannot be typed and an empty handler would throw on dispatch; refuse both up front.
     if (name.empty() || !handler)
+    {
         return false;
+    }
     return Spark::SimpleConsole::GetInstance().RegisterCommand(std::string(name), std::move(handler), std::string(help),
                                                                std::string(category), std::string(usage));
 }

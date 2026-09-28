@@ -32,7 +32,9 @@ ShowcaseOutcome GameplayShowcase::GetOutcome() const
         if (m_coroutineTarget && world->GetRegistry().valid(static_cast<EntityID>(*m_coroutineTarget)))
         {
             if (const auto* health = world->GetComponent<HealthComponent>(static_cast<EntityID>(*m_coroutineTarget)))
+            {
                 outcome.coroutineTargetHealth = static_cast<int>(std::lround(health->health));
+            }
         }
 
         // A prop counts as resolved when its mesh file exists where the asset pipeline opens a relative mesh
@@ -41,20 +43,28 @@ ShowcaseOutcome GameplayShowcase::GetOutcome() const
         {
             const auto entity = static_cast<EntityID>(entityId);
             if (!world->GetRegistry().valid(entity))
+            {
                 continue;
+            }
             const auto* renderer = world->GetComponent<MeshRenderer>(entity);
             std::error_code error;
             if (renderer && !renderer->meshPath.empty() &&
                 std::filesystem::is_regular_file(std::filesystem::path(renderer->meshPath), error))
+            {
                 ++outcome.exhibitResolved;
+            }
         }
     }
 
     if (const auto* weather = m_context ? m_context->GetWeather() : nullptr)
+    {
         outcome.weatherName = Spark::WeatherSystem::GetWeatherTypeName(weather->GetCurrentState().type);
+    }
 
     if (const auto* timeOfDay = m_context ? m_context->GetTimeOfDay() : nullptr)
+    {
         outcome.hourHundredths = static_cast<int>(std::lround(timeOfDay->GetTimeOfDay() * 100.0f));
+    }
 
     return outcome;
 }

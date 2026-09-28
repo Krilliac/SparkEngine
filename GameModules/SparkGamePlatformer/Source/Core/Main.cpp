@@ -189,7 +189,9 @@ void SparkGamePlatformerModule::OnUnload()
     if (Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr)
     {
         for (const std::string& name : m_consoleCommands)
+        {
             console->UnregisterCommand(name);
+        }
     }
     m_consoleCommands.clear();
 
@@ -315,9 +317,13 @@ void SparkGamePlatformerModule::RegisterConsoleCommands()
     auto registerCommand = [this, host](std::string_view name, Spark::IConsole::CommandHandler handler)
     {
         if (host->RegisterCommand(name, std::move(handler), "", "Platformer", ""))
+        {
             m_consoleCommands.emplace_back(name);
+        }
         else
+        {
             Spark::ModuleLog::Warn(m_context, "[Platformer] Console command '{}' was not registered", name);
+        }
     };
 
     registerCommand("platformer_status",
