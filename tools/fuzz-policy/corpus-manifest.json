@@ -575,6 +575,23 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "visual-script-graph-corpus",
+      "parser_id": "visual-script-graph",
+      "corpus_dir": "FuzzerTests/corpora/visual-script-graph",
+      "last_verified": "2026-09-28",
+      "content_digest": "bb9f017e254c8ba0d1b8d91e3fe9529e8c5b7331765669d75e4e6c5595b38c83",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

@@ -1650,3 +1650,70 @@ set_tests_properties(FuzzSparkBuildConfigSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# The .vscript decoder (VisualScriptGraphIO.cpp) with the writer that
+# serializes its round trip and the palette that names node types and pin
+# kinds; JsonUtils is header-only apart from the logger.
+add_executable(SparkFuzzVisualScriptGraph
+    FuzzVisualScriptGraph.cpp
+    FuzzVisualScriptGraphProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Scripting/VisualScriptGraphIO.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Scripting/VisualScriptGraphWriter.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Scripting/VisualScriptNodePalette.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the production decoder, writer, palette, logger and adapter use
+# libc++ and meet the driver only at the C ABI in FuzzVisualScriptGraphProduction.h.
+set_source_files_properties(
+    FuzzVisualScriptGraphProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Scripting/VisualScriptGraphIO.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Scripting/VisualScriptGraphWriter.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Scripting/VisualScriptNodePalette.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzVisualScriptGraph PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzVisualScriptGraph PRIVATE cxx_std_23)
+# Logger.cpp routes warnings/errors through DebugHookManager unless
+# SPARK_SHIPPING compiles the hooks out; the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzVisualScriptGraph PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzVisualScriptGraph PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzVisualScriptGraph PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzVisualScriptGraph PRIVATE Threads::Threads c++ c++abi)
+
+# game-manager.vscript is the shipped GameVisualScript graph, already canonical.
+# Six seeds carry one defect the decoder must reject (unknown node type,
+# duplicate id, id above kMaxNodeId, wire to a missing pin, second wire out of
+# one execution output, 32-level nesting). A Float default of 2^24 + 1 is
+# accepted and rounds to 2^24, so its canonical round trip must still hold.
+add_test(
+    NAME FuzzVisualScriptGraphSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzVisualScriptGraph>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/visual-script-graph"
+)
+set_tests_properties(FuzzVisualScriptGraphSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

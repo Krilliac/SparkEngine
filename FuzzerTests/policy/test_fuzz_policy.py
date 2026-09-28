@@ -119,6 +119,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzZipListing",
     "SparkFuzzExecScript",
     "SparkFuzzSparkBuildConfig",
+    "SparkFuzzVisualScriptGraph",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2025,6 +2026,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "SparkBuildConfig",
                 "SparkBuild::ConfigManager::LoadFromStream",
                 "sparkbuild-config",
+                8,
+            ),
+            "visual-script-graph": (
+                "VisualScriptGraph",
+                "Spark::Scripting::VisualScriptGraphIO::Parse",
+                "visual-script-graph",
                 8,
             ),
         }

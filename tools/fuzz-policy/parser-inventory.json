@@ -2323,10 +2323,16 @@
       "formats": [
         ".vscript"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness (Parse then Compile) and bounded seed corpus from the checked-in GameModules/SparkGameVisualScript/Assets/Graphs are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzVisualScriptGraph.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzVisualScriptGraph",
+        "test_selector": "FuzzVisualScriptGraphSmoke",
+        "corpus_id": "visual-script-graph-corpus",
+        "entry_symbol": "Spark::Scripting::VisualScriptGraphIO::Parse",
+        "binding_source": "FuzzerTests/FuzzVisualScriptGraphProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseVisualScriptGraph"
       }
     },
     {
