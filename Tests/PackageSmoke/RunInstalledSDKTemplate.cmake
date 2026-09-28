@@ -1,16 +1,21 @@
-# SDK-240: build the SDK component's shipped EmptyProject example from an
-# sdk-only install, with nothing from the engine source or build tree.
+# SDK-240 / ASSET-220: generate a game with the INSTALLED spark-cli from the
+# SDK component's shipped EmptyProject example and build it from an sdk-only
+# install, with nothing from the engine source or build tree.
 #
 # The sdk component installs Templates/EmptyProject as
 # share/SparkEngine/sdk/examples/EmptyProject and the SDK README calls it
 # buildable, but SparkSDKComponentCompleteness only checks that its files exist
 # and SparkInstalledTemplates builds templates from a FULL install. This runner:
 #
-#   1. installs ONLY the sdk component of the configured engine build;
-#   2. copies the installed example out of the prefix and configures and builds
-#      it against <prefix>/lib/cmake/SparkEngine, in the engine's configuration
-#      (the example links the static Spark::SparkEngineLib on Windows, so the
-#      CRT flavour and iterator debug level must match the engine's);
+#   1. installs ONLY the sdk and tools components of the configured engine build;
+#   2. runs `python <prefix>/tools/spark-cli/spark_cli.py new SparkGeneratedGame
+#      --template EmptyProject` with SPARK_ENGINE_DIR unset and the working
+#      directory outside the source tree, so the CLI must find the prefix and
+#      its sdk example on its own and rename the project; then configures and
+#      builds the generated project against <prefix>/lib/cmake/SparkEngine, in
+#      the engine's configuration (the example links the static
+#      Spark::SparkEngineLib on Windows, so the CRT flavour and iterator debug
+#      level must match the engine's);
 #   3. requires exactly one module image and its <image>.sparkabi sidecar, the
 #      sidecar's sdk_version to equal the installed Spark/Version.h and its
 #      binary_sha256 to hash the image, and (with SPARK_REFERENCE_SIDECAR) every
@@ -27,6 +32,7 @@
 # Required: SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_TEST_ROOT
 #           SPARK_CONSUMER_GENERATOR (must be "Ninja Multi-Config")
 #           SPARK_CONSUMER_MAKE_PROGRAM (the ninja executable)
+#           SPARK_PYTHON_EXECUTABLE (runs the installed spark-cli)
 # Optional: SPARK_CONSUMER_PLATFORM SPARK_CONSUMER_TOOLSET SPARK_CONSUMER_COMPILER
 #           SPARK_CONSUMER_TOOLCHAIN SPARK_REFERENCE_SIDECAR
 #
@@ -34,7 +40,7 @@
 # sidecar and boundary checks against inline fixtures; every broken fixture
 # must be rejected by name and every good one accepted.
 #
-# Success prints one record:
+# Success prints one record (module=SparkGeneratedGame proves the CLI renamed it):
 #   SPARK_SDK_TEMPLATE module=<name> sdk_version=<n> scanned=<k> violations=0
 
 cmake_minimum_required(VERSION 3.25)
@@ -357,7 +363,8 @@ if(SPARK_SDK_TEMPLATE_SELF_TEST)
 endif()
 
 foreach(_required IN ITEMS
-        SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_CONSUMER_GENERATOR SPARK_CONSUMER_MAKE_PROGRAM)
+        SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_CONSUMER_GENERATOR SPARK_CONSUMER_MAKE_PROGRAM
+        SPARK_PYTHON_EXECUTABLE)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
         message(FATAL_ERROR "${_required} is required for the installed SDK template test")
     endif()
@@ -401,19 +408,27 @@ function(_run_checked _stage)
     endif()
 endfunction()
 
-set(_module_name "EmptyProject")
+set(_template_name "EmptyProject")
+set(_module_name "SparkGeneratedGame")
 set(_prefix "${SPARK_TEST_ROOT}/prefix")
-set(_source "${SPARK_TEST_ROOT}/src")
+set(_projects "${SPARK_TEST_ROOT}/projects")
+set(_source "${_projects}/${_module_name}")
 set(_build "${SPARK_TEST_ROOT}/b")
 
 file(REMOVE_RECURSE "${SPARK_TEST_ROOT}")
-_run_checked("Install the sdk component"
-    "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
-    --config "${SPARK_CONFIG}" --prefix "${_prefix}" --component sdk)
+foreach(_component IN ITEMS sdk tools)
+    _run_checked("Install the ${_component} component"
+        "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
+        --config "${SPARK_CONFIG}" --prefix "${_prefix}" --component ${_component})
+endforeach()
 
-set(_example "${_prefix}/share/SparkEngine/sdk/examples/${_module_name}")
+set(_example "${_prefix}/share/SparkEngine/sdk/examples/${_template_name}")
 if(NOT EXISTS "${_example}/CMakeLists.txt")
-    message(FATAL_ERROR "The sdk component did not install the ${_module_name} example at ${_example}")
+    message(FATAL_ERROR "The sdk component did not install the ${_template_name} example at ${_example}")
+endif()
+set(_installed_cli "${_prefix}/tools/spark-cli/spark_cli.py")
+if(NOT EXISTS "${_installed_cli}")
+    message(FATAL_ERROR "The tools component did not install spark-cli at ${_installed_cli}")
 endif()
 set(_version_header "${_prefix}/include/Spark/Version.h")
 if(NOT EXISTS "${_version_header}")
@@ -426,8 +441,33 @@ if(NOT _sdk_line_count EQUAL 1 OR NOT _sdk_lines MATCHES "SPARK_SDK_VERSION[ \t]
 endif()
 set(_sdk_version "${CMAKE_MATCH_1}")
 
-# Build a copy so nothing is written into the prefix.
-file(COPY "${_example}/" DESTINATION "${_source}")
+# Generate the game with the installed CLI. It must locate the prefix from its
+# own install location (SPARK_ENGINE_DIR is unset) and write outside the prefix.
+file(MAKE_DIRECTORY "${_projects}")
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env --unset=SPARK_ENGINE_DIR
+        "${SPARK_PYTHON_EXECUTABLE}" -B "${_installed_cli}" new ${_module_name}
+        --template ${_template_name} --output "${_projects}"
+    WORKING_DIRECTORY "${_projects}"
+    RESULT_VARIABLE _new_result
+    OUTPUT_VARIABLE _new_output
+    ERROR_VARIABLE _new_error
+    TIMEOUT 120)
+if(NOT "${_new_result}" STREQUAL "0")
+    message(FATAL_ERROR "The installed spark-cli could not create ${_module_name} (${_new_result}):\n"
+                        "${_new_output}\n${_new_error}")
+endif()
+if(NOT EXISTS "${_source}/CMakeLists.txt" OR NOT EXISTS "${_source}/${_module_name}.sparkproject")
+    message(FATAL_ERROR "spark-cli new did not produce a renamed ${_module_name} project:\n${_new_output}")
+endif()
+file(REAL_PATH "${_prefix}/lib/cmake/SparkEngine" _package_dir_real)
+if(NOT _new_output MATCHES "-DSparkEngine_DIR=([^\r\n]+)")
+    message(FATAL_ERROR "spark-cli new printed no install-based SparkEngine_DIR:\n${_new_output}")
+endif()
+file(REAL_PATH "${CMAKE_MATCH_1}" _printed_package_dir)
+if(NOT _printed_package_dir STREQUAL _package_dir_real)
+    message(FATAL_ERROR "spark-cli new printed SparkEngine_DIR=${CMAKE_MATCH_1}, expected ${_package_dir_real}")
+endif()
 
 set(_configure
     "${CMAKE_COMMAND}" -S "${_source}" -B "${_build}"

@@ -494,16 +494,29 @@ def _write_development_manifest(path, resolved_modules):
     return _write_text(path, json.dumps(manifest, indent=2) + "\n")
 
 
+INSTALLED_PACKAGE_CONFIG = Path("lib") / "cmake" / "SparkEngine" / "SparkEngineConfig.cmake"
+
+
+def is_install_prefix(engine_root):
+    """True when engine_root is an installed SDK prefix rather than a source tree."""
+    return (Path(engine_root) / INSTALLED_PACKAGE_CONFIG).is_file()
+
+
 def find_engine_root():
-    """Find the SparkEngine root directory."""
-    # Check environment variable first
+    """Find the SparkEngine root: a source tree or an install prefix.
+
+    SPARK_ENGINE_DIR wins. Otherwise walk up from this script: an install puts
+    it at <prefix>/tools/spark-cli, below <prefix>/lib/cmake/SparkEngine; a
+    source tree has SparkSDK/ and SparkEngine/ at its root.
+    """
     env_root = os.environ.get("SPARK_ENGINE_DIR")
     if env_root and os.path.isdir(env_root):
         return Path(env_root)
 
-    # Walk up from this script's location
     current = Path(__file__).resolve().parent
     while current != current.parent:
+        if is_install_prefix(current):
+            return current
         if (current / "SparkSDK").is_dir() and (current / "SparkEngine").is_dir():
             return current
         current = current.parent
@@ -512,7 +525,18 @@ def find_engine_root():
 
 
 def get_templates_dir(engine_root):
-    """Get the templates directory."""
+    """Get the project templates directory for a source tree or an install prefix.
+
+    A full install carries every template under share/SparkEngine/templates; an
+    sdk-only install carries the EmptyProject example under
+    share/SparkEngine/sdk/examples.
+    """
+    engine_root = Path(engine_root)
+    if is_install_prefix(engine_root):
+        installed = engine_root / "share" / "SparkEngine" / "templates"
+        if installed.is_dir():
+            return installed
+        return engine_root / "share" / "SparkEngine" / "sdk" / "examples"
     return engine_root / "Templates"
 
 
@@ -643,7 +667,7 @@ def cmd_new(args):
     templates_dir = get_templates_dir(engine_root)
     template_path = templates_dir / template_name
     if not template_path.is_dir():
-        available = [d.name for d in templates_dir.iterdir() if d.is_dir()]
+        available = [d.name for d in templates_dir.iterdir() if d.is_dir()] if templates_dir.is_dir() else []
         print(f"Error: Template '{template_name}' not found.")
         print(f"Available templates: {', '.join(available) if available else 'none'}")
         return 1
@@ -699,6 +723,11 @@ def cmd_new(args):
     print()
     print("Next steps:")
     print(f"  1. cd {project_path}")
+    if is_install_prefix(engine_root):
+        package_dir = (Path(engine_root) / INSTALLED_PACKAGE_CONFIG).parent.resolve()
+        print(f"  2. cmake -B build -DSparkEngine_DIR={package_dir.as_posix()}")
+        print(f"  3. cmake --build build")
+        return 0
     print(f"  2. cmake -B build -DSparkEngine_DIR=<path-to-engine-install>/lib/cmake/SparkEngine")
     print(f"  3. cmake --build build")
     print()

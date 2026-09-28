@@ -19,6 +19,24 @@ python <engine-root>/Tools/spark-cli/spark_cli.py cooker --config Release -- --h
 Resolution is bounded to `SPARKENGINE_TOOL_DIR` and the engine's known build/install layouts. Use
 `--executable <path>` for an operator-selected binary or `--dry-run` to inspect the exact invocation.
 
+## Create a project
+
+```powershell
+python <prefix>/tools/spark-cli/spark_cli.py templates
+python <prefix>/tools/spark-cli/spark_cli.py new MyGame --template EmptyProject --output D:/Games
+```
+
+`new` copies a template into `<output>/<name>` (the current directory without `--output`) and rewrites every
+occurrence of the template name, in file contents and file names, to the project name, which must be a C++
+identifier. The engine root is `SPARK_ENGINE_DIR` when set; otherwise the CLI walks up from its own location
+and accepts either an install prefix (a directory holding `lib/cmake/SparkEngine/SparkEngineConfig.cmake`,
+which is where the `tools` install component puts the CLI, at `<prefix>/tools/spark-cli`) or a source
+checkout (a directory holding `SparkSDK/` and `SparkEngine/`). An install takes templates from
+`share/SparkEngine/templates` (the `templates` component), or from `share/SparkEngine/sdk/examples` when only
+the `sdk` component is installed; a checkout takes them from `Templates/`. From an install, `new` prints the
+exact `-DSparkEngine_DIR=<prefix>/lib/cmake/SparkEngine` to configure the generated project with.
+`templates` lists the available templates and `info` reports the engine root the CLI resolved.
+
 ## Run a project
 
 ```powershell

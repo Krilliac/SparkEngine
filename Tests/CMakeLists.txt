@@ -3510,7 +3510,8 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         RUN_SERIAL TRUE
         TIMEOUT 30)
 
-    # SDK-240: build the sdk component's EmptyProject example from an sdk-only
+    # SDK-240 / ASSET-220: generate SparkGeneratedGame with the installed spark-cli
+    # from the sdk component's EmptyProject example, build it from an sdk+tools
     # install, require its ABI sidecar to match a host-built module's, and fail
     # on any resolved path back into the engine source or build tree.
     add_test(
@@ -3527,6 +3528,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             "-DSPARK_CONSUMER_MAKE_PROGRAM=${_spark_mod310_consumer_make_program}"
             "-DSPARK_CONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
             "-DSPARK_REFERENCE_SIDECAR=$<TARGET_FILE:SparkGameFPS>.sparkabi"
+            "-DSPARK_PYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
             -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledSDKTemplate.cmake)
     set_tests_properties(SDKConsumer_InstalledEmptyProjectTemplate PROPERTIES
         LABELS "sdk;package;installed-sdk;integration"
@@ -3842,12 +3844,13 @@ if(SPARK_ENABLE_PACKAGE_CONSUMER_TESTS)
             "the Windows installed-SDK consumer runs in .github/workflows/build.yml")
     endif()
     # A single-config tree configured without CMAKE_BUILD_TYPE has an empty
-    # $<CONFIG>; the consumer then builds as Release. Four stages (install,
-    # configure, build, ctest) each get SPARK_STAGE_TIMEOUT; 4 x 800 s plus
+    # $<CONFIG>; the consumer then builds as Release. Seven stages (install,
+    # configure, build, ctest, then generate, configure and build the
+    # spark-cli generated game) each get SPARK_STAGE_TIMEOUT; 7 x 480 s plus
     # slack stays inside the 3600 s CTest TIMEOUT (the CI-110 policy ceiling),
     # so a stage limit with its log, not a CTest kill, reports a hang.
     set(_spark_consumer_config "$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Release>")
-    set(_spark_consumer_stage_timeout 800)
+    set(_spark_consumer_stage_timeout 480)
     add_test(NAME PackageConsumer_LinuxInstalledSDK
         COMMAND ${CMAKE_COMMAND}
             "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
@@ -3857,6 +3860,7 @@ if(SPARK_ENABLE_PACKAGE_CONSUMER_TESTS)
             "-DSPARK_STAGE_TIMEOUT=${_spark_consumer_stage_timeout}"
             "-DSPARK_CONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
             "-DSPARK_CONSUMER_CTEST=${CMAKE_CTEST_COMMAND}"
+            "-DSPARK_PYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
             -P "${CMAKE_SOURCE_DIR}/cmake/RunInstalledPackageConsumer.cmake")
     set_tests_properties(PackageConsumer_LinuxInstalledSDK PROPERTIES
         LABELS "package-consumer-linux"

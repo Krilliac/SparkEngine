@@ -76,6 +76,70 @@ class SparkNewTests(unittest.TestCase):
         self.assertIn("FrontierGameModule", (project / "Source" / "GameModule.h").read_text(encoding="utf-8"))
 
 
+class SparkNewFromInstalledPrefixTests(unittest.TestCase):
+    """ASSET-220: `spark new` run from an install prefix, as the tools component installs it."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.prefix = self.root / "prefix"
+        self.output = self.root / "Projects"
+        self.output.mkdir()
+        touch(self.prefix / "lib" / "cmake" / "SparkEngine" / "SparkEngineConfig.cmake")
+        # The tools component installs Tools/ (minus tests/) at <prefix>/tools.
+        installed_cli = self.prefix / "tools" / "spark-cli"
+        shutil.copytree(
+            CLI_PATH.parent, installed_cli, ignore=shutil.ignore_patterns("tests", "__pycache__")
+        )
+        spec = importlib.util.spec_from_file_location("installed_spark_cli", installed_cli / "spark_cli.py")
+        self.cli = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.cli)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def write_template(self, directory):
+        write_json(directory / "EmptyProject.sparkproject", {"name": "EmptyProject"})
+        (directory / "CMakeLists.txt").write_text(
+            "project(EmptyProject LANGUAGES CXX)\nspark_add_game_module(EmptyProject)\n", encoding="utf-8"
+        )
+
+    def run_new(self):
+        args = SimpleNamespace(name="SparkGeneratedGame", template="EmptyProject", output=str(self.output))
+        stdout = io.StringIO()
+        with mock.patch.dict(os.environ, {}, clear=False), contextlib.redirect_stdout(stdout):
+            os.environ.pop("SPARK_ENGINE_DIR", None)
+            result = self.cli.cmd_new(args)
+        return result, stdout.getvalue()
+
+    def assert_generated(self, result, stdout):
+        project = self.output / "SparkGeneratedGame"
+        self.assertEqual(result, 0, stdout)
+        self.assertTrue((project / "SparkGeneratedGame.sparkproject").is_file())
+        self.assertFalse((project / "EmptyProject.sparkproject").exists())
+        self.assertIn(
+            "spark_add_game_module(SparkGeneratedGame)", (project / "CMakeLists.txt").read_text(encoding="utf-8")
+        )
+        package_dir = (self.prefix / "lib" / "cmake" / "SparkEngine").resolve().as_posix()
+        self.assertIn(f"-DSparkEngine_DIR={package_dir}", stdout)
+        self.assertNotIn("<path-to-engine-install>", stdout)
+
+    def test_new_from_installed_prefix_uses_share_templates(self):
+        self.write_template(self.prefix / "share" / "SparkEngine" / "templates" / "EmptyProject")
+        self.assertEqual(self.cli.find_engine_root(), self.prefix.resolve())
+        self.assert_generated(*self.run_new())
+
+    def test_new_from_sdk_only_install_uses_the_sdk_example(self):
+        self.write_template(self.prefix / "share" / "SparkEngine" / "sdk" / "examples" / "EmptyProject")
+        self.assert_generated(*self.run_new())
+
+    def test_new_from_install_without_templates_fails_cleanly(self):
+        result, stdout = self.run_new()
+        self.assertEqual(result, 1)
+        self.assertIn("Template 'EmptyProject' not found", stdout)
+        self.assertFalse((self.output / "SparkGeneratedGame").exists())
+
+
 class SparkExternalToolTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
