@@ -42,8 +42,8 @@ RELEASE_WORKFLOW_PATH = ".github/workflows/release.yml"
 # and support semantics every stable release states.
 SUPPORT_WINDOW = (
     "Support window: this stable release receives security and critical fixes until 6 months after the next "
-    "stable release, and its assets are immutable and kept permanently. Nightly prereleases are kept for 30 days "
-    "and are unsupported, and experimental CI artifacts are kept 14 days and are never supported."
+    "stable release, and its assets are immutable and kept permanently. Nightly prereleases are unsupported, "
+    "and experimental CI artifacts are kept 14 days and are never supported."
 )
 
 # GitHub rejects release bodies above 125000 characters; stay clearly below it.

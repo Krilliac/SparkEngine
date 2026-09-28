@@ -170,8 +170,8 @@ class HappyPathTests(ReleaseNotesTestCase):
         # OD-17 channel semantics: the support window and retention are stated.
         self.assertIn("### Support and retention\n\nSupport window: this stable release receives security and "
                       "critical fixes until 6 months after the next stable release, and its assets are immutable "
-                      "and kept permanently. Nightly prereleases are kept for 30 days and are unsupported, and "
-                      "experimental CI artifacts are kept 14 days and are never supported.\n", body)
+                      "and kept permanently. Nightly prereleases are unsupported, and experimental CI artifacts are "
+                      "kept 14 days and are never supported.\n", body)
         # Exactly the requested changelog section, headings demoted, migrations extracted.
         self.assertIn("### Changes in 1.2.3 - 2026-10-01\n\nStable fixture release.", body)
         self.assertIn("#### Changed\n- Save format v5.", body)
@@ -361,8 +361,6 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("## Nightly Build", nightly["env"]["RELEASE_BODY"])
         self.assertIn("Nightly builds are unsupported prereleases",
                       nightly["env"]["RELEASE_BODY"])
-        # OD-17: the nightly body states its 30-day retention.
-        self.assertIn("kept for 30 days", nightly["env"]["RELEASE_BODY"])
         self.assertNotIn("stable-notes", nightly["env"]["RELEASE_BODY"])
 
     def test_experimental_ci_artifacts_keep_the_stated_14_days(self):

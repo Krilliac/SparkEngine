@@ -240,19 +240,16 @@ Where each term is stated or enforced today:
 
 - Stable and nightly terms are stated in the generated stable notes
   (`SUPPORT_WINDOW` in `tools/release_notes.py`), and the nightly release body
-  states the 30-day window.
+  states that nightlies are unsupported.
 - The 14-day experimental retention is pinned as `retention-days: 14` on the
   experimental `build.yml` uploads (`ReleaseProfileRehearsal_ReleaseNotes`).
-- `.github/scripts/prune_expired_nightlies.py` selects nightly releases past
-  30 days: only unique `nightly-<run>-<attempt>-<sha12>` tags that are published,
-  non-draft prereleases. It never selects the legacy `nightly` release, a stable
-  release, a draft, or a malformed tag or timestamp. It is a dry run unless
-  `--apply` is given. Before each delete it re-reads the release and requires the
-  same identity. It deletes only the release and keeps the git tag, so a tag is
-  never reused. It refuses more than `--max-deletions` (default 60) candidates,
-  and any API error exits non-zero. `ReleaseChannelPolicy_Retention` covers it.
-  No workflow job runs it yet, so the 30-day nightly window is not enforced and
-  REL-100's channel criterion stays unmet.
+- Nothing enforces the 30-day nightly window yet, and no release text claims
+  it. Deleting an expired nightly release also deletes its assets, and
+  `download_counter_ledger.py` refuses any tracked asset that disappears
+  without a durable pending publication. That would fail every later
+  publication. A pruning job therefore has to retire those assets in the
+  counter ledger first, keeping the cumulative download totals. Until it
+  does, REL-100's channel criterion stays unmet.
 
 ## Immutable stable and nightly publication
 
@@ -408,10 +405,9 @@ Contract reference rules and the public numeric-claim ledger added 2026-09-24 fr
 [`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).
 Generated stable release notes (REL-190) added 2026-09-24 from
 [`tools/release_notes.py`](../../tools/release_notes.py).
-Nightly retention selector and the immutable-nightly migration status (REL-100)
-updated 2026-09-28 from
-[`prune_expired_nightlies.py`](../../.github/scripts/prune_expired_nightlies.py)
-and [`release.yml`](../../.github/workflows/release.yml).
+Nightly retention status and the immutable-nightly migration status (REL-100)
+updated 2026-09-28 from [`release.yml`](../../.github/workflows/release.yml)
+and [`download_counter_ledger.py`](../../.github/scripts/download_counter_ledger.py).
 Release tag contract helpers (REL-100) added 2026-09-26 from
 [`stable_release_tag.py`](../../.github/scripts/stable_release_tag.py) and
 [`nightly_release_tag.py`](../../.github/scripts/nightly_release_tag.py).

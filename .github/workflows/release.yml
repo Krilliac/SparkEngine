@@ -2629,7 +2629,7 @@ jobs:
           Built on: ${{ steps.run-start.outputs.started_at }}
           Branch: `${{ github.ref_name }}`
 
-          > **Nightly builds are immutable prereleases.** Each run has a unique tag; the historical `nightly` rolling release is not modified. Nightly builds are unsupported prereleases and are kept for 30 days.
+          > **Nightly builds are immutable prereleases.** Each run has a unique tag; the historical `nightly` rolling release is not modified. Nightly builds are unsupported prereleases.
 
           ${{ steps.assets.outputs.table }}
       run: python3 .github/scripts/stage_release_draft.py
