@@ -361,8 +361,8 @@ namespace Spark::AI
      *
      * Two triangles neighbor each other when they share at least two vertices. Every link is first
      * reset to UINT32_MAX, and a triangle whose indices leave the vertex array gains no neighbors, so
-     * the result only ever names in-range triangles. O(n^2) in the triangle count: callers bound it by
-     * kMaxSnavAdjacencyRebuild.
+     * the result only ever names in-range triangles. O(n^2) in the triangle count: LoadNavMesh bounds it by
+     * kMaxSnavAdjacencyRebuild, and NavMeshBuilder's triangle-soup path runs it as part of an offline bake.
      */
     void RebuildTriangleAdjacency(NavMeshData& navMesh);
 

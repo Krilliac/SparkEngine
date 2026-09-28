@@ -680,48 +680,8 @@ namespace Spark::AI
             navMesh->triangles.push_back(tri);
         }
 
-        // Build adjacency (simple O(n^2) — fine for offline bake)
-        for (size_t i = 0; i < navMesh->triangles.size(); ++i)
-        {
-            for (size_t j = i + 1; j < navMesh->triangles.size(); ++j)
-            {
-                // Count shared vertices between triangles i and j
-                int shared = 0;
-                for (int ei = 0; ei < 3; ++ei)
-                {
-                    for (int ej = 0; ej < 3; ++ej)
-                    {
-                        const auto& vi = navMesh->vertices[navMesh->triangles[i].indices[ei]].position;
-                        const auto& vj = navMesh->vertices[navMesh->triangles[j].indices[ej]].position;
-                        float dx = vi.x - vj.x, dy = vi.y - vj.y, dz = vi.z - vj.z;
-                        if (dx * dx + dy * dy + dz * dz < 0.001f)
-                        {
-                            shared++;
-                        }
-                    }
-                }
-                if (shared >= 2)
-                {
-                    // Find first unset neighbor slot
-                    for (int e = 0; e < 3; ++e)
-                    {
-                        if (navMesh->triangles[i].neighborTriangles[e] == UINT32_MAX)
-                        {
-                            navMesh->triangles[i].neighborTriangles[e] = static_cast<uint32_t>(j);
-                            break;
-                        }
-                    }
-                    for (int e = 0; e < 3; ++e)
-                    {
-                        if (navMesh->triangles[j].neighborTriangles[e] == UINT32_MAX)
-                        {
-                            navMesh->triangles[j].neighborTriangles[e] = static_cast<uint32_t>(i);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        // Edge adjacency from shared vertex positions (O(n^2) — fine for an offline bake).
+        RebuildTriangleAdjacency(*navMesh);
 
         // Compute bounds
         if (!navMesh->vertices.empty())
