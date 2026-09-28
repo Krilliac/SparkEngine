@@ -138,11 +138,15 @@ if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
     # The staged executable and module run on NullRHI with no D3D11 device; the
     # runner gives both processes one isolated LOCALAPPDATA/APPDATA user root
     # under the run root and requires the reader to leave the save unchanged.
+    # Package mode launches them from an empty directory outside the package and
+    # the repository, and fails on any output naming the source or build tree or
+    # any change to the staged package (HEAD-220).
     _run_checked("Validate installed FPS NullRHI save/reload persistence" 300
         "${CMAKE_COMMAND}"
         "-DSPARK_ENGINE_EXECUTABLE=${_install_root}/bin/SparkEngine.exe"
         "-DSPARK_GAME_MODULE=${_install_root}/bin/SparkGameFPS.dll"
-        "-DSPARK_WORKING_DIRECTORY=${_install_root}/bin"
+        "-DSPARK_PACKAGE_ROOT=${_install_root}"
+        "-DSPARK_FORBIDDEN_ROOTS=${SPARK_SOURCE_ROOT}|${SPARK_ENGINE_BUILD_DIR}"
         "-DSPARK_TEST_ROOT=${_run_root}/headless-save-reload"
         -P "${SPARK_SOURCE_ROOT}/cmake/RunSparkHeadlessFPSSaveReload.cmake")
     message(STATUS

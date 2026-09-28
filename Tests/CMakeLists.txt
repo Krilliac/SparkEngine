@@ -2829,6 +2829,21 @@ set_tests_properties(NullRHIWindowsLifecycleParserContract PROPERTIES
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 10)
 
+# HEAD-220: the staged-package repository-isolation scrub that
+# FPSHeadlessPackage_NullRHISaveReload applies, fed synthetic output (both
+# slash spellings, case, build-dir mentions, a sibling directory, and the
+# positive control that the output names the package at all).
+add_test(
+    NAME FPSHeadlessPackage_RepositoryIsolationDetection
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_REPOSITORY_ISOLATION_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessFPSSaveReload.cmake
+)
+set_tests_properties(FPSHeadlessPackage_RepositoryIsolationDetection PROPERTIES
+    LABELS "nullrhi-headless;unit"
+    PASS_REGULAR_EXPRESSION "Repository isolation detection self-test passed 7 cases"
+    TIMEOUT 10)
+
 # PLT-210: the production Linux headless host runs the real SparkGameFPS module
 # on the EngineRuntime-owned NullRHI bridge and must print exactly one
 # SPARK_MODULE_READY, SPARK_HEADLESS_RHI and SPARK_HEADLESS_LIFECYCLE record, in
