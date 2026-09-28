@@ -6,7 +6,7 @@
       "directory": "GameModules/SparkGame",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGame/Source",
-      "sourceFileCount": 6,
+      "sourceFileCount": 7,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,
