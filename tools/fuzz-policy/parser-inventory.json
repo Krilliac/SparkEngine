@@ -80,7 +80,7 @@
     },
     {
       "id": "mesh-fbx-importer",
-      "description": "FBX model importer.",
+      "description": "Binary FBX model importer (engine-owned node-record parser, no SDK).",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Graphics/FBXImporter.cpp",
@@ -89,10 +89,16 @@
       "formats": [
         ".fbx"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "The proprietary SDK path has no engine-owned fuzz harness or bounded corpus.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzFbx.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzFbx",
+        "test_selector": "FuzzFbxSmoke",
+        "corpus_id": "mesh-fbx-importer-corpus",
+        "entry_symbol": "Spark::Graphics::FBXImporter::ImportFromMemory",
+        "binding_source": "FuzzerTests/FuzzFbxProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzImportFbx"
       }
     },
     {
@@ -115,10 +121,16 @@
         ".gltf",
         ".glb"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzGltf.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzGltf",
+        "test_selector": "FuzzGltfSmoke",
+        "corpus_id": "mesh-gltf-loader-corpus",
+        "entry_symbol": "Spark::Graphics::Detail::LoadGLTFStaticMesh",
+        "binding_source": "FuzzerTests/FuzzGltfProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadGltf"
       }
     },
     {
@@ -290,20 +302,25 @@
     },
     {
       "id": "audio-sound-effect",
-      "description": "WAV and OGG sound-effect loader.",
+      "description": "WAV sound-effect loader (RIFF chunk walker and fmt validation).",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Audio/SoundEffect.cpp",
         "SparkEngine/Source/Audio/SoundEffect.h"
       ],
       "formats": [
-        ".wav",
-        ".ogg"
+        ".wav"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzSoundWav.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzSoundWav",
+        "test_selector": "FuzzSoundWavSmoke",
+        "corpus_id": "audio-sound-effect-corpus",
+        "entry_symbol": "SoundEffect::LoadFromMemory",
+        "binding_source": "FuzzerTests/FuzzSoundWavProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadWav"
       }
     },
     {

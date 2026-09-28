@@ -289,6 +289,64 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "mesh-fbx-importer-corpus",
+      "parser_id": "mesh-fbx-importer",
+      "corpus_dir": "FuzzerTests/corpora/mesh-fbx-importer",
+      "last_verified": "2026-09-28",
+      "content_digest": "5854e27c2441a5f496059cded49f0b4d0a03c0246cef0ae2119c8c8dbdbf6f9a",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 16384,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "mesh-gltf-loader-corpus",
+      "parser_id": "mesh-gltf-loader",
+      "corpus_dir": "FuzzerTests/corpora/mesh-gltf-loader",
+      "last_verified": "2026-09-28",
+      "content_digest": "b35adc7f2b9d1806d275e126eb2fc17ac6d86cd487beb09f3a3b29bdaf599b83",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 256,
+        "max_corpus_entries": 10,
+        "max_corpus_bytes": 16384,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-data-uri-length-overclaim.gltf",
+          "finding": "A base64 data URI declaring a 300 MB byteLength made cgltf_load_buffers allocate the declared size (up to 1 GiB) from a 373-byte file before decoding; ValidateDocumentStructure now rejects a byteLength the payload cannot fill.",
+          "found_by": "smoke",
+          "guard_test": "FuzzGltfSmoke"
+        }
+      ]
+    },
+    {
+      "id": "audio-sound-effect-corpus",
+      "parser_id": "audio-sound-effect",
+      "corpus_dir": "FuzzerTests/corpora/audio-sound-effect",
+      "last_verified": "2026-09-28",
+      "content_digest": "f1add8af62efd5ab9377e97979faff9d6e9cb5b44082427944f0fec4350c86f3",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

@@ -53,6 +53,9 @@ FuzzerTests/corpora/save-system/** -text
 FuzzerTests/corpora/editor-prefab/** -text
 FuzzerTests/corpora/reflected-scene/** -text
 FuzzerTests/corpora/scene-manager-text/** -text
+FuzzerTests/corpora/mesh-fbx-importer/** -text
+FuzzerTests/corpora/mesh-gltf-loader/** -text
+FuzzerTests/corpora/audio-sound-effect/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

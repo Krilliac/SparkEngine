@@ -836,3 +836,197 @@ set_tests_properties(FuzzSceneManagerTextSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# FBXImporter::ImportFromMemory is the importer's whole parse path; its deflate
+# arrays inflate through the instrumented SparkFuzzMiniz declared above.
+add_executable(SparkFuzzFbx
+    FuzzFbx.cpp
+    FuzzFbxProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/FBXImporter.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzFbx.cpp use
+# libstdc++; the production importer, its logger and the adapter use libc++ and
+# meet the driver only at the C ABI in FuzzFbxProduction.h.
+set_source_files_properties(
+    FuzzFbxProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/FBXImporter.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzFbx PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzFbx PRIVATE cxx_std_23)
+# SPARK_MINIZ_AVAILABLE builds the zlib array path the engine ships with.
+# Logger.cpp routes warnings/errors through DebugHookManager unless
+# SPARK_SHIPPING compiles the hooks out; the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzFbx PRIVATE
+    SPARK_SHIPPING=1
+    SPARK_MINIZ_AVAILABLE=1
+)
+target_compile_options(SparkFuzzFbx PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzFbx PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzFbx PRIVATE SparkFuzzMiniz Threads::Threads c++ c++abi)
+
+# array-count-over-1M.fbx declares a ten-million-element (80 MB) zlib array in a
+# few bytes. -malloc_limit_mb=64 sits above every allocation a valid document
+# under -max_len needs (one 1M-element array is 8 MB), so an importer that sized
+# the destination before checking kMaxArrayElements fails this test.
+add_test(
+    NAME FuzzFbxSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzFbx>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -malloc_limit_mb=64
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mesh-fbx-importer"
+)
+set_tests_properties(FuzzFbxSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# The glTF loaders parse through the vendored cgltf, compiled here with the
+# fuzzer's coverage and sanitizer instrumentation like the target's own sources.
+add_executable(SparkFuzzGltf
+    FuzzGltf.cpp
+    FuzzGltfProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFValidation.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFSkinSkeleton.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/cgltf/cgltf_impl.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzGltf.cpp use
+# libstdc++; the production loaders, cgltf and the adapter use libc++ and meet
+# the driver only at the C ABI in FuzzGltfProduction.h.
+set_source_files_properties(
+    FuzzGltfProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFValidation.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFSkinSkeleton.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/cgltf/cgltf_impl.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzGltf PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/cgltf"
+)
+target_compile_features(SparkFuzzGltf PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzGltf PRIVATE SPARK_HAS_CGLTF=1)
+target_compile_options(SparkFuzzGltf PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzGltf PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzGltf PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzGltfSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzGltf>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=10
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mesh-gltf-loader"
+)
+set_tests_properties(FuzzGltfSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+add_executable(SparkFuzzSoundWav
+    FuzzSoundWav.cpp
+    FuzzSoundWavProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Audio/SoundEffect.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/MathUtils.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzSoundWav.cpp
+# use libstdc++; the production parser, its logger and the adapter use libc++
+# and meet the driver only at the C ABI in FuzzSoundWavProduction.h.
+set_source_files_properties(
+    FuzzSoundWavProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Audio/SoundEffect.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/MathUtils.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzSoundWav PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzSoundWav PRIVATE cxx_std_23)
+# Logger.cpp routes warnings/errors through DebugHookManager unless
+# SPARK_SHIPPING compiles the hooks out; the fuzzer links no hook manager.
+# SoundEffect.cpp's always-on assertions are the SPARK_REQUIRE caller
+# preconditions of LoadFromMemory (non-null, non-empty buffer; the adapter never
+# passes either) and of the procedural factory; the WAV parse path itself
+# (ParseWAVFile, FindChunk, ReadChunkData, IsSupportedWavFormat) asserts nothing.
+# DISABLE_ALWAYS_ASSERTS keeps Assert::Fail, and with it the crash-handler and
+# console closure, out of this target without changing any parse decision.
+target_compile_definitions(SparkFuzzSoundWav PRIVATE
+    SPARK_SHIPPING=1
+    DISABLE_ALWAYS_ASSERTS=1
+)
+target_compile_options(SparkFuzzSoundWav PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzSoundWav PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzSoundWav PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzSoundWavSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzSoundWav>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/audio-sound-effect"
+)
+set_tests_properties(FuzzSoundWavSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

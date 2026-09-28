@@ -106,6 +106,9 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzEditorPrefab",
     "SparkFuzzReflectedScene",
     "SparkFuzzSceneManagerText",
+    "SparkFuzzFbx",
+    "SparkFuzzGltf",
+    "SparkFuzzSoundWav",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -1935,6 +1938,24 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::ParseVersionedSceneText",
                 "scene-manager-text",
                 10,
+            ),
+            "mesh-fbx-importer": (
+                "Fbx",
+                "Spark::Graphics::FBXImporter::ImportFromMemory",
+                "mesh-fbx-importer",
+                8,
+            ),
+            "mesh-gltf-loader": (
+                "Gltf",
+                "Spark::Graphics::Detail::LoadGLTFStaticMesh",
+                "mesh-gltf-loader",
+                10,
+            ),
+            "audio-sound-effect": (
+                "SoundWav",
+                "SoundEffect::LoadFromMemory",
+                "audio-sound-effect",
+                8,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)
