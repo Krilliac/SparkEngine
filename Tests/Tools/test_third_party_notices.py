@@ -430,7 +430,8 @@ class PackageRuleSetTests(unittest.TestCase):
         gate = text.find('include("${CMAKE_CURRENT_LIST_DIR}/ValidateStagedPackageNotices.cmake")')
         self.assertGreater(required, 0)
         self.assertGreater(gate, required, "the notice gate must run in the full package validation path")
-        self.assertIn("set(SPARK_PACKAGE_NOTICE_COVERAGE report)", text)
+        self.assertIn("set(SPARK_PACKAGE_NOTICE_COVERAGE enforce)", text)
+        self.assertNotIn("set(SPARK_PACKAGE_NOTICE_COVERAGE report)", text)
 
 
 class LicenseInventoryPackageTests(unittest.TestCase):
@@ -532,7 +533,9 @@ class LicenseInventoryPackageTests(unittest.TestCase):
         for entry in entries:
             self.assertEqual(entry.problem, "", f"{entry.name}: {entry.problem}")
             self.assertTrue(entry.files, f"{entry.name} has no 'Files:' line")
-        # The real notice covers mapped payload but names none of the editor fonts.
+        # The real notice covers mapped payload and every editor font the editor
+        # installs (GOV-400 D8): each font is named on a 'Files:' line of an entry
+        # that reproduces its license text.
         root = Path(tmp.name) / "pkg"
         (root / "include/Jolt").mkdir(parents=True)
         (root / "include/Jolt/Jolt.h").write_text("#pragma once\n", encoding="utf-8")
@@ -543,14 +546,55 @@ class LicenseInventoryPackageTests(unittest.TestCase):
         coverage = notices.check_package_coverage(root, rules)
         named = {PurePosixPath(rel).name for entry in entries for rel in entry.files}
         fonts = sorted(p.name for p in (REPO_ROOT / "SparkEditor" / "Fonts").glob("*.ttf"))
-        self.assertTrue(fonts, "SparkEditor/Fonts has no fonts; the check would be vacuous")
-        # Today no dependencies.lock entry names the editor fonts (GOV-400 D8), so
-        # every one of them must be reported; a font gains coverage only through
-        # a manifest entry that names it and ships its license text.
-        self.assertEqual(
-            sorted(line.split(":", 1)[0].rsplit("/", 1)[1] for line in coverage.uncovered),
-            [font for font in fonts if font not in named],
+        self.assertEqual(len(fonts), 7, "SparkEditor/Fonts changed; the check must still cover every font")
+        self.assertEqual(coverage.font_count, len(fonts))
+        self.assertEqual(coverage.uncovered, [])
+        self.assertEqual([font for font in fonts if font not in named], [])
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
+    def test_packaged_notice_fails_closed_on_an_incomplete_font_inventory(self) -> None:
+        lock = (
+            "set(SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            '    "Alpha|https://example.invalid/alpha|v1|MIT|ThirdParty/Alpha|alpha.h|M|F|WARN|'
+            'ThirdParty/Alpha/LICENSE"\n)\n'
         )
+        cases = {
+            "font missing from the inventory": (
+                {"A.ttf": _font_entry()},
+                ["A.ttf", "B.ttf"],
+                "has no entry for editor font B.ttf",
+            ),
+            "license text missing": (
+                {"A.ttf": _font_entry(license_file="Missing.txt")},
+                ["A.ttf"],
+                "license notice file does not exist: SparkEditor/Fonts/LICENSES/Missing.txt",
+            ),
+            "inventory without fonts": ({}, ["A.ttf"], "'fonts' is empty or malformed"),
+        }
+        for label, (fonts, files, expected) in cases.items():
+            with self.subTest(label):
+                tmp = tempfile.TemporaryDirectory()
+                self.addCleanup(tmp.cleanup)
+                root = Path(tmp.name)
+                (root / "ThirdParty/Alpha").mkdir(parents=True)
+                (root / "ThirdParty/dependencies.lock").write_text(lock, encoding="utf-8")
+                (root / "ThirdParty/Alpha/LICENSE").write_text(LIBRARY_LICENSE, encoding="utf-8")
+                licenses = root / "SparkEditor/Fonts/LICENSES"
+                licenses.mkdir(parents=True)
+                (licenses / "OFL-1.1-Fixture.txt").write_text(FONT_LICENSE, encoding="utf-8")
+                (licenses / "fonts.json").write_text(json.dumps({"schema": 1, "fonts": fonts}), encoding="utf-8")
+                for name in files:
+                    (root / "SparkEditor/Fonts" / name).write_bytes(b"font")
+                script = root / "render.cmake"
+                script.write_text(
+                    f'include("{AUDIT_MODULE.as_posix()}")\n'
+                    f'spark_thirdparty_generate_notice("{(root / "ThirdParty/dependencies.lock").as_posix()}" '
+                    f'"{(root / "out.txt").as_posix()}")\n',
+                    encoding="utf-8",
+                )
+                result = subprocess.run(["cmake", "-P", str(script)], capture_output=True, text=True, timeout=120)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(expected, " ".join(result.stderr.split()))
 
 
 @unittest.skipUnless(shutil.which("git"), "git is required for the end-to-end fixture")

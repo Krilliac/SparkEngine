@@ -70,9 +70,12 @@ The generator does not guess any of them.
    the font's own name table: IBM Plex Sans, JetBrains Mono, and Font Awesome
    Free 6.7.2 are OFL-1.1, and Roboto 2.001047 is Apache-2.0. The repository
    `THIRD_PARTY_NOTICES` reproduces these texts. The packaged
-   `THIRD_PARTY_NOTICES.txt` still does not name the fonts, because no
-   `dependencies.lock` entry covers them. The remaining work is that entry and
-   the legal review of the texts.
+   `THIRD_PARTY_NOTICES.txt` reproduces them too: `cmake/SparkThirdPartyAudit.cmake`
+   reads `fonts.json` and writes one `<family> (editor font)` entry per license
+   text, naming its fonts on the `Files:` line. Rendering fails when
+   `fonts.json` is malformed, names a missing font or license text, or misses a
+   font in `SparkEditor/Fonts`. The remaining work is the legal review of the
+   texts.
 5. **Submodule notice copies.** The six submodule notices live in
    `ThirdParty/Licenses/`. A checkout without submodules cannot compare these
    copies with upstream.
@@ -214,23 +217,23 @@ These choices change `ThirdParty/` or its locks, which the SEC-110 lane owns.
   (`Jolt/`, `Build/`, `LICENSE`), which removes the LGPL-3.0 data and the
   assets that have no license; (b) keep it and declare each extra license
   file in `dependencies.lock`.
-- **Editor fonts:** the upstream license texts are now next to the fonts in
-  `SparkEditor/Fonts/LICENSES/` (item 4). What remains is an inventory entry
-  so the packaged notice file includes them too. List the font file names in
-  the entry's required files: the packaged notice prints them on a `Files:`
-  line, and the staged-package gate (`cmake/ValidateStagedPackageNotices.cmake`,
-  rules in `cmake/PackageNoticeCoverageRules.json`, also run by
-  `generate_third_party_notices.py --check-package <install root>`) covers a
-  shipped font only when an entry names it and reproduces license text. Today
-  it reports all 7 editor fonts; `ValidateStagedPackageExecutables.cmake` runs
-  it in report mode until that entry lands, after which the default should
-  become `enforce`.
+- **Editor fonts:** done. The upstream license texts are next to the fonts in
+  `SparkEditor/Fonts/LICENSES/` (item 4), and the packaged notice file names
+  each font on a `Files:` line of an entry that reproduces its license text,
+  generated from `fonts.json` rather than duplicated into `dependencies.lock`.
+  The staged-package gate (`cmake/ValidateStagedPackageNotices.cmake`, rules in
+  `cmake/PackageNoticeCoverageRules.json`, also run by
+  `generate_third_party_notices.py --check-package <install root>`) covers all 7
+  fonts, and `ValidateStagedPackageExecutables.cmake` now runs it in `enforce`
+  mode by default. Before the flip, a path mirror of a local MSVC
+  `windows-shipping` install reported only the 7 fonts as uncovered, and none
+  once the fonts were added. A Linux install has not been measured yet.
 - **SPDX fields:** rewrite the free-text `license` fields as SPDX expressions
   once the choices in the inventory table are made.
 - **Files that change:** `ThirdParty/dependencies.lock`;
   `ThirdParty/supply-chain.lock` (through `tools/check-supply-chain.py
-  --update`); `ThirdParty/**` payload; `cmake/SparkThirdPartyAudit.cmake` (if packaged notices must include fonts
-  and extra notices, or should reuse the repository generator);
+  --update`); `ThirdParty/**` payload; `cmake/SparkThirdPartyAudit.cmake` (if packaged notices must include
+  extra notices, or should reuse the repository generator);
   `THIRD_PARTY_NOTICES` (regenerated).
 
 ## Regenerating and checking the notices

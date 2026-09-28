@@ -811,14 +811,13 @@ if(_spark_missing_runtime_files)
 endif()
 
 # GOV-400: every shipped font and third-party payload file must be covered by the
-# package's THIRD_PARTY_NOTICES.txt. The shipped editor fonts have no license
-# text until the D8 remediation lands (docs/governance/GOV-400-DECISIONS.md), so
-# release workflows run this gate in report mode: it lists every uncovered file
-# as a warning in the package log. Pass -DSPARK_PACKAGE_NOTICE_COVERAGE=enforce
-# to fail on uncovered files; running ValidateStagedPackageNotices.cmake on its
-# own always enforces unless told otherwise.
+# package's THIRD_PARTY_NOTICES.txt, and an uncovered file fails the package.
+# The editor fonts are covered by the blocks cmake/SparkThirdPartyAudit.cmake
+# generates from SparkEditor/Fonts/LICENSES/fonts.json (GOV-400 D8).
+# -DSPARK_PACKAGE_NOTICE_COVERAGE=report downgrades the gate to warnings for
+# local investigation only.
 if(NOT DEFINED SPARK_PACKAGE_NOTICE_COVERAGE OR SPARK_PACKAGE_NOTICE_COVERAGE STREQUAL "")
-    set(SPARK_PACKAGE_NOTICE_COVERAGE report)
+    set(SPARK_PACKAGE_NOTICE_COVERAGE enforce)
 endif()
 include("${CMAKE_CURRENT_LIST_DIR}/ValidateStagedPackageNotices.cmake")
 
