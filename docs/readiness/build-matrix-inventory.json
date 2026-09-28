@@ -589,7 +589,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2708,
+      "line": 2718,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -616,7 +616,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3658,
+      "line": 3668,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1348,7 +1348,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2708,
+      "line": 2718,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1469,7 +1469,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3658,
+      "line": 3668,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2211,10 +2211,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1767,
+      "line": 1777,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1753",
+          "id": "CMakeLists.txt:1763",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2249,24 +2249,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1738,
+      "line": 1748,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1641",
+          "id": "CMakeLists.txt:1651",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1736",
+          "id": "CMakeLists.txt:1746",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1737",
+          "id": "CMakeLists.txt:1747",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2360,10 +2360,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1755,
+      "line": 1765,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1753",
+          "id": "CMakeLists.txt:1763",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2833,10 +2833,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1502,
+      "line": 1512,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1501",
+          "id": "CMakeLists.txt:1511",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2851,10 +2851,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1504,
+      "line": 1514,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1501",
+          "id": "CMakeLists.txt:1511",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2870,10 +2870,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1485,
+      "line": 1495,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1484",
+          "id": "CMakeLists.txt:1494",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2888,7 +2888,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1458,
+      "line": 1468,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3627,7 +3627,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1872,
+      "line": 1882,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3687,10 +3687,10 @@
       "target": "SparkSpirvShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1947,
+      "line": 1957,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1888",
+          "id": "CMakeLists.txt:1898",
           "branch": 0,
           "branches": [
             "SPARK_VULKAN_AVAILABLE"
@@ -3851,17 +3851,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2425,
+      "line": 2435,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2420",
+          "id": "CMakeLists.txt:2430",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2424",
+          "id": "CMakeLists.txt:2434",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -4149,7 +4149,7 @@
       "target": "uninstall",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 2771,
+      "line": 2781,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4253,7 +4253,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1767,
+          "line": 1777,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4307,7 +4307,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1738,
+          "line": 1748,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -4415,7 +4415,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1755,
+          "line": 1765,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4937,7 +4937,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1502,
+          "line": 1512,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4945,7 +4945,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1504,
+          "line": 1514,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4963,7 +4963,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1485,
+          "line": 1495,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4981,7 +4981,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1458,
+          "line": 1468,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6165,7 +6165,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1872,
+          "line": 1882,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -6273,7 +6273,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1947,
+          "line": 1957,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -6493,7 +6493,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2425,
+          "line": 2435,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6825,7 +6825,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2771,
+          "line": 2781,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -11959,7 +11959,9 @@
             "if": "matrix.config == 'Release'",
             "continueOnError": "absent",
             "hasRun": true,
-            "env": [],
+            "env": [
+              "TMPDIR"
+            ],
             "runDigest": "5cb377af7e1d2af2"
           },
           {
