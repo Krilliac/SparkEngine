@@ -19,6 +19,11 @@
 
 #pragma once
 
+// Networking-only fixture: sockets and the secure transport exist only when
+// ENABLE_NETWORKING is defined (the stable-v1 shipping profile turns it off).
+// Every consumer guards its tests the same way.
+#ifdef ENABLE_NETWORKING
+
 #include "Engine/Networking/NetworkManager.h"
 #include "Engine/Networking/SecureHandshake.h"
 #include "NetworkTestSecurity.h"
@@ -277,3 +282,5 @@ namespace SparkTestFixtures
         return predicate();
     }
 } // namespace SparkTestFixtures
+
+#endif // ENABLE_NETWORKING

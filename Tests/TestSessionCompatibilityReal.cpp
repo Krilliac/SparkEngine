@@ -23,9 +23,10 @@
 #include <vector>
 
 using namespace Spark::Net;
-using namespace SparkTestFixtures;
 
 #ifdef ENABLE_NETWORKING
+
+using namespace SparkTestFixtures;
 
 namespace
 {

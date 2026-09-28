@@ -176,6 +176,10 @@ TEST(FPSMultiplayer_WireEncodingIsStableAndTruncatedPayloadDefaults)
     EXPECT_FALSE(truncatedInput.jump);
 }
 
+// Everything below drives the real NetworkManager over loopback sockets, which exist only
+// when ENABLE_NETWORKING is defined (the stable-v1 shipping profile turns it off).
+#ifdef ENABLE_NETWORKING
+
 namespace
 {
     using Access = FPSMultiplayerSystemTestAccess;
@@ -1381,3 +1385,5 @@ TEST(FPSMultiplayerProduction_RejectedConnectEndsSession)
     EXPECT_TRUE(ConsoleLogContains("[FPSMultiplayer] Connection failed: " + reason));
     EXPECT_TRUE(Spark::Net::NetworkManager::GetInstance().GetRole() == Spark::Net::NetworkRole::None);
 }
+
+#endif // ENABLE_NETWORKING

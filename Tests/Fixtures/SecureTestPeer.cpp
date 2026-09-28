@@ -6,6 +6,8 @@
 #include "SecureTestPeer.h"
 #include "NetworkTestSecurity.h"
 
+#ifdef ENABLE_NETWORKING
+
 #include <algorithm>
 #include <array>
 #include <functional>
@@ -585,3 +587,5 @@ namespace SparkTestFixtures
         return std::nullopt;
     }
 } // namespace SparkTestFixtures
+
+#endif // ENABLE_NETWORKING
