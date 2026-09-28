@@ -421,7 +421,7 @@
         "tools/docs_contract.py",
         "tools/docs_currentness.py",
         "tools/site-data/validate_docs_links.py",
-        ".github/workflows/site-data.yml"
+        ".github/workflows/build.yml"
       ],
       "entryPoints": [
         "docs/update-all-docs.sh",
@@ -469,10 +469,10 @@
           "state": "implemented",
           "evidence": [
             "tools/site-data/validate_docs_links.py",
-            ".github/workflows/site-data.yml",
+            ".github/workflows/build.yml",
             "Tests/Tools/test_docs_health.py"
           ],
-          "note": "The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; site-data.yml runs it at every commit. Local only; no exact-commit CI yet."
+          "note": "The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; the required build.yml docs-health job runs it at every commit. Local only; no exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:d72cef64ec82",
@@ -497,9 +497,14 @@
         },
         {
           "criterionDigest": "sha256:e03b1b3590ef",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Proving it blocks CI needs a hosted CI run. No local check can show that."
+          "state": "implemented",
+          "evidence": [
+            ".github/workflows/build.yml",
+            ".github/scripts/test-workflow-failure-propagation.py",
+            "tools/site-data/validate_docs_links.py",
+            "tools/docs_currentness.py"
+          ],
+          "note": "docs-health is a Required CI Gate dependency in build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Structural and mutation tests only, and no hosted red run yet."
         }
       ],
       "commands": [

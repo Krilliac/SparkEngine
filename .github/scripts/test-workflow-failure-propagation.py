@@ -68,6 +68,7 @@ REQUIRED_CI_JOBS = (
     "aggregate-test-stats",
     "module-evidence",
     "network-security",
+    "docs-health",
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
 MINGW_WINE_JOB = "build-linux-mingw-wine"
@@ -2212,6 +2213,72 @@ def format_filter_suffixes(script: str) -> set[str]:
     return {"." + part.split(".", 1)[1] for part in arms[0].split("|") if part}
 
 
+DOCS_HEALTH_JOB = "docs-health"
+SITE_DATA_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data.yml"
+# DOC-410: each command whose failure must make docs-health (and so the Required
+# CI Gate) red, mapped to the step that runs it.
+DOCS_HEALTH_COMMANDS = (
+    ("Generate and validate exact-commit API documentation", "bash docs/generate-api-docs.sh generate"),
+    ("Generate and validate exact-commit API documentation", "python3 tools/docs_contract.py validate"),
+    ("Generate and validate exact-commit API documentation", "python3 tools/site-data/validate_docs_links.py"),
+    ("Run hostile documentation contract tests", "python3 Tests/Tools/test_docs_health.py"),
+    ("Run hostile documentation contract tests", "python3 tools/site-data/validate.py --docs"),
+    ("Prove isolated deterministic currentness and clean checkout", "bash docs/update-all-docs.sh check"),
+    ("Prove isolated deterministic currentness and clean checkout", 'test "$before" = "$after"'),
+)
+
+
+def docs_health_gate_errors(build: dict, site_data: dict) -> list[str]:
+    """Require docs-health to be one fail-closed Required CI Gate dependency in build.yml.
+
+    A stale generator, a missing result or a broken link must block a merge, so the
+    job lives in the workflow whose push concurrency never cancels a SHA, is listed
+    in the gate's needs and expected inventory, and every checking command runs
+    under errexit with no bypass. A second copy in site-data.yml would let the two
+    drift, so it is rejected.
+    """
+
+    errors: list[str] = []
+    jobs = build.get("jobs") if isinstance(build.get("jobs"), dict) else {}
+    site_jobs = site_data.get("jobs") if isinstance(site_data.get("jobs"), dict) else {}
+    if DOCS_HEALTH_JOB in site_jobs:
+        errors.append(f"{DOCS_HEALTH_JOB} must not be duplicated in site-data.yml")
+    job = jobs.get(DOCS_HEALTH_JOB)
+    if not isinstance(job, dict):
+        return errors + [f"{DOCS_HEALTH_JOB} is missing from build.yml"]
+    for key in ("continue-on-error", "if"):
+        if key in job:
+            errors.append(f"{DOCS_HEALTH_JOB} declares job-level {key}")
+    gate = jobs.get("required-ci-gate") if isinstance(jobs.get("required-ci-gate"), dict) else {}
+    if DOCS_HEALTH_JOB not in job_needs(gate):
+        errors.append(f"required-ci-gate does not need {DOCS_HEALTH_JOB}")
+    inventories = [
+        step["env"].get("EXPECTED_REQUIRED_JOBS_JSON")
+        for step in gate.get("steps", []) if isinstance(step, dict) and isinstance(step.get("env"), dict)
+    ]
+    inventories = [value for value in inventories if isinstance(value, str)]
+    if len(inventories) != 1 or DOCS_HEALTH_JOB not in json.loads(inventories[0]):
+        errors.append(f"{DOCS_HEALTH_JOB} is not in EXPECTED_REQUIRED_JOBS_JSON")
+    steps = {step.get("name"): step for step in job.get("steps", []) if isinstance(step, dict)}
+    for step_name, command in DOCS_HEALTH_COMMANDS:
+        step = steps.get(step_name)
+        lines = normalized_run_lines(step.get("run")) if isinstance(step, dict) else None
+        if not lines:
+            errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} is missing")
+            continue
+        if not any(command in line for line in lines):
+            errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} does not run {command}")
+        if lines[0] != "set -euo pipefail":
+            errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} must start with 'set -euo pipefail'")
+        for key in ("continue-on-error", "if", "shell"):
+            if key in step:
+                errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} declares {key}")
+        for line in lines:
+            if FAILURE_SUPPRESSION.search(line) or re.search(r"\bset\s+\+\w*e", line):
+                errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} suppresses a failure: {line}")
+    return sorted(set(errors))
+
+
 def check_format_gate_errors(document: dict, script: str) -> list[str]:
     """check-format must run the tested script fail-closed, and validate-ci-tools must test it.
 
@@ -2477,6 +2544,60 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("suppresses a failure", " ".join(mutate(lambda jobs: None, swallowed)))
         early_pass = script.replace("set -euo pipefail\n", "set -euo pipefail\nexit 0\n", 1)
         self.assertIn("exit 0 only", " ".join(mutate(lambda jobs: None, early_pass)))
+
+    def test_docs_health_is_a_fail_closed_required_gate_dependency(self) -> None:
+        site_data = parse_workflow_yaml(SITE_DATA_WORKFLOW.read_text(encoding="utf-8"))
+        self.assertEqual(docs_health_gate_errors(parse_workflow_yaml(self.build), site_data), [])
+
+    def test_docs_health_gate_contract_rejects_each_bypass(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        site_data = parse_workflow_yaml(SITE_DATA_WORKFLOW.read_text(encoding="utf-8"))
+        links_step = "Generate and validate exact-commit API documentation"
+        check_step = "Prove isolated deterministic currentness and clean checkout"
+
+        def step(jobs: dict, name: str) -> dict:
+            return next(item for item in jobs[DOCS_HEALTH_JOB]["steps"] if item.get("name") == name)
+
+        def gate_env(jobs: dict) -> dict:
+            return next(item["env"] for item in jobs["required-ci-gate"]["steps"] if "env" in item)
+
+        def drop_links(jobs: dict) -> None:
+            target = step(jobs, links_step)
+            target["run"] = "\n".join(line for line in target["run"].splitlines()
+                                      if "validate_docs_links.py" not in line and "--generated-root" not in line)
+
+        def replace_run(jobs: dict, name: str, old: str, new: str) -> None:
+            target = step(jobs, name)
+            self.assertIn(old, target["run"])
+            target["run"] = target["run"].replace(old, new)
+
+        def drop_from_inventory(jobs: dict) -> None:
+            env = gate_env(jobs)
+            env["EXPECTED_REQUIRED_JOBS_JSON"] = env["EXPECTED_REQUIRED_JOBS_JSON"].replace(',"docs-health"', "")
+
+        check_command = "bash docs/update-all-docs.sh check"
+        cases = (
+            (lambda jobs: jobs["required-ci-gate"]["needs"].remove(DOCS_HEALTH_JOB), "does not need docs-health"),
+            (drop_from_inventory, "not in EXPECTED_REQUIRED_JOBS_JSON"),
+            (lambda jobs: jobs[DOCS_HEALTH_JOB].update({"continue-on-error": True}), "job-level continue-on-error"),
+            (lambda jobs: step(jobs, check_step).update({"continue-on-error": True}), "declares continue-on-error"),
+            (drop_links, "does not run python3 tools/site-data/validate_docs_links.py"),
+            (lambda jobs: replace_run(jobs, check_step, check_command, check_command + " || true"),
+             "suppresses a failure"),
+            (lambda jobs: replace_run(jobs, links_step, "set -euo pipefail", "set -euo pipefail\nset +e"),
+             "suppresses a failure"),
+            (lambda jobs: jobs.pop(DOCS_HEALTH_JOB), "docs-health is missing from build.yml"),
+        )
+        for change, expected in cases:
+            with self.subTest(expected=expected):
+                document = copy.deepcopy(baseline)
+                change(document["jobs"])
+                errors = docs_health_gate_errors(document, site_data)
+                self.assertTrue(any(expected in error for error in errors), errors)
+        duplicated = copy.deepcopy(site_data)
+        duplicated["jobs"][DOCS_HEALTH_JOB] = copy.deepcopy(baseline["jobs"][DOCS_HEALTH_JOB])
+        self.assertIn("docs-health must not be duplicated in site-data.yml",
+                      docs_health_gate_errors(baseline, duplicated))
 
     def test_clang_tidy_inventory_covers_all_shipped_source_roots(self) -> None:
         block = self.build[self.build.index("\n  clang-tidy:\n"):]

@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **159 implemented** (61%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **160 implemented** (62%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -250,7 +250,7 @@ Establish the only source of readiness truth and make CI report reality.
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 3/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
-| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 4/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
+| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 5/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
 
@@ -806,7 +806,7 @@ A hostile audit found timestamp-only false greens, incomplete first-party source
 - `tools/docs_contract.py`
 - `tools/docs_currentness.py`
 - `tools/site-data/validate_docs_links.py`
-- `.github/workflows/site-data.yml`
+- `.github/workflows/build.yml`
 
 **Entry points**
 
@@ -827,7 +827,7 @@ A hostile audit found timestamp-only false greens, incomplete first-party source
 
 **Acceptance criteria**
 
-Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
+Progress: 5 of 6 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
    - Evidence: `Tests/Tools/test_docs_health.py`
@@ -836,16 +836,17 @@ Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
    - Evidence: `docs/generate-flowchart-content.py`, `Tests/Tools/test_docs_health.py`
    - Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff.
 3. **[implemented]** Every catalogued doc route, source, heading, image, and generated-API target resolves
-   - Evidence: `tools/site-data/validate_docs_links.py`, `.github/workflows/site-data.yml`, `Tests/Tools/test_docs_health.py`
-   - The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; site-data.yml runs it at every commit. Local only; no exact-commit CI yet.
+   - Evidence: `tools/site-data/validate_docs_links.py`, `.github/workflows/build.yml`, `Tests/Tools/test_docs_health.py`
+   - The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; the required build.yml docs-health job runs it at every commit. Local only; no exact-commit CI yet.
 4. **[implemented]** Health contains every expected generator exactly once with exit and failure counts consistent
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_currentness.py`, `tools/site-data/generate.py`
    - Tests drive production write_health and summarize_documentation_health. Missing or duplicate generators and inconsistent exit or failure counts are rejected. RepositoryEvidenceTests pins the generator manifest.
 5. **[implemented]** Hostile stale-doc, symbol, macro, health, link, anchor, route, and confinement fixtures pass
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_contract.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
    - Two hostile test classes (docs generation, docs links) cover stale docs, symbols, macros, health, links, anchors, route collisions and repository escape against production code.
-6. **[unmet]** A stale generator, missing result, or broken link blocks CI
-   - Proving it blocks CI needs a hosted CI run. No local check can show that.
+6. **[implemented]** A stale generator, missing result, or broken link blocks CI
+   - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-workflow-failure-propagation.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
+   - docs-health is a Required CI Gate dependency in build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Structural and mutation tests only, and no hosted red run yet.
 
 **Required commands**
 

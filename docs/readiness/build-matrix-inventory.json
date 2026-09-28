@@ -7210,7 +7210,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 41,
+    "jobCount": 42,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -13572,6 +13572,85 @@
         "gating": "advisory"
       },
       {
+        "id": "docs-health",
+        "name": "Documentation exact-currentness",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": 15,
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {},
+        "stepCount": 4,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout exact source",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Generate and validate exact-commit API documentation",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "SPARKENGINE_DOC_SOURCE_SHA"
+            ],
+            "runDigest": "b113065d4c798b4b"
+          },
+          {
+            "index": 2,
+            "name": "Run hostile documentation contract tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "3ac1ce7651455373"
+          },
+          {
+            "index": 3,
+            "name": "Prove isolated deterministic currentness and clean checkout",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "SPARKENGINE_DOC_SOURCE_SHA"
+            ],
+            "runDigest": "3fb02f4c42951d2d"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
         "id": "required-ci-gate",
         "name": "Required CI Gate",
         "runsOn": "ubuntu-24.04",
@@ -13611,7 +13690,8 @@
           "build-installer",
           "aggregate-test-stats",
           "module-evidence",
-          "network-security"
+          "network-security",
+          "docs-health"
         ],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -20108,8 +20188,8 @@
       }
     ],
     "summary": {
-      "jobCount": 41,
-      "matrixLegCount": 49,
+      "jobCount": 42,
+      "matrixLegCount": 50,
       "pathFilteredEventCount": 0,
       "configureCount": 35,
       "buildCount": 37,
@@ -20117,7 +20197,7 @@
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 21,
-      "blockingJobCount": 30,
+      "blockingJobCount": 31,
       "advisoryJobCount": 7,
       "conditionalJobCount": 4,
       "builtOsConfigurationPairs": [

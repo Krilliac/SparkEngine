@@ -2223,9 +2223,8 @@ class GenerationAndCiTests(ContractTestCase):
 
     def test_dedicated_ci_runs_contract_and_determinism_checks(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        self.assertIn(
-            "timeout 5m python3 Tests/Tools/test_site_data_contract.py -v", workflow
-        )
+        # The docs-health copy moved to build.yml (DOC-410); site-data-validate keeps its own run.
+        self.assertIn("python3 Tests/Tools/test_site_data_contract.py -v", workflow)
         self.assertIn("python3 tools/site-data/render_handoff.py --check", workflow)
         self.assertGreaterEqual(workflow.count("python3 tools/site-data/generate.py"), 2)
         self.assertIn("diff --recursive --brief", workflow)

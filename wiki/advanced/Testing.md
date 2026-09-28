@@ -716,6 +716,7 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job; per-check diagnostic budget ratchet (`Tools/clang-tidy-budget.json`) |
 | `todo-count` | ubuntu-24.04 | -- | -- | fails above 20 (required) |
+| `docs-health` | ubuntu-24.04 | -- | -- | required; docs exact-currentness, docs contract and link validation (DOC-410) |
 
 **Enforcement truth (verified 2026-09-12):** legacy branch protection is not
 configured on `Working` (`branches/Working/protection` is 404), but repository
@@ -739,6 +740,14 @@ that ruleset `21968740` is active, has no bypass actors, and requires exactly
 `validate-ci-tools`. Every `tools/validate-all.sh` check except the advisory
 `check-bloat.sh` and warn-only `check-wiki-quality.sh` now runs fail-closed in a
 required job. `test-workflow-failure-propagation.py` enforces that mapping.
+Documentation health is the required `docs-health` job in `build.yml`. It runs
+`docs/update-all-docs.sh check`, `tools/docs_contract.py validate`,
+`tools/site-data/validate_docs_links.py` and the hostile docs tests, so a stale
+generator, a missing generator result or a broken link fails `Required CI Gate`.
+It moved from `site-data.yml`, which is not a required check and whose push runs
+cancel each other. `test-workflow-failure-propagation.py` rejects dropping it from
+the gate's needs or expected inventory, a second copy in `site-data.yml`, and any
+`continue-on-error`, `set +e` or `|| true` around its checks.
 A Build Matrix Verifier run conclusion is never evidence (each
 source attempt fires the workflow twice; the `in_progress` run skips verification
 and still concludes success; never add `run-name` to that workflow, because GitHub
