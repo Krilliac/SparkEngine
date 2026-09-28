@@ -268,16 +268,16 @@ if(MSVC)
         /wd4267  # size_t conversion warnings
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
-    # Every image links with /DEBUG, Shipping included (BLD-100): the PDB is the
-    # private symbol file and the image's CodeView (RSDS) record -- PDB GUID and
-    # age -- is the build ID that maps a crash back to it. Outside Debug,
-    # /PDBALTPATH:%_PDB% records only the PDB file name, so no build-machine
-    # path lands in the image. STRIP_DEBUG_SYMBOLS (windows-shipping) keeps the
-    # PDBs out of the runtime package instead of not producing them: they
-    # install only into the "symbols" component (section 17), which CPack never
-    # packages. /DEBUG would switch /OPT:REF and /OPT:ICF off; the Release /
-    # Shipping linker optimizations below restate both outside Debug.
-    add_link_options(/DEBUG $<$<NOT:$<CONFIG:Debug>>:/PDBALTPATH:%_PDB%>)
+    # Every image links with /DEBUG, Shipping included (BLD-100): the PDB is the private symbol file and
+    # the image's CodeView (RSDS) record -- PDB GUID and age -- is the build ID that maps a crash back to
+    # it. Outside Debug, /PDBALTPATH records only the PDB file name, so no build-machine path lands in the
+    # image. It names the file through TARGET_PDB_FILE_NAME, not %_PDB%: the Visual Studio generator
+    # escapes % to %% in link options, so link.exe recorded "%%%SparkEngine.pdb%%%" in the image.
+    # STRIP_DEBUG_SYMBOLS (windows-shipping) keeps the PDBs out of the runtime package instead of not
+    # producing them: they install only into the "symbols" component (section 17), which CPack never
+    # packages. /DEBUG would switch /OPT:REF and /OPT:ICF off; the Release / Shipping linker
+    # optimizations below restate both outside Debug.
+    add_link_options(/DEBUG "$<$<NOT:$<CONFIG:Debug>>:/PDBALTPATH:$<TARGET_PDB_FILE_NAME:$<TARGET_PROPERTY:NAME>>>")
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
 
     # Conformance improvements available in VS 2017+ — enforce __cplusplus macro and

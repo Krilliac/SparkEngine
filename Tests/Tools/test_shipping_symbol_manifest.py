@@ -408,8 +408,14 @@ class SymbolProductionContractTests(unittest.TestCase):
         self.text = re.sub(r"#[^\n]*", "", ROOT_CMAKE.read_text(encoding="utf-8"))
 
     def test_msvc_always_links_with_a_relative_pdb_reference(self) -> None:
-        link = "add_link_options(/DEBUG $<$<NOT:$<CONFIG:Debug>>:/PDBALTPATH:%_PDB%>)"
+        link = (
+            'add_link_options(/DEBUG "$<$<NOT:$<CONFIG:Debug>>:/PDBALTPATH:'
+            '$<TARGET_PDB_FILE_NAME:$<TARGET_PROPERTY:NAME>>>")'
+        )
         self.assertEqual(self.text.count(link), 1)
+        # The Visual Studio generator escapes % in link options to %%, and
+        # link.exe then records "%%%<name>.pdb%%%" instead of the bare name.
+        self.assertNotIn("%_PDB%", self.text)
         # /DEBUG must not be conditional on STRIP_DEBUG_SYMBOLS again.
         conditional = r"if\(STRIP_DEBUG_SYMBOLS\)[^\n]*\n[^\n]*\n\s*else\(\)\s*add_link_options\(/DEBUG"
         self.assertNotRegex(self.text, conditional)

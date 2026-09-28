@@ -2026,6 +2026,17 @@ jobs:
           --build-dir build/windows-shipping \
           --build 2>&1 | tee build-matrix-windows-shipping-producer.log
 
+    - name: Verify Shipping is a distinct configuration (BLD-100)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Reads the codemodel the provenance capture just produced: MinSizeRel
+        # must carry the Shipping defines and none of the preset's development
+        # toggles, Debug and Release must not, each configuration must own its
+        # artifact directory, and the Shipping link must map a bare-name PDB.
+        python tools/check_shipping_configuration.py \
+          --build-dir build/windows-shipping --require-preset windows-shipping
+
     - name: Install the Windows Shipping SDK for the consumer profile
       shell: bash
       run: |

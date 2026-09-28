@@ -174,9 +174,18 @@ the runtime package. It no longer stops them from being produced:
 
 - **MSVC**: every image links with `/DEBUG` (objects already compile with
   `/Z7`), so it carries a CodeView RSDS record, the PDB GUID and age that
-  identify its PDB. Outside Debug, `/PDBALTPATH:%_PDB%` records only the PDB
-  file name. `/OPT:REF` and `/OPT:ICF` are restated for every non-Debug
-  configuration, because `/DEBUG` alone would switch them off.
+  identify its PDB. Outside Debug, `/PDBALTPATH:<name>.pdb` records only the PDB
+  file name; the name comes from `$<TARGET_PDB_FILE_NAME:...>`, not `%_PDB%`,
+  because the Visual Studio generator escapes `%` to `%%` in link options and
+  link.exe then recorded `%%%probe.pdb%%%` (reproduced 2026-09-27 with a probe
+  project; Ninja passed `%_PDB%` through intact). `/OPT:REF` and `/OPT:ICF` are
+  restated for every non-Debug configuration, because `/DEBUG` alone would
+  switch them off. `tools/check_shipping_configuration.py` reads a configured
+  tree's File API codemodel and fails when MinSizeRel is not a distinct
+  Shipping configuration: Shipping defines only in MinSizeRel, a per-configuration
+  artifact directory, and `/DEBUG`, `/Brepro` and a bare-name `/PDBALTPATH` on
+  the Shipping link. build.yml runs it on `build/windows-shipping`; the
+  `ShippingConfiguration_Distinct` CTest runs it on Visual Studio test trees.
 - **ELF (GCC/Clang)**: every image links with `-Wl,--build-id=sha1`. With
   `STRIP_DEBUG_SYMBOLS=ON`, every target compiles with `-g` (the static
   libraries hold most shipped code), and each shipped image target gets

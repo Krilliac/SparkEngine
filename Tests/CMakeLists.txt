@@ -4119,6 +4119,32 @@ exec "$5" -B "$6" --images "$1/runtime" --symbols "$1/private/symbols" --output 
         LABELS "build;shipping;integration"
         TIMEOUT 600)
 endif()
+
+# BLD-100: ShippingConfiguration_Distinct reads this tree's own CMake File API
+# codemodel, requested here and answered by this same configure, and requires
+# MinSizeRel (Shipping) to compile SparkEngineLib and SparkEngine with
+# SPARK_BUILD_SHIPPING and SPARK_SHIPPING=1 while Debug and Release define
+# neither, every configuration to own its artifact directory, and the Shipping
+# link to carry /DEBUG, /Brepro and a bare-name /PDBALTPATH. It needs an MSVC
+# multi-config tree that resolves all three configurations; Ninja Multi-Config
+# omits MinSizeRel unless CMAKE_CONFIGURATION_TYPES names it. build.yml runs the
+# same checker on the windows-shipping preset tree with --require-preset.
+if(MSVC AND SPARK_GENERATOR_IS_MULTI_CONFIG AND "Debug" IN_LIST CMAKE_CONFIGURATION_TYPES
+   AND "Release" IN_LIST CMAKE_CONFIGURATION_TYPES AND "MinSizeRel" IN_LIST CMAKE_CONFIGURATION_TYPES)
+    # cmake_file_api() needs CMake 3.27; without it the checker fails on the missing reply.
+    if(COMMAND cmake_file_api)
+        cmake_file_api(QUERY API_VERSION 1 CODEMODEL 2)
+    endif()
+    add_test(
+        NAME ShippingConfiguration_Distinct
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/check_shipping_configuration.py
+            --build-dir ${CMAKE_BINARY_DIR})
+    set_tests_properties(ShippingConfiguration_Distinct PROPERTIES
+        LABELS "build;shipping;integration"
+        TIMEOUT 120)
+else()
+    message(STATUS "ShippingConfiguration_Distinct not registered: needs an MSVC multi-config tree with Debug, Release and MinSizeRel")
+endif()
 # SDK-240: the SDK vtable/struct surface is pinned in SparkSDK/ABI/sdk-abi-surface.json;
 # an ABI change without a re-pinned SPARK_SDK_VERSION bump fails here.
 add_test(
