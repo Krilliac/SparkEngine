@@ -460,6 +460,60 @@ set_tests_properties(FuzzShaderServiceProtocolSmoke PROPERTIES
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
 
+# The asset daemon codecs are header-only (Utils/AssetServiceProtocol.h over
+# Utils/Serializer.h and Utils/DaemonProtocol.h), so the adapter compiles the
+# whole production decoder.
+add_executable(SparkFuzzAssetServiceProtocol
+    FuzzAssetServiceProtocol.cpp
+    FuzzAssetServiceProtocolProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the decoders it compiles use libc++ and meet the
+# driver only at the C ABI in FuzzAssetServiceProtocolProduction.h.
+set_source_files_properties(
+    FuzzAssetServiceProtocolProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzAssetServiceProtocol PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzAssetServiceProtocol PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzAssetServiceProtocol PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzAssetServiceProtocol PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzAssetServiceProtocol PRIVATE Threads::Threads c++ c++abi)
+
+# The blob and path overclaim seeds claim 4 GiB in a few bytes; a decoder that
+# resized before checking the bytes present would exceed the -rss_limit_mb
+# single-allocation cap and fail this test.
+add_test(
+    NAME FuzzAssetServiceProtocolSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzAssetServiceProtocol>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/asset-service-protocol"
+)
+set_tests_properties(FuzzAssetServiceProtocolSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
 # ConfigParser::LoadFromString and SaveToString are header-inline
 # (Utils/ConfigParser.h over Utils/StringUtils.h), so the adapter compiles the
 # whole production parser; ConfigParser.cpp only adds the LocalFileCache I/O.

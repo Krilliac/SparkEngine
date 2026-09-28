@@ -122,6 +122,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzVisualScriptGraph",
     "SparkFuzzNavMesh",
     "SparkFuzzSparkTerrain",
+    "SparkFuzzAssetServiceProtocol",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2047,6 +2048,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::Graphics::SparkTerrain::DecodeRuntime",
                 "terrain-sparkterrain",
                 8,
+            ),
+            "asset-service-protocol": (
+                "AssetServiceProtocol",
+                "Spark::Daemon::DecodePutAssetRequest",
+                "asset-service-protocol",
+                9,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

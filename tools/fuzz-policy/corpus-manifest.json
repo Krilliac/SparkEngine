@@ -646,6 +646,30 @@
           "guard_test": "SparkTerrainFormat_RejectsNonSquareHeightmap"
         }
       ]
+    },
+    {
+      "id": "asset-service-protocol-corpus",
+      "parser_id": "asset-service-protocol",
+      "corpus_dir": "FuzzerTests/corpora/asset-service-protocol",
+      "last_verified": "2026-09-28",
+      "content_digest": "cfd0369d1d24ab11d303cffe29223d09a903d5a84e50af5c94d39f4315fd6101",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-get-request-missing-platform.bin",
+          "finding": "A GetAssetRequest missing its platform byte was rejected only after the decoded path had been written into the caller's struct; the path, invalidate and stats decoders shared the partial-publish pattern.",
+          "found_by": "review",
+          "guard_test": "AssetServiceProtocol_RejectedDecodeLeavesOutputUntouched"
+        }
+      ]
     }
   ]
 }

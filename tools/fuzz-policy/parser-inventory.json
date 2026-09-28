@@ -2539,10 +2539,16 @@
       "formats": [
         "asset-service-message"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzAssetServiceProtocol.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzAssetServiceProtocol",
+        "test_selector": "FuzzAssetServiceProtocolSmoke",
+        "corpus_id": "asset-service-protocol-corpus",
+        "entry_symbol": "Spark::Daemon::DecodePutAssetRequest",
+        "binding_source": "FuzzerTests/FuzzAssetServiceProtocolProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeAssetServiceMessage"
       }
     },
     {
