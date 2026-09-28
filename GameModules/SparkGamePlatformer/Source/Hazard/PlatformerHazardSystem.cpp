@@ -278,7 +278,6 @@ namespace Platformer
 
             float cycleTime = hazard.laserOnTime + hazard.laserOffTime;
             float t = std::fmod(m_globalTimer, cycleTime);
-            bool wasActive = hazard.active;
             hazard.active = (t < hazard.laserOnTime);
         }
     }
