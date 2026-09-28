@@ -1148,7 +1148,7 @@
             "GameModules/SparkGameARPG/Source/Core/Main.cpp",
             "GameModules/SparkGameARPG/module.json"
           ],
-          "note": "ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, learned skills, cooldowns, loot and boss through the real SaveSystem, and forged state is rejected. There is still no UI round-trip, so the criterion stays unmet."
+          "note": "ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, skills, cooldowns, loot and boss through the real SaveSystem; ARPGDungeon_HudRoundTripsThroughSaveRestart drives UI/ARPGHud on a real UISystem across a save/restart; forged state is rejected unchanged. All 8 ARPGDungeon_ tests passed on a local Windows Release tree; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",

@@ -449,11 +449,13 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:dab94757cd15",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
+            "docs/update-all-docs.sh",
+            "tools/docs_currentness.py",
             "Tests/Tools/test_docs_health.py"
           ],
-          "note": "The double isolated generation is tested. Being green at the exact commit needs an exact-SHA CI run."
+          "note": "At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. No exact-SHA hosted run."
         },
         {
           "criterionDigest": "sha256:59ac611c1455",

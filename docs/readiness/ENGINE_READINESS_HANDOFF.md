@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **160 implemented** (62%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **161 implemented** (62%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -250,7 +250,7 @@ Establish the only source of readiness truth and make CI report reality.
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 3/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
-| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 5/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
+| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 6/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
 
@@ -827,11 +827,11 @@ A hostile audit found timestamp-only false greens, incomplete first-party source
 
 **Acceptance criteria**
 
-Progress: 5 of 6 implemented, 0 evidenced at an exact commit.
+Progress: 6 of 6 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
-   - Evidence: `Tests/Tools/test_docs_health.py`
-   - The double isolated generation is tested. Being green at the exact commit needs an exact-SHA CI run.
+1. **[implemented]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
+   - Evidence: `docs/update-all-docs.sh`, `tools/docs_currentness.py`, `Tests/Tools/test_docs_health.py`
+   - At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. No exact-SHA hosted run.
 2. **[implemented]** Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
    - Evidence: `docs/generate-flowchart-content.py`, `Tests/Tools/test_docs_health.py`
    - Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff.
@@ -3706,7 +3706,7 @@ Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
    - ARPGDungeonPackage_ClearAndRestart passes on Windows (105 s, opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS): the installed package clears floor 5, the boss holds its identity to the clear, and a restart reloads the save. Needed the module-teardown and exec-audit fixes. Not in hosted CI yet.
 2. **[implemented]** Hero/skills/combat/loot/UI/save all round-trip
    - Evidence: `Tests/TestMOD330ARPGDungeonReal.cpp`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.h`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.cpp`, `GameModules/SparkGameARPG/Source/Core/Main.cpp`, `GameModules/SparkGameARPG/module.json`
-   - ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, learned skills, cooldowns, loot and boss through the real SaveSystem, and forged state is rejected. There is still no UI round-trip, so the criterion stays unmet.
+   - ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, skills, cooldowns, loot and boss through the real SaveSystem; ARPGDungeon_HudRoundTripsThroughSaveRestart drives UI/ARPGHud on a real UISystem across a save/restart; forged state is rejected unchanged. All 8 ARPGDungeon_ tests passed on a local Windows Release tree; no exact-commit CI.
 3. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-ARPG CI.
 
