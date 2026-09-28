@@ -38,6 +38,13 @@ SIGNATURE_CONTROL_NAME = "SparkEngine-release-signature-bundle.tar.gz"
 SIGNATURE_MANIFEST_NAME = "release-signatures.json"
 SIGNATURE_PUBLIC_KEY_NAME = "spark-release-public-key.pem"
 RELEASE_WORKFLOW_PATH = ".github/workflows/release.yml"
+# Owner decision OD-17 (docs/readiness/OWNER-DECISIONS.md): channel retention
+# and support semantics every stable release states.
+SUPPORT_WINDOW = (
+    "Support window: this stable release receives security and critical fixes until 6 months after the next "
+    "stable release, and its assets are immutable and kept permanently. Nightly prereleases are unsupported, "
+    "and experimental CI artifacts are kept 14 days and are never supported."
+)
 
 # GitHub rejects release bodies above 125000 characters; stay clearly below it.
 MAX_BODY_CHARACTERS = 120_000
@@ -354,6 +361,11 @@ def render(*, version: str, title_suffix: str, source_commit: str, built_at: str
     add("")
     for limitation in profile["limitations"]:
         add(f"- {limitation}")
+    add("")
+
+    add("### Support and retention")
+    add("")
+    add(SUPPORT_WINDOW)
     add("")
 
     heading_suffix = f" {changelog_rest}" if changelog_rest else ""

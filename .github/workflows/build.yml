@@ -3118,7 +3118,7 @@ jobs:
       with:
         name: mingw-wine-test-results
         path: wine-test-results.txt
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        retention-days: 14  # OD-17: experimental artifacts are kept 14 days
 
   # ===========================================================================
   # macOS Build — Apple Clang (experimental)
@@ -3283,7 +3283,7 @@ jobs:
           build/*-process-smoke.xml
           test-stats-macos-${{ matrix.backend }}-release.json
           test-results.log
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        retention-days: 14  # OD-17: experimental artifacts are kept 14 days
         if-no-files-found: error
 
     - name: Extract error summary
@@ -3316,7 +3316,7 @@ jobs:
           Tests/Output/
           build/Tests/Output/
         if-no-files-found: ignore
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        retention-days: 14  # OD-17: experimental artifacts are kept 14 days
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
@@ -3324,7 +3324,7 @@ jobs:
       with:
         name: SparkEngine-macOS-${{ matrix.config }}-${{ matrix.backend }}
         path: build/bin/
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        retention-days: 14  # OD-17: experimental artifacts are kept 14 days
 
   # ===========================================================================
   # macOS Shipping (PLT-220) — the macos-shipping preset, advisory
@@ -4566,7 +4566,7 @@ jobs:
             build/experimental-module-lifecycle-junit.xml
             build/experimental-module-inventory.json
             experimental-module-lifecycle.log
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          retention-days: 14  # OD-17: experimental artifacts are kept 14 days
           if-no-files-found: warn
 
   # ===========================================================================

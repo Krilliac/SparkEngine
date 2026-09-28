@@ -26,6 +26,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 TOOL = ROOT / "tools" / "release_notes.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+BUILD_WORKFLOW = ROOT / ".github" / "workflows" / "build.yml"
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
 REPOSITORY = "Owner/SparkEngine"
 ZIP = "SparkEngine-1.2.3-Windows-AMD64-MinSizeRel.zip"
@@ -165,6 +166,11 @@ class HappyPathTests(ReleaseNotesTestCase):
         self.assertIn("- Mobile platforms (`platform.mobile`)", body)
         self.assertIn("- G11 Gameplay scripting closure: Scripting is outside the profile.", body)
         self.assertIn("- Fixture limitation one | with a pipe.\n- Fixture limitation two.\n", body)
+        # OD-17 channel semantics: the support window and retention are stated.
+        self.assertIn("### Support and retention\n\nSupport window: this stable release receives security and "
+                      "critical fixes until 6 months after the next stable release, and its assets are immutable "
+                      "and kept permanently. Nightly prereleases are unsupported, and experimental CI artifacts are "
+                      "kept 14 days and are never supported.\n", body)
         # Exactly the requested changelog section, headings demoted, migrations extracted.
         self.assertIn("### Changes in 1.2.3 - 2026-10-01\n\nStable fixture release.", body)
         self.assertIn("#### Changed\n- Save format v5.", body)
@@ -329,7 +335,22 @@ class WorkflowWiringTests(unittest.TestCase):
     def test_nightly_keeps_its_short_body(self):
         nightly = self.step("Stage nightly rolling release as draft")
         self.assertIn("## Nightly Build", nightly["env"]["RELEASE_BODY"])
+        self.assertIn("Nightly builds are unsupported prereleases",
+                      nightly["env"]["RELEASE_BODY"])
         self.assertNotIn("stable-notes", nightly["env"]["RELEASE_BODY"])
+
+    def test_experimental_ci_artifacts_keep_the_stated_14_days(self):
+        # The notes state OD-17's 14-day experimental retention; build.yml must
+        # pin it on the experimental lanes rather than inherit a shared default.
+        jobs = yaml.safe_load(BUILD_WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        error_retention = "${{ env.ERROR_RETENTION_DAYS }}"
+        for job_id in ("experimental-module-lifecycle", "build-linux-mingw-wine", "build-macos"):
+            uploads = [step for step in jobs[job_id]["steps"]
+                       if step.get("uses", "").startswith("actions/upload-artifact@")]
+            evidence = [step for step in uploads if step["with"]["retention-days"] != error_retention]
+            self.assertTrue(evidence, job_id)
+            for step in evidence:
+                self.assertEqual(step["with"]["retention-days"], 14, (job_id, step["name"]))
 
 
 if __name__ == "__main__":
