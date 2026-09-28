@@ -67,6 +67,11 @@ HARNESS_TESTS = frozenset({
     # Verifies the shared directory-link helper (an NTFS junction on Windows) that
     # the link-refusal tests depend on, so it cannot silently stop making links.
     "Tests/TestFilesystemLinks.cpp",
+    # Drives the vendored AngelScript core through its raw API. That core, built
+    # with ThirdParty/Scripting/patches/angelscript-packed-bytecode.patch, is the
+    # one the engine links and ships, so the subject is production code even
+    # though no engine header is included.
+    "Tests/TestAngelScriptStackAlignmentReal.cpp",
 })
 
 # A file with no production header still exercises production code if it drives
