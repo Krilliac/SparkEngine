@@ -171,8 +171,9 @@ TEST(TF120_Residency_ReleaseThenOtherContinentClaimsSameProgress)
     EXPECT_EQ(arrived.loadoutPrimary, std::string("mra_rifle"));
     EXPECT_TRUE(veyra.SaveCharacterProgress(hero.charId, 260, 2, 61, 8));
 
-    // The continent it left can no longer write it.
-    EXPECT_FALSE(cindral.SaveCharacterProgress(hero.charId, 999, 2, 999, 9));
+    // The continent it left can no longer write it. The values are valid (flux stays under
+    // kFluxWalletCap), so only the residency/revision fence can refuse the write.
+    EXPECT_FALSE(cindral.SaveCharacterProgress(hero.charId, 999, 2, 99, 9));
     EXPECT_TRUE(cindral.LastStatus() == TFDatabaseStatus::Conflict);
     TFCharacterRecord durable;
     ASSERT_TRUE(veyra.FindCharacter(hero.charId, durable));
