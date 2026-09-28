@@ -5415,8 +5415,16 @@ if(Python3_Interpreter_FOUND)
         add_test(
             NAME site-data-contract
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_contract.py)
+        # site-data-generation-determinism regenerates docs/api in the source tree
+        # (publish_generated_tree swaps it through a docs/.api.previous-* directory),
+        # and the contract suites walk docs/ while resolving references. Run in
+        # parallel, a walk hit the moving tree ("Required file does not exist:
+        # docs/.api.previous-*/ComponentIndex.md"), so every site-data test that
+        # reads or writes that tree holds this lock.
+        set(SPARK_SITE_DATA_TREE_LOCK "site-data-source-tree")
         set_tests_properties(site-data-contract PROPERTIES
             LABELS "readiness;site-data;unit;python"
+            RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
             TIMEOUT 300)
 
         # RDY-000: the fast cross-reference subset -- the checked-in contract under
@@ -5435,6 +5443,7 @@ if(Python3_Interpreter_FOUND)
                 GenerationAndCiTests)
         set_tests_properties(readiness-cross-references PROPERTIES
             LABELS "readiness;site-data;unit;python"
+            RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
             TIMEOUT 180)
 
         # RDY-000: two clean generate.py runs produce byte-identical bundles; the
@@ -5444,6 +5453,7 @@ if(Python3_Interpreter_FOUND)
             COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_generation_determinism.py)
         set_tests_properties(site-data-generation-determinism PROPERTIES
             LABELS "readiness;site-data;python;slow"
+            RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
             TIMEOUT 900)
 
         # DOC-400: docs/site/content.json and docs-catalog.json carry no hardcoded
@@ -5455,6 +5465,7 @@ if(Python3_Interpreter_FOUND)
                 NoHardcodedClaimsTests)
         set_tests_properties(no-hardcoded-claims PROPERTIES
             LABELS "readiness;site-data;unit;python"
+            RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
             TIMEOUT 180)
 
         # DOC-400: the reference site runtime verifier (tools/site-data/runtime)
