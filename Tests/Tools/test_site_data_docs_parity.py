@@ -24,6 +24,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Callable
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
@@ -133,6 +134,43 @@ class LiveDocsParityTests(unittest.TestCase):
         commit = latest["source"]["commit"]
         self.assertIn(f")]({REPOSITORY_URL}/tree/{commit}/Tests)", content)
         self.assertNotIn(")](Tests)", content)
+
+    def test_generated_api_documents_pass_without_a_generated_tree(self) -> None:
+        """The publish job validates from a fresh checkout, where gitignored docs/api does not exist."""
+        latest, bundle = self.latest_and_bundle(self.root)
+        api_documents = [item for item in bundle["docs"]["documents"] if item["sourcePath"].startswith("docs/api/")]
+        self.assertGreater(len(api_documents), 0)
+        on_disk = site_data_generate.collect_document_sources
+
+        def fresh_checkout(catalog: dict[str, Any]) -> list[Path]:
+            api_root = REPO_ROOT / "docs" / "api"
+            return [path for path in on_disk(catalog) if api_root not in path.parents]
+
+        with mock.patch.object(site_data_generate, "collect_document_sources", fresh_checkout):
+            self.assertEqual(published_docs_parity_errors(self.root, bundle, latest), [])
+            validate_published_bundle(self.root)
+
+            # Only Markdown paths the catalog selects are accepted there.
+            commit = latest["source"]["commit"]
+            for bad_path in ("docs/api/Not-Markdown.txt", "docs/api/../../README.md"):
+                with self.subTest(source_path=bad_path):
+                    def api_source(bundle_value: dict[str, Any], path: str = bad_path) -> None:
+                        document = next(
+                            item for item in bundle_value["docs"]["documents"]
+                            if item["slug"] == api_documents[0]["slug"]
+                        )
+                        document["sourcePath"] = path
+                        document["sourceUrl"] = f"{REPOSITORY_URL}/blob/{commit}/{path}"
+
+                    def api_record(search: dict[str, Any], path: str = bad_path) -> None:
+                        next(
+                            record for record in search["records"] if record["slug"] == api_documents[0]["slug"]
+                        )["sourcePath"] = path
+
+                    variant = self.publish_variant(mutate_bundle=api_source, mutate_search=api_record)
+                    with self.assertRaises(SiteDataError) as raised:
+                        validate_published_bundle(variant)
+                    self.assertIn("is not a published document source", str(raised.exception))
 
     def test_each_mutation_is_rejected_by_the_published_bundle_validator(self) -> None:
         latest, bundle = self.latest_and_bundle(self.root)
