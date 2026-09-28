@@ -213,7 +213,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestReplicationFields.cpp",
         "Tests/TestSHLighting.cpp",
         "Tests/TestSceneConfigDatabase.cpp",
-        "Tests/TestSceneManager.cpp",
         "Tests/TestSceneSerializer.cpp",
         "Tests/TestScheduledCallback.cpp",
         "Tests/TestScriptHookManager.cpp",
