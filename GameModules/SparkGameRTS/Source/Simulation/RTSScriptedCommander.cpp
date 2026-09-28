@@ -14,7 +14,8 @@
 
 namespace RTS
 {
-    static_assert(RTSScriptedCommander::TICKS_PER_SECOND * RTSSkirmishSimulation::TICK_SECONDS == 1.0f,
+    static_assert(static_cast<float>(RTSScriptedCommander::TICKS_PER_SECOND) * RTSSkirmishSimulation::TICK_SECONDS ==
+                      1.0f,
                   "the commander schedules orders in simulation ticks");
 
     void RTSScriptedCommander::Apply(const RTSSkirmishSystems& systems, uint64_t tick) const
