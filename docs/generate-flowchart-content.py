@@ -1881,7 +1881,7 @@ def main():
 
     out = pathlib.Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(content, encoding="utf-8")
+    out.write_text(content, encoding="utf-8", newline="\n")
     print(f"Wrote {len(content)} bytes to {out}")
 
 

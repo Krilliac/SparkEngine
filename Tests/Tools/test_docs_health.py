@@ -1282,5 +1282,32 @@ class TrackedInventoryAndExecutionEvidenceTests(unittest.TestCase):
                 site_generate.ctest_summary(report)
 
 
+class GeneratedNewlineDeterminismTests(unittest.TestCase):
+    def test_flowchart_generator_writes_lf_on_every_host(self) -> None:
+        # Text-mode writes translate "\n" to CRLF on Windows, so a Windows regeneration would differ from the
+        # tracked LF page byte-for-byte and the currentness check would report it stale.
+        with tempfile.TemporaryDirectory(prefix="flowchart-newlines-") as tmp:
+            output = Path(tmp) / "flowchart.md"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "docs" / "generate-flowchart-content.py"),
+                    "--output",
+                    str(output),
+                    "--project-root",
+                    str(REPO_ROOT),
+                    "--headers",
+                    "1",
+                    "--sources",
+                    "1",
+                ],
+                check=True,
+                capture_output=True,
+            )
+            content = output.read_bytes()
+        self.assertIn(b"\n", content)
+        self.assertNotIn(b"\r", content)
+
+
 if __name__ == "__main__":
     unittest.main()
