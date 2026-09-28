@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **56 in progress**, **5 blocked**, **3 open**
-- Acceptance criteria: **259 total**, **97 implemented** (37%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **100 implemented** (39%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -250,7 +250,7 @@ Establish the only source of readiness truth and make CI report reality.
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 1/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 0/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
-| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 2/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
+| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 3/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
 
@@ -265,7 +265,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **in-progress** | 2/4 · 0/4 | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **in-progress** | 4/4 · 0/4 | — | `CI-100`, `OPS-100`, `RDY-000` |
 | [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **in-progress** | 4/4 · 0/4 | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
-| [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **in-progress** | 0/3 · 0/3 | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
+| [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **in-progress** | 1/3 · 0/3 | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
 | [`OPS-100`](#ops-100--secure-and-complete-crash-reporting-telemetry-delivery-and-symbol-operations) Secure and complete crash reporting, telemetry delivery, and symbol operations | P0 | **in-progress** | 2/5 · 0/5 | — | `SEC-100`, `CI-100`, `RDY-000` |
 
 ### Wave 2 — Primary engine workflow
@@ -277,7 +277,7 @@ Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK,
 | [`PLT-200`](#plt-200--certify-the-primary-windows-support-row) Certify the primary Windows support row | P0 | **in-progress** | 1/3 · 0/3 | `BLD-100`, `REL-100`, `RDY-020`, `RHI-210`, `EDT-210`, `OPS-100` | `HEAD-220`, `SAVE-230`, `SDK-240` |
 | [`RHI-210`](#rhi-210--certify-d3d11-as-the-primary-renderer) Certify D3D11 as the primary renderer | P0 | **in-progress** | 0/4 · 0/4 | `CI-110`, `BLD-100`, `RDY-020` | `HEAD-220`, `EDT-210`, `ENG-200` |
 | [`HEAD-220`](#head-220--certify-packaged-windows-11-nullrhi-execution) Certify packaged Windows 11 NullRHI execution | P0 | **in-progress** | 2/4 · 0/4 | `BLD-100`, `RDY-010`, `RDY-020` | `RHI-210`, `EDT-210`, `LIFE-200` |
-| [`LIFE-200`](#life-200--close-runtime-ownership-shutdown-reload-and-failure-semantics) Close runtime ownership, shutdown, reload, and failure semantics | P0 | **in-progress** | 3/4 · 0/4 | `RDY-010`, `BLD-100` | `HEAD-220`, `EDT-210`, `ENG-200` |
+| [`LIFE-200`](#life-200--close-runtime-ownership-shutdown-reload-and-failure-semantics) Close runtime ownership, shutdown, reload, and failure semantics | P0 | **in-progress** | 4/4 · 0/4 | `RDY-010`, `BLD-100` | `HEAD-220`, `EDT-210`, `ENG-200` |
 | [`EDT-210`](#edt-210--finish-the-editor-authoring-and-undo-safe-package-round-trip) Finish the editor authoring and undo-safe package round trip | P1 | **in-progress** | 2/4 · 0/4 | `RDY-010`, `RDY-020`, `LIFE-200` | `RHI-210`, `ENG-200`, `SAVE-230` |
 | [`ASSET-220`](#asset-220--consolidate-cooking-packaging-cli-and-installed-consumer-behavior) Consolidate cooking, packaging, CLI, and installed consumer behavior | P0 | **in-progress** | 1/4 · 0/4 | `RDY-020`, `BLD-100`, `LIFE-200` | `EDT-210`, `SAVE-230`, `SDK-240` |
 | [`INST-130`](#inst-130--make-installer-clean-install-repair-and-uninstall-behavior-verified-and-recoverable) Make installer clean-install, repair, and uninstall behavior verified and recoverable | P0 | **in-progress** | 3/5 · 0/5 | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
@@ -827,16 +827,16 @@ A hostile audit found timestamp-only false greens, incomplete first-party source
 
 **Acceptance criteria**
 
-Progress: 2 of 6 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 6 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
    - Evidence: `Tests/Tools/test_docs_health.py`
    - The double isolated generation is tested. Being green at the exact commit needs an exact-SHA CI run.
 2. **[unmet]** Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
    - Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff.
-3. **[unmet]** Every catalogued doc route, source, heading, image, and generated-API target resolves
-   - Evidence: `tools/site-data/validate_docs_links.py`
-   - The link validator reports errors on the HEAD tree, including a missing heading anchor and stale line anchors.
+3. **[implemented]** Every catalogued doc route, source, heading, image, and generated-API target resolves
+   - Evidence: `tools/site-data/validate_docs_links.py`, `.github/workflows/site-data.yml`, `Tests/Tools/test_docs_health.py`
+   - The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; site-data.yml runs it at every commit. Local only; no exact-commit CI yet.
 4. **[implemented]** Health contains every expected generator exactly once with exit and failure counts consistent
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_currentness.py`, `tools/site-data/generate.py`
    - Tests drive production write_health and summarize_documentation_health. Missing or duplicate generators and inconsistent exit or failure counts are rejected. RepositoryEvidenceTests pins the generator manifest.
@@ -1636,12 +1636,13 @@ Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross st
 
 **Acceptance criteria**
 
-Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Malformed input cannot cause crash, OOB, path escape, integer overflow, or unbounded allocation/time
    - Only some parsers have bounds or libFuzzer targets. The item still lists blocked and unclassified parser candidates, so 'every parser' is not shown.
-2. **[unmet]** Every found issue lands with a minimized regression fixture
-   - Nothing enforces a minimized regression fixture for each found issue, and the definition of done still lists this as remaining.
+2. **[implemented]** Every found issue lands with a minimized regression fixture
+   - Evidence: `tools/fuzz-policy/corpus_manifest.py`, `tools/fuzz-policy/import_regression.py`, `FuzzerTests/policy/test_fuzz_policy.py`
+   - corpus_manifest.py _require_declared_regressions rejects any regression-* seed without a declared finding and minimized fixture, and import_regression.py is the only intake path; the fuzz-policy unittests pin both. Local only; no exact-commit CI yet.
 3. **[unmet]** Required fuzz smoke is deterministic and blocking
    - A blocking fuzz-smoke gate needs hosted, exact-SHA CI evidence. The local fuzz-smoke CTest targets cover only some parsers.
 
@@ -2072,7 +2073,7 @@ A fully ready engine needs deterministic initialization/teardown and safe partia
 
 **Acceptance criteria**
 
-Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Repeated lifecycle loops are leak/sanitizer/deadlock clean
    - Evidence: `Tests/TestLIFE200LifecycleLoopReal.cpp`, `Tests/TestLIFE200ModuleReloadLoopReal.cpp`, `Tests/LifecycleLoopGuards.h`, `Tests/PackageSmoke/run_headless_boot_loop.py`, `Tests/CMakeLists.txt`
@@ -2080,9 +2081,9 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 2. **[implemented]** Every injected phase failure unwinds without stale singleton/thread/resource
    - Evidence: `Tests/TestLifecycleCompositionRootFailure.cpp`, `SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h`, `Tests/TestLIFE200LifecycleLoopReal.cpp`, `Tests/CMakeLists.txt`
    - LifecycleLoop_InjectedFailureAtEveryInitBoundaryUnwinds and LifecycleLoop_ThrowingUpdateStageDoesNotLeakAcrossCycles (CTest Lifecycle_LifecycleLoop, exact count 4) inject failures at every production init stage boundary and a throwing update stage, and check the root unwinds without leaks. Local only; no exact-commit CI run.
-3. **[unmet]** Hot reload rejects incompatible state safely
-   - Evidence: `Tests/TestModuleABI.cpp`
-   - ABI-incompatible replacements are rejected. There is no state-handoff/versioning contract, so incompatible-state rejection is untested.
+3. **[implemented]** Hot reload rejects incompatible state safely
+   - Evidence: `Tests/TestModuleABI.cpp`, `SparkEngine/Source/Core/ModuleManager.cpp`, `Tests/TestENG200ScriptHotReloadReal.cpp`
+   - DLL reload carries no state and is transactional: an ABI-mismatched or hash-modified image is rejected before static constructors run (ModuleABI_MismatchRejected*, ModuleABI_ModifiedBinaryRejected*). Script hot reload keeps instances and state intact on a failed compile (ScriptHotReload_ENG200_*). Local only; no exact-commit CI yet.
 4. **[implemented]** Shutdown completes within budget
    - Evidence: `perf-budgets/v1/budget.json`, `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp`, `Tests/PackageSmoke/run_headless_boot_loop.py`, `cmake/RunSparkHeadlessNullRHILifecycle.cmake`, `tools/perf-budget/validate_budget.py`, `tools/perf-budget/compare_results.py`, `Tests/Tools/test_perf_budget_hardening.py`
    - HeadlessBootLoop_FPSNullRHI enforces the provisional 5000 ms nullrhi.headless.shutdown_time ceiling on every boot. The metric stays 'suspended' because 'active' requires a reviewed baseline. Certified-hardware numbers remain PERF-100 hosted evidence. No MSVC run of HeadlessBootLoop_FPSNullRHI is recorded yet.

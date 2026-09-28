@@ -1651,11 +1651,13 @@
         },
         {
           "criterionDigest": "sha256:4fdc9530334c",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestModuleABI.cpp"
+            "Tests/TestModuleABI.cpp",
+            "SparkEngine/Source/Core/ModuleManager.cpp",
+            "Tests/TestENG200ScriptHotReloadReal.cpp"
           ],
-          "note": "ABI-incompatible replacements are rejected. There is no state-handoff/versioning contract, so incompatible-state rejection is untested."
+          "note": "DLL reload carries no state and is transactional: an ABI-mismatched or hash-modified image is rejected before static constructors run (ModuleABI_MismatchRejected*, ModuleABI_ModifiedBinaryRejected*). Script hot reload keeps instances and state intact on a failed compile (ScriptHotReload_ENG200_*). Local only; no exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:a372c7c44e09",

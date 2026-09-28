@@ -461,11 +461,13 @@
         },
         {
           "criterionDigest": "sha256:ccd94aacef95",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "tools/site-data/validate_docs_links.py"
+            "tools/site-data/validate_docs_links.py",
+            ".github/workflows/site-data.yml",
+            "Tests/Tools/test_docs_health.py"
           ],
-          "note": "The link validator reports errors on the HEAD tree, including a missing heading anchor and stale line anchors."
+          "note": "The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; site-data.yml runs it at every commit. Local only; no exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:d72cef64ec82",
