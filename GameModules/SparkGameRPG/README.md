@@ -62,7 +62,11 @@ moves an NPC into a new schedule entry, the NPC switches behavior at once and wa
 post at 3 m/s along a `NavMeshQuery::FindPath` route; a patrolling NPC walks to the waypoint it was
 heading for. An NPC whose post is off the NavMesh or unreachable stays where it is. Routes are not
 saved: after a load, the NPC plans a new route from its restored position. The module fails to load
-if an NPC's area cannot be baked. Patrol legs still walk in straight lines between waypoints.
+if an NPC's area cannot be baked. Patrol legs use the same NavMesh: after its wait at a waypoint a
+patrolling NPC plans a `FindPath` route to the next waypoint and walks it at 3 m/s, and a patrolling NPC
+found away from its waypoint with no route (after a load or a rebake) replans the leg. A waypoint with no
+path leaves the guard where it stands until its waypoint changes, the NavMesh is rebaked, or a save is
+loaded.
 `ctest --test-dir build/linux-gcc-release -R RPGNPCNavigation --output-on-failure` runs the tests
 (Tests/TestMOD350RPGNPCNavigationReal.cpp).
 

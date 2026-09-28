@@ -27,6 +27,7 @@ namespace
     constexpr uint32_t kVillageArea = 1;
     constexpr uint32_t kBlacksmithNpc = 1; // Merchant at (50, 0, 30) until 20:00, then idles at (55, 0, 40)
     constexpr uint32_t kElderNpc = 2;      // Quest giver at (0, 0, 0) until 19:00, then idles at (10, 0, -20)
+    constexpr uint32_t kGuardNpc = 3;      // Patrols (-50, 100) -> (50, 100) -> (50, -100) -> (-50, -100) by day
 
     constexpr float kFrameSeconds = 0.05f;
     constexpr float kWalkSpeed = 3.0f;       // RPGNPCSystem::WALK_SPEED
@@ -181,6 +182,37 @@ TEST(RPGNPCNavigation_ScheduleRouteDetoursAroundBlockedGround)
     EXPECT_LE(walk.largestStep, kWalkSpeed * kFrameSeconds + 0.001f);
     // Around the wall's end is far longer than the blocked straight line.
     EXPECT_GT(walk.travelled, 1.5f * Distance2D(0.0f, 0.0f, 10.0f, -20.0f));
+
+    npcs.Shutdown();
+}
+
+TEST(RPGNPCNavigation_PatrolLegDetoursAroundBlockedGround)
+{
+    RPGNPCSystem npcs;
+    ASSERT_TRUE(npcs.Initialize(nullptr));
+
+    // Ground around the guard's first patrol leg, (-50, 100) -> (50, 100), with a block across its middle.
+    const GroundRect ground{-64.0f, 72.0f, 64.0f, 128.0f};
+    const GroundRect block{-16.0f, 88.0f, 16.0f, 112.0f};
+    std::vector<XMFLOAT3> vertices;
+    std::vector<uint32_t> indices;
+    AppendGround(ground, 4.0f, {block}, vertices, indices);
+    ASSERT_TRUE(npcs.BuildAreaNavMesh(kVillageArea, vertices, indices));
+
+    const NPCData* guard = npcs.GetNPC(kGuardNpc);
+    ASSERT_TRUE(guard != nullptr);
+    ASSERT_TRUE(guard->currentBehavior == NPCBehavior::Patrol);
+    ASSERT_EQ(guard->currentWaypointIndex, 0);
+
+    // The guard leaves waypoint 0 on the first frame; the leg must follow the NavMesh around the block.
+    const GroundRect blockCore{block.minX + 0.5f, block.minZ + 0.5f, block.maxX - 0.5f, block.maxZ - 0.5f};
+    const Walk walk = WalkUntilArrived(npcs, kGuardNpc, 50.0f, 100.0f, 60.0f, &blockCore);
+    EXPECT_TRUE(walk.arrived);
+    EXPECT_FALSE(walk.enteredCore);
+    EXPECT_LE(walk.largestStep, kWalkSpeed * kFrameSeconds + 0.001f);
+    EXPECT_GT(walk.travelled, 102.0f); // longer than the blocked 100 m straight line
+    EXPECT_EQ(guard->currentWaypointIndex, 1);
+    EXPECT_TRUE(guard->currentBehavior == NPCBehavior::Patrol);
 
     npcs.Shutdown();
 }

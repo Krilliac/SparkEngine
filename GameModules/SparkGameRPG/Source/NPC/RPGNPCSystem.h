@@ -11,14 +11,15 @@
  *
  * When a schedule entry becomes active the NPC walks to its new post along a path
  * from the engine NavMesh (Spark::AI::NavMeshBuilder / NavMeshQuery) of its area;
- * it never teleports. An NPC whose area has no NavMesh, or whose post is unreachable,
+ * it never teleports. Patrol legs are walked the same way, one NavMesh path per leg.
+ * An NPC whose area has no NavMesh, or whose post or next waypoint is unreachable,
  * stays where it is.
  *
  * Contract: game thread only (driven from SparkGameRPGModule::OnUpdate). The system
  * owns its NPC table and one NavMesh plus query per area it navigates. Allocation
  * happens at registration, NavMesh bakes and schedule transitions; the per-frame
  * update of routes, patrols and the clock does not allocate. Scalability: a handful
- * of NPCs per area, one path query per NPC per schedule transition.
+ * of NPCs per area, one path query per NPC per schedule transition or patrol leg.
  */
 
 #pragma once
@@ -80,6 +81,9 @@ namespace RPG
         std::vector<PatrolWaypoint> patrolPath;
         int currentWaypointIndex = 0;
         float waypointWaitTimer = 0.0f;
+        /// Runtime only: the current waypoint has no NavMesh path, so the NPC waits in place instead of
+        /// replanning every frame. Cleared when the waypoint changes, on RestoreState and on a NavMesh rebake.
+        bool patrolBlocked = false;
 
         // Schedule travel (runtime only: rebuilt from the restored position after a load)
         int activeScheduleEntry = -1; ///< Index into schedule of the entry in force; -1 until the next update
@@ -105,6 +109,9 @@ namespace RPG
         float posZ = 0.0f;
         int currentWaypointIndex = 0;
         float waypointWaitTimer = 0.0f;
+        /// Runtime only: the current waypoint has no NavMesh path, so the NPC waits in place instead of
+        /// replanning every frame. Cleared when the waypoint changes, on RestoreState and on a NavMesh rebake.
+        bool patrolBlocked = false;
     };
 
     /// @brief World clock plus every registered NPC's mutable state, ordered by NPC id
@@ -195,6 +202,7 @@ namespace RPG
         void UpdatePatrols(float deltaTime);
         void UpdateRoutes(float deltaTime);
         bool PlanRoute(NPCData& npc, const XMFLOAT3& destination);
+        void PlanPatrolLeg(NPCData& npc);
 
         Spark::IEngineContext* m_context{nullptr};
         std::unordered_map<uint32_t, NPCData> m_npcs;

@@ -187,6 +187,7 @@ namespace RPG
             npc.route.clear();
             npc.routeIndex = 0;
             npc.activeScheduleEntry = -1;
+            npc.patrolBlocked = false;
         }
         return true;
     }
@@ -543,6 +544,7 @@ namespace RPG
             npc.route.clear();
             npc.routeIndex = 0;
             npc.activeScheduleEntry = -1;
+            npc.patrolBlocked = false;
         }
         return true;
     }
@@ -624,35 +626,39 @@ namespace RPG
             if (npc.currentBehavior != NPCBehavior::Patrol || npc.patrolPath.empty() || !npc.route.empty())
                 continue;
 
-            auto& wp = npc.patrolPath[npc.currentWaypointIndex];
-
-            // Simple move-toward-waypoint
-            float dx = wp.x - npc.posX;
-            float dz = wp.z - npc.posZ;
-            float dist = std::sqrt(dx * dx + dz * dz);
-
-            if (dist < 1.0f)
+            const PatrolWaypoint& waypoint = npc.patrolPath[static_cast<size_t>(npc.currentWaypointIndex)];
+            if (HorizontalDistance(npc.posX, npc.posZ, waypoint.x, waypoint.z) < ARRIVAL_DISTANCE)
             {
-                // At waypoint — wait
+                // At the waypoint: wait, then walk the next leg along the NavMesh.
                 npc.waypointWaitTimer -= deltaTime;
                 if (npc.waypointWaitTimer <= 0.0f)
                 {
                     npc.currentWaypointIndex = (npc.currentWaypointIndex + 1) % static_cast<int>(npc.patrolPath.size());
-                    auto& nextWp = npc.patrolPath[npc.currentWaypointIndex];
-                    npc.waypointWaitTimer = nextWp.waitTime;
+                    npc.waypointWaitTimer = npc.patrolPath[static_cast<size_t>(npc.currentWaypointIndex)].waitTime;
+                    npc.patrolBlocked = false;
+                    PlanPatrolLeg(npc);
                 }
             }
-            else
+            else if (!npc.patrolBlocked)
             {
-                // Move toward waypoint
-                float step = WALK_SPEED * deltaTime;
-                if (step > dist)
-                    step = dist;
-
-                npc.posX += (dx / dist) * step;
-                npc.posZ += (dz / dist) * step;
+                // Away from the waypoint with no route (a restored save, a rebaked NavMesh): replan the leg.
+                PlanPatrolLeg(npc);
             }
         }
+    }
+
+    void RPGNPCSystem::PlanPatrolLeg(NPCData& npc)
+    {
+        const PatrolWaypoint& waypoint = npc.patrolPath[static_cast<size_t>(npc.currentWaypointIndex)];
+        // A path that ends short of the waypoint (the waypoint lies off the NavMesh but within snapping range)
+        // would leave the NPC away from it and replanning every frame, so it counts as blocked too.
+        if (PlanRoute(npc, {waypoint.x, waypoint.y, waypoint.z}) &&
+            HorizontalDistance(npc.route.back().x, npc.route.back().z, waypoint.x, waypoint.z) < ARRIVAL_DISTANCE)
+            return;
+
+        npc.route.clear();
+        npc.routeIndex = 0;
+        npc.patrolBlocked = true;
     }
 
     void RPGNPCSystem::RenderDebugUI()

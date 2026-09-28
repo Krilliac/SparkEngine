@@ -4572,11 +4572,12 @@ if(TARGET imgui)
         TIMEOUT 180)
 
     # MOD-350: RPGNPCNavigation_* bake area NavMeshes through the engine NavMeshBuilder and require
-    # schedule changes to walk NPCs along NavMesh routes at walking speed (around blocked ground,
-    # resuming after a restore) and to leave them in place when no route exists, never teleporting.
+    # schedule changes and patrol legs to walk NPCs along NavMesh routes at walking speed (around
+    # blocked ground, resuming after a restore) and to leave them in place when no route exists,
+    # never teleporting.
     add_test(NAME RPGNPCNavigation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(RPGNPCNavigation PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=RPGNPCNavigation_;SPARK_TEST_EXPECT_COUNT=5"
+        ENVIRONMENT "SPARK_TEST_NAME=RPGNPCNavigation_;SPARK_TEST_EXPECT_COUNT=6"
         LABELS "module;rpg;ai;unit"
         TIMEOUT 120)
 
