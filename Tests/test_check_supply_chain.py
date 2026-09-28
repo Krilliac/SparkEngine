@@ -163,6 +163,11 @@ class _Baseline:
             ["config", "user.name", "Supply Chain Fixture"],
             ["config", "commit.gpgsign", "false"],
             ["config", "core.autocrlf", "false"],
+            # Recent git runs auto-maintenance detached after a commit; its
+            # lock file can land in .git while a test's TemporaryDirectory is
+            # being removed ("Directory not empty: '.git'" on CI).
+            ["config", "maintenance.auto", "false"],
+            ["config", "gc.auto", "0"],
             ["add", "-A"],
             ["commit", "-q", "-m", "baseline"],
         ):
