@@ -623,6 +623,59 @@ set_tests_properties(FuzzDaemonWireSmoke PROPERTIES
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
 
+# Spark::BinaryReader is header-only (Utils/Serializer.h), so the adapter
+# compiles the whole production reader and drives it with an op script.
+add_executable(SparkFuzzBinaryReader
+    FuzzBinaryReader.cpp
+    FuzzBinaryReaderProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the reader it compiles use libc++ and meet the
+# driver only at the C ABI in FuzzBinaryReaderProduction.h.
+set_source_files_properties(
+    FuzzBinaryReaderProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzBinaryReader PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzBinaryReader PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzBinaryReader PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzBinaryReader PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzBinaryReader PRIVATE Threads::Threads c++ c++abi)
+
+# string-length-overclaim.bin claims a 4 GiB string in front of three bytes and
+# skip-near-size-max.bin skips SIZE_MAX bytes; a reader whose bounds check could
+# wrap would read past the exactly sized ASan buffer.
+add_test(
+    NAME FuzzBinaryReaderSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzBinaryReader>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=6
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/binary-serializer"
+)
+set_tests_properties(FuzzBinaryReaderSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
 # ConfigParser::LoadFromString and SaveToString are header-inline
 # (Utils/ConfigParser.h over Utils/StringUtils.h), so the adapter compiles the
 # whole production parser; ConfigParser.cpp only adds the LocalFileCache I/O.

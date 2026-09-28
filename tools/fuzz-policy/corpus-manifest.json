@@ -718,6 +718,23 @@
           "guard_test": "SparkDaemonServiceTests"
         }
       ]
+    },
+    {
+      "id": "binary-serializer-corpus",
+      "parser_id": "binary-serializer",
+      "corpus_dir": "FuzzerTests/corpora/binary-serializer",
+      "last_verified": "2026-09-28",
+      "content_digest": "44f2f792c12621e6f23f36cbf5429f58fc465239579a22f7caf29837ecea9c9f",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }
