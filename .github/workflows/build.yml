@@ -1723,7 +1723,7 @@ jobs:
         set -euo pipefail
         ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
           --show-only=json-v1 > build/ctest-policy-inventory.json
-        python Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json
+        python Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json --build-dir build
 
     - name: Build
       shell: bash
@@ -2605,7 +2605,7 @@ jobs:
         set -euo pipefail
         ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
           --show-only=json-v1 > build/ctest-policy-inventory.json
-        python3 Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json
+        python3 Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json --build-dir build
 
     - name: Build all targets
       run: |

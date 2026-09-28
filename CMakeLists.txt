@@ -2706,6 +2706,13 @@ spark_enable_fuzz_policy("${CMAKE_SOURCE_DIR}")
 
 if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
     enable_testing()
+    # CI-110: Tools/validate_ctest_policy.py --build-dir reads this codemodel to
+    # learn which shipped executables the configured tree builds, independently
+    # of which ones its tests happen to name. Older CMake gets no reply and the
+    # validator fails closed.
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.27)
+        cmake_file_api(QUERY API_VERSION 1 CODEMODEL 2)
+    endif()
     add_test(
         NAME SparkWindowsVersionInfo.Metadata
         COMMAND ${CMAKE_COMMAND}

@@ -71,6 +71,44 @@ def ctest_entry(name: str, **props: object) -> dict:
     }
 
 
+def write_build_tree(
+    root: Path,
+    installed: tuple[str, ...],
+    system_name: str = "Windows",
+    uninstalled: tuple[str, ...] = (),
+) -> None:
+    """Minimal configured tree: a CMake file-API codemodel reply plus CMakeSystem.cmake.
+
+    ``installed`` executables carry an install rule; ``uninstalled`` ones and a
+    static library do not, so neither may count as shipped.
+    """
+    reply = root / ".cmake" / "api" / "v1" / "reply"
+    reply.mkdir(parents=True)
+    targets = []
+    for name, target_type, install in (
+        [(name, "EXECUTABLE", True) for name in installed]
+        + [(name, "EXECUTABLE", False) for name in uninstalled]
+        + [("SparkEngineLib", "STATIC_LIBRARY", True)]
+    ):
+        document: dict = {"name": name, "type": target_type}
+        if install:
+            document["install"] = {"prefix": {"path": "/usr"}, "destinations": [{"path": "bin"}]}
+        json_file = f"target-{name}-Release.json"
+        (reply / json_file).write_text(json.dumps(document), encoding="utf-8")
+        targets.append({"name": name, "jsonFile": json_file})
+    codemodel = {"kind": "codemodel", "configurations": [{"name": "Release", "targets": targets}]}
+    (reply / "codemodel-v2-0.json").write_text(json.dumps(codemodel), encoding="utf-8")
+    index = {
+        "cmake": {"version": {"string": "4.4.1"}},
+        "objects": [{"kind": "codemodel", "version": {"major": 2, "minor": 8}, "jsonFile": "codemodel-v2-0.json"}],
+        "reply": {},
+    }
+    (reply / "index-2026-09-27T00-00-00-0000.json").write_text(json.dumps(index), encoding="utf-8")
+    system = root / "CMakeFiles" / "4.4.1" / "CMakeSystem.cmake"
+    system.parent.mkdir(parents=True)
+    system.write_text(f'set(CMAKE_SYSTEM_NAME "{system_name}")\n', encoding="utf-8")
+
+
 class CTestPolicyValidator(unittest.TestCase):
     def run_validator(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -86,11 +124,21 @@ class CTestPolicyValidator(unittest.TestCase):
             path.write_text(text, encoding="utf-8")
             return self.run_validator("--cmake-lists", str(path))
 
-    def check_json(self, text: str) -> subprocess.CompletedProcess[str]:
+    def check_json(
+        self,
+        text: str,
+        installed: tuple[str, ...] = ("SparkLauncher",),
+        system_name: str = "Windows",
+        uninstalled: tuple[str, ...] = (),
+    ) -> subprocess.CompletedProcess[str]:
+        # The default tree ships only SparkLauncher, a documented gap on every
+        # platform, so the TIMEOUT/LABELS cases see no shipped-binary errors.
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "ctest.json"
             path.write_text(text, encoding="utf-8")
-            return self.run_validator("--ctest-json", str(path))
+            build = Path(temporary) / "build"
+            write_build_tree(build, installed, system_name, uninstalled)
+            return self.run_validator("--ctest-json", str(path), "--build-dir", str(build))
 
     # -- static CMake view ---------------------------------------------------
 
@@ -203,14 +251,17 @@ class CTestPolicyValidator(unittest.TestCase):
         for case, command in cases.items():
             with self.subTest(case=case):
                 result = self.check_json(
-                    ctest_json(self.binary_entry("SparkInstallerVersion", command, ["installer", "integration"]))
+                    ctest_json(self.binary_entry("SparkInstallerVersion", command, ["installer", "integration"])),
+                    installed=("SparkInstaller",),
                 )
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("shipped binary SparkInstaller is only exercised through --help/--version", result.stderr)
 
     def test_behavioural_lane_needs_an_integration_smoke_or_process_label(self) -> None:
         command = ["C:/cmake.exe", "-DSPARK_INSTALLER=C:\\build\\bin\\Release\\SparkInstaller.exe", "-P", "s.cmake"]
-        unlabelled = self.check_json(ctest_json(self.binary_entry("Smoke", command, ["installer", "unit"])))
+        unlabelled = self.check_json(
+            ctest_json(self.binary_entry("Smoke", command, ["installer", "unit"])), installed=("SparkInstaller",)
+        )
         self.assertEqual(unlabelled.returncode, 1)
         self.assertIn("shipped binary SparkInstaller", unlabelled.stderr)
 
@@ -218,7 +269,8 @@ class CTestPolicyValidator(unittest.TestCase):
             ctest_json(
                 self.binary_entry("Version", ["/b/SparkInstaller", "--version"], ["installer"]),
                 self.binary_entry("Smoke", command, ["installer", "integration", "process"]),
-            )
+            ),
+            installed=("SparkInstaller",),
         )
         self.assertEqual(labelled.returncode, 0, labelled.stderr)
 
@@ -229,41 +281,118 @@ class CTestPolicyValidator(unittest.TestCase):
         by_environment = self.binary_entry(
             "DaemonSmoke", ["/b/SparkTests"], ["integration"], environment=["SPARK_TEST_DAEMON_PATH=/b/SparkDaemon"]
         )
-        result = self.check_json(ctest_json(by_argument, by_environment))
+        result = self.check_json(
+            ctest_json(by_argument, by_environment), installed=("SparkAutomation", "SparkDaemon", "SparkGateway")
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_shipped_built_binary_with_no_tests_at_all_is_rejected(self) -> None:
+        # The fail-open case: SparkServer is built and installed in this tree but
+        # no registered test names it. Built-ness comes from the codemodel, so
+        # the binary cannot drop out of enforcement by having no tests.
+        installer_smoke = self.binary_entry(
+            "InstallerSmoke", ["/b/cmake", "-DSPARK_INSTALLER=/b/SparkInstaller", "-P", "s.cmake"], ["integration"]
+        )
+        result = self.check_json(
+            ctest_json(installer_smoke, ctest_entry("Unrelated", TIMEOUT=30.0, LABELS=["unit"])),
+            installed=("SparkInstaller", "SparkServer"),
+            system_name="Linux",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "shipped binary SparkServer is built in this tree but no registered test runs it", result.stderr
+        )
+        self.assertNotIn("SparkInstaller", result.stderr)
+
+    def test_unshipped_or_unbuilt_executables_need_no_lane(self) -> None:
+        # DevTool is built but has no install rule; SparkServer is shipped by the
+        # project but not built in this tree, so the codemodel does not list it.
+        smoke = self.binary_entry(
+            "InstallerSmoke", ["/b/cmake", "-DSPARK_INSTALLER=/b/SparkInstaller", "-P", "s.cmake"], ["integration"]
+        )
+        result = self.check_json(ctest_json(smoke), installed=("SparkInstaller",), uninstalled=("DevTool",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_platform_scoped_gap_applies_only_on_its_platforms(self) -> None:
+        compiler_smoke = self.binary_entry(
+            "ShaderSmoke", ["/b/cmake", "-DSPARK_SHADER_COMPILER=/b/SparkShaderCompiler", "-P", "s.cmake"], ["process"]
+        )
+        unrelated = ctest_entry("Unrelated", TIMEOUT=30.0, LABELS=["unit"])
+        shipped = ("SparkShaderCompiler",)
+
+        linux_gap = self.check_json(ctest_json(unrelated), installed=shipped, system_name="Linux")
+        self.assertEqual(linux_gap.returncode, 0, linux_gap.stderr)
+        self.assertIn("known gap: shipped binary SparkShaderCompiler", linux_gap.stdout)
+
+        windows_missing = self.check_json(ctest_json(unrelated), installed=shipped, system_name="Windows")
+        self.assertEqual(windows_missing.returncode, 1)
+        self.assertIn("shipped binary SparkShaderCompiler is built in this tree", windows_missing.stderr)
+
+        windows_lane = self.check_json(ctest_json(compiler_smoke), installed=shipped, system_name="Windows")
+        self.assertEqual(windows_lane.returncode, 0, windows_lane.stderr)
+
+        linux_stale = self.check_json(ctest_json(compiler_smoke), installed=shipped, system_name="Linux")
+        self.assertEqual(linux_stale.returncode, 1)
+        self.assertIn("SparkShaderCompiler now has a behavioural lane on Linux", linux_stale.stderr)
+
+    def test_ctest_json_needs_a_build_tree_with_a_codemodel(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ctest.json"
+            path.write_text(ctest_json(ctest_entry("A", TIMEOUT=30.0, LABELS=["unit"])), encoding="utf-8")
+            alone = self.run_validator("--ctest-json", str(path))
+            self.assertEqual(alone.returncode, 2)
+            self.assertIn("--ctest-json and --build-dir must be given together", alone.stderr)
+
+            unconfigured = self.run_validator("--ctest-json", str(path), "--build-dir", temporary)
+            self.assertEqual(unconfigured.returncode, 2)
+            self.assertIn("no CMake file-API reply", unconfigured.stderr)
+
+            ships_nothing = Path(temporary) / "empty-build"
+            write_build_tree(ships_nothing, installed=(), uninstalled=("DevTool",))
+            empty = self.run_validator("--ctest-json", str(path), "--build-dir", str(ships_nothing))
+            self.assertEqual(empty.returncode, 2)
+            self.assertIn("builds no installed executable", empty.stderr)
 
     def test_known_gap_is_reported_as_a_note_and_a_stale_gap_fails(self) -> None:
         help_only = self.binary_entry("LauncherHelp", ["/b/SparkLauncher", "--help"], ["launcher", "process"])
-        noted = self.check_json(ctest_json(help_only))
+        noted = self.check_json(ctest_json(help_only), system_name="Linux")
         self.assertEqual(noted.returncode, 0, noted.stderr)
         self.assertIn("known gap: shipped binary SparkLauncher", noted.stdout)
+
+        untested = self.check_json(ctest_json(ctest_entry("Unrelated", TIMEOUT=30.0, LABELS=["unit"])))
+        self.assertEqual(untested.returncode, 0, untested.stderr)
+        self.assertIn("known gap: shipped binary SparkLauncher", untested.stdout)
 
         driven = self.binary_entry("LauncherSmoke", ["/b/SparkLauncher", "--project", "p"], ["launcher", "process"])
         stale = self.check_json(ctest_json(help_only, driven))
         self.assertEqual(stale.returncode, 1)
-        self.assertIn("SparkLauncher now has a behavioural lane; remove it from KNOWN_BINARY_LANE_GAPS", stale.stderr)
+        self.assertIn(
+            "SparkLauncher now has a behavioural lane on Windows; remove the gap from KNOWN_BINARY_LANE_GAPS",
+            stale.stderr,
+        )
 
-    def test_shipped_executables_are_installed_runtime_executables(self) -> None:
+    def test_configured_shipped_executables_are_installed_executables_of_every_configuration(self) -> None:
         policy = self._policy_module()
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            (root / "CMakeLists.txt").write_text(
-                "add_executable(Tool main.cpp)\n"
-                "add_executable(DevOnly dev.cpp)\n"
-                "add_library(Lib STATIC lib.cpp)\n"
-                "add_executable(${GENERATED} gen.cpp)\n"
-                "install(TARGETS Tool Lib RUNTIME DESTINATION bin COMPONENT tools)\n"
-                "# install(TARGETS DevOnly RUNTIME DESTINATION bin)\n",
-                encoding="utf-8",
-            )
-            self.assertEqual(policy.shipped_executables(root), ["Tool"])
-        shipped = set(policy.shipped_executables())
-        for name in ("SparkEngine", "SparkEditor", "SparkInstaller", "SparkLauncher", "SparkGateway", "SparkServer"):
-            self.assertIn(name, shipped)
+            build = Path(temporary)
+            write_build_tree(build, ("SparkServer", "SparkEngine"), "Linux", uninstalled=("DevTool",))
+            self.assertEqual(policy.configured_shipped_executables(build), (["SparkEngine", "SparkServer"], "Linux"))
 
-    def test_every_known_gap_is_a_shipped_binary(self) -> None:
+    def test_every_known_gap_is_an_installed_executable(self) -> None:
         policy = self._policy_module()
-        self.assertLessEqual(set(policy.KNOWN_BINARY_LANE_GAPS), set(policy.shipped_executables()))
+        sources = [
+            (REPO_ROOT / relative).read_text(encoding="utf-8")
+            for relative in policy._git_tracked_cmake_sources(REPO_ROOT) or []
+            if (REPO_ROOT / relative).is_file() and not relative.startswith("ThirdParty/")
+        ]
+        for target in policy.KNOWN_BINARY_LANE_GAPS:
+            with self.subTest(target=target):
+                pattern = re.compile(rf"install\(\s*TARGETS\s+{re.escape(target)}\b[^)]*RUNTIME")
+                self.assertTrue(any(pattern.search(text) for text in sources), f"{target} is not installed")
+
+    def test_root_cmakelists_requests_the_codemodel_for_test_trees(self) -> None:
+        text = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("cmake_file_api(QUERY API_VERSION 1 CODEMODEL 2)", text)
 
     # -- first-party discovery ----------------------------------------------------
 
@@ -343,7 +472,10 @@ class CTestPolicyValidator(unittest.TestCase):
                 self.assertIn("set -euo pipefail", script)
                 self.assertIn("--no-tests=error", script)
                 self.assertIn("--show-only=json-v1 > build/ctest-policy-inventory.json", script)
-                self.assertIn("Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json", script)
+                self.assertIn(
+                    "Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json --build-dir build",
+                    script,
+                )
                 self.assertNotIn("continue-on-error", script)
                 self.assertNotIn("|| true", script)
 

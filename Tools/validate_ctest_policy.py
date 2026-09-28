@@ -18,11 +18,14 @@ Two views of the same rule:
 * ``--ctest-json FILE``: validate ``ctest --show-only=json-v1`` output from a
   configured tree. This sees tests registered from subdirectories, loops and
   functions after CMake evaluated them, and rejects an empty inventory so a
-  tree that registered nothing cannot pass. It also enforces "every shipped
-  binary has a smoke or integration lane": each ``install(TARGETS ... RUNTIME)``
-  executable that the tree's tests invoke must have one test that does more
-  than print its help or version and carries an integration, smoke or process
-  label (``KNOWN_BINARY_LANE_GAPS`` lists the documented exceptions).
+  tree that registered nothing cannot pass. With ``--build-dir`` (required
+  alongside it) it also enforces "every shipped binary has a smoke or
+  integration lane": every installed executable target that the tree's CMake
+  file-API codemodel says this configuration builds must have one test that
+  does more than print its help or version and carries an integration, smoke
+  or process label (``KNOWN_BINARY_LANE_GAPS`` lists the documented
+  exceptions). Built-ness comes from the codemodel, never from test
+  references, so a shipped binary with no registered test at all fails.
 
 Exit status: 0 when the policy holds, 1 on any violation, 2 on unreadable input.
 """
@@ -54,21 +57,27 @@ _VARIABLE_REF_RE = re.compile(r"^\$\{[A-Za-z0-9_]+\}$")
 _INTEGER_RE = re.compile(r"^-?[0-9]+$")
 
 # Shipped-binary rule (CI-110 "every shipped binary has a smoke or integration lane").
-_TARGET_COMMAND_RE = re.compile(r"(?i)(?<![A-Za-z0-9_])(add_executable|install)\s*\(")
-_INSTALL_KEYWORDS = frozenset(
-    {"EXPORT", "RUNTIME", "LIBRARY", "ARCHIVE", "BUNDLE", "FRAMEWORK", "DESTINATION", "COMPONENT", "PERMISSIONS"}
-)
 SMOKE_LABELS = frozenset({"integration", "smoke", "process"})
 HELP_VERSION_ARGS = frozenset({"--help", "-h", "--version", "-v"})
 # cmake -P runners that only compare the target's --version output (the generated
 # Verify<Target>Version.cmake scripts in the product CMakeLists).
 VERSION_PROBE_DEFINES = frozenset({"SPARK_VERSION_EXECUTABLE"})
-# Shipped binaries with no non-interactive mode a lane could drive. Each entry
-# says where the behaviour is covered instead; the gap is printed on every run,
-# and an entry whose binary gains a behavioural lane fails until it is removed.
-KNOWN_BINARY_LANE_GAPS = {
-    "SparkLauncher": "GUI-only project picker with no headless mode; its launch-request validation runs "
-    "in-process in Tests/TestLauncherProcess.cpp, not through the shipped binary",
+# Shipped binaries with no behaviour a lane could drive, as target -> (the
+# CMAKE_SYSTEM_NAME values the gap applies to, or None for every platform, and
+# where the behaviour is covered instead). The gap is printed on every run, and
+# an entry whose binary gains a behavioural lane on a gap platform fails until
+# it is removed.
+KNOWN_BINARY_LANE_GAPS: dict[str, tuple[frozenset[str] | None, str]] = {
+    "SparkLauncher": (
+        None,
+        "GUI-only project picker with no headless mode; its launch-request validation runs in-process in "
+        "Tests/TestLauncherProcess.cpp, not through the shipped binary",
+    ),
+    "SparkShaderCompiler": (
+        frozenset({"Linux", "Darwin"}),
+        "d3dcompiler_47 is its only integrated backend, so off Windows every compile is refused; the Windows "
+        "SparkShaderCompilerExecutableSmoke and SparkShaderCompilerBatchOutputs lanes cover the binary",
+    ),
 }
 
 
@@ -301,30 +310,63 @@ def check_ctest_json(document: object, origin: str) -> list[str]:
     return errors
 
 
-def shipped_executables(root: Path = REPO_ROOT) -> list[str]:
-    """Executable targets that an ``install(TARGETS ... RUNTIME ...)`` rule ships, from the tracked CMake files."""
-    candidates = _git_tracked_cmake_sources(root)
-    if candidates is None:
-        candidates = _walked_cmake_sources(root)
-    executables: set[str] = set()
-    installed: set[str] = set()
-    for relative in candidates:
-        if relative.split("/", 1)[0] in EXCLUDED_TOP_LEVEL_DIRS or not _is_cmake_source(relative):
-            continue
-        path = root / relative
-        if not path.is_file():
-            continue
-        source = strip_comments(path.read_text(encoding="utf-8"))
-        for match in _TARGET_COMMAND_RE.finditer(source):
-            tokens = _tokens(_balanced_body(source, match.end() - 1)[0])
-            if match.group(1).lower() == "add_executable":
-                if tokens and "$" not in tokens[0]:
-                    executables.add(tokens[0])
-            elif tokens[:1] == ["TARGETS"] and "RUNTIME" in tokens:
-                names = tokens[1:]
-                end = next((index for index, token in enumerate(names) if token in _INSTALL_KEYWORDS), len(names))
-                installed.update(name for name in names[:end] if "$" not in name)
-    return sorted(executables & installed)
+def _load_reply_json(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: malformed CMake file-API reply ({exc})") from exc
+
+
+def configured_shipped_executables(build_dir: Path) -> tuple[list[str], str]:
+    """(installed executable targets the configured tree builds, its CMAKE_SYSTEM_NAME).
+
+    Read from the tree's CMake file-API codemodel reply, which the root
+    CMakeLists.txt requests with cmake_file_api() whenever tests are enabled.
+    Raises ValueError when the reply is missing or says the tree ships nothing,
+    so a tree the rule cannot see fails instead of passing with no binaries.
+    """
+    reply = build_dir / ".cmake" / "api" / "v1" / "reply"
+    indices = sorted(reply.glob("index-*.json"))
+    if not indices:
+        raise ValueError(
+            f"{build_dir}: no CMake file-API reply; configure the tree with BUILD_TESTS=ON and CMake >= 3.27 "
+            "(the root CMakeLists.txt requests the codemodel)"
+        )
+    index = _load_reply_json(indices[-1])
+    if not isinstance(index, dict):
+        raise ValueError(f"{indices[-1]}: not a CMake file-API index")
+    codemodels = {
+        entry.get("jsonFile")
+        for entry in index.get("objects", [])
+        if isinstance(entry, dict)
+        and entry.get("kind") == "codemodel"
+        and isinstance(entry.get("version"), dict)
+        and entry["version"].get("major") == 2
+    }
+    if len(codemodels) != 1 or not all(isinstance(name, str) for name in codemodels):
+        raise ValueError(f"{indices[-1]}: expected exactly one codemodel-v2 reply, found {sorted(map(str, codemodels))}")
+    codemodel = _load_reply_json(reply / codemodels.pop())
+    configurations = codemodel.get("configurations") if isinstance(codemodel, dict) else None
+    if not isinstance(configurations, list) or not configurations:
+        raise ValueError(f"{build_dir}: the codemodel reply lists no configurations")
+    shipped: set[str] = set()
+    for configuration in configurations:
+        for target in configuration.get("targets", []) if isinstance(configuration, dict) else []:
+            document = _load_reply_json(reply / str(target.get("jsonFile")))
+            if isinstance(document, dict) and document.get("type") == "EXECUTABLE" and document.get("install"):
+                shipped.add(str(document.get("name")))
+    if not shipped:
+        raise ValueError(f"{build_dir}: the codemodel reply builds no installed executable; nothing to check")
+
+    # CMake writes the configured platform under a directory named for its own version.
+    version = index.get("cmake", {}).get("version", {}).get("string")
+    system_file = build_dir / "CMakeFiles" / str(version) / "CMakeSystem.cmake"
+    match = None
+    if system_file.is_file():
+        match = re.search(r'set\(CMAKE_SYSTEM_NAME "([^"]+)"\)', system_file.read_text(encoding="utf-8"))
+    if match is None:
+        raise ValueError(f"{system_file}: cannot read the configured CMAKE_SYSTEM_NAME")
+    return sorted(shipped), match.group(1)
 
 
 def _binary_name(value: str) -> str:
@@ -343,17 +385,23 @@ def _is_version_probe(command: list[str], target: str) -> bool:
 
 
 def check_shipped_binary_lanes(
-    document: dict, shipped: list[str], origin: str, gaps: dict[str, str] = KNOWN_BINARY_LANE_GAPS
+    document: dict,
+    shipped: list[str],
+    system_name: str,
+    origin: str,
+    gaps: dict[str, tuple[frozenset[str] | None, str]] = KNOWN_BINARY_LANE_GAPS,
 ) -> tuple[list[str], list[str]]:
-    """Every shipped executable this tree's tests invoke needs a behavioural smoke/integration/process lane.
+    """Every shipped executable the configured tree builds needs a behavioural smoke/integration/process lane.
 
-    A target counts as built in the tree once any registered test names its
-    file (as the command, an argument, a ``-D...=`` value, or an ENVIRONMENT
-    value). Tests that only print its help or version do not count, and the
-    behavioural test must carry an integration, smoke or process label.
+    ``shipped`` comes from the tree's codemodel, not from the tests, so a
+    shipped binary that no registered test names fails. A test covers a target
+    when it names the target's file (as the command, an argument, a ``-D...=``
+    value, or an ENVIRONMENT value), does more than print its help or version,
+    and carries an integration, smoke or process label.
     Returns (errors, notes); a known gap is a note, and a stale one an error.
     """
-    covered: dict[str, bool] = {}
+    covered: dict[str, bool] = dict.fromkeys(shipped, False)
+    referenced_anywhere: set[str] = set()
     for entry in document["tests"]:
         if not isinstance(entry, dict):
             continue
@@ -364,16 +412,27 @@ def check_shipped_binary_lanes(
         environment = [str(value) for value in properties.get("ENVIRONMENT") or []]
         labels = {str(label) for label in properties.get("LABELS") or []}
         referenced = {_binary_name(arg.split("=", 1)[-1]) for arg in command + environment} & set(shipped)
+        referenced_anywhere.update(referenced)
         for target in referenced:
             behavioural = not _is_version_probe(command, target) and bool(labels & SMOKE_LABELS)
             covered[target] = covered.get(target, False) or behavioural
     errors: list[str] = []
     notes: list[str] = []
     for target in sorted(covered):
-        if target in gaps and covered[target]:
-            errors.append(f"{origin}: {target} now has a behavioural lane; remove it from KNOWN_BINARY_LANE_GAPS")
-        elif target in gaps:
-            notes.append(f"{origin}: known gap: shipped binary {target} has no behavioural lane ({gaps[target]})")
+        platforms, reason = gaps.get(target, (frozenset(), ""))
+        is_gap = platforms is None or system_name in platforms
+        if is_gap and covered[target]:
+            errors.append(
+                f"{origin}: {target} now has a behavioural lane on {system_name}; "
+                "remove the gap from KNOWN_BINARY_LANE_GAPS"
+            )
+        elif is_gap:
+            notes.append(f"{origin}: known gap: shipped binary {target} has no behavioural lane ({reason})")
+        elif target not in referenced_anywhere:
+            errors.append(
+                f"{origin}: shipped binary {target} is built in this tree but no registered test runs it; "
+                "add a smoke or integration lane"
+            )
         elif not covered[target]:
             errors.append(
                 f"{origin}: shipped binary {target} is only exercised through --help/--version or by tests without "
@@ -403,7 +462,14 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="output of 'ctest --show-only=json-v1' to check",
     )
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        help="configured build tree the --ctest-json inventory came from (its codemodel names the shipped binaries)",
+    )
     args = parser.parse_args(argv)
+    if bool(args.ctest_json) != bool(args.build_dir):
+        parser.error("--ctest-json and --build-dir must be given together")
 
     errors: list[str] = []
     checked = 0
@@ -420,13 +486,13 @@ def main(argv: list[str] | None = None) -> int:
             text = path.read_text(encoding="utf-8")
             errors.extend(check_cmake_text(text, _display_path(path)))
             checked += len(parse_cmake(text)[0])
-        shipped = shipped_executables() if args.ctest_json else []
+        shipped, system_name = configured_shipped_executables(args.build_dir) if args.build_dir else ([], "")
         for path in args.ctest_json or []:
             document = json.loads(path.read_text(encoding="utf-8"))
             errors.extend(check_ctest_json(document, str(path)))
             if isinstance(document, dict) and isinstance(document.get("tests"), list):
                 checked += len(document["tests"])
-                lane_errors, lane_notes = check_shipped_binary_lanes(document, shipped, str(path))
+                lane_errors, lane_notes = check_shipped_binary_lanes(document, shipped, system_name, str(path))
                 errors.extend(lane_errors)
                 for note in lane_notes:
                     print(f"validate_ctest_policy: note: {note}")

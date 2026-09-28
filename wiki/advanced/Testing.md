@@ -243,22 +243,37 @@ violation or an empty inventory. To reproduce locally:
 
 ```bash
 ctest --test-dir build/linux-gcc-release --show-only=json-v1 > ctest.json
-python3 Tools/validate_ctest_policy.py --ctest-json ctest.json
+python3 Tools/validate_ctest_policy.py --ctest-json ctest.json --build-dir build/linux-gcc-release
 ```
 
-The configured-tree view also enforces the CI-110 shipped-binary rule. Every
-`install(TARGETS ... RUNTIME)` executable that the tree's tests invoke (as the
-command, an argument, a `-D...=` value or an `ENVIRONMENT` value) needs at least
-one test that does more than print `--help`/`--version` (a
-`-DSPARK_VERSION_EXECUTABLE=` runner counts as a version probe) and carries an
-`integration`, `smoke` or `process` label. `SparkInstallerHeadlessSmoke` is the
-installer's lane: it runs a headless install, resume and refusal against a local
-fixture repository. `KNOWN_BINARY_LANE_GAPS` lists the documented exceptions,
-which are printed as notes on every run: `SparkLauncher` is a GUI with no
-headless mode, and only its launch-request logic is tested, in process. An entry
-whose binary gains a lane fails until it is removed. Measured on a 2026-09-27
-Windows Release tree before the installer lane existed, the rule flagged exactly
-`SparkInstaller`.
+The configured-tree view also enforces the CI-110 shipped-binary rule, which is
+why `--ctest-json` requires `--build-dir <configured tree>`. The shipped set is
+every executable target with an install rule in that tree's CMake file-API
+codemodel. The root `CMakeLists.txt` requests the codemodel with
+`cmake_file_api()` whenever `BUILD_TESTS` is on, which needs CMake 3.27 or
+newer. A missing reply, or a tree that ships nothing, fails with exit 2. Because
+the shipped set is read from the build rather than from the tests, a shipped
+binary that no registered test names fails with "built in this tree but no
+registered test runs it". Each shipped binary needs at least one test that names
+it (as the command, an argument, a `-D...=` value or an `ENVIRONMENT` value),
+does more than print `--help`/`--version` (a `-DSPARK_VERSION_EXECUTABLE=`
+runner counts as a version probe), and carries an `integration`, `smoke` or
+`process` label. `SparkInstallerHeadlessSmoke` is the installer's lane: it runs
+a headless install, resume and refusal against a local fixture repository.
+`KNOWN_BINARY_LANE_GAPS` lists the documented exceptions. Each one is scoped to
+the configured `CMAKE_SYSTEM_NAME` values it covers, and every run prints the
+applicable gaps as notes:
+
+- `SparkLauncher` (every platform) is a GUI with no headless mode. Only its
+  launch-request logic is tested, in process.
+- `SparkShaderCompiler` (Linux and macOS) is built and installed there, but
+  `d3dcompiler_47` is its only integrated backend, so every compile is refused.
+  Its lanes run on Windows only.
+
+An entry whose binary gains a lane on a gap platform fails until it is removed.
+The first form of the rule only checked binaries that some test already named.
+On a 2026-09-27 Windows Release tree, before the installer lane existed, it
+flagged exactly `SparkInstaller`.
 
 `cmake/RunSparkTests.cmake` **requires** `-DSPARK_TEST_TIMEOUT_SECONDS=<n>`; any
 script that invokes it directly must pass one (the 180 s default is gone so no
