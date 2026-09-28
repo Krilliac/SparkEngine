@@ -279,6 +279,29 @@ flagged exactly `SparkInstaller`.
 script that invokes it directly must pass one (the 180 s default is gone so no
 configuration can inherit the fast configuration's wall clock).
 
+**Documented selectors resolve in a real tree.** `validate.py` proves each
+work-item `-L`/`-R` filter names a registered label or test.
+`tools/site-data/check_documented_selectors.py` checks the same commands, plus
+every `ctest` line in a fenced block on this page, against a configured tree. A
+command applies when its `--test-dir` (or `--preset`) resolves through
+`CMakePresets.json` to the preset tree with the same name as `--build-dir`.
+Every other command is reported as not applicable and is never counted. For each
+applicable command it runs `ctest --show-only=json-v1` with the command's own
+selection flags. The selection must hold at least one test without `DISABLED`,
+and every enabled selected test's executable must exist. A filter declared in
+`plannedTestSelectors` is listed as debt, not as a pass. It exits 2 when the tree
+is not configured or no command applies, so it cannot stop checking and still
+pass. CTest runs it as `DocumentedTestCommands_SelectBuiltTests` in `build/<preset>`
+trees, where exit 2 reports Skipped. `DocumentedTestCommands_CheckerFailsClosed`
+runs its fixture tests. The full-CTest lanes then run what these selections
+name. The `SPARK_TEST_*` environment selectors of `SparkTests` are not ctest
+commands and are not covered by this check.
+
+```bash
+python3 tools/site-data/check_documented_selectors.py --build-dir build/linux-gcc-release
+python3 tools/site-data/check_documented_selectors.py --build-dir build/windows-release --config Release
+```
+
 **Test-count ratchet.** `.github/test-count-ratchet.json` carries a `baseline`
 block measured at `4fec0297` (Linux lanes 6917 recorded / 6914 executed / 3
 skipped; `windows-vs2022-release` 6819 / 6818 / 1) and per-lane floors of 6900
