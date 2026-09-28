@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "SparkEngine" / "Source" / "Engine" / "Persistence" / "AsyncDatabase.cpp"
-DURABILITY_SOURCE = ROOT / "SparkEngine" / "Source" / "Engine" / "SaveSystem" / "SaveFileDurability.cpp"
+DURABILITY_SOURCE = ROOT / "SparkEngine" / "Source" / "Utils" / "SaveFileDurability.cpp"
 TF_SOURCE = ROOT / "GameModules" / "SparkGameMMOFPS" / "Source"
 TF_SAVE_PATHS = TF_SOURCE / "Persistence" / "TFSavePaths.h"
 # Every TERRAFRONT store writer and the SavePaths call it must commit through.

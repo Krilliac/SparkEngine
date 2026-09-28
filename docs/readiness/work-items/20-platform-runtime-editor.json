@@ -2097,9 +2097,9 @@
           "state": "implemented",
           "evidence": [
             "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
-            "SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp",
+            "SparkEngine/Source/Utils/SaveFileDurability.cpp",
             "Tests/TestSaveInterruptionReal.cpp",
-            "SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.h",
+            "SparkEngine/Source/Utils/SaveFileDurability.h",
             "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
             "SparkEditor/Source/Core/ProjectManager.cpp",
             "Tests/TestDocumentDurableWrite.cpp",

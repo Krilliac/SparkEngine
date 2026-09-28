@@ -8,7 +8,7 @@
 #include "GatewayLocalAdapters.h"
 #include "GatewaySecurity.h"
 
-#include "Engine/SaveSystem/SaveFileDurability.h"
+#include "Utils/SaveFileDurability.h"
 #include "Utils/ConfigParser.h"
 
 #include <algorithm>

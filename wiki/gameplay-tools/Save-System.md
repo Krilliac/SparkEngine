@@ -225,7 +225,7 @@ killed writer can leave behind.
 The retained copy is published the same way as the slot: it is staged in
 `<slot>.spark_save.bak.tmp`, flushed, and renamed over `.bak`
 (`SaveFileDurability::CopyFileAtomically` in
-`SparkEngine/Source/Engine/SaveSystem/SaveFileDurability.cpp`). An in-place copy
+`SparkEngine/Source/Utils/SaveFileDurability.cpp`). An in-place copy
 truncates `.bak` first, so a process killed mid-copy used to leave a torn
 last-good copy. `AtomicWrite_*` in `Tests/TestSaveInterruptionReal.cpp` (ctest
 `SparkSaveInterruptionTests`, POSIX only) rehearses this: an exec'd writer saves

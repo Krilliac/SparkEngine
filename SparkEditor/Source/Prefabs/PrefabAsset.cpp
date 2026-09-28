@@ -10,7 +10,7 @@
 
 #include "PrefabAsset.h"
 #include "PrefabTextFormat.h"
-#include "Engine/SaveSystem/SaveFileDurability.h"
+#include "Utils/SaveFileDurability.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
