@@ -4140,9 +4140,9 @@ set_tests_properties(PackageAssets_StableV1ExcludesNoAssertion PROPERTIES
     LABELS "stable-v1;asset;packaging;unit;python"
     TIMEOUT 300)
 
-# MOD-360: tools/check-module-asset-refs.py fails closed on a missing, case-altered,
-# run-time-composed or unrecorded asset reference in an enforced module, and every
-# asset SparkGameOpenWorld source names resolves (Tests/Tools/test_check_module_asset_refs.py).
+# MOD-360 / RDY-020: tools/check-module-asset-refs.py fails closed on a missing, case-altered,
+# unrecorded or drifted asset reference in every module and on a run-time-composed path in an
+# enforced module, and all 11 module reference records verify clean (Tests/Tools/test_check_module_asset_refs.py).
 add_test(
     NAME OpenWorldAssets_ReferenceCheckFailsClosed
     COMMAND ${Python3_EXECUTABLE}

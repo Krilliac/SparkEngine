@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **158 implemented** (61%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **159 implemented** (61%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -248,7 +248,7 @@ Establish the only source of readiness truth and make CI report reality.
 |---|---|---|---|---|---|
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 3/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
-| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 2/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
+| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 3/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
 | [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 4/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
@@ -634,11 +634,11 @@ Several modules reference missing music/models/scenes, depend on path case that 
 
 **Acceptance criteria**
 
-Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Zero missing or case-mismatched references in every declared manifest
-   - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`
-   - Downgraded. Only the root Assets manifest is checked. The rationale cites modules referencing missing assets, and content from modules outside the profile remains unclassified. Per-module manifests are not generated.
+1. **[implemented]** Zero missing or case-mismatched references in every declared manifest
+   - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`, `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`
+   - check-all verifies the root, legacy and template manifests; check-module-asset-refs.py now verifies all 11 module asset-references.json records and fails on any missing, case-altered, unrecorded or drifted reference (0 found locally). Composed Assets/ prefixes stay report-only in FPS (2), MMOFPS (26) and VisualScript (1). Local runs only; no exact-commit CI.
 2. **[unmet]** Every in-profile packaged module resolves assets without the repository
    - Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists.
 3. **[unmet]** Every asset has provenance/license metadata where required
