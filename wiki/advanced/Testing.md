@@ -355,6 +355,16 @@ ctest --test-dir build -L package-consumer-linux --no-tests=error --output-on-fa
 cmake -B build -DSPARK_ENABLE_SOAK_TESTS=ON
 ctest --test-dir build -L '^soak$' --no-tests=error --output-on-failure
 
+# Installed experimental-module objective runs (MOD-330/340/350/370/380; Windows or Linux
+# headless, local evidence). Tests/PackageSmoke/RunInstalledModuleObjective.cmake installs
+# the runtime and samples components, then drives the installed SparkEngine and module on
+# NullRHI through Tests/PackageSmoke/ModuleObjectives/<Module>.cmake: every scripted
+# command must dispatch ok, every rule must match that command's own audit output, and
+# restart phases must reproduce an earlier process's output byte for byte. Real-time runs
+# of several minutes each; ModulePackageObjectiveParserContract is always registered.
+cmake -B build -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON
+ctest --test-dir build -C Release -L module-package-run --no-tests=error --output-on-failure
+
 # TERRAFRONT dedicated server + two headless clients (TF-110; local evidence until a
 # dedicated CI job exists). Needs SparkEngine and SparkGameMMOFPS; timing-sensitive,
 # so it is kept out of the required full-ctest lanes. TerrafrontMultiClient_Harness

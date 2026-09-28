@@ -3367,6 +3367,49 @@ if(Python3_Interpreter_FOUND)
     endif()
 endif()
 
+# MOD-330/340/350/370/380: installed-package objective runs of the experimental
+# game modules. Tests/PackageSmoke/RunInstalledModuleObjective.cmake installs the
+# runtime and samples components, then drives the installed SparkEngine and
+# module image headless on NullRHI through Tests/PackageSmoke/ModuleObjectives/<Module>.cmake.
+# The audit parser contract always runs; the real-time runs are opt-in:
+#   cmake -B build -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON
+#   ctest --test-dir build -L module-package-run --no-tests=error
+# They never carry the experimental-modules, stable-v1 or module-profile labels
+# (build.yml pins those label sets to other families).
+add_test(
+    NAME ModulePackageObjectiveParserContract
+    COMMAND ${CMAKE_COMMAND} -DSPARK_MODULE_OBJECTIVE_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledModuleObjective.cmake)
+set_tests_properties(ModulePackageObjectiveParserContract PROPERTIES
+    LABELS "module;package;unit"
+    TIMEOUT 10)
+option(SPARK_ENABLE_MODULE_PACKAGE_RUNS
+    "Register real-time installed-package objective runs for experimental game modules" OFF)
+function(spark_add_module_package_run test_name module short_label timeout)
+    if(NOT SPARK_ENABLE_MODULE_PACKAGE_RUNS OR NOT BUILD_GAME_MODULES OR CMAKE_CROSSCOMPILING OR
+       NOT TARGET SparkEngine OR NOT TARGET ${module})
+        return()
+    endif()
+    if(NOT WIN32 AND NOT (UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT))
+        return()
+    endif()
+    add_test(
+        NAME ${test_name}
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}
+            -DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}
+            -DSPARK_CONFIG=$<CONFIG>
+            -DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/module-package-runs/${test_name}
+            -DSPARK_MODULE_TARGET=${module}
+            -DSPARK_MODULE_FILE_NAME=$<TARGET_FILE_NAME:${module}>
+            -DSPARK_OBJECTIVE_SPEC=${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/ModuleObjectives/${module}.cmake
+            -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledModuleObjective.cmake)
+    set_tests_properties(${test_name} PROPERTIES
+        LABELS "module;package;module-package-run;${short_label}"
+        RUN_SERIAL TRUE
+        TIMEOUT ${timeout})
+endfunction()
+
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)
         message(FATAL_ERROR
