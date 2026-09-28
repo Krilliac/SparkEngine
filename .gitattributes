@@ -43,6 +43,9 @@ FuzzerTests/corpora/scene-manifest/*.sparkscene -text
 Tests/Fixtures/Compatibility/ReflectedScene/*.sparkscene -text
 # .spk seeds are binary archives; autocrlf must never touch a byte of them.
 FuzzerTests/corpora/sparkpak-reader/*.spk -text
+# SEC-120 hardening corpora: the manifest digest pins exact seed bytes (some seeds carry
+# CRLF, lone CR or NUL on purpose), so no checkout may normalize them.
+FuzzerTests/corpora/shader-daemon-blob/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before
