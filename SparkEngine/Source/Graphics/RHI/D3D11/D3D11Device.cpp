@@ -32,6 +32,11 @@ namespace Spark
     {
         namespace D3D11
         {
+            namespace
+            {
+                /// D3DCompile source name for a shader with neither a debug name nor a file path.
+                const std::string kUnnamedShaderSource = "SparkShader";
+            } // namespace
 
             // ============================================================================
             // D3D11 BUFFER
@@ -1470,23 +1475,30 @@ namespace Spark
                     case RHIShaderStage::Compute:
                         target = "cs_5_0";
                         break;
-                    default:
-                        return nullptr; // RT stages not supported in D3D11
+                    default: // RT stages are not supported in D3D11
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "CreateShader (%s): stage %d has no D3D11 compile target",
+                                        desc.debugName.c_str(), static_cast<int>(desc.stage));
+                        return nullptr;
                     }
 
                     UINT flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 
-                    HRESULT hr = D3DCompile(desc.sourceCode.c_str(), desc.sourceCode.size(), desc.debugName.c_str(),
+                    // D3D_COMPILE_STANDARD_FILE_INCLUDE resolves #include relative to the source name,
+                    // and an empty name fails the whole compile with ERROR_INVALID_NAME and no error
+                    // blob. Prefer the debug name, then the file the source came from.
+                    const std::string& sourceName = !desc.debugName.empty()  ? desc.debugName
+                                                    : !desc.filePath.empty() ? desc.filePath
+                                                                             : kUnnamedShaderSource;
+                    HRESULT hr = D3DCompile(desc.sourceCode.c_str(), desc.sourceCode.size(), sourceName.c_str(),
                                             nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, desc.entryPoint.c_str(), target,
                                             flags, 0, &bytecodeBlob, &errorBlob);
                     if (FAILED(hr))
                     {
-                        if (errorBlob)
-                        {
-                            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compile failed (%s): %s",
-                                            desc.debugName.c_str(),
-                                            static_cast<const char*>(errorBlob->GetBufferPointer()));
-                        }
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compile failed (%s, hr=0x%08lX): %s",
+                                        sourceName.c_str(), static_cast<unsigned long>(hr),
+                                        errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer())
+                                                  : "no compiler diagnostics");
                         return nullptr;
                     }
                 }
@@ -1494,11 +1506,18 @@ namespace Spark
                 {
                     HRESULT hr = D3DCreateBlob(desc.bytecodeSize, &bytecodeBlob);
                     if (FAILED(hr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "Shader bytecode blob allocation failed (%s, hr=0x%08lX)",
+                                        desc.debugName.c_str(), static_cast<unsigned long>(hr));
                         return nullptr;
+                    }
                     memcpy(bytecodeBlob->GetBufferPointer(), desc.bytecode, desc.bytecodeSize);
                 }
                 else
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "CreateShader (%s): neither source nor bytecode given", desc.debugName.c_str());
                     return nullptr;
                 }
 
@@ -1561,12 +1580,19 @@ namespace Spark
                         cs.As(&shaderObj);
                     break;
                 }
-                default:
-                    return nullptr; // RT stages not supported in D3D11
+                default: // RT stages are not supported in D3D11
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "CreateShader (%s): stage %d has no D3D11 shader object", desc.debugName.c_str(),
+                                    static_cast<int>(desc.stage));
+                    return nullptr;
                 }
 
                 if (FAILED(hr) || !shaderObj)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader object creation failed (%s, hr=0x%08lX)",
+                                    desc.debugName.c_str(), static_cast<unsigned long>(hr));
                     return nullptr;
+                }
 
                 return std::make_unique<D3D11Shader>(desc, std::move(shaderObj), std::move(bytecodeBlob));
             }

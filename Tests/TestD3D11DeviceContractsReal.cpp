@@ -27,10 +27,13 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/RHI/D3D11/D3D11Device.h"
+#include "ScopedLoggerBaseline.h"
+#include "Utils/Logger.h"
 #include <filesystem>
 #include <fstream>
 #include <windows.h>
@@ -526,6 +529,108 @@ TEST(GraphicsEngineReal_InitializeStoresWindowHandleForDeviceLostRecovery)
     }
 
     DestroyWindow(hwnd);
+}
+
+// ============================================================================
+// D3D11Device::CreateShader source name (D3D11_ShaderCompile_)
+// ============================================================================
+// D3DCompile with an empty source name and D3D_COMPILE_STANDARD_FILE_INCLUDE fails with
+// 0x8007007B (ERROR_INVALID_NAME) and no error blob, so a shader without a debugName came
+// back nullptr and logged nothing.
+
+namespace
+{
+    constexpr const char* kTrivialVertexShader =
+        "float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0); }";
+
+    /// Captures every log line while alive; restores the process-wide Logger afterwards.
+    class ScopedLogLines
+    {
+      public:
+        ScopedLogLines()
+        {
+            Spark::Logger::Get().AddSink(std::make_unique<Spark::CallbackSink>(
+                [this](const Spark::LogMessage& message) { m_lines.push_back(message.message); }));
+        }
+
+        bool Contains(const std::string& needle) const
+        {
+            for (const std::string& line : m_lines)
+            {
+                if (line.find(needle) != std::string::npos)
+                    return true;
+            }
+            return false;
+        }
+
+      private:
+        ScopedLoggerBaseline m_baseline;
+        std::vector<std::string> m_lines;
+    };
+} // namespace
+
+TEST(D3D11_ShaderCompile_EmptyDebugNameCompilesFromSource)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    Spark::RHI::RHIShaderDesc desc;
+    desc.stage = Spark::RHI::RHIShaderStage::Vertex;
+    desc.entryPoint = "main";
+    desc.sourceCode = kTrivialVertexShader;
+    ASSERT_TRUE(desc.debugName.empty());
+    ASSERT_TRUE(desc.filePath.empty());
+
+    EXPECT_TRUE(device.CreateShader(desc) != nullptr);
+    device.Shutdown();
+}
+
+TEST(D3D11_ShaderCompile_FilePathNamesTheSourceForRelativeIncludes)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    // The include resolves only relative to the shader's own file, so this compiles only when
+    // filePath (not the working directory) names the source.
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "SparkTests_D3D11ShaderCompile_Include";
+    std::filesystem::create_directories(dir);
+    {
+        std::ofstream header(dir / "SparkTestsShaderInclude.hlsli", std::ios::trunc);
+        header << "float4 SparkTestsExtend(float3 p) { return float4(p, 1.0); }\n";
+    }
+
+    Spark::RHI::RHIShaderDesc desc;
+    desc.stage = Spark::RHI::RHIShaderStage::Vertex;
+    desc.entryPoint = "main";
+    desc.filePath = (dir / "SparkTestsShader.hlsl").string();
+    desc.sourceCode = "#include \"SparkTestsShaderInclude.hlsli\"\n"
+                      "float4 main(float3 position : POSITION) : SV_Position { return SparkTestsExtend(position); }\n";
+
+    EXPECT_TRUE(device.CreateShader(desc) != nullptr);
+    device.Shutdown();
+    std::error_code ignored;
+    std::filesystem::remove_all(dir, ignored);
+}
+
+TEST(D3D11_ShaderCompile_FailureLogsTheHResult)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    ScopedLogLines log;
+    Spark::RHI::RHIShaderDesc desc;
+    desc.stage = Spark::RHI::RHIShaderStage::Vertex;
+    desc.entryPoint = "main";
+    desc.debugName = "SparkTestsBrokenShader";
+    desc.sourceCode = "float4 main( : SV_Position {";
+
+    EXPECT_TRUE(device.CreateShader(desc) == nullptr);
+    EXPECT_TRUE(log.Contains("SparkTestsBrokenShader"));
+    EXPECT_TRUE(log.Contains("hr=0x"));
+    device.Shutdown();
 }
 
 #endif // _WIN32

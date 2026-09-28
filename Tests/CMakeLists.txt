@@ -2694,6 +2694,14 @@ if(WIN32)
         LABELS "d3d11-stress;d3d11;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+    # CreateShader must compile source with no debugName (D3DCompile rejects an empty source
+    # name with the standard include handler), name the source by filePath so relative
+    # includes resolve, and log the HRESULT on failure (TestD3D11DeviceContractsReal.cpp).
+    add_test(NAME D3D11_ShaderCompile COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11_ShaderCompile PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=D3D11_ShaderCompile_;SPARK_TEST_EXPECT_COUNT=3"
+        LABELS "d3d11;unit"
+        TIMEOUT 60)
     spark_exclude_from_main_suite(D3D11_Validation_)
 endif()
 
