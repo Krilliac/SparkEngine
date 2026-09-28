@@ -6,6 +6,8 @@
 #   full (default)        playtester launcher, D3D11/WARP smoke and WARP save/reload
 #   headless-save-reload  HEAD-220 NullRHI writer/reader save/reload of the staged
 #                         executable and module (cmake/RunSparkHeadlessFPSSaveReload.cmake)
+#   arena-loop            MOD-310 D3D11/WARP single-player loop played by the
+#                         fps_autoplay developer command (RunInstalledFPSArenaLoop.cmake)
 
 foreach(_required IN ITEMS SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_TEST_ROOT)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
@@ -15,8 +17,13 @@ endforeach()
 if(NOT DEFINED SPARK_FPS_PACKAGE_MODE OR SPARK_FPS_PACKAGE_MODE STREQUAL "")
     set(SPARK_FPS_PACKAGE_MODE full)
 endif()
-if(NOT SPARK_FPS_PACKAGE_MODE STREQUAL "full" AND NOT SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
+if(NOT SPARK_FPS_PACKAGE_MODE MATCHES "^(full|headless-save-reload|arena-loop)$")
     message(FATAL_ERROR "Unknown SPARK_FPS_PACKAGE_MODE '${SPARK_FPS_PACKAGE_MODE}'")
+endif()
+# fps_autoplay is a developer command, and a Shipping (MinSizeRel) build never
+# registers developer commands, so that package has nothing to play the loop with.
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "arena-loop" AND SPARK_CONFIG STREQUAL "MinSizeRel")
+    message(FATAL_ERROR "The arena-loop package run needs developer commands, which MinSizeRel does not register")
 endif()
 
 find_program(_git_executable NAMES git git.exe REQUIRED)
@@ -198,6 +205,27 @@ if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
     message(STATUS
         "Installed SparkGameFPS runtime package passed NullRHI save/reload at "
         "${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); evidence retained under ${_run_root}")
+    return()
+endif()
+
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "arena-loop")
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSPARK_INSTALLED_ROOT=${_install_root}"
+            "-DSPARK_TEST_ROOT=${_run_root}/arena-loop"
+            -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/RunInstalledFPSArenaLoop.cmake"
+        RESULT_VARIABLE _arena_result
+        OUTPUT_VARIABLE _arena_output
+        ERROR_VARIABLE _arena_error
+        TIMEOUT 360)
+    if(NOT "${_arena_result}" STREQUAL "0")
+        message(FATAL_ERROR "Installed FPS arena loop failed (${_arena_result}):\n${_arena_output}\n${_arena_error}")
+    endif()
+    string(STRIP "${_arena_output}" _arena_output)
+    message(STATUS "${_arena_output}")
+    message(STATUS
+        "Installed SparkGameFPS arena loop passed at ${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); "
+        "evidence retained under ${_run_root}")
     return()
 endif()
 

@@ -77,14 +77,14 @@ enemy, weapon, progression, time-scale, and engine-service state.
 - The developer commands listed in `Source/Console/FPSConsolePolicy.h` (`god`, `noclip`, `player_tp`, `spawn`,
   `game_timescale`, `scene_load`, `scene_save`, `gamemode`, `give`, `quest_start`, `quest_all`, `destroy`,
   `weather`, `dialogue_start`, `seq_play`, `seq_stop`, `seq_time`, `wave_skip`, `wave_difficulty`, `xp`,
-  `powerup`) are not registered when `SPARK_BUILD_SHIPPING` is defined and `ENABLE_DEVCOMMANDS_IN_SHIPPING` is
+  `powerup`, `fps_autoplay`) are not registered when `SPARK_BUILD_SHIPPING` is defined and `ENABLE_DEVCOMMANDS_IN_SHIPPING` is
   OFF, which today means the MinSizeRel configuration / the `windows-shipping` preset alone. A package built from
   the MSVC `Release` configuration still registers them — state which artifact a release actually ships before
   claiming the cheats are absent. The headless host's own `xp` command (`HeadlessPersistence.cpp`) is a
   server-operator command and is not covered by this list.
 
 Build the `SparkGameFPS` target. CPU-only regression coverage is part of `SparkTests`; filter for `FPSInteg_`,
-`FPSRespawn_`, `FPSLocalProfile_`, `FPSProgression_`, `FPSAssets_`, `FPSStateRules_`, `FPSComponentsReal_`, and
+`FPSRespawn_`, `FPSArenaAutopilot_`, `FPSLocalProfile_`, `FPSProgression_`, `FPSAssets_`, `FPSStateRules_`, `FPSComponentsReal_`, and
 `WeaponMechanicsReal_` when running the test executable directly. For the experimental LAN path, `FPSMultiplayer_`
 covers the snapshot/input wire encoding and `FPSMultiplayerProduction_` drives the real `FPSMultiplayerSystem` in one
 process: server input application, hit validation (a lag-compensated line-of-fire ray; damage reports also require a
@@ -125,3 +125,18 @@ This is a bounded local progression-persistence slice, not stable-v1 certificati
 installation, recovery/soak, hardware rendering, or hosted exact-SHA qualification. The headless host registers the
 same quicksave/quickload commands (see above). `FPSHeadlessPackage_NullRHISaveReload` drives them through the same
 writer/reader test on NullRHI, run against the staged package (`SPARK_FPS_PACKAGE_MODE=headless-save-reload`).
+
+## Installed arena loop
+
+`fps_autoplay on|off` (a developer command) hands the player to `FPSArenaAutopilot`: it turns the camera with
+`SparkEngineCamera::Yaw`, holds W through `InputManager::HandleMessage` so `Player::UpdateMovement` runs unmodified,
+fires with `Player::Fire`, stands still after the first kill until the arena's enemies land a death, and hunts again
+after the respawn. `game_status` then prints `Loop: kills=K deaths=D respawns=R score=S moved=M autopilot=<phase>`;
+kills, deaths and score come from `GameMode`'s `Player1` row and respawns from `RespawnSystem` (a death whose
+`PlayerRespawnEvent` was published), never from the autopilot. `FPSArenaAutopilot_` in `SparkTests` pins those rules.
+
+`FPSSinglePlayerSlice_InstalledArenaLoop` (`SPARK_FPS_PACKAGE_MODE=arena-loop`, not offered for MinSizeRel, which
+drops developer commands) installs a fresh prefix, runs the staged `SparkEngine.exe` on D3D11/WARP with
+`fps_autoplay on`, and requires the final loop record to show kills >= 2, deaths >= 1, respawns >= 1, score > 0,
+at least 2 m moved and `autopilot=complete`. `FPSArenaLoopParserContract` proves the verdict rejects each missing
+piece. A fresh install prefix on the build host is not a clean machine.
