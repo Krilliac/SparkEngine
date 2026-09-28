@@ -9,7 +9,7 @@ from fnmatch import fnmatchcase
 from typing import Any
 import re
 
-from common import criterion_digest
+from common import ACCEPTANCE_CI_REFERENCE, criterion_digest
 
 PUBLICATION_PHASE = "publication-finalization"
 PUBLICATION_ENVIRONMENT = "stable-release"
@@ -21,6 +21,10 @@ N_MINUS_ONE_ITEM_IDS = ("REL-192", "INST-131")
 # The only step that fetches the N-1 predecessor MSI; the predecessor path has
 # no older release to provision.
 N_MINUS_ONE_PROVISIONER = ".github/scripts/provision-previous-windows-msi.py"
+# The qualifier mode that proves bootstrap recovery for the first predecessor.
+BOOTSTRAP_QUALIFIER_MODE = "--bootstrap-repair"
+# N-1 work needs a real immutable predecessor, so it cannot finish before one exists.
+PUBLISHED_PREDECESSOR_STATES = frozenset({"published", "ready"})
 _EVIDENCE_TOKEN = re.compile(r"[A-Za-z0-9_*./-]+")
 
 
@@ -129,6 +133,9 @@ def candidate_readiness_errors(contract: dict[str, Any]) -> list[str]:
                 errors.append(f"{label}: unfinished qualification item or transitive dependency {item_id}")
             if item.get("plannedCiJobs") or item.get("plannedTestSelectors"):
                 errors.append(f"{label}: qualification item {item_id} still has planned verification")
+    # The v1 stage never applies qualificationSubstitutions: REL-191 cannot
+    # stand in for REL-192 here, and predecessor results cannot be reused.
+    errors.extend(predecessor_evidence_reuse_errors(contract))
     return errors
 
 
@@ -447,4 +454,42 @@ def nminus1_evidence_errors(contract: dict[str, Any]) -> list[str]:
                 errors.append(f"{item_id}.acceptanceStatus: predecessor evidence cites N-1 evidence {cited}")
         for dependency in sorted(_dependencies(items, {item_id}) & set(n_minus_one)):
             errors.append(f"{item_id}: predecessor-only work cannot depend on N-1 item {dependency}")
+    return errors
+
+
+def predecessor_evidence_reuse_errors(contract: dict[str, Any]) -> list[str]:
+    """Refuse predecessor results presented as evidence for the work they replace (REL-192).
+
+    The mirror of ``nminus1_evidence_errors``. Every item the predecessor stage
+    substitutes away (REL-190, REL-192, INST-131), and every N-1 item even if
+    a ledger edit stops substituting it, must not cite a CI run at the
+    predecessor baseline commit, a predecessor-only selector or criterion digest
+    (minus selectors it shares), or the bootstrap qualifier mode. An N-1 item
+    also cannot be evidenced or done until a real predecessor is published.
+    """
+    boundary = _evidence_boundary(contract)
+    if boundary is None:
+        return []
+    stage, items, sources, predecessor_only = boundary
+    sources = {**sources, **{key: items[key] for key in N_MINUS_ONE_ITEM_IDS if key in items}}
+    shared = set().union(*(_item_selectors(item) for item in sources.values()))
+    selectors = set().union(*(_item_selectors(item) for item in predecessor_only.values())) - shared
+    literals = set().union(*(_item_digests(item) for item in predecessor_only.values())) | {BOOTSTRAP_QUALIFIER_MODE}
+    source = stage.get("sourceCommitEvidence")
+    baseline = source.get("baselineCommit") if isinstance(source, dict) else None
+    baseline = baseline.lower() if isinstance(baseline, str) and _COMMIT_RE.fullmatch(baseline) else None
+    published = stage.get("state") in PUBLISHED_PREDECESSOR_STATES
+
+    errors: list[str] = []
+    for item_id, item in sorted(sources.items()):
+        for text in _acceptance_texts(item):
+            if baseline and ACCEPTANCE_CI_REFERENCE.match(text) and text.rsplit("@", 1)[1] == baseline:
+                errors.append(f"{item_id}.acceptanceStatus: cites a CI run at the predecessor baseline commit")
+            cited = _foreign_reference(text, selectors, literals)
+            if cited:
+                errors.append(f"{item_id}.acceptanceStatus: substituted v1 work cites predecessor evidence {cited}")
+        if item_id in N_MINUS_ONE_ITEM_IDS and not published:
+            states = [entry.get("state") for entry in item.get("acceptanceStatus", []) if isinstance(entry, dict)]
+            if item.get("status") == "done" or "evidenced" in states:
+                errors.append(f"{item_id}: N-1 work cannot be evidenced or done before a real predecessor is published")
     return errors

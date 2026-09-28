@@ -37,7 +37,8 @@ from contract_selectors import (WorkflowJob, cmake_preset_index, preset_referenc
 from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
-                            predecessor_candidate_readiness_errors)
+                            nminus1_evidence_errors, predecessor_candidate_readiness_errors,
+                            predecessor_evidence_reuse_errors)
 
 
 IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
@@ -4185,6 +4186,9 @@ class Validator:
         for message in finalization_contract_errors(self.contract):
             self.error("publicationFinalization", message)
         self.errors.extend(publication_evidence_errors(self.contract))
+        # REL-191/REL-192: evidence never crosses the predecessor substitution boundary.
+        for message in nminus1_evidence_errors(self.contract) + predecessor_evidence_reuse_errors(self.contract):
+            self.error("predecessor evidence boundary", message)
         if require_candidate_ready:
             for message in candidate_readiness_errors(self.contract):
                 self.error("candidate readiness", message)

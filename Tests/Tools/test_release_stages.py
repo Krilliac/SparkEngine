@@ -8,7 +8,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "site-data"))
 from release_stages import (N_MINUS_ONE_PROVISIONER, candidate_readiness_errors, finalization_contract_errors,
-                            nminus1_evidence_errors, predecessor_candidate_readiness_errors)
+                            nminus1_evidence_errors, predecessor_candidate_readiness_errors,
+                            predecessor_evidence_reuse_errors)
 from common import criterion_digest, load_contract
 
 
@@ -182,6 +183,53 @@ class ReleaseStageTests(unittest.TestCase):
         items["INST-132"]["acceptanceStatus"][1]["evidence"] = ["Installer_Rollback"]
         self.assertEqual(nminus1_evidence_errors(contract),
                          ["INST-132.acceptanceStatus: predecessor evidence cites N-1 evidence Installer_Rollback"])
+
+    def test_actual_ledger_keeps_predecessor_evidence_out_of_substituted_work(self):
+        self.assertEqual(predecessor_evidence_reuse_errors(load_contract()), [])
+
+    def test_n_minus_one_evidenced_by_a_predecessor_baseline_run_is_refused(self):
+        contract = ledger_predecessor_candidate()
+        stage = contract["readiness"]["predecessorRelease"]
+        baseline = stage["sourceCommitEvidence"]["baselineCommit"]
+        stage["state"] = "published"
+        items = {item["id"]: item for item in contract["workItems"]}
+        items["REL-192"]["acceptanceStatus"][0]["evidence"] = [f"ci:release/1@{baseline}"]
+        self.assertEqual(predecessor_evidence_reuse_errors(contract),
+                         ["REL-192.acceptanceStatus: cites a CI run at the predecessor baseline commit"])
+        items["REL-192"]["acceptanceStatus"][0]["evidence"] = ["ci:release/1@" + "f" * 40]
+        self.assertEqual(predecessor_evidence_reuse_errors(contract), [])
+
+    def test_n_minus_one_citing_the_predecessor_rehearsal_or_bootstrap_mode_is_refused(self):
+        for text, cited in (("ReleaseProfilePredecessorRehearsal_Qualification", "ReleaseProfilePredecessorRehearsal_*"),
+                            ("qualify-windows-msi.py --bootstrap-repair passed", "--bootstrap-repair"),
+                            ("Installer_Tamper", "Installer_Tamper")):
+            contract = ledger_predecessor_candidate()
+            items = {item["id"]: item for item in contract["workItems"]}
+            items["REL-192"]["acceptanceStatus"][2]["note"] = text
+            self.assertIn(f"REL-192.acceptanceStatus: substituted v1 work cites predecessor evidence {cited}",
+                          predecessor_evidence_reuse_errors(contract), text)
+
+    def test_n_minus_one_cannot_finish_before_a_real_predecessor_is_published(self):
+        contract = ledger_predecessor_candidate()
+        items = {item["id"]: item for item in contract["workItems"]}
+        items["REL-192"]["status"] = "done"
+        self.assertEqual(contract["readiness"]["predecessorRelease"]["state"], "candidate")
+        expected = "REL-192: N-1 work cannot be evidenced or done before a real predecessor is published"
+        self.assertIn(expected, predecessor_evidence_reuse_errors(contract))
+        items["REL-192"]["status"] = "in-progress"
+        items["REL-192"]["acceptanceStatus"][1]["state"] = "evidenced"
+        self.assertIn(expected, predecessor_evidence_reuse_errors(contract))
+        contract["readiness"]["predecessorRelease"]["state"] = "published"
+        self.assertNotIn(expected, predecessor_evidence_reuse_errors(contract))
+
+    def test_v1_candidate_never_treats_the_predecessor_as_n_minus_one(self):
+        # REL-191 done cannot stand in for REL-192 outside the predecessor stage.
+        contract = ledger_predecessor_candidate()
+        items = {item["id"]: item for item in contract["workItems"]}
+        items["REL-191"]["status"] = "done"
+        items["REL-192"]["status"] = "open"
+        errors = candidate_readiness_errors(contract)
+        self.assertTrue(any(error.endswith("transitive dependency REL-192") for error in errors), errors)
 
     def test_predecessor_only_work_depending_on_n_minus_one_is_refused(self):
         for item_id, dependency in (("REL-191", "REL-192"), ("REL-193", "INST-131")):
