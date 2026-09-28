@@ -29,10 +29,17 @@ namespace Spark::Graphics::Detail
             return GLTF::ValidateDocumentStructure(data, error);
         }
 
+        /**
+         * Area-weighted vertex normals for a primitive without a NORMAL attribute. The sums run in
+         * double: positions are any finite float, and in float a cross product of edges near
+         * FLT_MAX (or its squared length) overflows to infinity and the normalized result is NaN.
+         * In double the largest possible face normal (~1e78) summed over kMaxIndices / 3 faces and
+         * squared stays far below DBL_MAX, so every published normal is finite.
+         */
         void GenerateNormals(GLTFStaticMeshData& meshData, size_t vertexStart, size_t vertexCount, size_t indexStart,
                              size_t indexCount)
         {
-            std::vector<std::array<float, 3>> accumulated(vertexCount, {0.0f, 0.0f, 0.0f});
+            std::vector<std::array<double, 3>> accumulated(vertexCount, {0.0, 0.0, 0.0});
             for (size_t i = indexStart; i < indexStart + indexCount; i += 3)
             {
                 const size_t i0 = meshData.indices[i] - vertexStart;
@@ -42,14 +49,14 @@ namespace Spark::Graphics::Detail
                 const auto& p1 = meshData.vertices[vertexStart + i1].position;
                 const auto& p2 = meshData.vertices[vertexStart + i2].position;
 
-                const float e1x = p1[0] - p0[0];
-                const float e1y = p1[1] - p0[1];
-                const float e1z = p1[2] - p0[2];
-                const float e2x = p2[0] - p0[0];
-                const float e2y = p2[1] - p0[1];
-                const float e2z = p2[2] - p0[2];
-                const std::array<float, 3> normal = {e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z,
-                                                     e1x * e2y - e1y * e2x};
+                const double e1x = static_cast<double>(p1[0]) - p0[0];
+                const double e1y = static_cast<double>(p1[1]) - p0[1];
+                const double e1z = static_cast<double>(p1[2]) - p0[2];
+                const double e2x = static_cast<double>(p2[0]) - p0[0];
+                const double e2y = static_cast<double>(p2[1]) - p0[1];
+                const double e2z = static_cast<double>(p2[2]) - p0[2];
+                const std::array<double, 3> normal = {e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z,
+                                                      e1x * e2y - e1y * e2x};
                 for (size_t localIndex : {i0, i1, i2})
                 {
                     accumulated[localIndex][0] += normal[0];
@@ -60,11 +67,13 @@ namespace Spark::Graphics::Detail
 
             for (size_t i = 0; i < vertexCount; ++i)
             {
-                auto& normal = accumulated[i];
-                const float length = std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+                const auto& normal = accumulated[i];
+                const double length = std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
                 meshData.vertices[vertexStart + i].normal =
-                    length > 1.0e-6f ? std::array<float, 3>{normal[0] / length, normal[1] / length, normal[2] / length}
-                                     : std::array<float, 3>{0.0f, 1.0f, 0.0f};
+                    length > 1.0e-6 ? std::array<float, 3>{static_cast<float>(normal[0] / length),
+                                                           static_cast<float>(normal[1] / length),
+                                                           static_cast<float>(normal[2] / length)}
+                                    : std::array<float, 3>{0.0f, 1.0f, 0.0f};
             }
         }
 

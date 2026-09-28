@@ -312,13 +312,13 @@
       "parser_id": "mesh-gltf-loader",
       "corpus_dir": "FuzzerTests/corpora/mesh-gltf-loader",
       "last_verified": "2026-09-28",
-      "content_digest": "f394360e2d0ae75c1447f5265c333145fbd539220c101877560f9cf325c67fb1",
+      "content_digest": "8e203e86a284699d0c7ce6b75c7b0d9892ed9df8329e20143f25484e94ce9a03",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,
         "max_memory_mb": 256,
         "max_depth": 256,
-        "max_corpus_entries": 12,
+        "max_corpus_entries": 13,
         "max_corpus_bytes": 16384,
         "smoke_seconds": 10
       },
@@ -339,6 +339,12 @@
           "file": "regression-glb-bin-unaligned.glb",
           "finding": "A GLB whose JSON chunk length is not a multiple of 4 placed the in-place BIN buffer at an odd address, so every typed accessor read was misaligned (UBSan); ValidateDocumentStructure now rejects an unaligned BIN chunk.",
           "found_by": "review",
+          "guard_test": "FuzzGltfSmoke"
+        },
+        {
+          "file": "regression-generated-normal-overflow.glb",
+          "finding": "A static mesh without NORMAL whose finite positions reach ~1e29 overflowed the float cross products in GenerateNormals, so LoadGLTFStaticMesh published NaN normals; the normals are now accumulated and normalized in double.",
+          "found_by": "campaign",
           "guard_test": "FuzzGltfSmoke"
         }
       ]
