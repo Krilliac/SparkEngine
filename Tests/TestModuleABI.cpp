@@ -121,11 +121,33 @@ namespace
         Spark::ModSystem* m_mods = nullptr;
     };
 
+    /**
+     * @brief This process's scratch root under the system temp directory.
+     *
+     * Fixed %TEMP% names collided with any other SparkTests process: a module
+     * whose OnLoad fails stays mapped until its process exits, so a concurrent or
+     * hung run held the shared copy open and this run's copy_file failed. File
+     * names below the root are unchanged (module names derive from them).
+     */
+    std::filesystem::path ProcessScratchRoot()
+    {
+#ifdef _WIN32
+        const unsigned long processId = static_cast<unsigned long>(GetCurrentProcessId());
+#else
+        const unsigned long processId = static_cast<unsigned long>(::getpid());
+#endif
+        const std::filesystem::path root =
+            std::filesystem::temp_directory_path() / ("SparkModuleABI-" + std::to_string(processId));
+        std::error_code ec;
+        std::filesystem::create_directories(root, ec);
+        return root;
+    }
+
     std::filesystem::path CopyCompatibleFixtureToTemp(const std::filesystem::path& stem,
                                                       std::string_view fixture = SPARK_TEST_COMPATIBLE_MODULE_PATH)
     {
         const std::filesystem::path sourcePath = PathFromUtf8(fixture);
-        std::filesystem::path destination = std::filesystem::temp_directory_path() / stem;
+        std::filesystem::path destination = ProcessScratchRoot() / stem;
         destination += sourcePath.extension();
         std::error_code ec;
         std::filesystem::create_directories(destination.parent_path(), ec);
@@ -351,8 +373,7 @@ TEST(ModuleABI_ExpectedDescriptorIsCompatible)
 
 TEST(ModuleABI_LoadErrorIncludesRequestedPathAndLoaderStage)
 {
-    const std::filesystem::path missingPath =
-        std::filesystem::temp_directory_path() / "spark-module-that-does-not-exist.invalid";
+    const std::filesystem::path missingPath = ProcessScratchRoot() / "spark-module-that-does-not-exist.invalid";
     std::error_code ec;
     std::filesystem::remove(missingPath, ec);
 
@@ -368,8 +389,7 @@ TEST(ModuleABI_LoadErrorIncludesRequestedPathAndLoaderStage)
 
 TEST(ModuleABI_LoadErrorTracksDirectoryFailureAndClearsAfterSuccess)
 {
-    const std::filesystem::path missingDirectory =
-        std::filesystem::temp_directory_path() / "spark-module-directory-that-does-not-exist";
+    const std::filesystem::path missingDirectory = ProcessScratchRoot() / "spark-module-directory-that-does-not-exist";
     std::error_code ec;
     std::filesystem::remove_all(missingDirectory, ec);
 
@@ -410,8 +430,7 @@ TEST(ModuleABI_FailedGameInitializationIsNotReportedAsUsable)
 TEST(ModuleABI_DiscoveryDoesNotExecuteCandidate)
 {
     const std::filesystem::path fixturePath = SPARK_TEST_MISMATCHED_MODULE_PATH;
-    const std::filesystem::path sentinelPath =
-        std::filesystem::temp_directory_path() / "spark-module-abi-discovery-sentinel.txt";
+    const std::filesystem::path sentinelPath = ProcessScratchRoot() / "spark-module-abi-discovery-sentinel.txt";
     std::error_code ec;
     std::filesystem::remove(sentinelPath, ec);
     SetSentinelEnvironment(sentinelPath.string());
@@ -489,8 +508,7 @@ TEST(ModuleABI_UnicodeManifestPathResolvesAndLoadsWithWideWindowsLoader)
 TEST(ModuleABI_MismatchRejectedBeforeStaticConstructorInjectionOrFactory)
 {
     const std::filesystem::path fixturePath = SPARK_TEST_MISMATCHED_MODULE_PATH;
-    const std::filesystem::path sentinelPath =
-        std::filesystem::temp_directory_path() / "spark-module-abi-load-sentinel.txt";
+    const std::filesystem::path sentinelPath = ProcessScratchRoot() / "spark-module-abi-load-sentinel.txt";
     std::error_code ec;
     std::filesystem::remove(sentinelPath, ec);
     SetSentinelEnvironment(sentinelPath.string());
@@ -508,10 +526,9 @@ TEST(ModuleABI_ModifiedBinaryRejectedByHashBeforeDllMainOrStaticConstructor)
 {
     const std::filesystem::path fixturePath = SPARK_TEST_COMPATIBLE_MODULE_PATH;
     const std::filesystem::path copiedPath =
-        std::filesystem::temp_directory_path() / ("SparkCompatibleHashTampered" + fixturePath.extension().string());
+        ProcessScratchRoot() / ("SparkCompatibleHashTampered" + fixturePath.extension().string());
     const std::filesystem::path copiedSidecar = copiedPath.string() + ".sparkabi";
-    const std::filesystem::path sentinelPath =
-        std::filesystem::temp_directory_path() / "spark-module-abi-hash-sentinel.txt";
+    const std::filesystem::path sentinelPath = ProcessScratchRoot() / "spark-module-abi-hash-sentinel.txt";
     std::error_code ec;
     std::filesystem::remove(copiedPath, ec);
     std::filesystem::remove(copiedSidecar, ec);
@@ -945,8 +962,7 @@ TEST(ModuleABI_ReloadPreservesHostRegistryCallbacks)
 
 TEST(ModuleABI_OnUnloadSeesEngineServicesBeforeImageTeardown)
 {
-    const std::filesystem::path sentinel =
-        std::filesystem::temp_directory_path() / "SparkRegistryLifecycleServicesAlive.txt";
+    const std::filesystem::path sentinel = ProcessScratchRoot() / "SparkRegistryLifecycleServicesAlive.txt";
     std::error_code cleanupError;
     std::filesystem::remove(sentinel, cleanupError);
     SetRegistryFixtureLifecycleSentinel(sentinel);
@@ -1057,8 +1073,7 @@ TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
 TEST(ModuleABI_WindowsReloadCleanupPreservesModuleParentDirectory)
 {
     const std::filesystem::path sourcePath = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
-    const std::filesystem::path moduleDirectory =
-        std::filesystem::temp_directory_path() / "SparkWindowsReloadParentPreservation";
+    const std::filesystem::path moduleDirectory = ProcessScratchRoot() / "SparkWindowsReloadParentPreservation";
     const std::filesystem::path modulePath = moduleDirectory / sourcePath.filename();
     const std::filesystem::path sentinelPath = moduleDirectory / "parent-directory-sentinel.txt";
 
@@ -1200,7 +1215,7 @@ TEST(ModuleABI_NonRegularManifestRejectedBeforeRead)
     // A manifest that is not a regular file has no size to budget. Reading it
     // anyway meant an unbounded read (a symlink to /dev/zero) or an open that
     // blocks forever (a FIFO with no writer). It must be refused before open.
-    const std::filesystem::path scratch = std::filesystem::temp_directory_path() / "SparkNonRegularManifest";
+    const std::filesystem::path scratch = ProcessScratchRoot() / "SparkNonRegularManifest";
     std::error_code ec;
     std::filesystem::remove_all(scratch, ec);
     std::filesystem::create_directories(scratch / "spark.directory.modules.json", ec);
@@ -1372,8 +1387,7 @@ TEST(ModuleABI_FailedReplacementImageStaysMapped)
     RegistryFixtureHostGuard host;
     const std::filesystem::path modulePath =
         CopyCompatibleFixtureToTemp("SparkRetainedReplacementModule", SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH);
-    const std::filesystem::path addressFile =
-        std::filesystem::temp_directory_path() / "SparkRetainedReplacementCodeAddress.txt";
+    const std::filesystem::path addressFile = ProcessScratchRoot() / "SparkRetainedReplacementCodeAddress.txt";
     std::error_code ec;
     std::filesystem::remove(addressFile, ec);
 
@@ -1495,8 +1509,7 @@ TEST(ModuleABI_WindowsModuleDependencyResolvesFromModuleDirectory)
     // An already-mapped copy would satisfy the import by name and hide the search order.
     ASSERT_TRUE(GetModuleHandleW(dependencyName.c_str()) == nullptr);
 
-    const std::filesystem::path moduleDirectory =
-        std::filesystem::temp_directory_path() / "SparkModuleDependencySearch";
+    const std::filesystem::path moduleDirectory = ProcessScratchRoot() / "SparkModuleDependencySearch";
     std::error_code ec;
     std::filesystem::remove_all(moduleDirectory, ec);
     ASSERT_TRUE(std::filesystem::create_directories(moduleDirectory));

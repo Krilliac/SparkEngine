@@ -18,9 +18,16 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #ifndef SPARK_TEST_COMPATIBLE_MODULE_PATH
 #error SPARK_TEST_COMPATIBLE_MODULE_PATH must name the compatible module fixture
@@ -118,10 +125,23 @@ namespace
         std::string m_previous;
     };
 
-    /** @brief Fresh, empty scratch directory removed and recreated per test. */
+    /**
+     * @brief Fresh, empty scratch directory removed and recreated per test.
+     *
+     * The directory name carries this process id. A module whose OnLoad fails
+     * stays mapped until its process exits, so a fixed %TEMP% name let any other
+     * live SparkTests process (a concurrent run, or a hung one) hold the copied
+     * image open, and this run's copy then failed.
+     */
     std::filesystem::path MakeScratchDirectory(std::string_view name)
     {
-        const std::filesystem::path directory = std::filesystem::temp_directory_path() / PathFromUtf8(name);
+#ifdef _WIN32
+        const int processId = _getpid();
+#else
+        const int processId = static_cast<int>(::getpid());
+#endif
+        std::filesystem::path directory = std::filesystem::temp_directory_path() / PathFromUtf8(name);
+        directory += "-" + std::to_string(processId);
         std::error_code ec;
         std::filesystem::remove_all(directory, ec);
         std::filesystem::create_directories(directory, ec);
@@ -134,10 +154,12 @@ namespace
         const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
         std::error_code ec;
         std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing, ec);
+        if (!ec)
+            std::filesystem::copy_file(SidecarPath(source), SidecarPath(destination),
+                                       std::filesystem::copy_options::overwrite_existing, ec);
         if (ec)
-            return false;
-        std::filesystem::copy_file(SidecarPath(source), SidecarPath(destination),
-                                   std::filesystem::copy_options::overwrite_existing, ec);
+            std::cerr << "  could not copy the module fixture to " << PathToUtf8(destination) << ": " << ec.message()
+                      << " (another process may hold that path open)\n";
         return !ec;
     }
 
