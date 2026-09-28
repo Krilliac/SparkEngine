@@ -5,7 +5,8 @@
  * Every test drives the real SparkGameRTS sources (units, buildings, economy,
  * commands, fog, match, and the fixed-step skirmish simulation). Determinism is
  * proven by hashing the full simulation state after every tick and comparing
- * runs that differ only in container insertion order or frame pacing.
+ * runs that differ only in container insertion order or frame pacing. The Human side is played by the module's
+ * own RTSScriptedCommander (the rts_autoplay player), bound into RTSSkirmishSimulation::Step().
  */
 
 #include "TestFramework.h"
@@ -20,6 +21,7 @@
 #include "../GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Navigation/RTSGridPathfinder.h"
 #include "../GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.h"
 #include "../GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.h"
 #include "../GameModules/SparkGameRTS/Source/Unit/RTSUnitSystem.h"
 #include "Engine/AI/AISystem.h"
@@ -80,80 +82,20 @@ namespace
         RTSFogOfWarSystem fog;
         RTSMatchSystem match;
         RTSSkirmishSimulation simulation;
+        RTSScriptedCommander commander; ///< The module's rts_autoplay Human player
 
         Skirmish()
         {
             simulation.Initialize(nullptr, {&units, &buildings, &resources, &commands, &fog, &match});
             simulation.StartDefaultSkirmish();
         }
+
+        /// Let the production commander issue the Human orders inside every Step(), as rts_autoplay does.
+        void BindCommander() { simulation.SetScriptedCommander(&commander); }
     };
 
     constexpr uint32_t TICKS_PER_SECOND = 32;
-    constexpr uint64_t COUNTER_ATTACK_TICK = TICKS_PER_SECOND * 45;
     constexpr uint64_t MAX_SKIRMISH_TICKS = TICKS_PER_SECOND * 60 * 15;
-
-    /**
-     * The local Human player's input stream. Fixed orders at fixed ticks (train, hold the base while the Swarm AI
-     * attacks, then counter-attack), then once per second the idle army is sent to the oldest remaining Swarm
-     * structure. Orders only read simulation state, so a deterministic tick
-     * yields an identical stream.
-     */
-    void ApplyHumanInput(Skirmish& game)
-    {
-        const uint64_t tick = game.simulation.GetTick();
-        const auto humanBarracks = [&]() -> uint32_t
-        {
-            for (uint32_t id : game.buildings.GetBuildingsByFaction(RTSFaction::Human))
-            {
-                if (game.buildings.GetBuilding(id)->type == RTSBuildingType::Barracks)
-                    return id;
-            }
-            return 0;
-        };
-
-        if (tick == 0 || tick == TICKS_PER_SECOND * 20 || tick == TICKS_PER_SECOND * 40)
-            game.buildings.StartProduction(humanBarracks(), RTSUnitType::Marine);
-        if (tick == COUNTER_ATTACK_TICK)
-        {
-            game.commands.DeselectAll();
-            for (uint32_t id : game.units.GetUnitsByFaction(RTSFaction::Human))
-            {
-                if (game.units.GetUnit(id)->type != RTSUnitType::Worker)
-                    game.commands.AddToSelection(id);
-            }
-            game.commands.IssueCommandToSelection({RTSCommandType::Attack, 60.0f, 60.0f, 0});
-        }
-        if (tick > COUNTER_ATTACK_TICK && tick % TICKS_PER_SECOND == 0)
-        {
-            const std::vector<uint32_t> targets = game.buildings.GetBuildingsByFaction(RTSFaction::Swarm);
-            const std::vector<uint32_t> survivors = game.units.GetUnitsByFaction(RTSFaction::Swarm);
-            float x = 0.0f;
-            float y = 0.0f;
-            if (!targets.empty())
-            {
-                x = game.buildings.GetBuilding(targets.front())->posX;
-                y = game.buildings.GetBuilding(targets.front())->posY;
-            }
-            else if (!survivors.empty())
-            {
-                x = game.units.GetUnit(survivors.front())->posX;
-                y = game.units.GetUnit(survivors.front())->posY;
-            }
-            else
-            {
-                return;
-            }
-            for (uint32_t id : game.units.GetUnitsByFaction(RTSFaction::Human))
-            {
-                const UnitData* unit = game.units.GetUnit(id);
-                if (unit->type != RTSUnitType::Worker && unit->state == RTSUnitState::Idle &&
-                    !game.commands.GetCurrentCommand(id))
-                {
-                    game.commands.IssueCommand(id, {RTSCommandType::Attack, x, y, 0});
-                }
-            }
-        }
-    }
 
     /// Re-insert the same world state into every container in a different order.
     void ShuffleContainerInsertionOrder(Skirmish& game)
@@ -175,11 +117,11 @@ namespace
         auto game = std::make_unique<Skirmish>();
         if (shuffleInsertionOrder)
             ShuffleContainerInsertionOrder(*game);
+        game->BindCommander();
 
         std::vector<uint64_t> hashes{game->simulation.ComputeStateHash()};
         while (game->simulation.GetTick() < maxTicks && game->match.GetMatchState() == RTSMatchState::Playing)
         {
-            ApplyHumanInput(*game);
             game->simulation.Step();
             hashes.push_back(game->simulation.ComputeStateHash());
         }
@@ -263,17 +205,22 @@ TEST(RTSSkirmish_ShuffledContainerInsertionIsBitIdenticalPerTick)
 }
 
 // Wall-clock frame pacing only decides how many fixed ticks run per frame; every tick reached must hash exactly
-// like the reference run that calls Step() once per tick.
+// like the reference run that calls Step() once per tick. The scripted commander is bound on every run, through
+// the counter-attack, so its orders must follow the tick counter and not the frame.
 TEST(RTSSkirmish_FramePacingNeverChangesSimulatedState)
 {
-    constexpr uint64_t ticks = TICKS_PER_SECOND * 45;
+    constexpr uint64_t ticks = RTSScriptedCommander::COUNTER_ATTACK_TICK + TICKS_PER_SECOND * 15;
     Skirmish reference;
+    reference.BindCommander();
     std::vector<uint64_t> expected{reference.simulation.ComputeStateHash()};
-    while (reference.simulation.GetTick() < ticks)
+    // One Advance may run several ticks past `ticks`, so the reference covers that overshoot too.
+    while (reference.simulation.GetTick() < ticks + RTSSkirmishSimulation::MAX_TICKS_PER_ADVANCE &&
+           reference.match.GetMatchState() == RTSMatchState::Playing)
     {
         reference.simulation.Step();
         expected.push_back(reference.simulation.ComputeStateHash());
     }
+    ASSERT_EQ(expected.size(), static_cast<size_t>(ticks + RTSSkirmishSimulation::MAX_TICKS_PER_ADVANCE + 1));
 
     // Exactly representable frame times: 30/60/120 Hz-like, a hitchy mix, and whole multi-tick frames.
     const std::vector<std::vector<float>> pacings = {
@@ -281,6 +228,7 @@ TEST(RTSSkirmish_FramePacingNeverChangesSimulatedState)
     for (const std::vector<float>& pacing : pacings)
     {
         Skirmish game;
+        game.BindCommander();
         size_t frame = 0;
         size_t matchedTicks = 0;
         while (game.simulation.GetTick() < ticks)
@@ -322,9 +270,9 @@ TEST(RTSSkirmish_ScriptedSkirmishReachesVictoryThroughProductionSystems)
     bool swarmLaunchedAttackWave = false;
     bool humanTookDamage = false;
 
+    game.BindCommander();
     while (game.simulation.GetTick() < MAX_SKIRMISH_TICKS && game.match.GetMatchState() == RTSMatchState::Playing)
     {
-        ApplyHumanInput(game);
         game.simulation.Step();
         for (uint32_t id : game.units.GetUnitsByFaction(RTSFaction::Swarm))
         {
@@ -608,12 +556,12 @@ namespace
         if (shuffleInsertionOrder)
             ShuffleContainerInsertionOrder(*game);
         IssueDetourOrders(*game);
+        game->BindCommander();
 
         RoutedRun run;
         run.hashes.push_back(game->simulation.ComputeStateHash());
         while (game->simulation.GetTick() < ticks && game->match.GetMatchState() == RTSMatchState::Playing)
         {
-            ApplyHumanInput(*game);
             game->simulation.Step();
             run.hashes.push_back(game->simulation.ComputeStateHash());
             run.longestRoute = std::max(run.longestRoute, LongestRoute(*game));

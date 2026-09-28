@@ -30,6 +30,7 @@ namespace RTS
     class RTSEngineSystems;
     class RTSDemoPresentation;
     class RTSSkirmishSimulation;
+    class RTSScriptedCommander;
 } // namespace RTS
 
 /**
@@ -77,6 +78,7 @@ class SparkGameRTSModule : public Spark::IModule
     std::unique_ptr<RTS::RTSMatchSystem> m_matchSystem;
     std::unique_ptr<RTS::RTSEngineSystems> m_engineSystems;
     std::unique_ptr<RTS::RTSSkirmishSimulation> m_simulation;
+    std::unique_ptr<RTS::RTSScriptedCommander> m_scriptedCommander; ///< Bound into m_simulation by rts_autoplay on
     std::unique_ptr<RTS::RTSDemoPresentation> m_demoPresentation;
 };
 

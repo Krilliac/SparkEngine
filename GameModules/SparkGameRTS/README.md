@@ -9,8 +9,9 @@ Battlefield** panel in editor-enabled runtimes.
 All gameplay advances through `Source/Simulation/RTSSkirmishSimulation`, a fixed 32 Hz tick
 (`TICK_SECONDS = 1/32`). Frame time from `OnUpdate` is only accumulated into whole ticks (at most 8 per frame), so
 the outcome depends on the starting state and the command stream, never on frame pacing or the host's fixed-step
-rate. Each tick runs, in order: AI opponents (once per simulated second) → commands/movement → combat → dead-unit
-cleanup → construction/production → economy → fog of war → elimination and win/loss.
+rate. Each tick runs, in order: the scripted Human commander (when bound) → AI opponents (once per simulated
+second) → commands/movement → combat → dead-unit cleanup → construction/production → economy → fog of war →
+elimination and win/loss.
 
 Determinism rules the tick relies on:
 
@@ -21,7 +22,8 @@ Determinism rules the tick relies on:
 - Combat picks every target from start-of-tick state and applies all hits together; ties resolve to the lowest id.
 - `ComputeStateHash()` hashes the complete state (units, buildings, queues, economy, nodes, fog grids, match) in
   canonical order. `Tests/TestMOD370SkirmishDeterminismReal.cpp` compares it tick by tick across repeated runs,
-  shuffled container insertion, and different frame pacings, and plays a scripted skirmish to Human victory.
+  shuffled container insertion, and different frame pacings, and plays a scripted skirmish to Human victory. The
+  Human side in those runs is the production `Source/Simulation/RTSScriptedCommander`.
 
 Combat is continuous damage (`damage × attackSpeed × tick`) against the nearest enemy unit in template attack range,
 falling back to enemy structures. An `Attack` order without a target entity is an attack-move: the unit walks
@@ -73,7 +75,13 @@ simulation tick.
 
 ## Console controls
 
-- `rts_status`, `rts_units`, `rts_buildings`, `rts_resources` inspect live state.
+- `rts_status`, `rts_units`, `rts_buildings`, `rts_resources` inspect live state; `rts_status` also reports the
+  simulation tick, the match state (`Playing`, `Victory`, `Defeat`) and the state hash.
+- `rts_autoplay on` restarts the default skirmish with `RTSScriptedCommander` playing the Human side: it trains
+  marines at fixed ticks, holds the base through the Swarm attack, counter-attacks at 45 simulated seconds, then
+  sends its idle army at the oldest Swarm structure every second. The commander runs inside
+  `RTSSkirmishSimulation::Step()`, so two processes reach the same tick, winner and state hash whatever their frame
+  pacing. `rts_autoplay off` hands the Human side back to the player.
 - `rts_select <workers|marines|tanks|army>` changes selection.
 - `rts_move <x> <y> [queue]`, `rts_hold`, and `rts_stop` issue orders.
 - `rts_train_marine` queues a marine at the Human barracks.

@@ -15,6 +15,7 @@
 #include "Command/RTSCommandSystem.h"
 #include "FogOfWar/RTSFogOfWarSystem.h"
 #include "Match/RTSMatchSystem.h"
+#include "Simulation/RTSScriptedCommander.h"
 #include "Simulation/RTSSkirmishSimulation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -24,6 +25,24 @@
 #include "Engine/ECS/Components/AIComponents.h"
 
 #include <Spark/ModuleDllMain.h>
+
+#include <array>
+#include <cstddef>
+#include <format>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace
+{
+    const char* MatchStateName(RTS::RTSMatchState state)
+    {
+        constexpr std::array<const char*, static_cast<size_t>(RTS::RTSMatchState::Count)> names{
+            "Setup", "Playing", "Paused", "Victory", "Defeat"};
+        const auto index = static_cast<size_t>(state);
+        return index < names.size() ? names[index] : "Unknown";
+    }
+} // namespace
 
 // =============================================================================
 // Module exports
@@ -214,6 +233,7 @@ void SparkGameRTSModule::OnUnload()
         m_simulation->Shutdown();
         m_simulation.reset();
     }
+    m_scriptedCommander.reset();
     if (m_matchSystem)
     {
         m_matchSystem->Shutdown();
@@ -330,7 +350,31 @@ void SparkGameRTSModule::RegisterConsoleCommands()
                                 status += "Map: " + std::to_string(m_fogOfWarSystem->GetMapWidth()) + "x" +
                                           std::to_string(m_fogOfWarSystem->GetMapHeight()) + "\n";
                                 status += "Match players: " + std::to_string(m_matchSystem->GetPlayerCount()) + "\n";
+                                status += "Tick: " + std::to_string(m_simulation->GetTick()) + "\n";
+                                status +=
+                                    std::string("Match: ") + MatchStateName(m_matchSystem->GetMatchState()) + "\n";
+                                status += std::format("State hash: {:016x}\n", m_simulation->ComputeStateHash());
                                 return status;
+                            });
+
+    // Automated player for packaged runs. Its orders are scheduled by simulation tick, so turning it on restarts
+    // the default skirmish and the whole match -- win or loss and final state hash -- depends only on the tick.
+    console.RegisterCommand("rts_autoplay",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+                                    return "Usage: rts_autoplay on|off";
+                                if (args[0] == "off")
+                                {
+                                    m_simulation->SetScriptedCommander(nullptr);
+                                    m_scriptedCommander.reset();
+                                    return "Autoplay off";
+                                }
+                                if (!m_simulation->StartDefaultSkirmish())
+                                    return "Autoplay failed: the default skirmish did not restart";
+                                m_scriptedCommander = std::make_unique<RTS::RTSScriptedCommander>();
+                                m_simulation->SetScriptedCommander(m_scriptedCommander.get());
+                                return "Autoplay on: default skirmish restarted with the scripted Human commander";
                             });
 
     console.RegisterCommand("rts_units", [this](const std::vector<std::string>&) -> std::string

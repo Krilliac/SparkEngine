@@ -10,6 +10,7 @@
 #include "FogOfWar/RTSFogOfWarSystem.h"
 #include "Match/RTSMatchSystem.h"
 #include "Navigation/RTSGridPathfinder.h"
+#include "RTSScriptedCommander.h"
 #include "Resource/RTSResourceSystem.h"
 #include "Unit/RTSUnitSystem.h"
 
@@ -153,6 +154,7 @@ namespace RTS
     void RTSSkirmishSimulation::Shutdown()
     {
         m_systems = {};
+        m_commander = nullptr;
         m_context = nullptr;
         ResetClock();
     }
@@ -252,6 +254,9 @@ namespace RTS
         if (!units || match->GetMatchState() != RTSMatchState::Playing)
             return;
 
+        // Scripted Human orders are part of the tick, so they follow the tick counter, not frame pacing.
+        if (m_commander)
+            m_commander->Apply(m_systems, m_tick);
         if (m_tick % AI_DECISION_TICKS == 0)
             RunAIOpponents();
         commands->Update(TICK_SECONDS);

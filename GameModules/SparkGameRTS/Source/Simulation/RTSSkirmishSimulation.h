@@ -30,6 +30,7 @@ namespace RTS
     class RTSFogOfWarSystem;
     class RTSMatchSystem;
     class RTSResourceSystem;
+    class RTSScriptedCommander;
     class RTSUnitSystem;
 
     /// @brief Non-owning pointers to the gameplay systems the skirmish tick drives
@@ -46,8 +47,8 @@ namespace RTS
     /**
      * @brief Owns the ordered, fixed-step skirmish loop
      *
-     * Tick order: AI opponents -> commands/movement -> combat -> unit cleanup -> construction/production ->
-     * economy -> fog of war -> elimination and win/loss.
+     * Tick order: scripted Human commander (when bound) -> AI opponents -> commands/movement -> combat -> unit
+     * cleanup -> construction/production -> economy -> fog of war -> elimination and win/loss.
      */
     class RTSSkirmishSimulation
     {
@@ -80,6 +81,12 @@ namespace RTS
 
         /** @brief Execute exactly one fixed tick. No-op once the match has left the Playing state. */
         void Step();
+
+        /**
+         * @brief Bind (or clear with nullptr) the commander that issues Human orders at the start of every tick.
+         *        Not owned; it must outlive the binding.
+         */
+        void SetScriptedCommander(const RTSScriptedCommander* commander) { m_commander = commander; }
 
         /** @brief Discard accumulated wall-clock time and restart the tick counter (after a reset). */
         void ResetClock();
@@ -117,6 +124,7 @@ namespace RTS
 
         Spark::IEngineContext* m_context{nullptr};
         RTSSkirmishSystems m_systems;
+        const RTSScriptedCommander* m_commander{nullptr};
         double m_accumulatedSeconds{0.0};
         uint64_t m_tick{0};
         size_t m_lastVisionCellWork{0};
