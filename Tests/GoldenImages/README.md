@@ -128,6 +128,56 @@ The bundled `ThirdParty/Utils/stb` headers are API stubs whose
 Until step 2 is done the hash check fails, so a new capture cannot pass
 without review.
 
+## Golden lanes and row parity
+
+A golden lane is a `Tests/TestRHI*Golden*.cpp` source that declares
+`constexpr const char* kRow` and a `kScenes` set. `Tests/Tools/test_golden_manifest.py`
+(CTest `GoldenImage_ManifestIntegrity`) requires:
+
+- every lane to be registered in `Tests/CMakeLists.txt` through
+  `SPARK_TEST_FILE=<lane>;`;
+- the union of `kScenes` over all lanes of one row to equal the manifest's
+  scenes for that row, so no baseline goes uncompared and no lane compares a
+  scene the manifest does not review;
+- each scene of a row to be declared by exactly one lane of that row, so a
+  baseline is compared once.
+
+A row may therefore be split across several lane sources, one fixture per file
+(for example a bare `PostProcessingPipeline`, a full `GraphicsEngine`, and the
+canonical scene through `WorldBasicRenderer` on `d3d11-warp`).
+
+## D3D11 WARP capture and review
+
+`d3d11-warp` is a software row. Its rasterizer identity, the WARP analogue of
+the Mesa pin on the Linux rows, is the file version of
+`%SystemRoot%\System32\d3d10warp.dll` plus the Windows build number:
+
+```powershell
+(Get-Item "$env:SystemRoot\System32\d3d10warp.dll").VersionInfo.FileVersion
+[System.Environment]::OSVersion.Version
+```
+
+The reviewer string of every `d3d11-warp` entry records both, for example
+`Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; ... owner review pending)`.
+A baseline is added only after this checklist:
+
+1. **Probes.** The lane's CPU-formula or geometry probes pass on the capture,
+   so a broken render cannot become the baseline.
+2. **Inspection.** The PNG is opened and looked at.
+3. **Cross-row divergence.** The same scene is rendered on a local hardware
+   device and the maximum and mean pixel distance to the WARP capture are
+   recorded; they justify the chosen `perPixelThreshold` and
+   `tolerancePercent`.
+4. **Mutation.** Changing one constant in the shader under test makes the
+   golden comparison fail with a pixel verdict (done locally, not committed).
+5. **Pending marker.** The reviewer string keeps `owner review pending` until
+   the owner reviews the baseline. That marker is allowed only on software
+   rows; `d3d11-hw` baselines stay owner-gated.
+
+WARP output may differ between Windows builds. A mismatch on another build
+(for example the hosted `windows-2022` image) is data for owner review, never
+a reason to loosen thresholds.
+
 ## Failure output
 
 When a comparison fails on pixels, the runner writes to `outputDir`:

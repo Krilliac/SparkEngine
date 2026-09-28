@@ -328,6 +328,14 @@ Until that promotion, `build-linux-gcc` and `build-linux-clang` keep running tho
 ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' --output-on-failure --no-tests=error
 ```
 
+### Lane parity
+
+`Tests/Tools/test_golden_manifest.py` (CTest `GoldenImage_ManifestIntegrity`) ties each committed baseline to exactly one comparing lane. A lane is a `Tests/TestRHI*Golden*.cpp` source that declares `kRow` and `kScenes` and is registered with `SPARK_TEST_FILE=<lane>;`. One row may be split across several lanes (one fixture per source file): the union of their `kScenes` must equal the manifest scenes for that row, and a scene declared by two lanes of the same row is an error.
+
+### D3D11 WARP capture and review
+
+The `d3d11-warp` row's rasterizer identity is the file version of `%SystemRoot%\System32\d3d10warp.dll` plus the Windows build number, recorded in every reviewer string (the WARP analogue of the Mesa pin). A WARP baseline is committed only after five checks, listed in `Tests/GoldenImages/README.md`: the lane's CPU probes pass, the PNG is inspected, the maximum and mean distance to a local hardware render of the same scene justify the thresholds, a one-constant shader mutation fails the golden, and the reviewer keeps `owner review pending` (allowed only on software rows). A mismatch on another Windows build is data for owner review, never a reason to loosen thresholds.
+
 ## Integration
 
 ### With the RHI

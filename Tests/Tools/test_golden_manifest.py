@@ -14,8 +14,10 @@ any host, without a GPU:
   SHA-256, is a structurally valid PNG (signature, CRC-checked IHDR, IEND), and
   every committed PNG has exactly one entry (no orphans);
 * a baseline whose review is still pending cannot sit on a hardware row;
-* each golden lane source declares a kRow and kScenes set that equals the
-  manifest's scenes for that row, and is registered in Tests/CMakeLists.txt.
+* each golden lane source declares a kRow and a kScenes set and is registered
+  in Tests/CMakeLists.txt; the union of kScenes over the lanes of one row
+  equals the manifest's scenes for that row, and no scene is claimed by two
+  lanes of the same row.
 """
 
 from __future__ import annotations
@@ -187,12 +189,17 @@ def baseline_errors(golden_root: Path, entries: list[dict[str, Any]]) -> list[st
 
 
 def lane_errors(tests_root: Path, cmake_text: str, entries: list[dict[str, Any]]) -> list[str]:
+    """Every manifest scene is compared by exactly one registered lane of its row.
+
+    A row may be split across several lane sources (one fixture per source file),
+    so the union of their kScenes must equal the manifest's scenes for that row
+    and no scene may be claimed by two lanes of the same row.
+    """
     manifest_rows: dict[str, set[str]] = {}
     for entry in entries:
         manifest_rows.setdefault(entry["backendRow"], set()).add(entry["scene"])
 
     errors: list[str] = []
-    lane_rows: set[str] = set()
     # A baseline-comparing lane declares the backend row it renders on; other
     # golden sources (for example the D3D11 GoldenImageTest wiring) do not.
     lanes: list[tuple[Path, str, re.Match[str]]] = []
@@ -203,22 +210,34 @@ def lane_errors(tests_root: Path, cmake_text: str, entries: list[dict[str, Any]]
             lanes.append((lane, text, row_match))
     if not lanes:
         return [f"no golden lane source matching Tests/{LANE_GLOB} declares a kRow"]
+
+    # row -> scene -> lane sources declaring it
+    declared: dict[str, dict[str, list[str]]] = {}
     for lane, text, row_match in lanes:
         scenes_match = _LANE_SCENES_RE.search(text)
         if scenes_match is None:
             errors.append(f"{lane.name}: golden lane declares kRow but no kScenes")
             continue
         row = row_match.group(1)
-        lane_rows.add(row)
-        scenes = set(re.findall(r'"([^"]+)"', scenes_match.group(1)))
-        if scenes != manifest_rows.get(row, set()):
-            errors.append(
-                f"{lane.name}: kScenes {sorted(scenes)} != manifest scenes for {row} "
-                f"{sorted(manifest_rows.get(row, set()))}"
-            )
+        row_scenes = declared.setdefault(row, {})
+        for scene in set(re.findall(r'"([^"]+)"', scenes_match.group(1))):
+            row_scenes.setdefault(scene, []).append(lane.name)
         if f"SPARK_TEST_FILE={lane.name};" not in cmake_text:
             errors.append(f"{lane.name}: golden lane is not registered in Tests/CMakeLists.txt")
-    for row in sorted(set(manifest_rows) - lane_rows):
+
+    for row in sorted(declared):
+        row_scenes = declared[row]
+        for scene in sorted(row_scenes):
+            if len(row_scenes[scene]) > 1:
+                errors.append(f"{row}/{scene}: declared by more than one lane {sorted(row_scenes[scene])}")
+        union = set(row_scenes)
+        expected = manifest_rows.get(row, set())
+        if union != expected:
+            owners = sorted({name for names in row_scenes.values() for name in names})
+            errors.append(
+                f"{', '.join(owners)}: kScenes {sorted(union)} != manifest scenes for {row} {sorted(expected)}"
+            )
+    for row in sorted(set(manifest_rows) - set(declared)):
         errors.append(f"manifest row {row} has baselines but no golden lane compares them")
     return errors
 
@@ -369,6 +388,68 @@ class GoldenManifestDriftTests(unittest.TestCase):
     def test_unregistered_lane_fails(self) -> None:
         self.cmake_text = self.cmake_text.replace("SPARK_TEST_FILE=TestRHI240OpenGLGoldenReal.cpp;", "")
         self.assertSingleError("TestRHI240OpenGLGoldenReal.cpp: golden lane is not registered")
+
+
+class GoldenLaneUnionTests(unittest.TestCase):
+    """One backend row split across several lane sources (one fixture each)."""
+
+    ROW = "d3d11-warp"
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tests_root = Path(self._tmp.name)
+        self.cmake_text = ""
+        self.entries = [
+            {"scene": scene, "backendRow": self.ROW} for scene in ("PassA", "PassB", "Canonical_Scene")
+        ]
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def add_lane(self, name: str, scenes: list[str], *, registered: bool = True) -> None:
+        quoted = ", ".join(f'"{scene}"' for scene in scenes)
+        (self.tests_root / name).write_text(
+            f'constexpr const char* kRow = "{self.ROW}";\n'
+            f"const std::array<const char*, {len(scenes)}> kScenes = {{{quoted}}};\n",
+            encoding="utf-8",
+        )
+        if registered:
+            self.cmake_text += f"SPARK_TEST_FILE={name};\n"
+
+    def errors(self) -> list[str]:
+        return lane_errors(self.tests_root, self.cmake_text, self.entries)
+
+    def test_two_lanes_whose_union_equals_the_manifest_pass(self) -> None:
+        self.add_lane("TestRHI210PassGoldenReal.cpp", ["PassA", "PassB"])
+        self.add_lane("TestRHI210SceneGoldenReal.cpp", ["Canonical_Scene"])
+        self.assertEqual([], self.errors())
+
+    def test_scene_declared_by_two_lanes_fails(self) -> None:
+        self.add_lane("TestRHI210PassGoldenReal.cpp", ["PassA", "PassB"])
+        self.add_lane("TestRHI210SceneGoldenReal.cpp", ["Canonical_Scene", "PassB"])
+        errors = self.errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn(f"{self.ROW}/PassB: declared by more than one lane", errors[0])
+
+    def test_lane_scene_missing_from_manifest_fails(self) -> None:
+        self.add_lane("TestRHI210PassGoldenReal.cpp", ["PassA", "PassB", "PassC"])
+        self.add_lane("TestRHI210SceneGoldenReal.cpp", ["Canonical_Scene"])
+        errors = self.errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn(f"!= manifest scenes for {self.ROW}", errors[0])
+
+    def test_manifest_scene_no_lane_declares_fails(self) -> None:
+        self.add_lane("TestRHI210PassGoldenReal.cpp", ["PassA", "PassB"])
+        errors = self.errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn(f"!= manifest scenes for {self.ROW}", errors[0])
+
+    def test_unregistered_second_lane_fails(self) -> None:
+        self.add_lane("TestRHI210PassGoldenReal.cpp", ["PassA", "PassB"])
+        self.add_lane("TestRHI210SceneGoldenReal.cpp", ["Canonical_Scene"], registered=False)
+        errors = self.errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("TestRHI210SceneGoldenReal.cpp: golden lane is not registered", errors[0])
 
 
 def copy_of(entry: dict[str, Any]) -> dict[str, Any]:
