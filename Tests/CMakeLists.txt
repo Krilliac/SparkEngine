@@ -2227,12 +2227,14 @@ set_tests_properties(TF120_Residency PROPERTIES
 
 # DATA-120 / TF-120: authority processes sharing one TF_SAVE_ROOT database. The
 # two spawned-peer cases (TF120PeerProcess.h) run on every platform, so the
-# count is the same everywhere; a peer that cannot spawn SKIPs and fails
-# --warn-is-error. RUN_SERIAL: fixed Saves/ paths, and on Windows the peers
-# inherit a scoped copy of this process's environment.
+# count is the same everywhere. A peer that cannot spawn SKIPs its case, which
+# the runner does not count as a failure, so the skip fails the CTest here.
+# RUN_SERIAL: fixed Saves/ paths, and on Windows the peers inherit a scoped
+# copy of this process's environment.
 add_test(NAME TF120_SharedRoot COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(TF120_SharedRoot PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_SharedRoot_;SPARK_TEST_EXPECT_COUNT=8"
+    FAIL_REGULAR_EXPRESSION "cannot spawn a peer;[0-9]+ skipped"
     LABELS "persistence;unit"
     RUN_SERIAL TRUE
     TIMEOUT 240)
