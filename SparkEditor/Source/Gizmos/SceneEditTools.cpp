@@ -59,9 +59,13 @@ namespace SparkEditor::SceneEditTools
             return out;
         }
 
+        /// Pointer to one of Transform's XMFLOAT3 members. The declarator is parenthesized
+        /// because `XMFLOAT3 ::Transform::*` lexes as the qualified name `XMFLOAT3::Transform`.
+        using TransformVectorMember = XMFLOAT3(::Transform::*);
+
         /// One undoable change of a Transform vector (position, rotation or scale).
         /// Captures the entity id and the member, never a component pointer.
-        bool CommitTransformVector(::World& world, ::EntityID entity, XMFLOAT3 ::Transform::*member,
+        bool CommitTransformVector(::World& world, ::EntityID entity, TransformVectorMember member,
                                    const XMFLOAT3& oldValue, const XMFLOAT3& newValue, const char* description)
         {
             entt::registry& registry = world.GetRegistry();
