@@ -60,7 +60,10 @@ namespace SparkTestFixtures
     /** @brief Parse an inner message; nullopt when the header or length is wrong. */
     std::optional<WireMessage> ParseWire(std::span<const uint8_t> wire);
 
-    /** @brief [kFrameHandshake][wire]: the only plaintext frame the transport accepts. */
+    /**
+     * @brief A handshake frame, the kFrameHandshake byte followed by the wire bytes: the only
+     *        plaintext frame the transport accepts.
+     */
     std::vector<uint8_t> HandshakeFrame(std::span<const uint8_t> wire);
 
     /** @brief A player name as NetBuffer::WriteString encodes it (the ClientFinished payload). */
