@@ -3371,11 +3371,13 @@ if(Python3_Interpreter_FOUND)
     endif()
 endif()
 
-# MOD-330/340/350/370/380: installed-package objective runs of the experimental
-# game modules. Tests/PackageSmoke/RunInstalledModuleObjective.cmake installs the
+# MOD-300/330/340/350/370/380: installed-package objective runs of the game
+# modules. Tests/PackageSmoke/RunInstalledModuleObjective.cmake installs the
 # runtime and samples components, then drives the installed SparkEngine and
 # module image headless on NullRHI through Tests/PackageSmoke/ModuleObjectives/<Module>.cmake.
-# The audit parser contract always runs; the real-time runs are opt-in:
+# The audit parser contract (which also lints every spec) always runs, and so
+# does the short SparkGame showcase smoke on Linux. The experimental modules'
+# real-time runs are opt-in:
 #   cmake -B build -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON
 #   ctest --test-dir build -L module-package-run --no-tests=error
 # They never carry the experimental-modules, stable-v1 or module-profile labels
@@ -3387,16 +3389,7 @@ add_test(
 set_tests_properties(ModulePackageObjectiveParserContract PROPERTIES
     LABELS "module;package;unit"
     TIMEOUT 10)
-option(SPARK_ENABLE_MODULE_PACKAGE_RUNS
-    "Register real-time installed-package objective runs for experimental game modules" OFF)
-function(spark_add_module_package_run test_name module short_label timeout)
-    if(NOT SPARK_ENABLE_MODULE_PACKAGE_RUNS OR NOT BUILD_GAME_MODULES OR CMAKE_CROSSCOMPILING OR
-       NOT TARGET SparkEngine OR NOT TARGET ${module})
-        return()
-    endif()
-    if(NOT WIN32 AND NOT (UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT))
-        return()
-    endif()
+function(spark_add_module_objective_test test_name module labels timeout)
     add_test(
         NAME ${test_name}
         COMMAND ${CMAKE_COMMAND}
@@ -3409,15 +3402,36 @@ function(spark_add_module_package_run test_name module short_label timeout)
             -DSPARK_OBJECTIVE_SPEC=${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/ModuleObjectives/${module}.cmake
             -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledModuleObjective.cmake)
     set_tests_properties(${test_name} PROPERTIES
-        LABELS "module;package;module-package-run;${short_label}"
+        LABELS "${labels}"
         RUN_SERIAL TRUE
         TIMEOUT ${timeout})
 endfunction()
-spark_add_module_package_run(ARPGDungeonPackage_ClearAndRestart SparkGameARPG arpg 600)
-spark_add_module_package_run(PlatformerCompletionPackage_Level0ThreeMinutes SparkGamePlatformer platformer 420)
-spark_add_module_package_run(RPGQuestSlicePackage_WolfHuntRestart SparkGameRPG rpg 900)
-spark_add_module_package_run(RTSSkirmishPackage_DeterministicVictory SparkGameRTS rts 1800)
-spark_add_module_package_run(RacingCompleteRacePackage_Circuit SparkGameRacing racing 900)
+if(BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine)
+    # MOD-300: the installed SparkGame showcase loads its own localization tables and spawns (Linux headless).
+    if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND TARGET SparkGame)
+        spark_add_module_objective_test(SparkGameShowcase_PackagedSmoke SparkGame "module;package;integration" 300)
+    endif()
+    option(SPARK_ENABLE_MODULE_PACKAGE_RUNS
+        "Register real-time installed-package objective runs for experimental game modules" OFF)
+    if(SPARK_ENABLE_MODULE_PACKAGE_RUNS AND (WIN32 OR (UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT)))
+        foreach(_spark_module_run IN ITEMS
+                "ARPGDungeonPackage_ClearAndRestart|SparkGameARPG|arpg|600"
+                "PlatformerCompletionPackage_Level0ThreeMinutes|SparkGamePlatformer|platformer|420"
+                "RPGQuestSlicePackage_WolfHuntRestart|SparkGameRPG|rpg|900"
+                "RTSSkirmishPackage_DeterministicVictory|SparkGameRTS|rts|1800"
+                "RacingCompleteRacePackage_Circuit|SparkGameRacing|racing|900")
+            string(REPLACE "|" ";" _spark_module_run_fields "${_spark_module_run}")
+            list(GET _spark_module_run_fields 0 _spark_module_run_name)
+            list(GET _spark_module_run_fields 1 _spark_module_run_target)
+            list(GET _spark_module_run_fields 2 _spark_module_run_label)
+            list(GET _spark_module_run_fields 3 _spark_module_run_timeout)
+            if(TARGET ${_spark_module_run_target})
+                spark_add_module_objective_test(${_spark_module_run_name} ${_spark_module_run_target}
+                    "module;package;module-package-run;${_spark_module_run_label}" ${_spark_module_run_timeout})
+            endif()
+        endforeach()
+    endif()
+endif()
 
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)

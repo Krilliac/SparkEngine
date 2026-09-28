@@ -360,8 +360,10 @@ ctest --test-dir build -L '^soak$' --no-tests=error --output-on-failure
 # the runtime and samples components, then drives the installed SparkEngine and module on
 # NullRHI through Tests/PackageSmoke/ModuleObjectives/<Module>.cmake: every scripted
 # command must dispatch ok, every rule must match that command's own audit output, and
-# restart phases must reproduce an earlier process's output byte for byte. Real-time runs
-# of several minutes each; ModulePackageObjectiveParserContract is always registered.
+# restart phases must reproduce an earlier process's output byte for byte, and no output may
+# name the source or build tree. Real-time runs of several minutes each.
+# ModulePackageObjectiveParserContract (parser cases plus a lint of every spec) is always
+# registered, and so is the short SparkGameShowcase_PackagedSmoke on Linux headless (MOD-300).
 cmake -B build -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON
 ctest --test-dir build -C Release -L module-package-run --no-tests=error --output-on-failure
 

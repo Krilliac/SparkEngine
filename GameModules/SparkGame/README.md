@@ -61,8 +61,8 @@ no step callable that lives in this image is left in the scheduler.
   documented contract for the one game module a process loads.
 - The module has no networking. The exhibit props are placed but not yet reviewed in a rendered run, and the
   `_lod1`/`_collision` variants are exported but not used by the module.
-- Still outstanding under MOD-300: rendered showcase output (`OnRender`), exact-state quickload evidence, and a
-  packaged smoke run.
+- Still outstanding under MOD-300: rendered showcase output (`OnRender`) and exact-state quickload evidence. The
+  packaged smoke below runs on Linux only; there is no Windows lane for it.
 
 ## Tests
 
@@ -77,6 +77,15 @@ checks that `showcase_language fr` relabels `showcase_status`. They are register
 `SparkGameShowcase_Localization*` (`Tests/TestMOD300ShowcaseLocalizationReal.cpp`, every platform) links
 `ShowcaseLocalization.cpp` directly: both shipped tables load and resolve every key, and a table with a missing key
 or a missing file is rejected without changing the loaded languages.
+
+`SparkGameShowcase_PackagedSmoke` (Linux headless) installs the build's runtime and samples components into a
+fresh prefix and runs the installed `SparkEngine` with the installed `libSparkGame.so` from the installed `bin`
+directory, in an empty environment with its own HOME/XDG roots, through
+`Tests/PackageSmoke/RunInstalledModuleObjective.cmake` and `Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake`:
+`showcase_status`, `showcase_spawn PackagedProbe`, `showcase_language fr`, `showcase_status`. It requires a clean
+NullRHI lifecycle, `Language set to fr`, a French status (`Langue: fr`) whose spawned count is exactly one higher,
+and no output naming the source or build tree. The installed tree carries `Assets/Localization`, which the build's
+post-build copy and the runtime install both include; the showcase loads it relative to the working directory.
 
 `ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload` (`Tests/TestModuleABI.cpp`) checks that
 `OnUnload()` releases the validation rules this module registers.

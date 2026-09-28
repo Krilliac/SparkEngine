@@ -2250,7 +2250,9 @@ endif()
 # (2026-07-12): chaos_accept.cfg's tf_dedicated/tf_chaos/tf_validate all came back "Unknown
 # command" because TFDataTables::Initialize() returned false before the module could register
 # them. SparkTests.exe never hit this because its TFData_* tests walk up to the repo root
-# instead of trusting cwd.
+# instead of trusting cwd. Localization holds the SparkGame showcase string tables
+# (Assets/Localization/SparkGame), which GameplayShowcase::SetupLocalization also loads
+# cwd-relative (MOD-300).
 foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine Localization)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${ASSET_DIR}")
         add_custom_command(TARGET SparkEngine POST_BUILD

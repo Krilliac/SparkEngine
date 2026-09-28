@@ -30,8 +30,11 @@ cmake_minimum_required(VERSION 3.25)
 # A phase passes only when the process passes the shared NullRHI lifecycle
 # parser (one module, faults=0, no D3D11 device), every scripted command has an
 # "ok" audit header with exactly one marker (the -test-seconds limit did not
-# cut the script short), and every rule holds. stdout, stderr and the audit of
-# each phase stay under the run root.
+# cut the script short), every rule holds, and nothing it printed names the
+# source or build tree outside this run's own root (the installed payload must
+# not reach back into either). On POSIX hosts each process starts from an empty
+# environment (`env -i`) plus the isolated user root. stdout, stderr and the
+# audit of each phase stay under the run root.
 #
 # This is local opt-in evidence of an experimental module. It deliberately
 # writes no package-smoke-v1 record: that format is fixed to the stable-v1 FPS
@@ -407,6 +410,47 @@ function(_spark_objective_check_phase phase child_result child_stdout child_stde
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+# Whether TEXT names a FORBIDDEN root (source or build tree) once every mention of
+# an ALLOWED root (the run's own install and user root, which may lie inside the
+# build tree) is removed. Both slash styles are searched; Windows compares
+# case-insensitively.
+function(_spark_objective_tree_leak text allowed forbidden out_leak)
+    set(_scrubbed "${text}")
+    set(_needles_allowed)
+    set(_needles_forbidden)
+    foreach(_kind IN ITEMS allowed forbidden)
+        foreach(_root IN LISTS ${_kind})
+            set(_forms "${_root}")
+            if(EXISTS "${_root}")
+                file(REAL_PATH "${_root}" _real)
+                list(APPEND _forms "${_real}")
+            endif()
+            foreach(_form IN LISTS _forms)
+                string(REPLACE "\\" "/" _slashed "${_form}")
+                string(REPLACE "/" "\\" _backslashed "${_slashed}")
+                list(APPEND _needles_${_kind} "${_slashed}" "${_backslashed}")
+            endforeach()
+        endforeach()
+    endforeach()
+    if(CMAKE_HOST_WIN32)
+        string(TOLOWER "${_scrubbed}" _scrubbed)
+        string(TOLOWER "${_needles_allowed}" _needles_allowed)
+        string(TOLOWER "${_needles_forbidden}" _needles_forbidden)
+    endif()
+    foreach(_needle IN LISTS _needles_allowed)
+        string(REPLACE "${_needle}" "<run-root>" _scrubbed "${_scrubbed}")
+    endforeach()
+    foreach(_needle IN LISTS _needles_forbidden)
+        string(FIND "${_scrubbed}" "${_needle}" _position)
+        if(NOT _position EQUAL -1)
+            string(SUBSTRING "${_scrubbed}" ${_position} 160 _context)
+            set(${out_leak} "${_context}" PARENT_SCOPE)
+            return()
+        endif()
+    endforeach()
+    set(${out_leak} "" PARENT_SCOPE)
+endfunction()
+
 if(SPARK_MODULE_OBJECTIVE_PARSER_SELF_TEST)
     set(_ready "SPARK_MODULE_READY count=1\n")
     set(_rhi "SPARK_HEADLESS_RHI backend=null initialized=1 frames=90 shutdown=1\n")
@@ -541,6 +585,20 @@ Score: 7
     endfunction()
     _spark_objective_fixture(custom_hook_reject)
     _spark_expect_objective_case(custom_hook_reject 0 "${_stdout_ok}" "${_audit}" FALSE)
+
+    # Tree leaks: the run root may sit inside the build tree and is scrubbed first.
+    function(_spark_expect_leak_case name text expected_leak)
+        _spark_objective_tree_leak("${text}" "/work/build/runs/r1" "/work/src;/work/build" _leak)
+        if(expected_leak AND _leak STREQUAL "")
+            message(FATAL_ERROR "Tree-leak case '${name}' found no leak")
+        elseif(NOT expected_leak AND NOT _leak STREQUAL "")
+            message(FATAL_ERROR "Tree-leak case '${name}' reported a leak: ${_leak}")
+        endif()
+    endfunction()
+    _spark_expect_leak_case(run_root_only "Loaded /work/build/runs/r1/install/bin/libSparkGame.so" FALSE)
+    _spark_expect_leak_case(build_tree "Loaded /work/build/bin/libSparkGame.so" TRUE)
+    _spark_expect_leak_case(source_tree "Reading /work/src/Assets/Localization/x.json" TRUE)
+    _spark_expect_leak_case(backslash_source "Reading \\work\\src\\Assets" TRUE)
 
     # Spec lint: a well-formed spec passes; each defect is refused before any process would run.
     function(_spark_expect_lint_case name expected_ok)
@@ -738,6 +796,14 @@ foreach(_assignment IN LISTS _user_env)
     string(REGEX REPLACE "^[A-Z_]+=" "" _dir "${_assignment}")
     file(MAKE_DIRECTORY "${_dir}")
 endforeach()
+if(CMAKE_HOST_WIN32)
+    set(_launcher "${CMAKE_COMMAND}" -E env)
+else()
+    # Nothing from the caller's environment (LD_LIBRARY_PATH, SPARK_* overrides) reaches the installed run.
+    find_program(_env_program NAMES env REQUIRED)
+    file(MAKE_DIRECTORY "${_run_root}/tmp")
+    set(_launcher "${_env_program}" -i "PATH=/usr/bin:/bin" "LC_ALL=C" "TMPDIR=${_run_root}/tmp")
+endif()
 
 include("${SPARK_OBJECTIVE_SPEC}")
 _spark_objective_lint_spec(_spec_ok _spec_reason)
@@ -758,7 +824,7 @@ foreach(_phase IN LISTS SPARK_OBJECTIVE_PHASES)
     message(STATUS "Module objective ${SPARK_MODULE_TARGET}: phase ${_phase} "
                    "(${SPARK_OBJECTIVE_${_phase}_SECONDS} s wall clock)")
     execute_process(
-        COMMAND "${CMAKE_COMMAND}" -E env
+        COMMAND ${_launcher}
             ${_user_env}
             "SPARK_RHI_BACKEND=null"
             "${_engine}"
@@ -785,6 +851,14 @@ foreach(_phase IN LISTS SPARK_OBJECTIVE_PHASES)
     endif()
     _spark_objective_check_phase("${_phase}" "${_result}" "${_stdout}" "${_stderr}" "${_audit_content}"
         _phase_ok _phase_reason)
+    if(_phase_ok)
+        _spark_objective_tree_leak("${_stdout}\n${_stderr}\n${_audit_content}" "${_run_root}"
+            "${SPARK_SOURCE_ROOT};${SPARK_ENGINE_BUILD_DIR}" _leak)
+        if(NOT _leak STREQUAL "")
+            set(_phase_ok FALSE)
+            set(_phase_reason "output names the source or build tree: ${_leak}")
+        endif()
+    endif()
     if(NOT _phase_ok)
         message(FATAL_ERROR
             "Installed ${SPARK_MODULE_TARGET} objective phase '${_phase}' failed: ${_phase_reason}\n"
