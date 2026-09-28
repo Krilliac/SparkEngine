@@ -4952,6 +4952,15 @@ if(Python3_Interpreter_FOUND)
             LABELS "readiness;site-data;unit;python"
             TIMEOUT 180)
 
+        # RDY-000: two clean generate.py runs produce byte-identical bundles; the
+        # comparator's own mutation cases prove a one-byte or file-set drift fails.
+        add_test(
+            NAME site-data-generation-determinism
+            COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_generation_determinism.py)
+        set_tests_properties(site-data-generation-determinism PROPERTIES
+            LABELS "readiness;site-data;python;slow"
+            TIMEOUT 900)
+
         # DOC-400: docs/site/content.json and docs-catalog.json carry no hardcoded
         # count, commit SHA, CI run ID, or version literal; mutable claims must
         # reference bundle metric identifiers. validate.py enforces the same rule.
