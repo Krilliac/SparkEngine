@@ -44,9 +44,21 @@ entries, so a required job still compares the baselines; promotion excludes them
 there and makes `golden-linux` the single comparison. If Ubuntu moves Mesa,
 re-render and re-review the baselines as described below.
 
-The `d3d11-warp` and `d3d11-hw` rows have no entries, so their comparisons
-fail closed. D3D11 baselines land with the RHI-210 golden slices, each
-rendered on its real row and reviewed.
+- `d3d11-warp/`: `PostPass_TonemapACES`, `PostPass_Bloom`, `PostPass_FXAA`
+  and `PostPass_GTAO`, the production `PostProcessingPipeline` passes (embedded
+  HLSL) rendered one at a time on WARP (`d3d10warp.dll` 10.0.26100.9278,
+  Windows build 26200) by `Tests/TestRHI210D3D11PassGoldenReal.cpp` (RHI-210,
+  CTest `D3D11PassGolden`; the main `SparkEngineTests` entry excludes
+  `D3D11PassGolden_`). Review record: the CPU probes pass; a one-constant
+  mutation of each shader (ACES coefficient, bloom Gaussian weight, FXAA
+  direction reduce, GTAO visibility scale) fails its golden with a pixel
+  verdict; the same scenes rendered on a local RTX 5070 Ti differ from the WARP
+  frames by at most 1.73 (mean at most 0.06), inside the per-pixel threshold of
+  2. `build-windows-vs2022` compares them on the hosted `windows-2022` WARP, where
+  a match is not yet recorded. They are engine-pass evidence for four passes,
+  not the canonical-content goldens or hardware certification.
+
+The `d3d11-hw` row has no entries, so its comparisons fail closed.
 
 ## Fail-closed rules
 

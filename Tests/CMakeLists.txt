@@ -1144,6 +1144,7 @@ target_sources(SparkTests PRIVATE
     TestLIFE200ModuleReloadLoopReal.cpp
     TestD3D11DeviceContractsReal.cpp
     TestRHI210D3D11GoldenReal.cpp
+    TestRHI210D3D11PassGoldenReal.cpp
     TestRHI210D3D11ValidationReal.cpp
     TestRHI210D3D11DeviceLossReal.cpp
     TestSEC2RenderingHardeningReal.cpp
@@ -2720,6 +2721,19 @@ if(WIN32)
         LABELS "d3d11-golden;d3d11;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 60)
+    # RHI-210: the production PostProcessingPipeline passes (ACES tonemap, bloom,
+    # FXAA, GTAO) on WARP, compared with the d3d11-warp baselines and reviewed
+    # thresholds in Tests/GoldenImages/manifest.json (owner review pending). The
+    # device is always WARP, so exactly this lane compares them; the main suite
+    # excludes the family.
+    add_test(NAME D3D11PassGolden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11PassGolden PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI210D3D11PassGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=5;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "d3d11-golden;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+    spark_exclude_from_main_suite(D3D11PassGolden_)
     add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(D3D11_Resource PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=D3D11_Resource_;SPARK_TEST_EXPECT_COUNT=3"

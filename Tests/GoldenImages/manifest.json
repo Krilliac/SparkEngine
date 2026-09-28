@@ -99,6 +99,42 @@
       "tolerancePercent": 0.5,
       "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; owner review pending)",
       "baselineSha256": "5e4cb97dc705e0c5b52d86950b6f39842415da9de2bab6b094198e0b03246b0a"
+    },
+    {
+      "scene": "PostPass_TonemapACES",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; CPU-reference probes and one-constant shader mutations checked; RTX 5070 Ti render of the same scene within max distance 1.73, mean 0.06; owner review pending)",
+      "baselineSha256": "cb5aa37c85264e1cc865fead6b445c329793617ef096ebf90a7fcbc350718505"
+    },
+    {
+      "scene": "PostPass_Bloom",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; CPU-reference probes and one-constant shader mutations checked; RTX 5070 Ti render of the same scene within max distance 1.73, mean 0.06; owner review pending)",
+      "baselineSha256": "71f77c897ac55197b3da43aba9a075b96d13d8a0b1cbd8cde6c88e348a2a787a"
+    },
+    {
+      "scene": "PostPass_FXAA",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; CPU-reference probes and one-constant shader mutations checked; RTX 5070 Ti render of the same scene within max distance 1.73, mean 0.06; owner review pending)",
+      "baselineSha256": "789ce42679bc77b2ad00f06d2e5fa795f27324aebeb4710b767c805796c14f9f"
+    },
+    {
+      "scene": "PostPass_GTAO",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; CPU-reference probes and one-constant shader mutations checked; RTX 5070 Ti render of the same scene within max distance 1.73, mean 0.06; owner review pending)",
+      "baselineSha256": "d15241aa15b839be8b9185ad51bfc549b6ce89f5a346a17e6444cf781ab43392"
     }
   ]
 }

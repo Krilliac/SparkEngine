@@ -268,7 +268,7 @@ class GoldenManifestLiveTests(unittest.TestCase):
         entries, errors = load_manifest(GOLDEN_ROOT)
         self.assertEqual([], errors)
         rows = {entry["backendRow"] for entry in entries}
-        self.assertEqual({"opengl-llvmpipe", "vulkan-lavapipe"}, rows)
+        self.assertEqual({"d3d11-warp", "opengl-llvmpipe", "vulkan-lavapipe"}, rows)
         self.assertEqual(len(entries), len(list(GOLDEN_ROOT.rglob("*.png"))))
 
 
