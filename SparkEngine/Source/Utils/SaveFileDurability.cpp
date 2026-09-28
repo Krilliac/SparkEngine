@@ -206,6 +206,24 @@ namespace Spark::SaveFileDurability
                 return true;
             }
 
+            /// Close without flushing to stable storage, reporting a failed close. For snapshots
+            /// that are atomic against a killed process but deliberately not durable.
+            bool Close(std::error_code& error)
+            {
+#if defined(_WIN32)
+                const bool closed = ::CloseHandle(m_handle) != FALSE;
+                m_handle = INVALID_HANDLE_VALUE;
+                if (!closed)
+                    error = LastWindowsError();
+#else
+                const bool closed = ::close(m_fd) == 0;
+                m_fd = -1;
+                if (!closed)
+                    error = LastPosixError();
+#endif
+                return closed;
+            }
+
             /// Close without flushing. Callers close before unlinking a failed staging file:
             /// Windows cannot delete a file while this unshared handle is open.
             void CloseQuietly() noexcept
@@ -477,15 +495,38 @@ namespace Spark::SaveFileDurability
     {
         error.clear();
         const std::filesystem::path staging = UniqueStagingPath(destination);
-        // WriteStagingFile creates the unpredictable name exclusively and never through a link, and removes
-        // it on failure; Publish removes it when the rename does not commit. The destination is never
-        // deleted first, so a failed publish keeps the previous complete snapshot.
-        if (!WriteStagingFile(staging, bytes, error))
+        // CreateStaging creates the unpredictable name exclusively and never through a link. The staging
+        // file is removed on every failure, and the destination is never deleted first, so a failed publish
+        // keeps the previous complete snapshot.
+        //
+        // Nothing is fsynced: callers republish a status snapshot every few hundred milliseconds from a
+        // server tick, where a file plus directory fsync stalls the tick for tens to hundreds of
+        // milliseconds on a busy disk. The rename alone keeps the snapshot atomic against a killed process;
+        // surviving a power loss has no value for a snapshot the next tick replaces.
+        ExclusiveStagingFile file;
+        if (!CreateStaging(file, staging, error))
         {
             if (!error)
                 error = std::make_error_code(std::errc::io_error);
             return false;
         }
-        return Publish(staging, destination, error);
+        if (!file.Write(bytes.data(), bytes.size(), error))
+        {
+            file.CloseQuietly();
+            RemoveQuietly(staging);
+            return false;
+        }
+        if (!file.Close(error))
+        {
+            RemoveQuietly(staging);
+            return false;
+        }
+        std::filesystem::rename(staging, destination, error);
+        if (error)
+        {
+            RemoveQuietly(staging);
+            return false;
+        }
+        return true;
     }
 } // namespace Spark::SaveFileDurability
