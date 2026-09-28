@@ -236,7 +236,25 @@ The stable window lines up with OD-03 (saves and scenes read N-1): a user on the
 previous stable release can still load current data during its fix window.
 No stable-v1 release exists yet, so no stable support window is running.
 
-## Immutable stable and rolling-nightly policy conflict
+Where each term is stated or enforced today:
+
+- Stable and nightly terms are stated in the generated stable notes
+  (`SUPPORT_WINDOW` in `tools/release_notes.py`), and the nightly release body
+  states the 30-day window.
+- The 14-day experimental retention is pinned as `retention-days: 14` on the
+  experimental `build.yml` uploads (`ReleaseProfileRehearsal_ReleaseNotes`).
+- `.github/scripts/prune_expired_nightlies.py` selects nightly releases past
+  30 days: only unique `nightly-<run>-<attempt>-<sha12>` tags that are published,
+  non-draft prereleases. It never selects the legacy `nightly` release, a stable
+  release, a draft, or a malformed tag or timestamp. It is a dry run unless
+  `--apply` is given. Before each delete it re-reads the release and requires the
+  same identity. It deletes only the release and keeps the git tag, so a tag is
+  never reused. It refuses more than `--max-deletions` (default 60) candidates,
+  and any API error exits non-zero. `ReleaseChannelPolicy_Retention` covers it.
+  No workflow job runs it yet, so the 30-day nightly window is not enforced and
+  REL-100's channel criterion stays unmet.
+
+## Immutable stable and nightly publication
 
 Stable publication requires repository immutable releases enabled. All package,
 signature, checksum, SBOM, exact-CI and source/tag checks complete against the
@@ -249,25 +267,27 @@ are public and mutable, the acceptance/recovery helper may quarantine that targe
 as a draft and verify the result. It never infers permission to hide an immutable,
 misidentified, or ambiguous release. Either failure leaves final readiness blocked.
 
-The current rolling-nightly design needs mutable releases, so these two channel
-policies are mutually exclusive today. The policy preflight runs inside the
+Nightly publication is immutable too. `release.yml` sets `RELEASE_IMMUTABLE`
+for both channels. Each nightly run creates a unique tag,
+`nightly-<run>-<attempt>-<sha12>` from `nightly_release_tag.py`, and never moves
+it. The legacy rolling `nightly` release is preserved and never mutated: its
+hide/redraft step is a disabled migration tombstone, and
+`recover_release_publication.py` returns without mutating a uniquely tagged
+nightly. The policy preflight runs inside the
 environment-bound publisher, and each ordinary publication/staging Git push or
 API write checks again in its own call path. The narrowly proven mutable-stable
 quarantine above is a containment exception, not permission to publish under an
 incompatible policy. Draft staging checks before each create, update, asset deletion,
 and upload, instead of delegating multiple unchecked mutations to a release
 action. Policy-flip tests prove that later writes are refused after a compatible
-policy changes. Under immutable policy, nightly fails without hiding, replacing,
-or publishing a release. Its recovery writes also recheck policy. Nightly retains
-mutable redraft recovery and does not run immutable-release verification.
-The workflow never toggles the repository policy automatically.
+policy changes. The legacy recovery writes that remain for the rolling
+`nightly` release still require a mutable policy and refuse otherwise. The
+workflow never toggles the repository policy automatically.
 
-This remains a release blocker in REL-100 and REL-190. Both channels must not be
-described as operational together. A separately reviewed channel migration to
-unique immutable nightly tags or Actions artifacts, or an explicit owner-approved
-channel policy change, is required. OD-17 picks the target: uniquely tagged,
-immutable nightlies kept for 30 days. The workflow has not been migrated to it,
-so the conflict and its REL-100/REL-190 blocker still stand.
+The migration to OD-17's target, uniquely tagged immutable nightlies, is in the
+workflow. No hosted run has yet published both channels under one immutable
+policy, so neither channel is described as operational. The REL-100 and REL-190
+blockers stand until that evidence and the 30-day nightly pruning job exist.
 
 ## Independent verification and final readiness
 
@@ -388,6 +408,10 @@ Contract reference rules and the public numeric-claim ledger added 2026-09-24 fr
 [`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).
 Generated stable release notes (REL-190) added 2026-09-24 from
 [`tools/release_notes.py`](../../tools/release_notes.py).
+Nightly retention selector and the immutable-nightly migration status (REL-100)
+updated 2026-09-28 from
+[`prune_expired_nightlies.py`](../../.github/scripts/prune_expired_nightlies.py)
+and [`release.yml`](../../.github/workflows/release.yml).
 Release tag contract helpers (REL-100) added 2026-09-26 from
 [`stable_release_tag.py`](../../.github/scripts/stable_release_tag.py) and
 [`nightly_release_tag.py`](../../.github/scripts/nightly_release_tag.py).

@@ -5195,6 +5195,19 @@ if(Python3_Interpreter_FOUND)
             TIMEOUT 120)
     endif()
 
+    # REL-100 / OD-17: .github/scripts/prune_expired_nightlies.py selects only
+    # unique nightly prereleases older than 30 days, is a dry run unless
+    # --apply, re-reads each release before deleting it, and fails closed on
+    # API errors or more candidates than --max-deletions. Pure Python with a
+    # mocked API, so it runs on every host.
+    add_test(
+        NAME ReleaseChannelPolicy_Retention
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/.github/scripts/test_prune_expired_nightlies.py -v)
+    set_tests_properties(ReleaseChannelPolicy_Retention PROPERTIES
+        LABELS "release;integrity;python"
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        TIMEOUT 60)
+
     # REL-190: tools/release_qualification.py, which profile-required-gates runs
     # for a versioned candidate: stage readiness, every required item's CI jobs
     # able to block publication, and a well-formed exact-SHA record. The real
