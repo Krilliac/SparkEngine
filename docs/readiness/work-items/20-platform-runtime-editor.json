@@ -899,7 +899,8 @@
         "ctest --test-dir build/macos-metal -L metal --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
-        "Metal_*"
+        "Metal_*",
+        "metal"
       ],
       "requiredCiJobs": [
         "metal-golden",
@@ -936,7 +937,8 @@
         "metal-stress"
       ],
       "plannedTestSelectors": [
-        "Metal_*"
+        "Metal_*",
+        "metal"
       ]
     },
     {

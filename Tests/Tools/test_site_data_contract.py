@@ -2892,6 +2892,63 @@ class SelectorResolutionTests(ContractTestCase):
         self.assertEqual([], errors)
         self.assertEqual([], legacy)
 
+    def test_ctest_filters_must_select_a_registered_label_or_test(self) -> None:
+        for arguments, fragment in (
+            (["-L", "no-such-label", "--no-tests=error"], "ctest -L no-such-label selects no registered label"),
+            (["-R", "^NoSuchTest_X$"], "ctest -R ^NoSuchTest_X$ selects no registered test"),
+            # A ${}-built name admits only its own literal parts.
+            (["-R", "^TerrafrontMultiClientX$"], "selects no registered test"),
+            (["-R", "(["], "is not a valid regular expression"),
+        ):
+            with self.subTest(arguments=arguments):
+                errors = contract_selectors.ctest_filter_errors(arguments)
+                self.assertEqual(1, len(errors), errors)
+                self.assertIn(fragment, errors[0])
+        for arguments in (
+            ["-R", "^ModuleManifest_SparkGameRTS_RTSSkirmish$"],  # module.json tests.prefixes
+            ["-R", "^TerrafrontMultiClient_VehicleLifecycle$"],  # NAME TerrafrontMultiClient_${_tf_name}
+            ["-R", "BackupRestore"],  # foreach item "Persistence_BackupRestore_=7"
+            ["--tests-regex=^Persistence_RecoveryDrill$"],
+            ["-L", "module-package-run"],  # label list passed to spark_add_module_objective_test
+            ["-L", "recovery-drill", "-LE", "no-such-label", "-E", "NoSuchTest"],  # exclusions need not match
+            ["-R", "$TEST_NAME"],  # shell placeholder, not resolvable
+        ):
+            with self.subTest(arguments=arguments):
+                self.assertEqual([], contract_selectors.ctest_filter_errors(arguments))
+
+    def test_unregistered_ctest_filter_is_accepted_only_as_planned_debt(self) -> None:
+        self.assertEqual(1, len(contract_selectors.ctest_filter_errors(["-L", "metal"])))
+        self.assertEqual(1, len(contract_selectors.ctest_filter_errors(["-L", "metal"], ["Metal_*"])))
+        self.assertEqual([], contract_selectors.ctest_filter_errors(["-L", "metal"], ["Metal_*", "metal"]))
+        self.assertEqual(
+            [], contract_selectors.ctest_filter_errors(["-R", "MMOIntegratedWorld"], ["MMOIntegratedWorld_*"])
+        )
+
+    def test_work_item_ctest_filters_that_select_nothing_are_rejected(self) -> None:
+        # The contract before CI-110: a label no test carries and two filters
+        # whose tests do not exist yet, undeclared.
+        items = self.items_of(self.mutable)
+        commands = items["RDY-020"]["commands"]
+        index = next(i for i, command in enumerate(commands) if " -L asset " in command)
+        commands[index] = " -L profile-package ".join(commands[index].split(" -L asset "))
+        for identifier, selector in (("RHI-220", "metal"), ("MOD-320", "MMOIntegratedWorld_*")):
+            items[identifier]["testSelectors"].remove(selector)
+            items[identifier]["plannedTestSelectors"].remove(selector)
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_work_items()
+        ctest_errors = sorted(error for error in validator.errors if "selects no registered" in error)
+        self.assertEqual(
+            [
+                "workItems.MOD-320.commands[0]: ctest -R MMOIntegratedWorld selects no registered test; "
+                "fix it or declare it in plannedTestSelectors",
+                f"workItems.RDY-020.commands[{index}]: ctest -L profile-package selects no registered label; "
+                "fix it or declare it in plannedTestSelectors",
+                "workItems.RHI-220.commands[0]: ctest -L metal selects no registered label; "
+                "fix it or declare it in plannedTestSelectors",
+            ],
+            ctest_errors,
+        )
+
     def test_product_directory_ctest_registrations_resolve(self) -> None:
         # OPS-100's crash selectors are registered in SparkCrashReporter/CMakeLists.txt,
         # not Tests/CMakeLists.txt; a resolver blind to product directories

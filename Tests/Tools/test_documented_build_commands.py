@@ -306,6 +306,16 @@ class DocumentedCommandRules(unittest.TestCase):
         elsewhere = fenced("git clone https://example.invalid/SparkEngine.git\ncd Other\n./build.sh release")
         self.assertEqual(len(self.findings(elsewhere + fenced("ctest --test-dir build"))), 1)
 
+    def test_ctest_filters_in_shell_blocks_must_select_registered_tests(self):
+        missing = self.findings(fenced("ctest --test-dir build/linux-gcc-release -L no-such-label --no-tests=error"))
+        self.assertEqual(1, len(missing), missing)
+        self.assertIn("ctest -L no-such-label selects no registered label", missing[0])
+        self.assertEqual(
+            [], self.findings(fenced("ctest --test-dir build/linux-gcc-release -L persistence --no-tests=error"))
+        )
+        # Inline spans in prose are often schematic (`ctest -R ^Name$`); only shell blocks are commands.
+        self.assertEqual([], self.findings("Run `ctest --test-dir build/linux-gcc-release -R ^Name$`.\n"))
+
     def test_line_numbers_point_at_the_command(self):
         text = "Intro\n\n```bash\ncmake --preset linux-gcc-release\n\ncmake --build build\n```\n"
         findings = documented_commands.check_text("doc.md", text, self.index)

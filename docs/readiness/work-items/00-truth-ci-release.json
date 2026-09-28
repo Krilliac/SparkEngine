@@ -397,7 +397,7 @@
         "python3 tools/site-data/validate.py --assets",
         "python3 Tests/Tools/test_asset_integrity.py",
         "python3 Tests/Tools/test_asset_package_profile.py",
-        "ctest --test-dir build/windows-release -C Release -L profile-package --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L asset --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "AssetManifest_*",

@@ -981,7 +981,8 @@
       "testSelectors": [
         "MMOAccount_*",
         "MMOWorld_*",
-        "MMOPersistence_*"
+        "MMOPersistence_*",
+        "MMOIntegratedWorld_*"
       ],
       "requiredCiJobs": [
         "module-MMO-integration"
@@ -1016,7 +1017,8 @@
         "module-MMO-integration"
       ],
       "plannedTestSelectors": [
-        "MMOAccount_*"
+        "MMOAccount_*",
+        "MMOIntegratedWorld_*"
       ]
     },
     {

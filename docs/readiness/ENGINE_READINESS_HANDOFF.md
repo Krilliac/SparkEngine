@@ -660,7 +660,7 @@ python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.int
 python3 tools/site-data/validate.py --assets
 python3 Tests/Tools/test_asset_integrity.py
 python3 Tests/Tools/test_asset_package_profile.py
-ctest --test-dir build/windows-release -C Release -L profile-package --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L asset --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3637,7 +3637,7 @@ ctest --test-dir build/linux-gcc-release -R MMOIntegratedWorld --output-on-failu
 
 **Automated evidence**
 
-- Test selectors: `MMOAccount_*`, `MMOWorld_*`, `MMOPersistence_*`
+- Test selectors: `MMOAccount_*`, `MMOWorld_*`, `MMOPersistence_*`, `MMOIntegratedWorld_*`
 - Required CI jobs: `module-MMO-integration`
 - Performance / reliability budgets:
   - Two-client world/persistence budgets
@@ -4923,7 +4923,7 @@ ctest --test-dir build/macos-metal -L metal --output-on-failure --no-tests=error
 
 **Automated evidence**
 
-- Test selectors: `Metal_*`
+- Test selectors: `Metal_*`, `metal`
 - Required CI jobs: `metal-golden`, `metal-stress`
 - Performance / reliability budgets:
   - Metal budgets from PERF-100

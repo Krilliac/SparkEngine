@@ -32,8 +32,9 @@ from common import (
     read_bytes_stable,
     tracked_paths,
 )
-from contract_selectors import (WorkflowJob, cmake_preset_index, preset_references, required_gate_jobs,
-                                resolve_ci_job, resolve_test_selector, workflow_jobs)
+from contract_selectors import (WorkflowJob, cmake_preset_index, command_tokens, ctest_filter_errors,
+                                preset_references, required_gate_jobs, resolve_ci_job, resolve_test_selector,
+                                workflow_jobs)
 from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
@@ -2756,6 +2757,9 @@ class Validator:
             for key in WORK_ITEM_LIST_KEYS:
                 self.require(isinstance(item.get(key), list), location, f"{key} must be an array")
             commands = item.get("commands", [])
+            planned_selectors = [
+                value for value in item.get("plannedTestSelectors") or [] if isinstance(value, str)
+            ]
             if isinstance(commands, list):
                 for index, command in enumerate(commands):
                     command_location = f"{location}.commands[{index}]"
@@ -2782,6 +2786,9 @@ class Validator:
                                 "executable CTest commands must include --no-tests=error "
                                 "unless they are --show-only=json-v1 discovery commands",
                             )
+                            # CI-110: -L/-R must select something registered, or be declared debt.
+                            for message in ctest_filter_errors(command_tokens(arguments), planned_selectors):
+                                self.error(command_location, message)
             if isinstance(commands, list):
                 self.validate_work_item_presets(identifier, commands, location, planned_preset_uses)
             for dependency in item.get("dependencies", []):

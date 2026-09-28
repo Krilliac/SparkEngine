@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import fnmatch
 import functools
+import json
 import os
 import re
 import shlex
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from common import REPO_ROOT, SiteDataError, read_bytes_stable
 
@@ -288,6 +289,176 @@ def resolve_test_selector(value: str) -> bool:
     return any(fnmatch.fnmatchcase(target, value) for target in targets)
 
 
+# CI-110: what `ctest -L` and `ctest -R` can select. Unlike test_selector_targets
+# this holds CTest names and labels only (ctest never sees SparkTests TEST names),
+# kept apart because -L matches labels and -R matches names.
+_ADD_TEST_NAME = re.compile(r"\bNAME\s+\"?([^\s\")]+)")
+_LABELS_PROPERTY = re.compile(r"\bLABELS\s+(?:\"([^\"]*)\"|([A-Za-z0-9_.;\-]+))")
+_HELPER_CALL = re.compile(r"(?<![\w(])(spark_add_\w*test)\s*\(")
+_QUOTED = re.compile(r"\"([^\"]*)\"")
+_CMAKE_VARIABLE = re.compile(r"\$\{[^}]*\}")
+_LITERAL_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_.\-]*")
+# Quoted foreach-list items that become CTest names: "Prefix_=<count>" (the
+# name drops the trailing underscores) and "Name|Module|label|timeout".
+_PREFIX_COUNT_ITEM = re.compile(r"([A-Za-z][A-Za-z0-9_]*?)_+=(?:\d+|\$\{\w+\})")
+_PIPE_ITEM = re.compile(r"([A-Za-z][A-Za-z0-9_]*)\|[^|]+\|[^|]*(?:\|[^|]*)*")
+_CTEST_PLACEHOLDER = re.compile(r"\$[A-Za-z{(]|<[A-Za-z]|%[A-Za-z]")
+
+
+@dataclass(frozen=True)
+class CTestRegistry:
+    """CTest labels and names registered by first-party CMake, statically.
+
+    A lower bound read from source, not from a configured tree: literal
+    ``LABELS`` values and ``;``-lists passed to ``spark_add_*test`` helpers,
+    literal ``NAME`` values, ``ModuleManifest_<Module>_<prefix>`` names expanded
+    from each module.json, and quoted foreach-list items shaped like the ones
+    those loops turn into names. A ``NAME`` built from ``${...}`` around a
+    literal part is kept as a glob (``TerrafrontMultiClient_*``).
+    """
+
+    labels: frozenset[str]
+    names: frozenset[str]
+    name_patterns: frozenset[str]
+
+
+def _call_body(text: str, start: int) -> str:
+    """Text of a CMake call from its opening parenthesis to the balancing one."""
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "(":
+            depth += 1
+        elif text[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return text[start + 1:index]
+    return text[start + 1:]
+
+
+def _label_list(value: str) -> set[str]:
+    return {label.strip() for label in value.split(";") if label.strip() and "$" not in label}
+
+
+@functools.lru_cache(maxsize=1)
+def ctest_registry() -> CTestRegistry:
+    labels: set[str] = set()
+    names: set[str] = set()
+    patterns: set[str] = set()
+    for path in test_registration_files():
+        if path.is_symlink() or not path.is_file():
+            continue
+        display = path.relative_to(REPO_ROOT).as_posix()
+        cmake = read_bytes_stable(path, MAX_TEST_SOURCE_BYTES, display).decode("utf-8", errors="replace")
+        if "add_test(" not in cmake:
+            continue
+        for match in _LABELS_PROPERTY.finditer(cmake):
+            labels.update(_label_list(match.group(1) if match.group(1) is not None else match.group(2)))
+        for match in _ADD_TEST_NAME.finditer(cmake):
+            token = match.group(1)
+            if "${" not in token:
+                names.add(token)
+                continue
+            pattern = _CMAKE_VARIABLE.sub("*", token)
+            if any(character.isalnum() for character in pattern):
+                patterns.add(pattern)
+        # The lookbehind skips the helper's own function(...) definition.
+        for match in _HELPER_CALL.finditer(cmake):
+            body = _call_body(cmake, match.end() - 1)
+            arguments = body.split()
+            if arguments and _LITERAL_NAME.fullmatch(arguments[0]):
+                names.add(arguments[0])
+            for quoted in _QUOTED.findall(body):
+                if ";" in quoted and "=" not in quoted:
+                    labels.update(_label_list(quoted))
+        for quoted in _QUOTED.findall(cmake):
+            item = _PREFIX_COUNT_ITEM.fullmatch(quoted) or _PIPE_ITEM.fullmatch(quoted)
+            if item:
+                names.add(item.group(1))
+    for manifest in sorted((REPO_ROOT / "GameModules").glob("*/module.json")):
+        if not (manifest.parent / "CMakeLists.txt").is_file():
+            continue
+        display = manifest.relative_to(REPO_ROOT).as_posix()
+        try:
+            data = json.loads(read_bytes_stable(manifest, MAX_TEST_SOURCE_BYTES, display))
+        except ValueError as error:
+            raise SiteDataError(f"{display}: {error}") from error
+        prefixes = (data.get("tests") or {}).get("prefixes") or [] if isinstance(data, dict) else []
+        for entry in prefixes:
+            prefix = entry.get("prefix") if isinstance(entry, dict) else None
+            if isinstance(prefix, str) and prefix.strip("_"):
+                names.add(f"ModuleManifest_{manifest.parent.name}_{prefix.rstrip('_')}")
+    if not labels or not names:
+        raise SiteDataError("no CTest label or name registration could be resolved")
+    return CTestRegistry(frozenset(labels), frozenset(names), frozenset(patterns))
+
+
+def _pattern_admits(core: str, left: bool, right: bool, pattern: str) -> bool:
+    """Whether a literal ``-R`` value can match some name a ``${...}`` glob stands for."""
+    if left and right:
+        return fnmatch.fnmatchcase(core, pattern)
+    head, tail = pattern.split("*")[0], pattern.split("*")[-1]
+    if core in pattern.replace("*", ""):
+        return True
+    if not right and head and (core.startswith(head) or (left and head.startswith(core))):
+        return True
+    return not left and bool(tail) and (core.endswith(tail) or (right and tail.endswith(core)))
+
+
+def _selects(value: str, pattern: re.Pattern[str], registered: frozenset[str], globs: frozenset[str]) -> bool:
+    if any(pattern.search(candidate) for candidate in registered):
+        return True
+    left, right = value.startswith("^"), value.endswith("$")
+    core = value[1 if left else 0:len(value) - 1 if right else len(value)]
+    if not _LITERAL_NAME.fullmatch(core):
+        return False
+    return any(_pattern_admits(core, left, right, glob) for glob in globs)
+
+
+def ctest_filter_errors(arguments: list[str], planned: Iterable[str] = ()) -> list[str]:
+    """Why each ``-L``/``-R`` filter in one ctest invocation's arguments selects nothing.
+
+    ``-LE``/``-E`` exclude and need not match. A filter whose value, without
+    ``^``/``$``, occurs in a planned selector (``*`` removed) is declared debt.
+    Values holding shell or document placeholders are skipped.
+    """
+    registry = ctest_registry()
+    planned_text = [entry.replace("*", "") for entry in planned]
+    errors: list[str] = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        index += 1
+        kind = None
+        for flag, flag_kind in (("-L", "label"), ("--label-regex", "label"), ("-R", "name"), ("--tests-regex", "name")):
+            if argument == flag:
+                kind, value = flag_kind, arguments[index] if index < len(arguments) else None
+                index += 1
+            elif flag.startswith("--") and argument.startswith(flag + "="):
+                kind, value = flag_kind, argument[len(flag) + 1:]
+            if kind:
+                break
+        if kind is None or not value or _CTEST_PLACEHOLDER.search(value):
+            continue
+        flag = "-L" if kind == "label" else "-R"
+        try:
+            compiled = re.compile(value)
+        except re.error as error:
+            errors.append(f"ctest {flag} {value} is not a valid regular expression ({error})")
+            continue
+        if kind == "label":
+            found = _selects(value, compiled, registry.labels, frozenset())
+        else:
+            found = _selects(value, compiled, registry.names, registry.name_patterns)
+        stripped = value.strip("^$")
+        if found or any(stripped and re.search(re.escape(stripped), entry) for entry in planned_text):
+            continue
+        noun = "label" if kind == "label" else "test"
+        errors.append(
+            f"ctest {flag} {value} selects no registered {noun}; fix it or declare it in plannedTestSelectors"
+        )
+    return errors
+
+
 _CMAKE_TOOL = re.compile(r"^(?:.*[/\\])?(cmake|ctest|cpack)(?:\.exe)?$", re.IGNORECASE)
 _BUILD_TESTS_ON = re.compile(r"^-D\s*BUILD_TESTS(?::BOOL)?=(?:ON|TRUE|YES|Y|1)$", re.IGNORECASE)
 # CMake's false constants (if() semantics); an unset BUILD_TESTS keeps the
@@ -313,7 +484,7 @@ class PresetReference:
     enables_tests: bool = False
 
 
-def _command_tokens(segment: str) -> list[str]:
+def command_tokens(segment: str) -> list[str]:
     try:
         return shlex.split(segment, posix=True)
     except ValueError:
@@ -339,7 +510,7 @@ def preset_references(command: str) -> list[PresetReference]:
     """
     references: list[PresetReference] = []
     for segment in re.split(r"[;&|\r\n]+", command):
-        tokens = [token.lstrip("$(!").rstrip(")") for token in _command_tokens(segment)]
+        tokens = [token.lstrip("$(!").rstrip(")") for token in command_tokens(segment)]
         start = next((index for index, token in enumerate(tokens) if _CMAKE_TOOL.match(token)), None)
         if start is None:
             continue
@@ -518,6 +689,7 @@ def reset_caches() -> None:
     workflow_jobs.cache_clear()
     test_selector_targets.cache_clear()
     resolve_test_selector.cache_clear()
+    ctest_registry.cache_clear()
     cmake_preset_index.cache_clear()
 
 

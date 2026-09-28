@@ -32,6 +32,8 @@ Rules, per documented invocation:
   multi-config unless its condition pins a non-Windows host. ``cmake --install``
   and ``cpack`` fall back to Release there, so they may omit it only for a Release
   preset. A stated configuration must always match the preset's.
+* In a fenced shell block, every ``ctest -L``/``-R`` filter must select a label or
+  test that first-party CMake registers (``contract_selectors.ctest_filter_errors``).
 
 Tree paths that are placeholders (``$VAR``, ``<dir>``, ``%DIR%``, ``~``) or absolute
 are not resolvable and are skipped rather than guessed.
@@ -48,7 +50,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from common import REPO_ROOT, SiteDataError, read_bytes_stable
-from contract_selectors import CMakePresetIndex, cmake_preset_index
+from contract_selectors import CMakePresetIndex, cmake_preset_index, ctest_filter_errors
 
 # Hand-written Markdown that documents how to build, test, or package the engine:
 # every root-level page (README, CLAUDE.md, TROUBLESHOOTING.md, CONTRIBUTING.md,
@@ -125,6 +127,8 @@ class _DocumentState:
     cwd: str | None = None
     # Directory a documented `git clone` of the repository creates; `cd` into it is the repository root.
     clone_dir: str | None = None
+    # Inside a fenced shell block rather than an inline code span in prose.
+    fenced: bool = False
 
 
 def documented_markdown(root: Path = REPO_ROOT) -> list[Path]:
@@ -334,6 +338,7 @@ class _Checker:
             state.block_presets = []
             state.block_adhoc = False
             state.cwd = None
+            state.fenced = bool(block.language)
             for line_number, command in block.commands:
                 if block.language in WINDOWS_LANGUAGES:
                     command = command.replace("\\", "/")
@@ -375,6 +380,10 @@ class _Checker:
             state.cwd = UNRESOLVED_CWD if resolved is None else (resolved or None)
             return
         tool = _TOOL.match(tokens[position]).group(1).lower()
+        # CI-110: a documented `ctest -L`/`-R` must select a registered label or test.
+        if tool == "ctest" and state.fenced:
+            for message in ctest_filter_errors(tokens[position + 1:]):
+                self.report(line, message)
         parsed = _parse(tool, tokens[position + 1:])
         mode = parsed["mode"]
         if mode == "other":
