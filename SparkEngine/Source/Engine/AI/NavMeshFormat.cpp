@@ -185,12 +185,12 @@ namespace Spark::AI
 
             // Every NavMeshQuery indexes vertices[indices[k]]; an index past the vertex array is a
             // corrupt mesh, not a triangle to skip.
-            for (uint32_t k = 0; k < 3; ++k)
+            for (const uint32_t index : tri.indices)
             {
-                if (tri.indices[k] >= vertexCount)
+                if (index >= vertexCount)
                 {
-                    error = std::format("triangle {} names vertex {} but the mesh has {} vertices", t, tri.indices[k],
-                                        vertexCount);
+                    error =
+                        std::format("triangle {} names vertex {} but the mesh has {} vertices", t, index, vertexCount);
                     return false;
                 }
             }
@@ -253,12 +253,10 @@ namespace Spark::AI
             for (size_t j = i + 1; j < navMesh.triangles.size(); ++j)
             {
                 int shared = 0;
-                for (int ei = 0; ei < 3; ++ei)
+                for (const uint32_t viIdx : navMesh.triangles[i].indices)
                 {
-                    for (int ej = 0; ej < 3; ++ej)
+                    for (const uint32_t vjIdx : navMesh.triangles[j].indices)
                     {
-                        const uint32_t viIdx = navMesh.triangles[i].indices[ei];
-                        const uint32_t vjIdx = navMesh.triangles[j].indices[ej];
                         if (viIdx >= vertexCount || vjIdx >= vertexCount)
                         {
                             continue;
@@ -276,19 +274,19 @@ namespace Spark::AI
                 {
                     continue;
                 }
-                for (int e = 0; e < 3; ++e)
+                for (uint32_t& link : navMesh.triangles[i].neighborTriangles)
                 {
-                    if (navMesh.triangles[i].neighborTriangles[e] == UINT32_MAX)
+                    if (link == UINT32_MAX)
                     {
-                        navMesh.triangles[i].neighborTriangles[e] = static_cast<uint32_t>(j);
+                        link = static_cast<uint32_t>(j);
                         break;
                     }
                 }
-                for (int e = 0; e < 3; ++e)
+                for (uint32_t& link : navMesh.triangles[j].neighborTriangles)
                 {
-                    if (navMesh.triangles[j].neighborTriangles[e] == UINT32_MAX)
+                    if (link == UINT32_MAX)
                     {
-                        navMesh.triangles[j].neighborTriangles[e] = static_cast<uint32_t>(i);
+                        link = static_cast<uint32_t>(i);
                         break;
                     }
                 }
