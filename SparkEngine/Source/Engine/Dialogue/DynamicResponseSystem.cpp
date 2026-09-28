@@ -21,6 +21,7 @@ namespace Spark::Dialogue
     {
         m_variables.clear();
         m_rules.clear();
+        m_unmatchedSignalsReported.clear();
         m_actionScheduler.ClearAll();
         m_gameTime = 0.0f;
         m_initialized = true;
@@ -33,6 +34,7 @@ namespace Spark::Dialogue
                        m_rules.size(), m_variables.size());
         m_variables.clear();
         m_rules.clear();
+        m_unmatchedSignalsReported.clear();
         m_actionScheduler.ClearAll();
         m_initialized = false;
     }
@@ -105,7 +107,8 @@ namespace Spark::Dialogue
             ~DepthGuard() { --depth; }
         } depthGuard{s_signalDepth};
 
-        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "DynamicResponseSystem: signal '%s' from entity %u",
+        // Trace: one line per signal, and gameplay raises one per destroyed object, hit, etc.
+        SPARK_LOG_TRACE(Spark::LogCategory::Core, "DynamicResponseSystem: signal '%s' from entity %u",
                         signalName.c_str(), senderEntity);
 
         // Find all rules matching this signal, pick highest priority that passes conditions
@@ -139,9 +142,15 @@ namespace Spark::Dialogue
 
         if (bestRule == nullptr)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core,
-                           "DynamicResponseSystem: no matching rule for signal '%s' — executing default response",
-                           signalName.c_str());
+            // Once per signal name: an unauthored signal repeats every time gameplay raises it
+            // (27,000 identical warnings in one destruction stress test).
+            if (m_unmatchedSignalsReported.insert(signalName).second)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "DynamicResponseSystem: no matching rule for signal '%s' — executing default response "
+                               "(reported once per signal)",
+                               signalName.c_str());
+            }
             // Execute a default fallback action so the caller gets a response
             ResponseAction fallback;
             fallback.type = ResponseAction::Type::Speak;
@@ -254,7 +263,7 @@ namespace Spark::Dialogue
 
     void DynamicResponseSystem::ExecuteAction(const ResponseAction& action, uint32_t senderEntity)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "DynamicResponseSystem: executing action type %d for entity %u",
+        SPARK_LOG_TRACE(Spark::LogCategory::Core, "DynamicResponseSystem: executing action type %d for entity %u",
                         static_cast<int>(action.type), senderEntity);
         switch (action.type)
         {
