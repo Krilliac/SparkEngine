@@ -2023,3 +2023,255 @@ set_tests_properties(FuzzSparkTerrainSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# DataTable's CSV/JSON loaders are header-only production code. Logger.cpp
+# provides the shipped logging path used by parser diagnostics.
+add_executable(SparkFuzzDataTable
+    FuzzDataTable.cpp
+    FuzzDataTableProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzDataTableProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzDataTable PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzDataTable PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzDataTable PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzDataTable PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzDataTable PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzDataTable PRIVATE Threads::Threads c++ c++abi)
+
+# The 8 MiB + 1 regression seed reaches the production cap instead of being
+# dropped at the harness boundary; the malformed JSON seed checks full parse.
+add_test(
+    NAME FuzzDataTableSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzDataTable>
+        -max_len=8388609
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/datatable-system"
+)
+set_tests_properties(FuzzDataTableSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# The same extracted wire codec is compiled into the editor and SparkTests.
+# The fuzz target reaches it without pulling in the editor's network session.
+add_executable(SparkFuzzEditorCollaboration
+    FuzzEditorCollaboration.cpp
+    FuzzEditorCollaborationProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Communication/CollaborativeWireCodec.cpp"
+)
+set_source_files_properties(
+    FuzzEditorCollaborationProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Communication/CollaborativeWireCodec.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorCollaboration PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+)
+target_compile_features(SparkFuzzEditorCollaboration PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzEditorCollaboration PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorCollaboration PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorCollaboration PRIVATE Threads::Threads c++ c++abi)
+
+# The five-byte regression frame used to partially publish a rejected decode.
+add_test(
+    NAME FuzzEditorCollaborationSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorCollaboration>
+        -max_len=1048576
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=4
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-collab-session-wire"
+)
+set_tests_properties(FuzzEditorCollaborationSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+add_executable(SparkFuzzLocalization
+    FuzzLocalization.cpp
+    FuzzLocalizationProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Localization/StringTable.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzLocalizationProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Localization/StringTable.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzLocalization PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzLocalization PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzLocalization PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzLocalization PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzLocalization PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzLocalization PRIVATE Threads::Threads c++ c++abi)
+
+# A malformed catalog must preserve a previously loaded table.
+add_test(
+    NAME FuzzLocalizationSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzLocalization>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=6
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/localization-system"
+)
+set_tests_properties(FuzzLocalizationSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# DialogueTreeLoader.cpp is the same parser translation unit used by the
+# engine; the editor/runtime conversation system is outside this link closure.
+add_executable(SparkFuzzDialogue
+    FuzzDialogue.cpp
+    FuzzDialogueProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Dialogue/DialogueTreeLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzDialogueProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Dialogue/DialogueTreeLoader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzDialogue PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzDialogue PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzDialogue PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzDialogue PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzDialogue PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzDialogue PRIVATE Threads::Threads c++ c++abi)
+
+# The large regression fixture reaches the production 8 MiB file cap.
+add_test(
+    NAME FuzzDialogueSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzDialogue>
+        -max_len=8388609
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=3
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/dialogue-system"
+)
+set_tests_properties(FuzzDialogueSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# MultiplayerNetFlow::HandleSnapshotMessage calls this same bounded decoder.
+add_executable(SparkFuzzFpsSnapshot
+    FuzzFpsSnapshot.cpp
+    FuzzFpsSnapshotProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameFPS/Source/Game/FpsSnapshotCodec.cpp"
+)
+set_source_files_properties(
+    FuzzFpsSnapshotProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameFPS/Source/Game/FpsSnapshotCodec.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzFpsSnapshot PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameFPS/Source"
+)
+target_compile_features(SparkFuzzFpsSnapshot PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzFpsSnapshot PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzFpsSnapshot PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzFpsSnapshot PRIVATE Threads::Threads c++ c++abi)
+
+# Exact packet seeds include the noncanonical boolean and action-bit regressions.
+add_test(
+    NAME FuzzFpsSnapshotSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzFpsSnapshot>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/fps-multiplayer-player-state"
+)
+set_tests_properties(FuzzFpsSnapshotSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

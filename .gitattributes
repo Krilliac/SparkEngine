@@ -73,6 +73,11 @@ FuzzerTests/corpora/asset-service-protocol/** -text
 FuzzerTests/corpora/daemon-protocol-frame/** -text
 FuzzerTests/corpora/daemon-bounded-wire-codec/** -text
 FuzzerTests/corpora/binary-serializer/** -text
+FuzzerTests/corpora/datatable-system/** -text
+FuzzerTests/corpora/editor-collab-session-wire/** -text
+FuzzerTests/corpora/dialogue-system/** -text
+FuzzerTests/corpora/localization-system/** -text
+FuzzerTests/corpora/fps-multiplayer-player-state/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

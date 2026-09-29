@@ -739,6 +739,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerClient.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerCombat.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FpsSnapshotCodec.cpp"
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
@@ -770,6 +771,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManagerInstances.cpp"
     # Editor sources needed by tests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeWireCodec.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/StandaloneCollaborationClient.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
@@ -1447,7 +1449,8 @@ if(ENABLE_NETWORKING)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerClient.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerCombat.cpp"
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp")
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FpsSnapshotCodec.cpp")
     target_compile_features(SparkFPSLANLoopbackPeer PRIVATE cxx_std_23)
     target_include_directories(SparkFPSLANLoopbackPeer PRIVATE
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
@@ -6056,6 +6059,42 @@ target_precompile_headers(SparkTests PRIVATE
     <unordered_map>
     <vector>
 )
+# SEC-120 parser regressions execute the shipped code through SparkTests. The
+# exact-one pin prevents an absent or renamed case from reading as a pass.
+foreach(_spark_sec120_case IN ITEMS
+    DataTable_RejectsOversizedDocumentBeforeParsing
+    DataTable_RejectsTrailingJSONWithoutPartialRows
+    DataTableRegistry_RejectsOversizedValidFileBeforeReading
+    DataTable_NumericLookingStringRoundTripsAsValidJSON
+    DataTable_CsvRoundTripKeepsEmptySingleCellRow
+    DataTable_CsvRoundTripKeepsTrailingCarriageReturn
+    Dialogue_LoadFailureDoesNotPartiallyReplaceTree
+    Dialogue_RejectsOversizedValidDocumentBeforeParsing
+    Dialogue_LoadsCrlfDocument
+    StringTable_MalformedReloadIsTransactional
+    StringTable_LoadAcceptsBomAndMergesEntries
+    FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits
+    FPSMultiplayer_SnapshotDecoderRejectsMalformedRecordWhenBatchIsZero
+)
+    add_test(NAME SEC120_${_spark_sec120_case}
+        COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+    set_tests_properties(SEC120_${_spark_sec120_case} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=${_spark_sec120_case};SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "security;fuzz-regression"
+        TIMEOUT 30)
+endforeach()
+unset(_spark_sec120_case)
+
+# This editor source is compiled into SparkTests only when ImGui is available.
+if(TARGET imgui)
+    add_test(NAME SEC120_Editor_Collab_MalformedFrame_DoesNotPartiallyPublish
+        COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+    set_tests_properties(SEC120_Editor_Collab_MalformedFrame_DoesNotPartiallyPublish PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=Editor_Collab_MalformedFrame_DoesNotPartiallyPublish;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "editor;collaboration;security;fuzz-regression"
+        TIMEOUT 30)
+endif()
+
 get_target_property(_spark_tests_sources SparkTests SOURCES)
 foreach(_spark_tests_source IN LISTS _spark_tests_sources)
     cmake_path(ABSOLUTE_PATH _spark_tests_source BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"

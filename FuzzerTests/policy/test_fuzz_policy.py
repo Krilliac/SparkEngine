@@ -126,6 +126,11 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzDaemonFrame",
     "SparkFuzzDaemonWire",
     "SparkFuzzBinaryReader",
+    "SparkFuzzEditorCollaboration",
+    "SparkFuzzDataTable",
+    "SparkFuzzDialogue",
+    "SparkFuzzLocalization",
+    "SparkFuzzFpsSnapshot",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2075,6 +2080,36 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::BinaryReader::ReadString",
                 "binary-serializer",
                 6,
+            ),
+            "datatable-system": (
+                "DataTable",
+                "Spark::Data::DataTableRegistry::LoadTableFromFile",
+                "datatable-system",
+                7,
+            ),
+            "editor-collab-session-wire": (
+                "EditorCollaboration",
+                "SparkEditor::DeserializeMessage",
+                "editor-collab-session-wire",
+                4,
+            ),
+            "dialogue-system": (
+                "Dialogue",
+                "Spark::DialogueTree::LoadFromFile",
+                "dialogue-system",
+                3,
+            ),
+            "localization-system": (
+                "Localization",
+                "Spark::StringTable::LoadFromFile",
+                "localization-system",
+                6,
+            ),
+            "fps-multiplayer-player-state": (
+                "FpsSnapshot",
+                "SparkFPS::DecodeSnapshotBatch",
+                "fps-multiplayer-player-state",
+                8,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)
