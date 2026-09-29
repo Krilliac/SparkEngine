@@ -7,6 +7,7 @@
  */
 
 #include "Core/Platform.h"
+#include "Core/FPSAssert.h"
 #include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -18,8 +19,6 @@
 
 #include "Game.h"
 #include "ClassSystem.h"
-#include "Utils/Assert.h"
-#include "Utils/Validate.h"
 #include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
@@ -760,7 +759,7 @@ void Game::CreateCombatArena()
     // === LARGE GROUND PLANE (200x200 arena) ===
     {
         auto ground = std::make_unique<PlaneObject>(100.0f, 100.0f);
-        ASSERT(ground);
+        FPS_ASSERT(ground);
         if (SUCCEEDED(ground->Initialize(device, context)))
         {
             ground->SetPosition({0.0f, -1.0f, 0.0f});

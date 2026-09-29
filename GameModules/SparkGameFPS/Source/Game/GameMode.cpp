@@ -7,7 +7,6 @@
 
 #include "GameMode.h"
 #include "Core/FPSLog.h"
-#include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -19,7 +18,6 @@ namespace Spark
 
     bool GameMode::Initialize(const GameModeRules& rules)
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         const bool validRules = rules.scoreLimit >= 0 && rules.roundLimit > 0 && std::isfinite(rules.timeLimit) &&
                                 rules.timeLimit >= 0.0f && std::isfinite(rules.respawnDelay) &&
                                 rules.respawnDelay >= 0.0f && std::isfinite(rules.damageMultiplier) &&
@@ -105,7 +103,6 @@ namespace Spark
 
     void GameMode::StartMatch()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         FPS_LOG_INFO("Starting match");
         m_matchActive = true;
         m_currentRound = 0;
@@ -136,7 +133,6 @@ namespace Spark
 
     void GameMode::EndMatch()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         FPS_LOG_INFO("Ending match");
         m_matchActive = false;
         m_roundState = RoundState::MatchEnd;

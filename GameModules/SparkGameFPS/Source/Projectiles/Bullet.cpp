@@ -2,7 +2,6 @@
 #include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Bullet.cpp
-#include "Utils/Assert.h"
 #include "Utils/Validate.h"
 
 using DirectX::XMFLOAT3;
@@ -24,7 +23,6 @@ Bullet::Bullet()
 
 HRESULT Bullet::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
 
@@ -47,6 +45,10 @@ void Bullet::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
     if (!m_active)
         return;
-    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, m_mesh);
+    if (m_mesh == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'm_mesh' must not be null", __func__);
+        return;
+    }
     Projectile::Render(view, projection);
 }

@@ -28,7 +28,6 @@
 #include "Engine/Events/EventSystem.h"
 #include <Spark/IConsole.h>
 #include <Spark/ModuleLog.h>
-#include "Utils/Validate.h"
 #include "Audio/MusicManager.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
@@ -105,8 +104,11 @@ Spark::ModuleInfo SparkGameModule::GetModuleInfo() const
 
 bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, context, false);
+    if (context == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'context' must not be null", __func__);
+        return false;
+    }
     m_context = context;
     // Every FPS_LOG_*/FPS_CONSOLE call (Core/FPSLog.h) reaches the host through this context until
     // Shutdown or a failed load unbinds it.
@@ -234,14 +236,21 @@ void SparkGameModule::OnImGui()
 
 bool SparkGameModule::InitializeFromContext()
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     if (m_initialized)
         return true; // Prevent double-init
 
     GraphicsEngine* graphics = m_context ? m_context->GetGraphics() : nullptr;
     InputManager* input = m_context ? m_context->GetInput() : nullptr;
-    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, graphics, false);
-    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, input, false);
+    if (graphics == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'graphics' must not be null", __func__);
+        return false;
+    }
+    if (input == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'input' must not be null", __func__);
+        return false;
+    }
 
     Spark::ModuleLog::Info(m_context, "Initializing SparkGameFPS module...");
 
@@ -317,7 +326,6 @@ bool SparkGameModule::InitializeFromContext()
 
 void SparkGameModule::Shutdown()
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     if (!m_initialized)
         return;
 

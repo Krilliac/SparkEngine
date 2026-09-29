@@ -39,7 +39,7 @@ LOCATION = "inventory"
 # Reviewed one-way ceilings for SparkGameFPS (MOD-310 target: zero). Lower them
 # together with the committed inventory whenever headers or copied files are
 # removed; never raise them.
-FPS_PRIVATE_HEADER_CEILING = 42
+FPS_PRIVATE_HEADER_CEILING = 40
 FPS_COPIED_INFRASTRUCTURE_CEILING = 1
 
 

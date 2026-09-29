@@ -1,17 +1,15 @@
 #include "Player.h"
+#include "Core/FPSAssert.h"
 #include "Core/FPSLog.h"
 #include "Core/Platform.h"
 #include "Engine/Security/MemoryIntegrity.h"
 #include "VehicleSystem.h"
 #include "InteractiveObject.h"
-#include "Utils/Assert.h"
-#include "Utils/Validate.h"
 #include "Utils/SparkConsole.h"
 #include "Camera/SparkEngineCamera.h"
 #include "Input/InputManager.h"
 #include "Projectiles/WeaponStats.h"
 #include "Projectiles/ProjectilePool.h"
-#include "Utils/MathUtils.h"
 #include "Game/Model.h"
 #include "FPSAssetPaths.h"
 #include "Graphics/GraphicsEngine.h"
@@ -21,6 +19,7 @@
 #endif // SPARK_PLATFORM_WINDOWS
 #include <cmath>
 #include <iostream>
+#include <random>
 
 using namespace DirectX;
 
@@ -32,12 +31,11 @@ Player::~Player() = default;
 // Constructor
 Player::Player() : m_currentWeapon(GetWeaponStats(WeaponType::PISTOL)), m_collisionSphere(GetPosition(), 0.5f)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     FPS_LOG_INFO("Player constructed");
     FPS_CONSOLE("Player constructed.", "INFO");
     SetName("Player");
     m_currentAmmo = m_currentWeapon.MagazineSize;
-    ASSERT_MSG(m_currentAmmo > 0, "Initial ammo must be positive");
+    FPS_ASSERT_MSG(m_currentAmmo > 0, "Initial ammo must be positive");
 }
 
 // Initialization
@@ -45,8 +43,8 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
                            InputManager* input)
 {
     FPS_CONSOLE("Player::Initialize called.", "OPERATION");
-    ASSERT_NOT_NULL(camera);
-    ASSERT_NOT_NULL(input);
+    FPS_ASSERT_MSG(camera != nullptr, "Pointer camera must not be null");
+    FPS_ASSERT_MSG(input != nullptr, "Pointer input must not be null");
 
     m_camera = camera;
     m_input = input;
@@ -104,10 +102,10 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
     {
         m_ownedProjectilePool = std::make_unique<ProjectilePool>(50);
         m_projectilePool = m_ownedProjectilePool.get();
-        ASSERT_NOT_NULL(m_projectilePool);
+        FPS_ASSERT_MSG(m_projectilePool != nullptr, "Pointer m_projectilePool must not be null");
         hr = m_projectilePool->Initialize(device, context);
         FPS_CONSOLE("Player projectile pool initialized. HR=0x" + std::to_string(hr), "INFO");
-        ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
+        FPS_ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
         if (FAILED(hr))
             return hr;
     }
@@ -119,7 +117,7 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
 void Player::Update(float dt)
 {
     // **FIXED: No per-frame logging to prevent console spam**
-    ASSERT_MSG(dt >= 0.0f && std::isfinite(dt), "Delta time must be non-negative and finite");
+    FPS_ASSERT_MSG(dt >= 0.0f && std::isfinite(dt), "Delta time must be non-negative and finite");
     if (!IsAlive())
         return;
 
@@ -220,7 +218,7 @@ void Player::RenderWeapon(const XMMATRIX& view, const XMMATRIX& proj)
 void Player::TakeDamage(float dmg)
 {
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::TakeDamage called. dmg=" + std::to_string(dmg), "OPERATION");
-    ASSERT_MSG(dmg >= 0.0f, "Damage must be non-negative");
+    FPS_ASSERT_MSG(dmg >= 0.0f, "Damage must be non-negative");
 
     // Check god mode from console integration
     if (m_godModeEnabled)
@@ -296,7 +294,7 @@ void Player::TakeDamage(float dmg)
 void Player::Heal(float amt)
 {
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::Heal called. amt=" + std::to_string(amt), "OPERATION");
-    ASSERT_MSG(amt >= 0.0f, "Heal amount must be non-negative");
+    FPS_ASSERT_MSG(amt >= 0.0f, "Heal amount must be non-negative");
     m_health = std::min(m_maxHealth, m_health + amt);
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player healed. Health=" + std::to_string(m_health), "INFO");
 }
@@ -304,7 +302,7 @@ void Player::Heal(float amt)
 void Player::AddArmor(float amt)
 {
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::AddArmor called. amt=" + std::to_string(amt), "OPERATION");
-    ASSERT_MSG(amt >= 0.0f, "Armor amount must be non-negative");
+    FPS_ASSERT_MSG(amt >= 0.0f, "Armor amount must be non-negative");
     m_armor = std::min(m_maxArmor, m_armor + amt);
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player armor added. Armor=" + std::to_string(m_armor), "INFO");
 }
@@ -348,7 +346,7 @@ void Player::Fire()
     if (!m_infiniteAmmoEnabled && m_currentAmmo <= 0)
         return;
 
-    ASSERT_NOT_NULL(m_projectilePool);
+    FPS_ASSERT_MSG(m_projectilePool != nullptr, "Pointer m_projectilePool must not be null");
     if (!m_camera)
         return;
 
@@ -407,7 +405,7 @@ void Player::ChangeWeapon(WeaponType t)
 void Player::OnHit(GameObject* target)
 {
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::OnHit called.", "OPERATION");
-    ASSERT_NOT_NULL(target);
+    FPS_ASSERT_MSG(target != nullptr, "Pointer target must not be null");
     // Player was hit by target - take a default collision damage, not own weapon damage
     TakeDamage(10.0f);
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player hit by target.", "INFO");
@@ -416,7 +414,8 @@ void Player::OnHit(GameObject* target)
 void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 {
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::OnHitWorld called.", "OPERATION");
-    ASSERT_MSG(std::isfinite(hitPoint.x) && std::isfinite(hitPoint.y) && std::isfinite(hitPoint.z), "Invalid hitPoint");
+    FPS_ASSERT_MSG(std::isfinite(hitPoint.x) && std::isfinite(hitPoint.y) && std::isfinite(hitPoint.z),
+                   "Invalid hitPoint");
     // World collision - no damage from hitting world geometry
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player hit world.", "INFO");
 }
@@ -738,8 +737,11 @@ XMFLOAT3 Player::CalculateFireDirection()
     float spread = (1.0f - m_currentWeapon.Accuracy) * 0.1f;
     if (spread > 0.0f)
     {
-        f.x += MathUtils::RandomFloat(-spread, spread);
-        f.y += MathUtils::RandomFloat(-spread, spread);
+        // Per-thread engine: firing runs on the game thread; headless tests may fire from others.
+        thread_local std::mt19937 spreadEngine{std::random_device{}()};
+        std::uniform_real_distribution<float> spreadDistribution(-spread, spread);
+        f.x += spreadDistribution(spreadEngine);
+        f.y += spreadDistribution(spreadEngine);
         XMVECTOR v = XMVector3Normalize(XMLoadFloat3(&f));
         XMStoreFloat3(&f, v);
     }

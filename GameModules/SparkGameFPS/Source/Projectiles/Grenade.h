@@ -23,7 +23,6 @@
 #include "Core/Platform.h"
 
 #include "Projectile.h"
-#include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS

@@ -2,8 +2,6 @@
 #include "Core/FPSLog.h"
 #include "Core/Platform.h"
 #include "Player.h"
-#include "Utils/Assert.h"
-#include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -34,7 +32,6 @@ namespace Spark
 
     bool DamageZoneSystem::Initialize()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         FPS_LOG_INFO("Initializing DamageZoneSystem");
         m_zones.clear();
         m_damageTickTimer = 0.0f;
@@ -43,7 +40,10 @@ namespace Spark
 
     void DamageZoneSystem::Update(float deltaTime, Player* player)
     {
-        SPARK_WARN_IF(Spark::LogCategory::Game, !player, "DamageZoneSystem::Update called with null player");
+        if (!player)
+        {
+            FPS_LOG_WARN("DamageZoneSystem::Update called with null player");
+        }
         if (!player || !player->IsAlive())
             return;
 

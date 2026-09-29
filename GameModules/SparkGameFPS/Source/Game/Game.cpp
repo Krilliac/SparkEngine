@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "Core/FPSAssert.h"
 #include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -13,7 +14,6 @@
 #include "Game.h"
 #include "ClassSystem.h"
 #include "Core/FaultIsolation.h"
-#include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 #include "Utils/Validate.h"
 #include "Utils/SparkConsole.h"
@@ -78,7 +78,6 @@ Game::~Game()
 --------------------------------------------------------------*/
 HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     FPS_LOG_INFO("Game::Initialize called");
     FPS_CONSOLE("Game::Initialize called.", "INFO");
 
@@ -115,12 +114,12 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     /* Camera ------------------------------------------------*/
     m_camera = std::make_unique<SparkEngineCamera>();
-    ASSERT(m_camera);
+    FPS_ASSERT(m_camera);
 
     UINT winHeight = m_graphics->GetWindowHeight();
     float aspect = (winHeight > 0) ? float(m_graphics->GetWindowWidth()) / float(winHeight)
                                    : 16.0f / 9.0f; // Safe fallback if window is minimized
-    ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
+    FPS_ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
 
     m_camera->Initialize(aspect);
     const SceneNode* authoredCamera = nullptr;
@@ -186,7 +185,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     /* Class System -----------------------------------------*/
     m_classSystem = std::make_unique<Spark::ClassSystem>();
-    ASSERT(m_classSystem);
+    FPS_ASSERT(m_classSystem);
     m_classSystem->Initialize();
     FPS_CONSOLE("Class system initialized with 6 classes", "SUCCESS");
 
@@ -194,29 +193,29 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     // Player and vehicles share this pool so every fired projectile follows
     // the same update, render, collision, and recycling path.
     m_projectilePool = std::make_unique<ProjectilePool>(100);
-    ASSERT(m_projectilePool);
+    FPS_ASSERT(m_projectilePool);
 
     // Initialize unconditionally: on a device-less host the pool populates itself
     // without GPU meshes, so firing still spawns a real projectile. Skipping this call
     // left the injected pool empty and turned every shot into a silent no-op.
     HRESULT hr = m_projectilePool->Initialize(m_renderingEnabled ? m_graphics->GetDevice() : nullptr,
                                               m_renderingEnabled ? m_graphics->GetContext() : nullptr);
-    ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
+    FPS_ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
     if (FAILED(hr))
     {
         std::string errorMsg = "ProjectilePool initialization failed with HR=0x" + std::to_string(hr);
         FPS_CONSOLE(errorMsg, "ERROR");
         return hr;
     }
-    ASSERT_MSG(m_projectilePool->GetAvailableCount() > 0, "ProjectilePool initialized empty - firing would no-op");
+    FPS_ASSERT_MSG(m_projectilePool->GetAvailableCount() > 0, "ProjectilePool initialized empty - firing would no-op");
 
     /* Player -----------------------------------------------*/
     m_player = std::make_unique<Player>();
-    ASSERT(m_player);
+    FPS_ASSERT(m_player);
     m_player->SetProjectilePool(m_projectilePool.get());
 
     hr = m_player->Initialize(m_graphics->GetDevice(), m_graphics->GetContext(), m_camera.get(), m_input);
-    ASSERT_MSG(SUCCEEDED(hr), "Player::Initialize failed");
+    FPS_ASSERT_MSG(SUCCEEDED(hr), "Player::Initialize failed");
     if (FAILED(hr))
     {
         std::string errorMsg = "Player initialization failed with HR=0x" + std::to_string(hr);
@@ -794,7 +793,7 @@ void Game::Render()
 void Game::UpdateCamera(float dt)
 {
     // No logging for per-frame operations
-    ASSERT(dt >= 0.0f);
+    FPS_ASSERT(dt >= 0.0f);
     if (m_camera)
         m_camera->Update(dt);
 }
@@ -803,7 +802,7 @@ void Game::UpdateCamera(float dt)
 void Game::UpdateGameObjects(float dt)
 {
     // No logging for per-frame operations
-    ASSERT(dt >= 0.0f);
+    FPS_ASSERT(dt >= 0.0f);
     for (auto& obj : m_gameObjects)
         if (obj && obj->IsActive())
             obj->Update(dt);
@@ -897,7 +896,7 @@ void Game::CreateTestObjects()
     // Ground plane
     {
         auto ground = std::make_unique<PlaneObject>(20.0f, 20.0f);
-        ASSERT(ground);
+        FPS_ASSERT(ground);
         HRESULT hr = ground->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
@@ -917,7 +916,7 @@ void Game::CreateTestObjects()
     for (int i = 0; i < 5; ++i)
     {
         auto cube = std::make_unique<CubeObject>(1.0f);
-        ASSERT(cube);
+        FPS_ASSERT(cube);
         HRESULT hr = cube->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
@@ -937,7 +936,7 @@ void Game::CreateTestObjects()
     // Single sphere
     {
         auto sphere = std::make_unique<SphereObject>(1.0f, 16, 16);
-        ASSERT(sphere);
+        FPS_ASSERT(sphere);
         HRESULT hr = sphere->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
@@ -956,7 +955,7 @@ void Game::CreateTestObjects()
     {
         // Target practice targets
         auto target1 = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/target.obj"));
-        ASSERT(target1);
+        FPS_ASSERT(target1);
         HRESULT hr = target1->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
@@ -971,7 +970,7 @@ void Game::CreateTestObjects()
         }
 
         auto target2 = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/target.obj"));
-        ASSERT(target2);
+        FPS_ASSERT(target2);
         hr = target2->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
@@ -987,7 +986,7 @@ void Game::CreateTestObjects()
 
         // Character model for testing
         auto character = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/character.obj"));
-        ASSERT(character);
+        FPS_ASSERT(character);
         hr = character->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
@@ -1003,7 +1002,7 @@ void Game::CreateTestObjects()
 
         // Weapon display (rifle on a stand)
         auto weaponDisplay = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/rifle.obj"));
-        ASSERT(weaponDisplay);
+        FPS_ASSERT(weaponDisplay);
         hr = weaponDisplay->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {

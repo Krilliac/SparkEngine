@@ -80,7 +80,7 @@
       "directory": "GameModules/SparkGameFPS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameFPS/Source",
-      "sourceFileCount": 82,
+      "sourceFileCount": 83,
       "moduleLocalContentState": "root-dependent",
       "releaseClassification": "shipping",
       "cmakeDeclarationParseError": false,
@@ -144,15 +144,13 @@
         "Physics/CollisionSystem.h",
         "Physics/PhysicsSystem.h",
         "SceneManager/SceneManager.h",
-        "Utils/Assert.h",
         "Utils/EventBus.h",
         "Utils/InvalidStateDetector.h",
-        "Utils/MathUtils.h",
         "Utils/SparkConsole.h",
         "Utils/SparkError.h",
         "Utils/Validate.h"
       ],
-      "privateEngineHeaderCount": 42,
+      "privateEngineHeaderCount": 40,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],

@@ -7,7 +7,6 @@
 #include "Grenade.h"
 #include "Game/Enemy.h"
 #include "Engine/Events/EventSystem.h"
-#include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/SparkConsole.h"
 #include <algorithm>
@@ -31,7 +30,6 @@ ProjectilePool::~ProjectilePool()
 
 HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     FPS_CONSOLE("ProjectilePool::Initialize called.", "OPERATION");
 
     m_device = device;
@@ -112,7 +110,6 @@ void ProjectilePool::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATR
 
 void ProjectilePool::Shutdown()
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     FPS_LOG_INFO("ProjectilePool shutting down");
     FPS_CONSOLE("ProjectilePool::Shutdown called.", "OPERATION");
 

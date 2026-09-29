@@ -2,9 +2,7 @@
 #include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Rocket.cpp
-#include "Utils/Assert.h"
 #include "Utils/Validate.h"
-#include "Utils/MathUtils.h"
 #include "Physics/PhysicsSystem.h"
 
 using DirectX::XMFLOAT3;
@@ -30,7 +28,6 @@ Rocket::Rocket() : m_explosionRadius(5.0f), m_hasExploded(false), m_trailTimer(0
 
 HRESULT Rocket::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
 
@@ -64,13 +61,16 @@ void Rocket::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
     if (!m_active)
         return;
-    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, m_mesh);
+    if (m_mesh == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'm_mesh' must not be null", __func__);
+        return;
+    }
     Projectile::Render(view, projection);
 }
 
 void Rocket::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     FPS_LOG_DEBUG("Rocket launched: speed={:.1f}, radius={:.1f}", speed, m_explosionRadius);
     m_hasExploded = false;
     m_trailPositions.clear();

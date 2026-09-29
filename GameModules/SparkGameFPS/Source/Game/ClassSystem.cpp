@@ -7,7 +7,6 @@
 
 #include "ClassSystem.h"
 #include "Core/FPSLog.h"
-#include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
 
@@ -42,7 +41,6 @@ namespace Spark
 
     bool ClassSystem::Initialize()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         FPS_LOG_INFO("Initializing ClassSystem with 6 classes");
         InitScout();
         InitMedic();
@@ -495,9 +493,10 @@ namespace Spark
 
     int ClassSystem::PlaceDeployable(Deployable::Type type, const DirectX::XMFLOAT3& position, int ownerID)
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_WARN_IF(Spark::LogCategory::Game, static_cast<int>(m_deployables.size()) >= MAX_DEPLOYABLES - 1,
-                      "Deployable count near maximum capacity");
+        if (static_cast<int>(m_deployables.size()) >= MAX_DEPLOYABLES - 1)
+        {
+            FPS_LOG_WARN("Deployable count near maximum capacity");
+        }
         if (m_deployables.size() >= static_cast<size_t>(MAX_DEPLOYABLES))
             return -1;
 

@@ -3,9 +3,7 @@
 #include "Core/Platform.h"
 #include "Player.h"
 #include "Input/InputManager.h"
-#include "Utils/Assert.h"
-#include "Utils/MathUtils.h"
-#include "Utils/Validate.h"
+#include <Spark/AngleUtils.h>
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -50,7 +48,10 @@ namespace Spark
 
     bool InteractiveObject::Interact(Player* player)
     {
-        SPARK_WARN_IF(Spark::LogCategory::Game, !player, "Interact called with null player");
+        if (!player)
+        {
+            FPS_LOG_WARN("Interact called with null player");
+        }
         if (!m_isInteractable || !player)
             return false;
         if (m_interactionCallback)
@@ -139,7 +140,7 @@ namespace Spark
         {
             // Rotating door
             XMFLOAT3 rot = GetRotation();
-            rot.y = m_closedRotationY + (MathUtils::DegreesToRadians(m_rotationAngle)) * m_openProgress;
+            rot.y = m_closedRotationY + Spark::AngleUtils::ToRadians(m_rotationAngle) * m_openProgress;
             SetRotation(rot);
         }
 
@@ -742,7 +743,6 @@ namespace Spark
 
     bool InteractionSystem::Initialize()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         FPS_LOG_INFO("Initializing InteractionSystem");
         m_objects.clear();
         m_highlightedObject = nullptr;

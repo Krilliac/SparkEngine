@@ -2,7 +2,6 @@
 #include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Grenade.cpp
-#include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Physics/PhysicsSystem.h"
 
@@ -32,7 +31,6 @@ Grenade::Grenade() : m_fuseTime(3.0f), m_explosionRadius(8.0f), m_hasExploded(fa
 
 HRESULT Grenade::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
 
@@ -64,13 +62,16 @@ void Grenade::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
     if (!m_active)
         return;
-    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, m_mesh);
+    if (m_mesh == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'm_mesh' must not be null", __func__);
+        return;
+    }
     Projectile::Render(view, projection);
 }
 
 void Grenade::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     FPS_LOG_DEBUG("Grenade thrown: fuse={:.1f}s, radius={:.1f}", m_fuseTime, m_explosionRadius);
     m_hasExploded = false;
     Projectile::Fire(startPosition, direction, speed);

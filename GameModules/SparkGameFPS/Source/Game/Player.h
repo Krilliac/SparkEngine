@@ -13,6 +13,7 @@
 
 // Subsystem headers
 #include "PlayerTypes.h"
+#include "Core/FPSAssert.h"
 
 #include "Spark/SparkExport.h"
 #include "Core/Platform.h"
@@ -20,12 +21,10 @@
 #include "Game/GameObject.h"
 #include "ClassSystem.h"
 #include "GravitySystem.h"
-#include "Utils/Assert.h"
 #include "Camera/SparkEngineCamera.h"
 #include "Input/InputManager.h"
 #include "Projectiles/WeaponStats.h"
 #include "Projectiles/ProjectilePool.h"
-#include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
@@ -210,7 +209,7 @@ class SPARK_GAME_API Player : public GameObject
      */
     void SetProjectilePool(ProjectilePool* pool)
     {
-        ASSERT_NOT_NULL(pool);
+        FPS_ASSERT_MSG(pool != nullptr, "Pointer pool must not be null");
         m_projectilePool = pool;
     }
 

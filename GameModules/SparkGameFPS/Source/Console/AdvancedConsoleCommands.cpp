@@ -14,7 +14,6 @@
 #include "FPSConsolePolicy.h"
 
 #include "Utils/SparkConsole.h"
-#include "Utils/Validate.h"
 #include "Game/Game.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Shader.h"
@@ -67,8 +66,11 @@ namespace SparkConsole
  */
     void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics)
     {
-        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, graphics);
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        if (graphics == nullptr)
+        {
+            FPS_LOG_ERROR("{}: 'graphics' must not be null", __func__);
+            return;
+        }
         FPS_LOG_INFO("Registering advanced console commands");
 
         UnregisterAdvancedCommands();

@@ -7,9 +7,8 @@
  * @author Spark Engine Team
  * @date 2025
  */
-
-#include "Utils/Assert.h"
 #include "Utils/Validate.h"
+
 #include <iostream>
 
 ModelObject::ModelObject(const std::wstring& modelPath) : m_modelPath(modelPath), m_model(std::make_unique<Model>())
@@ -20,7 +19,6 @@ ModelObject::ModelObject(const std::wstring& modelPath) : m_modelPath(modelPath)
 
 HRESULT ModelObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
 
@@ -46,7 +44,11 @@ void ModelObject::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX&
         return;
     }
 
-    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, m_context);
+    if (m_context == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'm_context' must not be null", __func__);
+        return;
+    }
 
     // Build full world matrix with scale, rotation, and translation
     DirectX::XMFLOAT3 pos = GetPosition();
@@ -90,7 +92,11 @@ void ModelObject::OnHit(GameObject* target)
 {
     // Handle collision with another game object
     // For now, just do nothing - override in derived classes for specific behavior
-    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, target);
+    if (target == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'target' must not be null", __func__);
+        return;
+    }
 }
 
 void ModelObject::OnHitWorld(const DirectX::XMFLOAT3& hitPoint, const DirectX::XMFLOAT3& normal)

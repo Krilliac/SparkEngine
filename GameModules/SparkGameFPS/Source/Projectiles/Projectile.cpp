@@ -2,9 +2,7 @@
 #include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Projectile.cpp
-#include "Utils/Assert.h"
 #include "Utils/Validate.h"
-#include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
@@ -25,7 +23,6 @@ Projectile::~Projectile() = default;
 
 HRESULT Projectile::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
 
@@ -80,7 +77,6 @@ void Projectile::Render(const XMMATRIX& view, const XMMATRIX& projection)
 
 void Projectile::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0, "Speed must be non-negative");
     SetPosition(startPosition);
     m_previousPosition = startPosition;
