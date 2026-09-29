@@ -1831,8 +1831,12 @@ jobs:
     # drop this guard and add a windows-vs2022-debug entry to BOTH
     # .github/test-count-ratchet.json and the --expected-lane list of
     # "Require and aggregate primary-lane evidence" (they are asserted equal).
+    # CI-110: run each documented windows-release CTest command against this tree.
+    # The full Release run takes about 17 minutes at --parallel 2; the documented
+    # subset is smaller and SparkTests children are capped by SPARK_TEST_LIMIT.
     - name: Execute documented subsystem commands
       if: matrix.config == 'Release'
+      timeout-minutes: 40
       shell: bash
       run: |
         python tools/site-data/check_documented_selectors.py --build-dir build \
@@ -2719,17 +2723,23 @@ jobs:
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # CI-110: run each documented linux-gcc-release CTest command against this tree.
+    # The full Release run takes about 20 minutes at --parallel 2; the documented
+    # subset is smaller and SparkTests children are capped by SPARK_TEST_LIMIT.
+    # The advisory experimental-modules label stays out of this required lane.
+    - name: Execute documented subsystem commands
+      if: matrix.config == 'Release'
+      timeout-minutes: 40
+      shell: bash
+      run: |
+        python3 tools/site-data/check_documented_selectors.py --build-dir build \
+          --documented-build-dir build/linux-gcc-release --config Release --execute --test-limit 50 \
+          --label-exclude experimental-modules
+
     # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
     # advisory experimental-module-lifecycle job; this required lane excludes it.
     # CI-110: the golden CTest entries stay in this required run until the Mesa-pinned
     # golden-linux lane is promoted to required; promotion excludes them here.
-    - name: Execute documented subsystem commands
-      if: matrix.config == 'Release'
-      shell: bash
-      run: |
-        python3 tools/site-data/check_documented_selectors.py --build-dir build \
-          --documented-build-dir build/linux-gcc-release --config Release --execute --test-limit 50
-
     - name: Run Tests
       run: |
         set -o pipefail
@@ -3727,12 +3737,16 @@ jobs:
   # comparator code, and their tests all reach this required job.
   # ===========================================================================
   # The published CodeQL workflow remains data-only. This separate, read-only
-  # scan is a direct required dependency, so alerts block PRs as well as pushes
-  # without waiting on cross-workflow status publication or trusting artifacts.
+  # scan is a direct required dependency, so new findings block PRs as well as
+  # pushes without waiting on cross-workflow status publication or trusting
+  # artifacts. Findings are compared with the reviewed .github/codeql-baseline.json:
+  # a finding it does not list blocks, and a listed finding that disappeared blocks
+  # until its entry is removed. Hosted c-cpp analysis takes about 80 minutes
+  # (CodeQL Advanced run 36455093304), so each language carries its own bound.
   analysis-regressions:
     name: "Blocking CodeQL (${{ matrix.language }})"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.timeout }}
     permissions:
       contents: read
     env:
@@ -3743,10 +3757,13 @@ jobs:
         include:
           - language: actions
             report: actions.sarif
+            timeout: 20
           - language: c-cpp
             report: cpp.sarif
+            timeout: 150
           - language: python
             report: python.sarif
+            timeout: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -3767,7 +3784,10 @@ jobs:
           upload: never
           upload-database: false
       - name: Fail on analysis findings
-        run: python3 .github/scripts/check-analysis-results.py "${{ runner.temp }}/blocking-codeql/${{ matrix.report }}"
+        run: >-
+          python3 .github/scripts/check-analysis-results.py
+          "${{ runner.temp }}/blocking-codeql/${{ matrix.report }}"
+          --language "${{ matrix.language }}" --baseline .github/codeql-baseline.json
 
   performance-budget-governance:
     name: "Performance budget governance"

@@ -16,19 +16,29 @@ and JSON record include failures, skipped jobs and cancelled jobs as failures.
 
 Coverage generation and per-subsystem thresholds, the existing clang-tidy
 ratchet, and `analysis-regressions` are required dependencies. The latter runs
-fresh buildless CodeQL analysis with read-only permissions and fails on every
-finding (including existing findings), incomplete execution, or missing SARIF.
-There is no reviewed CodeQL alert baseline or waiver list. Published CodeQL
-reporting remains separate. The CLI and workflow mutation checks are registered
-with CTest and also run in `validate-ci-tools`; hosted scan evidence is pending.
+fresh buildless CodeQL analysis (actions, C/C++, Python) with read-only
+permissions and compares the SARIF with the reviewed baseline
+`.github/codeql-baseline.json`. A finding the baseline does not list fails the
+job, and so does a baseline entry whose finding is gone, so the baseline only
+shrinks unless a reviewed change adds an entry with its written reason. SARIF
+suppressions and levels cannot accept a finding. Incomplete execution,
+error-level scanner notifications, or missing SARIF fail closed. Published
+CodeQL reporting remains separate. The CLI and workflow mutation checks are
+registered with CTest and also run in `validate-ci-tools`; hosted scan evidence
+for the blocking job is pending.
 
 The required GCC and VS2022 Release jobs execute each applicable documented
 CTest command against their real `build/` tree before the general test run.
 `check_documented_selectors.py --execute` maps that tree to the documented
-release preset, checks enabled selections and built executables, then runs the
-same selectors. Missing tests and test failures fail the job. The preset-tree
-`DocumentedTestCommands_SelectBuiltTests` registration remains a discovery check;
-execution is called directly by CI to avoid recursively running its own CTest.
+release preset, checks enabled selections and built executables, then runs each
+distinct selection once with `SPARK_TEST_LIMIT` bounding SparkTests children and
+a step timeout bounding the whole run. Missing tests and test failures fail the
+job. Selectors declared in a work item's `plannedTestSelectors` that select
+nothing yet are reported as declared debt and are not run. The GCC lane passes
+`--label-exclude experimental-modules`, the same advisory label its general test
+run excludes. The preset-tree `DocumentedTestCommands_SelectBuiltTests`
+registration remains a discovery check; execution is called directly by CI to
+avoid recursively running its own CTest.
 
 ## Test Framework
 

@@ -84,15 +84,23 @@ def workflow_errors(doc):
     if analysis.get("permissions") != {"contents": "read"}:
         errors.append("analysis must be read-only")
     rows = analysis.get("strategy", {}).get("matrix", {}).get("include", [])
-    if rows != [{"language": "actions", "report": "actions.sarif"},
-                {"language": "c-cpp", "report": "cpp.sarif"},
-                {"language": "python", "report": "python.sarif"}]:
+    if [(row.get("language"), row.get("report")) for row in rows] != [
+            ("actions", "actions.sarif"), ("c-cpp", "cpp.sarif"), ("python", "python.sarif")]:
         errors.append("analysis must cover each shipped source language")
+    # Hosted buildless c-cpp analysis took about 80 minutes (CodeQL Advanced run
+    # 36455093304); a bound below that cancels the job and turns the gate red.
+    timeouts = {row.get("language"): row.get("timeout") for row in rows}
+    if analysis.get("timeout-minutes") != "${{ matrix.timeout }}" or not all(
+            isinstance(value, int) and 10 <= value <= 180 for value in timeouts.values()) \
+            or timeouts.get("c-cpp", 0) < 120:
+        errors.append("analysis must carry a bounded per-language timeout that fits c-cpp analysis")
     steps = analysis.get("steps", [])
     required_steps = {
         "Initialize blocking analysis": ("uses", "github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938"),
         "Produce fresh analysis results": ("uses", "github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938"),
-        "Fail on analysis findings": ("run", 'python3 .github/scripts/check-analysis-results.py "${{ runner.temp }}/blocking-codeql/${{ matrix.report }}"'),
+        "Fail on analysis findings": ("run", 'python3 .github/scripts/check-analysis-results.py '
+                                      '"${{ runner.temp }}/blocking-codeql/${{ matrix.report }}" '
+                                      '--language "${{ matrix.language }}" --baseline .github/codeql-baseline.json'),
     }
     for name, (key, expected) in required_steps.items():
         matches = [s for s in steps if s.get("name") == name]
@@ -108,13 +116,14 @@ def workflow_errors(doc):
             errors.append("analysis must remain buildless")
     else:
         errors.append("analysis step inventory changed")
-    for job_id, tree, python in (("build-linux-gcc", "linux-gcc-release", "python3"),
-                                 ("build-windows-vs2022", "windows-release", "python")):
+    for job_id, tree, python, suffix in (
+            ("build-linux-gcc", "linux-gcc-release", "python3", " --label-exclude experimental-modules"),
+            ("build-windows-vs2022", "windows-release", "python", "")):
         job = jobs[job_id]
         steps = job["steps"]
         selected = [s for s in steps if s.get("name") == "Execute documented subsystem commands"]
         expected = (f"{python} tools/site-data/check_documented_selectors.py --build-dir build "
-                    f"--documented-build-dir build/{tree} --config Release --execute --test-limit 50")
+                    f"--documented-build-dir build/{tree} --config Release --execute --test-limit 50{suffix}")
         if len(selected) != 1:
             errors.append(f"{job_id} must execute documented commands")
         else:
@@ -122,6 +131,8 @@ def workflow_errors(doc):
             command = " ".join(step.get("run", "").replace("\\\n", " ").split())
             if command != expected or step.get("if") != "matrix.config == 'Release'" or step.get("continue-on-error"):
                 errors.append(f"{job_id} must execute exact bounded documented selectors")
+            if not isinstance(step.get("timeout-minutes"), int) or not 10 <= step["timeout-minutes"] <= 60:
+                errors.append(f"{job_id} documented execution needs a step timeout of 10-60 minutes")
             names = [s.get("name") for s in steps]
             if names.index("Execute documented subsystem commands") >= names.index("Run Tests"):
                 errors.append(f"{job_id} must check documentation before broader test failures can skip it")
@@ -176,7 +187,8 @@ class CIPerfContractTests(unittest.TestCase):
         self.assertTrue(workflow_errors(mutant))
 
     def test_analysis_cannot_be_removed_bypassed_or_detached_from_gate(self):
-        for mutation in ("removed", "advisory", "conditional", "detached", "results skipped", "language dropped"):
+        for mutation in ("removed", "advisory", "conditional", "detached", "results skipped", "language dropped",
+                         "baseline dropped", "c-cpp timeout too short"):
             mutant = copy.deepcopy(self.doc)
             jobs = mutant["jobs"]
             if mutation == "removed":
@@ -189,6 +201,11 @@ class CIPerfContractTests(unittest.TestCase):
                 jobs["required-ci-gate"]["needs"].remove("analysis-regressions")
             elif mutation == "results skipped":
                 jobs["analysis-regressions"]["steps"][-1]["run"] = "true"
+            elif mutation == "baseline dropped":
+                step = jobs["analysis-regressions"]["steps"][-1]
+                step["run"] = step["run"].split(" --baseline")[0]
+            elif mutation == "c-cpp timeout too short":
+                jobs["analysis-regressions"]["strategy"]["matrix"]["include"][1]["timeout"] = 30
             else:
                 jobs["analysis-regressions"]["strategy"]["matrix"]["include"].pop()
             with self.subTest(mutation=mutation):
@@ -223,7 +240,7 @@ class CIPerfContractTests(unittest.TestCase):
 
     def test_documented_commands_cannot_regress_to_discovery_only(self):
         for job in ("build-linux-gcc", "build-windows-vs2022"):
-            for mutation in ("resolve only", "advisory", "missing release"):
+            for mutation in ("resolve only", "advisory", "unbounded", "missing release"):
                 mutant = copy.deepcopy(self.doc)
                 lane = mutant["jobs"][job]
                 step = next(s for s in lane["steps"] if s.get("name") == "Execute documented subsystem commands")
@@ -231,6 +248,8 @@ class CIPerfContractTests(unittest.TestCase):
                     step["run"] = step["run"].replace("--execute", "")
                 elif mutation == "advisory":
                     step["continue-on-error"] = True
+                elif mutation == "unbounded":
+                    step.pop("timeout-minutes")
                 else:
                     lane["strategy"]["matrix"]["config"].remove("Release")
                 with self.subTest(job=job, mutation=mutation):

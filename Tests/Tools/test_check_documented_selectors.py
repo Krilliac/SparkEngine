@@ -39,6 +39,10 @@ add_test(NAME gamma_unbuilt COMMAND "${CMAKE_BINARY_DIR}/never-built-tool")
 set_tests_properties(gamma_unbuilt PROPERTIES LABELS gamma)
 add_test(NAME delta_fails COMMAND "${CMAKE_COMMAND}" -E false)
 set_tests_properties(delta_fails PROPERTIES LABELS delta)
+add_test(NAME epsilon_advisory_fails COMMAND "${CMAKE_COMMAND}" -E false)
+set_tests_properties(epsilon_advisory_fails PROPERTIES LABELS "epsilon;advisory-only")
+add_test(NAME epsilon_runs COMMAND "${CMAKE_COMMAND}" -E true)
+set_tests_properties(epsilon_runs PROPERTIES LABELS epsilon)
 """
 TREE = "build/linux-gcc-release"
 
@@ -62,7 +66,8 @@ class DocumentedSelectorTests(unittest.TestCase):
         cls._temp.cleanup()
 
     def run_checker(self, commands: list[str], *, build_dir: Path | None = None,
-                    planned: list[str] | None = None, execute: bool = False) -> tuple[int, str]:
+                    planned: list[str] | None = None, execute: bool = False,
+                    label_exclude: list[str] | None = None) -> tuple[int, str]:
         spec = self.root / "commands.json"
         spec.write_text(json.dumps([{"source": f"fixture[{index}]", "command": command, "planned": planned or []}
                                     for index, command in enumerate(commands)]), encoding="utf-8")
@@ -71,6 +76,8 @@ class DocumentedSelectorTests(unittest.TestCase):
             arguments = ["--build-dir", str(build_dir or self.build_dir), "--commands-json", str(spec)]
             if execute:
                 arguments.append("--execute")
+            for label in label_exclude or []:
+                arguments += ["--label-exclude", label]
             code = checker.main(arguments)
         return code, out.getvalue() + err.getvalue()
 
@@ -89,6 +96,32 @@ class DocumentedSelectorTests(unittest.TestCase):
         code, output = self.run_checker([f"ctest --test-dir {TREE} -L delta --no-tests=error"], execute=True)
         self.assertEqual(code, 1, output)
         self.assertIn("selection execution failed: ctest exited", output)
+
+    def test_execute_runs_each_distinct_selection_once(self) -> None:
+        command = f"ctest --test-dir {TREE} -L delta --no-tests=error"
+        with patch.object(checker, "execute_selected", wraps=checker.execute_selected) as execute:
+            code, output = self.run_checker([command, command], execute=True)
+        self.assertEqual(code, 1, output)
+        self.assertEqual(execute.call_count, 1)
+        self.assertIn("2 applicable command(s): 0 pass, 2 fail", output)
+        self.assertIn("same selection as fixture[0]", output)
+
+    def test_lane_excluded_label_is_neither_required_nor_run(self) -> None:
+        # Without the exclusion the advisory failure is executed and fails.
+        code, output = self.run_checker([f"ctest --test-dir {TREE} -L epsilon --no-tests=error"], execute=True)
+        self.assertEqual(code, 1, output)
+        # With it, the rest of the selection still runs and passes.
+        code, output = self.run_checker([f"ctest --test-dir {TREE} -L epsilon --no-tests=error"], execute=True,
+                                        label_exclude=["advisory-only"])
+        self.assertEqual(code, 0, output)
+        self.assertIn("executed 1 enabled test(s)", output)
+        # A selection made only of excluded tests is not applicable, never a pass.
+        code, output = self.run_checker([f"ctest --test-dir {TREE} -R epsilon_advisory --no-tests=error",
+                                         f"ctest --test-dir {TREE} -L alpha --no-tests=error"],
+                                        execute=True, label_exclude=["advisory-only"])
+        self.assertEqual(code, 0, output)
+        self.assertIn("1 applicable command(s): 1 pass, 0 fail", output)
+        self.assertIn("1 not applicable", output)
 
     def test_documented_tree_can_map_to_ci_build_directory(self) -> None:
         spec = checker.DocumentedCommand(
@@ -195,7 +228,8 @@ class DocumentedCommandInventoryTests(unittest.TestCase):
                 checker.execute_selected("ctest", Path("build/linux-gcc-release"), None, ["-L", "unit"], 7)
         arguments, options = run.call_args
         self.assertEqual(
-            arguments[0][-6:], ["-L", "unit", "--output-on-failure", "--no-tests=error", "--timeout", "120"]
+            arguments[0][-8:],
+            ["-L", "unit", "--output-on-failure", "--no-tests=error", "--parallel", "2", "--timeout", "120"],
         )
         self.assertEqual(options["env"]["SPARK_TEST_LIMIT"], "7")
         self.assertNotIn("SPARK_TEST_NAME_PREFIX", options["env"])
@@ -209,15 +243,19 @@ class DocumentedCommandInventoryTests(unittest.TestCase):
                 [{"properties": [{"name": "ENVIRONMENT", "value": "SPARK_TEST_EXPECT_COUNT=oops"}]}], 50
             )
 
-    def test_execute_planned_empty_selection_is_failure(self) -> None:
+    def test_execute_planned_empty_selection_stays_declared_debt(self) -> None:
+        # Declared debt is tracked by its work item; execution must neither run it
+        # nor count it as a pass or a regression.
         command = checker.DocumentedCommand(
             "fixture[planned]", "ctest --test-dir build/linux-gcc-release -L future",
             ["--test-dir", "build/linux-gcc-release", "-L", "future"], ["future-family*"]
         )
         with patch.object(checker, "ctest_filter_errors", side_effect=[True, False]), \
-                patch.object(checker, "command_tree", return_value="build/linux-gcc-release"):
+                patch.object(checker, "command_tree", return_value="build/linux-gcc-release"), \
+                patch.object(checker, "execute_selected") as execute:
             outcome = checker.evaluate(command, "ctest", Path("build/linux-gcc-release"), None, execute=True)
-        self.assertEqual(outcome.status, "fail")
+        self.assertEqual(outcome.status, "debt")
+        execute.assert_not_called()
 
     def test_discovery_only_flag_is_detected(self) -> None:
         self.assertTrue(checker._discovery_only(["--show-only=json-v1"]))

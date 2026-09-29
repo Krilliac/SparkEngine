@@ -23,9 +23,12 @@ With ``--execute``, each applicable selection is also run through CTest. The
 checker sets ``SPARK_TEST_LIMIT`` for the child process so SparkTests-based
 registrations stay bounded; CTest's own timeout and no-tests checks remain
 active. Expected-count pins are preserved even when larger than the requested
-limit. Discovery-only commands never count as execution, and declared empty
-selections fail in execute mode. ``SPARK_TEST_*`` environment selectors of ``SparkTests`` are not
-documented CTest commands and are not parsed here.
+limit. Each distinct selection runs once (``--parallel 2``, like the required
+lanes' full run), and ``--label-exclude`` mirrors a lane's own label exclusions.
+Discovery-only commands never count as execution. Declared debt stays declared
+debt: it is reported but neither run nor counted. ``SPARK_TEST_*`` environment
+selectors of ``SparkTests`` are not documented CTest commands and are not parsed
+here.
 
 Exit status: 0 every applicable command resolves (and passes with --execute), 1 at least one does not, 2
 the tree has no ``CTestTestfile.cmake`` or no documented command applies to it
@@ -66,6 +69,7 @@ SELECTION_FLAGS = {
 FENCE = re.compile(r"^\s*(```|~~~)")
 CTEST_TIMEOUT_SECONDS = 120
 CTEST_EXECUTION_TIMEOUT_SECONDS = 900
+CTEST_EXECUTION_PARALLEL = 2  # matches the required lanes' full "Run Tests" ctest invocation
 DEFAULT_TEST_LIMIT = 50
 CMAKE_TOOL = re.compile(r"^(?:.*[/\\])?cmake(?:\.exe)?$", re.IGNORECASE)
 CACHE_ENTRY = re.compile(r"^([A-Za-z_][A-Za-z0-9_.+-]*)(?::[A-Z]+)?=(.*)$")
@@ -250,12 +254,16 @@ def show_only(ctest: str, build_dir: Path, config: str | None, selection: list[s
 
 
 def execute_selected(ctest: str, build_dir: Path, config: str | None, selection: list[str],
-                     test_limit: int) -> None:
+                     test_limit: int, label_exclude: frozenset[str] = frozenset()) -> None:
     """Run one documented selection and fail on CTest or timeout failure."""
     argv = [ctest, "--test-dir", str(build_dir)]
     if config:
         argv += ["-C", config]
-    argv += selection + ["--output-on-failure", "--no-tests=error", "--timeout", str(CTEST_TIMEOUT_SECONDS)]
+    argv += selection
+    if label_exclude:
+        argv += ["--label-exclude", "^(" + "|".join(sorted(re.escape(label) for label in label_exclude)) + ")$"]
+    argv += ["--output-on-failure", "--no-tests=error", "--parallel", str(CTEST_EXECUTION_PARALLEL),
+             "--timeout", str(CTEST_TIMEOUT_SECONDS)]
     environment = os.environ.copy()
     for variable in ("SPARK_TEST_FILE", "SPARK_TEST_NAME", "SPARK_TEST_NAME_PREFIX", "SPARK_TEST_EXCLUDE",
                      "SPARK_TEST_EXPECT_COUNT", "SPARK_TEST_LIMIT"):
@@ -266,6 +274,15 @@ def execute_selected(ctest: str, build_dir: Path, config: str | None, selection:
     if completed.returncode != 0:
         detail = (completed.stdout.strip() + "\n" + completed.stderr.strip()).strip()
         raise RuntimeError(f"ctest exited {completed.returncode}: {detail[-600:]}")
+
+
+def _labels(test: dict) -> set[str]:
+    labels: set[str] = set()
+    for prop in test.get("properties") or []:
+        if isinstance(prop, dict) and prop.get("name") == "LABELS":
+            value = prop.get("value")
+            labels.update(value if isinstance(value, list) else [value])
+    return {label for label in labels if isinstance(label, str)}
 
 
 def _disabled(test: dict) -> bool:
@@ -320,7 +337,8 @@ def _executable_exists(command: object) -> bool:
 
 def evaluate(command: DocumentedCommand, ctest: str, build_dir: Path, config: str | None,
              execute: bool = False, test_limit: int = DEFAULT_TEST_LIMIT,
-             documented_tree: str | None = None) -> Outcome:
+             documented_tree: str | None = None, label_exclude: frozenset[str] = frozenset(),
+             executed: dict[tuple[str, ...], Outcome] | None = None) -> Outcome:
     tree = command_tree(command.arguments)
     if tree is None:
         return Outcome(command, "not-applicable", "no --test-dir/--preset naming a preset build tree")
@@ -333,9 +351,10 @@ def evaluate(command: DocumentedCommand, ctest: str, build_dir: Path, config: st
     selection = selection_arguments(command.arguments)
     if selection is None:
         return Outcome(command, "not-applicable", "selection value is a placeholder")
+    # Declared debt stays visible and uncounted in both modes: it is a planned
+    # selector tracked by its work item, not a documented command that regressed.
     if command.planned and ctest_filter_errors(selection) and not ctest_filter_errors(selection, command.planned):
-        status = "fail" if execute else "debt"
-        return Outcome(command, status, "selects nothing registered; declared in plannedTestSelectors")
+        return Outcome(command, "debt", "selects nothing registered; declared in plannedTestSelectors")
     try:
         tests = show_only(ctest, build_dir, config, selection)
     except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
@@ -343,17 +362,31 @@ def evaluate(command: DocumentedCommand, ctest: str, build_dir: Path, config: st
     enabled = [test for test in tests if isinstance(test, dict) and not _disabled(test)]
     if not enabled:
         return Outcome(command, "fail", f"selects {len(tests)} test(s), none enabled")
+    if label_exclude:
+        kept = [test for test in enabled if not _labels(test) & label_exclude]
+        if not kept:
+            return Outcome(command, "not-applicable",
+                           f"every selected test carries a lane-excluded label ({', '.join(sorted(label_exclude))})")
+        enabled = kept
     missing = sorted(str(test.get("name")) for test in enabled if not _executable_exists(test.get("command")))
     if missing:
         return Outcome(command, "fail", f"selected test(s) with no built executable: {', '.join(missing[:5])}")
     if execute:
         if _discovery_only(command.arguments):
             return Outcome(command, "discovery", f"selects {len(enabled)} enabled test(s); no tests executed")
+        key = tuple(selection)
+        if executed is not None and key in executed:
+            previous = executed[key]
+            return Outcome(command, previous.status, f"same selection as {previous.command.source}: {previous.detail}")
         try:
             limit = effective_test_limit(enabled, test_limit)
-            execute_selected(ctest, build_dir, config, selection, limit)
+            execute_selected(ctest, build_dir, config, selection, limit, label_exclude)
+            outcome = Outcome(command, "pass", f"selects and executed {len(enabled)} enabled test(s)")
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
-            return Outcome(command, "fail", f"selection execution failed: {error}")
+            outcome = Outcome(command, "fail", f"selection execution failed: {error}")
+        if executed is not None:
+            executed[key] = outcome
+        return outcome
     return Outcome(command, "pass", f"selects {len(enabled)} enabled test(s)")
 
 
@@ -368,6 +401,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--execute", action="store_true", help="run every applicable documented selection")
     parser.add_argument("--test-limit", type=int, default=DEFAULT_TEST_LIMIT,
                         help=f"SPARK_TEST_LIMIT for executed SparkTests children (default: {DEFAULT_TEST_LIMIT})")
+    parser.add_argument("--label-exclude", action="append", default=[], metavar="LABEL",
+                        help="CTest label the calling lane excludes; such tests are neither required nor run")
     args = parser.parse_args(argv)
 
     if args.test_limit < 1:
@@ -387,7 +422,10 @@ def main(argv: list[str] | None = None) -> int:
 
     documented_tree = args.documented_build_dir.replace("\\", "/").removeprefix("./").rstrip("/") \
         if args.documented_build_dir else None
-    outcomes = [evaluate(command, args.ctest, build_dir, args.config, args.execute, args.test_limit, documented_tree)
+    label_exclude = frozenset(args.label_exclude)
+    executed: dict[tuple[str, ...], Outcome] = {}
+    outcomes = [evaluate(command, args.ctest, build_dir, args.config, args.execute, args.test_limit, documented_tree,
+                         label_exclude, executed)
                 for command in commands]
     counts = {status: sum(outcome.status == status for outcome in outcomes)
               for status in ("pass", "fail", "debt", "discovery", "not-applicable")}
