@@ -16,7 +16,10 @@
 
 namespace MMO
 {
-    using namespace SessionGateWire;
+    using SessionGateWire::MaxPacketBytes;
+    using SessionGateWire::Operation;
+    using SessionGateWire::Packet;
+    using SessionGateWire::Status;
 
     struct MMOSessionGate::AuthenticationState final : Spark::Gateway::IGatewayAuthenticator
     {
@@ -326,7 +329,7 @@ namespace MMO
             return;
         }
         Packet request;
-        const bool decoded = Decode(payload, request);
+        const bool decoded = SessionGateWire::Decode(payload, request);
         if (!decoded || request.response || request.operation == Operation::State)
         {
             Spark::SecureErase(request.password.data(), request.password.size());
@@ -357,7 +360,7 @@ namespace MMO
         Spark::Net::NetworkMessage message;
         message.type = ReplyType;
         message.channel = Spark::Net::ChannelType::Reliable;
-        message.payload = Encode(packet);
+        message.payload = SessionGateWire::Encode(packet);
         m_network->SendToClient(clientId, message);
     }
 
@@ -376,7 +379,7 @@ namespace MMO
         message.type = RequestType;
         message.channel = Spark::Net::ChannelType::Reliable;
         message.sensitive = true;
-        message.payload = Encode(request);
+        message.payload = SessionGateWire::Encode(request);
         Spark::SecureErase(request.password.data(), request.password.size());
         if (message.payload.empty())
         {
@@ -401,8 +404,8 @@ namespace MMO
     void MMOSessionGate::ReceiveReply(std::span<const uint8_t> payload)
     {
         Packet packet;
-        if (!m_network || m_network->GetRole() != Spark::Net::NetworkRole::Client || !Decode(payload, packet) ||
-            !packet.response)
+        if (!m_network || m_network->GetRole() != Spark::Net::NetworkRole::Client ||
+            !SessionGateWire::Decode(payload, packet) || !packet.response)
         {
             return;
         }

@@ -12,7 +12,9 @@
 
 namespace MMO
 {
-    using namespace SessionGateWire;
+    using SessionGateWire::Operation;
+    using SessionGateWire::Packet;
+    using SessionGateWire::Status;
 
     Status MMOSessionGate::Apply(Session& session, const Packet& request)
     {
