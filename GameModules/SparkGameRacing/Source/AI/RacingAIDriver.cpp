@@ -232,10 +232,8 @@ namespace Racing
         state.targetWaypoint = (state.targetWaypoint + static_cast<uint32_t>(std::max(1.0f, waypointAdvance))) %
                                static_cast<uint32_t>(kSyntheticTrackWaypointCount);
 
-        // Per-driver, per-frame: Trace, not Debug. A full simulated race emits ~87k of these lines,
-        // which at Debug flooded the test console past the sanitizer lanes' 16 MiB capture cap.
-        Spark::ModuleLog::Debug(m_context, "Racing AI driver {}: throttle={:.2f} steer={:.2f} nitro={}",
-                                state.vehicleId, state.throttle, state.steer, state.useNitro ? "yes" : "no");
+        // No per-driver, per-frame log here: the SDK logger has no Trace level, and at Debug a full
+        // simulated race emits ~87k lines, flooding the sanitizer lanes' 16 MiB capture cap.
     }
 
     void RacingAIDriver::ComputeSteering(const AIDriverConfig& config, AIDriverState& state)
