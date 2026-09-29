@@ -454,7 +454,7 @@ class PackageRuleSetTests(unittest.TestCase):
                 **good,
                 "firstPartyRoots": [{"pattern": "^bin/", "justification": "  "}],
             },
-            "no first-party roots": {**good, "firstPartyRoots": []},
+            "first-party roots not a list": {**good, "firstPartyRoots": {"pattern": "^bin/"}},
             "asset manifest escaping the package": {
                 **good,
                 "assetManifests": [{"pattern": "^bin/", "manifest": "../m.json", "justification": "why"}],

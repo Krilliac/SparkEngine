@@ -256,6 +256,14 @@ def _rules_member(data: dict, key: str, kind: type, label: str):
     return value
 
 
+def _optional_rules_list(data: dict, key: str, label: str) -> list:
+    """A member only closed-world classification reads; absent means empty (which classifies nothing)."""
+    value = data.get(key, [])
+    if not isinstance(value, list):
+        raise NoticeInputError(f"{label}: '{key}' must be a list")
+    return value
+
+
 def _rules_regex(value: object, label: str) -> re.Pattern[str]:
     if not isinstance(value, str) or not value:
         raise NoticeInputError(f"{label}: pattern must be a non-empty string")
@@ -298,7 +306,7 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
             )
         )
     first_party_roots = []
-    for index, root in enumerate(_rules_member(data, "firstPartyRoots", list, label)):
+    for index, root in enumerate(_optional_rules_list(data, "firstPartyRoots", label)):
         where = f"{label}: firstPartyRoots[{index}]"
         if not isinstance(root, dict):
             raise NoticeInputError(f"{where} must be an object")
@@ -307,7 +315,7 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
             raise NoticeInputError(f"{where} must carry a non-empty 'justification'")
         first_party_roots.append(FirstPartyRoot(_rules_regex(root.get("pattern"), where), justification))
     asset_manifests = []
-    for index, rule in enumerate(_rules_member(data, "assetManifests", list, label)):
+    for index, rule in enumerate(_optional_rules_list(data, "assetManifests", label)):
         where = f"{label}: assetManifests[{index}]"
         if not isinstance(rule, dict):
             raise NoticeInputError(f"{where} must be an object")

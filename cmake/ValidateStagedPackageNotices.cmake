@@ -74,6 +74,21 @@ function(_spark_notice_json_length _spark_output _spark_json)
     set(${_spark_output} "${_spark_length}" PARENT_SCOPE)
 endfunction()
 
+# Members only closed-world classification reads: absent means empty (which
+# classifies nothing, so the closed world then fails closed).
+function(_spark_notice_json_optional_length _spark_output _spark_json _spark_member)
+    string(JSON _spark_type ERROR_VARIABLE _spark_error TYPE "${_spark_json}" ${_spark_member})
+    if(_spark_error)
+        set(${_spark_output} 0 PARENT_SCOPE)
+        return()
+    endif()
+    if(NOT _spark_type STREQUAL "ARRAY")
+        _spark_notice_fail("rules file member '${_spark_member}' must be a list")
+    endif()
+    string(JSON _spark_length LENGTH "${_spark_json}" ${_spark_member})
+    set(${_spark_output} "${_spark_length}" PARENT_SCOPE)
+endfunction()
+
 function(_spark_notice_read_bounded _spark_output _spark_path _spark_limit _spark_description)
     if(NOT EXISTS "${_spark_path}" OR IS_DIRECTORY "${_spark_path}" OR IS_SYMLINK "${_spark_path}")
         _spark_notice_fail("${_spark_description} is missing or is not a regular non-link file: ${_spark_path}")
@@ -196,10 +211,16 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
 
     # First-party roots: every entry needs a pattern and a written justification,
     # because closed-world classification accepts whatever they match.
-    _spark_notice_json_length(_spark_first_party_count "${_spark_rules}" firstPartyRoots)
-    math(EXPR _spark_last_first_party "${_spark_first_party_count} - 1")
+    _spark_notice_json_optional_length(_spark_first_party_count "${_spark_rules}" firstPartyRoots)
     set(_spark_first_party_patterns "")
-    foreach(_spark_index RANGE ${_spark_last_first_party})
+    set(_spark_first_party_indices "")
+    if(_spark_first_party_count GREATER 0)
+        math(EXPR _spark_last_first_party "${_spark_first_party_count} - 1")
+        foreach(_spark_index RANGE ${_spark_last_first_party})
+            list(APPEND _spark_first_party_indices ${_spark_index})
+        endforeach()
+    endif()
+    foreach(_spark_index IN LISTS _spark_first_party_indices)
         _spark_notice_json_get(_spark_pattern "${_spark_rules}" firstPartyRoots ${_spark_index} pattern)
         string(JSON _spark_justification ERROR_VARIABLE _spark_justification_error
             GET "${_spark_rules}" firstPartyRoots ${_spark_index} justification)
@@ -210,9 +231,15 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
         list(APPEND _spark_first_party_patterns "${_spark_pattern}")
     endforeach()
 
-    _spark_notice_json_length(_spark_asset_rule_count "${_spark_rules}" assetManifests)
-    math(EXPR _spark_last_asset_rule "${_spark_asset_rule_count} - 1")
-    foreach(_spark_index RANGE ${_spark_last_asset_rule})
+    _spark_notice_json_optional_length(_spark_asset_rule_count "${_spark_rules}" assetManifests)
+    set(_spark_asset_rule_indices "")
+    if(_spark_asset_rule_count GREATER 0)
+        math(EXPR _spark_last_asset_rule "${_spark_asset_rule_count} - 1")
+        foreach(_spark_index RANGE ${_spark_last_asset_rule})
+            list(APPEND _spark_asset_rule_indices ${_spark_index})
+        endforeach()
+    endif()
+    foreach(_spark_index IN LISTS _spark_asset_rule_indices)
         _spark_notice_json_get(_spark_asset_pattern_${_spark_index} "${_spark_rules}"
             assetManifests ${_spark_index} pattern)
         _spark_notice_json_get(_spark_asset_manifest_${_spark_index} "${_spark_rules}"
@@ -411,7 +438,7 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
             endforeach()
             set(_spark_asset_rule -1)
             if(NOT _spark_under_third_party_root AND _spark_world STREQUAL "closed")
-                foreach(_spark_index RANGE ${_spark_last_asset_rule})
+                foreach(_spark_index IN LISTS _spark_asset_rule_indices)
                     if(_spark_file MATCHES "${_spark_asset_pattern_${_spark_index}}")
                         set(_spark_asset_rule ${_spark_index})
                         break()
