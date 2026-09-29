@@ -264,10 +264,14 @@ namespace Spark::TelemetryDetail
                                                              .count());
         for (auto& event : events)
         {
+            // The age bound applies in both directions: a wall-clock step backwards
+            // must not discard freshly recorded events, while a forged or corrupt
+            // far-future stamp cannot pin itself in the spool indefinitely.
+            const uint64_t clockDistance = event.timestamp > now ? event.timestamp - now : now - event.timestamp;
             size_t eventBytes = 0;
             if (accepted.size() >= m_maxEvents || !EventSerializedSize(event, eventBytes) ||
-                event.sequence <= previousSequence || eventBytes > m_maxBytes - bytes || event.timestamp > now ||
-                now - event.timestamp > m_maxAgeMilliseconds)
+                event.sequence <= previousSequence || eventBytes > m_maxBytes - bytes ||
+                clockDistance > m_maxAgeMilliseconds)
             {
                 if (droppedSequences != nullptr)
                     droppedSequences->push_back(event.sequence);

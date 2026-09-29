@@ -119,7 +119,9 @@ namespace
         std::filesystem::create_symlink(danglingTarget, marker, error);
         if (error)
         {
-            failures += Check(false, "could not create dangling marker link fixture: " + error.message());
+            // Unprivileged Windows hosts without Developer Mode cannot create
+            // symlinks; the directory case above still covers non-regular markers.
+            std::cout << "SKIP: dangling marker link case (" << error.message() << ")\n";
             std::filesystem::remove_all(root, error);
             return failures;
         }

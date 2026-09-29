@@ -383,19 +383,27 @@ TEST(Telemetry_SpoolRecovery_AgeBound)
     fresh.timestamp = now - 1000;
     fresh.sessionId = "session_age";
     fresh.sequence = 2;
+    // A backwards wall-clock step within the bound keeps the event.
+    Spark::TelemetryEvent skewed = fresh;
+    skewed.name = "skewed";
+    skewed.sequence = 3;
+    skewed.timestamp = now + 1000;
     Spark::TelemetryEvent future = fresh;
-    future.sequence = 3;
-    future.timestamp = now + 1;
+    future.sequence = 4;
+    future.timestamp = now + 1001;
     Spark::TelemetryEvent undated = fresh;
-    undated.sequence = 4;
+    undated.sequence = 5;
     undated.timestamp = 0;
-    std::vector<Spark::TelemetryEvent> restored{stale, fresh, future, undated};
+    std::vector<Spark::TelemetryEvent> restored{stale, fresh, skewed, future, undated};
     std::vector<uint64_t> dropped;
     EXPECT_EQ(spool.Constrain(restored, &dropped, now), 3u);
-    ASSERT_EQ(restored.size(), 1u);
-    EXPECT_EQ(restored.front().name, std::string("fresh"));
+    ASSERT_EQ(restored.size(), 2u);
+    EXPECT_EQ(restored[0].name, std::string("fresh"));
+    EXPECT_EQ(restored[1].name, std::string("skewed"));
     ASSERT_EQ(dropped.size(), 3u);
-    EXPECT_EQ(dropped.front(), 1u);
+    EXPECT_EQ(dropped[0], 1u);
+    EXPECT_EQ(dropped[1], 4u);
+    EXPECT_EQ(dropped[2], 5u);
 }
 
 TEST(Telemetry_SpoolRecovery_ExpiredRestoreAccounting)

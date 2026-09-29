@@ -64,7 +64,8 @@ namespace Spark
 
             /**
              * Keep the oldest representable events within the configured
-             * format, capacity and age limits. Future timestamps are rejected.
+             * format, capacity and age limits. An event stamped more than the
+             * age bound before or after now is dropped.
              * @param nowMilliseconds Zero uses the wall clock; explicit values
              * permit deterministic boundary checks.
              * @return Number of events removed from @p events.
