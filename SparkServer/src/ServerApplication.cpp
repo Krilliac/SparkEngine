@@ -582,6 +582,10 @@ namespace Spark::Server
         context->SetWorld(m_world.get());
         context->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         context->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+        // Subscribe before modules load: a participating module publishes AreaHandoffParticipantChanged on this
+        // bus from its Initialize. The EngineContext registry cannot carry it across the module DLL boundary.
+        m_handoffDispatcher = std::make_unique<Net::AreaHandoffDispatcher>();
+        m_handoffDispatcher->BindParticipantEvents(*runtime.eventBus);
         m_modules = std::make_unique<ModuleManager>();
         if (!LoadSelectedModules())
         {
@@ -613,6 +617,10 @@ namespace Spark::Server
         {
             m_controlService = std::make_unique<Gateway::LocalAreaControlService>(
                 m_options.controlEndpoint, m_options.gatewayKeyFile, m_options.controlStateFile);
+            if (m_handoffDispatcher->IsReady())
+            {
+                m_controlService->SetHandoffDispatcher(m_handoffDispatcher.get());
+            }
             if (!m_controlService->Start())
             {
                 const std::string detail = m_controlService->GetLastError();
@@ -669,6 +677,10 @@ namespace Spark::Server
             lastTick = tickStart;
             if (runtime.headlessRhiBridge)
                 runtime.headlessRhiBridge->BeginFrame();
+            if (m_handoffDispatcher)
+            {
+                m_handoffDispatcher->Pump();
+            }
             m_modules->UpdateAll(deltaTime);
             auto& fixed = Spark::FixedTimestepAccumulator::GetInstance();
             fixed.Advance(deltaTime);
@@ -715,6 +727,11 @@ namespace Spark::Server
         if (m_controlService)
             m_controlService->Stop();
         m_controlService.reset();
+        if (m_handoffDispatcher)
+        {
+            m_handoffDispatcher->Stop();
+        }
+        m_handoffDispatcher.reset();
         if (m_server)
             m_server->Stop();
         m_server.reset();

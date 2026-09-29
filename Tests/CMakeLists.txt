@@ -675,6 +675,8 @@ add_executable(SparkTests
     TestTF120SharedSaveRoot.cpp
     # TF-120 character residency fence (TFDatabaseResidency.cpp below)
     TestTF120Residency.cpp
+    TestTF120HandoffReservation.cpp
+    TestPersistenceConcurrency.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseResidency.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseBackup.cpp"
@@ -1583,6 +1585,13 @@ if(TARGET SparkServerCore)
             LINK_LIBRARY_OVERRIDE "WHOLE_ARCHIVE,SparkEngineLib")
     endif()
 endif()
+if(ENABLE_NETWORKING)
+    # TF-120: production participants and host dispatcher; no mirrored handoff state machine.
+    target_sources(SparkTests PRIVATE
+        TestHandoffParticipant.cpp
+        TestTF120Migration.cpp
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Net/TFHandoffParticipant.cpp")
+endif()
 if(TARGET SparkGatewayCore)
     target_sources(SparkTests PRIVATE
         TestSparkGatewayCoordinator.cpp
@@ -2200,7 +2209,7 @@ endif()
 set(_spark_data120_persistence_selectors
     "Persistence_Transaction_=3"
     "Persistence_Migration_=11"
-    "Persistence_Durable_=${_spark_data120_durable_count}" "Persistence_Concurrency_=4"
+    "Persistence_Durable_=${_spark_data120_durable_count}" "Persistence_Concurrency_=6"
     "AsyncDatabaseReal_=1")
 foreach(_spark_data120_selector IN LISTS _spark_data120_persistence_selectors)
     string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")
@@ -2251,6 +2260,37 @@ set_tests_properties(TF120_Residency PROPERTIES
     LABELS "persistence;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
+
+add_test(NAME TerrafrontMigration_Reservation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(TerrafrontMigration_Reservation PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_HandoffReservation_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "persistence;terrafront-migration"
+    RUN_SERIAL TRUE
+    TIMEOUT 120)
+if(ENABLE_NETWORKING)
+    add_test(NAME TerrafrontMigration_Participant COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(TerrafrontMigration_Participant PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_Migration_;SPARK_TEST_EXPECT_COUNT=6"
+        LABELS "persistence;terrafront-migration"
+        RUN_SERIAL TRUE
+        TIMEOUT 240)
+    add_test(NAME TerrafrontMigration_Dispatcher COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(TerrafrontMigration_Dispatcher PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestHandoffParticipant.cpp;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "network;terrafront-migration"
+        RUN_SERIAL TRUE
+        TIMEOUT 30)
+endif()
+if(TARGET SparkGatewayCore)
+    # Authenticated, epoch-fenced area-control frames are the only way into the game-thread participant.
+    add_test(NAME TerrafrontMigration_GatewayDispatch COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(TerrafrontMigration_GatewayDispatch PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_NAME=GatewayAreaControl_DispatchesOnlyAuthenticatedFencedPhasesToParticipant;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "gateway;security;terrafront-migration"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
 
 # DATA-120 / TF-120: authority processes sharing one TF_SAVE_ROOT database. The
 # two spawned-peer cases (TF120PeerProcess.h) run on every platform, so the

@@ -33,6 +33,7 @@
 #include "Utils/DaemonClient.h"
 #include "Utils/DaemonProtocol.h"
 #include "Utils/Logger.h"
+#include "Engine/Networking/AreaHandoffDispatcher.h"
 // Keep the private-member access limited to this test translation unit; the
 // production header never exposes a test friend or macro-controlled authority.
 // clang-format off
@@ -998,6 +999,132 @@ TEST(GatewayAreaControl_LiveTwoAreaHandoffReachesSourceAndTarget)
     target.Stop();
     std::filesystem::remove(sourceState, error);
     std::filesystem::remove(targetState, error);
+}
+
+namespace
+{
+    // Records which phases reached the game-thread participant through the production dispatcher.
+    class RecordingHandoffParticipant final : public Spark::Net::IAreaHandoffParticipant
+    {
+      public:
+        Spark::Net::HandoffResult Prepare(const Spark::Net::HandoffRequest& request) override
+        {
+            return Record(Spark::Net::HandoffPhase::Prepare, request);
+        }
+        Spark::Net::HandoffResult Transfer(const Spark::Net::HandoffRequest& request) override
+        {
+            return Record(Spark::Net::HandoffPhase::Transfer, request);
+        }
+        Spark::Net::HandoffResult Commit(const Spark::Net::HandoffRequest& request) override
+        {
+            return Record(Spark::Net::HandoffPhase::Commit, request);
+        }
+        Spark::Net::HandoffResult Acknowledge(const Spark::Net::HandoffRequest& request) override
+        {
+            return Record(Spark::Net::HandoffPhase::Acknowledge, request);
+        }
+        Spark::Net::HandoffResult Abort(const Spark::Net::HandoffRequest& request) override
+        {
+            return Record(Spark::Net::HandoffPhase::Abort, request);
+        }
+
+        size_t Count() const
+        {
+            std::lock_guard lock(m_mutex);
+            return m_calls.size();
+        }
+
+        std::pair<Spark::Net::HandoffPhase, uint64_t> Last() const
+        {
+            std::lock_guard lock(m_mutex);
+            return m_calls.back();
+        }
+
+      private:
+        Spark::Net::HandoffResult Record(Spark::Net::HandoffPhase phase, const Spark::Net::HandoffRequest& request)
+        {
+            std::lock_guard lock(m_mutex);
+            m_calls.emplace_back(phase, request.epoch);
+            return Spark::Net::HandoffResult::Applied;
+        }
+
+        mutable std::mutex m_mutex;
+        std::vector<std::pair<Spark::Net::HandoffPhase, uint64_t>> m_calls;
+    };
+} // namespace
+
+// TF-120: only a MAC-verified, fresh, never-seen frame whose epoch and phase pass the persisted fence reaches the
+// game-thread participant. Forged, replayed, stale-epoch, out-of-order and retargeted frames stop at the service.
+TEST(GatewayAreaControl_DispatchesOnlyAuthenticatedFencedPhasesToParticipant)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-dispatch") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x61);
+    const std::vector<uint8_t> attackerKey(32, 0x62);
+    const std::string endpoint = UniqueName("spark-area-control-dispatch");
+
+    Spark::Net::AreaHandoffDispatcher dispatcher;
+    RecordingHandoffParticipant participant;
+    std::atomic<bool> pumping{true};
+    std::thread gameThread(
+        [&]
+        {
+            while (pumping.load())
+            {
+                dispatcher.Pump();
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        });
+
+    LocalAreaControlService service(endpoint, key, state);
+    service.SetHandoffDispatcher(&dispatcher);
+    ASSERT_TRUE(service.Start());
+    uint64_t nonce = 0x9000;
+    const auto send = [&](const std::vector<uint8_t>& signingKey, AreaControlPhase phase, const HandoffCommand& command)
+    {
+        const auto frame = ForgeAreaControlFrame(signingKey, phase, command, WallClockMilliseconds(), ++nonce);
+        return SendRawAreaControlFrame(endpoint, phase, frame);
+    };
+
+    // With the dispatcher attached but no participant bound, the service reports itself unavailable.
+    const HandoffCommand command{"tf/42", 3, 1, 2};
+    EXPECT_TRUE(send(key, AreaControlPhase::Prepare, command) == HandoffOperationResult::Unavailable);
+    EXPECT_EQ(participant.Count(), size_t{0});
+    dispatcher.SetParticipant(&participant);
+
+    EXPECT_TRUE(send(attackerKey, AreaControlPhase::Prepare, command) == HandoffOperationResult::Rejected);
+    EXPECT_EQ(participant.Count(), size_t{0});
+
+    const auto prepare =
+        ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x8001);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, prepare) ==
+                HandoffOperationResult::Applied);
+    EXPECT_EQ(participant.Count(), size_t{1});
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, prepare) ==
+                HandoffOperationResult::Rejected);                                                 // replayed nonce
+    EXPECT_TRUE(send(key, AreaControlPhase::Commit, command) == HandoffOperationResult::Rejected); // skips Transfer
+    EXPECT_TRUE(send(key, AreaControlPhase::Transfer, HandoffCommand{"tf/42", 3, 1, 9}) ==
+                HandoffOperationResult::Rejected); // same epoch, different target
+    EXPECT_TRUE(send(key, AreaControlPhase::Prepare, HandoffCommand{"tf/42", 2, 1, 2}) ==
+                HandoffOperationResult::Rejected); // stale epoch
+    EXPECT_TRUE(send(key, AreaControlPhase::Prepare, HandoffCommand{"tf/42", 4, 1, 2}) ==
+                HandoffOperationResult::Rejected); // newer epoch before this one resolved
+    EXPECT_EQ(participant.Count(), size_t{1});
+
+    // A retried phase is redelivered so the participant can answer idempotently; the next phase advances.
+    EXPECT_TRUE(send(key, AreaControlPhase::Prepare, command) == HandoffOperationResult::Duplicate);
+    EXPECT_EQ(participant.Count(), size_t{2});
+    EXPECT_TRUE(send(key, AreaControlPhase::Transfer, command) == HandoffOperationResult::Applied);
+    EXPECT_EQ(participant.Count(), size_t{3});
+    EXPECT_TRUE(participant.Last().first == Spark::Net::HandoffPhase::Transfer);
+    EXPECT_EQ(participant.Last().second, uint64_t{3});
+
+    service.Stop();
+    pumping.store(false);
+    gameThread.join();
+    dispatcher.Stop();
+    std::filesystem::remove(state, error);
 }
 
 TEST(GatewayAreaControl_StopCancelsPartialClientFrame)

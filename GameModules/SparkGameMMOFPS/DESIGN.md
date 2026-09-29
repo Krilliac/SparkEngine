@@ -380,6 +380,22 @@ dependencies outside the minimal-dependency unit-test build.
 
 ## 8. Multi-process harness: impairment, soak budgets, cold restart (TF-110, TF-120)
 
+> TF-120 integration update: the engine-side fenced participant is wired through SparkServer's authenticated
+> area-control service and game-thread dispatcher. TFDatabase schema v5 reserves ownership and stores a pawn
+> checkpoint across retries. Under OD-16 the reconnect redirect is no longer the production path; it still
+> answers until the fenced path reaches clients, and it cannot take a reserved character. Operator-authored
+> `gatewayAreaId` values must match actual gateway registration IDs, and the destination must already have
+> the matching authenticated account/connection binding. Automatic gateway admission/routing and client
+> scene replacement remain unfinished; the terminal is not a completed cross-continent travel path.
+> See `wiki/subsystems/Area-Server-Architecture.md` for the wiring and evidence limits.
+
+`TF120_Migration_FullCapacityWithLostDeliveriesHasOneOwnerEach` migrates `kMaxPlayers` characters through
+the production database and participants, losing some Commit requests (retried) and some Commit replies
+(redelivered), and checks one durable owner and one install per character. Its authority adapter is a test
+double: it is a state-transfer correctness check, not a budget, measured server tick, bandwidth, RSS,
+multi-process soak or rendered-world result. The provisional soak thresholds below are unchanged, and the
+TF-120 budget criterion remains unmet until real process runs pass them.
+
 `Tools/Terrafront/multiclient.py` drives real `SparkEngine` processes (one
 dedicated server, headless clients) through `-exec` scripts and compares their
 `tf_observe` output. Beyond the convergence scenarios it has three modes. The

@@ -387,9 +387,9 @@ namespace Terrafront
         // Absent schemaVersion == legacy v0 (pre-DATA-120), which is the same
         // row shape as v1 and upgrades on the next write. Anything newer may
         // carry fields this build would drop, so it must not be loaded.
+        uint32_t schemaVersion = 0;
         if (root.HasKey("schemaVersion"))
         {
-            uint32_t schemaVersion = 0;
             if (!ReadUnsigned(root["schemaVersion"], schemaVersion) || schemaVersion == 0)
                 return LoadResult::Corrupt;
             if (schemaVersion == kRetiredLedgerSchemaVersion)
@@ -473,6 +473,65 @@ namespace Terrafront
                 (!row["resident"].IsString() ||
                  (!row["resident"].AsString().empty() && !SavePaths::IsValidContinentKey(row["resident"].AsString()))))
                 return LoadResult::Corrupt;
+            const bool hasMigrationFields = row.HasKey("migrationOperation") || row.HasKey("migrationSource") ||
+                                            row.HasKey("migrationDestination") || row.HasKey("migrationPayload") ||
+                                            row.HasKey("migrationLastOperation") || row.HasKey("migrationEpoch") ||
+                                            row.HasKey("migrationState");
+            if (schemaVersion >= 5 && !hasMigrationFields)
+            {
+                return LoadResult::Corrupt;
+            }
+            if (hasMigrationFields && (!row.HasKey("migrationOperation") || !row.HasKey("migrationSource") ||
+                                       !row.HasKey("migrationDestination") || !row.HasKey("migrationPayload") ||
+                                       !row.HasKey("migrationLastOperation") || !row.HasKey("migrationEpoch") ||
+                                       !row.HasKey("migrationState") || !row["migrationOperation"].IsString() ||
+                                       !row["migrationSource"].IsString() || !row["migrationDestination"].IsString() ||
+                                       !row["migrationPayload"].IsString() ||
+                                       !row["migrationLastOperation"].IsString() || !row["migrationState"].IsString()))
+            {
+                return LoadResult::Corrupt;
+            }
+            uint64_t migrationEpoch = 0;
+            if (hasMigrationFields &&
+                (!ReadUnsigned(row["migrationEpoch"], migrationEpoch) || migrationEpoch >= kExhaustedJsonId))
+            {
+                return LoadResult::Corrupt;
+            }
+            const std::string migrationState = hasMigrationFields ? row["migrationState"].AsString() : "";
+            const std::string migrationOperation = hasMigrationFields ? row["migrationOperation"].AsString() : "";
+            const std::string migrationSource = hasMigrationFields ? row["migrationSource"].AsString() : "";
+            const std::string migrationDestination = hasMigrationFields ? row["migrationDestination"].AsString() : "";
+            const std::string migrationPayload = hasMigrationFields ? row["migrationPayload"].AsString() : "";
+            const std::string migrationLastOperation =
+                hasMigrationFields ? row["migrationLastOperation"].AsString() : "";
+            if (migrationPayload.size() > 65536 || migrationOperation.size() > 128 ||
+                migrationLastOperation.size() > 128 ||
+                (migrationState != "" && migrationState != "reserved" && migrationState != "committed" &&
+                 migrationState != "aborted"))
+            {
+                return LoadResult::Corrupt;
+            }
+            if (migrationState.empty() &&
+                (!migrationOperation.empty() || !migrationSource.empty() || !migrationDestination.empty() ||
+                 !migrationPayload.empty() || !migrationLastOperation.empty() || migrationEpoch != 0))
+            {
+                return LoadResult::Corrupt;
+            }
+            if (migrationState == "reserved" &&
+                (migrationOperation.empty() || !SavePaths::IsValidContinentKey(migrationSource) ||
+                 !SavePaths::IsValidContinentKey(migrationDestination) || migrationSource == migrationDestination ||
+                 migrationEpoch == 0 || row["resident"].AsString() != migrationSource))
+            {
+                return LoadResult::Corrupt;
+            }
+            if ((migrationState == "committed" || migrationState == "aborted") &&
+                (!migrationOperation.empty() || migrationLastOperation.empty() ||
+                 !SavePaths::IsValidContinentKey(migrationSource) ||
+                 !SavePaths::IsValidContinentKey(migrationDestination) || migrationSource == migrationDestination ||
+                 migrationEpoch == 0))
+            {
+                return LoadResult::Corrupt;
+            }
 
             if (row.HasKey("unlocks"))
             {
@@ -564,6 +623,34 @@ namespace Terrafront
                 rec.revision = static_cast<uint64_t>(row["revision"].AsNumber(0.0));
                 if (row["resident"].IsString())
                     rec.residentContinent = row["resident"].AsString();
+                if (row["migrationOperation"].IsString())
+                {
+                    rec.migrationOperation = row["migrationOperation"].AsString();
+                }
+                if (row["migrationSource"].IsString())
+                {
+                    rec.migrationSource = row["migrationSource"].AsString();
+                }
+                if (row["migrationDestination"].IsString())
+                {
+                    rec.migrationDestination = row["migrationDestination"].AsString();
+                }
+                if (row["migrationPayload"].IsString())
+                {
+                    rec.migrationPayload = row["migrationPayload"].AsString();
+                }
+                if (row["migrationLastOperation"].IsString())
+                {
+                    rec.migrationLastOperation = row["migrationLastOperation"].AsString();
+                }
+                if (row["migrationEpoch"].IsNumber())
+                {
+                    rec.migrationEpoch = static_cast<uint64_t>(row["migrationEpoch"].AsNumber(0.0));
+                }
+                if (row["migrationState"].IsString())
+                {
+                    rec.migrationState = row["migrationState"].AsString();
+                }
 
                 // W6 progression expansion (additive keys; tolerant of old files)
                 if (row.HasKey("unlocks") && row["unlocks"].IsArray())
@@ -654,6 +741,13 @@ namespace Terrafront
             row["lastPlayedMs"] = Spark::Json::Value(static_cast<double>(c.lastPlayedMs));
             row["revision"] = Spark::Json::Value(static_cast<double>(c.revision));
             row["resident"] = Spark::Json::Value(c.residentContinent);
+            row["migrationOperation"] = Spark::Json::Value(c.migrationOperation);
+            row["migrationSource"] = Spark::Json::Value(c.migrationSource);
+            row["migrationDestination"] = Spark::Json::Value(c.migrationDestination);
+            row["migrationPayload"] = Spark::Json::Value(c.migrationPayload);
+            row["migrationLastOperation"] = Spark::Json::Value(c.migrationLastOperation);
+            row["migrationEpoch"] = Spark::Json::Value(static_cast<double>(c.migrationEpoch));
+            row["migrationState"] = Spark::Json::Value(c.migrationState);
 
             // W6 progression expansion (additive keys)
             Spark::Json::Value unlocks = Spark::Json::Value::MakeArray();
@@ -990,7 +1084,8 @@ namespace Terrafront
                              // fence, not the only one.
                              const auto base = m_baseRevisions.find(update.charId);
                              if (base == m_baseRevisions.end() || base->second != it->revision ||
-                                 (!m_boundContinent.empty() && it->residentContinent != m_boundContinent))
+                                 (!m_boundContinent.empty() && it->residentContinent != m_boundContinent) ||
+                                 !it->migrationOperation.empty())
                              {
                                  conflictCharId = update.charId;
                                  return false;

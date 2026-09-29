@@ -59,6 +59,16 @@ namespace Terrafront
 
     void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data, size_t size)
     {
+        // A reserved source has no gameplay pawn. Keep its authenticated binding fixed until commit/abort;
+        // otherwise a character-selection message could recycle the PlayerId while its checkpoint is in flight.
+        for (const auto& [character, checkpoint] : m_suspendedCharacters)
+        {
+            (void)character;
+            if (checkpoint.player == sender)
+            {
+                return;
+            }
+        }
         // W5 T6 (T4-review #1 security fix): CRITICAL security gate. Before this
         // fix, the enter-world gate only withheld TF_WorldWelcome — the gameplay
         // handlers themselves never verified the sender had actually logged in

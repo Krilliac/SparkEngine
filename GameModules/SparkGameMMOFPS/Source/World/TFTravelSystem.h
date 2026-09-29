@@ -86,6 +86,7 @@ namespace Terrafront
             // button stays disabled. Never set for the active entry.
             std::string host;
             uint16_t port{0};
+            uint32_t gatewayAreaId{0}; ///< explicit gateway registration ID; zero disables fenced handoff routing
         };
 
         TFTravelSystem();
@@ -138,6 +139,12 @@ namespace Terrafront
         /// Returns false (host/port untouched) when `mapId` is unregistered
         /// or has no configured endpoint.
         bool LookupContinentEndpoint(uint8_t mapId, std::string& outHost, uint16_t& outPort) const;
+
+        /// @brief Resolve an explicit, unique gatewayAreaId to its durable continent key (never infer from mapId).
+        bool LookupHandoffContinent(uint32_t areaId, std::string& key) const;
+
+        /// @brief Keep a restored sanctuary checkpoint; discard the ordinary spawn-pad teleport queued by spawn.
+        void ServerAdoptHandoff(PlayerId player);
 
         /// Debug panel toggle (tf_* console pattern).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }

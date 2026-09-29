@@ -73,7 +73,23 @@ namespace Terrafront
                                                 {
                                                     continue;
                                                 }
+                                                const std::string staleOperation = row.migrationOperation;
+                                                const std::string staleSource = row.migrationSource;
+                                                const std::string staleDestination = row.migrationDestination;
+                                                const std::string stalePayload = row.migrationPayload;
                                                 row.residentContinent.clear();
+                                                row.migrationOperation.clear();
+                                                row.migrationSource.clear();
+                                                row.migrationDestination.clear();
+                                                row.migrationPayload.clear();
+                                                if (!staleOperation.empty())
+                                                {
+                                                    row.migrationLastOperation = staleOperation;
+                                                    row.migrationState = "aborted";
+                                                    row.migrationSource = staleSource;
+                                                    row.migrationDestination = staleDestination;
+                                                    row.migrationPayload = stalePayload;
+                                                }
                                                 row.revision = newRevision;
                                                 ++cleared;
                                             }
@@ -133,12 +149,28 @@ namespace Terrafront
                 }
                 if (it->residentContinent == m_boundContinent)
                 {
+                    if (!it->migrationOperation.empty())
+                    {
+                        heldBy = it->migrationDestination;
+                        return false;
+                    }
                     alreadyHere = true;
                     claimed = *it;
                     return false; // nothing to write; the baseline is adopted below
                 }
                 if (!it->residentContinent.empty())
                 {
+                    if (!it->migrationOperation.empty())
+                    {
+                        if (IsHeldByLiveAuthority(it->migrationSource))
+                        {
+                            heldBy = it->migrationSource;
+                            return false;
+                        }
+                        it->migrationLastOperation = it->migrationOperation;
+                        it->migrationState = "aborted";
+                        it->migrationOperation.clear();
+                    }
                     if (IsHeldByLiveAuthority(it->residentContinent))
                     {
                         heldBy = it->residentContinent;
@@ -185,6 +217,7 @@ namespace Terrafront
 
         bool found = false;
         bool residentHere = false;
+        bool migrationActive = false;
         const bool committed =
             Transact("ReleaseCharacter",
                      [&](Snapshot& fresh, uint64_t newRevision)
@@ -197,6 +230,11 @@ namespace Terrafront
                          }
                          found = true;
                          residentHere = it->residentContinent == m_boundContinent;
+                         migrationActive = residentHere && !it->migrationOperation.empty();
+                         if (migrationActive)
+                         {
+                             return false;
+                         }
                          if (!residentHere)
                          {
                              return false; // already released or taken over: nothing to do
@@ -205,11 +243,214 @@ namespace Terrafront
                          it->revision = newRevision;
                          return true;
                      });
-        if (!found || (residentHere && !committed))
+        if (!found || migrationActive || (residentHere && !committed))
         {
+            if (migrationActive)
+            {
+                m_status = TFDatabaseStatus::Conflict;
+            }
             return false;
         }
         m_baseRevisions.erase(charId);
+        m_status = TFDatabaseStatus::ReadyExisting;
+        return true;
+    }
+
+    bool TFDatabase::ReserveMigration(uint64_t charId, std::string_view operationId, uint64_t operationEpoch,
+                                      std::string_view destinationContinent, std::string_view payload,
+                                      TFCharacterRecord& out)
+    {
+        if (!m_open || m_boundContinent.empty() || operationId.empty() || operationId.size() > 128 ||
+            operationEpoch == 0 || operationEpoch >= 9007199254740991ULL || payload.size() > 65536 ||
+            !SavePaths::IsValidContinentKey(destinationContinent) || destinationContinent == m_boundContinent)
+        {
+            return false;
+        }
+
+        TFCharacterRecord reserved;
+        bool alreadyReserved = false;
+        bool refused = false;
+        const std::string operation(operationId);
+        const std::string destination(destinationContinent);
+        const std::string state(payload);
+        const bool committed = Transact(
+            "ReserveMigration",
+            [&](Snapshot& fresh, uint64_t newRevision)
+            {
+                auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
+                                       [charId](const TFCharacterRecord& c) { return c.id == charId; });
+                if (it == fresh.characters.end() || it->residentContinent != m_boundContinent ||
+                    m_baseRevisions.find(charId) == m_baseRevisions.end() || m_baseRevisions[charId] != it->revision)
+                {
+                    refused = true;
+                    return false;
+                }
+                if (!it->migrationOperation.empty())
+                {
+                    alreadyReserved = it->migrationOperation == operation && it->migrationDestination == destination &&
+                                      it->migrationPayload == state && it->migrationState == "reserved" &&
+                                      it->migrationEpoch == operationEpoch;
+                    refused = !alreadyReserved;
+                    reserved = *it;
+                    return false;
+                }
+                if (!it->migrationState.empty() && operationEpoch <= it->migrationEpoch)
+                {
+                    refused = true;
+                    return false;
+                }
+                it->migrationOperation = operation;
+                it->migrationSource = m_boundContinent;
+                it->migrationDestination = destination;
+                it->migrationPayload = state;
+                it->migrationEpoch = operationEpoch;
+                it->migrationState = "reserved";
+                it->revision = newRevision;
+                reserved = *it;
+                return true;
+            });
+        if (refused)
+        {
+            m_status = TFDatabaseStatus::Conflict;
+            return false;
+        }
+        if (!committed && !alreadyReserved)
+        {
+            return false;
+        }
+        m_baseRevisions[charId] = reserved.revision;
+        out = reserved;
+        m_status = TFDatabaseStatus::ReadyExisting;
+        return true;
+    }
+
+    bool TFDatabase::CommitMigration(uint64_t charId, std::string_view operationId, TFCharacterRecord& out)
+    {
+        if (!m_open || m_boundContinent.empty() || operationId.empty() || operationId.size() > 128)
+        {
+            return false;
+        }
+
+        TFCharacterRecord completed;
+        bool alreadyCommitted = false;
+        bool refused = false;
+        const std::string operation(operationId);
+        const bool committed =
+            Transact("CommitMigration",
+                     [&](Snapshot& fresh, uint64_t newRevision)
+                     {
+                         auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
+                                                [charId](const TFCharacterRecord& c) { return c.id == charId; });
+                         if (it == fresh.characters.end())
+                         {
+                             refused = true;
+                             return false;
+                         }
+                         if (it->residentContinent == m_boundContinent && it->migrationLastOperation == operation &&
+                             it->migrationState == "committed" && it->migrationOperation.empty())
+                         {
+                             alreadyCommitted = true;
+                             completed = *it;
+                             return false;
+                         }
+                         if (it->migrationOperation != operation || it->migrationDestination != m_boundContinent ||
+                             it->migrationState != "reserved")
+                         {
+                             refused = true;
+                             return false;
+                         }
+                         it->residentContinent = m_boundContinent;
+                         it->migrationOperation.clear();
+                         it->migrationLastOperation = operation;
+                         it->migrationState = "committed";
+                         it->revision = newRevision;
+                         completed = *it;
+                         return true;
+                     });
+        if (refused)
+        {
+            m_status = TFDatabaseStatus::Conflict;
+            return false;
+        }
+        if (!committed && !alreadyCommitted)
+        {
+            return false;
+        }
+        m_baseRevisions[charId] = completed.revision;
+        out = completed;
+        m_status = TFDatabaseStatus::ReadyExisting;
+        return true;
+    }
+
+    bool TFDatabase::AbortMigration(uint64_t charId, std::string_view operationId)
+    {
+        if (!m_open || m_boundContinent.empty() || operationId.empty() || operationId.size() > 128)
+        {
+            return false;
+        }
+
+        bool found = false;
+        bool matching = false;
+        bool alreadyAborted = false;
+        uint64_t resultingRevision = 0;
+        const std::string operation(operationId);
+        const bool committed =
+            Transact("AbortMigration",
+                     [&](Snapshot& fresh, uint64_t newRevision)
+                     {
+                         auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
+                                                [charId](const TFCharacterRecord& c) { return c.id == charId; });
+                         if (it == fresh.characters.end())
+                         {
+                             return false;
+                         }
+                         found = true;
+                         if (it->migrationOperation.empty())
+                         {
+                             alreadyAborted =
+                                 it->migrationLastOperation == operation && it->migrationState == "aborted";
+                             return false;
+                         }
+                         if (it->migrationOperation != operation || it->migrationSource != m_boundContinent ||
+                             it->migrationState != "reserved")
+                         {
+                             return false;
+                         }
+                         matching = true;
+                         it->migrationOperation.clear();
+                         it->migrationLastOperation = operation;
+                         it->migrationState = "aborted";
+                         it->revision = newRevision;
+                         resultingRevision = newRevision;
+                         return true;
+                     });
+        if (!matching && found && !alreadyAborted)
+        {
+            m_status = TFDatabaseStatus::Conflict;
+            return false;
+        }
+        if (!found || (!matching && !alreadyAborted))
+        {
+            return false;
+        }
+        if (matching && !committed)
+        {
+            return false;
+        }
+        if (alreadyAborted)
+        {
+            const auto it = std::find_if(m_snapshot.characters.begin(), m_snapshot.characters.end(),
+                                         [charId](const TFCharacterRecord& row) { return row.id == charId; });
+            if (it == m_snapshot.characters.end() || it->residentContinent != m_boundContinent)
+            {
+                m_status = TFDatabaseStatus::Conflict;
+                return false;
+            }
+        }
+        if (matching)
+        {
+            m_baseRevisions[charId] = resultingRevision;
+        }
         m_status = TFDatabaseStatus::ReadyExisting;
         return true;
     }

@@ -1,5 +1,22 @@
 # Persistence System
 
+## TF-120 handoff reservations and DATA-120 concurrency
+
+TERRAFRONT's file-backed `TFDatabase` writes schema v5. Ordinary v4 character rows migrate on the next
+commit. Each character can carry a bounded migration checkpoint, source/destination keys, an operation ID,
+an epoch and a terminal outcome. Reserve retains source ownership; destination commit changes it in one
+locked durable transaction. Aborted and committed epochs cannot be reused. Reserved rows reject ordinary
+progress/meta writes, release and competing claims, so the checkpoint cannot become stale during transfer.
+Terminal payloads remain available for retries after the database commit but before gameplay installation.
+This is the actual TERRAFRONT JSON backend; these checks are not SQLite concurrency measurements.
+
+`TF120_HandoffReservation_*` and `TF120_Migration_*` exercise real files and production persistence code.
+`Persistence_Concurrency_*` additionally starts independent economy writers on real threads and checks that
+conflict retries retain every acknowledged delta, and races territory authorities on real threads for one
+continent's file: each round exactly one holds the lease, every other contender's write is refused, and the
+next owner starts from the previous owner's committed snapshot. This does not promise merging arbitrary stale
+territory snapshots or durable economy operation IDs. Local runs are not exact-commit CI evidence.
+
 SparkEngine provides two independent persistence layers for different use cases:
 
 1. **[Save System](Save-System.md)** -- ECS-aware game state serialization to compressed JSON files. Designed for single-player save slots, quicksave/quickload, and autosave rotation.
@@ -362,9 +379,9 @@ Enforced by `Persistence_Durable_*` in `Tests/TestDATA120PersistenceReal.cpp` (b
 
 ## Schema Versions and Character Residency (TERRAFRONT)
 
-Every TERRAFRONT store reads schema N and N-1, writes N, and refuses a newer file without rewriting it: `TFDatabase` (v4), the territory files (`WorldSave::DecodeTerritory`, v1), `TFOutfitStore` and the `TFSocialSystem` store (`schemaVersion` 1; a file without the key is v0). Fixtures: `Persistence_Migration_*`. TFDatabase v4 adds each character's `resident` continent: an authority binds the database to its continent (`BindAuthority`), enter world claims the character (`ClaimCharacter`, refused while another live continent holds it, taken over from a dead one), and leave world releases it once its final progress and meta are durable. Tests: `TF120_Residency_*`. Details in `docs/specs/persistence.md`.
+Every TERRAFRONT store reads schema N and N-1, writes N, and refuses a newer file without rewriting it: `TFDatabase` (v5; v5 adds the TF-120 handoff reservation), the territory files (`WorldSave::DecodeTerritory`, v1), `TFOutfitStore` and the `TFSocialSystem` store (`schemaVersion` 1; a file without the key is v0). Fixtures: `Persistence_Migration_*`. TFDatabase v4 adds each character's `resident` continent: an authority binds the database to its continent (`BindAuthority`), enter world claims the character (`ClaimCharacter`, refused while another live continent holds it, taken over from a dead one), and leave world releases it once its final progress and meta are durable. Tests: `TF120_Residency_*`. Details in `docs/specs/persistence.md`.
 
-**Concurrent writers.** The character database is multi-writer: every call is one transaction under `<db>.lock`, contested creates of one name commit once, and a stale absolute write (for example two authorities spending the same flux) is refused with `Conflict`. The per-continent world files are single-writer: `WorldSave::WriteJson(writerLease, path, root, detail)` refuses unless the caller holds a `SavePaths::ExclusiveFileLock` on exactly that file (`LockedTarget()`), and `TFRegionSystem` / `TFProgressionSystem` take that lease before loading, so a second authority for the continent latches its writes off. Tests: `Persistence_Concurrency_*` (4 cases).
+**Concurrent writers.** The character database is multi-writer: every call is one transaction under `<db>.lock`, contested creates of one name commit once, and a stale absolute write (for example two authorities spending the same flux) is refused with `Conflict`. The per-continent world files are single-writer: `WorldSave::WriteJson(writerLease, path, root, detail)` refuses unless the caller holds a `SavePaths::ExclusiveFileLock` on exactly that file (`LockedTarget()`), and `TFRegionSystem` / `TFProgressionSystem` take that lease before loading, so a second authority for the continent latches its writes off. Tests: `Persistence_Concurrency_*`.
 
 ## Backup, Restore and Recovery Drill (TFDatabase)
 

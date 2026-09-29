@@ -80,6 +80,11 @@
  * per-call file lock, so no two claims interleave. Unbound instances (backup
  * and restore tooling, tests) never read or change residency.
  *
+ * Schema v5 adds a bounded handoff checkpoint and a per-character monotonic migration epoch.
+ * A reservation freezes ordinary character writes while the source remains the owner. Destination
+ * commit atomically moves residency; abort keeps source ownership. Terminal operation metadata and
+ * payload remain durable for idempotent retries. Schema v4 rows load with an empty migration fence.
+ *
  * Thread affinity: game thread only (no internal synchronization; the file
  * locks serialize processes, not threads). Ownership: the authority lock
  * lives exactly as long as the binding. Allocation: one snapshot per call.
@@ -186,8 +191,15 @@ namespace Terrafront
         uint16_t rank = 1;
         uint32_t flux = 0;
         int64_t createdAtMs = 0, lastPlayedMs = 0;
-        uint64_t revision = 0;         ///< file revision of this row's last change (0 == legacy/never rewritten)
-        std::string residentContinent; ///< schema v4 "resident": continent key it is in world on; empty == none
+        uint64_t revision = 0;              ///< file revision of this row's last change (0 == legacy/never rewritten)
+        std::string residentContinent;      ///< schema v4 "resident": continent key it is in world on; empty == none
+        std::string migrationOperation;     ///< TF-120 in-flight handoff operation identity; empty == none
+        std::string migrationSource;        ///< TF-120 source continent for the in-flight handoff
+        std::string migrationDestination;   ///< TF-120 destination continent for the in-flight handoff
+        std::string migrationPayload;       ///< TF-120 bounded opaque participant state captured by the source
+        std::string migrationLastOperation; ///< TF-120 last committed operation, for duplicate commit fencing
+        uint64_t migrationEpoch = 0; ///< TF-120 gateway epoch of the last reservation; the next one must be larger
+        std::string migrationState;  ///< empty, reserved, committed, or aborted
 
         // --- W6 progression expansion (additive schema; absent keys on old save
         // files simply load as the empty defaults below) -------------------------
@@ -222,8 +234,8 @@ namespace Terrafront
     class TFDatabase
     {
       public:
-        /// On-disk schema written by this build (v4: character residency). Files without the key are v0.
-        static constexpr uint32_t kSchemaVersion = 4;
+        /// On-disk schema written by this build (v5: fenced handoff reservation). Files without the key are v0.
+        static constexpr uint32_t kSchemaVersion = 5;
         /// Written only by the withdrawn operation-id ledger build (b2d2953).
         /// Never reuse it.
         static constexpr uint32_t kRetiredLedgerSchemaVersion = 3;
@@ -289,6 +301,16 @@ namespace Terrafront
         /// Leave-world release: clear the residency if it is on the bound continent (idempotent otherwise)
         /// and drop this instance's baseline, so no later absolute write lands from here.
         bool ReleaseCharacter(uint64_t charId);
+        /// Reserve a handoff while the bound source remains the character's resident owner. Repeating the same
+        /// operation is idempotent; a different operation is refused until the existing reservation is resolved.
+        bool ReserveMigration(uint64_t charId, std::string_view operationId, uint64_t operationEpoch,
+                              std::string_view destinationContinent, std::string_view payload, TFCharacterRecord& out);
+        /// Commit a reserved handoff on the bound destination. The operation identity and destination are checked
+        /// inside the transaction; a repeated commit of the same operation is idempotent.
+        bool CommitMigration(uint64_t charId, std::string_view operationId, TFCharacterRecord& out);
+        /// Abort on the bound source. A duplicate succeeds only for that same aborted operation while the source
+        /// still owns the character; a committed operation, missing row or I/O failure is refused.
+        bool AbortMigration(uint64_t charId, std::string_view operationId);
         bool SaveCharacterProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux, int64_t lastPlayedMs);
 
         /// W6 progression expansion: overwrite the meta block (unlocks / loadout /
