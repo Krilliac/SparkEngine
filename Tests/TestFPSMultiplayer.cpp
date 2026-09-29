@@ -176,6 +176,50 @@ TEST(FPSMultiplayer_WireEncodingIsStableAndTruncatedPayloadDefaults)
     EXPECT_FALSE(truncatedInput.jump);
 }
 
+TEST(FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits)
+{
+    NetworkPlayerState state;
+    state.actionFlags = ActionJump;
+    state.sequenceNumber = 9;
+    auto bytes = state.Serialize();
+
+    // clientId (4) + 9 floats (36) = 40, followed by action flags and ack.
+    bytes[40] = 0x80;
+    EXPECT_EQ(NetworkPlayerState::Deserialize(bytes.data(), bytes.size()).sequenceNumber, 0u);
+
+    bytes = state.Serialize();
+    bytes[49] = 2;
+    EXPECT_EQ(NetworkPlayerState::Deserialize(bytes.data(), bytes.size()).sequenceNumber, 0u);
+
+    PlayerInput input;
+    input.sequenceNumber = 7;
+    auto inputBytes = input.Serialize();
+    inputBytes[16] = 2;
+    EXPECT_EQ(PlayerInput::Deserialize(inputBytes.data(), inputBytes.size()).sequenceNumber, 0u);
+}
+
+TEST(FPSMultiplayer_SnapshotDecoderRejectsMalformedRecordWhenBatchIsZero)
+{
+    NetworkPlayerState state;
+    state.sequenceNumber = 0;
+    std::vector<uint8_t> payload;
+    Detail::WriteU32(payload, 0);
+    payload.push_back(1);
+    payload.push_back(0);
+    const auto encoded = state.Serialize();
+    payload.insert(payload.end(), encoded.begin(), encoded.end());
+    Detail::WriteU32(payload, 0);
+    Detail::WriteU32(payload, 0);
+    Detail::WriteU32(payload, 0);
+    Detail::WriteU32(payload, 0);
+    payload[55] = 2;
+
+    uint32_t batch = 0;
+    std::vector<NetworkPlayerState> states;
+    std::vector<PlayerScore> scores;
+    EXPECT_FALSE(DecodeSnapshotBatch(payload.data(), payload.size(), batch, states, scores));
+}
+
 // Everything below drives the real NetworkManager over loopback sockets, which exist only
 // when ENABLE_NETWORKING is defined (the stable-v1 shipping profile turns it off).
 #ifdef ENABLE_NETWORKING

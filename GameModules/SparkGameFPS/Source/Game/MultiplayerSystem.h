@@ -133,57 +133,10 @@ namespace SparkFPS
         uint32_t sequenceNumber = 0;
 
         /** @brief Serialize state into byte buffer. */
-        std::vector<uint8_t> Serialize() const
-        {
-            std::vector<uint8_t> bytes;
-            bytes.reserve(SerializedSize);
-            Detail::WriteU32(bytes, clientId);
-            Detail::WriteFloat(bytes, posX);
-            Detail::WriteFloat(bytes, posY);
-            Detail::WriteFloat(bytes, posZ);
-            Detail::WriteFloat(bytes, velX);
-            Detail::WriteFloat(bytes, velY);
-            Detail::WriteFloat(bytes, velZ);
-            Detail::WriteFloat(bytes, yaw);
-            Detail::WriteFloat(bytes, pitch);
-            Detail::WriteFloat(bytes, health);
-            Detail::WriteU32(bytes, actionFlags);
-            Detail::WriteU32(bytes, acknowledgedInputSequence);
-            bytes.push_back(currentWeapon);
-            bytes.push_back(static_cast<uint8_t>(isAlive));
-            bytes.push_back(static_cast<uint8_t>(isCrouching));
-            Detail::WriteU32(bytes, sequenceNumber);
-            return bytes;
-        }
+        std::vector<uint8_t> Serialize() const;
 
         /** @brief Deserialize state from byte buffer. */
-        static NetworkPlayerState Deserialize(const uint8_t* data, size_t size)
-        {
-            if (!data || size < SerializedSize)
-            {
-                return {};
-            }
-
-            NetworkPlayerState state;
-            size_t offset = 0;
-            state.clientId = Detail::ReadU32(data, offset);
-            state.posX = Detail::ReadFloat(data, offset);
-            state.posY = Detail::ReadFloat(data, offset);
-            state.posZ = Detail::ReadFloat(data, offset);
-            state.velX = Detail::ReadFloat(data, offset);
-            state.velY = Detail::ReadFloat(data, offset);
-            state.velZ = Detail::ReadFloat(data, offset);
-            state.yaw = Detail::ReadFloat(data, offset);
-            state.pitch = Detail::ReadFloat(data, offset);
-            state.health = Detail::ReadFloat(data, offset);
-            state.actionFlags = Detail::ReadU32(data, offset);
-            state.acknowledgedInputSequence = Detail::ReadU32(data, offset);
-            state.currentWeapon = data[offset++];
-            state.isAlive = data[offset++] != 0;
-            state.isCrouching = data[offset++] != 0;
-            state.sequenceNumber = Detail::ReadU32(data, offset);
-            return state;
-        }
+        static NetworkPlayerState Deserialize(const uint8_t* data, size_t size);
     };
 
     /** @brief Client input sent to server each tick. */
@@ -201,42 +154,9 @@ namespace SparkFPS
         bool crouch = false;
         uint32_t sequenceNumber = 0;
 
-        std::vector<uint8_t> Serialize() const
-        {
-            std::vector<uint8_t> bytes;
-            bytes.reserve(SerializedSize);
-            Detail::WriteFloat(bytes, forward);
-            Detail::WriteFloat(bytes, strafe);
-            Detail::WriteFloat(bytes, yaw);
-            Detail::WriteFloat(bytes, pitch);
-            bytes.push_back(static_cast<uint8_t>(jump));
-            bytes.push_back(static_cast<uint8_t>(fire));
-            bytes.push_back(static_cast<uint8_t>(reload));
-            bytes.push_back(static_cast<uint8_t>(crouch));
-            Detail::WriteU32(bytes, sequenceNumber);
-            return bytes;
-        }
+        std::vector<uint8_t> Serialize() const;
 
-        static PlayerInput Deserialize(const uint8_t* data, size_t size)
-        {
-            if (!data || size < SerializedSize)
-            {
-                return {};
-            }
-
-            PlayerInput input;
-            size_t offset = 0;
-            input.forward = Detail::ReadFloat(data, offset);
-            input.strafe = Detail::ReadFloat(data, offset);
-            input.yaw = Detail::ReadFloat(data, offset);
-            input.pitch = Detail::ReadFloat(data, offset);
-            input.jump = data[offset++] != 0;
-            input.fire = data[offset++] != 0;
-            input.reload = data[offset++] != 0;
-            input.crouch = data[offset++] != 0;
-            input.sequenceNumber = Detail::ReadU32(data, offset);
-            return input;
-        }
+        static PlayerInput Deserialize(const uint8_t* data, size_t size);
     };
 
     /** @brief Per-player score tracking. */
@@ -250,6 +170,10 @@ namespace SparkFPS
         int32_t score = 0;
         uint32_t ping = 0;
     };
+
+    /** @brief Decode and validate one complete peer-supplied state snapshot batch. */
+    bool DecodeSnapshotBatch(const uint8_t* data, size_t size, uint32_t& outBatch,
+                             std::vector<NetworkPlayerState>& outStates, std::vector<PlayerScore>& outScores);
 
     /** @brief Projectile replication data. */
     struct ProjectileData

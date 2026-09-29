@@ -6,6 +6,9 @@
 #include "TestFramework.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 
+#include <filesystem>
+#include <fstream>
+
 TEST(Dialogue_CreateTree)
 {
     Spark::DialogueTree tree;
@@ -32,6 +35,47 @@ TEST(Dialogue_CreateTree)
     const auto* node = tree.GetNode("start");
     ASSERT_TRUE(node != nullptr);
     EXPECT_EQ(node->speakerName, std::string("Guard"));
+}
+
+TEST(Dialogue_LoadFailureDoesNotPartiallyReplaceTree)
+{
+    const auto path = std::filesystem::temp_directory_path() / "spark_dialogue_partial.json";
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << R"({"id":"replacement","startNode":"new","nodes":[{"nodeId":"new","type":"Text"},)";
+    }
+
+    Spark::DialogueTree tree;
+    tree.SetId("original");
+    tree.SetStartNodeId("old");
+    Spark::DialogueNode oldNode;
+    oldNode.id = "old";
+    oldNode.text = "preserved";
+    tree.AddNode(oldNode);
+
+    EXPECT_FALSE(tree.LoadFromFile(path.string()));
+    EXPECT_EQ(std::string("original"), tree.GetId());
+    EXPECT_EQ(std::string("old"), tree.GetStartNodeId());
+    EXPECT_EQ(static_cast<size_t>(1), tree.GetNodeCount());
+    const auto* node = tree.GetNode("old");
+    ASSERT_TRUE(node != nullptr);
+    EXPECT_EQ(std::string("preserved"), node->text);
+    std::filesystem::remove(path);
+}
+
+TEST(Dialogue_RejectsOversizedValidDocumentBeforeParsing)
+{
+    const auto path = std::filesystem::temp_directory_path() / "spark_dialogue_oversized.json";
+    const std::string document = R"({"id":"x","startNode":"n","nodes":[{"nodeId":"n","type":"Text"}]})";
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << document << std::string(8u * 1024u * 1024u + 1u - document.size(), ' ');
+    }
+
+    Spark::DialogueTree tree;
+    EXPECT_FALSE(tree.LoadFromFile(path.string()));
+    EXPECT_EQ(static_cast<size_t>(0), tree.GetNodeCount());
+    std::filesystem::remove(path);
 }
 
 TEST(Dialogue_StartConversation)

@@ -735,6 +735,156 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "datatable-system-corpus",
+      "parser_id": "datatable-system",
+      "corpus_dir": "FuzzerTests/corpora/datatable-system",
+      "last_verified": "2026-09-28",
+      "content_digest": "c8611e71da2b974950b89f7673ad9894b356a1b12e703691cf72fa40f996729f",
+      "budget": {
+        "max_input_bytes": 8388609,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 16777216,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-oversized.csv",
+          "finding": "The CSV loader accepted a document larger than the new 8 MiB production limit without bounding its read and parse work.",
+          "found_by": "review",
+          "guard_test": "DataTableRegistry_RejectsOversizedValidFileBeforeReading"
+        },
+        {
+          "file": "regression-trailing-json.json",
+          "finding": "The JSON loader accepted a valid prefix followed by malformed trailing bytes and published partial table data.",
+          "found_by": "review",
+          "guard_test": "DataTable_RejectsTrailingJSONWithoutPartialRows"
+        },
+        {
+          "file": "regression-noncanonical-number.json",
+          "finding": "A numeric-looking JSON string such as 001 was inferred as an integer and serialized as an invalid bare JSON number.",
+          "found_by": "review",
+          "guard_test": "DataTable_NumericLookingStringRoundTripsAsValidJSON"
+        }
+      ]
+    },
+    {
+      "id": "editor-collab-session-wire-corpus",
+      "parser_id": "editor-collab-session-wire",
+      "corpus_dir": "FuzzerTests/corpora/editor-collab-session-wire",
+      "last_verified": "2026-09-28",
+      "content_digest": "ea66abcb4fd0763455f411f64158852383395b00052e37083264480d227e21f7",
+      "budget": {
+        "max_input_bytes": 1048576,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-partial-output-write.bin",
+          "finding": "A truncated collaboration frame changed the caller's type and peer before the decoder rejected its incomplete node ID.",
+          "found_by": "review",
+          "guard_test": "Editor_Collab_MalformedFrame_DoesNotPartiallyPublish"
+        }
+      ]
+    },
+    {
+      "id": "localization-system-corpus",
+      "parser_id": "localization-system",
+      "corpus_dir": "FuzzerTests/corpora/localization-system",
+      "last_verified": "2026-09-28",
+      "content_digest": "b86bb5fa5f5fe2fb911771e2601bf82e25cd9f1d99bb25cb5bacc2c708bd28ed",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-partial-write.json",
+          "finding": "The localization loader published an earlier entry from a malformed catalog instead of preserving the previous table.",
+          "found_by": "review",
+          "guard_test": "StringTable_MalformedReloadIsTransactional"
+        }
+      ]
+    },
+    {
+      "id": "dialogue-system-corpus",
+      "parser_id": "dialogue-system",
+      "corpus_dir": "FuzzerTests/corpora/dialogue-system",
+      "last_verified": "2026-09-28",
+      "content_digest": "e0a0e70d0c98e040fd31ccdcd2e20f597d9a67ea6e6d26b348c0adc1f63e9d05",
+      "budget": {
+        "max_input_bytes": 8388609,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 16777216,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-oversized.json",
+          "finding": "The dialogue loader read and parsed a document larger than the new 8 MiB production limit without a file-size bound.",
+          "found_by": "review",
+          "guard_test": "Dialogue_RejectsOversizedValidDocumentBeforeParsing"
+        },
+        {
+          "file": "regression-partial-tree.json",
+          "finding": "A malformed dialogue document replaced the loaded tree's ID and start node before failing later validation.",
+          "found_by": "review",
+          "guard_test": "Dialogue_LoadFailureDoesNotPartiallyReplaceTree"
+        }
+      ]
+    },
+    {
+      "id": "fps-multiplayer-player-state-corpus",
+      "parser_id": "fps-multiplayer-player-state",
+      "corpus_dir": "FuzzerTests/corpora/fps-multiplayer-player-state",
+      "last_verified": "2026-09-28",
+      "content_digest": "fb4c96072ee62b845413346e5fbe4bda210902949604a26d5b09eb56dedec95e",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-invalid-action-flags.bin",
+          "finding": "The FPS player-state decoder accepted unknown action bits in a peer-supplied snapshot record.",
+          "found_by": "review",
+          "guard_test": "FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits"
+        },
+        {
+          "file": "regression-invalid-bool.bin",
+          "finding": "The FPS player-state decoder coerced a noncanonical boolean wire byte instead of rejecting the record.",
+          "found_by": "review",
+          "guard_test": "FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits"
+        },
+        {
+          "file": "regression-batch-zero-invalid-bool.bin",
+          "finding": "An invalid boolean wire byte decoded to a default state whose zero sequence matched batch zero, so a malformed snapshot was accepted.",
+          "found_by": "review",
+          "guard_test": "FPSMultiplayer_SnapshotDecoderRejectsMalformedRecordWhenBatchIsZero"
+        }
+      ]
     }
   ]
 }

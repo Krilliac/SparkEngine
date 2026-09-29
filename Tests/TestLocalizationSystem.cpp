@@ -6,6 +6,20 @@
 #include "TestFramework.h"
 #include "Engine/Localization/LocalizationSystem.h"
 
+#include <filesystem>
+#include <fstream>
+
+namespace
+{
+    std::filesystem::path WriteLocalizationFixture(const char* name, const std::string& contents)
+    {
+        const auto path = std::filesystem::temp_directory_path() / name;
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file << contents;
+        return path;
+    }
+}
+
 // ============================================================================
 // StringTable Tests
 // ============================================================================
@@ -48,6 +62,19 @@ TEST(StringTable_GetAllKeys)
     // Keys should be sorted
     EXPECT_EQ(keys[0], std::string("a_key"));
     EXPECT_EQ(keys[1], std::string("b_key"));
+}
+
+TEST(StringTable_MalformedReloadIsTransactional)
+{
+    const auto path = WriteLocalizationFixture(
+        "spark-loc-regression.json", R"({"new":"value","broken":"unterminated})");
+    Spark::StringTable table;
+    table.SetEntry("old", "preserved");
+
+    EXPECT_FALSE(table.LoadFromFile(path.string()));
+    EXPECT_EQ(table.GetEntry("old"), std::string("preserved"));
+    EXPECT_FALSE(table.HasEntry("new"));
+    std::filesystem::remove(path);
 }
 
 // ============================================================================

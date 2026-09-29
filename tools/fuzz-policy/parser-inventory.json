@@ -439,10 +439,16 @@
         ".csv",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzDataTable.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzDataTable",
+        "test_selector": "FuzzDataTableSmoke",
+        "corpus_id": "datatable-system-corpus",
+        "entry_symbol": "Spark::Data::DataTableRegistry::LoadTableFromFile",
+        "binding_source": "FuzzerTests/FuzzDataTableProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseDataTable"
       }
     },
     {
@@ -451,16 +457,23 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp",
-        "SparkEngine/Source/Engine/Dialogue/DialogueSystem.h"
+        "SparkEngine/Source/Engine/Dialogue/DialogueSystem.h",
+        "SparkEngine/Source/Engine/Dialogue/DialogueTreeLoader.cpp"
       ],
       "formats": [
         ".dialogue",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzDialogue.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzDialogue",
+        "test_selector": "FuzzDialogueSmoke",
+        "corpus_id": "dialogue-system-corpus",
+        "entry_symbol": "Spark::DialogueTree::LoadFromFile",
+        "binding_source": "FuzzerTests/FuzzDialogueProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseDialogue"
       }
     },
     {
@@ -476,10 +489,16 @@
         ".csv",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzLocalization.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzLocalization",
+        "test_selector": "FuzzLocalizationSmoke",
+        "corpus_id": "localization-system-corpus",
+        "entry_symbol": "Spark::StringTable::LoadFromFile",
+        "binding_source": "FuzzerTests/FuzzLocalizationProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadLocalization"
       }
     },
     {
@@ -1980,16 +1999,23 @@
       "description": "SparkGameFPS NetworkPlayerState/PlayerInput wire decoders and the snapshot-batch framing (header, record count, per-record score fields) over peer-supplied packet bytes.",
       "trust_boundary": "untrusted-network",
       "source_files": [
+        "GameModules/SparkGameFPS/Source/Game/FpsSnapshotCodec.cpp",
         "GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp",
         "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h"
       ],
       "formats": [
         "packet"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzFpsSnapshot.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzFpsSnapshot",
+        "test_selector": "FuzzFpsSnapshotSmoke",
+        "corpus_id": "fps-multiplayer-player-state-corpus",
+        "entry_symbol": "SparkFPS::DecodeSnapshotBatch",
+        "binding_source": "FuzzerTests/FuzzFpsSnapshotProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzProcessFpsSnapshot"
       }
     },
     {
@@ -2247,15 +2273,22 @@
       "trust_boundary": "untrusted-network",
       "source_files": [
         "SparkEditor/Source/Communication/CollaborativeEditSession.cpp",
-        "SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp"
+        "SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp",
+        "SparkEditor/Source/Communication/CollaborativeWireCodec.cpp"
       ],
       "formats": [
         "tcp-frame"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorCollaboration.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorCollaboration",
+        "test_selector": "FuzzEditorCollaborationSmoke",
+        "corpus_id": "editor-collab-session-wire-corpus",
+        "entry_symbol": "SparkEditor::DeserializeMessage",
+        "binding_source": "FuzzerTests/FuzzEditorCollaborationProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeEditorCollaboration"
       }
     },
     {

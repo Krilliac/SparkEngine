@@ -134,8 +134,20 @@ namespace Spark
             return out;
         };
 
+        // Parse into a temporary table.  A malformed reload must not publish a
+        // half-loaded catalog to readers that still hold the previous table.
+        std::unordered_map<std::string, std::string> parsedEntries;
         size_t parsed = 0;
         size_t pos = 0;
+        const size_t firstContent = SkipJsonSpace(content, 0);
+        const size_t lastContent = content.empty() ? 0 : content.find_last_not_of(" \t\n\r\f\v");
+        if (firstContent >= content.size() || content[firstContent] != '{' || lastContent == std::string::npos ||
+            content[lastContent] != '}')
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "StringTable: localization file '%s' is not a JSON object",
+                           filePath.c_str());
+            return false;
+        }
         while (true)
         {
             const size_t keyOpen = content.find('"', pos);
@@ -143,7 +155,11 @@ namespace Spark
                 break;
             size_t keyClose = 0;
             if (!FindClosingQuote(content, keyOpen, keyClose))
-                break; // unterminated string: nothing after it can pair up
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "StringTable: unterminated key/value string in '%s'",
+                               filePath.c_str());
+                return false;
+            }
 
             // A string followed by ':' and another string is one entry. Any other string
             // (a nested object's name, a non-string value's key) is skipped, and scanning
@@ -156,8 +172,12 @@ namespace Spark
                 if (next < content.size() && content[next] == '"')
                 {
                     if (!FindClosingQuote(content, next, valueClose))
-                        break;
-                    m_entries[unescape(content.substr(keyOpen + 1, keyClose - keyOpen - 1))] =
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Core, "StringTable: unterminated value string in '%s'",
+                                       filePath.c_str());
+                        return false;
+                    }
+                    parsedEntries[unescape(content.substr(keyOpen + 1, keyClose - keyOpen - 1))] =
                         unescape(content.substr(next + 1, valueClose - next - 1));
                     ++parsed;
                     pos = valueClose + 1;
@@ -175,6 +195,7 @@ namespace Spark
             return false;
         }
 
+        m_entries = std::move(parsedEntries);
         return true;
     }
 

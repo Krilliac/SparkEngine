@@ -6,28 +6,32 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository now has fourteen structurally
-validated production fuzz targets and bounded seed corpora for `json-utils`,
-`crash-manifest-parser`, `texture-stex-compressor`, `neural-weights-nnw`,
-`scene-manifest`, `sparkpak-reader`, `shader-daemon-blob`, `shader-service-protocol`,
-`config-parser`, `telemetry-spool-format`, `sparkbuild-archive-download`,
-`exec-script-file`, `sparkbuild-config`, and `visual-script-graph`, but
-exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
+SEC-120 remains open and release-blocking. Production fuzz targets and bounded seed
+corpora cover some inventoried parsers. The current target and corpus set is recorded in
+`tools/fuzz-policy/parser-inventory.json` and `tools/fuzz-policy/corpus-manifest.json`.
+Exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
 crash-free-duration evidence remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **136 explicitly inventoried parsers, 14
-fuzzed and 122 blocked**, **14 bound corpora with 111 seeds (118099 bytes)**, **0 deferred
-candidates and 118 OD-21 exemptions**, and **2101 source files scanned across 17
-first-party roots**. The unwired material file import path (`Material::LoadFromFile`,
+Read its generated inventory, corpus, exemption, and blocker metrics for the current
+source-tree state. The unwired material file import path (`Material::LoadFromFile`,
 `Material::LoadTexture` and `MaterialSystem::LoadTextureFromFile`, inventoried as
 `pbr-material-file`, `wic-pbr-material-texture` and `wic-material-texture`) was deleted
 rather than fuzzed, so those three parsers left the inventory. Five more blocked records
 decoded no untrusted bytes and were reclassified rather than given a harness that would
 inflate the fuzzed count (see [Retired and reclassified records](#retired-and-reclassified-records)).
-Those counts are not fuzz coverage.
+Inventory counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
+
+The current SEC-120 parser slice hardens the editor collaboration frame decoder,
+DataTable CSV/JSON file reader, dialogue tree file reader, localization catalog reader,
+and SparkGameFPS snapshot batch decoder. Collaboration frames publish only after a
+complete decode; DataTable and dialogue reject files above their production byte caps
+before allocating for content; dialogue and localization preserve their prior state on
+a failed load; and the FPS runtime uses the same bounded batch decoder as its fuzz
+target. Each target has a production adapter, bounded corpus, and registered smoke.
+These bindings are structural evidence until the Linux sanitizer smokes execute.
 
 The neural CTest uses `-runs=8` to replay all eight reviewed seeds, and the crash-manifest
 CTest replays its six reviewed seeds, under ASan/UBSan without mutating the tracked
@@ -532,20 +536,12 @@ change *is* the review record.
 
 ## Remaining Closure Work
 
-- build and replay the four SEC-120 hardening targets (`shader-daemon-blob`,
-  `shader-service-protocol`, `config-parser`, `telemetry-spool-format`) on Linux Clang for
-  the first time, then retain exact-SHA sanitizer smoke for all ten targets;
-- implement production entry-point fuzz targets for the remaining 122 blocked parsers, starting
-  with the highest-risk binary readers (`terrain-sparkterrain`,
-  `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
-  `fps-terrain-heightmap-bmp`, `asset-media-windows`). `asset-service-protocol` and
-  `daemon-protocol-frame` follow the `shader-service-protocol` template directly.
-  `rts-save-snapshot`, `save-system` and
-  `animation-skel-sanim` need a Linux build to settle their link closures first:
-  `RTSPersistence::Deserialize` calls `Validate`, which shares a translation unit with
-  `Capture`/`Apply` and calls `RTSCommandSystem::IsCommandValid` (ImGui and console code in
-  the same unit), and the save and animation readers pull in the ECS, reflection
-  and glTF translation units;
+- implement production entry-point fuzz targets for every parser still marked `blocked`
+  in the generated snapshot, prioritizing remaining network, mod, save, and user-file
+  boundaries. Each target needs the production parser, a bounded corpus, a meaningful
+  oracle, a deterministic blocking smoke, and a regression fixture for every fix;
+- retain exact-SHA sanitizer smoke for all registered targets. A structural binding
+  check alone does not show that a target compiled or ran;
 - commit bounded seed corpora under `FuzzerTests/corpora/` and minimized regressions;
 - retain the blocking ASan/UBSan smoke now wired for both targets and record hosted
   `fuzz-scheduled` campaign history with its crash-free-duration statistics, then add
@@ -554,7 +550,7 @@ change *is* the review record.
 - independently review that each harness reaches production parsing code and that
   allocation, depth, path, integer, and time bounds are enforced by that code;
 - extend the detector so the 33 known blind spots shrink;
-- have an independent security reviewer re-check the 118 OD-21 exemptions; they are
+- have an independent security reviewer re-check the OD-21 exemptions; they are
   recorded judgement, not proof of unreachability.
 
 ## Source & Freshness

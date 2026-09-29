@@ -16,17 +16,9 @@ namespace SparkFPS
 
     namespace
     {
-        // StateSnapshot wire layout (see FPSMessageType::StateSnapshot).
         constexpr size_t kSnapshotHeaderSize = sizeof(uint32_t) + sizeof(uint16_t);
         constexpr size_t kSnapshotScoreSize = 4 * sizeof(uint32_t);
         constexpr size_t kSnapshotRecordSize = NetworkPlayerState::SerializedSize + kSnapshotScoreSize;
-
-        bool IsFiniteState(const NetworkPlayerState& state)
-        {
-            return std::isfinite(state.posX) && std::isfinite(state.posY) && std::isfinite(state.posZ) &&
-                   std::isfinite(state.velX) && std::isfinite(state.velY) && std::isfinite(state.velZ) &&
-                   std::isfinite(state.yaw) && std::isfinite(state.pitch) && std::isfinite(state.health);
-        }
     } // namespace
 
     // ============================================================================
@@ -177,57 +169,37 @@ namespace SparkFPS
             return;
 
         const std::vector<uint8_t>& payload = message.payload;
-        if (payload.size() < kSnapshotHeaderSize)
-            return;
-
-        size_t offset = 0;
-        const uint32_t batch = Detail::ReadU32(payload.data(), offset);
-        const uint32_t count =
-            static_cast<uint32_t>(payload[offset]) | (static_cast<uint32_t>(payload[offset + 1]) << 8);
-        if (count > kMaxPlayers || payload.size() != kSnapshotHeaderSize + count * kSnapshotRecordSize)
+        uint32_t batch = 0;
+        std::vector<NetworkPlayerState> decodedStates;
+        std::vector<PlayerScore> decodedScores;
+        if (!DecodeSnapshotBatch(payload.data(), payload.size(), batch, decodedStates, decodedScores))
             return;
         if (batch <= m_lastSnapshotBatch)
             return;
-
-        auto recordAt = [&payload](uint32_t index)
-        { return payload.data() + kSnapshotHeaderSize + static_cast<size_t>(index) * kSnapshotRecordSize; };
-
-        // Validate the whole batch before applying any of it.
-        for (uint32_t index = 0; index < count; ++index)
-        {
-            const NetworkPlayerState state =
-                NetworkPlayerState::Deserialize(recordAt(index), NetworkPlayerState::SerializedSize);
-            if (!IsFiniteState(state) || state.sequenceNumber != batch)
-                return;
-        }
         m_lastSnapshotBatch = batch;
 
-        for (uint32_t index = 0; index < count; ++index)
+        for (size_t index = 0; index < decodedStates.size(); ++index)
         {
-            const uint8_t* record = recordAt(index);
-            const NetworkPlayerState state =
-                NetworkPlayerState::Deserialize(record, NetworkPlayerState::SerializedSize);
+            const NetworkPlayerState& state = decodedStates[index];
             OnStateSnapshotReceived(state);
 
-            size_t scoreOffset = NetworkPlayerState::SerializedSize;
             auto [scoreIt, inserted] = m_scores.try_emplace(state.clientId);
             PlayerScore& score = scoreIt->second;
             if (inserted)
                 score.playerName = "Player_" + std::to_string(state.clientId);
             score.clientId = state.clientId;
-            score.kills = Detail::ReadU32(record, scoreOffset);
-            score.deaths = Detail::ReadU32(record, scoreOffset);
-            score.assists = Detail::ReadU32(record, scoreOffset);
-            score.score = static_cast<int32_t>(Detail::ReadU32(record, scoreOffset));
+            score.kills = decodedScores[index].kills;
+            score.deaths = decodedScores[index].deaths;
+            score.assists = decodedScores[index].assists;
+            score.score = decodedScores[index].score;
         }
 
         // The batch lists every player in the session; a remote player missing from it left.
         auto inBatch = [&](uint32_t clientId)
         {
-            for (uint32_t index = 0; index < count; ++index)
+            for (const NetworkPlayerState& state : decodedStates)
             {
-                size_t idOffset = 0;
-                if (Detail::ReadU32(recordAt(index), idOffset) == clientId)
+                if (state.clientId == clientId)
                     return true;
             }
             return false;
