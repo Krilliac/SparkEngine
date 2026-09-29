@@ -148,6 +148,12 @@ function(_spark_validate_fps_headless_arena child_result child_stdout child_stde
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+# RunInstalledFPSPackage.cmake (repository-isolation) includes this file for the
+# counter and the validator only; it runs the engine itself inside an AppContainer.
+if(SPARK_FPS_HEADLESS_ARENA_PARSER_INCLUDE_ONLY)
+    return()
+endif()
+
 if(SPARK_FPS_HEADLESS_ARENA_PARSER_SELF_TEST)
     function(_spark_expect_arena_case name stdout expected_ok)
         _spark_validate_fps_headless_arena(0 "${stdout}" "" 72 4 _actual_ok _reason)

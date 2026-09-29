@@ -3914,6 +3914,24 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             RUN_SERIAL TRUE
             TIMEOUT 600)
 
+        # RDY-020: copies of the same staged package run NullRHI and D3D11/WARP
+        # inside a fresh AppContainer that cannot read this checkout or build
+        # tree (canaries prove it), and scene-less/asset-less copies must fail.
+        # D3D11 needs an interactive desktop, so this runs on a local box.
+        add_test(
+            NAME FPSPackage_RepositoryUnreachable
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/u/$<CONFIG>"
+                -DSPARK_FPS_PACKAGE_MODE=repository-isolation
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSPackage_RepositoryUnreachable PROPERTIES
+            LABELS "stable-v1;fps;package;asset;nullrhi-headless;d3d11;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 600)
+
         # MOD-310: a fresh install prefix plays spawn -> move -> kill -> die ->
         # respawn -> score on D3D11/WARP through the fps_autoplay developer
         # command, scored by GameMode and RespawnSystem. Shipping (MinSizeRel)
@@ -4371,6 +4389,13 @@ add_test(NAME PackageAssets_RepositoryIsolationContract
     COMMAND ${Python3_EXECUTABLE} -B
         ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/asset_repository_isolation_tests.py)
 set_tests_properties(PackageAssets_RepositoryIsolationContract PROPERTIES
+    LABELS "stable-v1;asset;package;unit;python"
+    TIMEOUT 60)
+
+add_test(NAME PackageAssets_WindowsRepositoryIsolationContract
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/windows_appcontainer_run_tests.py)
+set_tests_properties(PackageAssets_WindowsRepositoryIsolationContract PROPERTIES
     LABELS "stable-v1;asset;package;unit;python"
     TIMEOUT 60)
 
