@@ -73,10 +73,11 @@ The `ModuleInfo` struct provides metadata about your module:
 | `sdkVersion` | `uint32_t` | SDK version this module was built against (`SPARK_SDK_VERSION`) |
 | `loadOrder` | `int` | Initialization priority (lower = earlier, default 1000) |
 
-`SPARK_SDK_VERSION` is **7** (`SparkSDK/Include/Spark/Version.h`): v5 dropped `IEngineContext`'s
+`SPARK_SDK_VERSION` is **8** (`SparkSDK/Include/Spark/Version.h`): v5 dropped `IEngineContext`'s
 `InitializeAll()` and `ShutdownAll()` (owner decision OD-01: `EngineRuntime` owns subsystem lifecycle),
-v6 appended `IEngineContext::GetLogger()`, and v7 appended `GetConsole()` (MOD-295).
-`IsSDKCompatible` is exact equality, so a v6 module is refused by a v7 host and a v7 module by a v6
+v6 appended `IEngineContext::GetLogger()`, v7 appended `GetConsole()` (MOD-295), and v8 appended
+`IConsole::Print()` (MOD-310).
+`IsSDKCompatible` is exact equality, so a v7 module is refused by a v8 host and a v8 module by a v7
 host — there is no forward or backward window; rebuild modules against the current SDK.
 `Spark/IEngineContext.h` pins `EngineContextVirtualCount = 90` with a `static_assert` tying
 it to the version constant: adding or removing a virtual means updating **both** together, or an old
@@ -85,15 +86,20 @@ host will accept a module that calls off the end of its vtable.
 ### Public console, logging and gameplay types
 
 ARPG, RPG, Racing, OpenWorld, RTS and Platformer register commands through the
-host's `IConsole` and log through `Spark::ModuleLog`. FPS's main and headless
-entrypoints also register through `IConsole`. Each module retains only the
+host's `IConsole` and log through `Spark::ModuleLog`. Every FPS source does too:
+`SparkGameModule::OnLoad` calls `Spark::ModuleLog::Bind(context)` (and unbinds
+on a failed load and in `Shutdown`), and FPS's `Source/Core/FPSLog.h` macros
+log through the bound context's `ILogger` and print in-game console lines through
+`IConsole::Print`. Each module retains only the
 names the host accepted and unregisters them before releasing its state and
 context. A missing optional console leaves no registered callbacks.
 
 Include `<Spark/GameTypes.h>` for shared gameplay enums. The SDK owns the
 declarations used by the runtime, editor and FPS; the private runtime header
 only forwards to it. The former FPS copy is removed. Enum names, representation
-and values are preserved, so this extraction leaves SDK ABI v7 unchanged.
+and values are preserved, so this extraction left SDK ABI v7 unchanged. The header-only
+`<Spark/StateMachine.h>` and `<Spark/AngleUtils.h>` follow the same single-definition
+pattern: the engine's `Utils/StateMachine.h` and `Utils/AngleUtils.h` only include them.
 
 These migrations do not complete the installed-SDK-only module boundary. FPS
 still needs concrete rendering, scene, input, physics and save APIs; its CMake
