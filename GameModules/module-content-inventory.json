@@ -144,20 +144,17 @@
         "Physics/CollisionSystem.h",
         "Physics/PhysicsSystem.h",
         "SceneManager/SceneManager.h",
-        "Utils/AngleUtils.h",
         "Utils/Assert.h",
         "Utils/ConsoleProcessManager.h",
         "Utils/EventBus.h",
         "Utils/InvalidStateDetector.h",
         "Utils/LogMacros.h",
         "Utils/MathUtils.h",
-        "Utils/ScheduledCallback.h",
         "Utils/SparkConsole.h",
         "Utils/SparkError.h",
-        "Utils/StateMachine.h",
         "Utils/Validate.h"
       ],
-      "privateEngineHeaderCount": 47,
+      "privateEngineHeaderCount": 44,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],

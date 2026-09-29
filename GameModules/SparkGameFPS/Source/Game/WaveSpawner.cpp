@@ -55,8 +55,7 @@ namespace Spark
         m_state = WaveState::Countdown;
         m_countdownTimer = 3.0f; // Short initial countdown
         m_waveTransitionReady = false;
-        m_waveScheduler.ClearAll();
-        (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
+        m_waveRestRemaining = 3.0f;
     }
 
     void WaveSpawner::Update(float dt, size_t aliveEnemies, Game* game)
@@ -64,7 +63,17 @@ namespace Spark
         if (m_paused || m_state == WaveState::Idle || m_state == WaveState::Completed || m_state == WaveState::Failed)
             return;
 
-        m_waveScheduler.Update(dt);
+        // One-shot rest countdown, armed by Start, SkipToWave and wave completion: raises
+        // m_waveTransitionReady once when it expires.
+        if (m_waveRestRemaining.has_value() && dt >= 0.0f)
+        {
+            *m_waveRestRemaining -= dt;
+            if (*m_waveRestRemaining <= 0.0f)
+            {
+                m_waveRestRemaining.reset();
+                m_waveTransitionReady = true;
+            }
+        }
 
         switch (m_state)
         {
@@ -75,7 +84,7 @@ namespace Spark
             if (m_callbacks.onCountdownTick)
                 m_callbacks.onCountdownTick(m_countdownTimer);
 
-            // Scheduler fires m_waveTransitionReady when countdown expires
+            // The rest countdown raises m_waveTransitionReady when it expires
             if (m_waveTransitionReady)
             {
                 m_waveTransitionReady = false;
@@ -126,8 +135,7 @@ namespace Spark
                     m_state = WaveState::Countdown;
                     m_countdownTimer = m_restDuration;
                     m_waveTransitionReady = false;
-                    m_waveScheduler.ClearAll();
-                    (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, m_restDuration);
+                    m_waveRestRemaining = std::max(m_restDuration, 0.0f);
                 }
             }
             break;
@@ -147,8 +155,7 @@ namespace Spark
         m_state = WaveState::Countdown;
         m_countdownTimer = 3.0f;
         m_waveTransitionReady = false;
-        m_waveScheduler.ClearAll();
-        (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
+        m_waveRestRemaining = 3.0f;
         return target;
     }
 

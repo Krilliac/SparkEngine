@@ -39,7 +39,7 @@ LOCATION = "inventory"
 # Reviewed one-way ceilings for SparkGameFPS (MOD-310 target: zero). Lower them
 # together with the committed inventory whenever headers or copied files are
 # removed; never raise them.
-FPS_PRIVATE_HEADER_CEILING = 47
+FPS_PRIVATE_HEADER_CEILING = 44
 FPS_COPIED_INFRASTRUCTURE_CEILING = 1
 
 
@@ -176,6 +176,23 @@ class FPSPrivateIncludeRatchetTests(unittest.TestCase):
         code, _ = module_content._lex_cpp(compatibility.read_text(encoding="utf-8"))
         self.assertIn("#include <Spark/GameTypes.h>", code)
         self.assertNotIn("enum class", code, "The runtime must consume the same SDK declarations")
+
+    def test_fps_utility_types_have_one_public_definition(self) -> None:
+        module = ROOT / "GameModules" / FPS_MODULE
+        classified = module_content.classify_module_includes(ROOT, module)
+        for public, private in (("Spark/StateMachine.h", "Utils/StateMachine.h"),
+                                ("Spark/AngleUtils.h", "Utils/AngleUtils.h")):
+            with self.subTest(header=public):
+                self.assertTrue((ROOT / module_content.SDK_INCLUDE_ROOT / public).is_file())
+                self.assertIn(public, classified["sdk"])
+                self.assertNotIn(private, classified["engine"])
+                compatibility = ROOT / module_content.ENGINE_PRIVATE_ROOT / private
+                code, _ = module_content._lex_cpp(compatibility.read_text(encoding="utf-8"))
+                self.assertIn(f"#include <{public}>", code)
+                for definition in ("class ", "struct ", "constexpr", "namespace "):
+                    self.assertNotIn(definition, code, "The runtime must consume the same SDK definitions")
+        self.assertNotIn("Utils/ScheduledCallback.h", classified["engine"],
+                         "WaveSpawner's rest countdown does not need the engine scheduler")
 
     def test_fps_matches_committed_inventory(self) -> None:
         entry = _committed_entries(ROOT)[FPS_MODULE]

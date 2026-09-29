@@ -12,7 +12,7 @@
 
 #pragma once
 #include "Core/Platform.h"
-#include "Utils/StateMachine.h"
+#include <Spark/StateMachine.h>
 
 #include "Game/GameObject.h"
 #include <Spark/GameTypes.h>

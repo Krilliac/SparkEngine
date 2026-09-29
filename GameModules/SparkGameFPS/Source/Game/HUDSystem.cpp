@@ -6,7 +6,7 @@
  */
 
 #include "HUDSystem.h"
-#include "Utils/AngleUtils.h"
+#include <Spark/AngleUtils.h>
 #include "Utils/Validate.h"
 #include "Player.h"
 #include <cmath>
