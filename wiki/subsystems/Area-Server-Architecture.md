@@ -4,6 +4,33 @@ Inspired by HeroEngine's distributed server model, SparkEngine's area server arc
 
 > **Status: Experimental** — Requires `ENABLE_NETWORKING=ON`. See [Networking](Networking.md) for setup.
 
+### TERRAFRONT fenced handoff integration (TF-120)
+
+`SparkServer` registers an engine-owned `AreaHandoffDispatcher` before loading modules. TERRAFRONT registers
+its `TFHandoffParticipant` through the injected `EngineContext`. Authenticated `LocalAreaControlService`
+commands are queued to the server game thread before module updates; module unload detaches the borrowed
+participant. A queued request that times out is canceled before it can change gameplay state.
+
+The control service persists the session, epoch, phase and both area IDs. Its new `v2` state format refuses
+nonempty older state files rather than guessing their source/destination identity. Operators must resolve
+in-flight handoffs with the old server before changing that file format. Duplicate callbacks remain safe
+through the participant's durable reservation; a failed control-state write can retry the same operation.
+
+TERRAFRONT requires explicit, unique `gatewayAreaId` values in the operator's `continents.json`. These are
+the IDs actually assigned by the gateway; map IDs are not assumed to be gateway IDs. Missing, ambiguous or
+unmapped IDs fail closed. A destination also requires an authenticated connection for the same account and
+player ID before it accepts a pawn. This is an intentional boundary: automatic gateway gameplay admission,
+client routing and client scene/collision replacement are not supplied by this slice. The former TF
+reconnect redirect is refused under OD-16. This is not evidence of working player-facing continent travel.
+
+The participant captures an alive, unseated sanctuary pawn, commits progression before reserving it, and
+removes its source pawn without a death event. The destination commits ownership, restores pose, velocity,
+health, shield and input sequence, resolves against its own world collision/terrain, and suppresses the
+ordinary spawn-pad teleport. Abort restores the source checkpoint; acknowledgement retires source state.
+`TerrafrontMigration_*` CTests cover durable participant operations, checkpoint validation and dispatcher
+thread/lifetime behavior. Their authority test double does not establish real Jolt collision or rendered
+travel correctness. Runtime execution, actual socket routing and rendered evidence remain required.
+
 ## Overview
 
 ```

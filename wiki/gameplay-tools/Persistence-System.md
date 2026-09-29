@@ -1,5 +1,23 @@
 # Persistence System
 
+## TF-120 handoff reservations and DATA-120 concurrency
+
+TERRAFRONT's file-backed `TFDatabase` writes schema v5. Ordinary v4 character rows migrate on the next
+commit. Each character can carry a bounded migration checkpoint, source/destination keys, an operation ID,
+an epoch and a terminal outcome. Reserve retains source ownership; destination commit changes it in one
+locked durable transaction. Aborted and committed epochs cannot be reused. Reserved rows reject ordinary
+progress/meta writes, release and competing claims, so the checkpoint cannot become stale during transfer.
+Terminal payloads remain available for retries after the database commit but before gameplay installation.
+This is the actual TERRAFRONT JSON backend; these checks are not SQLite concurrency measurements.
+
+`TF120_HandoffReservation_*` and `TF120_Migration_*` exercise real files and production persistence code.
+`Persistence_Concurrency_*` additionally starts independent economy writers together and checks that
+conflict retries retain every acknowledged delta. Territory persistence retains its existing per-continent
+exclusive authority lease: a same-file contender is rejected while the holder lives, and separate continent
+files commit concurrently. This does not promise merging arbitrary stale territory snapshots or durable
+economy operation IDs. The C++ tests require the central build/run; syntax checking alone is not runtime
+evidence or an exact-commit CI result.
+
 SparkEngine provides two independent persistence layers for different use cases:
 
 1. **[Save System](Save-System.md)** -- ECS-aware game state serialization to compressed JSON files. Designed for single-player save slots, quicksave/quickload, and autosave rotation.

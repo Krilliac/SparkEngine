@@ -2,6 +2,7 @@
 #pragma once
 
 #include "GatewaySecurity.h"
+#include "Engine/Networking/AreaHandoffDispatcher.h"
 
 #include <array>
 #include <atomic>
@@ -94,12 +95,15 @@ namespace Spark::Gateway
         [[nodiscard]] std::string GetLastError() const;
         /** @brief Number of frames classified as @p reason since construction. */
         [[nodiscard]] uint64_t GetAuditCount(AreaControlAuditReason reason) const;
+        void SetHandoffDispatcher(Spark::Net::AreaHandoffDispatcher* dispatcher) { m_dispatcher = dispatcher; }
 
       private:
         struct SessionFence
         {
             uint64_t epoch = 0;
             AreaControlPhase phase = AreaControlPhase::Abort;
+            Net::AreaID sourceArea = Net::INVALID_AREA;
+            Net::AreaID targetArea = Net::INVALID_AREA;
         };
         void Run();
         void SetError(std::string error);
@@ -108,7 +112,7 @@ namespace Spark::Gateway
                                                          const std::vector<uint8_t>& payload);
         void RecordAudit(AreaControlAuditReason reason, unsigned int phase, uint64_t epoch, std::string_view sessionId,
                          HandoffOperationResult outcome);
-        [[nodiscard]] HandoffOperationResult Apply(std::string_view sessionId, uint64_t epoch, AreaControlPhase phase);
+        [[nodiscard]] HandoffOperationResult Apply(const HandoffCommand& command, AreaControlPhase phase);
         [[nodiscard]] bool LoadState();
         [[nodiscard]] bool SaveState() const;
 
@@ -126,6 +130,7 @@ namespace Spark::Gateway
         std::atomic<bool> m_stop{false};
         std::atomic<bool> m_ready{false};
         std::atomic<bool> m_startupComplete{false};
+        Spark::Net::AreaHandoffDispatcher* m_dispatcher = nullptr;
     };
 
     class LocalGatewayIngressClient

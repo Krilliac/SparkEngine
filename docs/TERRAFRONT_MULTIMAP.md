@@ -1,21 +1,30 @@
 # TERRAFRONT Multi-Continent Hosting — Design + Current State
 
-**Status:** the redirect handshake is shipped
-and server-authoritative, but production multi-continent hosting is **not yet
-complete**. The account/character store (`terrafront.db`, `TFDatabase`) is
-transaction-scoped (TF-120): several authorities may open it, and stale
-character writes are rejected. Each authority binds the store to its
-continent, and a character is resident (in world) on at most one continent:
-enter world claims it, leave world releases it once its final progress is
-durable, a dead authority's characters are taken over from their last commit,
-and a second live server for the same continent cannot bind
-(`docs/specs/persistence.md`, "Character residency"). The hop handler does not
-yet hand the character over itself; the source releases it when the client
-disconnects. The outfit and social JSON stores still take
-lifetime-exclusive authority locks, so a second server on the same
-`TF_SAVE_ROOT` still fails closed at startup. Two servers cannot share one
-root until those stores are converted too. Do not present the hop button as
-proof that shared character state works across live continent processes.
+**Current status (TF-120): partial fenced handoff integration, not completed multi-continent travel.**
+
+OD-16 retires the reconnect design below. `TFServerSim::HandleContinentHopRequest` now refuses the
+old redirect. `SparkServer` instead connects authenticated area-control phases to `TFHandoffParticipant`
+through a game-thread dispatcher. TFDatabase schema v5 reserves a character on its source, commits
+ownership on its destination, and retains a versioned pawn checkpoint and terminal epoch for retries.
+Duplicate, reordered and dropped delivery cases are registered under `TerrafrontMigration_*`; they
+have not been run by this lane and are not exact-commit CI evidence.
+
+Operators must explicitly map the gateway's assigned area IDs through `gatewayAreaId` in their
+`continents.json`. The destination must already have an authenticated connection for the same account
+and player ID. Automatic gateway admission/client routing and client scene/collision replacement remain
+unfinished. The checkpoint covers an alive, unseated sanctuary pawn's pose, velocity, health, shield and
+input sequence, plus separately committed character progression/meta. It is not a complete serialization
+of every transient gameplay system. The authority adapters in the focused tests are test doubles;
+headless gameplay, real Jolt collision and rendered travel still require integration evidence.
+
+Shared-root hosting also retains the existing global outfit/social authority-lock limitation. This lane
+has not made two complete TERRAFRONT processes on one root a supported deployment. The existing
+provisional soak budgets remain unchanged; the deterministic capacity/loss test is only a state-transfer
+workload, not a server-time, network-throughput or RSS measurement. See
+[`Area Server Architecture`](../wiki/subsystems/Area-Server-Architecture.md) for the new wiring.
+
+The sections below preserve the **historical reconnect proposal and its implementation notes**. Their
+redirect/shipped statements are superseded by OD-16 and the current status above.
 
 ## 1. The question
 

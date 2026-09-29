@@ -581,6 +581,8 @@ namespace Spark::Server
         context->SetWorld(m_world.get());
         context->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         context->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+        m_handoffDispatcher = std::make_unique<Net::AreaHandoffDispatcher>();
+        context->RegisterSystem<Net::AreaHandoffDispatcher>(m_handoffDispatcher.get());
         m_modules = std::make_unique<ModuleManager>();
         if (!LoadSelectedModules())
         {
@@ -592,6 +594,7 @@ namespace Spark::Server
             runtime.timer.reset();
             return false;
         }
+        m_handoffDispatcher->SetParticipant(context->GetSystem<Net::IAreaHandoffParticipant>());
 
         m_server = std::make_unique<Net::DedicatedServer>();
         if (!m_server->Start(m_options.server))
@@ -612,6 +615,10 @@ namespace Spark::Server
         {
             m_controlService = std::make_unique<Gateway::LocalAreaControlService>(
                 m_options.controlEndpoint, m_options.gatewayKeyFile, m_options.controlStateFile);
+            if (context->GetSystem<Net::IAreaHandoffParticipant>() != nullptr)
+            {
+                m_controlService->SetHandoffDispatcher(m_handoffDispatcher.get());
+            }
             if (!m_controlService->Start())
             {
                 const std::string detail = m_controlService->GetLastError();
@@ -668,6 +675,10 @@ namespace Spark::Server
             lastTick = tickStart;
             if (runtime.headlessRhiBridge)
                 runtime.headlessRhiBridge->BeginFrame();
+            if (m_handoffDispatcher)
+            {
+                m_handoffDispatcher->Pump();
+            }
             m_modules->UpdateAll(deltaTime);
             auto& fixed = Spark::FixedTimestepAccumulator::GetInstance();
             fixed.Advance(deltaTime);
@@ -714,6 +725,15 @@ namespace Spark::Server
         if (m_controlService)
             m_controlService->Stop();
         m_controlService.reset();
+        if (m_handoffDispatcher)
+        {
+            m_handoffDispatcher->Stop();
+            if (auto* context = EngineContext::Get())
+            {
+                context->RegisterSystem<Net::AreaHandoffDispatcher>(nullptr);
+            }
+        }
+        m_handoffDispatcher.reset();
         if (m_server)
             m_server->Stop();
         m_server.reset();

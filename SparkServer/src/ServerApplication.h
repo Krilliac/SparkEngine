@@ -6,6 +6,7 @@
 #pragma once
 
 #include "Engine/Networking/DedicatedServer.h"
+#include "Engine/Networking/AreaHandoffDispatcher.h"
 #include "ServerHealth.h"
 
 #include <atomic>
@@ -106,6 +107,7 @@ namespace Spark::Server
         std::unique_ptr<World> m_world;
         std::unique_ptr<ModuleManager> m_modules;
         std::unique_ptr<Net::DedicatedServer> m_server;
+        std::unique_ptr<Net::AreaHandoffDispatcher> m_handoffDispatcher;
         std::unique_ptr<Gateway::LocalAreaControlService> m_controlService;
     };
 } // namespace Spark::Server

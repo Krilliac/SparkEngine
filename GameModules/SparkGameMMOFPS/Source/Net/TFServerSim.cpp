@@ -10,6 +10,8 @@
  *        TFClientNetHandlers split).
  */
 #include "Net/TFServerSim.h"
+#include "Core/EngineContext.h"
+#include "Engine/Networking/AreaHandoffDispatcher.h"
 #include "Net/TFServerSimConstants.h"
 
 #include "Game/TFPlayerSystem.h"
@@ -52,6 +54,20 @@ namespace Terrafront
         events.Subscribe<EvPlayerKilled>([this](const EvPlayerKilled& ev) { OnPlayerKilled(ev); });
 
         m_initialized = true;
+#ifdef ENABLE_NETWORKING
+        if (ctx.db)
+        {
+            m_handoff = std::make_unique<TFHandoffParticipant>(*ctx.db, *this);
+            if (auto* host = dynamic_cast<EngineContext*>(ctx.engine))
+            {
+                host->RegisterSystem<Spark::Net::IAreaHandoffParticipant>(m_handoff.get());
+                if (auto* dispatcher = host->GetSystem<Spark::Net::AreaHandoffDispatcher>())
+                {
+                    dispatcher->SetParticipant(m_handoff.get());
+                }
+            }
+        }
+#endif
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFServerSim initialized");
         return true;
     }
@@ -59,6 +75,14 @@ namespace Terrafront
     void TFServerSim::Update(float deltaTime)
     {
         (void)deltaTime; // authoritative work runs on the fixed step only
+#ifdef ENABLE_NETWORKING
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+        if (m_initialized && m_ctx && m_ctx->IsAuthority() && network.IsInitialized() &&
+            network.GetRole() == Spark::Net::NetworkRole::Server)
+        {
+            (void)EnsureAuthorityDatabaseOpen();
+        }
+#endif
     }
 
     void TFServerSim::FixedUpdate(float fixedDeltaTime)
@@ -114,6 +138,19 @@ namespace Terrafront
         if (!m_initialized)
             return;
 #ifdef ENABLE_NETWORKING
+        if (auto* host = dynamic_cast<EngineContext*>(m_ctx->engine))
+        {
+            if (host->GetSystem<Spark::Net::IAreaHandoffParticipant>() == m_handoff.get())
+            {
+                if (auto* dispatcher = host->GetSystem<Spark::Net::AreaHandoffDispatcher>())
+                {
+                    dispatcher->SetParticipant(nullptr);
+                }
+                host->RegisterSystem<Spark::Net::IAreaHandoffParticipant>(nullptr);
+            }
+        }
+        m_handoff.reset();
+        m_suspendedCharacters.clear();
         PrepareNetworkStop();
 #endif
         m_inputs.clear();

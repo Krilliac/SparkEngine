@@ -1081,7 +1081,7 @@ namespace Spark::Gateway
             else
             {
                 m_seenNonces.emplace(request.nonce, request.timestamp);
-                result = Apply(request.command.sessionId, request.command.epoch, request.phase);
+                result = Apply(request.command, request.phase);
             }
         }
         RecordAudit(reason, phase, epoch, sessionId, result);
@@ -1137,37 +1137,109 @@ namespace Spark::Gateway
         }
     }
 
-    HandoffOperationResult LocalAreaControlService::Apply(std::string_view sessionId, uint64_t epoch,
-                                                          AreaControlPhase phase)
+    HandoffOperationResult LocalAreaControlService::Apply(const HandoffCommand& command, AreaControlPhase phase)
     {
         if (phase == AreaControlPhase::Probe)
-            return HandoffOperationResult::Applied;
-        auto found = m_sessions.find(std::string(sessionId));
+        {
+            // Services without a gameplay dispatcher retain their existing generic control-plane contract.
+            // SparkServer attaches its dispatcher for participating modules; it then requires a live participant.
+            return m_dispatcher == nullptr || m_dispatcher->IsReady() ? HandoffOperationResult::Applied
+                                                                      : HandoffOperationResult::Unavailable;
+        }
+
+        auto existing = m_sessions.find(command.sessionId);
+        if (existing == m_sessions.end() && (phase != AreaControlPhase::Prepare || command.epoch == 0))
+        {
+            return HandoffOperationResult::Rejected;
+        }
+        if (existing != m_sessions.end())
+        {
+            const SessionFence& current = existing->second;
+            if (command.epoch == current.epoch &&
+                (current.sourceArea != command.sourceArea || current.targetArea != command.targetArea))
+            {
+                return HandoffOperationResult::Rejected;
+            }
+            if (command.epoch < current.epoch)
+            {
+                return HandoffOperationResult::Rejected;
+            }
+            if (command.epoch > current.epoch &&
+                ((current.phase != AreaControlPhase::Acknowledge && current.phase != AreaControlPhase::Abort) ||
+                 phase != AreaControlPhase::Prepare))
+            {
+                return HandoffOperationResult::Rejected;
+            }
+            if (command.epoch == current.epoch && phase != current.phase)
+            {
+                const bool sequential =
+                    (current.phase == AreaControlPhase::Prepare && phase == AreaControlPhase::Transfer) ||
+                    (current.phase == AreaControlPhase::Transfer && phase == AreaControlPhase::Commit) ||
+                    (current.phase == AreaControlPhase::Commit && phase == AreaControlPhase::Acknowledge);
+                const bool abort = phase == AreaControlPhase::Abort && current.phase != AreaControlPhase::Commit &&
+                                   current.phase != AreaControlPhase::Acknowledge;
+                if (!sequential && !abort)
+                {
+                    return HandoffOperationResult::Rejected;
+                }
+            }
+        }
+
+        if (m_dispatcher != nullptr)
+        {
+            Spark::Net::HandoffRequest request;
+            request.sessionId = command.sessionId;
+            request.epoch = command.epoch;
+            request.sourceArea = command.sourceArea;
+            request.targetArea = command.targetArea;
+            const auto phaseValue = static_cast<unsigned int>(phase);
+            if (phaseValue <= static_cast<unsigned int>(AreaControlPhase::Abort))
+            {
+                const auto enginePhase = static_cast<Spark::Net::HandoffPhase>(phaseValue);
+                const auto dispatched = m_dispatcher->Submit(enginePhase, request);
+                if (dispatched == Spark::Net::HandoffResult::Unavailable ||
+                    dispatched == Spark::Net::HandoffResult::Rejected)
+                {
+                    return dispatched == Spark::Net::HandoffResult::Rejected ? HandoffOperationResult::Rejected
+                                                                             : HandoffOperationResult::Unavailable;
+                }
+            }
+        }
+
+        auto found = m_sessions.find(command.sessionId);
         if (found == m_sessions.end())
         {
-            if (phase != AreaControlPhase::Prepare || epoch == 0)
+            if (phase != AreaControlPhase::Prepare || command.epoch == 0)
+            {
                 return HandoffOperationResult::Rejected;
-            const std::string session(sessionId);
-            m_sessions.emplace(session, SessionFence{epoch, phase});
+            }
+            m_sessions.emplace(command.sessionId,
+                               SessionFence{command.epoch, phase, command.sourceArea, command.targetArea});
             if (!SaveState())
             {
-                m_sessions.erase(session);
+                m_sessions.erase(command.sessionId);
                 return HandoffOperationResult::Unavailable;
             }
             return HandoffOperationResult::Applied;
         }
         SessionFence& fence = found->second;
-        if (epoch < fence.epoch)
+        if (command.epoch < fence.epoch)
+        {
             return HandoffOperationResult::Rejected;
-        if (epoch == fence.epoch && phase == fence.phase)
+        }
+        if (command.epoch == fence.epoch && phase == fence.phase)
+        {
             return HandoffOperationResult::Duplicate;
-        if (epoch > fence.epoch)
+        }
+        if (command.epoch > fence.epoch)
         {
             if ((fence.phase != AreaControlPhase::Acknowledge && fence.phase != AreaControlPhase::Abort) ||
                 phase != AreaControlPhase::Prepare)
+            {
                 return HandoffOperationResult::Rejected;
+            }
             const SessionFence previous = fence;
-            fence = {epoch, phase};
+            fence = {command.epoch, phase, command.sourceArea, command.targetArea};
             if (!SaveState())
             {
                 fence = previous;
@@ -1178,7 +1250,8 @@ namespace Spark::Gateway
         const bool sequential = (fence.phase == AreaControlPhase::Prepare && phase == AreaControlPhase::Transfer) ||
                                 (fence.phase == AreaControlPhase::Transfer && phase == AreaControlPhase::Commit) ||
                                 (fence.phase == AreaControlPhase::Commit && phase == AreaControlPhase::Acknowledge);
-        const bool abort = phase == AreaControlPhase::Abort && fence.phase != AreaControlPhase::Acknowledge;
+        const bool abort = phase == AreaControlPhase::Abort && fence.phase != AreaControlPhase::Commit &&
+                           fence.phase != AreaControlPhase::Acknowledge;
         if (!sequential && !abort)
             return HandoffOperationResult::Rejected;
         const SessionFence previous = fence;
@@ -1199,7 +1272,18 @@ namespace Spark::Gateway
         std::ifstream input(m_epochStateFile);
         if (!input)
             return false;
+        input >> std::ws;
+        if (input.peek() == std::char_traits<char>::eof())
+        {
+            return true;
+        }
         std::unordered_map<std::string, SessionFence> loaded;
+        std::string version;
+        input >> version;
+        if (!input || version != "v2")
+        {
+            return false;
+        }
         std::string session;
         uint64_t epoch = 0;
         unsigned int phase = 0;
@@ -1208,10 +1292,15 @@ namespace Spark::Gateway
             input >> std::ws;
             if (input.peek() == std::char_traits<char>::eof())
                 break;
-            if (!(input >> std::quoted(session) >> epoch >> phase) || session.empty() || session.size() > 128 ||
-                epoch == 0 || phase < 1 || phase > 5 || loaded.contains(session))
+            uint32_t source = 0;
+            uint32_t target = 0;
+            if (!(input >> std::quoted(session) >> epoch >> phase >> source >> target) || session.empty() ||
+                session.size() > 128 || epoch == 0 || phase < 1 || phase > 5 || source == Net::INVALID_AREA ||
+                target == Net::INVALID_AREA || loaded.contains(session))
+            {
                 return false;
-            loaded.emplace(session, SessionFence{epoch, static_cast<AreaControlPhase>(phase)});
+            }
+            loaded.emplace(session, SessionFence{epoch, static_cast<AreaControlPhase>(phase), source, target});
         }
         if (input.bad())
             return false;
@@ -1222,9 +1311,12 @@ namespace Spark::Gateway
     bool LocalAreaControlService::SaveState() const
     {
         std::ostringstream output;
+        output << "v2\n";
         for (const auto& [session, fence] : m_sessions)
-            output << std::quoted(session) << ' ' << fence.epoch << ' ' << static_cast<unsigned int>(fence.phase)
-                   << '\n';
+        {
+            output << std::quoted(session) << ' ' << fence.epoch << ' ' << static_cast<unsigned int>(fence.phase) << ' '
+                   << fence.sourceArea << ' ' << fence.targetArea << '\n';
+        }
         return AtomicWriteText(m_epochStateFile, output.str());
     }
 

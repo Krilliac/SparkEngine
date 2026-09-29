@@ -288,7 +288,7 @@ TEST(TF120_Residency_FencedOutAuthorityCommitConflicts)
     EXPECT_EQ(ResidentOnDisk(path, hero.charId), std::string(kVeyra));
 }
 
-TEST(TF120_Residency_V2FileLoadsWithoutResidencyAndUpgradesToV4)
+TEST(TF120_Residency_V2FileLoadsWithoutResidencyAndUpgradesToV5)
 {
     const fs::path path = FreshResidencyDb("test_tf120_residency_v2.db");
     WriteFile(path, R"({"schemaVersion": 2, "revision": 3, "nextAccountId": 2, "nextCharId": 2,
@@ -309,7 +309,9 @@ TEST(TF120_Residency_V2FileLoadsWithoutResidencyAndUpgradesToV4)
     const std::string upgraded = ReadFile(path);
     EXPECT_STR_CONTAINS(upgraded, "\"schemaVersion\": " + std::to_string(TFDatabase::kSchemaVersion));
     EXPECT_STR_CONTAINS(upgraded, std::string("\"resident\": \"") + kCindral + "\"");
-    EXPECT_EQ(TFDatabase::kSchemaVersion, uint32_t{4});
+    EXPECT_EQ(TFDatabase::kSchemaVersion, uint32_t{5});
+    EXPECT_TRUE(row.migrationState.empty());
+    EXPECT_EQ(row.migrationEpoch, uint64_t{0});
 
     // A resident key that could not name a lock file is corruption.
     WriteFile(path, R"({"schemaVersion": 4, "revision": 3, "nextAccountId": 2, "nextCharId": 2,
