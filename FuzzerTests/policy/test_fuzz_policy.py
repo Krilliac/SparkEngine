@@ -132,6 +132,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzLocalization",
     "SparkFuzzFpsSnapshot",
     "SparkFuzzSessionGateProtocol",
+    "SparkFuzzInstallState",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2146,6 +2147,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "SparkFPS::DecodeSnapshotBatch",
                 "fps-multiplayer-player-state",
                 8,
+            ),
+            "installer-state-manifest": (
+                "InstallState",
+                "SparkInstaller::InstallState::Load",
+                "installer-state-manifest",
+                6,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

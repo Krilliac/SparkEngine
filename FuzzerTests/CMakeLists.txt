@@ -2314,3 +2314,59 @@ set_tests_properties(FuzzSessionGateProtocolSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# InstallState.cpp is the whole reader closure: Load for .sparkengine-install.json and
+# ReadPendingMarker for .sparkengine-install.pending (Installer.cpp only calls them).
+add_executable(SparkFuzzInstallState
+    FuzzInstallState.cpp
+    FuzzInstallStateProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkInstaller/src/InstallState.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzInstallState.cpp use
+# libstdc++; the production reader and the adapter use libc++ and meet the driver
+# only at the C ABI in FuzzInstallStateProduction.h.
+set_source_files_properties(
+    FuzzInstallStateProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkInstaller/src/InstallState.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzInstallState PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkInstaller/src"
+)
+target_compile_features(SparkFuzzInstallState PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzInstallState PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzInstallState PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzInstallState PRIVATE Threads::Threads c++ c++abi)
+
+# regression-schema-overflow.json declares schema 4294967297, which atoi truncated to 1
+# on LP64; regression-escaped-quote.json and regression-windows-destination.json hold a
+# '\"' and '\\' that the pre-fix reader did not unescape, so their Save -> Load round
+# trip changed. The adapter aborts on all three against the old reader.
+add_test(
+    NAME FuzzInstallStateSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzInstallState>
+        -max_len=65537
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=6
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/installer-state-manifest"
+)
+set_tests_properties(FuzzInstallStateSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
