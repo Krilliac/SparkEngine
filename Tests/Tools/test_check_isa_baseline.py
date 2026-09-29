@@ -267,29 +267,83 @@ __declspec(dllexport) void Scale(float* out, const float* a, const float* b)
 }
 """
 
-    def _link(self, tmp: Path, name: str, *flags: str) -> Path:
+    def _link(self, tmp: Path, name: str, *flags: str, reviewed: bool = False, extra_source: str = "") -> Path:
         source = tmp / "pe.c"
-        source.write_text(self.SOURCE, encoding="utf-8")
+        contents = self.SOURCE
+        if reviewed:
+            contents = contents.replace("Scale", "__std_reverse_trivially_swappable_1")
+        source.write_text(contents + extra_source, encoding="utf-8")
         obj = tmp / f"{name}.obj"
+        if reviewed:
+            obj = tmp / "crt" / "src" / "stl" / "vector_algorithms.obj"
+            obj.parent.mkdir(parents=True, exist_ok=True)
         dll = tmp / f"{name}.dll"
         subprocess.run(
-            [CLANG, "--target=x86_64-pc-windows-msvc", "-O2", *flags, "-c", str(source), "-o", str(obj)],
+            [CLANG, "--target=x86_64-pc-windows-msvc", "-O2", "-g", "-gcodeview",
+             *flags, "-c", str(source), "-o", str(obj)],
             check=True,
             timeout=120,
         )
+        pdb = tmp / f"{name}.pdb"
         subprocess.run(
-            [LLD_LINK, "/dll", "/noentry", "/nodefaultlib", f"/out:{dll}", str(obj)], check=True, timeout=120
+            [LLD_LINK, "/dll", "/noentry", "/nodefaultlib", "/debug", f"/pdb:{pdb}", f"/out:{dll}", str(obj)],
+            check=True,
+            timeout=120,
         )
         return dll
 
     def test_pe_avx2_fails_and_floor_passes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tmp = Path(directory)
-            avx2 = _run_checker(str(self._link(tmp, "avx2", "-mavx2", "-mfma")))
+            avx2_dll = self._link(tmp, "avx2", "-mavx2", "-mfma")
+            avx2 = _run_checker("--pdb", str(avx2_dll.with_suffix(".pdb")), str(avx2_dll))
             self.assertEqual(avx2.returncode, 1, avx2.stdout + avx2.stderr)
             self.assertIn("violation AVX/AVX2 (ymm)", avx2.stdout)
-            floor = _run_checker(str(self._link(tmp, "floor", "-msse4.2")))
+            floor_dll = self._link(tmp, "floor", "-msse4.2")
+            floor = _run_checker("--pdb", str(floor_dll.with_suffix(".pdb")), str(floor_dll))
             self.assertEqual(floor.returncode, 0, floor.stdout + floor.stderr)
+
+    def test_pe_requires_matching_pdb(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            image = self._link(tmp, "missing", "-msse4.2")
+            missing = _run_checker(str(image))
+            self.assertEqual(missing.returncode, 2, missing.stdout + missing.stderr)
+            malformed = tmp / "malformed.pdb"
+            malformed.write_bytes(b"not a pdb")
+            malformed_result = _run_checker("--pdb", str(malformed), str(image))
+            self.assertEqual(malformed_result.returncode, 2, malformed_result.stdout + malformed_result.stderr)
+
+    def test_pe_rejects_pdb_from_another_image(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            first = self._link(tmp, "first", "-msse4.2")
+            second = self._link(tmp, "second", "-msse4.2")
+            result = _run_checker("--pdb", str(second.with_suffix(".pdb")), str(first))
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+
+    def test_pe_reviewed_vector_algorithms_ranges_are_the_only_exemption(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            image = self._link(tmp, "vector_algorithms", "-mavx2", reviewed=True)
+            self.assertTrue(checker._pdb_ranges(str(image.with_suffix(".pdb")), str(image)))
+            result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
+            # This metadata fixture tests the range selector, not CPUID dispatch.
+            # Runtime guard provenance is reviewed separately in the MSVC source.
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_pe_neighbor_in_same_module_and_extra_isa_are_not_exempt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            neighbor = self.SOURCE.replace("Scale", "Unreviewed").replace("int _fltused = 0;", "")
+            image = self._link(tmp, "neighbor", "-mavx2", reviewed=True, extra_source=neighbor)
+            result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("allowed (cpuid-dispatched)", result.stdout)
+            image = self._link(tmp, "fma", "-mavx2", "-mfma", reviewed=True)
+            result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("violation FMA", result.stdout)
 
 
 @unittest.skipUnless(DISASSEMBLER, "needs objdump or llvm-objdump")

@@ -37,3 +37,60 @@ STRIP_DEBUG_SYMBOLS now keeps symbols out of the runtime package instead of neve
 ## 2026-09-25 progress
 
 tools/compare_build_outputs.py writes a closed spark.build-output-manifest/1 (relative path, size, SHA-256, GNU build-id or COFF timestamp and RSDS, per-section hashes) and compares two, naming the first differing section. SparkReproducibleBuild.cmake now also maps the build root (-ffile-prefix-map=<build>=., after the source map; GCC LTO repeats both at link) and seeds GCC LTO objects with -frandom-seed=<OBJECT>. Fail-before: two trees built from the pre-change source differed in bin/SparkCooker (build-id), SparkCooker.debug (.debug_info comp_dir) and libSparkAssetPipelineCore.a. After: ReproducibleBuild_LinuxToolTargets passes locally (GCC 13.3, about 75 s), a single manual Clang two-tree run outside the CTest (no retained artifact) was equivalent, and a same-tree rebuild gives a byte-identical archive. GCC LTO IR in static-library members still records the build directory, so the CTest compares bin/ only. The reproducibility-windows job (two checkouts, two windows-shipping builds and installs, compared) is job-level continue-on-error and not a required-ci-gate need; it has never run, and MSVC /Z7 objects in the SDK libraries may differ.
+
+## 2026-09-28 OD-24 comparator and Windows CPU scan (local lane)
+
+`tools/compare_build_outputs.py` now implements the OD-24 replacement only inside
+`.debug$S` sections of valid x86 COFF/BigObj members of `.lib` archives. The
+replacement has the original root byte length. Headers, section layout, relocation
+and symbol tables, padding, other members and sections remain exact; overlapping
+or unsupported layouts receive no normalization. Standalone COFF objects are
+compared exactly. The closed `spark.build-output-manifest/2` schema records each
+normalized member name, ordinal and root length; old manifests must be regenerated.
+The Windows two-tree CTest scans both `bin/MinSizeRel` and `lib/MinSizeRel`, with
+equal-length build roots. The advisory workflow uses `tree-a` and `tree-b` and
+passes native Windows build-root strings to both stage manifests. Its
+`continue-on-error` remains unchanged.
+
+The registered in-memory comparator tests cover equal-root replacement, BigObj,
+non-library/standalone objects, non-COFF members, header/layout/relocation/symbol
+overlap, archive padding, unequal roots, and PE/ELF manifest validation. A real
+MSVC 14.44.35207 two-directory `/Z7 /Brepro /bigobj` single-source archive probe
+still fails after normalization: the BigObj timestamp and bytes in `.debug$T`
+differ. A clang-cl probe additionally retained `.debug$T` paths and auxiliary
+section checksums. OD-24 forbids normalizing those bytes. This implements the
+comparator policy, not Windows clean-build equivalence; no reproducibility
+criterion promotion is proposed from these probes.
+
+`CpuFloor_IsaBaseline` is now registered for Windows MSVC trees with explicit
+image/PDB pairs and LLVM tool paths. Missing tooling or PDBs fails execution.
+The scanner validates PE/PDB GUID and age, streams `llvm-pdbutil` procedure
+records, interprets their section offsets as decimal, and restricts exemptions
+to exact reviewed procedure/module pairs and half-open executable byte ranges.
+Only AVX/AVX2 is allowed there; other ISA families and neighboring functions
+remain violations. ELF regex exemptions cannot exempt a PE image.
+
+Review provenance is installed MSVC 14.44.35207: `crt/src/stl/vector_algorithms.cpp`
+uses `_Use_avx2()` at line 26 (`__isa_enabled & (1 << __ISA_AVAILABLE_AVX2)`).
+The explicit procedure list cites the direct guards and guarded wrapper targets
+in the checker. `crt/src/x64/memcpy.asm` lines 266-267 and `memset.asm` lines
+204-205 branch to `NoAVX` when `__isa_available` is below AVX. Concrete PDB module
+paths were observed in locally linked `/MT`, `/MD` and `/MDd` fixtures; unknown
+module variants/functions fail closed until reviewed. These source files were
+read locally; no external service was contacted.
+
+Local validation: the focused Python comparator/range/classifier/wiring suite
+passes. Linked clang/lld PE fixtures pass at the floor and in an allowlisted
+range, and reject ordinary AVX2, adjacent unreviewed AVX2, FMA inside an otherwise
+allowed function, and missing/mismatched PDBs. Native MSVC `/MT`, `/MD` and `/MDd`
+fixtures pass with their actual STL/CRT PDB ranges. The pre-change scanner rejects
+the guarded native fixture, and the pre-change comparator cannot equate the
+synthetic archives that differ only by the permitted root bytes.
+
+The ordinary temporary-directory suites cannot fully execute here: the sandbox
+returns Access denied on nested temporary paths and their cleanup. The CPU
+configuration suite also skips host-dependent checks because `platform.machine()`
+is empty in this shell. No engine CMake build, full engine image scan, Windows
+entry-point rebuild, Linux suite, below-floor hardware run, hosted Windows job
+or exact-commit CI was performed. No work-item JSON, generated handoff, owner
+decision or fuzz-policy file was edited.

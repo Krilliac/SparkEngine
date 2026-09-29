@@ -273,12 +273,14 @@ python3 tools/compare_build_outputs.py compare a.json b.json --report r.json
 python3 tools/compare_build_outputs.py trees <root-a> <root-b>           # both at once
 ```
 
-The `spark.build-output-manifest/1` manifest lists every ELF, PE and `ar` file
+The `spark.build-output-manifest/2` manifest lists every ELF, PE, COFF object and `ar` file
 under the root: relative path, size, SHA-256, the identity (GNU build-id; COFF
 timestamp, RSDS GUID/age/PDB name and whether the image carries the `/Brepro`
 REPRO debug entry) and a SHA-256 per section or archive
 member. It holds no absolute path, so equivalent trees give byte-identical
-manifests. PDBs are not compared: the RSDS record in the image identifies them.
+manifests. Regenerate older manifests: version 2 records normalization metadata
+and hashes archive members with their actual bytes. PDBs are not compared:
+the RSDS record in the image identifies them.
 The comparison exits 1 on any missing, extra or differing output and names the
 first differing section that is a cause (headers, the build-id note and the
 debuglink CRC only follow other changes). A PE image linked without `/Brepro`
@@ -306,14 +308,48 @@ CTests (label `reproducibility`):
   GCC 14 or Clang lane has run it yet; one manual Clang two-tree run outside
   the CTest was equivalent.
 
-The `reproducibility-windows` job checks the repository out twice (`a` and
-`tree-b/nested/src`), builds and installs the `windows-shipping` preset in each
-with no compiler cache, and compares the two install trees. It is job-level
-`continue-on-error` and not a `required-ci-gate` dependency until a hosted run
-shows equivalent trees, and it has not run yet. MSVC objects embed CodeView
-(`/Z7`) with absolute paths that `/d1trimfile` does not rewrite, so the static
-libraries in the SDK install may differ between the trees; the job reports
-that rather than hiding it.
+The `reproducibility-windows` job checks the repository out twice (`tree-a` and
+`tree-b`), builds and installs the `windows-shipping` preset in each with no
+compiler cache, and compares the two install trees. The checkout names have
+equal byte lengths. Each manifest receives its native Windows build-root
+string through `--build-root`.
+
+Owner decision OD-24 permits one normalization: the exact build-root string
+inside `.debug$S` CodeView sections of COFF members of `.lib` archives is
+replaced with a fixed placeholder of the same length. The manifest records
+the affected members. Archive headers, member lengths, section layouts,
+other sections, image bytes and paths outside `.debug$S` remain exact.
+Different-length roots are rejected. Standalone COFF objects and archives
+with other extensions do not receive this normalization. This does not
+permit stripping debug sections or ignoring SDK libraries.
+
+The job remains `continue-on-error` and outside `required-ci-gate` until a
+hosted run proves equivalent trees. Local parser fixtures do not establish
+Windows Shipping reproducibility. A local MSVC `/Z7 /Brepro /bigobj` probe
+still differed in the COFF content-derived timestamp and `.debug$T` bytes
+after the permitted replacement. Those differences remain failures under
+OD-24; broadening the comparator to hide them is not permitted.
+
+### Windows CPU instruction checks
+
+`CpuFloor_IsaBaseline` scans the linked engine, editor, server and game modules
+on Windows MSVC trees as well as ELF trees. Windows passes each target's PDB
+explicitly; missing tools or PDBs fail the test instead of removing it.
+Install LLVM's `llvm-objdump` and `llvm-pdbutil`, or set
+`SPARK_ISA_DISASSEMBLER` and `SPARK_ISA_PDBUTIL` to their executable paths.
+
+The scanner binds each PE to its PDB by RSDS GUID and age. Exemptions require
+an exact reviewed MSVC procedure name, compiler module provenance, and a PDB
+range inside executable section bytes. The reviewed MSVC 14.44 runtime
+procedures guard their AVX paths through `__isa_enabled` or `__isa_available`;
+only AVX/AVX2 is exempted. FMA and other extensions, neighboring procedures,
+and unknown runtime functions remain failures. `--allow-symbol` affects ELF
+only. The allowlist and source-review locations are in
+`tools/check_isa_baseline.py`; new toolchain/runtime variants require review.
+
+`CpuFloor_IsaBaselineChecker` covers linked PE fixtures and the PDB range
+parser. Native runtime fixture passes establish local scanner behavior;
+they do not replace an engine image scan or execution on below-floor hardware.
 
 ## macOS (job `build-macos`, `continue-on-error`)
 
