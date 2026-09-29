@@ -74,7 +74,7 @@ namespace SparkTestFixtures
     } // namespace
 
     std::vector<uint8_t> BuildWire(MessageType type, std::span<const uint8_t> payload, ChannelType channel,
-                                   uint32_t sequence, ClientID sender, float timestamp)
+                                   uint32_t sequence, ClientID sender, float timestamp, uint32_t orderedSequence)
     {
         NetBuffer buf;
         buf.WriteUint32(kWireMagic);
@@ -84,6 +84,10 @@ namespace SparkTestFixtures
         buf.WriteUint32(sequence);
         buf.WriteFloat(timestamp);
         buf.WriteUint32(static_cast<uint32_t>(payload.size()));
+        if (channel == ChannelType::ReliableOrdered)
+        {
+            buf.WriteUint32(orderedSequence);
+        }
         if (!payload.empty())
         {
             buf.WriteBytes(payload.data(), payload.size());
@@ -110,11 +114,16 @@ namespace SparkTestFixtures
         message.sequence = buf.ReadUint32();
         message.timestamp = buf.ReadFloat();
         const uint32_t payloadSize = buf.ReadUint32();
-        if (buf.HasError() || wire.size() != kWireHeaderSize + payloadSize)
+        if (message.channel == ChannelType::ReliableOrdered)
+        {
+            message.orderedSequence = buf.ReadUint32();
+        }
+        const size_t headerSize = buf.GetReadPosition();
+        if (buf.HasError() || wire.size() != headerSize + payloadSize)
         {
             return std::nullopt;
         }
-        message.payload.assign(wire.begin() + kWireHeaderSize, wire.end());
+        message.payload.assign(wire.begin() + static_cast<std::ptrdiff_t>(headerSize), wire.end());
         return message;
     }
 

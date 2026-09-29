@@ -10,7 +10,8 @@ This page documents the binary wire format used by SparkEngine's UDP networking 
 
 ## Packet Structure
 
-All packets use **little-endian** byte order. Every packet begins with the same 23-byte header:
+All packets use **little-endian** byte order. Every packet begins with the same 23-byte header;
+a `ReliableOrdered` packet (channel 2) carries a 4-byte ordered sequence after it (protocol v3):
 
 ```
 Offset  Size  Type       Field
@@ -19,14 +20,15 @@ Offset  Size  Type       Field
 4       2     uint16     MessageType
 6       1     uint8      ChannelType
 7       4     uint32     SenderID (ClientID)
-11      4     uint32     SequenceNumber
+11      4     uint32     SequenceNumber (reliability/ACK)
 15      4     float32    Timestamp (server time)
 19      4     uint32     PayloadLength (N)
-23      N     bytes      Payload
+23      4     uint32     OrderedSequence   -- ReliableOrdered only
+23|27   N     bytes      Payload
 ```
 
-- **Minimum packet size:** 23 bytes (empty payload)
-- **Maximum payload size:** 64,512 bytes (~63 KB)
+- **Minimum packet size:** 23 bytes (empty payload; 27 for ReliableOrdered)
+- **Maximum payload size:** 65,453 bytes on every channel (`MAX_NETWORK_MESSAGE_PAYLOAD_SIZE`)
 - **Magic number:** `0x5350524B` — ASCII `"SPRK"`. Packets with incorrect magic are silently dropped.
 
 ---
@@ -189,7 +191,11 @@ When a client reports a hit, the server rewinds entity positions to the client's
 
 Reliable messages use a sliding-window acknowledgment scheme:
 
-1. Sender assigns a `SequenceNumber` to each reliable message
+1. Sender assigns a `SequenceNumber` to each reliable message (Reliable and ReliableOrdered share this
+   reliability stream). A ReliableOrdered message also takes an `OrderedSequence` from a separate
+   per-peer stream that starts at 1; only that one drives in-order delivery, so Reliable traffic can
+   never leave a gap in the ordered stream (the protocol-v2 bug that stalled every ordered message sent
+   after a Reliable one)
 2. Receiver sends `Ack` messages containing the highest received sequence plus a 32-bit bitfield for the previous 32 sequences
 3. Sender retransmits unacknowledged messages after a configurable timeout
 

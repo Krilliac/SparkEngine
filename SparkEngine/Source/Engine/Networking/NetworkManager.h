@@ -130,7 +130,9 @@ namespace Spark::Net
     /// the signed handshake transcript) and echoed in ConnectAccepted. Peers must match exactly;
     /// bump it on every incompatible wire change (docs/specs/networking-wire-format.md).
     /// Version 2 (NET-100): every datagram is framed, and everything but the handshake is sealed.
-    constexpr uint16_t NETWORK_PROTOCOL_VERSION = 2;
+    /// Version 3: a ReliableOrdered message carries its own ordered-stream sequence after the fixed
+    /// header, so ordered delivery no longer shares the per-peer reliability/ACK sequence.
+    constexpr uint16_t NETWORK_PROTOCOL_VERSION = 3;
 
     /// Outer frame kind, the first byte of every v2 datagram (NET-100).
     /// Handshake frames carry only Connect, ConnectAccepted and ConnectRejected in plaintext;
@@ -253,10 +255,14 @@ namespace Spark::Net
         MessageType type = MessageType::UserDefined;   ///< What kind of network event this message represents.
         ChannelType channel = ChannelType::Unreliable; ///< Delivery guarantee (reliable ordered, unreliable, etc.).
         ClientID senderID = INVALID_CLIENT; ///< Client that originated this message (INVALID on server-sent).
-        SequenceNumber sequence = 0;        ///< Monotonic counter for reliable-ordered delivery.
-        std::vector<uint8_t> payload;       ///< Raw serialized message body.
-        float timestamp = 0.0f;             ///< Server time when the message was created (seconds).
-        bool sensitive = false;             ///< Sensitive-payload ownership marker; never serialized onto the network.
+        SequenceNumber sequence = 0;        ///< Reliability/ACK sequence (Reliable and ReliableOrdered); 0 = untracked.
+        /// Ordered-stream sequence (ReliableOrdered only, on the wire after the fixed header). Each
+        /// peer and direction numbers its ordered stream from 1, independently of @ref sequence;
+        /// 0 = deliver without ordering.
+        SequenceNumber orderedSequence = 0;
+        std::vector<uint8_t> payload; ///< Raw serialized message body.
+        float timestamp = 0.0f;       ///< Server time when the message was created (seconds).
+        bool sensitive = false;       ///< Sensitive-payload ownership marker; never serialized onto the network.
         bool localOnly =
             false; ///< Refuse transmission to non-loopback destinations; never serialized onto the network.
         uint64_t ownerLifecycleEpoch = 0; ///< Owning connection lifecycle; process-local and never serialized.
@@ -1095,13 +1101,20 @@ namespace Spark::Net
         ///
         /// On the server the peer key is the ClientID of the remote client; on
         /// a client there is a single implicit peer — the server — keyed by
-        /// SERVER_PEER. Both the outgoing stream (sequence counter, unacked
+        /// SERVER_PEER. Both the outgoing stream (sequence counters, unacked
         /// map, retransmit counts) and the incoming stream (dedup window, ACK
         /// bitfield, ordered reorder buffer) live here.
+        ///
+        /// Two sequence spaces per direction: every Reliable and ReliableOrdered
+        /// message takes a reliability sequence (dedup, ACK, retransmit), and a
+        /// ReliableOrdered message also takes an ordered sequence, contiguous
+        /// from 1, that alone drives in-order delivery. Sharing one counter made
+        /// any earlier Reliable message leave a permanent gap in the ordered stream.
         struct PeerState
         {
             // Outgoing reliable stream (messages we sent to this peer)
-            SequenceNumber nextOutgoingSequence = 1; ///< Next reliable sequence to assign
+            SequenceNumber nextOutgoingSequence = 1;        ///< Next reliability sequence to assign
+            SequenceNumber nextOutgoingOrderedSequence = 1; ///< Next ordered sequence (ReliableOrdered only)
             std::unordered_map<SequenceNumber, NetworkMessage> unacknowledgedMessages; ///< Awaiting ACK
             std::unordered_map<SequenceNumber, float> reliableOriginalSendTime; ///< First-send time (RTT samples)
             std::unordered_map<SequenceNumber, int> retransmitCounts;           ///< Per-message retries (backoff)
@@ -1110,8 +1123,8 @@ namespace Spark::Net
             SequenceNumber remoteSequenceHighest = 0; ///< Highest reliable sequence received
             uint32_t ackBitfield = 0;                 ///< Bitfield for sequences (highest-1) to (highest-32)
             std::unordered_map<SequenceNumber, float> receivedSequences;      ///< seq → receive time (dedup)
-            SequenceNumber expectedOrderedSequence = 1;                       ///< Next sequence to deliver in order
-            std::unordered_map<SequenceNumber, NetworkMessage> orderedBuffer; ///< Out-of-order holding buffer
+            SequenceNumber expectedOrderedSequence = 1;                       ///< Next ordered sequence to deliver
+            std::unordered_map<SequenceNumber, NetworkMessage> orderedBuffer; ///< Keyed by ordered sequence
         };
 
         /// @brief Peer key a client uses for its single implicit peer (the server).

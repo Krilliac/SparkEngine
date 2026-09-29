@@ -798,7 +798,12 @@ namespace Spark::Net
         // reaches here for reliable traffic, so the peer is always the server.
         if (queued.channel != ChannelType::Unreliable)
         {
-            queued.sequence = TakeReliableSequence(GetPeerState(SERVER_PEER).nextOutgoingSequence);
+            PeerState& serverPeer = GetPeerState(SERVER_PEER);
+            queued.sequence = TakeReliableSequence(serverPeer.nextOutgoingSequence);
+            if (queued.channel == ChannelType::ReliableOrdered)
+            {
+                queued.orderedSequence = TakeReliableSequence(serverPeer.nextOutgoingOrderedSequence);
+            }
         }
 
         m_outgoingQueue.push(queued);
@@ -880,6 +885,10 @@ namespace Spark::Net
         {
             PeerState& peer = GetPeerState(client);
             copy.sequence = TakeReliableSequence(peer.nextOutgoingSequence);
+            if (copy.channel == ChannelType::ReliableOrdered)
+            {
+                copy.orderedSequence = TakeReliableSequence(peer.nextOutgoingOrderedSequence);
+            }
             peer.unacknowledgedMessages[copy.sequence] = copy;
             peer.reliableOriginalSendTime.try_emplace(copy.sequence, m_serverTime);
         }
@@ -904,7 +913,12 @@ namespace Spark::Net
         }
         if (copy.channel != ChannelType::Unreliable)
         {
-            copy.sequence = TakeReliableSequence(GetPeerState(client).nextOutgoingSequence);
+            PeerState& peer = GetPeerState(client);
+            copy.sequence = TakeReliableSequence(peer.nextOutgoingSequence);
+            if (copy.channel == ChannelType::ReliableOrdered)
+            {
+                copy.orderedSequence = TakeReliableSequence(peer.nextOutgoingOrderedSequence);
+            }
         }
         m_outgoingQueue.push(copy);
         m_outgoingQueuePeak = std::max(m_outgoingQueuePeak, m_outgoingQueue.size());

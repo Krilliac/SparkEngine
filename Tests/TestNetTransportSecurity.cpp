@@ -56,9 +56,10 @@ namespace Spark::Net
 namespace
 {
     /// Wire format documented in NetworkManager::SerializeMessage:
-    /// [4] magic [2] type [1] channel [4] senderID [4] sequence [4] timestamp [4] payloadLen [N] payload
+    /// [4] magic [2] type [1] channel [4] senderID [4] sequence [4] timestamp [4] payloadLen
+    /// [4] orderedSequence (ReliableOrdered only) [N] payload
     std::vector<uint8_t> BuildWire(MessageType type, ChannelType channel, uint32_t sequence,
-                                   const std::vector<uint8_t>& payload = {})
+                                   const std::vector<uint8_t>& payload = {}, uint32_t orderedSequence = 0)
     {
         std::vector<uint8_t> packet;
         auto put32 = [&](uint32_t value)
@@ -74,6 +75,10 @@ namespace
         put32(sequence);
         put32(0); // timestamp bits (0.0f)
         put32(static_cast<uint32_t>(payload.size()));
+        if (channel == ChannelType::ReliableOrdered)
+        {
+            put32(orderedSequence);
+        }
         packet.insert(packet.end(), payload.begin(), payload.end());
         return packet;
     }
@@ -722,8 +727,10 @@ TEST(NetTransportSec_OrderedDeliveryContinuesAcrossSequenceWrap)
         ASSERT_TRUE(admitted != INVALID_CLIENT);
         NetworkManagerTransportSecurityTestAccess::SeedExpectedOrderedSequence(nm, admitted, 0xFFFFFFFFu);
 
-        ASSERT_TRUE(peer.Send(BuildWire(MessageType::UserDefined, ChannelType::ReliableOrdered, 0xFFFFFFFFu, {0xA1})));
-        ASSERT_TRUE(peer.Send(BuildWire(MessageType::UserDefined, ChannelType::ReliableOrdered, 1u, {0xA2})));
+        // The ordered stream wraps 0xFFFFFFFF -> 1; the reliability sequences are independent.
+        ASSERT_TRUE(
+            peer.Send(BuildWire(MessageType::UserDefined, ChannelType::ReliableOrdered, 5u, {0xA1}, 0xFFFFFFFFu)));
+        ASSERT_TRUE(peer.Send(BuildWire(MessageType::UserDefined, ChannelType::ReliableOrdered, 6u, {0xA2}, 1u)));
         EXPECT_TRUE(PumpUntil(nm, [&] { return delivered.size() >= 2; }));
         ASSERT_EQ(delivered.size(), static_cast<size_t>(2));
         EXPECT_EQ(delivered[0], static_cast<uint8_t>(0xA1));

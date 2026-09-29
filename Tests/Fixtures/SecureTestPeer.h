@@ -43,7 +43,7 @@ namespace SparkTestFixtures
     constexpr uint8_t kFrameHandshake = 0x01;
     constexpr uint8_t kFrameSealed = 0x02;
     constexpr uint32_t kWireMagic = 0x5350524B; // "SPRK" inner message header
-    constexpr size_t kWireHeaderSize = 23;
+    constexpr size_t kWireHeaderSize = 23;      // plus 4 (ordered sequence) on ReliableOrdered
 
     /** @brief One decoded inner message (the plaintext of a frame). */
     struct WireMessage
@@ -52,15 +52,20 @@ namespace SparkTestFixtures
         Spark::Net::ChannelType channel = Spark::Net::ChannelType::Unreliable;
         Spark::Net::ClientID sender = Spark::Net::INVALID_CLIENT;
         uint32_t sequence = 0;
+        uint32_t orderedSequence = 0; ///< ReliableOrdered only
         float timestamp = 0.0f;
         std::vector<uint8_t> payload;
     };
 
-    /** @brief Serialize an inner message exactly as NetworkManager::SerializeMessage does. */
+    /**
+     * @brief Serialize an inner message exactly as NetworkManager::SerializeMessage does
+     *
+     * @p orderedSequence is written only for ReliableOrdered (protocol v3); 0 delivers unordered.
+     */
     std::vector<uint8_t> BuildWire(Spark::Net::MessageType type, std::span<const uint8_t> payload,
                                    Spark::Net::ChannelType channel = Spark::Net::ChannelType::Reliable,
                                    uint32_t sequence = 0, Spark::Net::ClientID sender = Spark::Net::INVALID_CLIENT,
-                                   float timestamp = 0.0f);
+                                   float timestamp = 0.0f, uint32_t orderedSequence = 0);
 
     /** @brief Parse an inner message; nullopt when the header or length is wrong. */
     std::optional<WireMessage> ParseWire(std::span<const uint8_t> wire);
@@ -194,12 +199,12 @@ namespace SparkTestFixtures
         [[nodiscard]] LoopbackSocket& Socket() { return m_socket; }
         [[nodiscard]] uint16_t Port() const { return m_socket.Port(); }
         [[nodiscard]] bool HasChannel() const { return m_channel != nullptr; }
+        [[nodiscard]] Spark::Net::SecureChannel* Channel() { return m_channel.get(); }
 
         /// Pump @p client until its framed Connect arrives; returns the ClientHello payload.
         std::optional<std::vector<uint8_t>> AwaitConnect(
             Spark::Net::NetworkManager& client, std::chrono::milliseconds window = std::chrono::milliseconds(400));
 
-        [[nodiscard]] Spark::Net::SecureChannel* Channel() { return m_channel.get(); }
         /**
          * @brief Answer the last ClientHello with a signed ConnectAccepted and install the server channel
          * @param id       Client id to assign

@@ -52,7 +52,7 @@ namespace Spark::Net
 
     NetworkMessage::NetworkMessage(NetworkMessage&& other) noexcept
         : type(other.type), channel(other.channel), senderID(other.senderID), sequence(other.sequence),
-          payload(std::move(other.payload)), timestamp(other.timestamp),
+          orderedSequence(other.orderedSequence), payload(std::move(other.payload)), timestamp(other.timestamp),
           sensitive(std::exchange(other.sensitive, false)), localOnly(std::exchange(other.localOnly, false)),
           ownerLifecycleEpoch(std::exchange(other.ownerLifecycleEpoch, 0))
     {
@@ -81,6 +81,7 @@ namespace Spark::Net
         channel = other.channel;
         senderID = other.senderID;
         sequence = other.sequence;
+        orderedSequence = other.orderedSequence;
         payload = std::move(other.payload);
         timestamp = other.timestamp;
         sensitive = std::exchange(other.sensitive, false);
@@ -340,9 +341,10 @@ namespace Spark::Net
         //   [2] message type
         //   [1] channel type
         //   [4] sender ID
-        //   [4] sequence number
+        //   [4] sequence number (reliability/ACK)
         //   [4] timestamp (float bits)
         //   [4] payload length
+        //   [4] ordered sequence -- ReliableOrdered only (protocol v3)
         //   [N] payload bytes
 
         if (!IsNetworkPayloadSizeValid(msg.payload.size()))
@@ -368,6 +370,10 @@ namespace Spark::Net
         buf.WriteUint32(msg.sequence);
         buf.WriteFloat(msg.timestamp);
         buf.WriteUint32(static_cast<uint32_t>(msg.payload.size()));
+        if (msg.channel == ChannelType::ReliableOrdered)
+        {
+            buf.WriteUint32(msg.orderedSequence);
+        }
         if (!msg.payload.empty())
         {
             buf.WriteBytes(msg.payload.data(), msg.payload.size());
@@ -383,7 +389,8 @@ namespace Spark::Net
         outMsg.localOnly = false;
         outMsg.ownerLifecycleEpoch = 0;
 
-        // Minimum header: magic(4) + type(2) + channel(1) + sender(4) + seq(4) + timestamp(4) + payloadLen(4) = 23
+        // Minimum header: magic(4) + type(2) + channel(1) + sender(4) + seq(4) + timestamp(4) + payloadLen(4) = 23;
+        // a ReliableOrdered message adds its 4-byte ordered sequence before the payload.
         if (length < NETWORK_WIRE_HEADER_SIZE)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet too small (%zu bytes, need %zu minimum)", length,
@@ -431,6 +438,16 @@ namespace Spark::Net
             return false;
         }
         uint32_t payloadLen = buf.ReadUint32();
+        outMsg.orderedSequence = 0;
+        if (outMsg.channel == ChannelType::ReliableOrdered)
+        {
+            outMsg.orderedSequence = buf.ReadUint32();
+        }
+        if (buf.HasError())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet header truncated (%zu bytes)", length);
+            return false;
+        }
 
         const size_t payloadOffset = buf.GetReadPosition();
         if (payloadOffset > length || static_cast<size_t>(payloadLen) != length - payloadOffset)
@@ -882,44 +899,67 @@ namespace Spark::Net
                         toDispatch.pop();
                         continue;
                     }
-                    // ReliableOrdered recording is deferred until the message is
-                    // accepted below — a sequence dropped by a full reorder buffer
-                    // must not be ACKed, or the sender stops retransmitting and the
-                    // ordered channel wedges on the gap forever.
-                    if (msg.channel != ChannelType::ReliableOrdered)
+                    // Ordered recording is deferred until the message is accepted
+                    // below — a sequence dropped by a full reorder buffer must not
+                    // be ACKed, or the sender stops retransmitting and the ordered
+                    // channel wedges on the gap forever.
+                    if (msg.channel != ChannelType::ReliableOrdered || msg.orderedSequence == 0)
+                    {
                         RecordReceivedSequence(peer, msg.sequence);
+                    }
                 }
 
-                // Ordered delivery: buffer out-of-order ReliableOrdered messages
-                if (msg.channel == ChannelType::ReliableOrdered && msg.sequence > 0)
+                // Ordered delivery: ReliableOrdered messages are ordered by their own
+                // ordered-stream sequence, never by the reliability sequence, which
+                // Reliable traffic to the same peer also consumes.
+                if (msg.channel == ChannelType::ReliableOrdered && msg.orderedSequence > 0)
                 {
                     PeerState& peer = GetPeerState(peerKey);
-                    if (msg.sequence != peer.expectedOrderedSequence)
+                    if (msg.orderedSequence != peer.expectedOrderedSequence)
                     {
+                        // Already delivered (a late copy under a new reliability
+                        // sequence): ACK it so the sender stops, but never buffer
+                        // it — it would wait for a sequence that never recurs.
+                        if (IsSequenceNewer(peer.expectedOrderedSequence, msg.orderedSequence))
+                        {
+                            if (msg.sequence > 0)
+                            {
+                                RecordReceivedSequence(peer, msg.sequence);
+                            }
+                            m_stats.packetsReceived++;
+                            toDispatch.pop();
+                            continue;
+                        }
                         // Bound the reorder buffer so a peer that never sends the
                         // expected sequence (always leaving a gap) cannot grow this
                         // map without limit — a remote memory-exhaustion DoS.
                         // Overwriting an already-buffered sequence is fine; only a
                         // *new* out-of-order sequence past the cap is dropped.
                         if (peer.orderedBuffer.size() >= kMaxQueuedMessages &&
-                            !peer.orderedBuffer.contains(msg.sequence))
+                            !peer.orderedBuffer.contains(msg.orderedSequence))
                         {
                             m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
                             SPARK_LOG_WARN(Spark::LogCategory::Network,
                                            "Ordered reorder buffer full (%zu) — dropping out-of-order sequence %u",
-                                           peer.orderedBuffer.size(), static_cast<unsigned>(msg.sequence));
+                                           peer.orderedBuffer.size(), static_cast<unsigned>(msg.orderedSequence));
                             toDispatch.pop();
                             continue;
                         }
                         // Buffer for later delivery
-                        RecordReceivedSequence(peer, msg.sequence);
-                        peer.orderedBuffer[msg.sequence] = msg;
+                        if (msg.sequence > 0)
+                        {
+                            RecordReceivedSequence(peer, msg.sequence);
+                        }
+                        peer.orderedBuffer[msg.orderedSequence] = msg;
                         m_stats.packetsReceived++;
                         toDispatch.pop();
                         continue;
                     }
                     // This is the expected sequence — deliver it, then flush buffer
-                    RecordReceivedSequence(peer, msg.sequence);
+                    if (msg.sequence > 0)
+                    {
+                        RecordReceivedSequence(peer, msg.sequence);
+                    }
                     peer.expectedOrderedSequence = NextReliableSequence(peer.expectedOrderedSequence);
                 }
 
