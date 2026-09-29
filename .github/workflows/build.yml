@@ -149,6 +149,11 @@ jobs:
     - name: Test clang-tidy diagnostic budget ratchet
       run: python3 Tests/Tools/test_clang_tidy_budget.py
 
+    - name: Test blocking analysis results and CI claims
+      run: |
+        python3 .github/scripts/test-check-analysis-results.py
+        python3 .github/scripts/test-ci-perf-contract.py
+
     - name: Test shared build-directory lock
       run: python3 Tests/Tools/test_build_lock.py
 
@@ -1826,6 +1831,13 @@ jobs:
     # drop this guard and add a windows-vs2022-debug entry to BOTH
     # .github/test-count-ratchet.json and the --expected-lane list of
     # "Require and aggregate primary-lane evidence" (they are asserted equal).
+    - name: Execute documented subsystem commands
+      if: matrix.config == 'Release'
+      shell: bash
+      run: |
+        python tools/site-data/check_documented_selectors.py --build-dir build \
+          --documented-build-dir build/windows-release --config Release --execute --test-limit 50
+
     - name: Run Tests
       if: matrix.config == 'Release'
       shell: bash
@@ -2711,6 +2723,13 @@ jobs:
     # advisory experimental-module-lifecycle job; this required lane excludes it.
     # CI-110: the golden CTest entries stay in this required run until the Mesa-pinned
     # golden-linux lane is promoted to required; promotion excludes them here.
+    - name: Execute documented subsystem commands
+      if: matrix.config == 'Release'
+      shell: bash
+      run: |
+        python3 tools/site-data/check_documented_selectors.py --build-dir build \
+          --documented-build-dir build/linux-gcc-release --config Release --execute --test-limit 50
+
     - name: Run Tests
       run: |
         set -o pipefail
@@ -3707,6 +3726,49 @@ jobs:
   # This workflow has no path filter, so budget definitions, validator code,
   # comparator code, and their tests all reach this required job.
   # ===========================================================================
+  # The published CodeQL workflow remains data-only. This separate, read-only
+  # scan is a direct required dependency, so alerts block PRs as well as pushes
+  # without waiting on cross-workflow status publication or trusting artifacts.
+  analysis-regressions:
+    name: "Blocking CodeQL (${{ matrix.language }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CODEQL_EXTRACTOR_CPP_OPTION_FRONTEND_OPTIONS: --c++23
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            report: actions.sarif
+          - language: c-cpp
+            report: cpp.sarif
+          - language: python
+            report: python.sarif
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize blocking analysis
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config: |
+            paths-ignore:
+              - "ThirdParty"
+              - "ThirdParty/**"
+      - name: Produce fresh analysis results
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          output: ${{ runner.temp }}/blocking-codeql
+          upload: never
+          upload-database: false
+      - name: Fail on analysis findings
+        run: python3 .github/scripts/check-analysis-results.py "${{ runner.temp }}/blocking-codeql/${{ matrix.report }}"
+
   performance-budget-governance:
     name: "Performance budget governance"
     runs-on: ubuntu-24.04
@@ -4743,6 +4805,7 @@ jobs:
       - build-linux-clang
       - coverage
       - clang-tidy
+      - analysis-regressions
       - todo-count
       - build-installer
       - aggregate-test-stats
@@ -4758,7 +4821,7 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","docs-health"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","analysis-regressions","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","docs-health"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
 

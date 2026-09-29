@@ -4,6 +4,10 @@ A C++23 source-available 3D game engine with multiple graphics backends behind a
 
 Website: [sparkengine.dev](https://sparkengine.dev/)
 
+MinGW/Wine is an experimental development path. Its advisory CI lane runs only
+on manual `workflow_dispatch`; it does not certify Windows support and the last
+documented Wine run failed. See the [MinGW/Wine notes](wiki/development/MinGW-Wine-Cross-Compilation.md).
+
 [![Explore the engine in 3D](https://img.shields.io/badge/Explore-the_engine_in_3D-8a2be2?style=for-the-badge&logo=threedotjs&logoColor=white)](https://krilliac.github.io/SparkEngine/)
 
 The **Code City** is an interactive 3D map of the source tree: every source file is a building sized by its line count, grouped into subsystem districts, with include-dependency arcs, recent churn and readiness work-item overlays. It is regenerated from `Working` by the `Code City Pages` workflow and is a visualization, not readiness evidence. To build it locally: `python3 tools/architecture-viz/generate_code_city.py`, then open `build/code-city/index.html`.

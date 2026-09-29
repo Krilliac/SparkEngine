@@ -1015,6 +1015,26 @@ class TestMeasurementIntegrity(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("FAIL", out.getvalue())
 
+    def test_cli_over_budget_regression_is_blocking(self) -> None:
+        """The command boundary must fail when a real measurement exceeds budget."""
+        metric = _metric_of("frame_time", "ms", "p50", budget=16.0)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_suite(root, budget=_budget([metric]))
+            result_path = root / "result.json"
+            result_path.write_text(json.dumps(_result([{
+                "metricId": metric["id"],
+                "value": 20.0,
+                "unit": "ms",
+                "sampleCount": 1000,
+            }])), encoding="utf-8")
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                code = compare_main([
+                    str(root), str(result_path), "--expected-sha", RESULT_SHA,
+                ])
+        self.assertEqual(code, 1)
+        self.assertIn("REGRESSION", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

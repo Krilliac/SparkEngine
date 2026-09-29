@@ -10,7 +10,11 @@
 
 SparkEngine can cross-compile its Windows D3D11 code paths on Linux using MinGW-w64, then run the resulting `.exe` under Wine. Combined with DXVK (D3D11 → Vulkan), WineD3D (D3D11 → OpenGL), and Mesa Lavapipe/llvmpipe (software rasterization), this exercises the exact same `#ifdef _WIN32` code that MSVC compiles — without Windows and without a GPU.
 
-This was fully implemented and tested in a 2026-03-29 session. 64 files were touched to fix cross-compilation issues. The D3D12 backend is **excluded** (the MinGW headers are too old); D3D11 is primary and works fully.
+This is an experimental development path, exercised by an advisory, manual
+`workflow_dispatch` lane. Historical March results below are not current support
+or certification evidence. The last documented hosted Wine run failed (see the
+failure sample below). D3D12 is excluded because the MinGW headers are too old;
+D3D11 under Wine is not a certified Windows row.
 
 ## The Stack
 

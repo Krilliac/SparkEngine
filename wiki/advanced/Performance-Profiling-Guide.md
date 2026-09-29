@@ -4,6 +4,14 @@ This page explains how to use SparkEngine's built-in profiling tools to identify
 
 **Source:** `SparkEngine/Source/Utils/Profiler.h`, `ChromeTracing.h`, `MemoryDebugger.h`, `DebugOverlay.h`, `FrameInspector.h`
 
+`performance-budget-governance` is a required CI job. It validates
+`perf-budgets/v1` and runs the comparator's adversarial and CLI regression tests,
+including an over-budget result that must exit nonzero. CTest also registers the
+hardening suite as `PerformanceBudget_Hardening`. This is policy enforcement:
+the committed metrics are still `pending_measurement`, with no certified
+hardware rows or accepted measured baselines. No runtime performance gate is
+claimed until a real result producer and certified baseline are available.
+
 ---
 
 ## Quick Start
