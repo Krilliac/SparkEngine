@@ -38,10 +38,28 @@ class GovernancePolicyTests(unittest.TestCase):
 
     def test_unknown_channel_is_rejected(self) -> None:
         errors = policy.validate_support_text(
-            "## Supported Versions\n| Release line | Status |\n|---|---|\n| `nightly` | best-effort |\nhttps://github.com/Krilliac/SparkEngine/issues\nbest-effort",
-            {"Working"},
+            "## Supported Versions\n| Release line | Status |\n|---|---|\n| `lts` | best-effort |\nhttps://github.com/Krilliac/SparkEngine/issues\nbest-effort",
+            {"Working", "nightly"},
         )
-        self.assertTrue(any("nightly" in error for error in errors))
+        self.assertTrue(any("unavailable channel or release line lts" in error for error in errors), errors)
+
+    def test_nightly_row_requires_a_publishing_release_workflow(self) -> None:
+        """nightly is a real prerelease channel only while release.yml publishes it."""
+        text = (ROOT / "SUPPORT.md").read_text(encoding="utf-8")
+        self.assertEqual(policy.validate_support_text(text, {"Working", "nightly"}), [])
+        errors = policy.validate_support_text(text, {"Working"})
+        self.assertTrue(any("unavailable channel or release line nightly" in error for error in errors), errors)
+
+    def test_published_nightly_channel_must_be_disclosed(self) -> None:
+        """Dropping the nightly row would hide a published prerelease channel's status."""
+        channels = policy.configured_development_channels(ROOT)
+        self.assertIn("nightly", channels)
+        text = "\n".join(
+            line for line in (ROOT / "SECURITY.md").read_text(encoding="utf-8").splitlines()
+            if not line.startswith("| `nightly` |")
+        )
+        errors = policy.validate_security_text(text, channels)
+        self.assertTrue(any("every published channel" in error and "nightly" in error for error in errors), errors)
 
     def test_local_version_tag_cannot_authorize_a_release_claim(self) -> None:
         errors = policy.validate_support_text(
@@ -68,10 +86,10 @@ class GovernancePolicyTests(unittest.TestCase):
 
 class GovernanceIntegrationTests(unittest.TestCase):
     def test_legal_gate_rejects_unpublished_channel_in_security_table(self) -> None:
-        """The real --legal path used to ignore an invented nightly support row."""
+        """The real --legal path used to ignore an invented support row."""
         security = ROOT / "SECURITY.md"
         original_read = Path.read_text
-        text = original_read(security, encoding="utf-8").replace("| `Working` |", "| `nightly` |")
+        text = original_read(security, encoding="utf-8").replace("| `nightly` |", "| `lts` |")
         validator = site_validate.Validator(load_contract())
 
         def read(path, *args, **kwargs):
@@ -79,7 +97,7 @@ class GovernanceIntegrationTests(unittest.TestCase):
 
         with mock.patch.object(Path, "read_text", read):
             validator.validate_legal(strict_public_wording=True)
-        self.assertTrue(any("nightly" in error for error in validator.errors), validator.errors)
+        self.assertTrue(any("lts" in error for error in validator.errors), validator.errors)
 
 
 if __name__ == "__main__":

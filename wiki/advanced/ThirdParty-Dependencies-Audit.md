@@ -100,8 +100,10 @@ and Linux install roots; a source-tree inventory pass cannot establish their
 packaged coverage.
 
 The legal validator also checks the support tables in `SECURITY.md` and
-`SUPPORT.md` against the configured development channel and the unpublished
-release-profile boundary (`tools/site-data/policy.py`). Local Git tags do not
+`SUPPORT.md` against the channels the workflows actually publish (`Working`, and
+the unsupported nightly prereleases while `release.yml` still publishes them) and
+the unpublished release-profile boundary (`tools/site-data/policy.py`). Every
+published channel must appear in both tables. Local Git tags do not
 establish publication. Supported-version wording needs reviewed publication
 evidence before this conservative guard can be extended.
 

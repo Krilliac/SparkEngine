@@ -5735,11 +5735,12 @@ if(Python3_Interpreter_FOUND)
             NAME public-wiki-claim-boundaries
             COMMAND ${Python3_EXECUTABLE} -B
                 ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_public_wording.py -v)
+        # Each case runs the full contract validator (about 20-40 s on a desktop).
         set_tests_properties(public-wiki-claim-boundaries PROPERTIES
             LABELS "readiness;site-data;unit;python"
             RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
             FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
-            TIMEOUT 60)
+            TIMEOUT 180)
 
         # DOC-400: a generate.py publication's documents, search records, source
         # URLs and page links agree (tools/site-data/docs_parity.py, run by

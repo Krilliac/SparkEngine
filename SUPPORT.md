@@ -2,8 +2,9 @@
 
 SparkEngine has no published stable release or paid support offering. The
 `stable-v1` profile is blocked and uncertified, so it is not a supported release
-line. The `Working` branch is a development channel and receives best-effort
-community support.
+line. The `Working` branch is a development channel, and nightly prereleases
+built from it are unsupported evaluation builds. Both receive best-effort
+community support only.
 
 ## Supported Versions
 
@@ -11,6 +12,7 @@ community support.
 |---|---|
 | `stable-v1` | Pre-release and blocked; no supported version has been published |
 | `Working` | Development channel only; fixes are best-effort and do not constitute a release SLA |
+| `nightly` | Unsupported prerelease builds of `Working`; fixes are best-effort and do not constitute a release SLA |
 
 ## Where to ask for help
 

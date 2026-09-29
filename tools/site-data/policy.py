@@ -2,9 +2,10 @@
 """Check the conservative pre-release support table against repository policy.
 
 This offline guard does not prove publication. It permits the configured Working
-development channel and the explicitly unpublished stable-v1 profile. Naming a
-supported version needs a future reviewed publication-evidence contract; neither
-local tags nor removing a disclaimer can authorize that claim.
+development channel, the nightly prerelease channel the release workflow publishes
+from it, and the explicitly unpublished stable-v1 profile. Naming a supported
+version needs a future reviewed publication-evidence contract; neither local tags
+nor removing a disclaimer can authorize that claim.
 """
 
 from __future__ import annotations
@@ -16,21 +17,32 @@ VERSION_LITERAL = re.compile(r"\bv?[0-9]+\.[0-9]+(?:\.(?:[0-9]+|x))?(?:[-+][0-9A
 POLICY_STATUS = {
     "stable-v1": "Pre-release and blocked; no supported version has been published",
     "Working": "Development channel only; fixes are best-effort and do not constitute a release SLA",
+    "nightly": "Unsupported prerelease builds of `Working`; fixes are best-effort and do not constitute a release SLA",
 }
 
 
 def configured_development_channels(repo_root: Path) -> set[str]:
-    """Require Working in the checked-in site validation workflow's branch list.
+    """Return the development channels the checked-in workflows publish.
 
-    A shallow detached CI checkout need not have the branch ref. The workflow
-    declares a development channel, not a released product or a support SLA.
+    Working must appear in the site validation workflow's branch list (a shallow
+    detached CI checkout need not have the branch ref). nightly is a channel only
+    while the release workflow publishes nightly prereleases through its
+    nightly-release environment and tag helper. Neither is a released product or
+    a support SLA.
     """
     workflow = (repo_root / ".github/workflows/site-data.yml").read_text(encoding="utf-8")
     branch_lists = re.findall(r"^\s+branches:\s*\[([^]\n]+)\]", workflow, re.MULTILINE)
-    return {"Working"} if any(
+    channels: set[str] = set()
+    if any(
         "Working" in {value.strip().strip("\"'") for value in branches.split(",")}
         for branches in branch_lists
-    ) else set()
+    ):
+        channels.add("Working")
+    release_path = repo_root / ".github/workflows/release.yml"
+    release = release_path.read_text(encoding="utf-8") if release_path.is_file() else ""
+    if "Working" in channels and "nightly_release_tag.py" in release and "'nightly-release'" in release:
+        channels.add("nightly")
+    return channels
 
 
 def _table_rows(text: str) -> list[tuple[str, str]]:
@@ -54,14 +66,18 @@ def _errors_for_text(text: str, channels: set[str], *, label: str) -> list[str]:
     policy_text = text.split("\n## Reporting a Vulnerability", 1)[0] if label == "SECURITY.md" else text
     for version in VERSION_LITERAL.findall(policy_text):
         errors.append(f"{label} names version {version} without reviewed publication evidence")
-    allowed = (set(channels) & {"Working"}) | {"stable-v1"}
+    allowed = (set(channels) & {"Working", "nightly"}) | {"stable-v1"}
     rows = _table_rows(text)
+    declared = {channel for channel, _ in rows}
     if not rows:
         errors.append(f"{label} must contain a Supported Versions table")
-    if len(rows) != len({channel for channel, _ in rows}):
+    if len(rows) != len(declared):
         errors.append(f"{label} repeats a policy channel")
-    if {channel for channel, _ in rows} != set(POLICY_STATUS):
-        errors.append(f"{label} must declare the Working development channel and unpublished stable-v1 profile")
+    # Every published channel is disclosed, so a reader who finds a nightly
+    # prerelease on the releases page also finds its unsupported status.
+    if not allowed <= declared:
+        missing = ", ".join(sorted(allowed - declared))
+        errors.append(f"{label} must declare every published channel and the unpublished stable-v1 profile: {missing}")
     for channel, status in rows:
         if channel not in allowed:
             errors.append(f"{label} names unavailable channel or release line {channel}")
@@ -106,7 +122,7 @@ def main() -> int:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("governance policy tables match the configured development channel and pre-release boundary")
+    print("governance policy tables match the published development channels and pre-release boundary")
     return 0
 
 
