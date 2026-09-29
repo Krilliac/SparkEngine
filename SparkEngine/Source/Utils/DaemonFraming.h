@@ -43,7 +43,7 @@ namespace Spark::Daemon
     /// RecvFrame never grows a payload buffer more than this far past the bytes
     /// the peer has actually delivered (or twice the delivered bytes, once that is
     /// larger), so a header that merely claims kMaxPayloadSize costs no memory.
-    inline constexpr size_t kRecvFrameGrowthStep = 64u * 1024u;
+    inline constexpr size_t kRecvFrameGrowthStep = size_t{64} * 1024u;
 
 #if defined(_WIN32)
     using NativeSocket = HANDLE;

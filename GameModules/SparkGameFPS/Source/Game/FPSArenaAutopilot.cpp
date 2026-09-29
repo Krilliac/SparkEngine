@@ -36,15 +36,21 @@ namespace SparkFPS
         {
             using Phase = FPSArenaAutopilot::Phase;
             if (tally.kills >= 2 && tally.deaths >= 1 && tally.respawns >= 1)
+            {
                 return Phase::Complete;
+            }
             // A recorded death the respawn system has not published yet: the
             // player is dead, so there is nothing to drive.
             if (tally.respawns < tally.deaths)
+            {
                 return Phase::Yield;
+            }
             // The first kill is in; stand still so the arena can land the death
             // the loop needs before hunting the second kill.
             if (tally.kills >= 1 && tally.deaths == 0)
+            {
                 return Phase::Yield;
+            }
             return Phase::Hunt;
         }
     } // namespace
@@ -83,7 +89,9 @@ namespace SparkFPS
                                                             const Spark::RespawnSystem& respawn)
     {
         if (m_phase != Phase::Off)
+        {
             m_phase = PhaseFor(ReadTally(mode, respawn));
+        }
         return m_phase;
     }
 
@@ -91,16 +99,22 @@ namespace SparkFPS
                                  SparkEngineCamera& camera, InputManager& input, const ArenaView& view, float dt)
     {
         if (m_phase == Phase::Off)
+        {
             return false;
+        }
 
         // A new respawn starts a new life: measure movement from where it began,
         // so the respawn teleport itself never counts as the player moving.
         const ArenaLoopTally tally = ReadTally(mode, respawn);
         if (m_seenRespawns && *m_seenRespawns != tally.respawns)
+        {
             m_lifeStart = view.playerPosition;
+        }
         m_seenRespawns = tally.respawns;
         if (view.playerAlive)
+        {
             m_maxDisplacement = std::max(m_maxDisplacement, HorizontalDistance(m_lifeStart, view.playerPosition));
+        }
 
         m_phase = PhaseFor(tally);
         if (m_phase != Phase::Hunt || !view.playerAlive || view.targets.empty())
@@ -135,7 +149,9 @@ namespace SparkFPS
         const SparkEngineCamera::CameraState state = camera.Console_GetState();
         const float gain = state.rotationSpeed * state.mouseSensitivity;
         if (turn != 0.0f && gain > 0.0f)
+        {
             camera.Yaw(turn / gain);
+        }
 
         SetForwardHeld(input, nearestDistance > kHoldDistance);
         return std::abs(error - turn) <= kAimTolerance && nearestDistance <= kEngageRange;
@@ -170,7 +186,9 @@ namespace SparkFPS
     void FPSArenaAutopilot::SetForwardHeld(InputManager& input, bool held)
     {
         if (held == m_forwardHeld)
+        {
             return;
+        }
         // The same message a window delivers for a physical key, so movement
         // runs through Player::UpdateMovement exactly as it does for a player.
         input.HandleMessage(held ? WM_KEYDOWN : WM_KEYUP, static_cast<WPARAM>('W'), 0);

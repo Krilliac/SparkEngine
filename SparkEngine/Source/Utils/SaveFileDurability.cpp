@@ -221,7 +221,9 @@ namespace Spark::SaveFileDurability
                 const bool closed = ::close(m_fd) == 0;
                 m_fd = -1;
                 if (!closed)
+                {
                     error = LastPosixError();
+                }
 #endif
                 return closed;
             }

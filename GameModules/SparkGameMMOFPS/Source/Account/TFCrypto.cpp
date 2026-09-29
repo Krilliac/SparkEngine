@@ -221,10 +221,14 @@ namespace Terrafront::Crypto
             uint8_t pad[kBlockSize];
             const EraseOnExit clearPad(pad, sizeof(pad));
             for (size_t i = 0; i < kBlockSize; ++i)
+            {
                 pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x36);
+            }
             prepared.inner.Update(pad, kBlockSize);
             for (size_t i = 0; i < kBlockSize; ++i)
+            {
                 pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x5c);
+            }
             prepared.outer.Update(pad, kBlockSize);
         }
 

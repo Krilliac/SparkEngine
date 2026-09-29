@@ -442,12 +442,18 @@ void SparkGameModule::RegisterGameConsoleCommands()
         [game](const std::vector<std::string>& args) -> std::string
         {
             if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+            {
                 return "Usage: fps_autoplay on|off";
+            }
             if (!game)
+            {
                 return "Game not available";
+            }
             const bool enable = args[0] == "on";
             if (!game->SetArenaAutopilot(enable))
+            {
                 return "Error: fps_autoplay needs a live player, camera, input, game mode and respawn system";
+            }
             return enable ? "Arena autopilot on" : "Arena autopilot off";
         },
         "Play the single-player arena loop (hunt, kill, die, respawn, score) through the real input path", "Gameplay",

@@ -118,7 +118,9 @@ namespace Spark::Daemon
         decoded.key.path = r.ReadString();
         decoded.key.platform = r.Read<uint8_t>();
         if (r.HasError())
+        {
             return false;
+        }
         out = std::move(decoded);
         return true;
     }
@@ -192,7 +194,9 @@ namespace Spark::Daemon
         Spark::BinaryReader r(bytes);
         std::string path = r.ReadString();
         if (r.HasError())
+        {
             return false;
+        }
         out.path = std::move(path);
         return true;
     }
@@ -208,9 +212,11 @@ namespace Spark::Daemon
                                                             InvalidateAssetResponse& out)
     {
         Spark::BinaryReader r(bytes);
-        const uint32_t removedCount = r.Read<uint32_t>();
+        const auto removedCount = r.Read<uint32_t>();
         if (r.HasError())
+        {
             return false;
+        }
         out.removedCount = removedCount;
         return true;
     }
@@ -241,7 +247,9 @@ namespace Spark::Daemon
         if (r.Remaining() >= sizeof(uint64_t))
             decoded.evictionCount = r.Read<uint64_t>();
         if (r.HasError())
+        {
             return false;
+        }
         out = decoded;
         return true;
     }

@@ -30,8 +30,8 @@ namespace Spark::Net
     // The send buffer must admit one maximum datagram. The receive buffer must admit one while other
     // peers' traffic is still queued: at 64 KiB, macOS dropped every maximum-size datagram that arrived
     // behind even one small queued packet.
-    inline constexpr std::size_t NETWORK_SOCKET_SEND_BUFFER_SIZE = 64 * 1024;
-    inline constexpr std::size_t NETWORK_SOCKET_RECEIVE_BUFFER_SIZE = 256 * 1024;
+    inline constexpr std::size_t NETWORK_SOCKET_SEND_BUFFER_SIZE = std::size_t{64} * 1024;
+    inline constexpr std::size_t NETWORK_SOCKET_RECEIVE_BUFFER_SIZE = std::size_t{256} * 1024;
     static_assert(NETWORK_SOCKET_SEND_BUFFER_SIZE >= MAX_UDP_WIRE_DATAGRAM_SIZE);
     static_assert(NETWORK_SOCKET_RECEIVE_BUFFER_SIZE >= 2 * MAX_UDP_WIRE_DATAGRAM_SIZE);
 
