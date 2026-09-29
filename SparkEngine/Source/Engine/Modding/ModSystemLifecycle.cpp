@@ -141,7 +141,9 @@ namespace Spark
                       const int orderA = m_mods[a].loadOrder;
                       const int orderB = m_mods[b].loadOrder;
                       if (orderA != orderB)
+                      {
                           return orderA < orderB;
+                      }
                       return a < b;
                   });
 

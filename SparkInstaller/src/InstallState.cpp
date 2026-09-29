@@ -58,11 +58,15 @@ namespace SparkInstaller
             std::error_code error;
             const std::uintmax_t fileSize = fs::file_size(path, error);
             if (error || fileSize > kMaxInstallStateBytes)
+            {
                 return false;
+            }
 
             std::ifstream in(path, std::ios::binary);
             if (!in)
+            {
                 return false;
+            }
 
             // Allocate only from the bounded stat result, then read exactly that
             // many bytes. A one-byte probe catches a file that grew between the
@@ -350,7 +354,9 @@ namespace SparkInstaller
         fs::path path = fs::path(destination) / FileName();
         std::string json;
         if (!ReadFile(path.string(), json))
+        {
             return false;
+        }
 
         // Parse into a local and publish only a complete, valid state.
         InstallState parsed;
@@ -447,7 +453,9 @@ namespace SparkInstaller
     {
         if (destination.empty() || schema != 1 || ref.empty() || commit.empty() || generator.empty() ||
             buildType.empty() || installerVersion.empty())
+        {
             return false;
+        }
 
         fs::path path = fs::path(destination) / FileName();
         fs::path temporaryPath = path;
@@ -481,7 +489,9 @@ namespace SparkInstaller
         {
             out << "    \"" << Escape(kv.first) << "\": " << (kv.second ? "true" : "false");
             if (++i < options.size())
+            {
                 out << ",";
+            }
             out << "\n";
         }
         out << "  }\n";
