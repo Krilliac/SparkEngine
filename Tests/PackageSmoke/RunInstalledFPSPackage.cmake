@@ -6,6 +6,8 @@
 #   full (default)        playtester launcher, D3D11/WARP smoke and WARP save/reload
 #   headless-save-reload  HEAD-220 NullRHI writer/reader save/reload of the staged
 #                         executable and module (cmake/RunSparkHeadlessFPSSaveReload.cmake)
+#   arena-loop            MOD-310 D3D11/WARP single-player loop played by the
+#                         fps_autoplay developer command (RunInstalledFPSArenaLoop.cmake)
 
 foreach(_required IN ITEMS SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_TEST_ROOT)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
@@ -15,8 +17,13 @@ endforeach()
 if(NOT DEFINED SPARK_FPS_PACKAGE_MODE OR SPARK_FPS_PACKAGE_MODE STREQUAL "")
     set(SPARK_FPS_PACKAGE_MODE full)
 endif()
-if(NOT SPARK_FPS_PACKAGE_MODE STREQUAL "full" AND NOT SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
+if(NOT SPARK_FPS_PACKAGE_MODE MATCHES "^(full|headless-save-reload|arena-loop)$")
     message(FATAL_ERROR "Unknown SPARK_FPS_PACKAGE_MODE '${SPARK_FPS_PACKAGE_MODE}'")
+endif()
+# fps_autoplay is a developer command, and a Shipping (MinSizeRel) build never
+# registers developer commands, so that package has nothing to play the loop with.
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "arena-loop" AND SPARK_CONFIG STREQUAL "MinSizeRel")
+    message(FATAL_ERROR "The arena-loop package run needs developer commands, which MinSizeRel does not register")
 endif()
 
 find_program(_git_executable NAMES git git.exe REQUIRED)
@@ -143,13 +150,41 @@ _run_checked("Validate installed FPS runtime package" 120
 # the build tree are never consulted, so a DLL this developer machine happens
 # to have installed does not hide a dependency a clean machine lacks. Debug
 # images import the Debug CRT, which is not redistributable, so a Debug stage
-# is a developer layout and is not checked.
+# is a developer layout and is not checked. Every other configuration is named
+# explicitly, so a new or misspelled configuration fails instead of skipping,
+# and the run must list the two images the package exists to ship: a closure
+# that covered neither of them checked the wrong tree.
 if(SPARK_CONFIG STREQUAL "Debug")
     message(STATUS "PE import closure not checked: Debug packages import the non-redistributable Debug CRT")
-else()
+elseif(SPARK_CONFIG MATCHES "^(Release|MinSizeRel|RelWithDebInfo)$")
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
-    _run_checked("Validate installed FPS package DLL import closure" 120
-        "${Python3_EXECUTABLE}" -B "${SPARK_SOURCE_ROOT}/tools/pe_import_closure.py" "${_install_root}")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" -B "${SPARK_SOURCE_ROOT}/tools/pe_import_closure.py" --list "${_install_root}"
+        RESULT_VARIABLE _pe_closure_result
+        OUTPUT_VARIABLE _pe_closure_output
+        ERROR_VARIABLE _pe_closure_error
+        TIMEOUT 120)
+    if(NOT "${_pe_closure_result}" STREQUAL "0")
+        message(FATAL_ERROR
+            "Validate installed FPS package DLL import closure failed (${_pe_closure_result}):\n"
+            "${_pe_closure_output}\n${_pe_closure_error}")
+    endif()
+    # --list prints one "<path relative to the install root>: <imports>" line per image.
+    set(_pe_closure_listing "\n${_pe_closure_output}")
+    foreach(_pe_required_image IN ITEMS "bin/SparkEngine.exe" "bin/SparkGameFPS.dll")
+        string(FIND "${_pe_closure_listing}" "\n${_pe_required_image}: " _pe_required_position)
+        if(_pe_required_position EQUAL -1)
+            message(FATAL_ERROR "PE import closure did not cover ${_pe_required_image}:\n${_pe_closure_output}")
+        endif()
+    endforeach()
+    if(NOT _pe_closure_output MATCHES "pe_import_closure: ([0-9]+) image\\(s\\) under [^\n]* resolve")
+        message(FATAL_ERROR "PE import closure printed no summary:\n${_pe_closure_output}")
+    endif()
+    message(STATUS "Installed FPS package PE import closure: ${CMAKE_MATCH_1} images resolve")
+else()
+    message(FATAL_ERROR
+        "SPARK_CONFIG '${SPARK_CONFIG}' is not a known configuration; the PE import closure "
+        "runs for Release, MinSizeRel and RelWithDebInfo and is skipped only for Debug")
 endif()
 
 if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
@@ -170,6 +205,27 @@ if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
     message(STATUS
         "Installed SparkGameFPS runtime package passed NullRHI save/reload at "
         "${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); evidence retained under ${_run_root}")
+    return()
+endif()
+
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "arena-loop")
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSPARK_INSTALLED_ROOT=${_install_root}"
+            "-DSPARK_TEST_ROOT=${_run_root}/arena-loop"
+            -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/RunInstalledFPSArenaLoop.cmake"
+        RESULT_VARIABLE _arena_result
+        OUTPUT_VARIABLE _arena_output
+        ERROR_VARIABLE _arena_error
+        TIMEOUT 360)
+    if(NOT "${_arena_result}" STREQUAL "0")
+        message(FATAL_ERROR "Installed FPS arena loop failed (${_arena_result}):\n${_arena_output}\n${_arena_error}")
+    endif()
+    string(STRIP "${_arena_output}" _arena_output)
+    message(STATUS "${_arena_output}")
+    message(STATUS
+        "Installed SparkGameFPS arena loop passed at ${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); "
+        "evidence retained under ${_run_root}")
     return()
 endif()
 

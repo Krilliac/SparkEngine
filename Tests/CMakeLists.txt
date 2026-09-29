@@ -1185,6 +1185,9 @@ target_sources(SparkTests PRIVATE
     TestSEC2GameModules.cpp
     TestSparkGameFPSMirrorCompanionsReal.cpp
     TestMOD310FPSSceneReloadRespawnReal.cpp
+    # MOD-310: arena autopilot phases/steering (links GameMode, RespawnSystem, camera and input only).
+    TestMOD310FPSArenaAutopilotReal.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp"
     TestAssetManifestReal.cpp
     TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp
@@ -3799,6 +3802,25 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             RUN_SERIAL TRUE
             TIMEOUT 600)
 
+        # MOD-310: a fresh install prefix plays spawn -> move -> kill -> die ->
+        # respawn -> score on D3D11/WARP through the fps_autoplay developer
+        # command, scored by GameMode and RespawnSystem. Shipping (MinSizeRel)
+        # does not register developer commands, so the test is not offered there.
+        add_test(
+            NAME FPSSinglePlayerSlice_InstalledArenaLoop
+            CONFIGURATIONS Debug Release RelWithDebInfo
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/a/$<CONFIG>"
+                -DSPARK_FPS_PACKAGE_MODE=arena-loop
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSSinglePlayerSlice_InstalledArenaLoop PROPERTIES
+            LABELS "module;stable-v1;fps;package;d3d11"
+            RUN_SERIAL TRUE
+            TIMEOUT 900)
+
         add_test(
             NAME FPSPublicSDK_InstalledConsumers
             COMMAND ${CMAKE_COMMAND}
@@ -3837,6 +3859,17 @@ add_test(
 set_tests_properties(FPSHeadlessArenaParserContract PROPERTIES
     LABELS "module;fps;nullrhi-headless;unit"
     TIMEOUT 10)
+# MOD-310: verdict contract of the installed arena-loop run (every host).
+add_test(
+    NAME FPSArenaLoopParserContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_FPS_ARENA_LOOP_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSArenaLoop.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(FPSArenaLoopParserContract PROPERTIES
+    LABELS "module;fps;package;unit"
+    TIMEOUT 30)
 if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
    TARGET SparkEngine AND TARGET SparkGameFPS)
     add_dependencies(SparkTests SparkEngine SparkGameFPS)

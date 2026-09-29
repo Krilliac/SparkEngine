@@ -31,6 +31,7 @@
 #include "ProgressionSystem.h"
 #include "LootSystem.h"
 #include "FPSLocalProfile.h"
+#include "FPSArenaAutopilot.h"
 #include "Engine/Networking/NetworkManager.h"
 #include "Game/FPSWeatherPort.h"
 #include "Game/FPSWeatherIntegration.h"
@@ -486,6 +487,12 @@ class SPARK_GAME_API Game
     void RenderDebugUI();
 
     /**
+     * @brief Start or stop the arena autopilot (developer command `fps_autoplay`).
+     * @return false when there is no live player, camera, input, game mode or respawn system to drive.
+     */
+    bool SetArenaAutopilot(bool enabled);
+
+    /**
      * @brief Get current scene object count
      * @return Number of active game objects in scene
      */
@@ -634,6 +641,9 @@ class SPARK_GAME_API Game
      */
     void HandleInput(float dt);
 
+    /// @brief Step the arena autopilot when enabled and fire when it is on target.
+    void UpdateArenaAutopilot(float dt);
+
     /**
      * @brief Create initial test objects for the scene
      *
@@ -716,6 +726,9 @@ class SPARK_GAME_API Game
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene
     std::vector<Enemy*> m_enemies;                          ///< Non-owning refs to enemies in m_gameObjects
+
+    SparkFPS::FPSArenaAutopilot m_arenaAutopilot;           ///< Developer arena-loop driver (off by default)
+    std::vector<DirectX::XMFLOAT3> m_arenaAutopilotTargets; ///< Reused per-frame target list (no steady-state alloc)
 
     bool m_isPaused{false};   ///< Current pause state of the game
     bool m_isShutDown{false}; ///< Guards against double-shutdown

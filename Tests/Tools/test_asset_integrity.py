@@ -302,10 +302,28 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
             check=False,
         )
 
+    CRATE_OBJ = b"o crate\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"
+    CRATE_SCENE = b"[Scene]\nname=Fixture\n\n[Object]\ntype=model\nmodel=Assets/Models/crate.obj\n"
+
     def test_installed_package_asset_helper_accepts_matching_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            result = self._run_helper(self._fixture(temporary))
+            assets = self._fixture(
+                temporary, extra={"Models/crate.obj": self.CRATE_OBJ, "Scenes/arena.scene": self.CRATE_SCENE})
+            result = self._run_helper(assets)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("asset integrity passed: OK: 3 entries verified", result.stdout + result.stderr)
+
+    def test_installed_package_asset_helper_rejects_a_closure_over_nothing(self) -> None:
+        # ENG-220: every hash matches and the reference verifier exits 0, but no
+        # scene or material was staged, so the closure checked nothing. The
+        # FPS package ships authored scenes; an empty closure is not a pass.
+        with tempfile.TemporaryDirectory() as temporary:
+            result = self._run_helper(self._fixture(temporary))
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("asset integrity passed", output)
+        # CMake wraps FATAL_ERROR text, so match across the line breaks.
+        self.assertRegex(output, r"reference closure checked nothing \(0\s+references\s+in\s+0\s+scene")
 
     def test_installed_package_asset_helper_checks_scene_reference_closure(self) -> None:
         crate = b"o crate\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"
@@ -416,6 +434,50 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
             module_position,
             "asset integrity must be validated before module validation",
         )
+
+    @staticmethod
+    def _pe_closure_contract_violations(text: str) -> list[str]:
+        """ENG-220: the installed FPS package must run the PE import closure for
+        every redistributable configuration and may skip it only for Debug."""
+        violations = []
+        start = text.find('if(SPARK_CONFIG STREQUAL "Debug")')
+        end = text.find("\nendif()", start)
+        if start < 0 or end < 0:
+            return ["no configuration switch around the PE import closure"]
+        block = text[start:end]
+        branches = block.split("\nelse")
+        if len(branches) != 3:
+            return [f"expected Debug / redistributable / unknown branches, found {len(branches)}"]
+        debug, redistributable, unknown = branches
+        if "pe_import_closure.py" in debug:
+            violations.append("Debug branch runs the closure the Debug CRT cannot pass")
+        if 'MATCHES "^(Release|MinSizeRel|RelWithDebInfo)$"' not in redistributable:
+            violations.append("redistributable branch does not name Release, MinSizeRel and RelWithDebInfo")
+        if "tools/pe_import_closure.py\" --list" not in redistributable:
+            violations.append("redistributable branch does not run pe_import_closure.py --list")
+        for image in ("bin/SparkEngine.exe", "bin/SparkGameFPS.dll"):
+            if image not in redistributable:
+                violations.append(f"closure coverage of {image} is not required")
+        if not unknown.lstrip().startswith("()") or "FATAL_ERROR" not in unknown:
+            violations.append("an unknown configuration does not fail")
+        return violations
+
+    def test_installed_fps_package_runs_pe_closure_for_every_redistributable_config(self) -> None:
+        package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"
+        text = package_script.read_text(encoding="utf-8")
+        self.assertEqual(self._pe_closure_contract_violations(text), [])
+        # The contract must catch the regressions it exists for.
+        removed = text.replace("tools/pe_import_closure.py\" --list", "tools/removed.py\"")
+        self.assertIn("redistributable branch does not run pe_import_closure.py --list",
+                      self._pe_closure_contract_violations(removed))
+        release_skipped = text.replace('"^(Release|MinSizeRel|RelWithDebInfo)$"', '"^(RelWithDebInfo)$"')
+        self.assertIn("redistributable branch does not name Release, MinSizeRel and RelWithDebInfo",
+                      self._pe_closure_contract_violations(release_skipped))
+        silent_unknown = text.replace(
+            "message(FATAL_ERROR\n        \"SPARK_CONFIG '${SPARK_CONFIG}'",
+            "message(STATUS\n        \"SPARK_CONFIG '${SPARK_CONFIG}'")
+        self.assertNotEqual(silent_unknown, text)
+        self.assertIn("an unknown configuration does not fail", self._pe_closure_contract_violations(silent_unknown))
 
     def test_installed_fps_package_wires_d3d11_smoke_after_module_validation(self) -> None:
         package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"

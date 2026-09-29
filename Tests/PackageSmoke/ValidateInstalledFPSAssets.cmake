@@ -87,6 +87,16 @@ if(NOT _asset_result EQUAL 0)
 endif()
 
 string(STRIP "${_asset_output}" _asset_summary)
+# A verifier that checked nothing also exits 0. Require the summary line and a
+# nonzero entry count, so an empty or unparsed manifest cannot read as a pass.
+if(NOT _asset_summary MATCHES "^OK: ([0-9]+) entries verified")
+    message(FATAL_ERROR
+        "Installed FPS asset integrity printed no parseable summary: '${_asset_summary}'")
+endif()
+if(CMAKE_MATCH_1 EQUAL 0)
+    message(FATAL_ERROR
+        "Installed FPS asset integrity verified 0 entries: '${_asset_summary}'")
+endif()
 message(STATUS "Installed FPS asset integrity passed: ${_asset_summary}")
 
 # ENG-220: the hashes above prove the staged files are the reviewed bytes; this
@@ -107,4 +117,17 @@ if(NOT _reference_result EQUAL 0)
 endif()
 
 string(STRIP "${_reference_output}" _reference_summary)
+# The FPS package ships authored scenes and materials, so a closure over zero
+# references or zero files means the check looked at nothing (for example a
+# staged tree missing Scenes/ and Materials/ entirely), not that it passed.
+if(NOT _reference_summary MATCHES
+       "^OK: ([0-9]+) references in ([0-9]+) scene and material files resolve to listed staged assets$")
+    message(FATAL_ERROR
+        "Installed FPS asset reference closure printed no parseable summary: '${_reference_summary}'")
+endif()
+if(CMAKE_MATCH_1 EQUAL 0 OR CMAKE_MATCH_2 EQUAL 0)
+    message(FATAL_ERROR
+        "Installed FPS asset reference closure checked nothing (${CMAKE_MATCH_1} references in "
+        "${CMAKE_MATCH_2} scene and material files); the staged Assets tree carries no authored content")
+endif()
 message(STATUS "Installed FPS asset reference closure passed: ${_reference_summary}")

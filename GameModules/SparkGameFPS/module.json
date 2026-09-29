@@ -24,6 +24,7 @@
     "files": [
       "Tests/TestSparkGameFPSLoopReal.cpp",
       "Tests/TestMOD310FPSSceneReloadRespawnReal.cpp",
+      "Tests/TestMOD310FPSArenaAutopilotReal.cpp",
       "Tests/TestFPSGameplayIntegration.cpp",
       "Tests/TestGameModeReal.cpp",
       "Tests/TestFPSMultiplayer.cpp",
@@ -45,6 +46,10 @@
       {
         "prefix": "FPSRespawn_",
         "count": 10
+      },
+      {
+        "prefix": "FPSArenaAutopilot_",
+        "count": 5
       },
       {
         "prefix": "FPSScene_",
