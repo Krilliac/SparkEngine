@@ -577,6 +577,19 @@ namespace Spark::Server
             return false;
         }
 
+        auto& network = Net::NetworkManager::GetInstance();
+        context->SetNetwork(&network);
+        context->SetNetworkService(&network);
+        if (!network.Initialize())
+        {
+            SetError("Failed to initialize the network service before loading game modules");
+            runtime.ShutdownHeadlessRhi();
+            runtime.eventBus.reset();
+            runtime.timer.reset();
+            EngineContext::ResetOwned();
+            return false;
+        }
+
         runtime.InitializeHeadlessAssetServices(*context);
         m_world = std::make_unique<World>();
         context->SetWorld(m_world.get());
@@ -590,6 +603,7 @@ namespace Spark::Server
         if (!LoadSelectedModules())
         {
             DestroyModuleRuntime(true);
+            network.Shutdown();
             runtime.ShutdownHeadlessRhi();
             runtime.ShutdownHeadlessAssetServices();
             EngineContext::ResetOwned();
@@ -604,6 +618,7 @@ namespace Spark::Server
             SetError("DedicatedServer failed to bind or initialize networking");
             m_server.reset();
             DestroyModuleRuntime(true);
+            network.Shutdown();
             runtime.ShutdownHeadlessRhi();
             runtime.ShutdownHeadlessAssetServices();
             EngineContext::ResetOwned();

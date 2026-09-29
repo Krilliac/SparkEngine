@@ -4,6 +4,7 @@
  */
 
 #include "MMOPlayerSystem.h"
+#include "Session/MMOSessionGate.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -38,8 +39,19 @@ namespace MMO
 
         SetupNetworkHandlers();
 
-        // Spawn a default local player in the TownSquare (area 1)
-        SpawnLocalPlayer("Player", 1);
+        // Connected peers create actors only after character admission. Keep the
+        // demo actor for the offline interactive showcase.
+        bool networkActive = false;
+#ifdef ENABLE_NETWORKING
+        if (auto* network = context->GetNetwork())
+        {
+            networkActive = network->GetRole() != Spark::Net::NetworkRole::None;
+        }
+#endif
+        if (!context->IsHeadless() && !networkActive)
+        {
+            SpawnLocalPlayer("Player", 1);
+        }
 
         m_initialized = true;
 
@@ -180,6 +192,13 @@ namespace MMO
         auto it = m_players.find(clientId);
         if (it != m_players.end())
         {
+#ifdef ENABLE_NETWORKING
+            if (auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+                netMgr && netMgr->GetRole() == Spark::Net::NetworkRole::Server && it->second.networkId != 0)
+            {
+                netMgr->UnregisterReplicatedEntity(it->second.networkId);
+            }
+#endif
             SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Player removed: %s (client %u)", it->second.name.c_str(),
                             clientId);
             auto& console = Spark::SimpleConsole::GetInstance();
@@ -246,6 +265,25 @@ namespace MMO
         auto* local = GetLocalPlayerMutable();
         if (!local || local->health <= 0.0f || deltaTime <= 0.0f)
             return false;
+
+#ifdef ENABLE_NETWORKING
+        auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (m_sessionGate && netMgr && netMgr->GetRole() == Spark::Net::NetworkRole::Client)
+        {
+            SessionGateWire::Packet packet;
+            packet.operation = SessionGateWire::Operation::Move;
+            packet.characterId = local->characterId;
+            packet.x = input.moveX;
+            packet.z = input.moveZ;
+            const float length = std::hypot(packet.x, packet.z);
+            if (length > 1.0f)
+            {
+                packet.x /= length;
+                packet.z /= length;
+            }
+            return m_sessionGate->Send(packet);
+        }
+#endif
 
         const float previousX = local->posX;
         const float previousZ = local->posZ;
@@ -344,6 +382,11 @@ namespace MMO
         if (!local || !netMgr)
             return;
 
+        if (m_sessionGate && netMgr->GetRole() == Spark::Net::NetworkRole::Client)
+        {
+            return;
+        }
+
         if (netMgr->GetRole() != Spark::Net::NetworkRole::Client)
         {
             // Host/standalone: this process owns the replicated entity directly.
@@ -413,6 +456,10 @@ namespace MMO
     {
 #ifdef ENABLE_NETWORKING
         auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (m_sessionGate && netMgr && netMgr->GetRole() == Spark::Net::NetworkRole::Client)
+        {
+            return;
+        }
         const float safeDelta = std::clamp(deltaTime, 0.0f, 0.25f);
         const float alpha = 1.0f - std::exp(-REMOTE_INTERPOLATION_RATE * safeDelta);
 

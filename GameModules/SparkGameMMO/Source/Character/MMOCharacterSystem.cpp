@@ -202,6 +202,13 @@ namespace MMO
 
     // === Character CRUD ===
 
+    bool MMOCharacterSystem::OwnsCharacter(uint32_t accountId, uint32_t characterId) const
+    {
+        const auto account = m_accountCharacters.find(accountId);
+        return accountId != 0 && characterId != 0 && account != m_accountCharacters.end() &&
+               std::find(account->second.begin(), account->second.end(), characterId) != account->second.end();
+    }
+
     bool MMOCharacterSystem::ValidateName(const std::string& name, std::string& errorOut) const
     {
         if (name.size() < MIN_NAME_LENGTH)

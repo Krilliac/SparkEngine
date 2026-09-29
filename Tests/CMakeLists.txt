@@ -124,6 +124,8 @@ add_executable(SparkTests
     TestHash.cpp
     TestPasswordHash.cpp
     TestMMOCredentialSecurity.cpp
+    TestSessionGateProtocol.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp"
     TestSecureRandom.cpp
     TestSparkConsoleConcurrency.cpp
     TestExecScript.cpp
@@ -1303,6 +1305,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSession.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Dungeon/MMODungeonSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp"
@@ -1434,6 +1437,33 @@ endif()
 # Propagate engine feature defines so tests can gate on them
 if(ENABLE_NETWORKING)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_NETWORKING)
+    # MOD-320: use the same session gate and player/character services as the MMO module.
+    # The peer is only a process host; server authority is implemented in production sources.
+    set(_spark_mmo_session_sources
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Session/MMOSessionGate.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Session/MMOSessionGateWorld.cpp")
+    add_executable(SparkMMOSessionGatePeer
+        Fixtures/SessionGatePeer.cpp
+        ${_spark_mmo_session_sources}
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSession.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp")
+    target_compile_features(SparkMMOSessionGatePeer PRIVATE cxx_std_23)
+    target_include_directories(SparkMMOSessionGatePeer PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source"
+        "${CMAKE_SOURCE_DIR}/SparkGateway/src")
+    target_link_libraries(SparkMMOSessionGatePeer PRIVATE SparkEngineLib)
+    add_dependencies(SparkTests SparkMMOSessionGatePeer)
+    if(TARGET imgui)
+        # MMOPlayerSystem's client input route calls the gate in the module test sources too.
+        target_sources(SparkTests PRIVATE ${_spark_mmo_session_sources})
+        target_include_directories(SparkTests PRIVATE "${CMAKE_SOURCE_DIR}/SparkGateway/src")
+    endif()
     target_sources(SparkTests PRIVATE
         TestNetworkStack.cpp
         TestNetworkSecurity.cpp
@@ -1631,6 +1661,14 @@ endif()
 # #if-gated macros and is an upper bound, so it must not be used as a floor.
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    if(TARGET SparkMMOSessionGatePeer)
+        add_test(NAME MMOIntegratedWorld_TwoClientSessionGate
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/TestMOD320SessionGateProcess.py
+                --peer $<TARGET_FILE:SparkMMOSessionGatePeer>)
+        set_tests_properties(MMOIntegratedWorld_TwoClientSessionGate PROPERTIES
+            LABELS "mmo;network;security;integration;process"
+            TIMEOUT 180)
+    endif()
     get_target_property(_spark_test_sources SparkTests SOURCES)
     string(REPLACE ";" "\n" _spark_test_source_lines "${_spark_test_sources}")
     file(WRITE "${CMAKE_BINARY_DIR}/test-registration-sources.txt" "${_spark_test_source_lines}\n")
@@ -2476,6 +2514,12 @@ if(ENABLE_NETWORKING)
         RUN_SERIAL TRUE
         TIMEOUT 60)
 endif()
+add_test(NAME MMOSessionGateProtocol COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(MMOSessionGateProtocol PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SessionGateProtocol_;SPARK_TEST_EXPECT_COUNT=4"
+    LABELS "mmo;network;security;unit"
+    TIMEOUT 30)
+
 # SEC-net-transport finding 35: the MMO server binds client-authored player state
 # to the sender's own server entity instead of relaying it (MMO sources need ImGui).
 if(TARGET imgui AND ENABLE_NETWORKING)
