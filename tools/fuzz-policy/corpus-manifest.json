@@ -867,7 +867,7 @@
       "parser_id": "fps-multiplayer-player-state",
       "corpus_dir": "FuzzerTests/corpora/fps-multiplayer-player-state",
       "last_verified": "2026-09-28",
-      "content_digest": "fb4c96072ee62b845413346e5fbe4bda210902949604a26d5b09eb56dedec95e",
+      "content_digest": "ab45c8a0c5c0cdd4bb3fb95555bde57885b1e946ae74e87875cef80a17514059",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,

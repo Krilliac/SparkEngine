@@ -18,6 +18,9 @@ namespace
     constexpr std::size_t kScoreSize = 4u * sizeof(std::uint32_t);
     constexpr std::size_t kRecordSize = SparkFPS::NetworkPlayerState::SerializedSize + kScoreSize;
     constexpr std::size_t kMaxInputBytes = 65536;
+    // clientId (4) + nine floats (36) + actionFlags (4) + ack (4) + weapon (1) = 49.
+    constexpr std::size_t kAliveOffset = 49;
+    constexpr std::size_t kCrouchingOffset = 50;
 
     [[noreturn]] void InvariantFailure(const char* message)
     {
@@ -88,6 +91,13 @@ extern "C" int SparkFuzzProcessFpsSnapshot(const std::uint8_t* data, std::size_t
             InvariantFailure("accepted snapshot state contains a non-finite value");
         }
         const std::uint8_t* record = data + kHeaderSize + index * kRecordSize;
+        // Independent wire-contract model: only defined action bits, canonical 0/1 booleans.
+        constexpr std::uint32_t kKnownActions = SparkFPS::ActionJump | SparkFPS::ActionFire | SparkFPS::ActionReload |
+                                                SparkFPS::ActionCrouch | SparkFPS::ActionSprint;
+        if ((state.actionFlags & ~kKnownActions) != 0 || record[kAliveOffset] > 1 || record[kCrouchingOffset] > 1)
+        {
+            InvariantFailure("accepted snapshot state carries undefined action bits or a non-canonical boolean");
+        }
         if (state.Serialize() !=
             std::vector<std::uint8_t>(record, record + SparkFPS::NetworkPlayerState::SerializedSize))
         {
