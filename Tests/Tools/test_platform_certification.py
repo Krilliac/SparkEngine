@@ -3168,6 +3168,7 @@ class TestRowProbePlans(unittest.TestCase):
         for row_id in (D3D11_ID, NULLRHI_ID):
             plan = copy.deepcopy(self._plan(row_id))
             plan["uncoveredCategories"].pop("dependency_closure", None)
+            plan.pop("dependencyClosure", None)
             self.assertIn(
                 "category 'dependency_closure' is neither probed nor declared uncovered",
                 self._errors(plan),
@@ -3184,6 +3185,32 @@ class TestRowProbePlans(unittest.TestCase):
             "category 'dependency_closure' is neither probed nor declared uncovered",
             self._errors(plan),
         )
+
+    def test_windows_row_plans_declare_a_measured_closure(self) -> None:
+        """PLT-200: each Windows row declares the closure its package walk measured.
+
+        The declaration must name every platformRuntime library the authority
+        requires for the row, carry versions the authority's patterns accept,
+        and no longer list dependency_closure as uncovered.  Whether the names
+        match the real package is proven by WindowsCertification_PackageDependencyClosure,
+        which walks a freshly staged package against these plans.
+        """
+        for row_id in (D3D11_ID, NULLRHI_ID):
+            plan = self._plan(row_id)
+            declaration = pe_imports.parse_declaration(plan)
+            self.assertTrue(declaration.closure, row_id)
+            self.assertIn("sparkengine.exe", declaration.first_party, row_id)
+            self.assertNotIn("dependency_closure", plan.get("uncoveredCategories", {}), row_id)
+            declared = {entry["name"].casefold(): entry for entry in declaration.closure}
+            for entry in AUTHORITY.document["platformRuntime"]:
+                name = entry["name"].casefold()
+                if row_id in entry["requiredForRows"]:
+                    self.assertIn(name, declared, f"{row_id} omits required {name}")
+                if name in declared:
+                    self.assertEqual(declared[name]["source"], entry["source"], f"{row_id} {name}")
+                    pattern = da.compile_version_pattern(entry)
+                    self.assertIsNotNone(pattern, name)
+                    self.assertRegex(declared[name]["version"], pattern, f"{row_id} {name}")
 
 
 class TestLedgerConsistency(BundleTestCase):
