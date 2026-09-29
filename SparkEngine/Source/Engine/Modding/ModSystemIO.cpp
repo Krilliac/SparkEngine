@@ -8,12 +8,14 @@
 #include "../../Utils/JsonUtils.h"
 #include "../../Utils/LogMacros.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <optional>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 
 namespace Spark
@@ -26,6 +28,24 @@ namespace Spark
         /// is far above the two levels these documents actually use.
         constexpr size_t MAX_MOD_JSON_BYTES = 64u * 1024u;
         constexpr Json::JsonLimits MOD_JSON_LIMITS{.maxBytes = MAX_MOD_JSON_BYTES, .maxDepth = 16u, .maxNodes = 4096u};
+
+        /// A mod id is a map key, a log argument, a SaveConfig field and a UI label, so it
+        /// is a short printable token: no separators, control bytes, NUL or spaces.
+        constexpr size_t MAX_MOD_ID_BYTES = 128;
+
+        bool IsValidModId(std::string_view id)
+        {
+            if (id.empty() || id.size() > MAX_MOD_ID_BYTES || id == "." || id == "..")
+            {
+                return false;
+            }
+            return std::all_of(id.begin(), id.end(),
+                               [](char c)
+                               {
+                                   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                                          c == '.' || c == '_' || c == '-';
+                               });
+        }
 
         /// Read a manifest whole, refusing an oversized file from its directory
         /// entry BEFORE any of its bytes are pulled into memory. A mod directory is
@@ -210,21 +230,44 @@ namespace Spark
         };
 
         info.id = getString("id");
+        if (!IsValidModId(info.id))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "ModSystem: mod manifest '%s' rejected: id must be 1-%zu characters of [A-Za-z0-9._-] "
+                            "and not '.' or '..'",
+                            path.c_str(), MAX_MOD_ID_BYTES);
+            return false;
+        }
         info.name = getString("name");
         info.author = getString("author");
         info.version = getString("version");
         info.description = getString("description");
         info.previewImage = getString("previewImage");
 
-        // Extract dependencies array
+        // Extract dependencies array. A dependency names another mod, so it follows the
+        // same id policy; a repeat is recorded once and a mod may not depend on itself.
         if (root.HasKey("dependencies") && root["dependencies"].IsArray())
         {
             const auto& deps = root["dependencies"];
             for (size_t i = 0; i < deps.Size(); ++i)
             {
-                if (deps[i].IsString())
+                if (!deps[i].IsString())
                 {
-                    info.dependencies.push_back(deps[i].AsString());
+                    continue;
+                }
+                const std::string& dependency = deps[i].AsString();
+                if (!IsValidModId(dependency) || dependency == info.id)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                    "ModSystem: mod manifest '%s' rejected: dependency %zu is not a valid mod id "
+                                    "other than the mod's own",
+                                    path.c_str(), i);
+                    return false;
+                }
+                if (std::find(info.dependencies.begin(), info.dependencies.end(), dependency) ==
+                    info.dependencies.end())
+                {
+                    info.dependencies.push_back(dependency);
                 }
             }
         }
@@ -244,7 +287,7 @@ namespace Spark
             info.loadOrder = *loadOrder;
         }
 
-        return !info.id.empty();
+        return true;
     }
 
     std::string ModSystem::Console_GetStatus() const
