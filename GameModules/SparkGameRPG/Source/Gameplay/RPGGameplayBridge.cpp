@@ -48,7 +48,7 @@ namespace RPG
         RegisterRPGDialogueTrees();
         RegisterDialogueHooks();
 
-        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Gameplay bridge initialized (engine quest/dialogue)");
+        Spark::ModuleLog::Info(m_context, "[RPG] Gameplay bridge initialized (engine quest/dialogue)");
         return true;
     }
 

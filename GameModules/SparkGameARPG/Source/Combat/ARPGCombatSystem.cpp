@@ -32,7 +32,7 @@ namespace ARPG
         m_totalCrits = 0;
 
         Spark::ModuleLog::Info(m_context, "ARPG combat system initialized");
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Combat system initialized");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Combat system initialized");
         return true;
     }
 

@@ -28,7 +28,7 @@ namespace RPG
     {
         m_context = context;
         Spark::ModuleLog::Info(m_context, "RPG combat system initialized");
-        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Combat system initialized");
+        Spark::ModuleLog::Info(m_context, "[RPG] Combat system initialized");
         return true;
     }
 

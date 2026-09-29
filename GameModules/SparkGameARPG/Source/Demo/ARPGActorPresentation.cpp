@@ -11,6 +11,7 @@
 #include "Hero/ARPGHeroSystem.h"
 #include "Monster/ARPGMonsterSystem.h"
 #include "Spark/IEngineContext.h"
+#include "Spark/ModuleLog.h"
 
 #include <string>
 #include <string_view>

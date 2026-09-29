@@ -269,7 +269,7 @@ namespace RPG
         if (m_session.isActive)
         {
             Spark::ModuleLog::Debug(m_context, "RPG dialogue session ended");
-            Spark::ModuleLog::Info(m_context, "{}", "[RPG] Dialogue ended");
+            Spark::ModuleLog::Info(m_context, "[RPG] Dialogue ended");
         }
         m_session = {};
     }

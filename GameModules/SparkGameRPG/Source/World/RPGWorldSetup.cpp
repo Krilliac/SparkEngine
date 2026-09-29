@@ -174,7 +174,7 @@ namespace RPG
         }
 
         Spark::ModuleLog::Info(m_context, "RPG areas registered with SeamlessAreaManager");
-        Spark::ModuleLog::Info(m_context, "{}", "[RPG World] Registered areas with SeamlessAreaManager");
+        Spark::ModuleLog::Info(m_context, "[RPG World] Registered areas with SeamlessAreaManager");
     }
 
     void RPGWorldSetup::ConfigureOriginRebasing()
@@ -183,7 +183,7 @@ namespace RPG
         m_originSystem.SetEnabled(true);
 
         Spark::ModuleLog::Info(m_context, "RPG origin rebasing enabled (threshold: 3000m)");
-        Spark::ModuleLog::Info(m_context, "{}", "[RPG World] Origin rebasing enabled (threshold: 3000m)");
+        Spark::ModuleLog::Info(m_context, "[RPG World] Origin rebasing enabled (threshold: 3000m)");
     }
 
     void RPGWorldSetup::Update(float deltaTime)

@@ -309,7 +309,7 @@ namespace Racing
         replay->SetRecordInterval(1.0f / 20.0f);
         replay->SetMetadata("race_track", "racing");
 
-        Spark::ModuleLog::Info(m_context, "{}", "[Racing] Replay: configured (20fps, ghost + cinematic support)");
+        Spark::ModuleLog::Info(m_context, "[Racing] Replay: configured (20fps, ghost + cinematic support)");
     }
 
     std::string RacingEngineSystems::ToggleReplay(const std::string& action)

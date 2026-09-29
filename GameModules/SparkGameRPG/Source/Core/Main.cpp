@@ -103,14 +103,14 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    Spark::ModuleLog::Info(m_context, "{}", "[RPG] Loading Spark RPG module...");
+    Spark::ModuleLog::Info(m_context, "[RPG] Loading Spark RPG module...");
     Spark::ModuleLog::Info(m_context, "RPG module loading — initializing 8 subsystems");
 
     // Initialize the world area setup (registers areas with streaming)
     m_worldSetup = std::make_unique<RPG::RPGWorldSetup>();
     if (!m_worldSetup->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[RPG] Failed to initialize world setup");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize world setup");
         return false;
     }
 
@@ -118,7 +118,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_characterSystem = std::make_unique<RPG::RPGCharacterSystem>();
     if (!m_characterSystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[RPG] Failed to initialize character system");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize character system");
         return false;
     }
 
@@ -126,7 +126,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_combatSystem = std::make_unique<RPG::RPGCombatSystem>();
     if (!m_combatSystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[RPG] Failed to initialize combat system");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize combat system");
         return false;
     }
 
@@ -134,7 +134,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_gameplayBridge = std::make_unique<RPG::RPGGameplayBridge>();
     if (!m_gameplayBridge->Initialize(context, m_characterSystem.get()))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[RPG] Failed to initialize gameplay bridge");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize gameplay bridge");
         return false;
     }
 
@@ -142,7 +142,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_inventorySystem = std::make_unique<RPG::RPGInventorySystem>();
     if (!m_inventorySystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[RPG] Failed to initialize inventory system");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize inventory system");
         return false;
     }
 
@@ -150,14 +150,14 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_npcSystem = std::make_unique<RPG::RPGNPCSystem>();
     if (!m_npcSystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[RPG] Failed to initialize NPC system");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize NPC system");
         return false;
     }
 
     // Bake each NPC area's NavMesh so schedule changes walk NPCs to their posts instead of teleporting them
     if (!m_npcSystem->BuildAreaNavigation(m_worldSetup->GetAreas()))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[RPG] Failed to build NPC area navigation");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to build NPC area navigation");
         return false;
     }
 
@@ -165,14 +165,14 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_engineSystems = std::make_unique<RPG::RPGEngineSystems>();
     if (!m_engineSystems->Initialize(context))
     {
-        Spark::ModuleLog::Warn(m_context, "{}", "[RPG] Engine systems integration partially failed (non-fatal)");
+        Spark::ModuleLog::Warn(m_context, "[RPG] Engine systems integration partially failed (non-fatal)");
     }
 
     m_demoSession = std::make_unique<RPG::RPGDemoSession>();
     if (!m_demoSession->Initialize(m_characterSystem.get(), m_combatSystem.get(), m_inventorySystem.get(),
                                    m_npcSystem.get(), m_worldSetup.get()))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[RPG] Failed to initialize playable demo session");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize playable demo session");
         return false;
     }
 
@@ -214,7 +214,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
 
     m_initialized = true;
     Spark::ModuleLog::Info(m_context, "RPG module loaded successfully — 8 subsystems active");
-    Spark::ModuleLog::Info(m_context, "{}", "[RPG] Spark RPG module loaded successfully (8 subsystems)");
+    Spark::ModuleLog::Info(m_context, "[RPG] Spark RPG module loaded successfully (8 subsystems)");
     Spark::ModuleLog::Info(m_context, "{}",
                            "[RPG] Areas: " + std::to_string(m_worldSetup->GetAreaCount()) +
                                " | Classes: " + std::to_string(m_characterSystem->GetClassCount()) +
@@ -233,7 +233,7 @@ void SparkGameRPGModule::OnUnload()
     // them before the module image is unmapped during hot unload/reload.
     Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("RPG");
 
-    Spark::ModuleLog::Info(m_context, "{}", "[RPG] Unloading Spark RPG module...");
+    Spark::ModuleLog::Info(m_context, "[RPG] Unloading Spark RPG module...");
     Spark::ModuleLog::Info(m_context, "RPG module shutting down");
 
     UnregisterConsoleCommands();
@@ -282,7 +282,7 @@ void SparkGameRPGModule::OnUnload()
     }
 
     Spark::ModuleLog::Info(m_context, "RPG module unloaded");
-    Spark::ModuleLog::Info(m_context, "{}", "[RPG] Spark RPG module unloaded");
+    Spark::ModuleLog::Info(m_context, "[RPG] Spark RPG module unloaded");
     m_context = nullptr;
     m_initialized = false;
 }
@@ -554,11 +554,12 @@ void SparkGameRPGModule::RegisterConsoleCommands()
 
 void SparkGameRPGModule::UnregisterConsoleCommands()
 {
-    auto* console = m_context ? m_context->GetConsole() : nullptr;
-    for (const std::string& commandName : m_registeredConsoleCommands)
+    if (auto* console = m_context ? m_context->GetConsole() : nullptr)
     {
-        if (console)
+        for (const std::string& commandName : m_registeredConsoleCommands)
+        {
             console->UnregisterCommand(commandName);
+        }
     }
     m_registeredConsoleCommands.clear();
 }

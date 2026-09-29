@@ -46,7 +46,7 @@ namespace Racing
         // end waypoint's (matching GetSurfaceAt). Both ends are extended by the half-width with flat caps, so the
         // strips of adjacent segments overlap at every waypoint and a corner leaves no gap in the road.
         auto addStrip =
-            [&](SurfaceType surface, const TrackWaypoint& from, const TrackWaypoint& to, const float (&stations)[3])
+            [&](SurfaceType surface, const TrackWaypoint& from, const TrackWaypoint& to, const float(&stations)[3])
         {
             const float segX = to.x - from.x;
             const float segZ = to.z - from.z;

@@ -95,7 +95,7 @@ namespace ARPG
 
         m_initialized = true;
         Spark::ModuleLog::Info(m_context, "ARPG engine systems integration initialized");
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Engine systems integration initialized");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Engine systems integration initialized");
         return true;
     }
 
@@ -153,7 +153,7 @@ namespace ARPG
         m_loot = nullptr;
         m_dungeon = nullptr;
         Spark::ModuleLog::Info(m_context, "ARPG engine systems integration shut down");
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Engine systems integration shut down");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Engine systems integration shut down");
         m_context = nullptr;
     }
 
@@ -219,7 +219,7 @@ namespace ARPG
             }));
 
         Spark::ModuleLog::Info(m_context, "ARPG EventBus: 2 subscriptions registered");
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] EventBus: 2 subscriptions registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] EventBus: 2 subscriptions registered");
     }
 
     // =========================================================================
@@ -270,7 +270,7 @@ namespace ARPG
                 }
             });
 
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Destruction: 3 fracture patterns registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Destruction: 3 fracture patterns registered");
     }
 
     // =========================================================================
@@ -320,7 +320,7 @@ namespace ARPG
         ai->RegisterBehavior("arpg_boss_phases", Spark::AI::FPSBehaviors::CreateCombatBehavior(bossConfig));
 
         Spark::ModuleLog::Info(m_context, "ARPG AI: 3 behavior trees registered");
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] AI: 3 behavior trees registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] AI: 3 behavior trees registered");
     }
 
     // =========================================================================
@@ -357,7 +357,7 @@ namespace ARPG
             m_hasAnimationBridge = true;
         }
 
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Animation: live hero state machine registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Animation: live hero state machine registered");
     }
 
     // =========================================================================
@@ -384,7 +384,7 @@ namespace ARPG
         auto* abilities = m_context->GetAbilities();
         if (!abilities)
         {
-            Spark::ModuleLog::Warn(m_context, "{}", "[ARPG] Abilities: engine registry unavailable");
+            Spark::ModuleLog::Warn(m_context, "[ARPG] Abilities: engine registry unavailable");
             return;
         }
 
@@ -394,7 +394,7 @@ namespace ARPG
         m_registeredAbilityCount = 4;
         m_registeredAuraCount = 4;
         m_registeredProcCount = 1;
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Abilities: 4 abilities, 4 auras, 1 proc registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Abilities: 4 abilities, 4 auras, 1 proc registered");
     }
 
     void ARPGEngineSystems::PlayHeroAction(ARPGHeroAction action)
@@ -491,7 +491,7 @@ namespace ARPG
         // Set default dungeon weather to foggy/dark atmosphere
         weather->SetWeather(Spark::WeatherType::Fog, 0.4f, 2.0f);
 
-        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Weather: dungeon atmosphere configured");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Weather: dungeon atmosphere configured");
     }
 
 } // namespace ARPG

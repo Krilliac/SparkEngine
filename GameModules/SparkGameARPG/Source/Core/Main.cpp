@@ -68,14 +68,14 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Loading Spark ARPG module...");
+    Spark::ModuleLog::Info(m_context, "[ARPG] Loading Spark ARPG module...");
     Spark::ModuleLog::Info(m_context, "ARPG module loading — initializing 7 subsystems");
 
     // Initialize hero system (classes, stats, leveling)
     m_heroSystem = std::make_unique<ARPG::ARPGHeroSystem>();
     if (!m_heroSystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize hero system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize hero system");
         return false;
     }
 
@@ -83,7 +83,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_combatSystem = std::make_unique<ARPG::ARPGCombatSystem>();
     if (!m_combatSystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize combat system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize combat system");
         return false;
     }
 
@@ -91,7 +91,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_lootSystem = std::make_unique<ARPG::ARPGLootSystem>();
     if (!m_lootSystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize loot system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize loot system");
         return false;
     }
 
@@ -99,7 +99,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_dungeonSystem = std::make_unique<ARPG::ARPGDungeonSystem>();
     if (!m_dungeonSystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize dungeon system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize dungeon system");
         return false;
     }
 
@@ -107,7 +107,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_skillSystem = std::make_unique<ARPG::ARPGSkillSystem>();
     if (!m_skillSystem->Initialize(context, m_heroSystem.get()))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize skill system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize skill system");
         return false;
     }
 
@@ -115,7 +115,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_monsterSystem = std::make_unique<ARPG::ARPGMonsterSystem>();
     if (!m_monsterSystem->Initialize(context))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize monster system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize monster system");
         return false;
     }
 
@@ -124,7 +124,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     if (!m_engineSystems->Initialize(context, m_heroSystem.get(), m_combatSystem.get(), m_lootSystem.get(),
                                      m_dungeonSystem.get()))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize engine systems integration");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize engine systems integration");
         return false;
     }
 
@@ -132,7 +132,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     if (!m_demoEncounter->Initialize(m_heroSystem.get(), m_combatSystem.get(), m_lootSystem.get(),
                                      m_dungeonSystem.get(), m_skillSystem.get(), m_monsterSystem.get()))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize the playable demo encounter");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize the playable demo encounter");
         return false;
     }
 
@@ -140,7 +140,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_actorPresentation = std::make_unique<ARPG::ARPGActorPresentation>();
     if (!m_actorPresentation->Initialize(context, m_demoEncounter.get(), m_monsterSystem.get()))
     {
-        Spark::ModuleLog::Error(m_context, "{}", "[ARPG] Failed to initialize the hero/monster actor presentation");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize the hero/monster actor presentation");
         return false;
     }
 
@@ -197,14 +197,14 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
 
     m_initialized = true;
     Spark::ModuleLog::Info(m_context, "ARPG module loaded successfully — 7 subsystems active");
-    Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Spark ARPG module loaded successfully (7 subsystems)");
+    Spark::ModuleLog::Info(m_context, "[ARPG] Spark ARPG module loaded successfully (7 subsystems)");
     Spark::ModuleLog::Info(m_context, "{}",
                            "[ARPG] Classes: " + std::to_string(m_heroSystem->GetClassCount()) +
                                " | Skills: " + std::to_string(m_skillSystem->GetTotalSkillCount()) +
                                " | Monsters: " + std::to_string(m_monsterSystem->GetTemplateCount()) +
                                " | Affixes: " + std::to_string(m_lootSystem->GetAffixPoolSize()) +
                                " | Tiers: " + std::to_string(m_dungeonSystem->GetTierCount()));
-    Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Playable encounter ready — Space attack, Q skill, R restart");
+    Spark::ModuleLog::Info(m_context, "[ARPG] Playable encounter ready — Space attack, Q skill, R restart");
     return true;
 }
 
@@ -219,7 +219,7 @@ void SparkGameARPGModule::OnUnload()
     Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("ARPG");
 
     UnregisterConsoleCommands();
-    Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Unloading Spark ARPG module...");
+    Spark::ModuleLog::Info(m_context, "[ARPG] Unloading Spark ARPG module...");
     Spark::ModuleLog::Info(m_context, "ARPG module shutting down");
 
     if (m_hud)
@@ -279,7 +279,7 @@ void SparkGameARPGModule::OnUnload()
     }
 
     Spark::ModuleLog::Info(m_context, "ARPG module unloaded");
-    Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Spark ARPG module unloaded");
+    Spark::ModuleLog::Info(m_context, "[ARPG] Spark ARPG module unloaded");
     m_context = nullptr;
     m_initialized = false;
 }
