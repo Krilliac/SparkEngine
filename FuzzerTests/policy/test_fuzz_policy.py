@@ -122,6 +122,10 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzVisualScriptGraph",
     "SparkFuzzNavMesh",
     "SparkFuzzSparkTerrain",
+    "SparkFuzzAssetServiceProtocol",
+    "SparkFuzzDaemonFrame",
+    "SparkFuzzDaemonWire",
+    "SparkFuzzBinaryReader",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2047,6 +2051,30 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::Graphics::SparkTerrain::DecodeRuntime",
                 "terrain-sparkterrain",
                 8,
+            ),
+            "asset-service-protocol": (
+                "AssetServiceProtocol",
+                "Spark::Daemon::DecodePutAssetRequest",
+                "asset-service-protocol",
+                9,
+            ),
+            "daemon-protocol-frame": (
+                "DaemonFrame",
+                "Spark::Daemon::RecvFrame",
+                "daemon-protocol-frame",
+                7,
+            ),
+            "daemon-bounded-wire-codec": (
+                "DaemonWire",
+                "Spark::Daemon::DecodeSnapshot",
+                "daemon-bounded-wire-codec",
+                10,
+            ),
+            "binary-serializer": (
+                "BinaryReader",
+                "Spark::BinaryReader::ReadString",
+                "binary-serializer",
+                6,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

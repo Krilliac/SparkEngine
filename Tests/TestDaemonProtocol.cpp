@@ -12,6 +12,16 @@
 #include <string>
 #include <vector>
 
+#if !defined(_WIN32)
+#include "Utils/DaemonFraming.h"
+
+#include <atomic>
+#include <thread>
+
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
 using Spark::Daemon::ControlMessage;
 using Spark::Daemon::DecodeFrameHeader;
 using Spark::Daemon::EncodeFrame;
@@ -111,10 +121,9 @@ TEST(DaemonProtocol_AssetBlobDecodersRejectImpossibleLengthsBeforeResize)
     EXPECT_EQ(getOut.blob[0], 0xA5u);
     EXPECT_TRUE(getOut.found);
 
-    const std::vector<uint8_t> putPayload = {
-        0u, 0u, 0u, 0u, // empty path
-        0u,             // platform
-        0xFFu, 0xFFu, 0xFFu, 0xFFu};
+    const std::vector<uint8_t> putPayload = {0u,    0u,    0u,    0u, // empty path
+                                             0u,                      // platform
+                                             0xFFu, 0xFFu, 0xFFu, 0xFFu};
     Spark::Daemon::PutAssetRequest putOut;
     putOut.key.path = "sentinel";
     putOut.blob = {0x5Au};
@@ -139,11 +148,10 @@ TEST(DaemonProtocol_ShaderBlobDecodersRejectImpossibleLengthsBeforeResize)
     EXPECT_EQ(getOut.blob[0], 0xA5u);
     EXPECT_TRUE(getOut.found);
 
-    const std::vector<uint8_t> putPayload = {
-        0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, // source hash
-        0u,                               // target
-        0u,                               // stage
-        0xFFu, 0xFFu, 0xFFu, 0xFFu};
+    const std::vector<uint8_t> putPayload = {0u,    0u,    0u,    0u,   0u, 0u, 0u, 0u, // source hash
+                                             0u,                                        // target
+                                             0u,                                        // stage
+                                             0xFFu, 0xFFu, 0xFFu, 0xFFu};
     Spark::Daemon::PutCacheEntryRequest putOut;
     putOut.key.sourceHash = 99u;
     putOut.blob = {0x5Au};
@@ -157,9 +165,8 @@ TEST(DaemonProtocol_ShaderBlobDecodersRejectImpossibleLengthsBeforeResize)
 
 TEST(DaemonProtocol_StatsDecoderRejectsImpossibleVersionLengthBeforeAllocation)
 {
-    const std::vector<uint8_t> payload = {
-        0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, // uptime
-        0xFFu, 0xFFu, 0xFFu, 0xFFu};      // version length
+    const std::vector<uint8_t> payload = {0u,    0u,    0u,    0u,   0u, 0u, 0u, 0u, // uptime
+                                          0xFFu, 0xFFu, 0xFFu, 0xFFu};               // version length
     Spark::Daemon::DaemonStats out;
     out.protocolVersion = "sentinel";
     bool decoded = true;
@@ -170,10 +177,9 @@ TEST(DaemonProtocol_StatsDecoderRejectsImpossibleVersionLengthBeforeAllocation)
 
 TEST(DaemonProtocol_StatsDecoderRejectsImpossibleIdCountBeforeReserve)
 {
-    const std::vector<uint8_t> payload = {
-        0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, // uptime
-        0u, 0u, 0u, 0u,                   // empty protocol version
-        0xFFu, 0xFFu, 0xFFu, 0xFFu};      // registered ID count
+    const std::vector<uint8_t> payload = {0u,    0u,    0u,    0u,   0u, 0u, 0u, 0u, // uptime
+                                          0u,    0u,    0u,    0u,                   // empty protocol version
+                                          0xFFu, 0xFFu, 0xFFu, 0xFFu};               // registered ID count
     Spark::Daemon::DaemonStats out;
     out.registeredIds = {7u};
     bool decoded = true;
@@ -182,3 +188,101 @@ TEST(DaemonProtocol_StatsDecoderRejectsImpossibleIdCountBeforeReserve)
     EXPECT_EQ(out.registeredIds.size(), 1u);
     EXPECT_EQ(out.registeredIds[0], 7u);
 }
+
+TEST(AssetServiceProtocol_RejectedDecodeLeavesOutputUntouched)
+{
+    // Every asset decoder is publish-on-success: a payload that fails part-way
+    // must not leave the fields it already decoded in the caller's struct.
+    const std::vector<uint8_t> getPayload = {3u, 0u, 0u, 0u, 'a', '/', 'b'}; // valid path, platform byte missing
+    Spark::Daemon::GetAssetRequest getOut;
+    getOut.key.path = "sentinel";
+    getOut.key.platform = 9u;
+    EXPECT_FALSE(Spark::Daemon::DecodeGetAssetRequest(getPayload, getOut));
+    EXPECT_EQ(getOut.key.path, std::string("sentinel"));
+    EXPECT_EQ(getOut.key.platform, 9u);
+
+    const std::vector<uint8_t> invalidatePayload = {0xFFu, 0xFFu, 0xFFu, 0xFFu, 'x'}; // path length overclaim
+    Spark::Daemon::InvalidateAssetRequest invalidateOut;
+    invalidateOut.path = "sentinel";
+    EXPECT_FALSE(Spark::Daemon::DecodeInvalidateAssetRequest(invalidatePayload, invalidateOut));
+    EXPECT_EQ(invalidateOut.path, std::string("sentinel"));
+
+    const std::vector<uint8_t> removedPayload = {1u, 0u, 0u}; // three of the four count bytes
+    Spark::Daemon::InvalidateAssetResponse removedOut;
+    removedOut.removedCount = 77u;
+    EXPECT_FALSE(Spark::Daemon::DecodeInvalidateAssetResponse(removedPayload, removedOut));
+    EXPECT_EQ(removedOut.removedCount, 77u);
+
+    std::vector<uint8_t> statsPayload(31u, 0x11u); // one byte short of the legacy 32-byte layout
+    Spark::Daemon::AssetCacheStats statsOut;
+    statsOut.entryCount = 5u;
+    statsOut.totalBytes = 6u;
+    statsOut.hitCount = 7u;
+    statsOut.missCount = 8u;
+    EXPECT_FALSE(Spark::Daemon::DecodeAssetCacheStats(statsPayload, statsOut));
+    EXPECT_EQ(statsOut.entryCount, uint64_t{5});
+    EXPECT_EQ(statsOut.totalBytes, uint64_t{6});
+    EXPECT_EQ(statsOut.hitCount, uint64_t{7});
+    EXPECT_EQ(statsOut.missCount, uint64_t{8});
+
+    // A legacy 32-byte stats payload is accepted and never keeps a stale eviction count.
+    statsPayload.push_back(0x11u);
+    statsOut.evictionCount = 99u;
+    EXPECT_TRUE(Spark::Daemon::DecodeAssetCacheStats(statsPayload, statsOut));
+    EXPECT_EQ(statsOut.entryCount, uint64_t{0x1111111111111111ull});
+    EXPECT_EQ(statsOut.evictionCount, uint64_t{0});
+}
+
+#if !defined(_WIN32)
+TEST(DaemonFraming_RecvFrameAllocationTracksReceivedBytes)
+{
+    // A local peer that sends a header claiming the 16 MiB maximum and then only
+    // a few bytes must not make RecvFrame allocate the claimed size.
+    int sockets[2] = {-1, -1};
+    ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+    const std::atomic<bool> shuttingDown{false};
+
+    auto claimed = EncodeFrame(ServiceId::Asset, 1u, std::vector<uint8_t>(10u, 0x42u));
+    claimed[0] = static_cast<uint8_t>(kMaxPayloadSize & 0xFFu);
+    claimed[1] = static_cast<uint8_t>((kMaxPayloadSize >> 8) & 0xFFu);
+    claimed[2] = static_cast<uint8_t>((kMaxPayloadSize >> 16) & 0xFFu);
+    claimed[3] = static_cast<uint8_t>((kMaxPayloadSize >> 24) & 0xFFu);
+    ASSERT_EQ(::write(sockets[0], claimed.data(), claimed.size()), static_cast<ssize_t>(claimed.size()));
+    ASSERT_EQ(::shutdown(sockets[0], SHUT_WR), 0);
+
+    FrameHeader header;
+    std::vector<uint8_t> payload;
+    EXPECT_FALSE(Spark::Daemon::RecvFrame(sockets[1], header, payload, shuttingDown));
+    EXPECT_EQ(header.payloadSize, kMaxPayloadSize);
+    EXPECT_TRUE(payload.capacity() <= 2u * 10u + Spark::Daemon::kRecvFrameGrowthStep);
+    ::close(sockets[0]);
+    ::close(sockets[1]);
+
+    // A frame spanning several growth steps still arrives intact.
+    ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+    std::vector<uint8_t> body(3u * Spark::Daemon::kRecvFrameGrowthStep + 5u);
+    for (size_t i = 0; i < body.size(); ++i)
+        body[i] = static_cast<uint8_t>(i * 31u);
+    const auto frame = EncodeFrame(ServiceId::Asset, 2u, body);
+    std::thread writer(
+        [&]
+        {
+            size_t sent = 0;
+            while (sent < frame.size())
+            {
+                const ssize_t n = ::write(sockets[0], frame.data() + sent, frame.size() - sent);
+                if (n <= 0)
+                    break;
+                sent += static_cast<size_t>(n);
+            }
+            ::shutdown(sockets[0], SHUT_WR);
+        });
+    const bool received = Spark::Daemon::RecvFrame(sockets[1], header, payload, shuttingDown);
+    writer.join();
+    EXPECT_TRUE(received);
+    EXPECT_EQ(header.messageType, 2u);
+    EXPECT_TRUE(payload == body);
+    ::close(sockets[0]);
+    ::close(sockets[1]);
+}
+#endif

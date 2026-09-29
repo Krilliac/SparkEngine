@@ -40,6 +40,11 @@ namespace Spark::Daemon
 
     inline constexpr auto kDaemonIoTimeout = std::chrono::seconds(5);
 
+    /// RecvFrame never grows a payload buffer more than this far past the bytes
+    /// the peer has actually delivered (or twice the delivered bytes, once that is
+    /// larger), so a header that merely claims kMaxPayloadSize costs no memory.
+    inline constexpr size_t kRecvFrameGrowthStep = 64u * 1024u;
+
 #if defined(_WIN32)
     using NativeSocket = HANDLE;
     inline const NativeSocket kInvalidSocket = INVALID_HANDLE_VALUE;
@@ -313,18 +318,19 @@ namespace Spark::Daemon
     }
 
     /**
-     * @brief Read exactly @p totalLen bytes from the socket.
+     * @brief Read exactly @p totalLen bytes from the socket before @p deadline.
      *
-     * Same aborts-waiting-only semantics as `SendAll`. Polling and an absolute
-     * deadline bound partial or stalled peers on every platform.
+     * Same aborts-waiting-only semantics as `SendAll`. Polling and the absolute
+     * deadline bound partial or stalled peers on every platform; RecvFrame passes
+     * one deadline to the several reads that fill a payload.
      */
-    inline bool RecvAll(NativeSocket s, void* buf, size_t totalLen, const std::atomic<bool>& shuttingDown) noexcept
+    inline bool RecvAllUntil(NativeSocket s, void* buf, size_t totalLen, const std::atomic<bool>& shuttingDown,
+                             std::chrono::steady_clock::time_point deadline) noexcept
     {
         if (s == kInvalidSocket)
             return false;
         auto* p = static_cast<uint8_t*>(buf);
         size_t received = 0;
-        const auto deadline = std::chrono::steady_clock::now() + kDaemonIoTimeout;
         while (received < totalLen && std::chrono::steady_clock::now() < deadline)
         {
 #if defined(_WIN32)
@@ -394,6 +400,12 @@ namespace Spark::Daemon
         return received == totalLen;
     }
 
+    /// Read exactly @p totalLen bytes within kDaemonIoTimeout (see RecvAllUntil).
+    inline bool RecvAll(NativeSocket s, void* buf, size_t totalLen, const std::atomic<bool>& shuttingDown) noexcept
+    {
+        return RecvAllUntil(s, buf, totalLen, shuttingDown, std::chrono::steady_clock::now() + kDaemonIoTimeout);
+    }
+
     /**
      * @brief Send a framed message: 8-byte header followed by @p payload.
      */
@@ -422,7 +434,13 @@ namespace Spark::Daemon
      * @brief Receive one framed message. On success fills @p header and @p payload.
      *
      * Returns false on malformed header (payload > kMaxPayloadSize), hard I/O error,
-     * peer close, or @p shuttingDown.
+     * peer close, a payload not delivered within kDaemonIoTimeout, or @p shuttingDown.
+     *
+     * The payload buffer grows with the bytes that actually arrive (at most
+     * kRecvFrameGrowthStep, or the bytes already received, ahead of them) instead
+     * of trusting the header's claimed size, so a peer that sends only a header
+     * claiming 16 MiB cannot make the receiver allocate it. After a failed call the
+     * contents of @p payload are unspecified.
      */
     inline bool RecvFrame(NativeSocket s, FrameHeader& header, std::vector<uint8_t>& payload,
                           const std::atomic<bool>& shuttingDown)
@@ -435,10 +453,20 @@ namespace Spark::Daemon
         if (header.payloadSize > kMaxPayloadSize)
             return false;
 
-        payload.resize(header.payloadSize);
-        if (header.payloadSize == 0)
-            return true;
-        return RecvAll(s, payload.data(), header.payloadSize, shuttingDown);
+        payload.clear();
+        const size_t payloadSize = header.payloadSize;
+        const auto deadline = std::chrono::steady_clock::now() + kDaemonIoTimeout;
+        size_t received = 0;
+        while (received < payloadSize)
+        {
+            // Geometric growth keeps the copying linear; the step keeps small frames cheap.
+            const size_t step = (std::min)(payloadSize - received, (std::max)(received, kRecvFrameGrowthStep));
+            payload.resize(received + step);
+            if (!RecvAllUntil(s, payload.data() + received, step, shuttingDown, deadline))
+                return false;
+            received += step;
+        }
+        return true;
     }
 
 } // namespace Spark::Daemon

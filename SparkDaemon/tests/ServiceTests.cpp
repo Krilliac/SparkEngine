@@ -9,10 +9,12 @@
 
 #include <cstdlib>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <new>
 #include <optional>
 #include <string>
 #include <thread>
@@ -24,6 +26,44 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
+
+namespace
+{
+    /// Largest single operator-new request since the last reset. The wire-codec
+    /// test reads it to prove a decoder never reserves records its payload cannot hold.
+    std::atomic<size_t> g_largestAllocation{0};
+} // namespace
+
+// Replaceable global allocation functions ([new.delete.single]); the array forms
+// forward to these by default, so every container allocation is observed. GCC
+// must not inline them: once std::free is visible at a call site that got its
+// pointer from operator new, -Wmismatched-new-delete (an error here) fires.
+#if defined(__GNUC__)
+#define SPARK_SERVICE_TESTS_NOINLINE __attribute__((noinline))
+#else
+#define SPARK_SERVICE_TESTS_NOINLINE
+#endif
+
+SPARK_SERVICE_TESTS_NOINLINE void* operator new(size_t size)
+{
+    size_t largest = g_largestAllocation.load(std::memory_order_relaxed);
+    while (size > largest && !g_largestAllocation.compare_exchange_weak(largest, size, std::memory_order_relaxed))
+    {
+    }
+    if (void* memory = std::malloc(size == 0 ? 1 : size))
+        return memory;
+    throw std::bad_alloc();
+}
+
+SPARK_SERVICE_TESTS_NOINLINE void operator delete(void* memory) noexcept
+{
+    std::free(memory);
+}
+
+SPARK_SERVICE_TESTS_NOINLINE void operator delete(void* memory, size_t) noexcept
+{
+    std::free(memory);
+}
 
 namespace
 {
@@ -98,6 +138,77 @@ namespace
         payload[0] = 2;
         Check(!Spark::Daemon::DecodeProcessDefinition(payload, decodedKey, decoded),
               "process decoder rejects unknown schema");
+    }
+
+    /// Run the decode call @p decode and report whether no single allocation it
+    /// made reached @p limit bytes.
+    template <typename Decode> bool DecodesWithoutAllocatingOver(size_t limit, Decode&& decode)
+    {
+        g_largestAllocation.store(0, std::memory_order_relaxed);
+        decode();
+        return g_largestAllocation.load(std::memory_order_relaxed) < limit;
+    }
+
+    void TestWireDecodersRejectCountsThePayloadCannotHold()
+    {
+        // Every count below is within its decoder's cap but claims far more records
+        // than the few bytes after it could encode. Each must be rejected before the
+        // decoder reserves or sizes a container for the claimed count.
+        constexpr size_t kAllocationLimit = 1024;
+
+        for (int emptyLists = 0; emptyLists < 3; ++emptyLists)
+        {
+            Spark::Daemon::Wire::Writer writer;
+            Spark::Daemon::Wire::WriteVersion(writer);
+            writer.WriteString("scene", Spark::Daemon::kMaximumSessionIdLength);
+            writer.Write<uint64_t>(1);
+            for (int list = 0; list < emptyLists; ++list)
+                writer.Write<uint32_t>(0);
+            writer.Write<uint32_t>(emptyLists == 0 ? 1024u : 65'536u); // peers, then locks, then edits
+            const std::vector<uint8_t> payload = writer.Take();
+
+            Spark::Daemon::CollaborationSnapshot snapshot;
+            snapshot.sessionId = "sentinel";
+            bool decoded = true;
+            Check(DecodesWithoutAllocatingOver(kAllocationLimit,
+                                               [&] { decoded = Spark::Daemon::DecodeSnapshot(payload, snapshot); }),
+                  "snapshot decoder does not reserve records its payload cannot hold");
+            Check(!decoded && snapshot.sessionId == "sentinel", "snapshot count overclaim is rejected untouched");
+        }
+
+        {
+            Spark::Daemon::Wire::Writer writer;
+            Spark::Daemon::Wire::WriteVersion(writer);
+            writer.Write<uint32_t>(1024);
+            const std::vector<uint8_t> payload = writer.Take();
+            std::vector<Spark::Daemon::ProcessStatus> statuses;
+            bool decoded = true;
+            Check(
+                DecodesWithoutAllocatingOver(
+                    kAllocationLimit, [&] { decoded = Spark::Daemon::DecodeProcessStatuses(payload, statuses, 1024); }),
+                "status list decoder does not size records its payload cannot hold");
+            Check(!decoded, "status count overclaim is rejected");
+        }
+
+        {
+            Spark::Daemon::Wire::Writer writer;
+            Spark::Daemon::Wire::WriteVersion(writer);
+            writer.WriteString("client", Spark::Daemon::kMaximumClientInstanceLength);
+            writer.Write<uint64_t>(1);
+            writer.WriteString("world-1", Spark::Daemon::kMaximumProcessIdLength);
+            writer.WriteString("/bin/true", Spark::Daemon::kMaximumProcessPathLength);
+            writer.WriteString("/bin", Spark::Daemon::kMaximumProcessPathLength);
+            writer.Write<uint32_t>(static_cast<uint32_t>(Spark::Daemon::kMaximumProcessArguments));
+            const std::vector<uint8_t> payload = writer.Take();
+            Spark::Daemon::MutationKey key;
+            Spark::Daemon::ProcessDefinition definition;
+            bool decoded = true;
+            Check(DecodesWithoutAllocatingOver(
+                      kAllocationLimit,
+                      [&] { decoded = Spark::Daemon::DecodeProcessDefinition(payload, key, definition); }),
+                  "process definition decoder does not size arguments its payload cannot hold");
+            Check(!decoded, "argument count overclaim is rejected");
+        }
     }
 
     void TestCollaborationCapabilitiesAndLocks()
@@ -666,6 +777,7 @@ int main(int argc, char** argv)
         ("spark-daemon-tests-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(scratch);
     TestStrictProcessCodec();
+    TestWireDecodersRejectCountsThePayloadCannotHold();
     TestCollaborationCapabilitiesAndLocks();
     TestCollaborationSnapshotByteBudget();
     TestSupervisorFailClosedConfiguration();

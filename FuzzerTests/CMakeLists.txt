@@ -460,6 +460,222 @@ set_tests_properties(FuzzShaderServiceProtocolSmoke PROPERTIES
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
 
+# The asset daemon codecs are header-only (Utils/AssetServiceProtocol.h over
+# Utils/Serializer.h and Utils/DaemonProtocol.h), so the adapter compiles the
+# whole production decoder.
+add_executable(SparkFuzzAssetServiceProtocol
+    FuzzAssetServiceProtocol.cpp
+    FuzzAssetServiceProtocolProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the decoders it compiles use libc++ and meet the
+# driver only at the C ABI in FuzzAssetServiceProtocolProduction.h.
+set_source_files_properties(
+    FuzzAssetServiceProtocolProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzAssetServiceProtocol PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzAssetServiceProtocol PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzAssetServiceProtocol PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzAssetServiceProtocol PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzAssetServiceProtocol PRIVATE Threads::Threads c++ c++abi)
+
+# The blob and path overclaim seeds claim 4 GiB in a few bytes; a decoder that
+# resized before checking the bytes present would exceed the -rss_limit_mb
+# single-allocation cap and fail this test.
+add_test(
+    NAME FuzzAssetServiceProtocolSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzAssetServiceProtocol>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/asset-service-protocol"
+)
+set_tests_properties(FuzzAssetServiceProtocolSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# The daemon frame receive path is header-only (Utils/DaemonFraming.h over
+# Utils/DaemonProtocol.h); the adapter drives the POSIX branch of RecvFrame
+# through a Unix socket pair.
+add_executable(SparkFuzzDaemonFrame
+    FuzzDaemonFrame.cpp
+    FuzzDaemonFrameProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the receive path it compiles use libc++ and meet
+# the driver only at the C ABI in FuzzDaemonFrameProduction.h.
+set_source_files_properties(
+    FuzzDaemonFrameProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzDaemonFrame PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzDaemonFrame PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzDaemonFrame PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzDaemonFrame PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzDaemonFrame PRIVATE Threads::Threads c++ c++abi)
+
+# regression-header-claims-max-payload.bin claims 16 MiB and sends ten bytes;
+# the adapter aborts if the payload buffer grows past what actually arrived.
+add_test(
+    NAME FuzzDaemonFrameSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzDaemonFrame>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/daemon-protocol-frame"
+)
+set_tests_properties(FuzzDaemonFrameSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# The daemon's collaboration and orchestration DTO codecs are header-only
+# (SparkDaemon/src CollaborationProtocol.h and OrchestrationProtocol.h over
+# BoundedWireCodec.h), so the adapter compiles every production decoder.
+add_executable(SparkFuzzDaemonWire
+    FuzzDaemonWire.cpp
+    FuzzDaemonWireProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the decoders it compiles use libc++ and meet the
+# driver only at the C ABI in FuzzDaemonWireProduction.h.
+set_source_files_properties(
+    FuzzDaemonWireProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzDaemonWire PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src"
+)
+target_compile_features(SparkFuzzDaemonWire PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzDaemonWire PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzDaemonWire PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzDaemonWire PRIVATE Threads::Threads c++ c++abi)
+
+# The count-overclaim seeds claim up to 65,536 snapshot records in a few bytes.
+# Everything a valid message under -max_len decodes to stays far below 1 MiB,
+# while reserving 65,536 locks or edits takes 2-4 MiB, so -malloc_limit_mb=1
+# fails a decoder that reserved before checking the bytes present.
+add_test(
+    NAME FuzzDaemonWireSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzDaemonWire>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -malloc_limit_mb=1
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=10
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/daemon-bounded-wire-codec"
+)
+set_tests_properties(FuzzDaemonWireSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# Spark::BinaryReader is header-only (Utils/Serializer.h), so the adapter
+# compiles the whole production reader and drives it with an op script.
+add_executable(SparkFuzzBinaryReader
+    FuzzBinaryReader.cpp
+    FuzzBinaryReaderProduction.cpp
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and the harness use
+# libstdc++; the adapter and the reader it compiles use libc++ and meet the
+# driver only at the C ABI in FuzzBinaryReaderProduction.h.
+set_source_files_properties(
+    FuzzBinaryReaderProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzBinaryReader PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzBinaryReader PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzBinaryReader PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzBinaryReader PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzBinaryReader PRIVATE Threads::Threads c++ c++abi)
+
+# string-length-overclaim.bin claims a 4 GiB string in front of three bytes and
+# skip-near-size-max.bin skips SIZE_MAX bytes; a reader whose bounds check could
+# wrap would read past the exactly sized ASan buffer.
+add_test(
+    NAME FuzzBinaryReaderSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzBinaryReader>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=6
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/binary-serializer"
+)
+set_tests_properties(FuzzBinaryReaderSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
 # ConfigParser::LoadFromString and SaveToString are header-inline
 # (Utils/ConfigParser.h over Utils/StringUtils.h), so the adapter compiles the
 # whole production parser; ConfigParser.cpp only adds the LocalFileCache I/O.
