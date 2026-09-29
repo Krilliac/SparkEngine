@@ -396,10 +396,9 @@ TEST(TF120_Migration_FullCapacityWithLostDeliveriesHasOneOwnerEach)
         EXPECT_TRUE(destination.Acknowledge(request) == HandoffResult::Applied);
     }
 
-    std::printf("[TF120] characters=%u lostRequests=%u lostReplies=%u owners=%zu installs=%d
-                ", kMaxPlayers,
-                lostRequests,
-                lostReplies, destinationAuthority.installedStates.size(), destinationAuthority.installCount);
+    std::printf("[TF120] characters=%u lostRequests=%u lostReplies=%u owners=%zu installs=%d\n", kMaxPlayers,
+                lostRequests, lostReplies, destinationAuthority.installedStates.size(),
+                destinationAuthority.installCount);
     EXPECT_TRUE(lostRequests > 0 && lostReplies > 0);
     EXPECT_EQ(destinationAuthority.installedStates.size(), static_cast<size_t>(kMaxPlayers));
     EXPECT_EQ(destinationAuthority.installCount, static_cast<int>(kMaxPlayers));
