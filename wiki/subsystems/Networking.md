@@ -1,5 +1,13 @@
 # Networking
 
+SparkEngine includes an **experimental** UDP networking system for multiplayer development, with entity replication, client-side prediction, lag compensation, pluggable transports, and dedicated server support. Since protocol version 2 (NET-100) the active `NetworkManager` wire path authenticates the server with a signed X25519 handshake and seals every post-handshake datagram with ChaCha20-Poly1305 (libsodium); it has not had an independent cryptographic review, and players are authenticated by game code inside the channel, not by the transport.
+
+**Source:** `SparkEngine/Source/Engine/Networking/`
+
+> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). First-party endpoints bind to IPv4 loopback by default. Isolated LAN development requires canonical CIDR through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address` (for example `192.168.1.20/24`). The prefix must keep the complete subnet inside RFC1918 space; the exact network and directed-broadcast addresses are rejected, and peers are restricted to concrete hosts in that same subnet. Wildcard, public, documentation/test, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, missing-prefix, and alternate textual forms are rejected before socket creation. The captured policy is threaded through gameplay, discovery, collaboration, and live-editor socket lifecycles and filters peer endpoints before packet parsing and every send/retry boundary. Gateway-managed area processes require loopback and reject a conflicting LAN bind. This boundary is containment; authentication and encryption come from the NET-100 secure transport described under [SecureChannel](#networkencryption-advanced), which still awaits independent review. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
+
+`NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests always set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the exact destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission. Selecting a private-LAN bind does not enable remote credential onboarding.
+
 ## MMO authenticated session slice
 
 SparkGameMMO's module-owned `MMOSessionGate` handles account authentication, owned character creation,
@@ -14,18 +22,12 @@ before destroying account/player services. Network clients use the `mmo_session_
 the login UI remains an offline showcase. This small-area slice does not supply persistent accounts,
 cross-area handoff, or collision-complete movement.
 
-`MMOIntegratedWorld_TwoClientSessionGate` registers the real server/two-client process scenario, including
-bad-credential and foreign-character refusals and peer-observed movement/interactions. Central runtime
-execution and exact-commit CI are still required. See the [module guide](../../GameModules/SparkGameMMO/README.md)
-and [SEC-120 registration packet](../../GameModules/SparkGameMMO/SessionGate-Fuzz-Integration.md).
+The gate's network handlers may run on the `DedicatedServer` tick thread inside `SparkServer`, so they only
+copy datagrams into a bounded inbox that the module drains on the game thread.
 
-SparkEngine includes an **experimental** UDP networking system for multiplayer development, with entity replication, client-side prediction, lag compensation, pluggable transports, and dedicated server support. Since protocol version 2 (NET-100) the active `NetworkManager` wire path authenticates the server with a signed X25519 handshake and seals every post-handshake datagram with ChaCha20-Poly1305 (libsodium); it has not had an independent cryptographic review, and players are authenticated by game code inside the channel, not by the transport.
-
-**Source:** `SparkEngine/Source/Engine/Networking/`
-
-> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). First-party endpoints bind to IPv4 loopback by default. Isolated LAN development requires canonical CIDR through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address` (for example `192.168.1.20/24`). The prefix must keep the complete subnet inside RFC1918 space; the exact network and directed-broadcast addresses are rejected, and peers are restricted to concrete hosts in that same subnet. Wildcard, public, documentation/test, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, missing-prefix, and alternate textual forms are rejected before socket creation. The captured policy is threaded through gameplay, discovery, collaboration, and live-editor socket lifecycles and filters peer endpoints before packet parsing and every send/retry boundary. Gateway-managed area processes require loopback and reject a conflicting LAN bind. This boundary is containment; authentication and encryption come from the NET-100 secure transport described under [SecureChannel](#networkencryption-advanced), which still awaits independent review. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
-
-`NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests always set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the exact destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission. Selecting a private-LAN bind does not enable remote credential onboarding.
+`MMOIntegratedWorld_TwoClientSessionGate` runs the real server/two-client process scenario, including
+bad-credential and foreign-character refusals and peer-observed movement/interactions. It is local evidence,
+not exact-commit CI. See the [module guide](../../GameModules/SparkGameMMO/README.md).
 
 ## Architecture
 

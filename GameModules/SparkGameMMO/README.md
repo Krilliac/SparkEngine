@@ -55,14 +55,19 @@ within three metres; the server applies its cooldown and records the greeting ta
 receive authoritative positions and greetings. Legacy position uploads are refused while the gate is active.
 Disconnect, expired authentication, and replacement login revoke the previous world actor.
 
-This is a bounded small-area session slice. It does not add account persistence, world collision, remote
-login UI, cross-area handoff, or server-restart recovery. It remains experimental. The registered
-`MMOIntegratedWorld_TwoClientSessionGate` CTest starts a server and two client processes using these production
-services; it must pass centrally before the MOD-320 criterion is promoted. `MMOSessionGateProtocol` pins the
-codec tests. Local syntax checks are not runtime qualification or exact-commit CI.
+The gate's network handlers only copy each datagram into a bounded inbox; decoding, authentication and all
+world mutation run when the module's update drains it on the game thread. Inside `SparkServer` the network is
+pumped by the `DedicatedServer` tick thread, so this keeps session and player state single-threaded.
 
-The new byte parser has a fuzz harness and reviewed seeds. Required SEC-120 registration is documented in
-[SessionGate-Fuzz-Integration.md](SessionGate-Fuzz-Integration.md); policy files are owned by the SEC-120 lane.
+This is a bounded small-area session slice. It does not add account persistence, world collision, remote
+login UI, cross-area handoff, or server-restart recovery. It remains experimental. The
+`MMOIntegratedWorld_TwoClientSessionGate` CTest starts one server and two client processes over secured
+loopback UDP using these production services (bad-credential and foreign-character refusals included), and
+`MMOSessionGateProtocol` pins the codec tests. Neither is exact-commit CI evidence.
+
+The wire decoder has a libFuzzer harness (`FuzzerTests/FuzzSessionGateProtocol.cpp`) and seeds
+(`FuzzerTests/corpora/session-gate/`); its SEC-120 parser-inventory, corpus-manifest and CMake registration
+land with the SEC-120 policy files.
 
 ## Known limitations
 
