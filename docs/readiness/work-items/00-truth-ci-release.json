@@ -366,11 +366,16 @@
         },
         {
           "criterionDigest": "sha256:b056e4c35794",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_asset_package_profile.py"
+            "Tests/Tools/test_asset_package_profile.py",
+            "tools/check-module-asset-refs.py",
+            "Tests/Tools/test_check_module_asset_refs.py",
+            "Tests/PackageSmoke/asset_provenance_tests.py",
+            "Tests/CMakeLists.txt",
+            "tools/asset-integrity/verify_asset_integrity.py"
           ],
-          "note": "Licenses are asserted only for the 40-entry stable-v1 closure. 475 NOASSERTION entries remain, and provenance is listed as open."
+          "note": "check-module-asset-refs validates the shared provenance policy schema, rejects duplicate rules, requires rule evidence files and fails on missing or relabelled licenses for every module-referenced asset (4 fixture and 2 real-FPS regressions, RED on base). NOASSERTION stays excluded from stable-v1. Local runs only; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:3467a81033d4",

@@ -227,11 +227,14 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:e4d717d6251d",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "SparkInstaller/tests/InstallerTransactionTests.cpp"
+            "SparkInstaller/tests/InstallerTransactionTests.cpp",
+            "SparkInstaller/src/InstallState.cpp",
+            "SparkInstaller/tests/InstallStateTests.cpp",
+            "SparkInstaller/README.md"
           ],
-          "note": "Transaction tests exist. No Windows run shows a fresh predecessor install and an interrupted activation recovering with user data kept."
+          "note": "Local Windows Release run: SparkInstallerTransactionTests (fake git) passes fresh-install build-failure resume and interrupted-update rollback, asserting a user-data file survives both. InstallState refuses non-regular marker targets (link case RED on base). No native MSI/NSIS run; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:6f6b2bb4602c",

@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **169 implemented** (65%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **171 implemented** (66%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -248,7 +248,7 @@ Establish the only source of readiness truth and make CI report reality.
 |---|---|---|---|---|---|
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 3/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 3/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
-| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 3/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
+| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 4/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 3/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
 | [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 6/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
@@ -346,7 +346,7 @@ Finish governance, publish the live bundle, rehearse every gate required by each
 | [`GOV-400`](#gov-400--resolve-licensing-third-party-notices-trademark-contribution-security-and-support-policy) Resolve licensing, third-party notices, trademark, contribution, security, and support policy | P0 | **in-progress** | 1/5 · 0/5 | `RDY-000`, `SEC-110`, `REL-100` | `DOC-400` |
 | [`DOC-400`](#doc-400--publish-the-repository-synchronized-site-data-bundle-and-complete-public-framing) Publish the repository-synchronized site-data bundle and complete public framing | P0 | **in-progress** | 0/7 · 0/7 | `RDY-000` | `DOC-410`, `CI-100`, `GOV-400` |
 | [`INST-131`](#inst-131--qualify-stable-v1-n-1-upgrade-and-rollback-against-an-immutable-predecessor) Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor | P0 | **in-progress** | 1/3 · 0/3 | `INST-130`, `REL-100`, `REL-110` | `REL-190` |
-| [`INST-132`](#inst-132--qualify-predecessor-bootstrap-recovery-without-an-n-1-dependency) Qualify predecessor bootstrap recovery without an N-1 dependency | P0 | **in-progress** | 0/3 · 0/3 | `INST-130` | `INST-131` |
+| [`INST-132`](#inst-132--qualify-predecessor-bootstrap-recovery-without-an-n-1-dependency) Qualify predecessor bootstrap recovery without an N-1 dependency | P0 | **in-progress** | 1/3 · 0/3 | `INST-130` | `INST-131` |
 | [`REL-190`](#rel-190--rehearse-and-approve-the-qualified-release-candidate-before-publication) Rehearse and approve the qualified release candidate before publication | P0 | **blocked** | 4/6 · 0/6 | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
 | [`REL-191`](#rel-191--rehearse-the-predecessor-release-without-n-1-upgrade-claims) Rehearse the predecessor release without N-1 upgrade claims | P0 | **in-progress** | 1/3 · 0/3 | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
 | [`REL-192`](#rel-192--qualify-stable-v1-n-1-release-rehearsal-and-rollback) Qualify stable-v1 N-1 release rehearsal and rollback | P0 | **blocked** | 1/3 · 0/3 | `REL-190`, `INST-131` | — |
@@ -635,16 +635,16 @@ Several modules reference missing music/models/scenes, depend on path case that 
 
 **Acceptance criteria**
 
-Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Zero missing or case-mismatched references in every declared manifest
    - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`, `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`
    - check-all verifies the root, legacy and template manifests. check-module-asset-refs.py verifies all 11 module records fail-closed; 0 problems were found locally. Composed prefixes stay report-only in FPS 2, MMOFPS 26 and VisualScript 1. Local runs only; no exact-commit CI. Not applied in the ledger by this lane, because the header forbids state edits.
 2. **[unmet]** Every in-profile packaged module resolves assets without the repository
    - Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists.
-3. **[unmet]** Every asset has provenance/license metadata where required
-   - Evidence: `Tests/Tools/test_asset_package_profile.py`
-   - Licenses are asserted only for the 40-entry stable-v1 closure. 475 NOASSERTION entries remain, and provenance is listed as open.
+3. **[implemented]** Every asset has provenance/license metadata where required
+   - Evidence: `Tests/Tools/test_asset_package_profile.py`, `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`, `Tests/PackageSmoke/asset_provenance_tests.py`, `Tests/CMakeLists.txt`, `tools/asset-integrity/verify_asset_integrity.py`
+   - check-module-asset-refs validates the shared provenance policy schema, rejects duplicate rules, requires rule evidence files and fails on missing or relabelled licenses for every module-referenced asset (4 fixture and 2 real-FPS regressions, RED on base). NOASSERTION stays excluded from stable-v1. Local runs only; no exact-commit CI.
 4. **[implemented]** Tampered or traversal paths fail before package assembly
    - Evidence: `Tests/Tools/test_asset_integrity.py`, `cmake/SparkRuntimeAssets.cmake`, `cmake/SparkTrackedInstall.cmake`, `cmake/TestSparkTrackedInstall.cmake`, `Tests/Tools/test_asset_package_profile.py`, `CMakeLists.txt`, `wiki/gameplay-tools/Asset-Pipeline.md`
    - The preflight verifies the staged snapshot that the install rules copy, and the tamper test changes that payload, found through cmake_install.cmake. This test failed (install exited 0) on the pre-fix helpers. Local Python and CMake -P runs only.
@@ -5595,11 +5595,11 @@ The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence
 
 **Acceptance criteria**
 
-Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
+Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Fresh predecessor installation and interrupted activation recover without replacing user data
-   - Evidence: `SparkInstaller/tests/InstallerTransactionTests.cpp`
-   - Transaction tests exist. No Windows run shows a fresh predecessor install and an interrupted activation recovering with user data kept.
+1. **[implemented]** Fresh predecessor installation and interrupted activation recover without replacing user data
+   - Evidence: `SparkInstaller/tests/InstallerTransactionTests.cpp`, `SparkInstaller/src/InstallState.cpp`, `SparkInstaller/tests/InstallStateTests.cpp`, `SparkInstaller/README.md`
+   - Local Windows Release run: SparkInstallerTransactionTests (fake git) passes fresh-install build-failure resume and interrupted-update rollback, asserting a user-data file survives both. InstallState refuses non-regular marker targets (link case RED on base). No native MSI/NSIS run; no exact-commit CI.
 2. **[unmet]** Repair and uninstall pass with no N-1 claim
    - Needs Windows repair and uninstall qualification runs.
 3. **[unmet]** Evidence is bound to the reviewed v0.9.0 source commit
