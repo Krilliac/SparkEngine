@@ -76,7 +76,9 @@ namespace SparkEditor
         void CloseSocket(CollaborativeSocketHandle socket)
         {
             if (!IsValidSocket(socket))
+            {
                 return;
+            }
 #ifdef _WIN32
             ::closesocket(ToNativeSocket(socket));
 #else
