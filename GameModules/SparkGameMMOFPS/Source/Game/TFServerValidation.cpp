@@ -189,7 +189,9 @@ namespace Terrafront
         ++st.forgedStateRejects;
 
         if (m_audit.size() >= kForgedAuditCapacity)
+        {
             m_audit.pop_front();
+        }
         m_audit.push_back(TFForgedStateAudit{player, kind, now});
 
         const auto [logIt, firstLog] = m_lastForgedLog.try_emplace(player, now);

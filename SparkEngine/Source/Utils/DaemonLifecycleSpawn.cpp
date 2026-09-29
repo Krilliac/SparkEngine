@@ -90,8 +90,10 @@ namespace Spark::Daemon::Detail
                 if (::stat(endpoint.c_str(), &endpointStatus) == 0)
                 {
                     if (!S_ISSOCK(endpointStatus.st_mode))
+                    {
                         return Spark::Daemon::Unexpected<std::string>(
                             "daemon endpoint exists but is not a Unix-domain socket: " + endpoint);
+                    }
 
                     // The socket file appears at bind(), before the daemon calls listen(), so its
                     // existence is not readiness: a connect() in that window is refused. Probe with
@@ -100,18 +102,24 @@ namespace Spark::Daemon::Detail
                     // mean the daemon is listening.
                     const int probe = ::socket(AF_UNIX, SOCK_STREAM, 0);
                     if (probe < 0)
+                    {
                         return Spark::Daemon::Unexpected<std::string>(
                             std::string("Unix-socket readiness probe could not create a socket: ") +
                             std::strerror(errno));
+                    }
                     const int probeFlags = ::fcntl(probe, F_GETFL, 0);
                     if (probeFlags >= 0)
+                    {
                         (void)::fcntl(probe, F_SETFL, probeFlags | O_NONBLOCK);
+                    }
                     const int connected =
                         ::connect(probe, reinterpret_cast<const sockaddr*>(&address), sizeof(address));
                     const int connectError = connected == 0 ? 0 : errno;
                     ::close(probe);
                     if (connected == 0 || connectError == EAGAIN || connectError == EINPROGRESS)
+                    {
                         return {};
+                    }
                     lastError = connectError;
                     if (lastError != ECONNREFUSED && lastError != ENOENT)
                     {

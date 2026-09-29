@@ -275,9 +275,9 @@ namespace Spark::Net
         }
 #endif // SPARK_PLATFORM_WINDOWS
 
-        // Set socket buffer sizes for game traffic
-        int sendBufSize = 65536;
-        int recvBufSize = 65536;
+        // Set socket buffer sizes for game traffic (sized in NetworkWireLimits.h)
+        const int sendBufSize = static_cast<int>(NETWORK_SOCKET_SEND_BUFFER_SIZE);
+        const int recvBufSize = static_cast<int>(NETWORK_SOCKET_RECEIVE_BUFFER_SIZE);
         setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufSize), sizeof(sendBufSize));
         setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&recvBufSize), sizeof(recvBufSize));
 

@@ -75,7 +75,9 @@ namespace
     XMMATRIX BackendProjection(const XMMATRIX& projMatrix, Spark::RHI::GraphicsBackend backend)
     {
         if (backend == Spark::RHI::GraphicsBackend::Vulkan)
+        {
             return XMMatrixMultiply(projMatrix, XMMatrixScaling(1.0f, -1.0f, 1.0f));
+        }
         return projMatrix;
     }
 
@@ -118,7 +120,9 @@ namespace
         {
             auto buffer = rhi.bridge.CreateConstantBuffer(sizeof(BasicObjectConstants));
             if (!buffer)
+            {
                 break;
+            }
             pool.push_back(std::move(buffer));
         }
         return std::min(pool.size(), drawCount);

@@ -118,7 +118,7 @@ namespace SparkEditor
         /// Most `*.sparkprefab` files LoadProjectPrefabs considers in one project.
         static constexpr size_t kMaxProjectPrefabFiles = 2048;
         /// Most bytes of project prefab files LoadProjectPrefabs reads in one sweep.
-        static constexpr std::uintmax_t kMaxProjectPrefabBytes = 32u * 1024u * 1024u;
+        static constexpr std::uintmax_t kMaxProjectPrefabBytes = std::uintmax_t{32} * 1024u * 1024u;
 
         /**
          * @brief Load a prefab from disk (see PrefabAsset::TryLoad for validation and recovery)

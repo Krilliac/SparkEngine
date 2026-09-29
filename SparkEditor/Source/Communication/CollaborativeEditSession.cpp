@@ -366,7 +366,7 @@ namespace SparkEditor
             if (len == 0 || len > maxFrameBytes)
                 return {};
 
-            constexpr size_t kReceiveChunkBytes = 64 * 1024;
+            constexpr size_t kReceiveChunkBytes = size_t{64} * 1024;
             std::vector<uint8_t> data;
             while (data.size() < len)
             {
@@ -572,7 +572,9 @@ namespace SparkEditor
         // into switch statements and callbacks as out-of-range enum values.
         if (static_cast<uint8_t>(outMsg.type) > static_cast<uint8_t>(InternalMessageType::AuthAccepted) ||
             static_cast<uint8_t>(outMsg.editMessage.type) > static_cast<uint8_t>(EditMessageType::ComponentModified))
+        {
             return false;
+        }
 
         return true;
     }
@@ -613,10 +615,14 @@ namespace SparkEditor
         bool ConstantTimeEquals(std::string_view a, std::string_view b)
         {
             if (a.size() != b.size())
+            {
                 return false;
+            }
             unsigned char difference = 0;
             for (size_t i = 0; i < a.size(); ++i)
+            {
                 difference |= static_cast<unsigned char>(a[i] ^ b[i]);
+            }
             return difference == 0;
         }
     } // namespace
@@ -1092,7 +1098,9 @@ namespace SparkEditor
         challenge.type = InternalMessageType::AuthChallenge;
         challenge.payload = nonce;
         if (!SendFramed(clientSocket, SerializeMessage(challenge)))
+        {
             return false;
+        }
 
         // The first and only frame accepted before authentication is a PeerConnect
         // carrying the join proof; it is small, and it must arrive promptly.
@@ -1101,11 +1109,15 @@ namespace SparkEditor
         InternalMessage connect;
         if (data.empty() || !DeserializeMessage(data.data(), data.size(), connect) ||
             connect.type != InternalMessageType::PeerConnect)
+        {
             return false;
+        }
 
         const std::string& userName = connect.peerInfo.userName;
         if (userName.empty() || userName.size() > kCollabMaxUserNameBytes)
+        {
             return false;
+        }
         if (!ConstantTimeEquals(connect.payload, ComputeCollabJoinProof(m_joinCode, nonce, userName)))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Editor, "Rejected collaboration peer: invalid join proof.");
@@ -1130,7 +1142,9 @@ namespace SparkEditor
         if (challengeData.empty() || !DeserializeMessage(challengeData.data(), challengeData.size(), challenge) ||
             challenge.type != InternalMessageType::AuthChallenge ||
             challenge.payload.size() != kCollabChallengeNonceBytes)
+        {
             return INVALID_PEER;
+        }
 
         InternalMessage connect;
         connect.type = InternalMessageType::PeerConnect;
@@ -1138,13 +1152,17 @@ namespace SparkEditor
         connect.peerInfo.userName = userName;
         connect.peerInfo.isActive = true;
         if (!SendFramed(m_clientSocket, SerializeMessage(connect)))
+        {
             return INVALID_PEER;
+        }
 
         const auto acceptData = RecvFramed(m_clientSocket, m_shuttingDown, kCollabMaxHandshakeFrameBytes, deadline);
         InternalMessage accepted;
         if (acceptData.empty() || !DeserializeMessage(acceptData.data(), acceptData.size(), accepted) ||
             accepted.type != InternalMessageType::AuthAccepted)
+        {
             return INVALID_PEER;
+        }
         return accepted.sourcePeer;
     }
 
@@ -1171,7 +1189,9 @@ namespace SparkEditor
                 for (auto& [otherPeerId, otherSock] : m_peerSockets)
                 {
                     if (otherPeerId != peerId && IsValidSocket(otherSock))
+                    {
                         SendFramed(otherSock, announce);
+                    }
                 }
             }
             EnqueueMessage(m_incomingMessages, std::move(connect), "incoming");
@@ -1205,7 +1225,9 @@ namespace SparkEditor
             // Remap source peer to server-assigned ID
             msg.sourcePeer = peerId;
             if (msg.type == InternalMessageType::EditBroadcast)
+            {
                 msg.editMessage.sourceEditor = peerId;
+            }
 
             // Push to incoming queue for main thread processing (bounded)
             EnqueueMessage(m_incomingMessages, InternalMessage(msg), "incoming");

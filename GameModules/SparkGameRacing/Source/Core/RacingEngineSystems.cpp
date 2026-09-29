@@ -288,7 +288,9 @@ namespace Racing
             return "Invalid racing state in slot '" + slotName + "': " + error;
         }
         if (!RacingPersistence::Apply(snapshot, *m_trackSystem, *m_vehicleSystem, *m_raceManager, *m_aiDriver, error))
+        {
             return "Invalid racing state in slot '" + slotName + "': " + error;
+        }
 
         return "Race data loaded from slot: " + slotName;
     }

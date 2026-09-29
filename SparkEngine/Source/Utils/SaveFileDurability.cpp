@@ -37,17 +37,17 @@ namespace Spark::SaveFileDurability
         constexpr int kMaxStagingCreateAttempts = 3;
 
         /// Chunk size for CopyFileAtomically's streamed copy.
-        constexpr std::size_t kCopyChunkBytes = 64 * 1024;
+        constexpr std::size_t kCopyChunkBytes = std::size_t{64} * 1024;
 
 #if defined(_WIN32)
         std::error_code LastWindowsError()
         {
-            return std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return {static_cast<int>(::GetLastError()), std::system_category()};
         }
 #else
         std::error_code LastPosixError()
         {
-            return std::error_code(errno, std::generic_category());
+            return {errno, std::generic_category()};
         }
 #endif
 
@@ -152,7 +152,9 @@ namespace Spark::SaveFileDurability
                     if (written < 0)
                     {
                         if (errno == EINTR)
+                        {
                             continue;
+                        }
                         error = LastPosixError();
                         return false;
                     }
@@ -206,6 +208,26 @@ namespace Spark::SaveFileDurability
                 return true;
             }
 
+            /// Close without flushing to stable storage, reporting a failed close. For snapshots
+            /// that are atomic against a killed process but deliberately not durable.
+            bool Close(std::error_code& error)
+            {
+#if defined(_WIN32)
+                const bool closed = ::CloseHandle(m_handle) != FALSE;
+                m_handle = INVALID_HANDLE_VALUE;
+                if (!closed)
+                    error = LastWindowsError();
+#else
+                const bool closed = ::close(m_fd) == 0;
+                m_fd = -1;
+                if (!closed)
+                {
+                    error = LastPosixError();
+                }
+#endif
+                return closed;
+            }
+
             /// Close without flushing. Callers close before unlinking a failed staging file:
             /// Windows cannot delete a file while this unshared handle is open.
             void CloseQuietly() noexcept
@@ -216,7 +238,9 @@ namespace Spark::SaveFileDurability
                 m_handle = INVALID_HANDLE_VALUE;
 #else
                 if (m_fd >= 0)
+                {
                     ::close(m_fd);
+                }
                 m_fd = -1;
 #endif
             }
@@ -241,7 +265,9 @@ namespace Spark::SaveFileDurability
                 if (file.TryCreate(staging, createError))
                 {
                     if (file.VerifyFreshRegularFile(error))
+                    {
                         return true;
+                    }
                     file.CloseQuietly();
                     std::error_code removeError;
                     std::filesystem::remove(staging, removeError);
@@ -298,7 +324,9 @@ namespace Spark::SaveFileDurability
                 break;
             }
             if (!error)
+            {
                 error = std::make_error_code(std::errc::io_error);
+            }
             RemoveQuietly(staging);
             return false;
         }
@@ -308,7 +336,9 @@ namespace Spark::SaveFileDurability
     {
         ExclusiveStagingFile file;
         if (!CreateStaging(file, staging, error))
+        {
             return false;
+        }
         if (!file.Write(bytes.data(), bytes.size(), error))
         {
             file.CloseQuietly();
@@ -387,7 +417,9 @@ namespace Spark::SaveFileDurability
         {
             ExclusiveStagingFile file;
             if (!CreateStaging(file, staging, error))
+            {
                 return false;
+            }
 
             std::vector<char> chunk(kCopyChunkBytes);
             while (input)
@@ -433,7 +465,9 @@ namespace Spark::SaveFileDurability
         staging += ".tmp";
 
         if (!WriteStagingFile(staging, bytes, error))
+        {
             return false;
+        }
 
         if (retainBackup)
         {
@@ -477,15 +511,40 @@ namespace Spark::SaveFileDurability
     {
         error.clear();
         const std::filesystem::path staging = UniqueStagingPath(destination);
-        // WriteStagingFile creates the unpredictable name exclusively and never through a link, and removes
-        // it on failure; Publish removes it when the rename does not commit. The destination is never
-        // deleted first, so a failed publish keeps the previous complete snapshot.
-        if (!WriteStagingFile(staging, bytes, error))
+        // CreateStaging creates the unpredictable name exclusively and never through a link. The staging
+        // file is removed on every failure, and the destination is never deleted first, so a failed publish
+        // keeps the previous complete snapshot.
+        //
+        // Nothing is fsynced: callers republish a status snapshot every few hundred milliseconds from a
+        // server tick, where a file plus directory fsync stalls the tick for tens to hundreds of
+        // milliseconds on a busy disk. The rename alone keeps the snapshot atomic against a killed process;
+        // surviving a power loss has no value for a snapshot the next tick replaces.
+        ExclusiveStagingFile file;
+        if (!CreateStaging(file, staging, error))
         {
             if (!error)
+            {
                 error = std::make_error_code(std::errc::io_error);
+            }
             return false;
         }
-        return Publish(staging, destination, error);
+        if (!file.Write(bytes.data(), bytes.size(), error))
+        {
+            file.CloseQuietly();
+            RemoveQuietly(staging);
+            return false;
+        }
+        if (!file.Close(error))
+        {
+            RemoveQuietly(staging);
+            return false;
+        }
+        std::filesystem::rename(staging, destination, error);
+        if (error)
+        {
+            RemoveQuietly(staging);
+            return false;
+        }
+        return true;
     }
 } // namespace Spark::SaveFileDurability

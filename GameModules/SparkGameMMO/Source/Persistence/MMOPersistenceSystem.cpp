@@ -998,7 +998,7 @@ namespace MMO
                                   ? GetValue(MMOStmtId::LoadReputationValue, {MakeInt(charId), MakeInt(*factionId)})
                                   : std::nullopt;
             const auto reputation = text ? ParseInteger<int>(*text) : std::nullopt;
-            if (!reputation)
+            if (!factionId || !reputation)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt reputation '%s%s'", prefix.c_str(),
                                 suffix.c_str());
@@ -1099,7 +1099,7 @@ namespace MMO
             const std::vector<std::string> fields = text ? Split(*text, '|') : std::vector<std::string>{};
             const auto level = fields.size() == 2 ? ParseInteger<int>(fields[0]) : std::nullopt;
             const auto xp = fields.size() == 2 ? ParseInteger<int>(fields[1]) : std::nullopt;
-            if (!level || *level < 1 || *level > maxLevel || !xp || *xp < 0)
+            if (!discipline || !level || *level < 1 || *level > maxLevel || !xp || *xp < 0)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt crafting skill '%s%s'",
                                 skillPrefix.c_str(), suffix.c_str());
@@ -1165,7 +1165,7 @@ namespace MMO
                                              {MakeInt(charId), MakeInt(*dungeonDefId), MakeInt(*difficulty)})
                                   : std::nullopt;
             const auto remaining = text ? ParseFiniteFloat(*text) : std::nullopt;
-            if (!remaining)
+            if (!dungeonDefId || !difficulty || !remaining)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt lockout '%s%s'", prefix.c_str(),
                                 suffix.c_str());
@@ -1302,7 +1302,7 @@ namespace MMO
             Guild guild;
             const auto id = ParseInteger<uint32_t>(suffix);
             const auto text = id && *id != 0 ? GetValue(MMOStmtId::LoadGuildValue, {MakeInt(*id)}) : std::nullopt;
-            if (!text || !ParseGuildRecord(*text, guild))
+            if (!id || !text || !ParseGuildRecord(*text, guild))
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt guild record 'guild_%s'",
                                 suffix.c_str());
@@ -1319,7 +1319,7 @@ namespace MMO
             const auto text =
                 ids ? GetValue(MMOStmtId::LoadGuildMemberValue, {MakeInt(ids->first), MakeInt(ids->second)})
                     : std::nullopt;
-            if (!text || !ParseGuildMemberRecord(*text, member))
+            if (!ids || !text || !ParseGuildMemberRecord(*text, member))
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt guild member record 'gm_%s'",
                                 suffix.c_str());

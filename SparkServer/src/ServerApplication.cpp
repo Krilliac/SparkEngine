@@ -29,6 +29,7 @@
 #include <charconv>
 #include <cctype>
 #include <cmath>
+#include <format>
 #include <iostream>
 #include <limits>
 #include <locale>
@@ -145,7 +146,7 @@ namespace Spark::Server
                     const std::string loweredKey = LowerAscii(key);
                     if (std::ranges::find(reservedKeys, std::string_view(loweredKey)) != reservedKeys.end())
                     {
-                        error = std::string(unavailable) + "remove " + section + "." + key;
+                        error = std::format("{}remove {}.{}", unavailable, section, key);
                         return false;
                     }
                 }

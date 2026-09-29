@@ -78,7 +78,9 @@ namespace SparkLauncher
         template <std::size_t N> bool CopyWhole(const std::string& text, char (&buffer)[N])
         {
             if (text.size() >= N)
+            {
                 return false;
+            }
             std::memcpy(buffer, text.c_str(), text.size() + 1);
             return true;
         }
@@ -143,7 +145,9 @@ namespace SparkLauncher
         // decodes; the ImGui buffer holds UTF-8.
         fs::path base = home ? fs::path(home) / "SparkProjects" : fs::current_path();
         if (!CopyWhole(PathToUtf8(base), m_newProjectLocation))
+        {
             m_newProjectLocation[0] = '\0';
+        }
     }
 
     void LauncherApp::DrawUI()

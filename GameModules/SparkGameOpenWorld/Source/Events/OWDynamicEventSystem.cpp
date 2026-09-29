@@ -232,7 +232,9 @@ namespace OpenWorld
         for (const auto& [id, evt] : m_activeEvents)
         {
             if (evt.state == EventState::Completed || evt.playerParticipating)
+            {
                 continue;
+            }
             const float dx = evt.posX - x;
             const float dz = evt.posZ - z;
             const float distSq = dx * dx + dz * dz;

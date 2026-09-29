@@ -9,6 +9,7 @@
 #include "TestFramework.h"
 
 #include "Core/Platform.h"
+#include "Fixtures/ScopedUnboundedFileSize.h"
 #include "Game/Model.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/OBJStaticMeshLoader.h"
@@ -435,11 +436,15 @@ TEST(AssetSec_ObjStaticRejectsOversizedFile)
     // A valid 32-byte triangle followed by a sparse tail one byte over the cap.
     // The loader read files of any size (tinyobj buffers each whole line), so
     // this parsed and loaded; the cap now rejects it before a byte is read.
+    // The file exceeds the sanitizer wrapper's 16 MiB soft RLIMIT_FSIZE, which
+    // makes resize_file fail with EFBIG and leaves only the 32-byte triangle.
+    const SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
     const std::string triangle = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
     const auto path = WriteFile("oversized.obj", triangle);
     std::error_code ec;
     std::filesystem::resize_file(path, Spark::Graphics::Detail::kMaxOBJFileBytes + 1, ec);
     EXPECT_FALSE(static_cast<bool>(ec));
+    EXPECT_EQ(std::filesystem::file_size(path, ec), Spark::Graphics::Detail::kMaxOBJFileBytes + 1);
 
     Spark::Graphics::Detail::OBJStaticMeshData mesh;
     std::string error;

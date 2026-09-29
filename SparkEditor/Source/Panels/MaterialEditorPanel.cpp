@@ -82,7 +82,9 @@ namespace SparkEditor
                 // path::string() throws for it (which ended the scan): skip it. Name and
                 // description are ImGui text, so UTF-8.
                 if (!Spark::FileUtils::TryPathToNarrow(it->path()))
+                {
                     continue;
+                }
 
                 ShaderInfo info;
                 info.name = Spark::FileUtils::TryPathToUtf8(it->path().stem()).value_or("?");

@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 339885 |
+| **SparkEngine/Source** | 339901 |
 | **SparkEditor/Source** | 105121 |
-| **GameModules** | 158885 |
+| **GameModules** | 158886 |
 | **External services** | 12596 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 251432 |
+| **Tests** | 251496 |
 | **SparkConsole/src** | 1857 |
 | **SparkShaderCompiler/src** | 839 |
-| **Total C++ (excl. ThirdParty)** | **~891900** |
+| **Total C++ (excl. ThirdParty)** | **~891981** |
 
 ### File Counts
 
@@ -35,7 +35,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 124447 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 124451 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,9 +43,9 @@ Graphics contains 124447 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 124447 | 36.6% |
+| Graphics | 124451 | 36.6% |
 | Engine (all subsystems) | 97672 | 28.7% |
-| Utils | 48607 | 14.3% |
+| Utils | 48619 | 14.3% |
 | Core | 32962 | 9.6% |
 | Physics | 11077 | 3.2% |
 | Audio | 6949 | 2.0% |
@@ -161,7 +161,7 @@ inventory is implementation evidence, not support certification.
 | `OpenGLDevice.cpp` | 2545 |
 | `CrashHandler.cpp` | 2514 |
 | `NetworkConnection.cpp` | 2483 |
-| `D3D11Device.cpp` | 2135 |
+| `D3D11Device.cpp` | 2139 |
 | `VulkanDevice.cpp` | 1983 |
 | `EngineSettings.cpp` | 1875 |
 | `SaveSystem.cpp` | 1847 |

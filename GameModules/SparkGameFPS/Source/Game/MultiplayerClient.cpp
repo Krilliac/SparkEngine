@@ -18,7 +18,9 @@ namespace SparkFPS
     void FPSMultiplayerSystem::SendInput(const PlayerInput& input)
     {
         if (!m_isActive)
+        {
             return;
+        }
 
         if (m_isServer)
         {
@@ -32,7 +34,9 @@ namespace SparkFPS
 
         // Until the handshake assigns an id there is no player to predict or to send for.
         if (m_localClientId == Spark::Net::INVALID_CLIENT)
+        {
             return;
+        }
 
         Spark::PredictedInput predicted{};
         predicted.timestamp = static_cast<float>(m_clientPrediction.GetCurrentSequence() + 1) * kInputStep;
@@ -108,7 +112,9 @@ namespace SparkFPS
         for (auto& [playerId, snapshots] : m_remoteSnapshots)
         {
             if (playerId == m_localClientId || snapshots.empty())
+            {
                 continue;
+            }
 
             auto target = snapshots.back();
             auto currentIt = m_playerStates.find(playerId);
@@ -141,14 +147,18 @@ namespace SparkFPS
         // Until the handshake assigns an id, m_localClientId is INVALID_CLIENT (0), which is
         // also the host's player id: the host's snapshots would be reconciled as our own.
         if (m_isServer || m_localClientId == Spark::Net::INVALID_CLIENT)
+        {
             return;
+        }
 
         if (snapshot.clientId == m_localClientId)
         {
             // Server snapshot sequences start at 1; 0 is a default-constructed or
             // truncated payload and never authoritative.
             if (snapshot.sequenceNumber <= m_lastLocalAuthoritySequence)
+            {
                 return;
+            }
             m_lastLocalAuthoritySequence = snapshot.sequenceNumber;
             m_pendingLocalAuthority = snapshot;
             m_hasPendingLocalAuthority = true;
@@ -157,10 +167,14 @@ namespace SparkFPS
 
         auto& history = m_remoteSnapshots[snapshot.clientId];
         if (!history.empty() && snapshot.sequenceNumber <= history.back().sequenceNumber)
+        {
             return;
+        }
         history.push_back(snapshot);
         while (history.size() > kMaxSnapshotHistory)
+        {
             history.pop_front();
+        }
     }
 
     void FPSMultiplayerSystem::ReconcileToAuthoritativeState(const NetworkPlayerState& authoritativeState)
@@ -202,7 +216,9 @@ namespace SparkFPS
     {
         auto localIt = m_playerStates.find(m_localClientId);
         if (localIt == m_playerStates.end())
+        {
             return;
+        }
 
         const auto& predicted = m_clientPrediction.GetState();
         auto& local = localIt->second;

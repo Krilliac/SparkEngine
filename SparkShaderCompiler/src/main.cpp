@@ -327,8 +327,10 @@ static bool ReportBatchCollisions(const std::vector<BatchOutput>& plan)
         }
     }
     if (!clean)
+    {
         std::cerr << "Error: batch output collision - rename a source or compile it separately; nothing was "
                      "compiled\n";
+    }
     return clean;
 }
 
@@ -714,10 +716,14 @@ int main(int argc, char* argv[])
         // silently replaced the earlier artifact and both still counted as successes.
         std::vector<BatchOutput> plan;
         if (!PlanBatchOutputs(shaderFiles, config.batchDir, config.outputFile, config.targetBackend, plan))
+        {
             return 1;
+        }
         // -validate writes nothing, so shared destinations cannot overwrite anything there.
         if (!config.validateOnly && !ReportBatchCollisions(plan))
+        {
             return 1;
+        }
 
         // In batch mode -o names an output directory; ensure it exists up front so
         // per-file writes below don't all fail on a missing path.
@@ -750,7 +756,9 @@ int main(int argc, char* argv[])
             std::error_code dirError;
             const fs::path outputParent = fs::path(item.output).parent_path();
             if (!config.validateOnly && !outputParent.empty())
+            {
                 fs::create_directories(outputParent, dirError);
+            }
             if (dirError)
             {
                 std::cerr << "Error: Could not create output directory '" << outputParent.string()

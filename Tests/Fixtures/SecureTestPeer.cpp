@@ -324,11 +324,20 @@ namespace SparkTestFixtures
         {
             return;
         }
+        // The engine's socket buffer sizes: macOS otherwise refuses to send a datagram over 9 KiB,
+        // so this peer could not deliver the large frames an engine peer can.
+        const int sendBufferSize = static_cast<int>(Spark::Net::NETWORK_SOCKET_SEND_BUFFER_SIZE);
+        const int receiveBufferSize = static_cast<int>(Spark::Net::NETWORK_SOCKET_RECEIVE_BUFFER_SIZE);
+        const bool buffersSized =
+            setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufferSize),
+                       sizeof(sendBufferSize)) == 0 &&
+            setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&receiveBufferSize),
+                       sizeof(receiveBufferSize)) == 0;
         sockaddr_in local{};
         local.sin_family = AF_INET;
         local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         local.sin_port = 0;
-        m_ready = bind(m_socket, reinterpret_cast<const sockaddr*>(&local), sizeof(local)) == 0;
+        m_ready = buffersSized && bind(m_socket, reinterpret_cast<const sockaddr*>(&local), sizeof(local)) == 0;
 #ifdef SPARK_PLATFORM_WINDOWS
         u_long nonBlocking = 1;
         m_ready = m_ready && ioctlsocket(m_socket, FIONBIO, &nonBlocking) == 0;

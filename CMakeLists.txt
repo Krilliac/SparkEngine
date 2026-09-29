@@ -1089,6 +1089,16 @@ if(ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_FLAGS MATCHES "--coverage|-fprofile-arcs")
         target_compile_options(angelscript PRIVATE "-fprofile-exclude-files=as_callfunc_[a-z0-9]+_gcc[.]cpp$")
     endif()
+    # The same terminate under GCC's ThreadSanitizer: its function-exit hook runs from an
+    # EH cleanup, and that cleanup's exception table in CallSystemFunctionNative does not
+    # list the inline-assembly call either (SIGABRT in AngelScriptStackAlignment_* native
+    # exception paths in the TSan job). Drop only the entry/exit hooks in this one file;
+    # its memory accesses stay instrumented for race detection.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*thread")
+        set_source_files_properties("${SPARK_ANGELSCRIPT_PATCHED_CORE_DIR}/source/as_callfunc_x64_gcc.cpp"
+            TARGET_DIRECTORY angelscript
+            PROPERTIES COMPILE_OPTIONS "--param=tsan-instrument-func-entry-exit=0")
+    endif()
 
     list(APPEND THIRDPARTY_INCLUDE_DIRS "${SPARK_ANGELSCRIPT_ADDON_DIR}")
     set(SPARK_ANGELSCRIPT_AVAILABLE TRUE)

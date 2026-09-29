@@ -73,11 +73,17 @@ namespace ARPG
                 const auto entity = static_cast<EntityID>(*cachedEntity);
                 // Another system may have stripped a component; restore rather than render a partial actor.
                 if (!world.HasComponent<Transform>(entity))
+                {
                     world.AddComponent<Transform>(entity);
+                }
                 if (!world.HasComponent<MeshRenderer>(entity))
+                {
                     world.AddComponent<MeshRenderer>(entity).meshPath = ARPGActorPresentation::ActorMeshPath;
+                }
                 if (!world.HasComponent<HealthComponent>(entity))
+                {
                     world.AddComponent<HealthComponent>(entity);
+                }
                 return entity;
             }
 
@@ -91,14 +97,18 @@ namespace ARPG
 
         void ApplyPose(World& world, EntityID entity, const DirectX::XMFLOAT3& position, float yawDegrees, float scale)
         {
-            Transform* transform = world.GetComponent<Transform>(entity);
-            MeshRenderer* renderer = world.GetComponent<MeshRenderer>(entity);
+            auto* transform = world.GetComponent<Transform>(entity);
+            auto* renderer = world.GetComponent<MeshRenderer>(entity);
             if (!transform || !renderer)
+            {
                 return;
+            }
             if (transform->position.x == position.x && transform->position.y == position.y &&
                 transform->position.z == position.z && transform->rotation.y == yawDegrees &&
                 transform->scale.x == scale)
+            {
                 return;
+            }
             transform->position = position;
             transform->rotation = {0.0f, yawDegrees, 0.0f};
             transform->scale = {scale, scale, scale};
@@ -107,9 +117,11 @@ namespace ARPG
 
         void ApplyHealth(World& world, EntityID entity, float health, float maxHealth)
         {
-            HealthComponent* component = world.GetComponent<HealthComponent>(entity);
+            auto* component = world.GetComponent<HealthComponent>(entity);
             if (!component)
+            {
                 return;
+            }
             component->health = health;
             component->maxHealth = maxHealth;
             // The hero and monster systems already resolved this death. Marking it processed keeps the engine
@@ -124,7 +136,9 @@ namespace ARPG
                                            const ARPGMonsterSystem* monsters)
     {
         if (!encounter || !monsters)
+        {
             return false;
+        }
         m_context = context;
         m_encounter = encounter;
         m_monsters = monsters;
@@ -156,11 +170,15 @@ namespace ARPG
         World* world = m_context ? m_context->GetWorld() : nullptr;
         const HeroData* hero = m_encounter ? m_encounter->GetHero() : nullptr;
         if (!world)
+        {
             return;
+        }
         if (!hero)
         {
             if (m_heroEntity && IsLive(*world, *m_heroEntity))
+            {
                 world->DestroyEntity(static_cast<EntityID>(*m_heroEntity));
+            }
             m_heroEntity.reset();
             return;
         }
@@ -174,7 +192,9 @@ namespace ARPG
     {
         World* world = m_context ? m_context->GetWorld() : nullptr;
         if (!world || !m_monsters)
+        {
             return;
+        }
 
         // Retire actors whose monster was killed and removed, cleared by a restart or replaced by a restore.
         for (auto it = m_monsterEntities.begin(); it != m_monsterEntities.end();)
@@ -185,14 +205,18 @@ namespace ARPG
                 continue;
             }
             if (IsLive(*world, it->second))
+            {
                 world->DestroyEntity(static_cast<EntityID>(it->second));
+            }
             it = m_monsterEntities.erase(it);
         }
 
         const std::vector<MonsterData>& active = m_monsters->GetActiveMonsters();
         size_t arenaCount = 0;
         for (const MonsterData& monster : active)
+        {
             arenaCount += HoldsArena(monster.rank) ? 1 : 0;
+        }
         const size_t aisleCount = active.size() - arenaCount;
 
         size_t arenaIndex = 0;
@@ -201,19 +225,27 @@ namespace ARPG
         {
             std::optional<uint32_t> cached;
             if (const auto found = m_monsterEntities.find(monster.monsterId); found != m_monsterEntities.end())
+            {
                 cached = found->second;
+            }
             // The entity name is only built when the actor is (re)created, keeping steady-state syncs allocation-free.
             std::string name;
             if (!cached || !IsLive(*world, *cached))
+            {
                 name = MonsterEntityPrefix + monster.name;
+            }
             const EntityID entity = EnsureActor(*world, cached, name);
             m_monsterEntities[monster.monsterId] = *cached;
 
             DirectX::XMFLOAT3 position{};
             if (HoldsArena(monster.rank))
+            {
                 position = {RowOffset(arenaIndex++, arenaCount, ARENA_SPACING), 0.0f, ARENA_Z};
+            }
             else
+            {
                 position = {RowOffset(aisleIndex++, aisleCount, AISLE_SPACING), 0.0f, AISLE_Z};
+            }
             ApplyPose(*world, entity, position, MONSTER_YAW_DEGREES, ScaleForRank(monster.rank));
             ApplyHealth(*world, entity, monster.health, monster.maxHealth);
         }
@@ -235,10 +267,14 @@ namespace ARPG
             {
                 const std::string_view name = world->GetComponent<NameComponent>(entity)->name;
                 if (name == heroName || name.starts_with(monsterPrefix))
+                {
                     restoredActors.push_back(entity);
+                }
             }
             for (const EntityID entity : restoredActors)
+            {
                 world->DestroyEntity(entity);
+            }
         }
         SyncActors();
     }
@@ -249,11 +285,15 @@ namespace ARPG
         if (world)
         {
             if (m_heroEntity && IsLive(*world, *m_heroEntity))
+            {
                 world->DestroyEntity(static_cast<EntityID>(*m_heroEntity));
+            }
             for (const auto& [monsterId, entityId] : m_monsterEntities)
             {
                 if (IsLive(*world, entityId))
+                {
                     world->DestroyEntity(static_cast<EntityID>(entityId));
+                }
             }
         }
         m_heroEntity.reset();
@@ -269,7 +309,9 @@ namespace ARPG
     {
         const auto found = m_monsterEntities.find(monsterId);
         if (found == m_monsterEntities.end())
+        {
             return std::nullopt;
+        }
         return found->second;
     }
 

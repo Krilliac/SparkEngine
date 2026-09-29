@@ -82,7 +82,9 @@ namespace Spark::Core::Lifecycle
         void RunRollbackPreludeContained(const std::function<void()>& prelude)
         {
             if (!prelude)
+            {
                 return;
+            }
 
             auto& console = Spark::SimpleConsole::GetInstance();
             try

@@ -523,7 +523,9 @@ namespace Spark
             // The initial texels were accepted but never uploaded, so the engine's 1x1 white
             // default texture sampled as uninitialized (black) memory.
             if (texture && data)
+            {
                 m_device->UpdateTexture(texture.get(), data, 0);
+            }
             return texture;
         }
 

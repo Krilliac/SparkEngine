@@ -31,12 +31,16 @@ namespace SparkEditor
         std::error_code ec;
         const fs::path relative = fs::relative(assetPath, assetsRoot, ec);
         if (ec || relative.empty() || relative.is_absolute())
+        {
             return {};
+        }
 
         for (const auto& component : relative)
         {
             if (component == "." || component == "..")
+            {
                 return {};
+            }
         }
 
         std::string reference;
@@ -51,23 +55,31 @@ namespace SparkEditor
         std::replace(reference.begin(), reference.end(), '\\', '/');
         if (!IsValidEditorAssetReference(reference, EditorAssetKind::Mesh) &&
             !IsValidEditorAssetReference(reference, EditorAssetKind::Material))
+        {
             return {};
+        }
         return reference;
     }
 
     bool DecodeAssetDragPayload(const void* data, int size, EditorAssetKind kind, std::string& reference)
     {
         if (data == nullptr || size < kMinPayloadBytes || size > kMaxPayloadBytes)
+        {
             return false;
+        }
 
         const auto* bytes = static_cast<const char*>(data);
         const auto* terminator = std::find(bytes, bytes + size, '\0');
         if (terminator != bytes + size - 1)
+        {
             return false;
+        }
 
         std::string decoded(bytes, static_cast<std::size_t>(size - 1));
         if (!IsValidEditorAssetReference(decoded, kind))
+        {
             return false;
+        }
         reference = std::move(decoded);
         return true;
     }

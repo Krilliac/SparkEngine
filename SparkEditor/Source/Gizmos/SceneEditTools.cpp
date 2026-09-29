@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -83,9 +84,13 @@ namespace SparkEditor::SceneEditTools
             {
                 entt::registry& reg = worldPtr->GetRegistry();
                 if (!reg.valid(entity))
+                {
                     return;
+                }
                 if (::Transform* transform = reg.try_get<::Transform>(entity))
+                {
                     transform->*member = value;
+                }
             };
             Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
                 [assign, newValue]() { assign(newValue); }, [assign, oldValue]() { assign(oldValue); }, description));
@@ -291,11 +296,11 @@ namespace SparkEditor::SceneEditTools
         {
             entt::registry& reg = worldPtr->GetRegistry();
             // Destroy in reverse creation order; the ids stay as create(hint) seeds.
-            for (auto it = created->rbegin(); it != created->rend(); ++it)
+            for (const ::EntityID entity : std::ranges::reverse_view(*created))
             {
-                if (*it != entt::null && reg.valid(*it))
+                if (entity != entt::null && reg.valid(entity))
                 {
-                    worldPtr->DestroyEntity(*it);
+                    worldPtr->DestroyEntity(entity);
                 }
             }
         };

@@ -18,6 +18,7 @@
 #include "../AssetPipeline/EditorAssetReference.h"
 #include "InspectorPendingWorldEdit.h"
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string_view>
@@ -27,7 +28,7 @@ namespace SparkEditor
     /// Asset kind a reflected World component field accepts, or nullopt when it takes no asset drop.
     std::optional<EditorAssetKind> AssetKindForField(std::string_view componentType, std::string_view fieldName);
 
-    enum class AssetDropResult
+    enum class AssetDropResult : std::uint8_t
     {
         Applied,    ///< The field changed and one history entry was recorded.
         Unchanged,  ///< The field already held the reference; nothing recorded.

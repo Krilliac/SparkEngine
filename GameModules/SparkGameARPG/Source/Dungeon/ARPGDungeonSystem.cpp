@@ -132,16 +132,22 @@ namespace ARPG
         m_kitEntities.clear();
         auto* world = m_context ? m_context->GetWorld() : nullptr;
         if (!world)
+        {
             return;
+        }
 
         std::vector<EntityID> restoredProps;
         for (const EntityID entity : world->GetEntitiesWith<NameComponent>())
         {
             if (std::string_view(world->GetComponent<NameComponent>(entity)->name).starts_with(CRYPT_PROP_PREFIX))
+            {
                 restoredProps.push_back(entity);
+            }
         }
         for (const EntityID entity : restoredProps)
+        {
             world->DestroyEntity(entity);
+        }
         PlaceCryptKit();
     }
 

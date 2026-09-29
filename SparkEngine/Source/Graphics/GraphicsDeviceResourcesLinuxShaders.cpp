@@ -57,7 +57,9 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
 
     HRESULT hr = CreateBasicConstantBuffer();
     if (FAILED(hr))
+    {
         return hr;
+    }
 
     auto& pass = rhi.basicForward;
     pass.sampler = rhi.bridge.CreateSamplerLinearWrap();
@@ -93,7 +95,9 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
     Spark::RHI::IRHITexture* depthBuffer = rhi.bridge.GetDepthBuffer();
     desc.renderTargetFormats[0] = backBuffer ? backBuffer->GetFormat() : Spark::RHI::PixelFormat::R8G8B8A8_UNORM;
     if (depthBuffer)
+    {
         desc.depthStencilFormat = depthBuffer->GetFormat();
+    }
     desc.debugName = "BasicForwardPass";
 
     Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice();
@@ -178,7 +182,9 @@ HRESULT GraphicsEngine::CreateBasicConstantBuffer()
     material.emissiveFactor = 0.0f;
     material.alphaCutoff = 0.0f;
     if (Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice())
+    {
         device->UpdateBuffer(pass.materialConstants.get(), &material, sizeof(material));
+    }
 
     return S_OK;
 }

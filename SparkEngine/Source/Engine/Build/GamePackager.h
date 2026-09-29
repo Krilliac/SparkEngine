@@ -453,7 +453,9 @@ namespace Spark::Build
                 if (!sourcePath || !stem || !filename)
                     continue;
                 if (!required.empty() && required.find(*stem) == required.end())
+                {
                     continue;
+                }
 
                 ManifestEntry me;
                 me.sourcePath = *sourcePath;
@@ -498,7 +500,9 @@ namespace Spark::Build
                 const std::optional<std::string> sourcePath = ToManifestPath(entry.path(), result);
                 const std::optional<std::string> relative = FileUtils::TryPathToUtf8(relPath);
                 if (!sourcePath || !relative)
+                {
                     continue;
+                }
 
                 ManifestEntry me;
                 me.sourcePath = *sourcePath;
@@ -514,7 +518,9 @@ namespace Spark::Build
         {
             std::optional<std::string> utf8 = FileUtils::TryPathToUtf8(path);
             if (!utf8)
+            {
                 result.warnings.emplace_back("Skipped a file whose name is not valid Unicode");
+            }
             return utf8;
         }
 

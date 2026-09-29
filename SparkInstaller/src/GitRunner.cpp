@@ -79,12 +79,16 @@ namespace SparkInstaller
         {
             constexpr std::string_view kUntrackedPrefix = "?? ";
             if (!StartsWith(line, kUntrackedPrefix))
+            {
                 return false;
+            }
             const std::string_view path = line.substr(kUntrackedPrefix.size());
             for (const std::string& owned : InstallerOwnedPaths())
             {
                 if (path == owned)
+                {
                     return true;
+                }
             }
             return false;
         }
@@ -192,13 +196,19 @@ namespace SparkInstaller
             std::string_view line = remaining.substr(0, newline);
             remaining = newline == std::string_view::npos ? std::string_view{} : remaining.substr(newline + 1);
             if (!line.empty() && line.back() == '\r')
+            {
                 line.remove_suffix(1);
+            }
             if (line.empty())
+            {
                 continue;
+            }
             if (IsInstallerOwnedUntrackedLine(line))
             {
                 if (log)
+                {
                     log("ignoring installer-owned untracked file: " + std::string(line.substr(3)));
+                }
                 continue;
             }
             clean = false;

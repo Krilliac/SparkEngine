@@ -58,7 +58,9 @@ namespace SparkInstaller
             std::error_code ec;
             const std::uintmax_t size = fs::file_size(marker, ec);
             if (ec || size > kMaxPendingMarkerBytes)
+            {
                 return false;
+            }
             std::ifstream in(marker, std::ios::binary);
             std::string line;
             ref.clear();
@@ -66,11 +68,17 @@ namespace SparkInstaller
             while (std::getline(in, line))
             {
                 if (!line.empty() && line.back() == '\r')
+                {
                     line.pop_back();
+                }
                 if (line.rfind("ref=", 0) == 0)
+                {
                     ref = line.substr(4);
+                }
                 else if (line.rfind("commit=", 0) == 0)
+                {
                     commit = line.substr(7);
+                }
             }
             return !ref.empty() && !commit.empty();
         }
@@ -147,7 +155,9 @@ namespace SparkInstaller
                 std::string out;
                 int rc = runner.RunSync(buildCmd, ctx.destination, out);
                 if (!out.empty())
+                {
                     Emit(log, out);
+                }
                 if (rc != 0)
                 {
                     Emit(log, "error: cmake build exited " + std::to_string(rc));
@@ -166,7 +176,9 @@ namespace SparkInstaller
             out << reason << '\n';
             out.close();
             if (!out)
+            {
                 Emit(log, "error: could not write repair-required marker " + marker.string());
+            }
         }
     } // namespace
 
@@ -193,7 +205,9 @@ namespace SparkInstaller
         // leaves filename() empty, which would put the staging clone inside the
         // destination instead of beside it. Drop it; a bare root keeps its own.
         if (!dest.has_filename() && dest.has_relative_path())
+        {
             dest = dest.parent_path();
+        }
         ctx.destination = dest.string();
 
         // --- Mode detection ------------------------------------------------
@@ -202,7 +216,9 @@ namespace SparkInstaller
         if (InstallState::Exists(ctx.destination))
             ctx.mode = Mode::Update;
         else if (PendingMarkerExists(dest))
+        {
             ctx.mode = Mode::ResumeInstall;
+        }
         else if (PathLooksLikeEngineClone(dest))
             ctx.mode = Mode::Update; // existing clone without our marker
         else
@@ -278,15 +294,21 @@ namespace SparkInstaller
             if (!git.CheckoutCommit(previousCommit, ctx.destination, ctx.log))
                 repairReason = "could not check out " + previousCommit;
             else if (!ctx.skipSubmoduleUpdate && !git.UpdateSubmodules(ctx.destination, ctx.log))
+            {
                 repairReason = "restored " + previousCommit + " but not its submodules";
+            }
             else if (!ctx.skipBuild)
             {
                 const int rebuild = ConfigureAndBuild(ctx, ctx.log);
                 if (rebuild != 0)
+                {
                     repairReason = "restored " + previousCommit + " but its rebuild exited " + std::to_string(rebuild);
+                }
             }
             if (repairReason.empty() && git.HeadCommit(ctx.destination) != previousCommit)
+            {
                 repairReason = "restored checkout does not report HEAD " + previousCommit;
+            }
 
             if (!repairReason.empty())
             {
@@ -411,7 +433,9 @@ namespace SparkInstaller
 
         // --- Configure + build via SparkBuildCore -------------------------
         if (const int buildResult = ConfigureAndBuild(ctx, ctx.log); buildResult != 0)
+        {
             return rollbackUpdate(buildResult == 6 ? "CMake configure failure" : "CMake build failure", buildResult);
+        }
 
         // --- Persist state ------------------------------------------------
         InstallState state;

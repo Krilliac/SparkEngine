@@ -281,7 +281,9 @@ namespace Spark::Gateway
     std::unique_ptr<IGatewayAuthenticator> CreateGatewayAuthenticator(const GatewayOptions& options)
     {
         if (!options.admissionFixture.empty())
+        {
             return std::make_unique<LocalFixtureAuthenticator>(options.admissionFixture);
+        }
         return std::make_unique<KeyFileAuthenticator>(options.keyFile);
     }
 
@@ -471,7 +473,7 @@ namespace Spark::Gateway
                << ",\"consecutiveFaults\":" << auth.consecutiveFaults
                << ",\"circuitOpen\":" << (auth.circuitOpen ? "true" : "false")
                << ",\"maxCallMicroseconds\":" << auth.maxCallMicroseconds << "}";
-        stream << ",\"error\":\"" << EscapeJson(health.lastError) << "\"}";
+        stream << R"(,"error":")" << EscapeJson(health.lastError) << "\"}";
         return stream.str();
     }
 

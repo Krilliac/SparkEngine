@@ -241,7 +241,9 @@ namespace Terrafront
     void TFClientNet::OnContinentIdentity(const void* data, size_t size)
     {
         if (size != sizeof(TF_ContinentIdentity) || !m_ctx->data || !m_ctx->data->IsLoaded())
+        {
             return;
+        }
         TF_ContinentIdentity identity;
         std::memcpy(&identity, data, sizeof(identity));
         const char* end = static_cast<const char*>(std::memchr(identity.key, '\0', sizeof(identity.key)));
@@ -253,7 +255,9 @@ namespace Terrafront
             return;
         }
         if (serverKey == localKey)
+        {
             return;
+        }
 
         // The scene, collision and region lattice were built for localKey at boot (tf_continent is
         // RequiresRestart), so entering this server's world would put the pawn on the wrong continent.
@@ -267,7 +271,9 @@ namespace Terrafront
         Disconnect();
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         if (nm.IsInitialized())
+        {
             nm.Disconnect();
+        }
     }
 
     void TFClientNet::OnSpawnReply(const void* data, size_t size)

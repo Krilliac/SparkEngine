@@ -39,7 +39,9 @@ namespace SparkInstaller::Preflight
         {
             fs::path current = destination;
             while (!PathEntryExists(current) && current.has_parent_path() && current != current.parent_path())
+            {
                 current = current.parent_path();
+            }
             return current;
         }
 
@@ -47,7 +49,9 @@ namespace SparkInstaller::Preflight
         {
             std::error_code error;
             if (fs::is_symlink(fs::symlink_status(path, error)))
+            {
                 return true;
+            }
 #ifdef _WIN32
             // std::filesystem does not portably report NTFS junctions (mount
             // points), which redirect writes exactly like a directory symlink.
@@ -183,7 +187,9 @@ namespace SparkInstaller::Preflight
         {
             std::string detail;
             if (!ProbeWritable(ancestor, detail))
+            {
                 failures.push_back({"destination-not-writable", detail});
+            }
 
             const std::uintmax_t required = ctx.minFreeBytes.value_or(DefaultMinFreeBytes(ctx));
             const fs::space_info space = fs::space(ancestor, error);

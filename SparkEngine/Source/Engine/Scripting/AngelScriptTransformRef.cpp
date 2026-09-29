@@ -21,7 +21,9 @@ namespace
     {
 #ifdef SPARK_ANGELSCRIPT_SUPPORT
         if (asIScriptContext* context = asGetActiveContext())
+        {
             context->SetException(message);
+        }
 #endif
     }
 
@@ -31,7 +33,9 @@ namespace
     {
         World* world = AngelScriptEngine::GetBoundWorld();
         if (!world || entity == entt::null || !world->GetRegistry().valid(entity))
+        {
             return nullptr;
+        }
         return world->GetRegistry().try_get<Transform>(entity);
     }
 } // namespace
@@ -44,7 +48,9 @@ void ScriptTransformRef::AddRef() noexcept
 void ScriptTransformRef::Release() noexcept
 {
     if (--m_refCount == 0)
+    {
         delete this; // AngelScript reference counting owns the object (created in ASGetTransform)
+    }
 }
 
 bool ScriptTransformRef::IsValid() const noexcept
@@ -56,7 +62,9 @@ Transform* ScriptTransformRef::Resolve() const noexcept
 {
     Transform* transform = FindLiveTransform(m_entity);
     if (!transform)
+    {
         RaiseScriptException("Transform handle used after its entity was destroyed or lost its Transform");
+    }
     return transform;
 }
 
@@ -69,7 +77,9 @@ DirectX::XMFLOAT3 ScriptTransformRef::GetPosition() const noexcept
 void ScriptTransformRef::SetPosition(const DirectX::XMFLOAT3& value) noexcept
 {
     if (Transform* transform = Resolve())
+    {
         transform->position = value;
+    }
 }
 
 DirectX::XMFLOAT3 ScriptTransformRef::GetRotation() const noexcept
@@ -81,7 +91,9 @@ DirectX::XMFLOAT3 ScriptTransformRef::GetRotation() const noexcept
 void ScriptTransformRef::SetRotation(const DirectX::XMFLOAT3& value) noexcept
 {
     if (Transform* transform = Resolve())
+    {
         transform->rotation = value;
+    }
 }
 
 DirectX::XMFLOAT3 ScriptTransformRef::GetScale() const noexcept
@@ -93,7 +105,9 @@ DirectX::XMFLOAT3 ScriptTransformRef::GetScale() const noexcept
 void ScriptTransformRef::SetScale(const DirectX::XMFLOAT3& value) noexcept
 {
     if (Transform* transform = Resolve())
+    {
         transform->scale = value;
+    }
 }
 
 ScriptTransformRef* ASGetTransform(EntityID entity)

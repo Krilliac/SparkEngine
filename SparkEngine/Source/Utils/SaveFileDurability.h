@@ -7,7 +7,8 @@
  * - Thread affinity: async-safe. The functions keep no state; concurrent calls on
  *   distinct paths are independent. Callers serialize writes to the same slot.
  * - Ownership: callers own every path; nothing is retained after a call returns.
- * - Allocation: path temporaries only. These run on save/load, never per frame.
+ * - Allocation: path temporaries only. These run on save/load, never per frame, except
+ *   PublishFileAtomically, which never flushes to stable storage so it can.
  * - Failures are reported through the return value and @p error. Only std::bad_alloc
  *   from building a staging path can escape.
  *
@@ -23,6 +24,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string_view>
 #include <system_error>
@@ -32,7 +34,7 @@ namespace Spark::SaveFileDurability
     /**
      * @brief Outcome of ReplaceFileAtomically. The commit point is the rename itself.
      */
-    enum class ReplaceOutcome
+    enum class ReplaceOutcome : std::uint8_t
     {
         NotCommitted,        ///< @p destination still names its previous contents.
         CommittedNotDurable, ///< @p destination names the staged contents, but the directory sync failed.
@@ -147,8 +149,15 @@ namespace Spark::SaveFileDurability
      * The staging file is `<destination>.<random>.<counter>.tmp`, created by WriteStagingFile
      * (exclusive, no-follow: O_CREAT|O_EXCL|O_NOFOLLOW on POSIX, CREATE_NEW|FILE_FLAG_OPEN_REPARSE_POINT
      * on Windows). A file, symlink or hard link planted at the name is never followed or truncated, and
-     * the random name cannot be predicted in advance. The bytes are flushed and then renamed over
-     * @p destination with ReplaceFileAtomically.
+     * the random name cannot be predicted in advance. The bytes are written, the handle is closed, and
+     * the staging file is renamed over @p destination.
+     *
+     * Atomic, not durable: unlike the save-path functions above, nothing is flushed to stable storage.
+     * This is the one function here that runs per frame (a server or gateway tick republishes its
+     * snapshot every status interval), and a file plus directory fsync there stalls the tick for tens to
+     * hundreds of milliseconds on a busy disk. A killed process still leaves the previous or the new
+     * complete snapshot; a power loss may leave either, or on some filesystems an empty file, which the
+     * next publish replaces.
      *
      * On any failure the staging file is removed and @p destination keeps its previous complete
      * contents; the destination is never deleted first. A process killed mid-write can leave one
@@ -156,8 +165,7 @@ namespace Spark::SaveFileDurability
      *
      * @param destination File to replace; its parent directory must exist.
      * @param bytes       Complete new contents, written in binary mode.
-     * @param error       Cleared on entry; receives the failure reason. After a successful commit whose
-     *                    POSIX directory sync failed, it holds that error (as for WriteFileAtomically).
+     * @param error       Cleared on entry; receives the failure reason.
      * @return true when @p destination now names exactly @p bytes.
      */
     [[nodiscard]] bool PublishFileAtomically(const std::filesystem::path& destination, std::string_view bytes,

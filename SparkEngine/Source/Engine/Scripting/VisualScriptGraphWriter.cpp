@@ -62,7 +62,9 @@ namespace Spark::Scripting
         std::string Number(float value)
         {
             if (value == 0.0f || !std::isfinite(value))
+            {
                 return "0";
+            }
             char buffer[32];
             const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), value);
             return error == std::errc{} ? std::string(buffer, end) : "0";
@@ -75,17 +77,23 @@ namespace Spark::Scripting
             {
             case PinKind::Bool:
                 if (pin.defaultValue[0] != 0.0f)
+                {
                     text += ", \"default\": true";
+                }
                 break;
             case PinKind::Int:
             case PinKind::Entity:
             case PinKind::Float:
                 if (pin.defaultValue[0] != 0.0f)
+                {
                     text += ", \"default\": " + Number(pin.defaultValue[0]);
+                }
                 break;
             case PinKind::String:
                 if (!pin.defaultString.empty())
+                {
                     text += ", \"default\": " + Quote(pin.defaultString);
+                }
                 break;
             case PinKind::Vector3:
                 if (pin.defaultValue[0] != 0.0f || pin.defaultValue[1] != 0.0f || pin.defaultValue[2] != 0.0f)
@@ -104,7 +112,9 @@ namespace Spark::Scripting
         {
             std::string text = "[";
             for (size_t i = 0; i < pins.size(); ++i)
+            {
                 text += (i > 0 ? ", " : "") + PinText(pins[i]);
+            }
             return text + "]";
         }
 
@@ -115,16 +125,22 @@ namespace Spark::Scripting
                                Quote(typeName ? typeName : std::to_string(static_cast<uint32_t>(node.type))) +
                                ", \"position\": [" + Number(node.editorX) + ", " + Number(node.editorY) + "]";
             if (!node.inputs.empty())
+            {
                 text += ", \"inputs\": " + PinListText(node.inputs);
+            }
             if (!node.outputs.empty())
+            {
                 text += ", \"outputs\": " + PinListText(node.outputs);
+            }
             if (!node.properties.empty())
             {
                 std::vector<std::pair<std::string, std::string>> sorted(node.properties.begin(), node.properties.end());
                 std::sort(sorted.begin(), sorted.end());
                 text += ", \"properties\": {";
                 for (size_t i = 0; i < sorted.size(); ++i)
+                {
                     text += (i > 0 ? ", " : "") + Quote(sorted[i].first) + ": " + Quote(sorted[i].second);
+                }
                 text += "}";
             }
             return text + "}";
@@ -152,7 +168,9 @@ namespace Spark::Scripting
         {
             out += "  \"" + std::string(key) + "\": [";
             for (size_t i = 0; i < elements.size(); ++i)
+            {
                 out += std::string(i > 0 ? "," : "") + "\n    " + elements[i];
+            }
             out += elements.empty() ? "]" : "\n  ]";
             out += last ? "\n" : ",\n";
         }
@@ -162,7 +180,9 @@ namespace Spark::Scripting
             std::vector<std::string> lines;
             lines.reserve(items.size());
             for (const auto& item : items)
+            {
                 lines.push_back(toText(item));
+            }
             return lines;
         }
     } // namespace
@@ -174,7 +194,9 @@ namespace Spark::Scripting
         out += "  \"version\": " + std::to_string(kVersion) + ",\n";
         out += "  \"className\": " + Quote(graph.className) + ",\n";
         if (!graph.description.empty())
+        {
             out += "  \"description\": " + Quote(graph.description) + ",\n";
+        }
 
         AppendArray(out, "variables",
                     Lines(graph.variables,
@@ -183,7 +205,9 @@ namespace Spark::Scripting
                               std::string text =
                                   "{\"name\": " + Quote(var.name) + ", \"type\": " + Quote(PinKindName(var.type));
                               if (!var.defaultValue.empty())
+                              {
                                   text += ", \"default\": " + Quote(var.defaultValue);
+                              }
                               return text + "}";
                           }),
                     false);
@@ -198,10 +222,14 @@ namespace Spark::Scripting
                                                  ", \"parameters\": " + ParametersText(function.parameters) +
                                                  ", \"nodes\": [";
                               for (size_t i = 0; i < function.nodes.size(); ++i)
+                              {
                                   text += (i > 0 ? ", " : "") + NodeText(function.nodes[i]);
+                              }
                               text += "], \"connections\": [";
                               for (size_t i = 0; i < function.connections.size(); ++i)
+                              {
                                   text += (i > 0 ? ", " : "") + ConnectionText(function.connections[i]);
+                              }
                               return text + "]}";
                           }),
                     false);
@@ -222,7 +250,9 @@ namespace Spark::Scripting
         const std::string name = path.generic_string();
         const std::string text = Serialize(graph);
         if (auto check = Parse(text); !check)
+        {
             return std::unexpected(name + ": refusing to save a graph that would not load: " + check.error());
+        }
 
         std::filesystem::path temporary = path;
         temporary += ".tmp";

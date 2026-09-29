@@ -140,10 +140,14 @@ namespace Spark
         {
             const size_t keyOpen = content.find('"', pos);
             if (keyOpen == std::string::npos)
+            {
                 break;
+            }
             size_t keyClose = 0;
             if (!FindClosingQuote(content, keyOpen, keyClose))
+            {
                 break; // unterminated string: nothing after it can pair up
+            }
 
             // A string followed by ':' and another string is one entry. Any other string
             // (a nested object's name, a non-string value's key) is skipped, and scanning
@@ -156,7 +160,9 @@ namespace Spark
                 if (next < content.size() && content[next] == '"')
                 {
                     if (!FindClosingQuote(content, next, valueClose))
+                    {
                         break;
+                    }
                     m_entries[unescape(content.substr(keyOpen + 1, keyClose - keyOpen - 1))] =
                         unescape(content.substr(next + 1, valueClose - next - 1));
                     ++parsed;

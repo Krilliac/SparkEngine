@@ -30,7 +30,9 @@ namespace Spark
         {
             if (type.empty() || type.front() == '#' || type.front() == '/' || type.front() == '{' ||
                 type.front() == '}')
+            {
                 return false;
+            }
             return std::none_of(type.begin(), type.end(),
                                 [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; });
         }
@@ -43,7 +45,9 @@ namespace Spark
         bool ValidateAndRebuildHierarchy(std::vector<SceneNode>& nodes)
         {
             for (auto& node : nodes)
+            {
                 node.childIndices.clear();
+            }
 
             const int count = static_cast<int>(nodes.size());
             for (int i = 0; i < count; ++i)
@@ -51,9 +55,13 @@ namespace Spark
                 const SceneNode& node = nodes[static_cast<size_t>(i)];
                 if (node.type.empty() || node.name.empty() || !IsFinite(node.position) || !IsFinite(node.rotation) ||
                     !IsFinite(node.scale))
+                {
                     return false;
+                }
                 if (node.parentIndex < -1 || node.parentIndex >= count || node.parentIndex == i)
+                {
                     return false;
+                }
             }
 
             enum class Walk : uint8_t
@@ -75,16 +83,22 @@ namespace Spark
                     current = nodes[static_cast<size_t>(current)].parentIndex;
                 }
                 if (current >= 0 && state[static_cast<size_t>(current)] == Walk::OnPath)
+                {
                     return false; // the chain returned to a node on this walk: a cycle
+                }
                 for (const int visited : path)
+                {
                     state[static_cast<size_t>(visited)] = Walk::ReachesRoot;
+                }
             }
 
             for (int i = 0; i < count; ++i)
             {
                 const int parent = nodes[static_cast<size_t>(i)].parentIndex;
                 if (parent >= 0)
+                {
                     nodes[static_cast<size_t>(parent)].childIndices.push_back(i);
+                }
             }
             return true;
         }
@@ -106,7 +120,9 @@ namespace Spark
         {
             const auto first = value.find_first_not_of(" \t\r");
             if (first == std::string::npos)
+            {
                 return std::string{};
+            }
             const auto last = value.find_last_not_of(" \t\r");
             return value.substr(first, last - first + 1);
         }
@@ -117,15 +133,21 @@ namespace Spark
             std::string normalized = value;
             const auto comment = normalized.find('#');
             if (comment != std::string::npos)
+            {
                 normalized.erase(comment);
+            }
             std::replace(normalized.begin(), normalized.end(), ',', ' ');
             std::istringstream values(normalized);
             DirectX::XMFLOAT3 parsed{};
             if (!(values >> parsed.x >> parsed.y >> parsed.z))
+            {
                 return false;
+            }
             values >> std::ws;
             if (!values.eof() || !IsFinite(parsed))
+            {
                 return false;
+            }
             output = parsed;
             return true;
         }
@@ -140,11 +162,15 @@ namespace Spark
         if (content.starts_with(kSerializedHeader) &&
             (content.size() == kSerializedHeader.size() || content[kSerializedHeader.size()] == '\r' ||
              content[kSerializedHeader.size()] == '\n'))
+        {
             return SceneTextDialect::Versioned;
+        }
 
         if (content.contains("[Scene]") || content.contains("[Object]") || content.contains("[Camera]") ||
             content.contains("[SpawnPoint]"))
+        {
             return SceneTextDialect::Ini;
+        }
         return SceneTextDialect::LegacyObjects;
     }
 
@@ -161,36 +187,54 @@ namespace Spark
         while (std::getline(ss, line))
         {
             if (line.empty())
+            {
                 continue;
+            }
             if (line[0] == '#')
             {
                 if (line.starts_with("# name:"))
+                {
                     stagedMetadata.sceneName = HeaderValue(line, 7);
+                }
                 else if (line.starts_with("# gravity:"))
                 {
                     if (!ParseFiniteTriple(HeaderValue(line, 10), stagedMetadata.gravityX, stagedMetadata.gravityY,
                                            stagedMetadata.gravityZ))
+                    {
                         return false;
+                    }
                 }
                 else if (line.starts_with("# author:"))
+                {
                     stagedMetadata.author = HeaderValue(line, 9);
+                }
                 else if (line.starts_with("# version:"))
+                {
                     stagedMetadata.version = HeaderValue(line, 10);
+                }
                 else if (line.starts_with("# description:"))
+                {
                     stagedMetadata.description = HeaderValue(line, 14);
+                }
                 else if (line.starts_with("# ambient:"))
                 {
                     if (!ParseFiniteTriple(HeaderValue(line, 10), stagedMetadata.ambientLightR,
                                            stagedMetadata.ambientLightG, stagedMetadata.ambientLightB))
+                    {
                         return false;
+                    }
                 }
                 continue;
             }
             if (line[0] == '/' || line[0] == '{' || line[0] == '}')
+            {
                 continue;
+            }
 
             if (stagedNodes.size() >= kMaxSceneTextNodes)
+            {
                 return false;
+            }
 
             std::istringstream ls(line);
             SceneNode node;
@@ -198,7 +242,9 @@ namespace Spark
             // can round-trip names containing whitespace and quotes.
             if (!(ls >> node.type >> std::quoted(node.name) >> node.position.x >> node.position.y >> node.position.z) ||
                 !IsRowType(node.type) || node.name.empty() || !IsFinite(node.position))
+            {
                 return false;
+            }
 
             // Extended fields are optional for old line-oriented files, but once
             // present they are an all-or-nothing, finite record.
@@ -208,33 +254,43 @@ namespace Spark
                 if (!(ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >>
                       node.scale.z >> node.parentIndex) ||
                     !IsFinite(node.rotation) || !IsFinite(node.scale))
+                {
                     return false;
+                }
 
                 ls >> std::ws;
                 if (!ls.eof())
                 {
                     size_t propertyCount = 0;
                     if (!(ls >> std::quoted(node.modelPath) >> std::quoted(node.materialPath) >> propertyCount))
+                    {
                         return false;
+                    }
                     // Each property needs input bytes, so a huge count fails at end of line.
                     for (size_t property = 0; property < propertyCount; ++property)
                     {
                         std::string key;
                         std::string value;
                         if (!(ls >> std::quoted(key) >> std::quoted(value)))
+                        {
                             return false;
+                        }
                         node.properties.emplace(std::move(key), std::move(value));
                     }
                     ls >> std::ws;
                     if (!ls.eof())
+                    {
                         return false;
+                    }
                 }
             }
             stagedNodes.push_back(std::move(node));
         }
 
         if (stagedNodes.empty() || !ValidateAndRebuildHierarchy(stagedNodes))
+        {
             return false;
+        }
         metadata = std::move(stagedMetadata);
         nodes = std::move(stagedNodes);
         return true;
@@ -258,7 +314,9 @@ namespace Spark
         auto flushNode = [&]()
         {
             if (!hasNode)
+            {
                 return;
+            }
             const bool requiresPosition = currentNode.type == "Camera" || currentNode.type == "SpawnPoint";
             if (nodeInvalid || currentNode.type.empty() || (requiresPosition && !nodeHasPosition) ||
                 stagedNodes.size() >= kMaxSceneTextNodes)
@@ -268,12 +326,16 @@ namespace Spark
             else
             {
                 if (currentNode.name.empty())
+                {
                     currentNode.name = currentNode.type + "_" + std::to_string(stagedNodes.size());
+                }
                 if (currentNode.type == "SpawnPoint")
                 {
                     const auto tag = currentNode.properties.find("tag");
                     if (tag == currentNode.properties.end() || tag->second.empty())
+                    {
                         parseError = true;
+                    }
                 }
                 stagedNodes.push_back(std::move(currentNode));
             }
@@ -287,7 +349,9 @@ namespace Spark
         {
             line = Trim(line);
             if (line.empty() || line[0] == '#' || line[0] == ';')
+            {
                 continue;
+            }
 
             if (line.front() == '[')
             {
@@ -304,7 +368,9 @@ namespace Spark
                 {
                     hasNode = true;
                     if (currentSection == "SpawnPoint" || currentSection == "Camera")
+                    {
                         currentNode.type = currentSection;
+                    }
                 }
                 continue;
             }
@@ -313,7 +379,9 @@ namespace Spark
             if (eqPos == std::string::npos)
             {
                 if (hasNode || currentSection == "Scene")
+                {
                     parseError = true;
+                }
                 continue;
             }
             const std::string key = Trim(line.substr(0, eqPos));
@@ -328,17 +396,27 @@ namespace Spark
             {
                 DirectX::XMFLOAT3 vector{};
                 if (key == "name")
+                {
                     stagedMetadata.sceneName = value;
+                }
                 else if (key == "author")
+                {
                     stagedMetadata.author = value;
+                }
                 else if (key == "version")
+                {
                     stagedMetadata.version = value;
+                }
                 else if (key == "description")
+                {
                     stagedMetadata.description = value;
+                }
                 else if (key == "ambientLight")
                 {
                     if (!ParseIniVector(value, vector))
+                    {
                         parseError = true;
+                    }
                     else
                     {
                         stagedMetadata.ambientLightR = vector.x;
@@ -349,7 +427,9 @@ namespace Spark
                 else if (key == "gravity")
                 {
                     if (!ParseIniVector(value, vector))
+                    {
                         parseError = true;
+                    }
                     else
                     {
                         stagedMetadata.gravityX = vector.x;
@@ -363,38 +443,58 @@ namespace Spark
                 if (key == "type")
                 {
                     if (currentSection == "Camera" || currentSection == "SpawnPoint")
+                    {
                         currentNode.properties[key] = value;
+                    }
                     else
+                    {
                         currentNode.type = value;
+                    }
                 }
                 else if (key == "name")
+                {
                     currentNode.name = value;
+                }
                 else if (key == "model")
+                {
                     currentNode.modelPath = value;
+                }
                 else if (key == "position")
                 {
                     nodeHasPosition = true;
                     nodeInvalid = !ParseIniVector(value, currentNode.position) || nodeInvalid;
                 }
                 else if (key == "rotation")
+                {
                     nodeInvalid = !ParseIniVector(value, currentNode.rotation) || nodeInvalid;
+                }
                 else if (key == "scale")
+                {
                     nodeInvalid = !ParseIniVector(value, currentNode.scale) || nodeInvalid;
+                }
                 else if (key == "material")
+                {
                     currentNode.materialPath = value;
+                }
                 else
+                {
                     currentNode.properties[key] = value;
+                }
             }
         }
         flushNode();
 
         if (parseError || stagedNodes.empty() || !ValidateAndRebuildHierarchy(stagedNodes))
+        {
             return false;
+        }
         std::unordered_map<std::string, int> names;
         for (int i = 0; i < static_cast<int>(stagedNodes.size()); ++i)
         {
             if (!names.emplace(stagedNodes[static_cast<size_t>(i)].name, i).second)
+            {
                 return false;
+            }
         }
         metadata = std::move(stagedMetadata);
         nodes = std::move(stagedNodes);
@@ -413,13 +513,21 @@ namespace Spark
             ++lineNumber;
             const auto comment = line.find('#');
             if (comment != std::string::npos)
+            {
                 line.erase(comment);
+            }
             while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t'))
+            {
                 line.pop_back();
+            }
             if (line.empty())
+            {
                 continue;
+            }
             if (stagedRows.size() >= kMaxSceneTextNodes)
+            {
                 return false;
+            }
 
             std::istringstream ls(line);
             LegacyObjectRow row;
@@ -427,7 +535,9 @@ namespace Spark
             ls >> row.type;
             if (row.type.empty() || !(ls >> row.position.x >> row.position.y >> row.position.z) ||
                 !IsFinite(row.position))
+            {
                 return false;
+            }
             ls >> std::ws;
 
             // Every primitive constructor requires positive dimensions; a zero,
@@ -438,49 +548,67 @@ namespace Spark
             if (row.type == "Cube" || row.type == "Pyramid")
             {
                 if (hasParameters && !positiveFloat(row.primary))
+                {
                     return false;
+                }
             }
             else if (row.type == "Plane")
             {
                 row.primary = 10.0f;
                 row.secondary = 10.0f;
                 if (hasParameters && (!positiveFloat(row.primary) || !positiveFloat(row.secondary)))
+                {
                     return false;
+                }
             }
             else if (row.type == "Sphere")
             {
                 row.primary = 0.5f;
                 if (hasParameters && (!positiveFloat(row.primary) || !(ls >> row.slices) || !(ls >> row.stacks)))
+                {
                     return false;
+                }
                 if (row.slices < kMinLegacySphereSlices || row.slices > kMaxLegacySphereTessellation ||
                     row.stacks < kMinLegacySphereStacks || row.stacks > kMaxLegacySphereTessellation)
+                {
                     return false;
+                }
             }
             else if (row.type == "Ramp")
             {
                 row.primary = 2.0f;
                 row.secondary = 1.0f;
                 if (hasParameters && (!positiveFloat(row.primary) || !positiveFloat(row.secondary)))
+                {
                     return false;
+                }
             }
             else if (row.type == "Wall")
             {
                 row.primary = 1.0f;
                 row.secondary = 2.0f;
                 if (hasParameters && (!positiveFloat(row.primary) || !positiveFloat(row.secondary)))
+                {
                     return false;
+                }
             }
             else
+            {
                 return false;
+            }
 
             ls >> std::ws;
             if (!ls.eof())
+            {
                 return false;
+            }
             stagedRows.push_back(std::move(row));
         }
 
         if (stagedRows.empty())
+        {
             return false;
+        }
         rows = std::move(stagedRows);
         return true;
     }
@@ -507,7 +635,9 @@ namespace Spark
                 node.parentIndex = mappedParent >= 0 ? mappedParent : -2;
             }
             else if (node.parentIndex < -1)
+            {
                 node.parentIndex = -2; // validation below reports this as malformed
+            }
         }
 
         const auto oneLine = [](const std::string& value) { return value.find('\n') == std::string::npos; };
@@ -517,15 +647,21 @@ namespace Spark
             !std::isfinite(metadata.ambientLightG) || !std::isfinite(metadata.ambientLightB) ||
             !oneLine(metadata.sceneName) || !oneLine(metadata.author) || !oneLine(metadata.version) ||
             !oneLine(metadata.description))
+        {
             return false;
+        }
         for (const auto& node : written)
         {
             if (!IsRowType(node.type) || !oneLine(node.name) || !oneLine(node.modelPath) || !oneLine(node.materialPath))
+            {
                 return false;
+            }
             for (const auto& [key, value] : node.properties)
             {
                 if (!oneLine(key) || !oneLine(value))
+                {
                     return false;
+                }
             }
         }
 
@@ -550,7 +686,9 @@ namespace Spark
             std::vector<std::pair<std::string, std::string>> properties(node.properties.begin(), node.properties.end());
             std::sort(properties.begin(), properties.end());
             for (const auto& [key, value] : properties)
+            {
                 serialized << " " << std::quoted(key) << " " << std::quoted(value);
+            }
             serialized << "\n";
         }
         text = serialized.str();

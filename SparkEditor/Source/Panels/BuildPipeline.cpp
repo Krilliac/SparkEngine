@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -351,7 +352,9 @@ namespace SparkEditor
             std::error_code ec;
             const fs::file_status status = fs::symlink_status(path, ec);
             if (ec || fs::is_symlink(status))
+            {
                 return true;
+            }
 #ifdef _WIN32
             const DWORD attributes = GetFileAttributesW(path.c_str());
             return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
@@ -364,7 +367,7 @@ namespace SparkEditor
         /// is untrusted (an opened project may plant links to the developer's files), so
         /// it is copied with Reject; the editor's own runtime directories keep Follow
         /// (macOS frameworks legitimately contain symlinks).
-        enum class SourceLinkPolicy
+        enum class SourceLinkPolicy : std::uint8_t
         {
             Follow,
             Reject
@@ -431,10 +434,14 @@ namespace SparkEditor
             constexpr SourceLinkPolicy untrusted = SourceLinkPolicy::Reject;
             if (includeAssets &&
                 !CopyDirectoryContents(projectRoot / "Assets", outputDirectory / "Assets", error, untrusted))
+            {
                 return false;
+            }
             if (!CopyDirectoryContents(projectRoot / "Scenes", outputDirectory / "Scenes", error, untrusted) ||
                 !CopyDirectoryContents(projectRoot / "Config", outputDirectory / "Config", error, untrusted))
+            {
                 return false;
+            }
 
             std::error_code ec;
             for (fs::directory_iterator it(projectRoot, ec), end; it != end && !ec; it.increment(ec))
@@ -449,7 +456,9 @@ namespace SparkEditor
                     return false;
                 }
                 if (!it->is_regular_file(ec))
+                {
                     continue;
+                }
                 fs::copy_file(it->path(), outputDirectory / it->path().filename(), fs::copy_options::overwrite_existing,
                               ec);
             }
@@ -526,7 +535,9 @@ namespace SparkEditor
                     std::error_code ec;
                     const fs::file_status status = fs::symlink_status(current, ec);
                     if (status.type() == fs::file_type::not_found)
+                    {
                         break; // the rest is created below as real directories
+                    }
                     if (ec || IsLinkOrReparsePoint(current) || !fs::is_directory(status))
                     {
                         error = "Output path component '" + current.string() +
@@ -598,12 +609,16 @@ namespace SparkEditor
 
             std::ifstream file(projectFile, std::ios::binary);
             if (!file)
+            {
                 return {};
+            }
             const std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             Spark::Json::Value document;
             if (!Spark::Json::ParseStrict(content, &document) || !document.IsObject() ||
                 !document.HasKey("defaultScene") || !document["defaultScene"].IsString())
+            {
                 return {};
+            }
 
             const std::string& declared = document["defaultScene"].AsString();
             const fs::path relative =
@@ -611,11 +626,15 @@ namespace SparkEditor
                     .lexically_normal();
             if (relative.empty() || relative.has_root_path() || *relative.begin() != "Scenes" ||
                 relative.extension() != ".sparkscene")
+            {
                 return {};
+            }
             for (const auto& component : relative)
             {
                 if (component == "..")
+                {
                     return {};
+                }
             }
 
             const fs::path packaged = packageRoot / relative;
@@ -1357,7 +1376,9 @@ namespace SparkEditor
         if (!IsSafeOutputDirectory(fs::absolute(projectRoot).lexically_normal(), destination, detail))
         {
             if (error)
+            {
                 *error = std::move(detail);
+            }
             return false;
         }
         const fs::path staging = CreateUniqueSiblingPath(destination, "stage", detail);
@@ -1427,7 +1448,9 @@ namespace SparkEditor
             IsPathWithin(destination, sourceRoot / "Scenes") || IsPathWithin(destination, sourceRoot / "Config"))
             return fail("Package output cannot replace the project root or live inside packaged content");
         if (!IsSafeOutputDirectory(sourceRoot, destination, detail))
+        {
             return fail(detail);
+        }
 
         std::error_code ec;
         fs::create_directories(destination, ec);
@@ -1518,7 +1541,9 @@ namespace SparkEditor
         // one the package contains, else the first reflected scene.
         fs::path reflectedScene = FindPackagedDefaultScene(sourceRoot, destination);
         if (reflectedScene.empty())
+        {
             reflectedScene = FindFirstReflectedScene(destination / "Scenes");
+        }
         bool hasScenePreview = false;
         if (!reflectedScene.empty())
         {
@@ -1539,11 +1564,15 @@ namespace SparkEditor
                 // Never overwrite a different authored scene that uses the
                 // staging name: the game module may load it by path.
                 if (fs::exists(previewScene, ec) || ec)
+                {
                     return fail("Project scene Scenes/Startup.sparkscene is not the startup scene; rename it or "
                                 "make it the project's defaultScene");
+                }
                 fs::copy_file(reflectedScene, previewScene, fs::copy_options::none, ec);
                 if (ec)
+                {
                     return fail("Failed to stage reflected scene-preview scene: " + ec.message());
+                }
             }
 
             const fs::path previewDirectory = destination / "ScenePreview";

@@ -14,7 +14,7 @@
  *
  * These are cross-backend checks, not goldens: no baseline images or reviewed thresholds.
  * A scene whose D3D12 feature is missing fails; nothing skips. Both devices must run on the
- * same adapter (equal LUIDs, or both software), so a cross-GPU comparison cannot hide or
+ * same adapter (equal LUIDs, or both software/WARP), so a cross-GPU comparison cannot hide or
  * invent a difference. The scene table is mirrored in wiki/graphics/D3D12-Backend.md between
  * the parity-matrix markers, and every test checks the two list the same scenes in order.
  * Scope: RHI level only; GraphicsEngine renders through D3D11 directly on Windows.
@@ -75,6 +75,9 @@ namespace
     // Backends
     // ========================================================================
 
+    constexpr UINT kMicrosoftVendorId = 0x1414;
+    constexpr UINT kWarpDeviceId = 0x8C; // Microsoft Basic Render Driver (WARP)
+
     struct AdapterIdentity
     {
         LUID luid = {};
@@ -98,7 +101,11 @@ namespace
             SUCCEEDED(adapter1->GetDesc1(&desc)))
         {
             identity.luid = desc.AdapterLuid;
-            identity.software = (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0;
+            // On a GPU-less host D3D11's hardware driver type lands on the Microsoft Basic Render
+            // Driver without DXGI_ADAPTER_FLAG_SOFTWARE and with a LUID of its own, while D3D12 uses
+            // EnumWarpAdapter. Both are the WARP rasterizer, which DXGI identifies as 1414:008C.
+            identity.software = (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0 ||
+                                (desc.VendorId == kMicrosoftVendorId && desc.DeviceId == kWarpDeviceId);
             identity.description = Narrow(desc.Description);
         }
         return identity;

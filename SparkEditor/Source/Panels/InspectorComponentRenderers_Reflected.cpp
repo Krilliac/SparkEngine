@@ -260,7 +260,9 @@ namespace SparkEditor
                         ImGui::EndDisabled();
 
                     if (afterField)
+                    {
                         afterField(field);
+                    }
                     if (!field.tooltip.empty() && ImGui::IsItemHovered())
                         ImGui::SetTooltip("%s", field.tooltip.c_str());
 
@@ -287,7 +289,9 @@ namespace SparkEditor
                     ImGui::EndDisabled();
 
                 if (afterField)
+                {
                     afterField(field);
+                }
                 if (!field.tooltip.empty() && ImGui::IsItemHovered())
                     ImGui::SetTooltip("%s", field.tooltip.c_str());
 

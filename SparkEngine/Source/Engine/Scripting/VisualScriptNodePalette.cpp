@@ -203,7 +203,9 @@ namespace Spark::Scripting
         for (const auto& entry : kNodeTypeNames)
         {
             if (entry.type == type)
+            {
                 return entry.name;
+            }
         }
         return nullptr;
     }
@@ -213,7 +215,9 @@ namespace Spark::Scripting
         for (const auto& entry : kNodeTypeNames)
         {
             if (name == entry.name)
+            {
                 return entry.type;
+            }
         }
         return std::nullopt;
     }
@@ -229,7 +233,9 @@ namespace Spark::Scripting
         for (size_t i = 0; i < kPinKindNames.size(); ++i)
         {
             if (name == kPinKindNames[i])
+            {
                 return static_cast<PinKind>(i);
+            }
         }
         return std::nullopt;
     }
@@ -237,9 +243,13 @@ namespace Spark::Scripting
     bool VisualScriptGraphIO::ArePinKindsCompatible(PinKind from, PinKind to)
     {
         if (from == PinKind::Execution || to == PinKind::Execution)
+        {
             return from == to;
+        }
         if (from == to || from == PinKind::Any || to == PinKind::Any)
+        {
             return true;
+        }
         return (from == PinKind::Int && to == PinKind::Float) || (from == PinKind::Float && to == PinKind::Int);
     }
 
