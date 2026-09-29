@@ -145,6 +145,7 @@ namespace MMO::SessionGateWire
             PutFloat(bytes, packet.z);
             PutFloat(bytes, packet.health);
             PutU32(bytes, packet.interactionCount);
+            PutU32(bytes, packet.stateSequence);
         }
 
         bool ReadSnapshot(std::span<const uint8_t> bytes, size_t& cursor, Packet& packet) noexcept
@@ -153,7 +154,7 @@ namespace MMO::SessionGateWire
                    ReadU32(bytes, cursor, packet.targetId) && ReadU32(bytes, cursor, packet.areaId) &&
                    ReadFloat(bytes, cursor, packet.x) && ReadFloat(bytes, cursor, packet.y) &&
                    ReadFloat(bytes, cursor, packet.z) && ReadFloat(bytes, cursor, packet.health) &&
-                   ReadU32(bytes, cursor, packet.interactionCount);
+                   ReadU32(bytes, cursor, packet.interactionCount) && ReadU32(bytes, cursor, packet.stateSequence);
         }
     } // namespace
 

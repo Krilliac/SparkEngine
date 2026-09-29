@@ -125,9 +125,10 @@ namespace MMO
         return Status::Invalid;
     }
 
-    Packet MMOSessionGate::Snapshot(const Session& session) const
+    Packet MMOSessionGate::Snapshot(const Session& session)
     {
         Packet packet;
+        packet.stateSequence = ++m_stateSequence;
         packet.operation = Operation::State;
         packet.response = true;
         // State events use requestId for the server-attributed connection ID.

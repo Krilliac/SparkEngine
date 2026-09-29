@@ -356,7 +356,7 @@ namespace MMO
     {
         Spark::Net::NetworkMessage message;
         message.type = ReplyType;
-        message.channel = Spark::Net::ChannelType::ReliableOrdered;
+        message.channel = Spark::Net::ChannelType::Reliable;
         message.payload = Encode(packet);
         m_network->SendToClient(clientId, message);
     }
@@ -374,7 +374,7 @@ namespace MMO
         m_nextRequest = (std::max)(m_nextRequest, request.requestId);
         Spark::Net::NetworkMessage message;
         message.type = RequestType;
-        message.channel = Spark::Net::ChannelType::ReliableOrdered;
+        message.channel = Spark::Net::ChannelType::Reliable;
         message.sensitive = true;
         message.payload = Encode(request);
         Spark::SecureErase(request.password.data(), request.password.size());
@@ -390,7 +390,7 @@ namespace MMO
     {
         for (const auto& state : m_states)
         {
-            if (characterId != 0 && state.characterId == characterId)
+            if (characterId != 0 && state.characterId == characterId && state.status == Status::Ok)
             {
                 return &state;
             }
@@ -411,43 +411,58 @@ namespace MMO
             m_lastReply = packet;
             return;
         }
-        if (packet.status == Status::Ok && packet.characterId != 0 && packet.requestId != 0)
+        if (packet.characterId == 0 || packet.requestId == 0)
         {
-            MMOPlayer player;
-            player.clientId = packet.requestId;
-            player.characterId = packet.characterId;
-            player.currentAreaId = packet.areaId;
-            player.posX = player.targetPosX = packet.x;
-            player.posY = player.targetPosY = packet.y;
-            player.posZ = player.targetPosZ = packet.z;
-            player.health = player.maxHealth = packet.health;
-            player.lastInteractionTarget = packet.targetId;
-            player.interactionCount = packet.interactionCount;
-            (void)m_players->ApplySessionState(packet.requestId, player);
+            return;
         }
-        else if (packet.status != Status::Ok)
-        {
-            m_players->RemovePlayer(packet.requestId);
-        }
+        // Reliable delivery does not preserve order, so a late snapshot must never
+        // overwrite a newer one (or resurrect a revoked character).
+        Packet* slot = nullptr;
+        Packet* freeSlot = nullptr;
         for (auto& state : m_states)
         {
             if (state.characterId == packet.characterId)
             {
-                state = packet.status == Status::Ok ? packet : Packet{};
-                return;
+                slot = &state;
+                break;
             }
-        }
-        if (packet.status == Status::Ok)
-        {
-            for (auto& state : m_states)
+            if (!freeSlot && (state.characterId == 0 || state.status != Status::Ok))
             {
-                if (state.characterId == 0)
-                {
-                    state = packet;
-                    return;
-                }
+                freeSlot = &state;
             }
         }
+        if (slot && packet.stateSequence <= slot->stateSequence)
+        {
+            return;
+        }
+        if (!slot)
+        {
+            slot = packet.status == Status::Ok ? freeSlot : nullptr;
+        }
+        if (slot)
+        {
+            *slot = packet;
+        }
+        if (packet.status != Status::Ok)
+        {
+            m_players->RemovePlayer(packet.requestId);
+            return;
+        }
+        if (!slot)
+        {
+            return;
+        }
+        MMOPlayer player;
+        player.clientId = packet.requestId;
+        player.characterId = packet.characterId;
+        player.currentAreaId = packet.areaId;
+        player.posX = player.targetPosX = packet.x;
+        player.posY = player.targetPosY = packet.y;
+        player.posZ = player.targetPosZ = packet.z;
+        player.health = player.maxHealth = packet.health;
+        player.lastInteractionTarget = packet.targetId;
+        player.interactionCount = packet.interactionCount;
+        (void)m_players->ApplySessionState(packet.requestId, player);
     }
 } // namespace MMO
 #endif

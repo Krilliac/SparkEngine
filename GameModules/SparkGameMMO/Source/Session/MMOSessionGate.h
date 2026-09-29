@@ -89,7 +89,8 @@ namespace MMO
         void ReceiveReply(std::span<const uint8_t> payload);
         SessionGateWire::Status Authenticate(Session& session, const SessionGateWire::Packet& request);
         SessionGateWire::Status Apply(Session& session, const SessionGateWire::Packet& request);
-        SessionGateWire::Packet Snapshot(const Session& session) const;
+        /// Build a state packet stamped with the next server snapshot sequence.
+        SessionGateWire::Packet Snapshot(const Session& session);
         void SendTo(uint32_t clientId, const SessionGateWire::Packet& packet);
         void Publish(const Session& session);
 
@@ -106,6 +107,7 @@ namespace MMO
         std::array<SessionGateWire::Packet, MaxSessions> m_states{};
         SessionGateWire::Packet m_lastReply{};
         uint32_t m_nextRequest = 0;
+        uint32_t m_stateSequence = 0;
         float m_authCooldown = 0.0f;
         float m_connectionCheck = 0.0f;
     };

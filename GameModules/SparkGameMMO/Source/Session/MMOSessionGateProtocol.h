@@ -13,7 +13,6 @@
 
 #include <array>
 #include <cstddef>
-#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -55,6 +54,7 @@ namespace MMO::SessionGateWire
         uint32_t targetId = 0;
         uint32_t areaId = 0;
         uint32_t interactionCount = 0;
+        uint32_t stateSequence = 0; ///< Server-assigned snapshot order; receivers drop stale snapshots.
         float x = 0.0F;
         float y = 0.0F;
         float z = 0.0F;
