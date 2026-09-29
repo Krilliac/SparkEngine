@@ -913,11 +913,20 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:16e99ff696fc",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestNetworkMMOIntegration.cpp"
+            "Tests/TestNetworkMMOIntegration.cpp",
+            "GameModules/SparkGameMMO/Source/Session/MMOSessionGate.cpp",
+            "GameModules/SparkGameMMO/Source/Session/MMOSessionGateWorld.cpp",
+            "GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp",
+            "SparkEngine/Source/Engine/Networking/GatewayAuthenticator.h",
+            "SparkServer/src/ServerApplication.cpp",
+            "Tests/Fixtures/SessionGatePeer.cpp",
+            "Tests/TestMOD320SessionGateProcess.py",
+            "Tests/TestSessionGateProtocol.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "No committed test has two real clients authenticate, create owned characters and move authoritatively."
+          "note": "Local Windows Release only, no exact-commit CI. CTest MMOIntegratedWorld_TwoClientSessionGate (server + 2 client processes over secured loopback, guarded authentication) passes; bad-credential, unauthenticated and foreign-character refusals asserted; forcing OwnsCharacter true makes it fail. Flaky under heavy CPU load (auth budget); a client through SparkServer not yet exercised."
         },
         {
           "criterionDigest": "sha256:1e28d56271ea",
@@ -994,8 +1003,7 @@
         "module-MMO-integration"
       ],
       "plannedTestSelectors": [
-        "MMOAccount_*",
-        "MMOIntegratedWorld_*"
+        "MMOAccount_*"
       ]
     },
     {

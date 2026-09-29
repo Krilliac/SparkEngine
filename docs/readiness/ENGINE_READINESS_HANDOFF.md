@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **172 implemented** (66%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **173 implemented** (67%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -308,7 +308,7 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | [`MOD-290`](#mod-290--build-the-shared-manifest-and-installed-sdk-module-kit) Build the shared manifest and installed-SDK module kit | P1 | **in-progress** | 3/4 · 0/4 | `RDY-010`, `RDY-020`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
 | [`MOD-300`](#mod-300--complete-and-correctly-position-the-base-sparkgame-showcase) Complete and correctly position the base SparkGame showcase | P1 | **in-progress** | 4/5 · 0/5 | `MOD-290` | `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-310`](#mod-310--finish-fps-as-the-installed-single-player-stable-v1-slice) Finish FPS as the installed single-player stable-v1 slice | P1 | **in-progress** | 3/5 · 0/5 | `MOD-290`, `SDK-240`, `RDY-020` | `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-320`](#mod-320--finish-mmo-as-a-secure-persistent-integrated-world) Finish MMO as a secure persistent integrated world | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290`, `NET-100`, `DATA-120`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-320`](#mod-320--finish-mmo-as-a-secure-persistent-integrated-world) Finish MMO as a secure persistent integrated world | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290`, `NET-100`, `DATA-120`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **in-progress** | 3/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
@@ -2922,7 +2922,7 @@ Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `SparkGateway/src/GatewayLocalAdapters.h`, `SparkGateway/src/GatewayLocalAdapters.cpp`, `SparkGateway/src/GatewayCoordinator.h`, `SparkGateway/src/GatewayCoordinator.cpp`, `SparkGateway/src/GatewayApplication.cpp`, `SparkGateway/src/main.cpp`, `Tests/TestOnlineServicesLocalStack.cpp`, `Tests/CMakeLists.txt`, `docs/specs/online-services.md`, `wiki/advanced/Online-Service-Boundary.md`
    - Engine seams, pending owner check OD-08: NullOnlinePlatform (B1); LocalFixtureAuthenticator for identity, entitlement, moderation (B2/B4); LocalDeterministicPlacement via IAreaPlacementPolicy (B9); SparkDaemon + BeginDrain for fleet (B8); DedicatedServer in-process admin. CTest OnlineServicesLocalStack (6 tests, exact count) runs admission twice from fresh state; both equal a fixed transcript.
 3. **[implemented]** Production adapters fail safely and are observable
-   - Evidence: `SparkEngine/Source/Engine/OnlineServices/OnlineServices.h`, `SparkEngine/Source/Core/EngineConsoleCommands.cpp`, `SparkGateway/src/GuardedGatewayAuthenticator.h`, `SparkGateway/src/GatewayCoordinator.cpp`, `SparkGateway/src/GatewayApplication.cpp`, `Tests/TestOnlineServices.cpp`, `Tests/TestSparkGatewayCoordinator.cpp`, `Tests/TestGatewayAreaControl.cpp`, `Tests/CMakeLists.txt`, `docs/specs/online-services.md`
+   - Evidence: `SparkEngine/Source/Engine/OnlineServices/OnlineServices.h`, `SparkEngine/Source/Core/EngineConsoleCommands.cpp`, `SparkEngine/Source/Engine/Networking/GatewayAuthenticator.h`, `SparkGateway/src/GatewayCoordinator.cpp`, `SparkGateway/src/GatewayApplication.cpp`, `Tests/TestOnlineServices.cpp`, `Tests/TestSparkGatewayCoordinator.cpp`, `Tests/TestGatewayAreaControl.cpp`, `Tests/CMakeLists.txt`, `docs/specs/online-services.md`
    - Safe failure: GuardedOnlinePlatform (5 ms budget, per-capability circuit) and GuardedGatewayAuthenticator (exception containment, 2 s budget, fault circuit, redaction). Observable: gateway health 'authentication' ready=false when failing fast; online_status command. CTests: OnlineServicesDegraded (11), GatewayGuardedAuthenticator (7). OD-08: owner to confirm this meets 'production adapters'.
 4. **[implemented]** No local JSON/demo service is marketed as production infrastructure
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
@@ -3620,11 +3620,11 @@ MMO account storage is in-memory with demo hashing, scene paths mismatch the tre
 
 **Acceptance criteria**
 
-Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Two real clients authenticate, create owned characters, enter world, move/interact authoritatively
-   - Evidence: `Tests/TestNetworkMMOIntegration.cpp`
-   - No committed test has two real clients authenticate, create owned characters and move authoritatively.
+1. **[implemented]** Two real clients authenticate, create owned characters, enter world, move/interact authoritatively
+   - Evidence: `Tests/TestNetworkMMOIntegration.cpp`, `GameModules/SparkGameMMO/Source/Session/MMOSessionGate.cpp`, `GameModules/SparkGameMMO/Source/Session/MMOSessionGateWorld.cpp`, `GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp`, `SparkEngine/Source/Engine/Networking/GatewayAuthenticator.h`, `SparkServer/src/ServerApplication.cpp`, `Tests/Fixtures/SessionGatePeer.cpp`, `Tests/TestMOD320SessionGateProcess.py`, `Tests/TestSessionGateProtocol.cpp`, `Tests/CMakeLists.txt`
+   - Local Windows Release only, no exact-commit CI. CTest MMOIntegratedWorld_TwoClientSessionGate (server + 2 client processes over secured loopback, guarded authentication) passes; bad-credential, unauthenticated and foreign-character refusals asserted; forcing OwnsCharacter true makes it fail. Flaky under heavy CPU load (auth budget); a client through SparkServer not yet exercised.
 2. **[implemented]** Inventory/reputation/world state persists through cold restart
    - Evidence: `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp`, `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h`, `Tests/TestMOD320MMOPersistenceReal.cpp`, `GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.cpp`, `GameModules/SparkGameMMO/Source/Core/Main.cpp`, `GameModules/SparkGameMMO/README.md`
    - A fresh MMOPersistenceSystem on the same file (in-process cold restart, AsyncDatabase KV fallback) restores inventory slots, reputation, crafting, lockouts, achievements and guild world state (guilds, members, next guild ID); removed records stay removed. Boss kills are not persisted: MMOWorldBossSystem keeps no kill history. No two-client or process-restart test and no hosted CI yet.

@@ -689,7 +689,7 @@
           "evidence": [
             "SparkEngine/Source/Engine/OnlineServices/OnlineServices.h",
             "SparkEngine/Source/Core/EngineConsoleCommands.cpp",
-            "SparkGateway/src/GuardedGatewayAuthenticator.h",
+            "SparkEngine/Source/Engine/Networking/GatewayAuthenticator.h",
             "SparkGateway/src/GatewayCoordinator.cpp",
             "SparkGateway/src/GatewayApplication.cpp",
             "Tests/TestOnlineServices.cpp",
