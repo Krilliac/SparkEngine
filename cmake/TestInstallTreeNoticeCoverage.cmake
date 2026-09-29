@@ -3,9 +3,9 @@ cmake_minimum_required(VERSION 3.25)
 # GOV-400 LicenseInventory_InstallTreeNoticeCoverage: the notice-coverage gate
 # against this build's real install tree, not a fixture.
 #
-# Installs the components CPack packages (CPACK_COMPONENTS_ALL in the root
-# CMakeLists.txt; the private "symbols" component is not among them) into a
-# fresh prefix, then runs both gate implementations in closed-world mode:
+# Installs the components CPack packages (CPACK_COMPONENTS_ALL, read from this
+# build's CPackConfig.cmake; the private "symbols" component is not among them)
+# into a fresh prefix, then runs both gate implementations in closed-world mode:
 # cmake/ValidateStagedPackageNotices.cmake and
 # tools/governance/generate_third_party_notices.py --check-package --closed-world.
 # Both must pass, agree on the font and third-party payload counts, and find a
@@ -16,8 +16,7 @@ cmake_minimum_required(VERSION 3.25)
 # This covers the install tree; the CPack archive and native installers are not
 # run through the gate here.
 
-foreach(_spark_required IN ITEMS SPARK_BINARY_DIR SPARK_SOURCE_DIR SPARK_CONFIG SPARK_PYTHON SPARK_COMPONENTS
-                                 SPARK_INSTALL_ROOT)
+foreach(_spark_required IN ITEMS SPARK_BINARY_DIR SPARK_SOURCE_DIR SPARK_CONFIG SPARK_PYTHON SPARK_INSTALL_ROOT)
     if(NOT DEFINED ${_spark_required} OR "${${_spark_required}}" STREQUAL "")
         message(FATAL_ERROR "${_spark_required} is required")
     endif()
@@ -37,7 +36,13 @@ if(NOT _spark_root_is_bounded OR _spark_root STREQUAL _spark_binary_root OR
 endif()
 file(REMOVE_RECURSE "${_spark_root}")
 
-string(REPLACE "|" ";" SPARK_COMPONENTS "${SPARK_COMPONENTS}")
+# The package's component list, exactly as CPack will package it.
+file(STRINGS "${SPARK_BINARY_DIR}/CPackConfig.cmake" _spark_components_line
+    REGEX "^set[(]CPACK_COMPONENTS_ALL \"[^\"]*\"[)]$")
+if(NOT _spark_components_line MATCHES "^set[(]CPACK_COMPONENTS_ALL \"([^\"]+)\"[)]$")
+    message(FATAL_ERROR "No CPACK_COMPONENTS_ALL in ${SPARK_BINARY_DIR}/CPackConfig.cmake")
+endif()
+set(SPARK_COMPONENTS "${CMAKE_MATCH_1}")
 foreach(_spark_component IN LISTS SPARK_COMPONENTS)
     execute_process(
         COMMAND "${CMAKE_COMMAND}" --install "${SPARK_BINARY_DIR}" --config "${SPARK_CONFIG}"

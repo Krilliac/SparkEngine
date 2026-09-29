@@ -4491,14 +4491,9 @@ set_tests_properties(LicenseInventory_ThirdPartyNotices PROPERTIES
     LABELS "governance;unit;python"
     TIMEOUT 300)
 # GOV-400: both notice-gate implementations, in closed-world classification,
-# against this build's real install tree (the components CPack packages; the
-# root CMakeLists.txt sets CPACK_COMPONENTS_ALL after this directory is added,
-# so the list is repeated here). Probe files prove the pass is not vacuous.
-set(_spark_notice_install_components runtime sdk tools templates samples)
-if(MSVC)
-    list(APPEND _spark_notice_install_components redist)
-endif()
-list(JOIN _spark_notice_install_components "|" _spark_notice_install_components)
+# against this build's real install tree (the CPACK_COMPONENTS_ALL components,
+# read from the generated CPackConfig.cmake). Probe files prove the pass is not
+# vacuous.
 add_test(
     NAME LicenseInventory_InstallTreeNoticeCoverage
     COMMAND ${CMAKE_COMMAND}
@@ -4506,7 +4501,6 @@ add_test(
         -DSPARK_SOURCE_DIR=${CMAKE_SOURCE_DIR}
         -DSPARK_CONFIG=$<CONFIG>
         -DSPARK_PYTHON=${Python3_EXECUTABLE}
-        "-DSPARK_COMPONENTS=${_spark_notice_install_components}"
         -DSPARK_INSTALL_ROOT=${CMAKE_BINARY_DIR}/notice-install-tree
         -P ${CMAKE_SOURCE_DIR}/cmake/TestInstallTreeNoticeCoverage.cmake)
 set_tests_properties(LicenseInventory_InstallTreeNoticeCoverage PROPERTIES
