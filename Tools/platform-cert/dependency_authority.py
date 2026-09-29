@@ -337,11 +337,33 @@ def default_platform_runtime() -> list[dict[str, Any]]:
     entry pins a bounded anchored *shape* rather than an exact string; the
     file's real bytes are still measured out of the evidence bundle, so an
     entry that matches the shape but not a real file cannot certify.
+
+    The 'system' entries are the operating-system DLLs the MSVC v143 images
+    import, read from their PE import tables with pe_imports.py (a
+    windows-release Release bin/ of 2026-09-28, a windows-shipping MinSizeRel
+    bin/ of 2026-09-23, and the app-local VC143 CRT the redist component
+    installs).  A DLL is required
+    for both rows when SparkEngine.exe, the product executable of both rows,
+    imports it in both trees; it is authorised but not row-required when
+    only the editor or a tool imports it.  SparkEngine.exe statically imports
+    d3d11.dll, dxgi.dll and d3dcompiler_47.dll, so the NullRHI row needs them
+    on the host too even though it never renders (HEAD-220).
     """
     d3d11_row = "win11-x64-msvc143-d3d11"
     nullrhi_row = "win11-x64-msvc143-nullrhi"
+    both_rows = [d3d11_row, nullrhi_row]
     msvc_pattern = r"^14\.[0-9]{1,3}\.[0-9]{1,5}\.[0-9]{1,5}$"
     os_pattern = r"^10\.0\.[0-9]{1,6}\.[0-9]{1,6}$"
+
+    def system(name: str, rows: list[str], justification: str) -> dict[str, Any]:
+        return {
+            "name": name,
+            "versionPattern": os_pattern,
+            "source": "system",
+            "requiredForRows": list(rows),
+            "justification": justification,
+        }
+
     return [
         {
             "name": "msvcp140.dll",
@@ -364,34 +386,62 @@ def default_platform_runtime() -> list[dict[str, Any]]:
             "requiredForRows": [d3d11_row, nullrhi_row],
             "justification": "MSVC x64 exception-handling runtime.",
         },
-        {
-            "name": "d3d11.dll",
-            "versionPattern": os_pattern,
-            "source": "system",
-            "requiredForRows": [d3d11_row],
-            "justification": "Direct3D 11 runtime for the primary RHI backend.",
-        },
-        {
-            "name": "dxgi.dll",
-            "versionPattern": os_pattern,
-            "source": "system",
-            "requiredForRows": [d3d11_row],
-            "justification": "DXGI adapter/swapchain runtime used by the D3D11 backend.",
-        },
-        {
-            "name": "d3dcompiler_47.dll",
-            "versionPattern": os_pattern,
-            "source": "directx",
-            "requiredForRows": [d3d11_row],
-            "justification": "Runtime HLSL compilation path in SparkShaderCompiler.",
-        },
-        {
-            "name": "xaudio2_9.dll",
-            "versionPattern": os_pattern,
-            "source": "system",
-            "requiredForRows": [d3d11_row],
-            "justification": "XAudio2 backend; the NullRHI row declares audio api 'none'.",
-        },
+        system(
+            "d3d11.dll",
+            both_rows,
+            "Direct3D 11 runtime for the primary RHI backend; SparkEngine.exe imports it "
+            "statically, so the NullRHI row loads it too.",
+        ),
+        system(
+            "dxgi.dll",
+            both_rows,
+            "DXGI adapter/swapchain runtime; SparkEngine.exe imports it statically.",
+        ),
+        system(
+            "d3dcompiler_47.dll",
+            both_rows,
+            "HLSL-to-DXBC compiler (Spark::RHI::CompileShader). No install component ships "
+            "it; the loader takes the Windows 10+ in-box copy from System32.",
+        ),
+        system(
+            "d3d12.dll",
+            both_rows,
+            "Direct3D 12 runtime; SparkEngine.exe imports it statically for the D3D12 backend.",
+        ),
+        system(
+            "xaudio2_9.dll",
+            [],
+            "XAudio2 backend. The Windows SDK's inline XAudio2Create loads it with "
+            "LoadLibraryEx(LOAD_LIBRARY_SEARCH_SYSTEM32), so it is in no image's import "
+            "table and a measured PE closure can never contain it; requiring it for a row "
+            "would make that row uncertifiable.",
+        ),
+        system("kernel32.dll", both_rows, "Win32 base API; every image imports it."),
+        system("user32.dll", both_rows, "Win32 windowing and input."),
+        system("gdi32.dll", both_rows, "Win32 GDI."),
+        system("imm32.dll", both_rows, "Win32 Input Method Manager."),
+        system("advapi32.dll", both_rows, "Win32 registry and security APIs."),
+        system("ole32.dll", both_rows, "COM runtime."),
+        system("shell32.dll", both_rows, "Win32 shell API (CommandLineToArgvW)."),
+        system("bcrypt.dll", both_rows, "CNG random numbers (BCryptGenRandom)."),
+        system("dbghelp.dll", both_rows, "Crash-dump writing and stack symbolisation."),
+        system("winmm.dll", both_rows, "Windows multimedia API, linked by SparkEngineLib."),
+        system(
+            "comdlg32.dll",
+            [],
+            "Common file dialogs; only SparkEditor.exe imports it.",
+        ),
+        system(
+            "ws2_32.dll",
+            [],
+            "Winsock; SparkEditor.exe imports it, and SparkEngine.exe does only when "
+            "ENABLE_NETWORKING is ON, which windows-shipping turns off.",
+        ),
+        system(
+            "winhttp.dll",
+            [],
+            "HTTP client; only SparkInstaller.exe and SparkBuild.exe import it.",
+        ),
     ]
 
 

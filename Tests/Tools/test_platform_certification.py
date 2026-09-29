@@ -1863,18 +1863,33 @@ class TestPackageWalk(PackageTestCase):
         self.assertIn("do not match the images' imports", str(raised.exception))
 
     def test_a_package_local_third_party_dll_is_declared_by_its_authority_identity(self) -> None:
-        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "vcruntime140_1.dll", "SDL2.dll"]))
+        # The row also requires its operating-system DLLs, so the product imports them.
+        os_required = [
+            AUTHORITY.by_identity[key]["name"]
+            for key in AUTHORITY.required_keys(NULLRHI_ID)
+            if key[1] == "system"
+        ]
+        self.stage(
+            "SparkEngine.exe",
+            build_pe(["msvcp140.dll", "vcruntime140_1.dll", "SDL2.dll"] + os_required),
+        )
         self.stage("SDL2.dll", build_pe(["vcruntime140.dll"]))
         graph = pe_imports.walk_package(self.package, SDL2_AUTHORITY, ["SparkEngine.exe"])
         closure = self.closure(
             ("msvcp140.dll", "vcredist"), ("vcruntime140.dll", "vcredist"), ("vcruntime140_1.dll", "vcredist")
         ) + [
             {"name": "SDL2", "version": SDL2_VERSION, "source": "bundled"}
+        ] + [
+            {"name": name, "version": "10.0.26100.1", "source": "system"} for name in os_required
         ]
         self.assertEqual(pe_imports.closure_errors(graph, closure, SDL2_AUTHORITY), [])
         self.assertEqual(bundle_verify.check_dependency_closure(NULLRHI_ID, closure, SDL2_AUTHORITY), [])
 
-        by_file_name = closure[:3] + [{"name": "sdl2.dll", "version": SDL2_VERSION, "source": "bundled"}]
+        by_file_name = (
+            closure[:3]
+            + [{"name": "sdl2.dll", "version": SDL2_VERSION, "source": "bundled"}]
+            + closure[4:]
+        )
         self.assertEqual(
             pe_imports.closure_errors(graph, by_file_name, SDL2_AUTHORITY),
             [
@@ -1912,15 +1927,32 @@ class TestPackageWalk(PackageTestCase):
         self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "KERNEL32.dll"]))
         self.stage("kernel32.dll", build_pe())
         graph = self.walk(["SparkEngine.exe", "kernel32.dll"])
-        self.assertEqual(self.resolution(graph, "kernel32.dll")["resolution"], "unresolved")
+        # The shipped copy never loads: the import still resolves to the OS library.
+        self.assertEqual(
+            self.resolution(graph, "kernel32.dll"),
+            {
+                "name": "kernel32.dll",
+                "importedBy": ["SparkEngine.exe"],
+                "resolution": "platform",
+                "source": "system",
+            },
+        )
         errors = pe_imports.closure_errors(graph, self.closure(("msvcp140.dll", "vcredist")), AUTHORITY)
         self.assertEqual(
             errors,
             [
                 "first-party image 'kernel32.dll' is a KnownDLL the loader always maps from the "
                 "system directory, not a product image",
-                "'kernel32.dll' (imported by SparkEngine.exe) is neither in the package nor a "
-                "platformRuntime entry of the dependency authority",
+            ],
+        )
+        # Nor does the shipped file stand in for declaring the OS library.
+        self.assertEqual(
+            pe_imports.closure_errors(
+                self.walk(), self.closure(("msvcp140.dll", "vcredist")), AUTHORITY
+            ),
+            [
+                "measured import 'kernel32.dll' (imported by SparkEngine.exe) is not declared "
+                "in the dependency closure",
             ],
         )
 
@@ -1951,6 +1983,7 @@ class TestPackageWalk(PackageTestCase):
         dep = self.resolution(graph, "kernel32.dll")
         dep["resolution"] = "package"
         dep["packagePath"] = "kernel32.dll"
+        del dep["source"]
         pe_imports.validate_graph(graph)
         self.assertEqual(
             pe_imports.graph_authority_errors(graph, AUTHORITY),
@@ -2958,6 +2991,10 @@ def _row_plan_errors(
     required = set(row["evidenceRequired"])
     probes = set(plan["probes"])
     uncovered = plan.get("uncoveredCategories", {})
+    # collect_evidence.py --package-root measures dependency_closure against the
+    # plan's declared dependencyClosure; an empty declaration measures nothing.
+    if plan.get("dependencyClosure"):
+        probes.add("dependency_closure")
 
     for name in sorted(probes - required):
         errors.append(f"probe {name!r} is not in the row's evidenceRequired")
@@ -3108,6 +3145,40 @@ class TestRowProbePlans(unittest.TestCase):
         del plan["uncoveredCategories"]["crash"]
         self.assertIn(
             "category 'crash' is neither probed nor declared uncovered", self._errors(plan)
+        )
+
+    CLOSURE = [{"name": "kernel32.dll", "version": "10.0.26100.1", "source": "system"}]
+
+    def test_a_declared_closure_that_is_still_declared_uncovered_is_rejected(self) -> None:
+        for row_id in (D3D11_ID, NULLRHI_ID):
+            plan = copy.deepcopy(self._plan(row_id))
+            plan["dependencyClosure"] = copy.deepcopy(self.CLOSURE)
+            plan["uncoveredCategories"].setdefault("dependency_closure", "not measured yet")
+            self.assertIn(
+                "category 'dependency_closure' is both probed and declared uncovered",
+                self._errors(plan),
+                row_id,
+            )
+
+    def test_a_declared_closure_covers_the_dependency_closure_category(self) -> None:
+        for row_id in (D3D11_ID, NULLRHI_ID):
+            plan = copy.deepcopy(self._plan(row_id))
+            plan["uncoveredCategories"].pop("dependency_closure", None)
+            self.assertIn(
+                "category 'dependency_closure' is neither probed nor declared uncovered",
+                self._errors(plan),
+                row_id,
+            )
+            plan["dependencyClosure"] = copy.deepcopy(self.CLOSURE)
+            self.assertEqual(self._errors(plan), [], row_id)
+
+    def test_an_empty_declared_closure_does_not_cover_the_category(self) -> None:
+        plan = copy.deepcopy(self._plan(NULLRHI_ID))
+        plan["uncoveredCategories"].pop("dependency_closure", None)
+        plan["dependencyClosure"] = []
+        self.assertIn(
+            "category 'dependency_closure' is neither probed nor declared uncovered",
+            self._errors(plan),
         )
 
 
