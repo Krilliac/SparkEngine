@@ -42,7 +42,7 @@ namespace Spark
 
     bool DialogueTree::LoadFromFile(const std::string& filePath)
     {
-        constexpr std::streamoff kMaxFileBytes = 8 * 1024 * 1024;
+        constexpr std::streamoff kMaxFileBytes = std::streamoff{8} * 1024 * 1024;
         constexpr size_t kMaxNodes = 100000;
         constexpr size_t kMaxChoicesPerNode = 4096;
         // Binary mode: the byte count from tellg must match what read() returns (text mode would
@@ -126,7 +126,7 @@ namespace Spark
             node.type = DialogueNodeType::Text;
             if (jsonNode["type"].IsString())
             {
-                using namespace Spark::HashLiterals;
+                using Spark::HashLiterals::operator""_hash64;
                 const std::string& typeStr = jsonNode["type"].AsString();
                 switch (Spark::FNV1a64(typeStr))
                 {

@@ -114,7 +114,7 @@ namespace Spark::Data
     {
       public:
         /// @brief Maximum untrusted table document size accepted by the in-memory loader.
-        static constexpr size_t kMaxDocumentBytes = 8u * 1024u * 1024u;
+        static constexpr size_t kMaxDocumentBytes = size_t{8} * 1024 * 1024;
         /// @brief Maximum rows and columns accepted from one table document.
         static constexpr size_t kMaxRows = 100000u;
         static constexpr size_t kMaxColumns = 256u;

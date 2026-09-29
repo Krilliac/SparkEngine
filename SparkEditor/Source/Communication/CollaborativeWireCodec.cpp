@@ -186,24 +186,23 @@ namespace SparkEditor
         }
     } // namespace
 
-    std::vector<uint8_t> SerializeMessage(const InternalMessage& message)
+    std::vector<uint8_t> SerializeMessage(const InternalMessage& msg)
     {
         static const EditMessage defaultEditMessage{};
         std::vector<uint8_t> buffer;
         buffer.reserve(256);
 
-        WriteU8(buffer, static_cast<uint8_t>(message.type));
-        WriteU32(buffer, message.sourcePeer);
-        WriteString(buffer, message.nodeId);
-        WriteString(buffer, message.payload);
-        WriteU64(buffer, message.timestamp);
-        WriteEditMessage(buffer,
-                         message.type == InternalMessageType::EditBroadcast ? message.editMessage : defaultEditMessage);
-        WriteEditorPeer(buffer, message.peerInfo);
+        WriteU8(buffer, static_cast<uint8_t>(msg.type));
+        WriteU32(buffer, msg.sourcePeer);
+        WriteString(buffer, msg.nodeId);
+        WriteString(buffer, msg.payload);
+        WriteU64(buffer, msg.timestamp);
+        WriteEditMessage(buffer, msg.type == InternalMessageType::EditBroadcast ? msg.editMessage : defaultEditMessage);
+        WriteEditorPeer(buffer, msg.peerInfo);
         return buffer;
     }
 
-    bool DeserializeMessage(const uint8_t* data, size_t size, InternalMessage& outMessage)
+    bool DeserializeMessage(const uint8_t* data, size_t size, InternalMessage& outMsg)
     {
         if (!data || size == 0)
         {
@@ -235,7 +234,7 @@ namespace SparkEditor
             return false;
         }
 
-        outMessage = std::move(decoded);
+        outMsg = std::move(decoded);
         return true;
     }
 } // namespace SparkEditor
