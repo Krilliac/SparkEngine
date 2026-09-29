@@ -4766,6 +4766,16 @@ set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
     LABELS "build;shipping;unit;python"
     TIMEOUT 300)
 
+# BLD-100 / OD-04: libsodium's CPUID dispatch reports no AVX/AVX2/AVX-512/AES-NI/
+# PCLMUL/RDRAND variant on any toolchain, because cmake/SparkLibsodium.cmake
+# compiles none of them (on MSVC it overrides private/common.h's unconditional
+# HAVE_*INTRIN_H). Fails on any AVX2/AES-NI host if an above-floor variant returns.
+add_test(NAME CpuFloor_LibsodiumVariants COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(CpuFloor_LibsodiumVariants PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=CpuFloor_Libsodium_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "build;shipping;unit"
+    TIMEOUT 30)
+
 # ENG-220: tools/pe_import_closure.py fails a staged Windows package whose
 # EXE/DLL imports or delay-imports a DLL that is neither beside it, an API set,
 # nor an allowlisted System32 DLL. Synthetic in-memory PE fixtures, so it runs
