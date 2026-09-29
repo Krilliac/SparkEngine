@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.25)
 # CI-120: reset typed -D ENABLE_*/SPARK_*/BUILD_* entries so the option guard at the end
 # of this file also rejects typed typos. Must run before any option() or cache declaration.
 include("${CMAKE_SOURCE_DIR}/cmake/SparkOptionGuard.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/SparkSourceFilter.cmake")
 spark_capture_cli_options()
+include("${CMAKE_SOURCE_DIR}/cmake/SparkSourceFilter.cmake")
 
 # All targets need PIC since game modules are shared libraries that link SparkEngineLib
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

@@ -263,7 +263,7 @@ RAW_SOCKET_ALLOWLIST = (
     ),
     RawSocketAllowance(
         "SparkEngine/Source/Utils/DaemonFraming.h",
-        "RecvAll",
+        "RecvAllUntil",
         (("recv", 1),),
         reviewed_exception="POSIX branch of the named-pipe/AF_UNIX daemon framing adapter",
         family="unix",
