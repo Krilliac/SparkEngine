@@ -741,7 +741,7 @@
       "parser_id": "datatable-system",
       "corpus_dir": "FuzzerTests/corpora/datatable-system",
       "last_verified": "2026-09-28",
-      "content_digest": "3099b59eac6de969e8180d11cbe8bc9279a443935c946eb081880edb140d5540",
+      "content_digest": "c8473d15775fc3fc8ec71f34396f7d50f8809241c731c5f98bbe608127ba7bfa",
       "budget": {
         "max_input_bytes": 8388609,
         "max_parse_time_ms": 1000,
@@ -775,6 +775,12 @@
           "finding": "SaveToCSV wrote a single-column row with an empty cell as a blank line, which LoadFromCSV skips, so the row was lost on reload.",
           "found_by": "campaign",
           "guard_test": "DataTable_CsvRoundTripKeepsEmptySingleCellRow"
+        },
+        {
+          "file": "regression-trailing-cr-cell.csv",
+          "finding": "SaveToCSV wrote a last-column cell ending in CR unquoted, and LoadFromCSV stripped that CR as a line ending on reload.",
+          "found_by": "campaign",
+          "guard_test": "DataTable_CsvRoundTripKeepsTrailingCarriageReturn"
         }
       ]
     },

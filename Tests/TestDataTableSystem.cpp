@@ -114,6 +114,22 @@ TEST(DataTable_CsvRoundTripKeepsEmptySingleCellRow)
     EXPECT_EQ(table.GetRowCount(), reloaded.GetRowCount());
 }
 
+TEST(DataTable_CsvRoundTripKeepsTrailingCarriageReturn)
+{
+    // Found by the SEC-120 DataTable fuzz campaign: a last-column cell ending in CR was
+    // written unquoted, and the line splitter stripped that CR on reload.
+    Spark::Data::DataTable table;
+    ASSERT_TRUE(table.LoadFromCSV("a,b\ny,x\r\r\n"));
+    const auto* row = table.GetRow("y");
+    ASSERT_TRUE(row != nullptr);
+    EXPECT_EQ(std::string("x\r"), row->GetString("b"));
+    Spark::Data::DataTable reloaded;
+    ASSERT_TRUE(reloaded.LoadFromCSV(table.SaveToCSV()));
+    const auto* reloadedRow = reloaded.GetRow("y");
+    ASSERT_TRUE(reloadedRow != nullptr);
+    EXPECT_EQ(std::string("x\r"), reloadedRow->GetString("b"));
+}
+
 TEST(DataTableRegistry_RejectsOversizedValidFileBeforeReading)
 {
     const auto path = std::filesystem::temp_directory_path() / "spark_datatable_oversized.csv";
