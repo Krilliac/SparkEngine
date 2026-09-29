@@ -38,12 +38,27 @@ def good_frames():
     return screenshots, {"d3d11-positive": True, "d3d11-negative": False}
 
 
-def verdict(results=None, screenshots=None, authored=None):
+PACKAGE = RUN + r"\package"
+PACKAGE_SCENE = PACKAGE + r"\bin\Assets\Scenes\level1.scene"
+
+
+def scene_audit(path, outcome):
+    return (f"     > {isolation.SCENE_LOAD_CALL}{path}\n     > SceneManager::LoadCustom called. path={path}\n"
+            f"     > SceneManager::LoadScene returned: {outcome}\n")
+
+
+def good_audits():
+    return {"d3d11-positive": scene_audit(PACKAGE_SCENE, "SUCCESS"),
+            "d3d11-negative": scene_audit(OUTPUT + r"\d3d11-negative\Assets\Scenes\level1.scene", "FAILURE")}
+
+
+def verdict(results=None, screenshots=None, authored=None, audits=None):
     default_screenshots, default_authored = good_frames()
     return isolation.containment_verdict(
         good_results() if results is None else results, FORBIDDEN,
         default_screenshots if screenshots is None else screenshots, OUTPUT,
-        default_authored if authored is None else authored)
+        default_authored if authored is None else authored,
+        good_audits() if audits is None else audits, PACKAGE)
 
 
 class ContainmentVerdictTests(unittest.TestCase):
@@ -135,6 +150,36 @@ class ContainmentVerdictTests(unittest.TestCase):
         screenshots, authored = good_frames()
         del authored["d3d11-negative"]
         self.assertRejected(verdict(screenshots=screenshots, authored=authored), "asset-less package still")
+
+    def test_positive_without_scene_load_audit_fails(self):
+        for audit in ("", scene_audit(PACKAGE_SCENE, "FAILURE"), "SceneManager::LoadScene returned: SUCCESS\n"):
+            with self.subTest(audit=audit):
+                audits = good_audits()
+                audits["d3d11-positive"] = audit
+                self.assertRejected(verdict(audits=audits), "no successful level1.scene load")
+
+    def test_positive_scene_from_outside_the_package_copy_fails(self):
+        for scene in (OUTPUT + r"\d3d11-positive\Assets\Scenes\level1.scene",
+                      RUN + r"\package-no-scene\bin\Assets\Scenes\level1.scene"):
+            with self.subTest(scene=scene):
+                audits = good_audits()
+                audits["d3d11-positive"] = scene_audit(scene, "SUCCESS")
+                self.assertRejected(verdict(audits=audits), "not only the package copy's")
+
+    def test_positive_scene_path_matches_case_and_slash_insensitively(self):
+        audits = good_audits()
+        audits["d3d11-positive"] = scene_audit(PACKAGE_SCENE.upper().replace("\\", "/"), "SUCCESS")
+        self.assertEqual(verdict(audits=audits), [])
+
+    def test_audit_naming_source_root_fails(self):
+        audits = good_audits()
+        audits["d3d11-positive"] += "Loaded " + SOURCE + r"\Assets\Materials\wall.json\n"
+        self.assertRejected(verdict(audits=audits), "d3d11-positive: output names the forbidden root")
+
+    def test_d3d11_negative_control_that_loaded_a_scene_fails(self):
+        audits = good_audits()
+        audits["d3d11-negative"] = scene_audit(PACKAGE_SCENE, "SUCCESS")
+        self.assertRejected(verdict(audits=audits), "asset-less package still loaded a scene")
 
     def test_d3d11_negative_control_that_crashed_or_saved_nothing_passes(self):
         results = good_results()

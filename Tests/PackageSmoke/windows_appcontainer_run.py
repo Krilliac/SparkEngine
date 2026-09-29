@@ -16,11 +16,13 @@ One session proves, in the same container:
   ``type`` of the package copy's level1.scene succeeds;
 * NullRHI: the headless host loads the packaged module and arena; the same run
   from a copy without level1.scene fails and emits no arena record;
-* D3D11/WARP: the windowed host renders and saves a frame that
-  CheckFPSVisibleFrame.ps1 accepts; the same run from a copy without bin/Assets
-  produces no such frame. (A copy without only level1.scene still draws the
-  module's procedural props, which that frame check accepts, so the D3D11
-  control removes the whole asset tree.)
+* D3D11/WARP: the windowed host loads the package copy's level1.scene (its
+  exec_audit.log records the load path and SUCCESS) and renders and saves a
+  frame that CheckFPSVisibleFrame.ps1 accepts; the same run from a copy without
+  bin/Assets loads no scene and produces no such frame. (A copy without only
+  level1.scene still draws the module's procedural props, which that frame
+  check accepts, so the D3D11 control removes the whole asset tree and the
+  scene load is judged from the audit trail.)
 
 Nothing runs uncontained, and no run falls back to the repository. Record
 grammar (arena, lifecycle) is judged afterwards by the existing CMake parsers
@@ -41,6 +43,9 @@ import sys
 SCENE_RELATIVE = ("bin", "Assets", "Scenes", "level1.scene")
 ARENA_TOKEN = "SPARK_FPS_HEADLESS_ARENA"
 SCREENSHOT_NAME = "fps-visible.png"
+AUDIT_NAME = "exec_audit.log"
+SCENE_LOAD_CALL = "SceneManager::LoadScene called. filepath="
+SCENE_LOAD_SUCCESS = "SceneManager::LoadScene returned: SUCCESS"
 RUN_TIMEOUT_SECONDS = 120
 CANARY_TIMEOUT_SECONDS = 30
 
@@ -93,6 +98,16 @@ def names_forbidden_root(text: str, forbidden_roots: list[str]) -> str | None:
     return None
 
 
+def loaded_scene_paths(audit: str) -> list[str]:
+    """Every scene path the windowed module asked SceneManager to load, from its exec_audit.log."""
+    paths = []
+    for line in audit.splitlines():
+        _, marker, path = line.partition(SCENE_LOAD_CALL)
+        if marker:
+            paths.append(path.strip())
+    return paths
+
+
 def engine_argv(package: str, phase: str, visual_script: str | None = None) -> list[str]:
     """The installed-package command lines RunSparkFPSHeadlessArena/RunInstalledFPSD3D11 use."""
     bin_dir = ntpath.join(package, "bin")
@@ -120,12 +135,13 @@ def phase_environment(phase: str) -> dict[str, str]:
 
 def containment_verdict(results: dict[str, RunResult], forbidden_roots: list[str],
                         screenshots: dict[str, str | None], output_dir: str,
-                        frames_authored: dict[str, bool]) -> list[str]:
+                        frames_authored: dict[str, bool], audits: dict[str, str], package: str) -> list[str]:
     """Judge one session. Every rule fails closed; an absent run is a failure.
 
     ``screenshots`` maps each D3D11 run to the saved frame path (None when no
-    frame was written) and ``frames_authored`` to the CheckFPSVisibleFrame.ps1
-    verdict for that frame.
+    frame was written), ``frames_authored`` to the CheckFPSVisibleFrame.ps1
+    verdict for that frame and ``audits`` to its exec_audit.log text ("" when
+    none was written). ``package`` is the positive package copy.
     """
     errors = []
     required = ("canary-source", "canary-build", "canary-package", "nullrhi-positive",
@@ -147,7 +163,8 @@ def containment_verdict(results: dict[str, RunResult], forbidden_roots: list[str
         result = results[name]
         if result.exit_code is None:
             errors.append(f"{name}: timed out")
-        leaked = names_forbidden_root(result.stdout + "\n" + result.stderr, forbidden_roots)
+        leaked = names_forbidden_root("\n".join((result.stdout, result.stderr, audits.get(name, ""))),
+                                      forbidden_roots)
         if leaked is not None:
             errors.append(f"{name}: output names the forbidden root {leaked}")
 
@@ -169,10 +186,19 @@ def containment_verdict(results: dict[str, RunResult], forbidden_roots: list[str
         errors.append(f"d3d11-positive: screenshot {positive_frame} is outside the run output directory")
     elif not frames_authored.get("d3d11-positive", False):
         errors.append("d3d11-positive: the saved frame is not a visible authored arena frame")
+    positive_audit = audits.get("d3d11-positive", "")
+    scenes = loaded_scene_paths(positive_audit)
+    package_scene = ntpath.join(package, *SCENE_RELATIVE)
+    if not scenes or SCENE_LOAD_SUCCESS not in positive_audit:
+        errors.append("d3d11-positive: exec_audit.log records no successful level1.scene load")
+    elif any(_normalized(scene) != _normalized(package_scene) for scene in scenes):
+        errors.append(f"d3d11-positive: loaded {scenes}, not only the package copy's {package_scene}")
     negative_frame = screenshots.get("d3d11-negative")
     if (results["d3d11-negative"].exit_code == 0 and negative_frame is not None
             and frames_authored.get("d3d11-negative", True)):
         errors.append("d3d11-negative: the asset-less package still rendered a visible arena frame")
+    if SCENE_LOAD_SUCCESS in audits.get("d3d11-negative", ""):
+        errors.append("d3d11-negative: the asset-less package still loaded a scene")
     return errors
 
 
@@ -442,6 +468,7 @@ def run_session(args: argparse.Namespace) -> list[str]:
     results: dict[str, RunResult] = {}
     screenshots: dict[str, str | None] = {}
     authored: dict[str, bool] = {}
+    audits: dict[str, str] = {}
     with AppContainer() as container:
         print(f"AppContainer {container.name} ({container.sid_string})")
         for granted in (package, scene_less, asset_less):
@@ -478,9 +505,11 @@ def run_session(args: argparse.Namespace) -> list[str]:
                     screenshots[name] = str(frame) if frame.is_file() else None
                     if screenshots[name] is not None:
                         authored[name] = frame_is_authored(args.frame_check, frame)
+                    audit = run_dir / AUDIT_NAME
+                    audits[name] = audit.read_text(encoding="utf-8", errors="replace") if audit.is_file() else ""
     summary = {name: result.exit_code for name, result in results.items()}
     (output_dir / "appcontainer-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    return containment_verdict(results, forbidden, screenshots, output, authored)
+    return containment_verdict(results, forbidden, screenshots, output, authored, audits, package)
 
 
 def main() -> int:
