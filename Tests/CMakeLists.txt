@@ -282,6 +282,7 @@ add_executable(SparkTests
     Fixtures/NetworkTestSecurity.cpp
     Fixtures/SecureTestPeer.cpp
     TestSessionCompatibilityReal.cpp
+    TestReliableOrderedSequenceReal.cpp
     TestLogger.cpp
     TestProfiler.cpp
     TestStackTrace.cpp
@@ -2387,6 +2388,20 @@ if(ENABLE_NETWORKING)
     set_tests_properties(NetworkSessionCompatibility PROPERTIES
         ENVIRONMENT "SPARK_TEST_FILE=TestSessionCompatibilityReal.cpp;SPARK_TEST_EXPECT_COUNT=11"
         LABELS "network-security;network;security;unit"
+        TIMEOUT 60)
+    # Reliable and ReliableOrdered traffic to one peer: the ordered stream must be numbered on its
+    # own, so ordered messages after any Reliable message (a client's ClientFinished, MMO chat) are
+    # still delivered in order exactly once -- interleaved, lost/reordered/duplicated, and across a
+    # reconnect. Production sender and receiver over loopback UDP, replayed through a raw peer.
+    if(TARGET imgui)
+        set(_spark_reliable_ordered_count 6) # + ReliableOrderedSeq_MMOChatFromClientReachesServer
+    else()
+        set(_spark_reliable_ordered_count 5)
+    endif()
+    add_test(NAME NetworkReliableOrderedSequence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetworkReliableOrderedSequence PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestReliableOrderedSequenceReal.cpp;SPARK_TEST_EXPECT_COUNT=${_spark_reliable_ordered_count}"
+        LABELS "network;unit"
         TIMEOUT 60)
     # NET-100: the v2 handshake and sealed datagrams through the production NetworkManager over
     # loopback UDP: wrong/tampered/downgraded server identity, truncated or suite-downgraded

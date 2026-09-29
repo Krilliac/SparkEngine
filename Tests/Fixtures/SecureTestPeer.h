@@ -199,6 +199,7 @@ namespace SparkTestFixtures
         std::optional<std::vector<uint8_t>> AwaitConnect(
             Spark::Net::NetworkManager& client, std::chrono::milliseconds window = std::chrono::milliseconds(400));
 
+        [[nodiscard]] Spark::Net::SecureChannel* Channel() { return m_channel.get(); }
         /**
          * @brief Answer the last ClientHello with a signed ConnectAccepted and install the server channel
          * @param id       Client id to assign
