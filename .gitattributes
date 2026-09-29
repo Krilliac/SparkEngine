@@ -79,6 +79,8 @@ FuzzerTests/corpora/dialogue-system/** -text
 FuzzerTests/corpora/localization-system/** -text
 FuzzerTests/corpora/fps-multiplayer-player-state/** -text
 FuzzerTests/corpora/session-gate/** -text
+FuzzerTests/corpora/replay-system/** -text
+FuzzerTests/corpora/animation-skel-sanim/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

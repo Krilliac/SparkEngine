@@ -132,6 +132,8 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzLocalization",
     "SparkFuzzFpsSnapshot",
     "SparkFuzzSessionGateProtocol",
+    "SparkFuzzReplay",
+    "SparkFuzzAnimationBinary",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2146,6 +2148,18 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "SparkFPS::DecodeSnapshotBatch",
                 "fps-multiplayer-player-state",
                 8,
+            ),
+            "replay-system": (
+                "Replay",
+                "Spark::ReplaySystem::LoadFromFile",
+                "replay-system",
+                7,
+            ),
+            "animation-skel-sanim": (
+                "AnimationBinary",
+                "Spark::Animation::DecodeAnimationClipsBinary",
+                "animation-skel-sanim",
+                7,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)
