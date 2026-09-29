@@ -359,17 +359,17 @@ Scores are evidence pointers, not percentages: `0` absent/dead, `1` data-model/m
 
 | Module | lifecycle | gameplayLoop | networking | persistence | ai | assets | editorDebug | testsDocs |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `SparkGameMMOFPS` | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
-| `SparkGameFPS` | 2 | 2 | 1 | 1 | 2 | 2 | 1 | 1 |
-| `SparkGameMMO` | 2 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| `SparkGame` | 2 | 1 | N/A | 2 | 0 | 0 | 1 | 1 |
-| `SparkGameARPG` | 2 | 1 | N/A | 0 | 1 | 0 | 1 | 1 |
-| `SparkGamePlatformer` | 2 | 1 | N/A | 1 | 0 | 0 | 1 | 1 |
-| `SparkGameRPG` | 2 | 1 | N/A | 1 | 1 | 0 | 1 | 1 |
-| `SparkGameOpenWorld` | 2 | 1 | N/A | 1 | 1 | 0 | 1 | 1 |
-| `SparkGameRTS` | 2 | 1 | N/A | 0 | 1 | 0 | 1 | 1 |
-| `SparkGameRacing` | 2 | 1 | N/A | 0 | 1 | 0 | 1 | 1 |
-| `SparkGameVisualScript` | 1 | 0 | N/A | 0 | 0 | 0 | 1 | 0 |
+| `SparkGameMMOFPS` | 2 | 1 | 1 | 2 | 1 | 2 | 2 | 2 |
+| `SparkGameFPS` | 2 | 2 | 1 | 2 | 2 | 2 | 2 | 2 |
+| `SparkGameMMO` | 2 | 1 | 1 | 2 | 1 | 1 | 1 | 2 |
+| `SparkGame` | 2 | 1 | N/A | 2 | 0 | 2 | 2 | 2 |
+| `SparkGameARPG` | 2 | 2 | N/A | 2 | 1 | 2 | 2 | 2 |
+| `SparkGamePlatformer` | 2 | 2 | N/A | 2 | 0 | 1 | 1 | 2 |
+| `SparkGameRPG` | 2 | 2 | N/A | 2 | 2 | 1 | 1 | 2 |
+| `SparkGameOpenWorld` | 2 | 1 | N/A | 2 | 1 | 1 | 1 | 2 |
+| `SparkGameRTS` | 2 | 2 | N/A | 2 | 2 | 2 | 1 | 2 |
+| `SparkGameRacing` | 2 | 2 | N/A | 2 | 2 | 2 | 2 | 2 |
+| `SparkGameVisualScript` | 2 | 2 | N/A | 0 | 2 | 2 | 2 | 2 |
 
 ## Work-item implementation briefs
 
