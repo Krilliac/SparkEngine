@@ -277,14 +277,18 @@ namespace MMO
         if (!nm)
             return false;
 
-        if (!nm->IsInitialized())
+        const bool serverAlreadyRunning = nm->GetRole() == Spark::Net::NetworkRole::Server;
+        if (!serverAlreadyRunning && !nm->IsInitialized())
         {
             if (!nm->Initialize())
                 return false;
         }
 
-        if (!nm->UseDefaultSecurityConfig(Spark::Net::NetworkRole::Server) || !nm->StartServer(port, 128))
+        if (!serverAlreadyRunning &&
+            (!nm->UseDefaultSecurityConfig(Spark::Net::NetworkRole::Server) || !nm->StartServer(port, 128)))
+        {
             return false;
+        }
 
         // Chat routing remains owned by MMOChatSystem. Clients author their own
         // player movement, so the server consumes their EntityStateUpdate as a
@@ -296,7 +300,7 @@ namespace MMO
         nm->RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
                             [this, nm](const Spark::Net::NetworkMessage& msg)
                             {
-                                if (nm->GetRole() == Spark::Net::NetworkRole::Server)
+                                if (nm->GetRole() == Spark::Net::NetworkRole::Server && !m_sessionGateRequired)
                                 {
                                     (void)ApplyClientStateRequest(*nm, msg);
                                 }
@@ -304,6 +308,7 @@ namespace MMO
         m_serverPlayerEntities.clear();
 
         m_networkServerRunning = true;
+        m_networkOwnedByModule = !serverAlreadyRunning;
         m_knownClients.clear();
 
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -315,7 +320,8 @@ namespace MMO
                                                     const Spark::Net::NetworkMessage& message)
     {
         const Spark::Net::ClientID sender = message.senderID;
-        if (network.GetRole() != Spark::Net::NetworkRole::Server || sender == Spark::Net::INVALID_CLIENT)
+        if (m_sessionGateRequired || network.GetRole() != Spark::Net::NetworkRole::Server ||
+            sender == Spark::Net::INVALID_CLIENT)
         {
             return 0;
         }
@@ -369,6 +375,11 @@ namespace MMO
         if (!m_networkServerRunning)
             return;
 
+        if (!m_networkOwnedByModule)
+        {
+            return;
+        }
+
         // Networking is resolved through the injected engine context, not the global singleton
         auto* nm = m_context ? m_context->GetNetwork() : nullptr;
         if (!nm)
@@ -390,7 +401,7 @@ namespace MMO
         }
 
         // Detect new client connections and bridge to WorldServer
-        if (m_worldServer && m_worldServer->IsRunning())
+        if (m_worldServer && m_worldServer->IsRunning() && !m_sessionGateRequired)
         {
             // Detect new connections
             for (const auto& [clientId, info] : clients)
@@ -431,11 +442,15 @@ namespace MMO
             // The relay observer captures this object and lives in this module image; remove (never
             // replace) it with the server it serves, so no callback outlives this object or image.
             nm->UnregisterHandler(Spark::Net::MessageType::EntityStateUpdate);
-            nm->StopServer();
+            if (m_networkOwnedByModule)
+            {
+                nm->StopServer();
+            }
         }
         m_knownClients.clear();
         m_serverPlayerEntities.clear();
         m_networkServerRunning = false;
+        m_networkOwnedByModule = false;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO World] Network server stopped");
@@ -470,6 +485,7 @@ namespace MMO
 
         m_areas.clear();
         m_worldTime = 0.0f;
+        m_sessionGateRequired = false;
         m_context = nullptr;
         m_initialized = false;
     }

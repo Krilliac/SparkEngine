@@ -34,6 +34,36 @@ The `mmo_*` console commands (`mmo_help` lists them) drive the systems.
 
 Account passwords are stored only as `Spark::PasswordHash` hashes, never as plaintext.
 
+## Network session gate
+
+With networking enabled, the module owns `MMOSessionGate` over the real `NetworkManager` secure channel.
+`SparkServer` injects that service before module initialization; the shared headless host can start it on the
+module's first update. An existing host-owned listener is adopted without rebinding or ticking it twice.
+Client console registration and login call the server's `MMOAccountSystem`; login is wrapped by
+`Spark::Gateway::GuardedGatewayAuthenticator`. Transport admission alone grants no character authority.
+
+After connecting with the engine's normal network commands and pinned/known-host trust, use `mmo_register`,
+`mmo_login`, `mmo_session_create <name> <race> <class>`, and `mmo_session_enter <character-id>`.
+`mmo_session_status` reports the last asynchronous reply, including account and character IDs. Human/Warrior
+use race/class IDs `0/0`. Credentials longer than the gate's bounded fields are rejected, never truncated.
+The local login UI remains the offline showcase flow; network admission uses these console commands.
+
+Character ownership comes from the server account index. Each move is a normalized direction integrated for
+one server-selected step, funded by server-time credit. Client positions and supplied account IDs cannot
+choose authority. `mmo_session_interact <other-character-id>` greets a living character in the same area
+within three metres; the server applies its cooldown and records the greeting target/count. Both clients
+receive authoritative positions and greetings. Legacy position uploads are refused while the gate is active.
+Disconnect, expired authentication, and replacement login revoke the previous world actor.
+
+This is a bounded small-area session slice. It does not add account persistence, world collision, remote
+login UI, cross-area handoff, or server-restart recovery. It remains experimental. The registered
+`MMOIntegratedWorld_TwoClientSessionGate` CTest starts a server and two client processes using these production
+services; it must pass centrally before the MOD-320 criterion is promoted. `MMOSessionGateProtocol` pins the
+codec tests. Local syntax checks are not runtime qualification or exact-commit CI.
+
+The new byte parser has a fuzz harness and reviewed seeds. Required SEC-120 registration is documented in
+[SessionGate-Fuzz-Integration.md](SessionGate-Fuzz-Integration.md); policy files are owned by the SEC-120 lane.
+
 ## Known limitations
 
 - Accounts and sessions are in memory only. `MMOAccountSystem` keeps them in `std::unordered_map`s and nothing

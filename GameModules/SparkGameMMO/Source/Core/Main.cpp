@@ -24,10 +24,12 @@
 #include "Character/MMOCharacterSystem.h"
 #include "UI/MMOLoginUI.h"
 #include "Gameplay/MMOGameplaySession.h"
+#include "Session/MMOSessionGate.h"
 #include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 #include "Utils/InvalidStateDetector.h"
+#include "Utils/SecureMemory.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/NetworkComponents.h"
@@ -36,6 +38,7 @@
 
 #include <charconv>
 #include <cmath>
+#include <algorithm>
 
 namespace
 {
@@ -255,6 +258,23 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     }
     m_characterSystem->SetPersistence(m_persistenceSystem.get());
 
+#ifdef ENABLE_NETWORKING
+    if (auto* network = context->GetNetwork())
+    {
+        m_sessionGate = std::make_unique<MMO::MMOSessionGate>();
+        if (!m_sessionGate->Initialize(*network, *m_accountSystem, *m_characterSystem, *m_playerSystem))
+        {
+            return failLoad("[MMO] Failed to initialize session gate");
+        }
+        m_playerSystem->SetSessionGate(m_sessionGate.get());
+        m_worldSetup->SetSessionGateRequired(true);
+        if (context->IsHeadless())
+        {
+            m_networkStartPending = true;
+        }
+    }
+#endif
+
     m_loginUI = std::make_unique<MMO::MMOLoginUI>();
     if (!m_loginUI->Initialize(context, m_accountSystem.get(), m_characterSystem.get()))
     {
@@ -302,22 +322,6 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
-
-#ifdef ENABLE_NETWORKING
-    // In headless/dedicated mode, start the network server automatically
-    if (context->IsHeadless())
-    {
-        constexpr uint16_t MMO_SERVER_PORT = 27015;
-        if (m_worldSetup->StartNetworkServer(MMO_SERVER_PORT))
-        {
-            console.LogInfo("[MMO] Dedicated server listening on port " + std::to_string(MMO_SERVER_PORT));
-        }
-        else
-        {
-            console.LogError("[MMO] Failed to start network server on port " + std::to_string(MMO_SERVER_PORT));
-        }
-    }
-#endif
 
     RegisterStateValidationRules();
 
@@ -410,6 +414,19 @@ void SparkGameMMOModule::OnUnload()
 
 void SparkGameMMOModule::ShutdownSystems()
 {
+#ifdef ENABLE_NETWORKING
+    if (m_sessionGate)
+    {
+        if (m_playerSystem)
+        {
+            m_playerSystem->SetSessionGate(nullptr);
+        }
+        m_sessionGate->Shutdown();
+        m_sessionGate.reset();
+    }
+    m_networkStartPending = false;
+#endif
+
     if (m_engineSystems)
     {
         m_engineSystems->Shutdown();
@@ -520,6 +537,20 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
 
     if (m_engineSystems)
         m_engineSystems->Update(deltaTime);
+
+#ifdef ENABLE_NETWORKING
+    if (m_networkStartPending && m_context && m_context->GetNetwork())
+    {
+        if (m_worldSetup->StartNetworkServer(27015))
+        {
+            m_networkStartPending = false;
+        }
+    }
+    if (m_sessionGate)
+    {
+        m_sessionGate->Update(deltaTime);
+    }
+#endif
 
 #ifdef ENABLE_NETWORKING
     // Drive the network server tick (processes socket I/O, bridges to WorldServer)
@@ -809,28 +840,75 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                                 return m_persistenceSystem->GetStatusString();
                             });
 
-    console.RegisterSensitiveCommand("mmo_register",
-                                     [this](const std::vector<std::string>& args) -> std::string
-                                     {
-                                         if (args.size() < 2)
-                                             return "Usage: mmo_register <username> <password>";
-                                         auto result = m_accountSystem->Register(args[0], args[1]);
-                                         return result.success
-                                                    ? "Account created (ID " + std::to_string(result.accountId) + ")"
-                                                    : "Error: " + result.errorMessage;
-                                     });
+    console.RegisterSensitiveCommand(
+        "mmo_register",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() < 2)
+            {
+                return "Usage: mmo_register <username> <password>";
+            }
+#ifdef ENABLE_NETWORKING
+            if (m_sessionGate && m_context && m_context->GetNetwork() &&
+                m_context->GetNetwork()->GetRole() == Spark::Net::NetworkRole::Client)
+            {
+                MMO::SessionGateWire::Packet packet;
+                packet.operation = MMO::SessionGateWire::Operation::Register;
+                if (args[0].size() >= packet.username.size() || args[1].size() >= packet.password.size())
+                {
+                    return "Username or password too long";
+                }
+                const auto usernameLength = (std::min)(args[0].size(), packet.username.size() - 1);
+                const auto passwordLength = (std::min)(args[1].size(), packet.password.size() - 1);
+                std::copy_n(args[0].data(), usernameLength, packet.username.data());
+                std::copy_n(args[1].data(), passwordLength, packet.password.data());
+                const bool sent = m_sessionGate->Send(packet);
+                Spark::SecureErase(packet.password.data(), packet.password.size());
+                return sent ? "Registration sent" : "Registration unavailable";
+            }
+#endif
+            auto result = m_accountSystem->Register(args[0], args[1]);
+            return result.success ? "Account created (ID " + std::to_string(result.accountId) + ")"
+                                  : "Error: " + result.errorMessage;
+        });
 
-    console.RegisterSensitiveCommand("mmo_login",
-                                     [this](const std::vector<std::string>& args) -> std::string
-                                     {
-                                         if (args.size() < 2)
-                                             return "Usage: mmo_login <username> <password>";
-                                         auto result = m_accountSystem->Login(args[0], args[1]);
-                                         return result.success ? "Logged in" : "Error: " + result.errorMessage;
-                                     });
+    console.RegisterSensitiveCommand(
+        "mmo_login",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() < 2)
+            {
+                return "Usage: mmo_login <username> <password>";
+            }
+#ifdef ENABLE_NETWORKING
+            if (m_sessionGate && m_context && m_context->GetNetwork() &&
+                m_context->GetNetwork()->GetRole() == Spark::Net::NetworkRole::Client)
+            {
+                MMO::SessionGateWire::Packet packet;
+                packet.operation = MMO::SessionGateWire::Operation::Login;
+                if (args[0].size() >= packet.username.size() || args[1].size() >= packet.password.size())
+                {
+                    return "Username or password too long";
+                }
+                const auto usernameLength = (std::min)(args[0].size(), packet.username.size() - 1);
+                const auto passwordLength = (std::min)(args[1].size(), packet.password.size() - 1);
+                std::copy_n(args[0].data(), usernameLength, packet.username.data());
+                std::copy_n(args[1].data(), passwordLength, packet.password.data());
+                const bool sent = m_sessionGate->Send(packet);
+                Spark::SecureErase(packet.password.data(), packet.password.size());
+                return sent ? "Login sent" : "Login unavailable";
+            }
+#endif
+            auto result = m_accountSystem->Login(args[0], args[1]);
+            return result.success ? "Logged in" : "Error: " + result.errorMessage;
+        });
 
     console.RegisterCommand("mmo_online", [this](const std::vector<std::string>&) -> std::string
                             { return m_accountSystem->GetOnlineListString(); });
+
+#ifdef ENABLE_NETWORKING
+    RegisterSessionConsoleCommands();
+#endif
 
     console.RegisterCommand(
         "mmo_abilities", [this](const std::vector<std::string>&) -> std::string
@@ -870,6 +948,8 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                                        "  mmo_damage <amount> | mmo_respawn\n"
                                        "  mmo_chat <channel> <message> | mmo_guilds | mmo_auctions\n"
                                        "  mmo_register <user> <password> | mmo_login <user> <password>\n"
+                                       "  mmo_session_create <name> <race> <class> | mmo_session_enter <character-id>\n"
+                                       "  mmo_session_interact <character-id> | mmo_session_status\n"
                                        "  mmo_online | mmo_characters <account-id> | mmo_db_status";
                             });
 
@@ -883,12 +963,14 @@ void SparkGameMMOModule::UnregisterConsoleCommands()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     constexpr const char* commandNames[]{
-        "mmo_status",    "mmo_play",        "mmo_restart",       "mmo_travel",       "mmo_gather",  "mmo_craft",
-        "mmo_use",       "mmo_boss_attack", "mmo_dungeon_enter", "mmo_dungeon_boss", "mmo_damage",  "mmo_respawn",
-        "mmo_inventory", "mmo_chat",        "mmo_areas",         "mmo_players",      "mmo_guilds",  "mmo_guild_create",
-        "mmo_auctions",  "mmo_dungeons",    "mmo_bosses",        "mmo_boss_spawn",   "mmo_recipes", "mmo_db_status",
-        "mmo_register",  "mmo_login",       "mmo_online",        "mmo_abilities",    "mmo_weather", "mmo_cinematic",
-        "mmo_locale",    "mmo_characters",  "mmo_help",
+        "mmo_status",         "mmo_play",       "mmo_restart",        "mmo_travel",        "mmo_gather",
+        "mmo_craft",          "mmo_use",        "mmo_boss_attack",    "mmo_dungeon_enter", "mmo_dungeon_boss",
+        "mmo_damage",         "mmo_respawn",    "mmo_inventory",      "mmo_chat",          "mmo_areas",
+        "mmo_players",        "mmo_guilds",     "mmo_guild_create",   "mmo_auctions",      "mmo_dungeons",
+        "mmo_bosses",         "mmo_boss_spawn", "mmo_recipes",        "mmo_db_status",     "mmo_register",
+        "mmo_login",          "mmo_online",     "mmo_session_create", "mmo_session_enter", "mmo_session_interact",
+        "mmo_session_status", "mmo_abilities",  "mmo_weather",        "mmo_cinematic",     "mmo_locale",
+        "mmo_characters",     "mmo_help",
     };
     for (const char* commandName : commandNames)
         console.UnregisterCommand(commandName);

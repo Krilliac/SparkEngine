@@ -93,6 +93,9 @@ namespace MMO
         /// Get the WorldServer instance (for tests)
         Spark::Net::WorldServer* GetWorldServer() const { return m_worldServer.get(); }
 
+        /// Require the MMO session gate to admit clients before world services observe them.
+        void SetSessionGateRequired(bool required) { m_sessionGateRequired = required; }
+
         /**
          * @brief Apply one client-authored player state request (server role only).
          *
@@ -140,7 +143,9 @@ namespace MMO
         /// Server-owned player entity per admitted client (entries for departed clients are pruned in ServerTick).
         std::unordered_map<Spark::Net::ClientID, uint32_t> m_serverPlayerEntities;
         bool m_networkServerRunning{false};
+        bool m_networkOwnedByModule{false};
 #endif
+        bool m_sessionGateRequired{false};
         float m_worldTime{0.0f};
         bool m_initialized{false};
     };

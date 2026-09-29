@@ -1,5 +1,24 @@
 # Networking
 
+## MMO authenticated session slice
+
+SparkGameMMO's module-owned `MMOSessionGate` handles account authentication, owned character creation,
+world entry, server-timed movement, and nearby greeting interactions over `NetworkManager`'s secure transport.
+Login reuses the gateway's guarded authenticator and `MMOAccountSystem` password hashing. Transport connection
+does not grant gameplay authority: every world command checks the connection's authenticated account and
+character ownership. The gated module refuses the older client-position upload path.
+
+`SparkServer` installs the network service before loading game modules. The MMO module adopts a host-owned
+listener or starts its own shared-headless listener on its first update, and unregisters its session handlers
+before destroying account/player services. Network clients use the `mmo_session_*` console commands;
+the login UI remains an offline showcase. This small-area slice does not supply persistent accounts,
+cross-area handoff, or collision-complete movement.
+
+`MMOIntegratedWorld_TwoClientSessionGate` registers the real server/two-client process scenario, including
+bad-credential and foreign-character refusals and peer-observed movement/interactions. Central runtime
+execution and exact-commit CI are still required. See the [module guide](../../GameModules/SparkGameMMO/README.md)
+and [SEC-120 registration packet](../../GameModules/SparkGameMMO/SessionGate-Fuzz-Integration.md).
+
 SparkEngine includes an **experimental** UDP networking system for multiplayer development, with entity replication, client-side prediction, lag compensation, pluggable transports, and dedicated server support. Since protocol version 2 (NET-100) the active `NetworkManager` wire path authenticates the server with a signed X25519 handshake and seals every post-handshake datagram with ChaCha20-Poly1305 (libsodium); it has not had an independent cryptographic review, and players are authenticated by game code inside the channel, not by the transport.
 
 **Source:** `SparkEngine/Source/Engine/Networking/`

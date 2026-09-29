@@ -167,6 +167,8 @@ namespace MMO
         bool DeleteCharacter(uint32_t accountId, uint32_t characterId);
         std::vector<CharacterSummary> GetCharacters(uint32_t accountId) const;
         const CharacterSummary* GetCharacter(uint32_t characterId) const;
+        /// @brief Check the server-owned account-to-character index without allocating a character list.
+        bool OwnsCharacter(uint32_t accountId, uint32_t characterId) const;
         bool IsNameAvailable(const std::string& name) const;
 
         // === Character Data ===

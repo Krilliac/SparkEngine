@@ -38,6 +38,7 @@ namespace MMO
     class MMOLoginUI;
     class MMOEngineSystems;
     class MMOGameplaySession;
+    class MMOSessionGate;
 } // namespace MMO
 
 /**
@@ -77,6 +78,9 @@ class SparkGameMMOModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
+#ifdef ENABLE_NETWORKING
+    void RegisterSessionConsoleCommands();
+#endif
     void UnregisterConsoleCommands();
     void RegisterStateValidationRules();
     void ShutdownSystems();
@@ -106,6 +110,10 @@ class SparkGameMMOModule : public Spark::IModule
     std::unique_ptr<MMO::MMOCharacterSystem> m_characterSystem;
     std::unique_ptr<MMO::MMOLoginUI> m_loginUI;
     std::unique_ptr<MMO::MMOGameplaySession> m_gameplaySession;
+#ifdef ENABLE_NETWORKING
+    std::unique_ptr<MMO::MMOSessionGate> m_sessionGate;
+    bool m_networkStartPending{false};
+#endif
 
     // Engine subsystem integration
     std::unique_ptr<MMO::MMOEngineSystems> m_engineSystems;

@@ -116,6 +116,7 @@ endif()
 
 target_include_directories(SparkGameMMO PRIVATE
     "Source"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../SparkGateway/src"
     "${ENGINE_SOURCE_DIR}"
     "${SPARK_SDK_INCLUDE_DIR}"
     ${THIRDPARTY_INCLUDE_DIRS}
