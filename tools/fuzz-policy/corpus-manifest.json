@@ -825,7 +825,7 @@
       "parser_id": "dialogue-system",
       "corpus_dir": "FuzzerTests/corpora/dialogue-system",
       "last_verified": "2026-09-28",
-      "content_digest": "e0a0e70d0c98e040fd31ccdcd2e20f597d9a67ea6e6d26b348c0adc1f63e9d05",
+      "content_digest": "f08402b99f226b27fd9ad9904c1faf9d24bd3c48d2b320ef7b50b0d526471507",
       "budget": {
         "max_input_bytes": 8388609,
         "max_parse_time_ms": 1000,
@@ -844,7 +844,7 @@
         },
         {
           "file": "regression-partial-tree.json",
-          "finding": "A malformed dialogue document replaced the loaded tree's ID and start node before failing later validation.",
+          "finding": "A dialogue document whose nodes field is not an array replaced the loaded tree's ID and start node before the loader rejected it.",
           "found_by": "review",
           "guard_test": "Dialogue_LoadFailureDoesNotPartiallyReplaceTree"
         }

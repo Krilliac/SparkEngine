@@ -7,17 +7,17 @@
     "corpus_count": 39,
     "max_staleness_days": 90,
     "regression_count": 33,
-    "seed_bytes": 17044080,
+    "seed_bytes": 17044062,
     "seed_count": 311
   },
   "coverage_claim": false,
   "inputs": {
-    "corpus_manifest": "c80f761b21e2a2ad48f60db6c456ae1cb74d3a2ee50d36b19f83613401180ecf",
-    "inventory": "63d61d7864116a66375de6abff36ac2898dd7551a9af06bd9b8ccf72615a1c80"
+    "corpus_manifest": "eadd76360af913ea2339a9f00665ed8e7bdfb17ebeb888c26278feb3068458b5",
+    "inventory": "cc8f50c0a7902692ed2f0204e19f8358086d83130d710f50eb632149f31489da"
   },
   "inventory": {
     "blocked_count": 96,
-    "candidate_count": 298,
+    "candidate_count": 299,
     "deferred_candidate_count": 0,
     "excluded_files": [],
     "excluded_subtrees": [
@@ -65,7 +65,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 2125,
+    "scanned_file_count": 2126,
     "unclassified_candidate_count": 0
   },
   "passed": false,

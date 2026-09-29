@@ -2,6 +2,7 @@
 #include "FuzzDataTableProduction.h"
 
 #include "Engine/DataTable/DataTableSystem.h"
+#include "Utils/JsonUtils.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -46,6 +47,44 @@ namespace
         if (reencoded != encoded)
             InvariantFailure("accepted table changed cell data during its production round trip");
     }
+
+    bool IsPrintableAsciiText(const std::string& content)
+    {
+        for (const char c : content)
+        {
+            const auto byte = static_cast<unsigned char>(c);
+            if (byte != '\n' && (byte < 0x20 || byte > 0x7E))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Independent model of the accepted-document contract: a bounded size, nothing but
+    // whitespace after the closing ']' of a JSON table, and a JSON export that a strict
+    // parser accepts (non-canonical numbers such as "001" must be written as strings).
+    void CheckDocumentModel(const std::string& content, const Spark::Data::DataTable& table, bool json)
+    {
+        if (content.size() > Spark::Data::DataTable::kMaxDocumentBytes)
+        {
+            InvariantFailure("accepted document exceeds the documented size cap");
+        }
+        if (json)
+        {
+            const size_t last = content.find_last_not_of(" \t\r\n");
+            if (last == std::string::npos || content[last] != ']')
+            {
+                InvariantFailure("accepted JSON table has content after its closing bracket");
+            }
+        }
+        // JEsc does not escape other control bytes, so the strict check is limited to plain text.
+        if (IsPrintableAsciiText(content) &&
+            !Spark::Json::ParseBounded(table.SaveToJSON(), Spark::Json::JsonLimits{}, nullptr, nullptr))
+        {
+            InvariantFailure("accepted table exports invalid JSON");
+        }
+    }
 } // namespace
 
 extern "C" int SparkFuzzParseDataTable(const std::uint8_t* data, std::size_t size)
@@ -58,7 +97,10 @@ extern "C" int SparkFuzzParseDataTable(const std::uint8_t* data, std::size_t siz
     Spark::Data::DataTable table;
     const bool accepted = json ? table.LoadFromJSON(content) : table.LoadFromCSV(content);
     if (accepted)
+    {
         CheckRoundTrip(table, json);
+        CheckDocumentModel(content, table, json);
+    }
 
     const auto suffix = s_fileCounter.fetch_add(1, std::memory_order_relaxed);
     std::string fileName = "spark-fuzz-datatable-";

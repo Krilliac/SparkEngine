@@ -18,7 +18,8 @@
 
 namespace
 {
-    constexpr std::size_t kMaxInputBytes = 8u * 1024u * 1024u + 1u;
+    constexpr std::size_t kMaxDocumentBytes = 8u * 1024u * 1024u;
+    constexpr std::size_t kMaxInputBytes = kMaxDocumentBytes + 1u;
     std::atomic<std::uint64_t> s_fileCounter{0};
 
     std::uint64_t ProcessId()
@@ -90,6 +91,8 @@ extern "C" int SparkFuzzParseDialogue(const std::uint8_t* data, std::size_t size
     const bool accepted = tree.LoadFromFile(path.string());
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
+    if (accepted && size > kMaxDocumentBytes)
+        InvariantFailure("accepted dialogue file exceeds the documented size cap");
     if (accepted)
         CheckReferences(tree);
     else if (tree.GetId() != "sentinel" || tree.GetStartNodeId() != "sentinel-node" || tree.GetNodeCount() != 1 ||

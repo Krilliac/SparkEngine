@@ -2129,12 +2129,12 @@ set_tests_properties(FuzzEditorCollaborationSmoke PROPERTIES
 add_executable(SparkFuzzLocalization
     FuzzLocalization.cpp
     FuzzLocalizationProduction.cpp
-    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Localization/LocalizationSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Localization/StringTable.cpp"
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
 )
 set_source_files_properties(
     FuzzLocalizationProduction.cpp
-    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Localization/LocalizationSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Localization/StringTable.cpp"
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
     PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
 )

@@ -68,13 +68,23 @@ extern "C" int SparkFuzzLoadLocalization(const std::uint8_t* data, std::size_t s
     }
     else
     {
-        if (table.GetEntryCount() == 0)
+        // Entries merge over the existing table, so an accepted catalog either adds a key or
+        // overwrites the baseline one.
+        if (table.GetEntryCount() < 2 && table.GetEntry("__baseline__") == "preserved")
         {
-            InvariantFailure("accepted catalog has no entries");
+            InvariantFailure("accepted catalog added no entries");
+        }
+        // Independent model: an accepted catalog is one complete JSON object (optional UTF-8 BOM).
+        const size_t bomBytes = content.starts_with("\xEF\xBB\xBF") ? 3 : 0;
+        const size_t first = content.find_first_not_of(" \t\n\r\f\v", bomBytes);
+        const size_t last = content.find_last_not_of(" \t\n\r\f\v");
+        if (first == std::string::npos || content[first] != '{' || last == std::string::npos || content[last] != '}')
+        {
+            InvariantFailure("accepted catalog is not a complete JSON object");
         }
         for (const std::string& key : table.GetAllKeys())
         {
-            if (key.size() > size || table.GetEntry(key).size() > size)
+            if (key != "__baseline__" && (key.size() > size || table.GetEntry(key).size() > size))
             {
                 InvariantFailure("accepted entry exceeds the input budget");
             }

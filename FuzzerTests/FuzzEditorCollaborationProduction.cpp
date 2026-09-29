@@ -60,9 +60,18 @@ namespace
             return;
         }
 
+        // SerializeMessage writes a default edit section for every type except EditBroadcast,
+        // so only an EditBroadcast frame must reproduce its input exactly. Every accepted
+        // frame must re-encode to a canonical frame that decodes and re-encodes to itself.
         const std::vector<std::uint8_t> reencoded = SparkEditor::SerializeMessage(decoded);
-        if (reencoded != frame)
-            InvariantFailure("an accepted frame does not round-trip byte-for-byte");
+        if (decoded.type == SparkEditor::InternalMessageType::EditBroadcast && reencoded != frame)
+            InvariantFailure("an accepted edit broadcast does not round-trip byte-for-byte");
+        SparkEditor::InternalMessage canonical;
+        if (!SparkEditor::DeserializeMessage(reencoded.data(), reencoded.size(), canonical) ||
+            SparkEditor::SerializeMessage(canonical) != reencoded)
+            InvariantFailure("the canonical re-encoding of an accepted frame is not a fixed point");
+        if (reencoded.size() > frame.size())
+            InvariantFailure("the canonical re-encoding is larger than the accepted frame");
 
         if (decoded.nodeId.size() > SparkEditor::kCollabMaxIdentifierBytes ||
             decoded.editMessage.nodeId.size() > SparkEditor::kCollabMaxIdentifierBytes ||

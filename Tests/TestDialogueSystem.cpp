@@ -42,7 +42,8 @@ TEST(Dialogue_LoadFailureDoesNotPartiallyReplaceTree)
     const auto path = std::filesystem::temp_directory_path() / "spark_dialogue_partial.json";
     {
         std::ofstream file(path, std::ios::binary);
-        file << R"({"id":"replacement","startNode":"new","nodes":[{"nodeId":"new","type":"Text"},)";
+        // Well-formed JSON that the loader must reject only after reading "id" and "startNode".
+        file << R"({"id":"replacement","startNode":"new","nodes":"not-an-array"})";
     }
 
     Spark::DialogueTree tree;

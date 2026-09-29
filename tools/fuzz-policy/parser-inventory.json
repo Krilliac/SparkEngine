@@ -482,7 +482,8 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/Localization/LocalizationSystem.cpp",
-        "SparkEngine/Source/Engine/Localization/LocalizationSystem.h"
+        "SparkEngine/Source/Engine/Localization/LocalizationSystem.h",
+        "SparkEngine/Source/Engine/Localization/StringTable.cpp"
       ],
       "formats": [
         ".loc",
