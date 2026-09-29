@@ -14,7 +14,7 @@
 #include "Resource/RTSResourceSystem.h"
 #include "Simulation/RTSSkirmishSimulation.h"
 #include "Unit/RTSUnitSystem.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -306,8 +306,8 @@ namespace RTS
         }
         if (landmarksChanged > 0)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS kit: %zu props staged from Assets/Models/RTS/Kit",
-                           m_kitProps.size());
+            Spark::ModuleLog::Info(m_context, "[RTS] Kit: {} props staged from Assets/Models/RTS/Kit",
+                                   m_kitProps.size());
         }
     }
 

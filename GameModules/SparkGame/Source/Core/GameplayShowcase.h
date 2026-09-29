@@ -23,6 +23,28 @@
 struct HealthComponent;
 
 /**
+ * @brief One assertable record of what the showcase has done (the showcase_outcome command)
+ *
+ * Every field is read from state the showcase itself drives or from the host systems it drives it
+ * through; no field comes from randomness, so two runs stepped through the same simulated time
+ * format to the same FormatOutcome line. The time-of-day hour advances with the host's frame time, so a host paced
+ * by the wall clock reports it only approximately.
+ */
+struct ShowcaseOutcome
+{
+    std::string coroutineStage;      ///< Lifecycle coroutine stage, as showcase_status reports it
+    int coroutineTargetHealth{-1};   ///< The coroutine target's health (rounded); -1 while there is no target
+    uint32_t totalDamageEvents{0};   ///< EntityDamagedEvents received on the host EventBus
+    uint32_t totalKillEvents{0};     ///< EntityKilledEvents received on the host EventBus
+    uint32_t totalWeatherChanges{0}; ///< WeatherChangedEvents received on the host EventBus
+    std::string weatherName{"n/a"};  ///< Current weather type; "n/a" when the host has no WeatherSystem
+    int hourHundredths{-1};          ///< Time-of-day hour rounded to 0.01, in hundredths; -1 without a TimeOfDaySystem
+    uint32_t exhibitPlaced{0};       ///< Exhibit props placed by SpawnExhibit
+    uint32_t exhibitResolved{0};     ///< Placed props whose mesh file exists relative to the working directory
+    uint32_t spawnedCount{0};        ///< Tracked showcase entities (SpawnEntity and the coroutine target)
+};
+
+/**
  * @brief Showcases core engine subsystem integration from a game module
  *
  * Demonstrates:
@@ -91,6 +113,23 @@ class GameplayShowcase
      * @return Status string describing the spawned entity
      */
     std::string SpawnEntity(const std::string& name = "");
+
+    /**
+     * @brief Snapshot the showcase outcome
+     *
+     * Checks each exhibit prop's mesh file on disk, so it is meant for the console command and tests,
+     * not for per-frame use. Implemented in GameplayShowcaseOutcome.cpp.
+     */
+    ShowcaseOutcome GetOutcome() const;
+
+    /**
+     * @brief Format an outcome as one grep-able line
+     *
+     * `SPARK_SHOWCASE_OUTCOME stage=<s> target_hp=<n> damage_events=<n> kill_events=<n> weather_changes=<n>
+     * weather=<name> hour=<h> exhibit=<placed>/<resolved> spawned=<n>`, all on one line. Spaces inside the
+     * stage become '_', and target_hp/hour read "n/a" when unavailable.
+     */
+    static std::string FormatOutcome(const ShowcaseOutcome& outcome);
 
     /** @brief Scheduler name of the showcase lifecycle coroutine (stopped by name in Shutdown). */
     static constexpr const char* LifecycleCoroutineName = "SparkGame.ShowcaseLifecycle";

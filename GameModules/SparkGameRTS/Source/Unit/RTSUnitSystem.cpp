@@ -4,8 +4,7 @@
  */
 
 #include "RTSUnitSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -27,9 +26,7 @@ namespace RTS
         RegisterFactionTemplates(RTSFaction::Sentinel);
         RegisterFactionTemplates(RTSFaction::Swarm);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS unit system initialized with %zu templates", m_templates.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Unit system initialized (" +
-                                                    std::to_string(m_templates.size()) + " templates)");
+        Spark::ModuleLog::Info(m_context, "[RTS] Unit system initialized ({} templates)", m_templates.size());
         return true;
     }
 
@@ -74,7 +71,6 @@ namespace RTS
 
         uint32_t id = unit.unitId;
         m_units[id] = unit;
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS unit spawned: id=%u at (%.0f, %.0f)", id, x, y);
         return id;
     }
 
@@ -83,7 +79,6 @@ namespace RTS
         auto it = m_units.find(unitId);
         if (it != m_units.end())
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS unit %u killed", unitId);
             m_units.erase(it);
         }
     }

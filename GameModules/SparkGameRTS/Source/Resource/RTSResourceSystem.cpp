@@ -5,8 +5,7 @@
 
 #include "RTSResourceSystem.h"
 #include "Unit/RTSUnitSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -26,8 +25,7 @@ namespace RTS
         m_unitSystem = unitSystem;
         m_gatherTimer = 0.0f;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS resource system initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Resource system initialized");
+        Spark::ModuleLog::Info(m_context, "[RTS] Resource system initialized");
         return true;
     }
 
@@ -81,14 +79,13 @@ namespace RTS
     {
         if (!CanAfford(faction, minerals, gas))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "RTS cannot afford: need %d minerals, %d gas", minerals, gas);
+            Spark::ModuleLog::Warn(m_context, "[RTS] Cannot afford: need {} minerals, {} gas", minerals, gas);
             return false;
         }
 
         auto& res = m_playerResources[faction];
         res.minerals -= minerals;
         res.gas -= gas;
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS resources spent: %d minerals, %d gas", minerals, gas);
         return true;
     }
 

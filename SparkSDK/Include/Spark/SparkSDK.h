@@ -6,6 +6,7 @@
  *   - IModule interface, ModuleInfo struct, and lifecycle hooks
  *   - IEngineContext service locator (26 subsystem getters)
  *   - ILogger logging interface
+ *   - IConsole console command registration
  *   - SPARK_IMPLEMENT_MODULE macro
  *   - Version and compatibility utilities
  *   - Export macros
@@ -21,6 +22,7 @@
 #include "IEngineContext.h"
 #include "IModule.h"
 #include "ILogger.h"
+#include "IConsole.h"
 #include "ModuleABI.h"
 #include "PluginABI.h"
 #include "ModuleRegistry.h"

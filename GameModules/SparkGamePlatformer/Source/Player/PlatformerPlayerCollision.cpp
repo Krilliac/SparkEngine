@@ -12,7 +12,7 @@
 
 #include "PlatformerPlayerController.h"
 #include "Level/PlatformerLevelSystem.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #include <algorithm>
 #include <cmath>
@@ -238,8 +238,7 @@ namespace Platformer
         // Falling out of the level always costs a life: shields, ghost mode, and invincibility frames
         // cannot keep a player with no ground beneath them alive.
         m_lives = std::max(m_lives - 1, 0);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player fell out of the level (lives remaining: %d)",
-                       m_lives);
+        Spark::ModuleLog::Info(m_context, "[Platformer Player] Fell out of the level (lives remaining: {})", m_lives);
         if (m_lives == 0)
             EnterDeadState();
         else
@@ -249,7 +248,7 @@ namespace Platformer
 
     void PlatformerPlayerController::EnterDeadState()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player died — restarting at last checkpoint");
+        Spark::ModuleLog::Info(m_context, "[Platformer Player] Died; restarting at the last checkpoint");
         m_velocity = {0.0f, 0.0f, 0.0f};
         m_grounded = false;
         m_groundPlatform = NO_PLATFORM;

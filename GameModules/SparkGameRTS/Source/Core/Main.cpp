@@ -17,20 +17,21 @@
 #include "Match/RTSMatchSystem.h"
 #include "Simulation/RTSScriptedCommander.h"
 #include "Simulation/RTSSkirmishSimulation.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 #include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/AIComponents.h"
 
 #include <Spark/ModuleDllMain.h>
+#include <Spark/ModuleLog.h>
 
 #include <array>
 #include <cstddef>
 #include <format>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace
@@ -79,15 +80,13 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[RTS] Loading Spark RTS module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module loading — initializing 7 subsystems");
+    Spark::ModuleLog::Info(context, "[RTS] Loading Spark RTS module (7 subsystems)...");
 
     // Initialize unit system (faction templates, spawning, AI)
     m_unitSystem = std::make_unique<RTS::RTSUnitSystem>();
     if (!m_unitSystem->Initialize(context))
     {
-        console.LogError("[RTS] Failed to initialize unit system");
+        Spark::ModuleLog::Error(context, "[RTS] Failed to initialize unit system");
         return false;
     }
 
@@ -95,7 +94,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_resourceSystem = std::make_unique<RTS::RTSResourceSystem>();
     if (!m_resourceSystem->Initialize(context, m_unitSystem.get()))
     {
-        console.LogError("[RTS] Failed to initialize resource system");
+        Spark::ModuleLog::Error(context, "[RTS] Failed to initialize resource system");
         return false;
     }
 
@@ -103,7 +102,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_buildingSystem = std::make_unique<RTS::RTSBuildingSystem>();
     if (!m_buildingSystem->Initialize(context, m_unitSystem.get(), m_resourceSystem.get()))
     {
-        console.LogError("[RTS] Failed to initialize building system");
+        Spark::ModuleLog::Error(context, "[RTS] Failed to initialize building system");
         return false;
     }
 
@@ -111,7 +110,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_commandSystem = std::make_unique<RTS::RTSCommandSystem>();
     if (!m_commandSystem->Initialize(context, m_unitSystem.get(), m_buildingSystem.get()))
     {
-        console.LogError("[RTS] Failed to initialize command system");
+        Spark::ModuleLog::Error(context, "[RTS] Failed to initialize command system");
         return false;
     }
 
@@ -119,7 +118,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_fogOfWarSystem = std::make_unique<RTS::RTSFogOfWarSystem>();
     if (!m_fogOfWarSystem->Initialize(context))
     {
-        console.LogError("[RTS] Failed to initialize fog of war system");
+        Spark::ModuleLog::Error(context, "[RTS] Failed to initialize fog of war system");
         return false;
     }
 
@@ -127,7 +126,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_matchSystem = std::make_unique<RTS::RTSMatchSystem>();
     if (!m_matchSystem->Initialize(context))
     {
-        console.LogError("[RTS] Failed to initialize match system");
+        Spark::ModuleLog::Error(context, "[RTS] Failed to initialize match system");
         return false;
     }
 
@@ -137,7 +136,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_simulation = std::make_unique<RTS::RTSSkirmishSimulation>();
     if (!m_simulation->Initialize(context, gameplaySystems))
     {
-        console.LogError("[RTS] Failed to initialize skirmish simulation");
+        Spark::ModuleLog::Error(context, "[RTS] Failed to initialize skirmish simulation");
         return false;
     }
 
@@ -146,7 +145,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_engineSystems = std::make_unique<RTS::RTSEngineSystems>();
     if (!m_engineSystems->Initialize(context, gameplaySystems, m_simulation.get()))
     {
-        console.LogWarning("[RTS] Engine system integrations partially unavailable (non-fatal)");
+        Spark::ModuleLog::Warn(context, "[RTS] Engine system integrations partially unavailable (non-fatal)");
     }
 
     m_demoPresentation = std::make_unique<RTS::RTSDemoPresentation>();
@@ -154,7 +153,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
                                         m_commandSystem.get(), m_fogOfWarSystem.get(), m_matchSystem.get(),
                                         m_simulation.get()))
     {
-        console.LogError("[RTS] Failed to initialize playable demo");
+        Spark::ModuleLog::Error(context, "[RTS] Failed to initialize playable demo");
         return false;
     }
 
@@ -196,11 +195,9 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
                            }});
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module loaded successfully — 7 subsystems active");
-    console.LogInfo("[RTS] Spark RTS module loaded successfully (7 subsystems)");
-    console.LogInfo("[RTS] Units: " + std::to_string(m_unitSystem->GetUnitCount()) +
-                    " | Buildings: " + std::to_string(m_buildingSystem->GetBuildingCount()) +
-                    " | Nodes: " + std::to_string(m_resourceSystem->GetNodeCount()));
+    Spark::ModuleLog::Info(context, "[RTS] Spark RTS module loaded successfully (7 subsystems)");
+    Spark::ModuleLog::Info(context, "[RTS] Units: {} | Buildings: {} | Nodes: {}", m_unitSystem->GetUnitCount(),
+                           m_buildingSystem->GetBuildingCount(), m_resourceSystem->GetNodeCount());
     return true;
 }
 
@@ -213,9 +210,17 @@ void SparkGameRTSModule::OnUnload()
     // them before the module image is unmapped during hot unload/reload.
     Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("RTS");
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[RTS] Unloading Spark RTS module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module shutting down");
+    // Command handlers are std::functions in this DLL too, and they reference the systems torn down below.
+    if (Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr)
+    {
+        for (const std::string& name : m_consoleCommands)
+        {
+            console->UnregisterCommand(name);
+        }
+    }
+    m_consoleCommands.clear();
+
+    Spark::ModuleLog::Info(m_context, "[RTS] Unloading Spark RTS module...");
 
     // Shutdown in reverse initialization order
     if (m_demoPresentation)
@@ -267,10 +272,9 @@ void SparkGameRTSModule::OnUnload()
         m_unitSystem.reset();
     }
 
+    Spark::ModuleLog::Info(m_context, "[RTS] Spark RTS module unloaded");
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module unloaded");
-    console.LogInfo("[RTS] Spark RTS module unloaded");
 }
 
 void SparkGameRTSModule::OnUpdate(float deltaTime)
@@ -334,164 +338,175 @@ void SparkGameRTSModule::OnImGui()
 
 void SparkGameRTSModule::RegisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
+    Spark::IConsole* host = m_context->GetConsole();
+    if (!host)
+    {
+        Spark::ModuleLog::Warn(m_context, "[RTS] Host has no console; RTS commands are unavailable");
+        return;
+    }
+    // Remember each accepted name so OnUnload removes exactly what this module registered.
+    auto registerCommand = [this, host](std::string_view name, Spark::IConsole::CommandHandler handler)
+    {
+        if (host->RegisterCommand(name, std::move(handler), "", "RTS", ""))
+        {
+            m_consoleCommands.emplace_back(name);
+        }
+        else
+        {
+            Spark::ModuleLog::Warn(m_context, "[RTS] Console command '{}' was not registered", name);
+        }
+    };
 
-    console.RegisterCommand("rts_status",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                if (!m_unitSystem)
-                                    return "RTS module not initialized";
+    registerCommand("rts_status",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        if (!m_unitSystem)
+                            return "RTS module not initialized";
 
-                                std::string status = "=== Spark RTS Status ===\n";
-                                status += "Units: " + std::to_string(m_unitSystem->GetUnitCount()) + "\n";
-                                status += "Buildings: " + std::to_string(m_buildingSystem->GetBuildingCount()) + "\n";
-                                status += "Resource nodes: " + std::to_string(m_resourceSystem->GetNodeCount()) + "\n";
-                                status += "Selected: " + std::to_string(m_commandSystem->GetSelectionCount()) + "\n";
-                                status += "Map: " + std::to_string(m_fogOfWarSystem->GetMapWidth()) + "x" +
-                                          std::to_string(m_fogOfWarSystem->GetMapHeight()) + "\n";
-                                status += "Match players: " + std::to_string(m_matchSystem->GetPlayerCount()) + "\n";
-                                status += "Tick: " + std::to_string(m_simulation->GetTick()) + "\n";
-                                status +=
-                                    std::string("Match: ") + MatchStateName(m_matchSystem->GetMatchState()) + "\n";
-                                status += std::format("State hash: {:016x}\n", m_simulation->ComputeStateHash());
-                                return status;
-                            });
+                        std::string status = "=== Spark RTS Status ===\n";
+                        status += "Units: " + std::to_string(m_unitSystem->GetUnitCount()) + "\n";
+                        status += "Buildings: " + std::to_string(m_buildingSystem->GetBuildingCount()) + "\n";
+                        status += "Resource nodes: " + std::to_string(m_resourceSystem->GetNodeCount()) + "\n";
+                        status += "Selected: " + std::to_string(m_commandSystem->GetSelectionCount()) + "\n";
+                        status += "Map: " + std::to_string(m_fogOfWarSystem->GetMapWidth()) + "x" +
+                                  std::to_string(m_fogOfWarSystem->GetMapHeight()) + "\n";
+                        status += "Match players: " + std::to_string(m_matchSystem->GetPlayerCount()) + "\n";
+                        status += "Tick: " + std::to_string(m_simulation->GetTick()) + "\n";
+                        status += std::string("Match: ") + MatchStateName(m_matchSystem->GetMatchState()) + "\n";
+                        status += std::format("State hash: {:016x}\n", m_simulation->ComputeStateHash());
+                        return status;
+                    });
 
     // Automated player for packaged runs. Its orders are scheduled by simulation tick, so turning it on restarts
     // the default skirmish and the whole match -- win or loss and final state hash -- depends only on the tick.
-    console.RegisterCommand("rts_autoplay",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
-                                {
-                                    return "Usage: rts_autoplay on|off";
-                                }
-                                if (args[0] == "off")
-                                {
-                                    m_simulation->SetScriptedCommander(nullptr);
-                                    m_scriptedCommander.reset();
-                                    return "Autoplay off";
-                                }
-                                if (!m_simulation->StartDefaultSkirmish())
-                                {
-                                    return "Autoplay failed: the default skirmish did not restart";
-                                }
-                                m_scriptedCommander = std::make_unique<RTS::RTSScriptedCommander>();
-                                m_simulation->SetScriptedCommander(m_scriptedCommander.get());
-                                return "Autoplay on: default skirmish restarted with the scripted Human commander";
-                            });
+    registerCommand("rts_autoplay",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+                        {
+                            return "Usage: rts_autoplay on|off";
+                        }
+                        if (args[0] == "off")
+                        {
+                            m_simulation->SetScriptedCommander(nullptr);
+                            m_scriptedCommander.reset();
+                            return "Autoplay off";
+                        }
+                        if (!m_simulation->StartDefaultSkirmish())
+                        {
+                            return "Autoplay failed: the default skirmish did not restart";
+                        }
+                        m_scriptedCommander = std::make_unique<RTS::RTSScriptedCommander>();
+                        m_simulation->SetScriptedCommander(m_scriptedCommander.get());
+                        return "Autoplay on: default skirmish restarted with the scripted Human commander";
+                    });
 
-    console.RegisterCommand("rts_units", [this](const std::vector<std::string>&) -> std::string
-                            { return m_unitSystem->GetUnitListString(); });
+    registerCommand("rts_units", [this](const std::vector<std::string>&) -> std::string
+                    { return m_unitSystem->GetUnitListString(); });
 
-    console.RegisterCommand("rts_buildings", [this](const std::vector<std::string>&) -> std::string
-                            { return m_buildingSystem->GetBuildingListString(); });
+    registerCommand("rts_buildings", [this](const std::vector<std::string>&) -> std::string
+                    { return m_buildingSystem->GetBuildingListString(); });
 
-    console.RegisterCommand("rts_resources", [this](const std::vector<std::string>&) -> std::string
-                            { return m_resourceSystem->GetResourceListString(); });
+    registerCommand("rts_resources", [this](const std::vector<std::string>&) -> std::string
+                    { return m_resourceSystem->GetResourceListString(); });
 
-    console.RegisterCommand("rts_demo_reset", [this](const std::vector<std::string>&) -> std::string
-                            { return m_demoPresentation->Reset() ? "RTS demo reset" : "RTS demo reset failed"; });
+    registerCommand("rts_demo_reset", [this](const std::vector<std::string>&) -> std::string
+                    { return m_demoPresentation->Reset() ? "RTS demo reset" : "RTS demo reset failed"; });
 
-    console.RegisterCommand("rts_select",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.empty())
-                                    return "Usage: rts_select <workers|marines|tanks|army>";
-                                if (args[0] == "workers")
-                                    m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Worker);
-                                else if (args[0] == "marines")
-                                    m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Marine);
-                                else if (args[0] == "tanks")
-                                    m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Tank);
-                                else if (args[0] == "army")
-                                    m_demoPresentation->SelectArmy();
-                                else
-                                    return "Unknown group: " + args[0];
-                                return "Selected " + std::to_string(m_commandSystem->GetSelectionCount()) + " units";
-                            });
+    registerCommand("rts_select",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.empty())
+                            return "Usage: rts_select <workers|marines|tanks|army>";
+                        if (args[0] == "workers")
+                            m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Worker);
+                        else if (args[0] == "marines")
+                            m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Marine);
+                        else if (args[0] == "tanks")
+                            m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Tank);
+                        else if (args[0] == "army")
+                            m_demoPresentation->SelectArmy();
+                        else
+                            return "Unknown group: " + args[0];
+                        return "Selected " + std::to_string(m_commandSystem->GetSelectionCount()) + " units";
+                    });
 
-    console.RegisterCommand("rts_move",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.size() < 2)
-                                    return "Usage: rts_move <x> <y> [queue]";
-                                try
-                                {
-                                    const bool queued = args.size() >= 3 && args[2] == "queue";
-                                    return m_demoPresentation->MoveSelection(std::stof(args[0]), std::stof(args[1]),
-                                                                             queued)
-                                               ? "Move order issued"
-                                               : "Move order rejected";
-                                }
-                                catch (const std::exception&)
-                                {
-                                    return "Invalid move coordinates";
-                                }
-                            });
+    registerCommand("rts_move",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.size() < 2)
+                            return "Usage: rts_move <x> <y> [queue]";
+                        try
+                        {
+                            const bool queued = args.size() >= 3 && args[2] == "queue";
+                            return m_demoPresentation->MoveSelection(std::stof(args[0]), std::stof(args[1]), queued)
+                                       ? "Move order issued"
+                                       : "Move order rejected";
+                        }
+                        catch (const std::exception&)
+                        {
+                            return "Invalid move coordinates";
+                        }
+                    });
 
-    console.RegisterCommand("rts_hold",
-                            [this](const std::vector<std::string>&) -> std::string {
-                                return m_demoPresentation->HoldSelection() ? "Hold order issued" : "No units selected";
-                            });
-    console.RegisterCommand("rts_stop",
-                            [this](const std::vector<std::string>&) -> std::string {
-                                return m_demoPresentation->StopSelection() ? "Stop order issued" : "No units selected";
-                            });
-    console.RegisterCommand("rts_train_marine", [this](const std::vector<std::string>&) -> std::string
-                            { return m_demoPresentation->TrainMarine() ? "Marine queued" : "Marine queue rejected"; });
+    registerCommand("rts_hold", [this](const std::vector<std::string>&) -> std::string
+                    { return m_demoPresentation->HoldSelection() ? "Hold order issued" : "No units selected"; });
+    registerCommand("rts_stop", [this](const std::vector<std::string>&) -> std::string
+                    { return m_demoPresentation->StopSelection() ? "Stop order issued" : "No units selected"; });
+    registerCommand("rts_train_marine", [this](const std::vector<std::string>&) -> std::string
+                    { return m_demoPresentation->TrainMarine() ? "Marine queued" : "Marine queue rejected"; });
 
     // Engine system commands
-    console.RegisterCommand("rts_save",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (!m_engineSystems)
-                                    return "Engine systems not initialized";
-                                std::string slot = args.empty() ? "rts_quicksave" : args[0];
-                                if (!RTS::RTSEngineSystems::IsValidSlotName(slot))
-                                    return "Invalid slot name: use 1-64 letters, digits, '_' or '-'";
-                                return m_engineSystems->SaveMatch(slot) ? "Saved to: " + slot : "Save failed";
-                            });
+    registerCommand("rts_save",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (!m_engineSystems)
+                            return "Engine systems not initialized";
+                        std::string slot = args.empty() ? "rts_quicksave" : args[0];
+                        if (!RTS::RTSEngineSystems::IsValidSlotName(slot))
+                            return "Invalid slot name: use 1-64 letters, digits, '_' or '-'";
+                        return m_engineSystems->SaveMatch(slot) ? "Saved to: " + slot : "Save failed";
+                    });
 
-    console.RegisterCommand("rts_load",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (!m_engineSystems)
-                                    return "Engine systems not initialized";
-                                std::string slot = args.empty() ? "rts_quicksave" : args[0];
-                                if (!RTS::RTSEngineSystems::IsValidSlotName(slot))
-                                    return "Invalid slot name: use 1-64 letters, digits, '_' or '-'";
-                                return m_engineSystems->LoadMatch(slot) ? "Loaded from: " + slot : "Load failed";
-                            });
+    registerCommand("rts_load",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (!m_engineSystems)
+                            return "Engine systems not initialized";
+                        std::string slot = args.empty() ? "rts_quicksave" : args[0];
+                        if (!RTS::RTSEngineSystems::IsValidSlotName(slot))
+                            return "Invalid slot name: use 1-64 letters, digits, '_' or '-'";
+                        return m_engineSystems->LoadMatch(slot) ? "Loaded from: " + slot : "Load failed";
+                    });
 
-    console.RegisterCommand("rts_weather",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (!m_engineSystems)
-                                    return "Engine systems not initialized";
-                                if (args.empty())
-                                    return "Usage: rts_weather <clear|rain|fog|storm|snow|cloudy>";
-                                m_engineSystems->SetWeather(args[0]);
-                                return "Weather set to: " + args[0];
-                            });
+    registerCommand("rts_weather",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (!m_engineSystems)
+                            return "Engine systems not initialized";
+                        if (args.empty())
+                            return "Usage: rts_weather <clear|rain|fog|storm|snow|cloudy>";
+                        m_engineSystems->SetWeather(args[0]);
+                        return "Weather set to: " + args[0];
+                    });
 
-    console.RegisterCommand("rts_time",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (!m_engineSystems)
-                                    return "Engine systems not initialized";
-                                if (args.empty())
-                                    return "Usage: rts_time <0-24>";
-                                float hour;
-                                try
-                                {
-                                    hour = std::stof(args[0]);
-                                }
-                                catch (const std::exception&)
-                                {
-                                    return "Invalid time value: " + args[0];
-                                }
-                                m_engineSystems->SetTimeOfDay(hour);
-                                return "Time set to: " + args[0];
-                            });
+    registerCommand("rts_time",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (!m_engineSystems)
+                            return "Engine systems not initialized";
+                        if (args.empty())
+                            return "Usage: rts_time <0-24>";
+                        float hour;
+                        try
+                        {
+                            hour = std::stof(args[0]);
+                        }
+                        catch (const std::exception&)
+                        {
+                            return "Invalid time value: " + args[0];
+                        }
+                        m_engineSystems->SetTimeOfDay(hour);
+                        return "Time set to: " + args[0];
+                    });
 }

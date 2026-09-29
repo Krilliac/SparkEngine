@@ -108,6 +108,7 @@ void SparkGameDefaultModule::OnUnload()
     }
 
     console.UnregisterCommand("showcase_status");
+    console.UnregisterCommand("showcase_outcome");
     console.UnregisterCommand("showcase_weather");
     console.UnregisterCommand("showcase_save");
     console.UnregisterCommand("showcase_load");
@@ -190,6 +191,18 @@ void SparkGameDefaultModule::RegisterConsoleCommands()
             return m_showcase->GetStatus();
         },
         "Show gameplay showcase status", "Showcase");
+
+    console.RegisterCommand(
+        "showcase_outcome",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_showcase)
+            {
+                return "Showcase not initialized";
+            }
+            return GameplayShowcase::FormatOutcome(m_showcase->GetOutcome());
+        },
+        "Print the showcase outcome as one SPARK_SHOWCASE_OUTCOME line", "Showcase");
 
     console.RegisterCommand(
         "showcase_weather",

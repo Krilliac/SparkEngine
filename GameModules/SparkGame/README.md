@@ -48,8 +48,14 @@ python3 tools/blender/validate_kit.py Art/Blender/SparkGame/provenance.json
 `xvfb-run` is only needed for the preview render on a host without an EGL/GPU context. Every mesh and string-table
 path the source names is recorded in `asset-references.json`; the string tables are repository-authored.
 
-Console commands: `showcase_status`, `showcase_weather`, `showcase_save`, `showcase_load`, `showcase_spawn`, and
-`showcase_language`.
+Console commands: `showcase_status`, `showcase_outcome`, `showcase_weather`, `showcase_save`, `showcase_load`,
+`showcase_spawn`, and `showcase_language`.
+
+`showcase_outcome` prints the showcase's result as one line: `SPARK_SHOWCASE_OUTCOME stage=<coroutine stage>
+target_hp=<n> damage_events=<n> kill_events=<n> weather_changes=<n> weather=<name> hour=<h> exhibit=<placed>/<resolved>
+spawned=<n>`. `exhibit` counts the placed props and those whose mesh file exists relative to the working directory,
+where the asset pipeline opens it. Spaces in the stage become `_`, and `target_hp`/`hour` read `n/a` when there is no
+coroutine target or no TimeOfDaySystem. Nothing in it is random; only `hour` follows the host's frame time.
 `OnUnload()` removes the module's validation rules and tears the showcase down before the library is unmapped.
 Teardown stops the lifecycle coroutine first; `StopCoroutine()` outside a scheduler tick destroys it immediately, so
 no step callable that lives in this image is left in the scheduler.
@@ -74,6 +80,12 @@ and the missing-scheduler warning. `SparkGameShowcase_StatusIsLocalized` gives t
 checks that `showcase_language fr` relabels `showcase_status`. They are registered on Linux only (the test loads the
 `.so`); there is no Windows lane for them yet.
 
+`SparkGameShowcase_OutcomeIsDeterministic` loads the image three times, each with a fresh `World`, `EventBus`,
+`WeatherSystem` and the engine `TimeOfDaySystem`, and steps the module, scheduler, weather and time of day together
+for 40 s of simulated time: twice at 1/64 s and once at 1/60 s. All three `showcase_outcome` lines must equal
+`stage=complete target_hp=100 damage_events=1 kill_events=0 weather_changes=1 weather=Rain hour=8.67 exhibit=4/4
+spawned=4`, with the source root as working directory.
+
 `SparkGameShowcase_Localization*` (`Tests/TestMOD300ShowcaseLocalizationReal.cpp`, every platform) links
 `ShowcaseLocalization.cpp` directly: both shipped tables load and resolve every key, and a table with a missing key
 or a missing file is rejected without changing the loaded languages.
@@ -86,6 +98,11 @@ directory, in an empty environment with its own HOME/XDG roots, through
 NullRHI lifecycle, `Language set to fr`, a French status (`Langue: fr`) whose spawned count is exactly one higher,
 and no output naming the source or build tree. The installed tree carries `Assets/Localization`, which the build's
 post-build copy and the runtime install both include; the showcase loads it relative to the working directory.
+Phases `runA` and `runB` are two more processes that print `showcase_outcome` at 7 s: each must report a complete
+coroutine sequence (`target_hp=100 damage_events=1`) and `exhibit=4/4` from the installed meshes, and runB's line must
+equal runA's apart from `hour`, which follows wall-clock-paced frames. The headless package host registers no
+`WeatherSystem` or `TimeOfDaySystem`, so those runs report `weather=n/a hour=n/a`. The packaged run does not check what
+is drawn.
 
 `ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload` (`Tests/TestModuleABI.cpp`) checks that
 `OnUnload()` releases the validation rules this module registers.

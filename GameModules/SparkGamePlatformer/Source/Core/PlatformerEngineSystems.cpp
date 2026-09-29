@@ -6,12 +6,6 @@
  * Uses IEngineContext (SDK v2) for subsystem access instead of singletons.
  */
 
-#include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <windows.h>
-#include "Core/Platform.h"
-#endif
-
 #include "PlatformerEngineSystems.h"
 #include "Spark/ModuleLog.h"
 
