@@ -2,9 +2,9 @@
 #include "Downloader.h"
 #include "DownloadSecurity.h"
 #include "PathSecurity.h"
+#include "ProcessRunner.h"
 
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -572,7 +572,7 @@ namespace
     constexpr const char* kFixtureScript = R"PY(
 import io, os, struct, sys, tarfile, zipfile, zlib
 
-root = sys.argv[1]
+root = os.path.abspath(sys.argv[1])
 fixtures = os.path.join(root, "fixtures")
 outside = os.path.join(root, "outside")
 os.makedirs(fixtures)
@@ -682,10 +682,13 @@ raw_zip("overrun_entry.zip", [("o/a.txt", "o/a.txt", b"alpha")], central_name_le
             std::ofstream output(script, std::ios::binary | std::ios::trunc);
             output << kFixtureScript;
         }
-        const std::string command = "python3 \"" + script.string() + "\" \"" + root.string() + "\"";
-        if (std::system(command.c_str()) != 0)
+        // The generator runs inside the scratch root with a constant argv and no
+        // shell: the root derives from TMPDIR, so it never reaches a command line.
+        SparkBuild::ProcessRunner generator;
+        std::string generatorOutput;
+        if (generator.RunSync("python3 make_fixtures.py .", root.string(), generatorOutput) != 0)
         {
-            std::cerr << "FAIL: could not generate archive fixtures with python3\n";
+            std::cerr << "FAIL: could not generate archive fixtures with python3\n" << generatorOutput;
             fs::remove_all(root, ignored);
             return 1;
         }
