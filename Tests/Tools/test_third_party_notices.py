@@ -354,6 +354,9 @@ def _runtime_entry(files: str, terms: bool = True) -> str:
     return entry + f"  Files: {files}\n\n"
 
 
+FONT_LICENSE_TEXT = "bin/EditorAssets/Fonts/LICENSES/FixtureSans-LICENSE.txt"
+
+
 def _package_notice(font_body: str | None, jolt_body: str | None, font_files: str, extra_inventory: str = "") -> str:
     """A THIRD_PARTY_NOTICES.txt in the format cmake/SparkThirdPartyAudit.cmake writes."""
     text = (
@@ -406,7 +409,8 @@ class PackageRuleSetTests(unittest.TestCase):
         for rule in rules.payload:
             if rule.component is None:
                 self.assertTrue(
-                    rule.first_party or rule.system_runtime, f"{rule.pattern.pattern} exempts payload without a reason"
+                    rule.first_party or rule.system_runtime or rule.notice_text,
+                    f"{rule.pattern.pattern} exempts payload without a reason",
                 )
         for root in rules.first_party_roots:
             self.assertTrue(root.justification.strip(), f"{root.pattern.pattern} has no justification")
@@ -448,6 +452,10 @@ class PackageRuleSetTests(unittest.TestCase):
             "runtime rule with a component": {
                 **good,
                 "payloadRules": [{"pattern": "^bin/", "component": "zstd", "systemRuntime": RUNTIME}],
+            },
+            "notice-text rule with a component": {
+                **good,
+                "payloadRules": [{"pattern": "^bin/", "component": "zstd", "noticeText": "why"}],
             },
             "first-party root without justification": {**good, "firstPartyRoots": [{"pattern": "^bin/"}]},
             "first-party root with blank justification": {
@@ -541,6 +549,25 @@ class LicenseInventoryPackageTests(unittest.TestCase):
             RUNTIME_DLLS,
             [],
         ),
+        # A shipped license text (noticeText rule) must be a reproduced 'Notice files:' text.
+        "license_text_reproduced": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {FONT_LICENSE_TEXT: "fixture license\n"},
+            [],
+        ),
+        "license_text_not_in_notice": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {FONT_LICENSE_TEXT: "fixture license\n", "bin/EditorAssets/Fonts/LICENSES/Other-LICENSE.txt": "x\n"},
+            ["bin/EditorAssets/Fonts/LICENSES/Other-LICENSE.txt: license text not a 'Notice files:' text"],
+        ),
+        "license_text_not_reproduced": (
+            _package_notice(None, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {FONT_LICENSE_TEXT: "fixture license\n"},
+            [
+                "bin/EditorAssets/Fonts/FixtureSans-Regular.ttf: font named by 'Fixture Sans' but license text",
+                f"{FONT_LICENSE_TEXT}: license text named by 'Fixture Sans' but license text",
+            ],
+        ),
     }
 
     def _run_case(self, notice: str, extra: dict[str, str]) -> tuple[Path, notices.PackageCoverage]:
@@ -562,7 +589,9 @@ class LicenseInventoryPackageTests(unittest.TestCase):
                     self.assertTrue(line.startswith(fragment), f"{line!r} does not start with {fragment!r}")
                 if not expected:
                     self.assertEqual(coverage.font_count, 1)
-                    self.assertEqual(coverage.payload_count, 3 + sum(rel.endswith(".dll") for rel in extra))
+                    self.assertEqual(
+                        coverage.payload_count, 3 + sum(rel.endswith(".dll") or "/LICENSES/" in rel for rel in extra)
+                    )
 
     def test_check_package_cli_exit_codes(self) -> None:
         notice, extra, _ = self.CASES["uncovered_font"]

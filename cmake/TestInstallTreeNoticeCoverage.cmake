@@ -37,9 +37,8 @@ endif()
 file(REMOVE_RECURSE "${_spark_root}")
 
 # The package's component list, exactly as CPack will package it.
-file(STRINGS "${SPARK_BINARY_DIR}/CPackConfig.cmake" _spark_components_line
-    REGEX "^set[(]CPACK_COMPONENTS_ALL \"[^\"]*\"[)]$")
-if(NOT _spark_components_line MATCHES "^set[(]CPACK_COMPONENTS_ALL \"([^\"]+)\"[)]$")
+file(READ "${SPARK_BINARY_DIR}/CPackConfig.cmake" _spark_cpack_config)
+if(NOT _spark_cpack_config MATCHES "\nset[(]CPACK_COMPONENTS_ALL \"([^\"\n]+)\"[)]\n")
     message(FATAL_ERROR "No CPACK_COMPONENTS_ALL in ${SPARK_BINARY_DIR}/CPackConfig.cmake")
 endif()
 set(SPARK_COMPONENTS "${CMAKE_MATCH_1}")
@@ -84,6 +83,60 @@ function(_spark_run_both _spark_prefix)
     set(${_spark_prefix}_python_result "${_spark_python_result}" PARENT_SCOPE)
     set(${_spark_prefix}_python_log "${_spark_python_flat}" PARENT_SCOPE)
 endfunction()
+
+# OD-09: only the stable-v1 package (SPARK_GAME_MODULES=SparkGameFPS) excludes
+# the TERRAFRONT assets whose installed RDY-020 manifest license is NOASSERTION;
+# the default package still ships them, and closed-world classification
+# correctly reports each as having no identified license. Those files, and only
+# those, are the permitted residual: both gates must fail on exactly that many
+# files, every reported file must carry that reason, and the files are then
+# removed (as the stable-v1 profile removes them) so the rest of the tree must
+# pass in full. A stable-v1 tree has no NOASSERTION entry, so it must pass as is.
+set(_spark_asset_manifest "${_spark_root}/bin/Assets/assets.integrity.json")
+set(_spark_noassertion "")
+if(EXISTS "${_spark_asset_manifest}")
+    file(READ "${_spark_asset_manifest}" _spark_manifest_json)
+    string(JSON _spark_entry_count LENGTH "${_spark_manifest_json}" entries)
+    if(_spark_entry_count GREATER 0)
+        math(EXPR _spark_last_entry "${_spark_entry_count} - 1")
+        foreach(_spark_index RANGE ${_spark_last_entry})
+            string(JSON _spark_entry GET "${_spark_manifest_json}" entries ${_spark_index})
+            string(JSON _spark_license GET "${_spark_entry}" license)
+            if(_spark_license STREQUAL "NOASSERTION")
+                string(JSON _spark_path GET "${_spark_entry}" path)
+                list(APPEND _spark_noassertion "bin/Assets/${_spark_path}")
+            endif()
+        endforeach()
+    endif()
+endif()
+list(LENGTH _spark_noassertion _spark_noassertion_count)
+if(_spark_noassertion_count GREATER 0)
+    _spark_run_both(_spark_residual)
+    foreach(_spark_implementation IN ITEMS cmake python)
+        set(_spark_log "${_spark_residual_${_spark_implementation}_log}")
+        if(_spark_residual_${_spark_implementation}_result EQUAL 0 OR
+           NOT _spark_log MATCHES "([0-9]+) shipped file\\(s\\) are not covered")
+            message(FATAL_ERROR
+                "The ${_spark_implementation} gate did not report the ${_spark_noassertion_count} NOASSERTION "
+                "asset(s): ${_spark_log}")
+        endif()
+        set(_spark_reported "${CMAKE_MATCH_1}")
+        string(REGEX MATCHALL "records no identified license" _spark_reasons "${_spark_log}")
+        list(LENGTH _spark_reasons _spark_reason_count)
+        if(NOT _spark_reported EQUAL _spark_noassertion_count OR NOT _spark_reason_count EQUAL _spark_noassertion_count)
+            message(FATAL_ERROR
+                "The ${_spark_implementation} gate reported ${_spark_reported} uncovered file(s), "
+                "${_spark_reason_count} of them NOASSERTION assets; expected exactly the "
+                "${_spark_noassertion_count} NOASSERTION assets of the installed manifest: ${_spark_log}")
+        endif()
+    endforeach()
+    list(TRANSFORM _spark_noassertion PREPEND "${_spark_root}/")
+    file(REMOVE ${_spark_noassertion})
+    math(EXPR _spark_installed_count "${_spark_installed_count} - ${_spark_noassertion_count}")
+    message(STATUS
+        "Both gates reported exactly the ${_spark_noassertion_count} NOASSERTION asset(s) OD-09 keeps out of "
+        "stable-v1; checking the remaining ${_spark_installed_count} file(s)")
+endif()
 
 _spark_run_both(_spark_clean)
 if(NOT _spark_clean_cmake_result EQUAL 0 OR NOT _spark_clean_python_result EQUAL 0)

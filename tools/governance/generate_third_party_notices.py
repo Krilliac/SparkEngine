@@ -220,6 +220,9 @@ class PayloadRule:
     # are not a file in the repository: covered by a named inventory entry with
     # a "Terms:" line whose "Files:" line names the file.
     system_runtime: str | None = None
+    # A shipped license text: covered when its name is on the "Notice files:"
+    # line of an inventory entry whose texts are all reproduced.
+    notice_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -293,16 +296,19 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
         where = f"{label}: payloadRules[{index}]"
         if not isinstance(rule, dict):
             raise NoticeInputError(f"{where} must be an object")
-        targets = {key: rule.get(key) for key in ("component", "firstParty", "systemRuntime")}
+        targets = {key: rule.get(key) for key in ("component", "firstParty", "systemRuntime", "noticeText")}
         named = {key: value for key, value in targets.items() if isinstance(value, str) and value}
         if len(named) != 1 or any(value is not None for key, value in targets.items() if key not in named):
-            raise NoticeInputError(f"{where} must name exactly one of 'component', 'firstParty' or 'systemRuntime'")
+            raise NoticeInputError(
+                f"{where} must name exactly one of 'component', 'firstParty', 'systemRuntime' or 'noticeText'"
+            )
         payload.append(
             PayloadRule(
                 _rules_regex(rule.get("pattern"), where),
                 named.get("component"),
                 named.get("firstParty"),
                 named.get("systemRuntime"),
+                named.get("noticeText"),
             )
         )
     first_party_roots = []
@@ -558,6 +564,18 @@ def check_package_coverage(package_root: Path, rules: PackageRules, closed_world
                 uncovered.append(f"{rel}: system runtime '{rule.system_runtime}' has no 'Terms:' line")
             elif not any(PurePosixPath(named).name == name for named in entry.files):
                 uncovered.append(f"{rel}: not named on the 'Files:' line of system runtime '{rule.system_runtime}'")
+            continue
+        if rule.notice_text is not None:
+            reason = f"not a 'Notice files:' text of any {PACKAGE_NOTICE_NAME} inventory entry"
+            for entry in entries:
+                if not any(PurePosixPath(named).name == name for named in entry.notice_files):
+                    continue
+                if not entry.problem:
+                    reason = ""
+                    break
+                reason = f"named by '{entry.name}' but {entry.problem}"
+            if reason:
+                uncovered.append(f"{rel}: license text {reason}")
             continue
         if rule.component is None:
             continue

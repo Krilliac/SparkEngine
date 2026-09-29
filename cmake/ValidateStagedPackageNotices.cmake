@@ -15,6 +15,9 @@ cmake_minimum_required(VERSION 3.25)
 #     Microsoft Visual C++ runtime, whose redistribution terms are not a file in
 #     the repository) is covered when the named inventory entry has a "Terms:"
 #     line and names the file on its "Files:" line;
+#   * a file matching a noticeText rule (a shipped license text, such as the
+#     editor fonts' LICENSES directory) is covered when its name is on the
+#     "Notice files:" line of an inventory entry whose texts are all reproduced;
 #   * a file under a third-party root that no payload rule maps is uncovered;
 #   * in closed-world classification, any other file must either be listed with
 #     an identified license (not NOASSERTION) in the installed asset manifest of
@@ -185,6 +188,8 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
             GET "${_spark_rules}" payloadRules ${_spark_index} firstParty)
         string(JSON _spark_rule_runtime_${_spark_index} ERROR_VARIABLE _spark_runtime_error
             GET "${_spark_rules}" payloadRules ${_spark_index} systemRuntime)
+        string(JSON _spark_rule_notice_text_${_spark_index} ERROR_VARIABLE _spark_notice_text_error
+            GET "${_spark_rules}" payloadRules ${_spark_index} noticeText)
         if(_spark_component_error)
             set(_spark_rule_component_${_spark_index} "")
         endif()
@@ -194,18 +199,24 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
         if(_spark_runtime_error)
             set(_spark_rule_runtime_${_spark_index} "")
         endif()
-        # Exactly one of component/firstParty/systemRuntime, and a first-party
-        # exemption must say why, so an empty rule cannot silently exempt payload.
+        if(_spark_notice_text_error)
+            set(_spark_rule_notice_text_${_spark_index} "")
+        endif()
+        # Exactly one of component/firstParty/systemRuntime/noticeText, and a
+        # first-party exemption must say why, so an empty rule cannot silently
+        # exempt payload.
         set(_spark_rule_targets 0)
         foreach(_spark_target IN ITEMS "${_spark_rule_component_${_spark_index}}" "${_spark_rule_first_party}"
-                                       "${_spark_rule_runtime_${_spark_index}}")
+                                       "${_spark_rule_runtime_${_spark_index}}"
+                                       "${_spark_rule_notice_text_${_spark_index}}")
             if(NOT _spark_target STREQUAL "")
                 math(EXPR _spark_rule_targets "${_spark_rule_targets} + 1")
             endif()
         endforeach()
         if(NOT _spark_rule_targets EQUAL 1)
             _spark_notice_fail(
-                "payloadRules[${_spark_index}] must name exactly one of 'component', 'firstParty' or 'systemRuntime'")
+                "payloadRules[${_spark_index}] must name exactly one of 'component', 'firstParty', "
+                "'systemRuntime' or 'noticeText'")
         endif()
     endforeach()
 
@@ -531,6 +542,33 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
             if(NOT _spark_named)
                 list(APPEND _spark_uncovered
                     "${_spark_file}: not named on the 'Files:' line of system runtime '${_spark_runtime}'")
+            endif()
+            continue()
+        endif()
+        # A shipped license text must be one the notice reproduces: its name is
+        # on the 'Notice files:' line of an entry whose texts are all present.
+        if(NOT _spark_rule_notice_text_${_spark_matched_rule} STREQUAL "")
+            set(_spark_reason "not a 'Notice files:' text of any THIRD_PARTY_NOTICES.txt inventory entry")
+            foreach(_spark_block RANGE 1 ${_spark_block_count})
+                set(_spark_named OFF)
+                foreach(_spark_named_file IN LISTS _spark_block_notices_${_spark_block})
+                    get_filename_component(_spark_named_name "${_spark_named_file}" NAME)
+                    if(_spark_named_name STREQUAL _spark_name)
+                        set(_spark_named ON)
+                    endif()
+                endforeach()
+                if(NOT _spark_named)
+                    continue()
+                endif()
+                if(_spark_block_problem_${_spark_block} STREQUAL "")
+                    set(_spark_reason "")
+                    break()
+                endif()
+                set(_spark_reason
+                    "named by '${_spark_block_name_${_spark_block}}' but ${_spark_block_problem_${_spark_block}}")
+            endforeach()
+            if(NOT _spark_reason STREQUAL "")
+                list(APPEND _spark_uncovered "${_spark_file}: license text ${_spark_reason}")
             endif()
             continue()
         endif()

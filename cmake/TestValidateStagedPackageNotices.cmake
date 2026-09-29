@@ -295,6 +295,23 @@ _spark_write_notice("${_spark_root}" "${_spark_fixture_font_license}" "${_spark_
     "FixtureSans-Regular.ttf" "${_spark_entry}")
 _spark_expect_pass(RuntimeCovered "${_spark_root}")
 
+# 13b. A shipped license text (noticeText rule: the editor fonts' LICENSES
+#      directory) must be a 'Notice files:' text the notice reproduces.
+_spark_new_case(license_text_reproduced _spark_root)
+file(MAKE_DIRECTORY "${_spark_root}/bin/EditorAssets/Fonts/LICENSES")
+file(WRITE "${_spark_root}/bin/EditorAssets/Fonts/LICENSES/FixtureSans-LICENSE.txt" "fixture license\n")
+_spark_expect_pass(LicenseTextReproduced "${_spark_root}")
+file(WRITE "${_spark_root}/bin/EditorAssets/Fonts/LICENSES/Other-LICENSE.txt" "fixture license\n")
+_spark_expect_fail(LicenseTextNotInNotice "${_spark_root}"
+    "1 shipped file(s) are not covered"
+    "bin/EditorAssets/Fonts/LICENSES/Other-LICENSE.txt: license text not a 'Notice files:' text")
+_spark_new_case(license_text_not_reproduced _spark_root)
+file(MAKE_DIRECTORY "${_spark_root}/bin/EditorAssets/Fonts/LICENSES")
+file(WRITE "${_spark_root}/bin/EditorAssets/Fonts/LICENSES/FixtureSans-LICENSE.txt" "fixture license\n")
+_spark_write_notice("${_spark_root}" MISSING "${_spark_fixture_library_license}" "FixtureSans-Regular.ttf")
+_spark_expect_fail(LicenseTextNotReproduced "${_spark_root}"
+    "bin/EditorAssets/Fonts/LICENSES/FixtureSans-LICENSE.txt: license text named by 'Fixture Sans' but license text for SparkEditor/Fonts/FixtureSans-LICENSE.txt is not reproduced")
+
 # 14. Closed world: nothing is presumed first-party. The base package is fully
 #     classified; an unmapped DLL that open world accepts is unclassified.
 _spark_new_case(closed_world _spark_root)
