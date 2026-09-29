@@ -440,12 +440,15 @@ namespace
             {"recover-client", 7, {static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StopResponse), {1, 0}}});
         Check(Spark::Daemon::CompactOrchestrationJournal(journal, state), "journal compacts atomically");
 
-        Spark::Daemon::OrchestrationIntent interrupted{
-            {"torn-client", 9},
-            static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StartRequest),
-            "stale",
-            999999,
-            42};
+        // Field-by-field rather than nested aggregate braces: GCC 15 at -O3 reports a false
+        // maybe-uninitialized on key.clientInstance for the nested brace form (-Werror target).
+        Spark::Daemon::OrchestrationIntent interrupted;
+        interrupted.key.clientInstance = "torn-client";
+        interrupted.key.sequence = 9;
+        interrupted.messageType = static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StartRequest);
+        interrupted.processId = "stale";
+        interrupted.processIdBefore = 999999;
+        interrupted.processStartTokenBefore = 42;
         Check(Spark::Daemon::AppendOrchestrationIntent(journal, interrupted), "journal intent is durable");
         {
             std::ofstream torn(journal.string() + ".wal", std::ios::binary | std::ios::app);
