@@ -516,18 +516,26 @@
         },
         {
           "criterionDigest": "sha256:ae0f4962f815",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Needs hosted Working runs, including a docs-only commit, that publish a gate summary."
+          "state": "implemented",
+          "evidence": [
+            ".github/workflows/build.yml",
+            ".github/scripts/test-ci-perf-contract.py",
+            ".github/scripts/test-workflow-failure-propagation.py"
+          ],
+          "note": "The Build workflow has no path filters, pushes are not cancelled and the gate is always(); registered mutations reject paths/paths-ignore and a conditional gate. No hosted docs-only run or exact-commit CI."
         },
         {
           "criterionDigest": "sha256:709caf31c8a5",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             ".github/scripts/test-workflow-failure-propagation.py",
-            ".github/workflows/build.yml"
+            ".github/workflows/build.yml",
+            ".github/scripts/test-ci-perf-contract.py",
+            "README.md",
+            "wiki/development/MinGW-Wine-Cross-Compilation.md",
+            "wiki/platform/Cross-Compilation-Wine-Testing.md"
           ],
-          "note": "The experimental label is structurally tested, but no hosted MinGW dispatch has run since the relabel. The last run had 32 Wine test failures."
+          "note": "Claims now match the workflow_dispatch-only, continue-on-error experimental lane and disclose the last documented Wine failure; a claims test with mutations guards them. No hosted MinGW dispatch since the relabel; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:3918ed579816",
@@ -640,11 +648,15 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:3aa012b16686",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "tools/site-data/validate.py"
+            "tools/site-data/validate.py",
+            "tools/site-data/check_documented_selectors.py",
+            "Tests/Tools/test_check_documented_selectors.py",
+            ".github/workflows/build.yml",
+            ".github/scripts/test-ci-perf-contract.py"
           ],
-          "note": "Commands are still not executed. check_documented_selectors.py only resolves selections against configured trees (enabled tests, built executables): windows-release 27/27, linux-gcc-release 21/24 (SparkDaemonServiceTests unbuilt under local GCC 15.2). Its CTest registers only in preset trees, which no CI lane runs ctest over. tests-unit and tests-integration are still planned."
+          "note": "Required GCC/VS2022 Release jobs run each distinct documented selection (--execute, SPARK_TEST_LIMIT, --parallel 2, 40-min step bound, lane label excludes); declared debt stays uncounted. Fixture tests prove failing selections fail; contract mutations pin the steps. Local only; no engine-tree run or exact-commit CI."
         },
         {
           "criterionDigest": "sha256:6023a2a14b43",
@@ -661,14 +673,19 @@
         },
         {
           "criterionDigest": "sha256:7f52d65039aa",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tools/clang_tidy_budget.py",
             "Tools/clang-tidy-budget.json",
             "Tests/Tools/test_clang_tidy_budget.py",
-            ".github/workflows/build.yml"
+            ".github/workflows/build.yml",
+            ".github/scripts/check-analysis-results.py",
+            ".github/codeql-baseline.json",
+            ".github/scripts/test-check-analysis-results.py",
+            ".github/scripts/test-ci-perf-contract.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Clang-tidy now ends in a blocking per-file, per-check budget ratchet and coverage thresholds block, but the budget is a local clang-tidy 18.1.3 measurement, CodeQL alert regressions do not block, and no hosted run has shown a controlled regression failing the gate."
+          "note": "Required read-only CodeQL (actions/c-cpp/python) blocks new or stale findings against a reviewed baseline seeded from hosted run 36455093304; the checker passes that real SARIF and flags an injected regression. Coverage and clang-tidy remain required. Local only; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:ed39e09a09dc",

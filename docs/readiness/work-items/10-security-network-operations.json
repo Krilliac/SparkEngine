@@ -1297,9 +1297,14 @@
         },
         {
           "criterionDigest": "sha256:f4be3e4b59ef",
-          "state": "unmet",
-          "evidence": [],
-          "note": "No reviewed golden baselines are committed, and no approval gate exists for baseline changes."
+          "state": "implemented",
+          "evidence": [
+            "tools/perf-budget/check_golden_review.py",
+            "Tests/Tools/test_golden_review_gate.py",
+            ".github/scripts/test-ci-perf-contract.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "The required performance-budget-governance job rejects changed or new entries with pending or unchanged review records, PNG changes without manifest changes, and removals; 5 tests fail on the base tool. Local only; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:4570b349bbe5",

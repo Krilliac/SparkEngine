@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **164 implemented** (63%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **169 implemented** (65%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -249,7 +249,7 @@ Establish the only source of readiness truth and make CI report reality.
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 3/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 3/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 3/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
-| [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
+| [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 3/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
 | [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 6/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
@@ -258,7 +258,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 3/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
+| [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 5/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
 | [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | 5/8 · 0/8 | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
 | [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | 3/4 · 0/4 | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 3/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
@@ -283,7 +283,7 @@ Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK,
 | [`INST-130`](#inst-130--make-installer-clean-install-repair-and-uninstall-behavior-verified-and-recoverable) Make installer clean-install, repair, and uninstall behavior verified and recoverable | P0 | **in-progress** | 3/5 · 0/5 | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
 | [`SAVE-230`](#save-230--version-saves-scenes-assets-editor-data-and-migrations) Version saves, scenes, assets, editor data, and migrations | P0 | **in-progress** | 4/4 · 0/4 | `RDY-000`, `RDY-010`, `LIFE-200` | `EDT-210`, `ASSET-220`, `SDK-240` |
 | [`SDK-240`](#sdk-240--stabilize-sdk-module-abi-package-exports-and-compatibility-diagnostics) Stabilize SDK, module ABI, package exports, and compatibility diagnostics | P0 | **in-progress** | 4/4 · 0/4 | `ASSET-220`, `LIFE-200`, `REL-100` | `SAVE-230`, `EDT-210` |
-| [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **in-progress** | 1/4 · 0/4 | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
+| [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **in-progress** | 2/4 · 0/4 | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
 | [`ENG-200`](#eng-200--complete-the-angelscript-and-visual-script-runtime-lifecycle) Complete the AngelScript and visual-script runtime lifecycle | P0 | **in-progress** | 4/4 · 0/4 | `RDY-010`, `LIFE-200`, `SAVE-230` | `EDT-210`, `RHI-210` |
 
 ### Wave 3 — Secure multiplayer reference
@@ -733,15 +733,16 @@ ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Controlled test, sanitizer, format, threshold, registration, and validation failures each make CI red
    - Needs a hosted, controlled red run on Working proving the Required CI Gate turns red.
-2. **[unmet]** Every Working commit receives a gate summary, including docs-only changes
-   - Needs hosted Working runs, including a docs-only commit, that publish a gate summary.
-3. **[unmet]** MinGW/Wine is either executable and labeled experimental or removed from claims
-   - Evidence: `.github/scripts/test-workflow-failure-propagation.py`, `.github/workflows/build.yml`
-   - The experimental label is structurally tested, but no hosted MinGW dispatch has run since the relabel. The last run had 32 Wine test failures.
+2. **[implemented]** Every Working commit receives a gate summary, including docs-only changes
+   - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-ci-perf-contract.py`, `.github/scripts/test-workflow-failure-propagation.py`
+   - The Build workflow has no path filters, pushes are not cancelled and the gate is always(); registered mutations reject paths/paths-ignore and a conditional gate. No hosted docs-only run or exact-commit CI.
+3. **[implemented]** MinGW/Wine is either executable and labeled experimental or removed from claims
+   - Evidence: `.github/scripts/test-workflow-failure-propagation.py`, `.github/workflows/build.yml`, `.github/scripts/test-ci-perf-contract.py`, `README.md`, `wiki/development/MinGW-Wine-Cross-Compilation.md`, `wiki/platform/Cross-Compilation-Wine-Testing.md`
+   - Claims now match the workflow_dispatch-only, continue-on-error experimental lane and disclose the last documented Wine failure; a claims test with mutations guards them. No hosted MinGW dispatch since the relabel; no exact-commit CI.
 4. **[implemented]** Required-check policy is documented and externally verified
    - Evidence: `.github/scripts/test-verify-working-ruleset.py`, `.github/scripts/verify-working-ruleset.py`, `wiki/advanced/Testing.md`
    - The verifier's hidden-bypass_actors diagnostic is implemented. External verification still needs a live --live run, so this criterion stays at implemented, not evidenced.
@@ -934,17 +935,17 @@ One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking
 
 **Acceptance criteria**
 
-Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 5 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Documented subsystem commands select and execute real tests
-   - Evidence: `tools/site-data/validate.py`
-   - Commands are still not executed. check_documented_selectors.py only resolves selections against configured trees (enabled tests, built executables): windows-release 27/27, linux-gcc-release 21/24 (SparkDaemonServiceTests unbuilt under local GCC 15.2). Its CTest registers only in preset trees, which no CI lane runs ctest over. tests-unit and tests-integration are still planned.
+1. **[implemented]** Documented subsystem commands select and execute real tests
+   - Evidence: `tools/site-data/validate.py`, `tools/site-data/check_documented_selectors.py`, `Tests/Tools/test_check_documented_selectors.py`, `.github/workflows/build.yml`, `.github/scripts/test-ci-perf-contract.py`
+   - Required GCC/VS2022 Release jobs run each distinct documented selection (--execute, SPARK_TEST_LIMIT, --parallel 2, 40-min step bound, lane label excludes); declared debt stays uncounted. Fixture tests prove failing selections fail; contract mutations pin the steps. Local only; no engine-tree run or exact-commit CI.
 2. **[implemented]** No unowned flaky exception exists
    - Evidence: `Tools/validate_test_warnings.py`, `Tests/Tools/test_validate_test_warnings.py`, `Tests/test-warning-waivers.json`, `Tests/TestLevelStreamingSystemPhaseAA.cpp`, `Tests/TestLoadingScreenReal.cpp`, `wiki/advanced/Testing.md`
    - SKIP_TEST and EXPECT_NO_CRASH exceptions have no owner or expiry enforcement.
-3. **[unmet]** Coverage and analysis regressions block
-   - Evidence: `Tools/clang_tidy_budget.py`, `Tools/clang-tidy-budget.json`, `Tests/Tools/test_clang_tidy_budget.py`, `.github/workflows/build.yml`
-   - Clang-tidy now ends in a blocking per-file, per-check budget ratchet and coverage thresholds block, but the budget is a local clang-tidy 18.1.3 measurement, CodeQL alert regressions do not block, and no hosted run has shown a controlled regression failing the gate.
+3. **[implemented]** Coverage and analysis regressions block
+   - Evidence: `Tools/clang_tidy_budget.py`, `Tools/clang-tidy-budget.json`, `Tests/Tools/test_clang_tidy_budget.py`, `.github/workflows/build.yml`, `.github/scripts/check-analysis-results.py`, `.github/codeql-baseline.json`, `.github/scripts/test-check-analysis-results.py`, `.github/scripts/test-ci-perf-contract.py`, `Tests/CMakeLists.txt`
+   - Required read-only CodeQL (actions/c-cpp/python) blocks new or stale findings against a reviewed baseline seeded from hosted run 36455093304; the checker passes that real SARIF and flags an injected regression. Coverage and clang-tidy remain required. Local only; no exact-commit CI.
 4. **[implemented]** Every shipped binary has a smoke or integration lane
    - Evidence: `Tools/validate_ctest_policy.py`, `Tests/Tools/test_validate_ctest_policy.py`, `CMakeLists.txt`, `.github/workflows/build.yml`, `SparkInstaller/CMakeLists.txt`, `SparkInstaller/tests/InstallerHeadlessSmoke.cmake`, `wiki/advanced/Testing.md`
    - Shipped and built binaries are read from the configured tree's file-API codemodel, not from test references. The documented gaps are SparkLauncher (all platforms) and SparkShaderCompiler (Linux/Darwin). No current configured tree or hosted run has been validated under the new rule.
@@ -2636,12 +2637,13 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Budgets block regressions
    - All metrics are pending_measurement and none has an accepted baseline, so no budget can block a regression.
-2. **[unmet]** Golden changes require reviewed baseline update
-   - No reviewed golden baselines are committed, and no approval gate exists for baseline changes.
+2. **[implemented]** Golden changes require reviewed baseline update
+   - Evidence: `tools/perf-budget/check_golden_review.py`, `Tests/Tools/test_golden_review_gate.py`, `.github/scripts/test-ci-perf-contract.py`, `.github/workflows/build.yml`
+   - The required performance-budget-governance job rejects changed or new entries with pending or unchanged review records, PNG changes without manifest changes, and removals; 5 tests fail on the base tool. Local only; no exact-commit CI.
 3. **[implemented]** Required soak completes without leak, crash, deadlock, or unbounded queue growth
    - Evidence: `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `tools/perf-budget/run_nullrhi_soak.py`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/CMakeLists.txt`, `.github/workflows/operations-scheduled.yml`, `Tests/Tools/test_operations_scheduled_workflow.py`, `wiki/advanced/Performance-Profiling-Guide.md`
    - Commits 6f7407646 and 2f4f93f67.
