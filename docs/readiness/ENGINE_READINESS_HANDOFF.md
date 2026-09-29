@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **161 implemented** (62%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **162 implemented** (63%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -258,7 +258,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 3/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
+| [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 4/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
 | [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | 5/8 · 0/8 | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
 | [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | 3/4 · 0/4 | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 3/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
@@ -933,11 +933,11 @@ One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking
 
 **Acceptance criteria**
 
-Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Documented subsystem commands select and execute real tests
-   - Evidence: `tools/site-data/validate.py`
-   - Commands are resolved statically but never executed. The tests-unit and tests-integration jobs are still planned.
+1. **[implemented]** Documented subsystem commands select and execute real tests
+   - Evidence: `tools/site-data/validate.py`, `tools/site-data/contract_selectors.py`, `tools/site-data/check_documented_selectors.py`, `Tests/Tools/test_check_documented_selectors.py`, `Tests/CMakeLists.txt`
+   - check_documented_selectors.py resolved every applicable documented ctest command: windows-release 27/27 (59 not applicable); linux-gcc-release 21/24 (2 planned debt, 60 not applicable), the 3 misses being SparkDaemonServiceTests, unbuilt under local GCC 15.2 -Werror (clean with GCC 14). Local configured trees only; no hosted run.
 2. **[implemented]** No unowned flaky exception exists
    - Evidence: `Tools/validate_test_warnings.py`, `Tests/Tools/test_validate_test_warnings.py`, `Tests/test-warning-waivers.json`, `Tests/TestLevelStreamingSystemPhaseAA.cpp`, `Tests/TestLoadingScreenReal.cpp`, `wiki/advanced/Testing.md`
    - SKIP_TEST and EXPECT_NO_CRASH exceptions have no owner or expiry enforcement.
@@ -962,7 +962,7 @@ SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml
 
 **Automated evidence**
 
-- Test selectors: `TestRegistration_*`, `GoldenImage_*`, `CoverageBudget_*`, `RunnerSemanticsReal_*`, `SparkRunSparkTestsHarness`
+- Test selectors: `TestRegistration_*`, `GoldenImage_*`, `CoverageBudget_*`, `RunnerSemanticsReal_*`, `SparkRunSparkTestsHarness`, `DocumentedTestCommands_*`
 - Required CI jobs: `tests-unit`, `tests-integration`, `coverage`, `clang-tidy`, `analyze`
 - Performance / reliability budgets:
   - Shard runtimes stay balanced within 25 percent
@@ -3453,7 +3453,7 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
    - SparkGameShowcase_QuickLoadRestoresExactState loads the real module with a SaveSystem in a temp dir, quicksaves, diverges (damage, destroy, spawn), quickloads and requires the name/transform/health/tag snapshot to match exactly, the coroutine stopped and tracking rebuilt. Linux-only; local runs, no exact-commit CI.
 4. **[implemented]** Packaged smoke passes
    - Evidence: `CMakeLists.txt`, `Tests/CMakeLists.txt`, `Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake`, `Tests/PackageSmoke/RunInstalledModuleObjective.cmake`
-   - There is no packaged SparkGame smoke.
+   - SparkGameShowcase_PackagedSmoke (spark_add_module_objective_test; Linux headless only) installs the runtime, runs the installed SparkEngine with the installed SparkGame, and requires the French status from the installed localization tables and a spawn count of exactly +1. It passed on a local linux-gcc-release tree. No Windows packaged run; no exact-commit CI.
 5. **[implemented]** Public label never calls it a finished game
    - Evidence: `GameModules/SparkGame/README.md`, `tools/check-module-positioning.py`, `Tests/Tools/test_check_module_positioning.py`, `Tests/CMakeLists.txt`, `GameModules/README.md`, `wiki/getting-started/Game-Modules.md`
    - criterionDigest sha256:bd643b216c0e. The checker fails on finished/playable-game or FPS/arena/shooter claims about SparkGame in the root README, module READMEs and the wiki, and when the module README loses its disclaimers. CTest: ModulePositioning_SparkGameLabelIsShowcase. It failed on GameModules/README.md:273 before the fix.

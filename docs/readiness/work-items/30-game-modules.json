@@ -620,7 +620,7 @@
             "Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake",
             "Tests/PackageSmoke/RunInstalledModuleObjective.cmake"
           ],
-          "note": "There is no packaged SparkGame smoke."
+          "note": "SparkGameShowcase_PackagedSmoke (spark_add_module_objective_test; Linux headless only) installs the runtime, runs the installed SparkEngine with the installed SparkGame, and requires the French status from the installed localization tables and a spawn count of exactly +1. It passed on a local linux-gcc-release tree. No Windows packaged run; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:bd643b216c0e",

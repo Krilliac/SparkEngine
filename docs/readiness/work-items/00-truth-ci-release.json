@@ -636,11 +636,15 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:3aa012b16686",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "tools/site-data/validate.py"
+            "tools/site-data/validate.py",
+            "tools/site-data/contract_selectors.py",
+            "tools/site-data/check_documented_selectors.py",
+            "Tests/Tools/test_check_documented_selectors.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Commands are resolved statically but never executed. The tests-unit and tests-integration jobs are still planned."
+          "note": "check_documented_selectors.py resolved every applicable documented ctest command: windows-release 27/27 (59 not applicable); linux-gcc-release 21/24 (2 planned debt, 60 not applicable), the 3 misses being SparkDaemonServiceTests, unbuilt under local GCC 15.2 -Werror (clean with GCC 14). Local configured trees only; no hosted run."
         },
         {
           "criterionDigest": "sha256:6023a2a14b43",
@@ -702,7 +706,8 @@
         "GoldenImage_*",
         "CoverageBudget_*",
         "RunnerSemanticsReal_*",
-        "SparkRunSparkTestsHarness"
+        "SparkRunSparkTestsHarness",
+        "DocumentedTestCommands_*"
       ],
       "requiredCiJobs": [
         "tests-unit",
