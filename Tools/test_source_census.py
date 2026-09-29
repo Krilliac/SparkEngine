@@ -230,7 +230,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestShaderGraphCompiler.cpp",
         "Tests/TestSkyAtmosphere.cpp",
         "Tests/TestSparkBuildConfig.cpp",
-        "Tests/TestSparkGatewayCoordinator.cpp",
         "Tests/TestSpatialGrid.cpp",
         "Tests/TestSplineMath.cpp",
         "Tests/TestSprite2DComponents.cpp",
