@@ -87,7 +87,14 @@ namespace Spark
         }
 
         /// Reads XCR0. Only valid when CPUID reports OSXSAVE.
-        inline uint64_t ReadXcr0() noexcept
+        /// Never inlined: tools/check_isa_baseline.py exempts XGETBV only inside the procedure named exactly
+        /// Spark::Detail::ReadXcr0, whose one caller (DetectCpuFeatures) runs it after the CPUID.1:ECX.OSXSAVE
+        /// check. Inlined, the instruction would land in the caller and fail the CPU-floor image scan.
+#if defined(_MSC_VER) && !defined(__clang__)
+        __declspec(noinline) inline uint64_t ReadXcr0() noexcept
+#else
+        [[gnu::noinline]] inline uint64_t ReadXcr0() noexcept
+#endif
         {
 #if defined(_MSC_VER) && !defined(__clang__)
             return _xgetbv(0);
