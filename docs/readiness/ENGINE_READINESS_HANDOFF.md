@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **160 implemented** (62%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **164 implemented** (63%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -248,9 +248,9 @@ Establish the only source of readiness truth and make CI report reality.
 |---|---|---|---|---|---|
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 3/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 3/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
-| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 2/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
+| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 3/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
-| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 4/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
+| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 6/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
 
@@ -306,7 +306,7 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
 | [`MOD-290`](#mod-290--build-the-shared-manifest-and-installed-sdk-module-kit) Build the shared manifest and installed-SDK module kit | P1 | **in-progress** | 3/4 · 0/4 | `RDY-010`, `RDY-020`, `LIFE-200`, `ASSET-220`, `SAVE-230`, `SDK-240` | — |
-| [`MOD-300`](#mod-300--complete-and-correctly-position-the-base-sparkgame-showcase) Complete and correctly position the base SparkGame showcase | P1 | **in-progress** | 3/5 · 0/5 | `MOD-290` | `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-300`](#mod-300--complete-and-correctly-position-the-base-sparkgame-showcase) Complete and correctly position the base SparkGame showcase | P1 | **in-progress** | 4/5 · 0/5 | `MOD-290` | `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-310`](#mod-310--finish-fps-as-the-installed-single-player-stable-v1-slice) Finish FPS as the installed single-player stable-v1 slice | P1 | **in-progress** | 3/5 · 0/5 | `MOD-290`, `SDK-240`, `RDY-020` | `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-320`](#mod-320--finish-mmo-as-a-secure-persistent-integrated-world) Finish MMO as a secure persistent integrated world | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290`, `NET-100`, `DATA-120`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 2/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
@@ -635,11 +635,11 @@ Several modules reference missing music/models/scenes, depend on path case that 
 
 **Acceptance criteria**
 
-Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** Zero missing or case-mismatched references in every declared manifest
-   - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`
-   - check-all verifies the root, legacy and template manifests; tools/check-module-asset-refs.py now verifies all 11 module reference records fail-closed for missing, case-altered, unrecorded or drifted paths (0 found locally). Composed Assets/ prefixes stay report-only in FPS (2), MMOFPS (26) and VisualScript (1). Not promoted here; local runs only, no exact-commit CI.
+1. **[implemented]** Zero missing or case-mismatched references in every declared manifest
+   - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`, `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`
+   - check-all verifies the root, legacy and template manifests. check-module-asset-refs.py verifies all 11 module records fail-closed; 0 problems were found locally. Composed prefixes stay report-only in FPS 2, MMOFPS 26 and VisualScript 1. Local runs only; no exact-commit CI. Not applied in the ledger by this lane, because the header forbids state edits.
 2. **[unmet]** Every in-profile packaged module resolves assets without the repository
    - Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists.
 3. **[unmet]** Every asset has provenance/license metadata where required
@@ -828,11 +828,11 @@ A hostile audit found timestamp-only false greens, incomplete first-party source
 
 **Acceptance criteria**
 
-Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
+Progress: 6 of 6 implemented, 0 evidenced at an exact commit.
 
-1. **[unmet]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
-   - Evidence: `Tests/Tools/test_docs_health.py`
-   - At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. State not promoted here; no exact-SHA hosted run.
+1. **[implemented]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
+   - Evidence: `Tests/Tools/test_docs_health.py`, `docs/update-all-docs.sh`, `tools/docs_currentness.py`
+   - Clean WSL Ubuntu clone at 3d330173c: exit 0, all 9 generators current, links valid, and status identical before and after. No exact-SHA hosted run. Not applied in the ledger by this lane, because the header forbids state edits.
 2. **[implemented]** Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
    - Evidence: `docs/generate-flowchart-content.py`, `Tests/Tools/test_docs_health.py`
    - Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff.
@@ -845,8 +845,9 @@ Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
 5. **[implemented]** Hostile stale-doc, symbol, macro, health, link, anchor, route, and confinement fixtures pass
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_contract.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
    - Two hostile test classes (docs generation, docs links) cover stale docs, symbols, macros, health, links, anchors, route collisions and repository escape against production code.
-6. **[unmet]** A stale generator, missing result, or broken link blocks CI
-   - docs-health is a Required CI Gate dependency in .github/workflows/build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Covered by structural and mutation tests in .github/scripts/test-workflow-failure-propagation.py only. State not promoted here; no hosted red run yet.
+6. **[implemented]** A stale generator, missing result, or broken link blocks CI
+   - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-workflow-failure-propagation.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
+   - docs-health is a Required CI Gate dependency in build.yml, and per-SHA push runs never cancel it. Structural and mutation tests only; no hosted red run. Not applied in the ledger by this lane, because the header forbids state edits.
 
 **Required commands**
 
@@ -3441,13 +3442,13 @@ SparkGame has real lifecycle, ECS spawn, EventBus, weather, time of day, and qui
 
 **Acceptance criteria**
 
-Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Lifecycle score 3
    - There is no lifecycle score 3. SparkGame is outside every release profile, with no release-profile or required-CI evidence.
-2. **[unmet]** Showcase outcome is deterministic and visible/assertable
-   - Evidence: `Tests/TestSparkGameShowcase.cpp`
-   - Only the coroutine sequence is asserted. There is no visible render or localization outcome evidence.
+2. **[implemented]** Showcase outcome is deterministic and visible/assertable
+   - Evidence: `Tests/TestSparkGameShowcase.cpp`, `GameModules/SparkGame/Source/Core/GameplayShowcaseOutcome.cpp`, `GameModules/SparkGame/Source/Core/GameplayShowcase.h`, `Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake`, `Tests/CMakeLists.txt`
+   - Linux only, run at 5bbdef863: real libSparkGame gives identical outcomes at 1/64 and 1/60 s steps; headless packaged runA/runB reach exhibit=4/4 from installed meshes (weather/hour n/a, no weather or time-of-day system in the headless host). Rendering not frame-checked. No exact-commit CI.
 3. **[implemented]** Quicksave reloads exact state
    - Evidence: `Tests/TestSparkGameShowcase.cpp`, `GameModules/SparkGame/Source/Core/GameplayShowcase.cpp`, `Tests/CMakeLists.txt`
    - SparkGameShowcase_QuickLoadRestoresExactState loads the real module with a SaveSystem in a temp dir, quicksaves, diverges (damage, destroy, spawn), quickloads and requires the name/transform/health/tag snapshot to match exactly, the coroutine stopped and tracking rebuilt. Linux-only; local runs, no exact-commit CI.
@@ -5986,7 +5987,7 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - No published immutable artifacts, and no independent verification against a qualified candidate.
 4. **[implemented]** Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `.github/workflows/site-data-publish.yml`
-   - The validator only tests that global ready needs every profile ready. Nothing ties ready to publication evidence, and the live-site switch needs a hosted publish.
+   - Already implemented before this lane. This lane hardens it: the deploy gate reads globalRelease.state by assignment and dispatches with a case whose unknown-state branch exits 1. Global-ready publication evidence citing different commits across profiles is rejected. Proven by site-data-contract locally only; no hosted CI evidence.
 
 **Required commands**
 

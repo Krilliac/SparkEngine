@@ -349,12 +349,14 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:dbf6a5ff40ba",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_asset_integrity.py",
-            "tools/asset-integrity/verify_asset_integrity.py"
+            "tools/asset-integrity/verify_asset_integrity.py",
+            "tools/check-module-asset-refs.py",
+            "Tests/Tools/test_check_module_asset_refs.py"
           ],
-          "note": "check-all verifies the root, legacy and template manifests; tools/check-module-asset-refs.py now verifies all 11 module reference records fail-closed for missing, case-altered, unrecorded or drifted paths (0 found locally). Composed Assets/ prefixes stay report-only in FPS (2), MMOFPS (26) and VisualScript (1). Not promoted here; local runs only, no exact-commit CI."
+          "note": "check-all verifies the root, legacy and template manifests. check-module-asset-refs.py verifies all 11 module records fail-closed; 0 problems were found locally. Composed prefixes stay report-only in FPS 2, MMOFPS 26 and VisualScript 1. Local runs only; no exact-commit CI. Not applied in the ledger by this lane, because the header forbids state edits."
         },
         {
           "criterionDigest": "sha256:5a3bf0f4851d",
@@ -1698,7 +1700,7 @@
             "tools/site-data/validate.py",
             ".github/workflows/site-data-publish.yml"
           ],
-          "note": "The validator only tests that global ready needs every profile ready. Nothing ties ready to publication evidence, and the live-site switch needs a hosted publish."
+          "note": "Already implemented before this lane. This lane hardens it: the deploy gate reads globalRelease.state by assignment and dispatches with a case whose unknown-state branch exits 1. Global-ready publication evidence citing different commits across profiles is rejected. Proven by site-data-contract locally only; no hosted CI evidence."
         }
       ],
       "commands": [

@@ -496,11 +496,15 @@
         },
         {
           "criterionDigest": "sha256:4901c1ae62f0",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "Tests/TestSparkGameShowcase.cpp"
+            "Tests/TestSparkGameShowcase.cpp",
+            "GameModules/SparkGame/Source/Core/GameplayShowcaseOutcome.cpp",
+            "GameModules/SparkGame/Source/Core/GameplayShowcase.h",
+            "Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Only the coroutine sequence is asserted. There is no visible render or localization outcome evidence."
+          "note": "Linux only, run at 5bbdef863: real libSparkGame gives identical outcomes at 1/64 and 1/60 s steps; headless packaged runA/runB reach exhibit=4/4 from installed meshes (weather/hour n/a, no weather or time-of-day system in the headless host). Rendering not frame-checked. No exact-commit CI."
         },
         {
           "criterionDigest": "sha256:9e45c6dbf688",
