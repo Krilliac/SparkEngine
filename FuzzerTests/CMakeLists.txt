@@ -2370,3 +2370,70 @@ set_tests_properties(FuzzInstallStateSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# ScanForMods lives in ModSystem.cpp and parses each mod.json in ModSystemIO.cpp
+# (Json::ParseBounded is header-only in Utils/JsonUtils.h); FileUtils converts the
+# UTF-8 paths and Logger backs the log macros. Load/unload and their guarded
+# callbacks are in ModSystemLifecycle.cpp, so this closure needs no fault isolator
+# (GNU ld reports undefined symbols even in sections --gc-sections drops).
+add_executable(SparkFuzzModManifest
+    FuzzModManifest.cpp
+    FuzzModManifestProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/ModSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/ModSystemIO.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/FileUtils.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzModManifest.cpp use
+# libstdc++; the production closure and the adapter use libc++ and meet the driver
+# only at the C ABI in FuzzModManifestProduction.h.
+set_source_files_properties(
+    FuzzModManifestProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/ModSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/ModSystemIO.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/FileUtils.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzModManifest PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzModManifest PRIVATE cxx_std_23)
+# Logger.cpp routes warnings/errors through DebugHookManager unless
+# SPARK_SHIPPING compiles the hooks out; the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzModManifest PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzModManifest PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzModManifest PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzModManifest PRIVATE Threads::Threads c++ c++abi)
+
+# regression-control-byte-id.json declares the id "x\u0001y" and
+# regression-duplicate-id-pair.bin two directories with one id; the pre-fix scan
+# published the first and counted both of the second, which the adapter aborts on.
+add_test(
+    NAME FuzzModManifestSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzModManifest>
+        -max_len=131073
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=6
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mod-manifest"
+)
+set_tests_properties(FuzzModManifestSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

@@ -950,6 +950,36 @@
           "guard_test": "SparkInstallerInstallStateTests"
         }
       ]
+    },
+    {
+      "id": "mod-manifest-corpus",
+      "parser_id": "mod-manifest",
+      "corpus_dir": "FuzzerTests/corpora/mod-manifest",
+      "last_verified": "2026-09-29",
+      "content_digest": "a6c72361303985428f0c736cd0e46666f8bfb53e4e44048141b0979a54dcb01d",
+      "budget": {
+        "max_input_bytes": 131073,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 16,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-control-byte-id.json",
+          "finding": "A mod id had no policy beyond non-empty, so an id holding a control byte (or NUL, a path separator or 64 KiB) was published as the map key, log argument, config field and UI label. Ids are now 1-128 characters of [A-Za-z0-9._-], not '.' or '..'.",
+          "found_by": "review",
+          "guard_test": "ModSystem_RejectsIdWithControlOrSeparatorBytes"
+        },
+        {
+          "file": "regression-duplicate-id-pair.bin",
+          "finding": "Two mod directories declaring one id were both counted but only the one the directory iterator reached last was registered, so a dropped-in mod could shadow an installed one. An id claimed twice is now published from neither directory.",
+          "found_by": "review",
+          "guard_test": "ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished"
+        }
+      ]
     }
   ]
 }

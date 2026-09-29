@@ -133,6 +133,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzFpsSnapshot",
     "SparkFuzzSessionGateProtocol",
     "SparkFuzzInstallState",
+    "SparkFuzzModManifest",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2147,6 +2148,12 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "SparkFPS::DecodeSnapshotBatch",
                 "fps-multiplayer-player-state",
                 8,
+            ),
+            "mod-manifest": (
+                "ModManifest",
+                "Spark::ModSystem::ScanForMods",
+                "mod-manifest",
+                6,
             ),
             "installer-state-manifest": (
                 "InstallState",
