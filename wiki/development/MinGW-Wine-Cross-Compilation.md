@@ -78,7 +78,7 @@ All four files verified present as of 2026-06-08.
 6. `dbghelp` and `xaudio2_8` added to link libraries (MSVC uses `#pragma comment`).
 7. Toolchain sets `-static-libgcc -static-libstdc++` so the `.exe` does not need MinGW DLLs.
 
-## Cross-Compilation Fixes (64 files, 2026-03-29)
+## Cross-Compilation Fixes (2026-03-29)
 
 | Issue | Fix |
 |-------|-----|
@@ -112,7 +112,7 @@ All four files verified present as of 2026-06-08.
 | Break tests | 6 | 0 | SIGKILL, SIGTERM, bad prefix, no Vulkan |
 | Console app | Works | 0 | Full interactive console under Wine |
 
-> The 2,509 unit-test count is a 2026-03-29 snapshot. The suite has since grown well past 6,000 tests; treat the table as historical for that run.
+> The 2,509 unit-test count is a 2026-03-29 snapshot. Treat the table as historical for that run.
 
 ## Performance: DXVK vs WineD3D
 
@@ -156,7 +156,7 @@ Wine GUI (`WIN32`) applications often return exit code 255 instead of 0 when std
 
 ### Sample of Wine failures (hosted run 34983218822, 2026-09-15)
 
-Manual dispatch on PR branch `claude/stable-v1-release` at `3f427dd` (job 104483285541). Configure and the MinGW build (~49 min) succeeded, and the Wine prefix/DXVK setup succeeded. **`Run Tests under Wine` failed**. `extract-errors.sh` counted 32 test failures, and the run ended at a crash. The table below is a partial sample of two of them, not the full list; the job uploads its complete per-test output (`wine-test-results.txt`) as the `mingw-wine-test-results` artifact, kept for the workflow's artifact retention period:
+Manual dispatch on PR branch `claude/stable-v1-release` at `3f427dd` (job 104483285541). Configure and the MinGW build (~49 min) succeeded, and the Wine prefix/DXVK setup succeeded. **`Run Tests under Wine` failed**. `extract-errors.sh` reported failing test cases, and the run ended at a crash. The table below is a partial sample of two of them, not the full list; the job uploads its complete per-test output (`wine-test-results.txt`) as the `mingw-wine-test-results` artifact, kept for the workflow's artifact retention period:
 
 | Test | Result under Wine | Cause observed in the log |
 |------|-------------------|---------------------------|
@@ -179,7 +179,7 @@ Only the FAudio crash is attributed to the runner environment (no ALSA sound car
 - **UPDATED — CI trigger:** `build-linux-mingw-wine` now runs **only on `workflow_dispatch`** (manual), not on every PR. The original entry implied it ran on PRs. Confirmed it still uses `continue-on-error: true` and `-DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF -DENABLE_SDL2=OFF`.
 - **UPDATED 2026-09-24 (CI-100):** the job is now named `build-linux-mingw-wine (experimental)` and declares job-level `continue-on-error: true`. Before this, the docs claimed `continue-on-error` but build.yml did not set it. The sampled Wine failures were read from the job 104483285541 log.
 - **UPDATED — build directory:** corrected build/run commands to use the preset's per-preset `build/linux-mingw-release` directory.
-- **FLAGGED — STALE counts:** the 2,509 unit-test figure is a 2026-03-29 snapshot; the suite now exceeds 6,000 tests. Test-results table marked historical.
+- **FLAGGED — STALE counts:** the 2,509 unit-test figure is a 2026-03-29 snapshot; use generated metrics for the current suite. Test-results table marked historical.
 
 ## Related Pages
 
