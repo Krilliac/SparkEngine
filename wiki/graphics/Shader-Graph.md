@@ -4,7 +4,7 @@ SparkEngine includes a node-based shader graph compiler that translates visual m
 
 **Source:** `SparkEngine/Source/Graphics/ShaderGraph/ShaderGraphCompiler.h`
 **Namespace:** `Spark::Graphics`
-**Tests:** `Tests/TestShaderGraphCompiler.cpp` (5 test cases)
+**Tests:** `Tests/TestShaderGraphCompiler.cpp`
 
 ---
 
@@ -58,7 +58,7 @@ The shader graph system bridges the gap between visual material editing and GPU 
 
 ## Node Types
 
-The `ShaderNodeType` enum defines 34 node types across four categories.
+The `ShaderNodeType` enum defines the node types across four categories.
 
 ### Input Nodes
 

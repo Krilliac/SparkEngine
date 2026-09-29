@@ -8,7 +8,7 @@
 
 ## Overview
 
-SparkEngine uses [Jolt Physics](https://github.com/jrouwe/JoltPhysics) for 3D rigid-body, character, vehicle, ragdoll, and soft-body simulation. The engine migrated from Bullet Physics to Jolt across roughly seven commits (~6,500 lines). The integration is wrapped behind the engine's own `PhysicsSystem` API rather than exposing Jolt types directly, and a no-Jolt stub (`PhysicsSystemStub.cpp`) keeps the engine buildable without the dependency.
+SparkEngine uses [Jolt Physics](https://github.com/jrouwe/JoltPhysics) for 3D rigid-body, character, vehicle, ragdoll, and soft-body simulation. The engine migrated from Bullet Physics to Jolt across roughly seven commits. The integration is wrapped behind the engine's own `PhysicsSystem` API rather than exposing Jolt types directly, and a no-Jolt stub (`PhysicsSystemStub.cpp`) keeps the engine buildable without the dependency.
 
 All physics source lives under `SparkEngine/Source/Physics/`.
 
@@ -74,7 +74,7 @@ All physics source lives under `SparkEngine/Source/Physics/`.
 |---------|----------|-------|
 | Full `JPH::DebugRenderer` subclass | Medium | Current data collector works; full impl needs graphics-engine wiring |
 | Per-triangle `PhysicsMaterial` | Low | Jolt supports it on `MeshShape` but we don't expose it |
-| Hair simulation (GPU strands) | Low | 3 Jolt files, very specialized |
+| Hair simulation (GPU strands) | Low | Specialized Jolt implementation files |
 | Jolt native `StateRecorder` | Low | Our binary format covers the common case |
 | Constraint breaking | Low | `SetBreakingThreshold` stubbed; Jolt has no direct API, needs force monitoring |
 | `IPhysicsBackend` inheritance | Low | Reflection plan Phase 8C — deferred (ID-vs-pointer API mismatch) |

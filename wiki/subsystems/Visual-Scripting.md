@@ -68,7 +68,7 @@ class MyScript
 
 ### History
 
-The **original** visual scripting system (~7,300 lines) was removed in March 2026 as dead code — two parallel implementations that were never wired in. The current system is a clean reimplementation following the `ShaderGraphCompiler` pattern (node graph → code generation) with a single unified engine + editor implementation.
+The **original** visual scripting system was removed in March 2026 as dead code — two parallel implementations that were never wired in. The current system is a clean reimplementation following the `ShaderGraphCompiler` pattern (node graph → code generation) with a single unified engine + editor implementation.
 
 ## See Also
 
@@ -495,9 +495,9 @@ lists. The module README covers both.
 ## Performance Considerations
 
 1. **No runtime overhead** -- Visual scripts compile to the same AngelScript as hand-written code. There is no visual script interpreter or VM.
-2. **Compile-time cost** -- Code generation walks each execution chain once and each statement's data inputs once. Compilation is near-instant for typical graphs (< 200 nodes).
+2. **Compile-time cost** -- Code generation walks each execution chain once and each statement's data inputs once. Measure compilation time on representative graphs before assigning a latency budget.
 3. **Hot reload latency** -- After compilation, `ScriptHotReload` detects the file change within one frame and triggers AngelScript recompilation. Total turnaround is typically under 100ms.
-4. **Graph size** -- Large graphs (500+ nodes) may slow canvas rendering in the editor. Consider splitting logic across multiple scripts attached to different entities.
+4. **Graph size** -- Large graphs may slow canvas rendering in the editor. Consider splitting logic across multiple scripts attached to different entities.
 
 ## Integration with AngelScript
 

@@ -16,7 +16,7 @@ Most of those specific instances have since been fixed (see Source & Freshness).
 
 ## Why AI Creates Bloat
 
-**1. No pain from complexity.** A human developer feels the cost of a 261 KB file when they spend three hours debugging it. An AI never does. Each session starts fresh; the accumulated mess is invisible until it is catastrophic.
+**1. No pain from complexity.** A human developer feels the cost of an oversized source file when they spend three hours debugging it. An AI never does. Each session starts fresh; the accumulated mess is invisible until it is catastrophic.
 
 **2. Addition feels productive; removal does not.** Every new feature, method, or class looks like forward progress. Deleting code looks like going backwards. There is no natural counter-pressure.
 
@@ -26,7 +26,7 @@ Most of those specific instances have since been fixed (see Source & Freshness).
 
 **5. Parallel duplication.** Two systems doing overlapping work get built independently and neither is removed, because "we might need both."
 
-**6. Each session sees only a small change.** No single session adds an outrageous amount — 50 lines here, a new method there. After 20 sessions you have 261 KB files and systems nobody can explain.
+**6. Each session sees only a small change.** No single session adds an outrageous amount — a small addition here, a new method there. After 20 sessions you have oversized files and systems nobody can explain.
 
 ## The Compounding Effect
 
@@ -36,10 +36,10 @@ Bloat compounds. A bloated file is harder to read, so the next session adds anot
 
 | Location | Bloat Type | Status as of 2026-06-08 |
 |----------|-----------|--------------------------|
-| `SparkConsole.cpp` | Embedded console UI never used (cursor, ANSI, Win32 handles) | **Resolved** — file is now 641 lines |
-| `SparkConsole.h` | 25+ `Register*()` methods | **Resolved** — header now 193 lines |
+| `SparkConsole.cpp` | Embedded console UI never used (cursor, ANSI, Win32 handles) | **Resolved** — the implementation was reduced in the recorded audit |
+| `SparkConsole.h` | 25+ `Register*()` methods | **Resolved** — the header was reduced in the recorded audit |
 | `ConsoleProcessManager` | Fully implemented, zero call sites for `Initialize()` | **Resolved** — now wired in via `SparkEngine.cpp` / `SparkEngineWindows.cpp` / `SparkEngineLinux.cpp` |
-| `SparkEngine.cpp` | `SimpleConsole::Initialize()` called 5x | **Resolved** — `SparkEngine.cpp` is now 443 lines |
+| `SparkEngine.cpp` | `SimpleConsole::Initialize()` called 5x | **Resolved** — `SparkEngine.cpp` was reduced in the recorded audit |
 | `SimpleConsole::WatchEntry` system | Built, no external callers | Reviewed during trim |
 | `SimpleConsole` tab-completion state | Dead members | Reviewed during trim |
 
@@ -60,7 +60,7 @@ These are signals to pause and think, not absolute caps. A clean 450-line `.cpp`
 | Command registration functions | 1 per subsystem | Consolidate before adding |
 | Parallel singletons doing the same thing | 0 | Remove the duplicate |
 
-> Earlier revisions of this guidance cited hard limits of 400 lines per `.cpp` and 200 per `.h`. The current `CLAUDE.md` uses the softer ~500/~300 thresholds above, with readability as the overriding test. Tooling: `tools/check-bloat.sh` (part of `tools/validate-all.sh`).
+> Earlier revisions of this guidance cited hard line-count limits. The current `CLAUDE.md` uses the softer ~500/~300 thresholds above, with readability as the overriding test. Tooling: `tools/check-bloat.sh` (part of `tools/validate-all.sh`).
 
 ### The readability principle
 
@@ -84,10 +84,10 @@ Do not defer. If the file you are editing is over the threshold:
 
 The `ConsoleProcessManager` wire-in is the canonical example:
 
-- **Wrong:** add 20 lines wrapping `Initialize()` in a helper class with retry logic and callbacks.
-- **Right:** add 2 lines — `Initialize()` in startup, `ProcessCommands()` in the main loop.
+- **Wrong:** add an unnecessary wrapper around `Initialize()` in a helper class with retry logic and callbacks.
+- **Right:** call the existing functions directly — `Initialize()` in startup, `ProcessCommands()` in the main loop.
 
-If the fix is more than ~10 lines, ask: *"What am I adding that I don't need?"*
+If the fix adds more than the required calls, ask: *"What am I adding that I don't need?"*
 
 ## Notes
 
@@ -99,7 +99,7 @@ If the fix is more than ~10 lines, ask: *"What am I adding that I don't need?"*
 
 - **Original entry date:** 2026-03-14 (`.claude/knowledge/ai-bloat-pattern.md`, type: Observation)
 - **Verified against codebase 2026-06-08.**
-- **UPDATED:** Nearly all cited bloat instances are now resolved — `SparkConsole.cpp` is 641 lines (was ~261 KB), `SparkConsole.h` is 193 lines, and `ConsoleProcessManager` is wired in (referenced from `SparkEngine.cpp`, `SparkEngineWindows.cpp`, `SparkEngineLinux.cpp`, with per-platform implementations). Marked the table accordingly.
+- **UPDATED:** Nearly all cited bloat instances are now resolved — `SparkConsole.cpp` and `SparkConsole.h` were reduced, and `ConsoleProcessManager` is wired in (referenced from `SparkEngine.cpp`, `SparkEngineWindows.cpp`, `SparkEngineLinux.cpp`, with per-platform implementations). Marked the table accordingly.
 - **UPDATED:** Replaced the obsolete hard limits (400/.cpp, 200/.h) with the current `CLAUDE.md` ~500/~300 readability-first thresholds and the full guideline table; noted `tools/check-bloat.sh` and `tools/check-wiring.sh` as the enforcing scripts.
 - **VERIFIED:** The "why AI creates bloat" analysis and the per-session discipline remain accurate and unchanged in intent.
 

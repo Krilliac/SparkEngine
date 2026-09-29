@@ -68,8 +68,7 @@ Updates / status changes since the original:
 
 - **All 7 new systems still present** at the stated paths — Implemented and stable.
 - **All 8 pre-existing systems still present** — Implemented.
-- Test totals referenced in the original ("3388+ tests") are superseded — the suite has
-  since grown to ~6,000 tests; the per-system test files for these features remain in
+- Test totals referenced in the original are superseded; use generated metrics for current totals; the per-system test files for these features remain in
   place.
 - No regressions or removals detected for any of the 15 systems.
 

@@ -9,7 +9,7 @@ line with a security-support commitment.
 | Release line | Status |
 |---|---|
 | `stable-v1` | Pre-release and blocked; no supported version has been published |
-| `Working` / nightly artifacts | Development evaluation only; fixes are best-effort and do not constitute a release SLA |
+| `Working` | Development channel only; fixes are best-effort and do not constitute a release SLA |
 
 ## Reporting a Vulnerability
 

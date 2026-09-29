@@ -59,8 +59,8 @@ owning item. Only that owner's cmake commands may name it, and never a ctest
 tree. The entry is an error once the preset exists, the owner is `done`, or the
 owner stops naming it.
 
-Hand-written counts are governed too. `validate.py` scans every file in
-`REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES` for a number followed (within two words)
+Hand-written counts are governed too. `validate.py` scans every wiki Markdown
+page and the required public surfaces for a number followed (within two words)
 by tests, files, panels, modules, subsystems, backends, lines or nodes, including
 `N+`, `~N` and `N/M` forms and phrases wrapped across lines. `<!-- AUTO:* -->`
 blocks, the fully generated `wiki/advanced/Codebase-Statistics.md`, and the
@@ -70,8 +70,8 @@ rewrites (the validator resolves `$readme`, loop variables, and arrays; an
 unresolvable target fails validation), so `N specialized panels` is managed on
 `README.md` but must be claimed on `wiki/getting-started/FAQ.md`. Every other hit
 must lie wholly inside the `text` of a `readiness.publicNumericClaims` entry for
-that `surface`; an entry `64 nodes` does not cover `~64 nodes`, `1/64 nodes` or
-`#64 nodes`:
+that `surface`; an entry `N nodes` does not cover `~N nodes`, `1/N nodes` or
+`#N nodes`:
 
 | `classification` | Extra field | Check |
 |------------------|-------------|-------|
@@ -83,11 +83,32 @@ An entry whose text no longer occurs, or holds no claim, is an error, so
 rewording a page retires its entry in the same change. Prefer removing
 per-file line counts over registering them: they drift with every edit.
 
+The architecture flowchart's panel-header inventory is bound to
+`editor.panelHeaders`. The separate `editor.panels` metric counts factory
+registrations; they describe different inventories. Profile-scope and forbidden
+readiness wording are checked on newly discovered wiki pages too, without
+requiring every page to discuss a release profile.
+
 CTest runs the whole contract suite as `site-data-contract`. The faster
 `readiness-cross-references` runs the strict live validation plus the dependency,
 promotion, selector, future-path, prose-reference and handoff cases. Both carry
 the `readiness` and `site-data` labels and are registered on non-Windows hosts
 only; the Linux `site-data` workflow is the suite's CI home.
+
+## Repository site publication checks
+
+The publication entry point, `tools/site-data/generate.py`, invokes the same
+Python API producer as `docs/generate-api-docs.sh` before checking documentation.
+This materializes the ignored `docs/api` corpus on a clean checkout without
+requiring a shell for API generation. It then validates the exact-source API
+manifest, documentation routes, links and anchors before replacing an existing
+publication. Broken links and route collisions fail publication; missing API
+pages are never excused by the link validator.
+
+`site-data-publisher-docs` registers regression checks for that ordering and
+failure boundary. Local generation with `--allow-dirty --skip-doc-health` produces
+a blocked development bundle. It is not publication evidence and cannot establish
+live-site adoption or an exact-commit CI result.
 
 ## Protected publication authority
 

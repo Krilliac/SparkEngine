@@ -45,7 +45,7 @@ find SparkEngine/Source SparkEditor/Source SparkConsole/src GameModules \
   | xargs clang-format --dry-run --Werror
 ```
 
-`head -50` caps the input to 50 files. Locally this passes while leaving thousands of files unchecked; CI runs without it and fails immediately. The path list is also stale and `*.hpp` is missing.
+`head -50` truncates the input list. Locally this passes while leaving thousands of files unchecked; CI runs without it and fails immediately. The path list is also stale and `*.hpp` is missing.
 
 ## Right — local check
 

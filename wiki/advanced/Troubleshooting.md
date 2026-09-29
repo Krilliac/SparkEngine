@@ -433,7 +433,7 @@ cmake -B build -DENABLE_NETWORKING=ON ...
 
 **Solutions:**
 1. Verify `ENABLE_EDITOR` is ON in CMake
-2. Check that all 22 editor subsystems initialized: `editor_status`
+2. Check that all editor subsystems initialized: `editor_status`
 3. Reset panel layout: `editor_reset_layout`
 
 ### Editor Crash on Scene Load

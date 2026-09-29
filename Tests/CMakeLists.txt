@@ -4380,6 +4380,15 @@ add_test(
 set_tests_properties(PublicWording_ConsoleCertification PROPERTIES
     LABELS "governance;platform;unit;python"
     TIMEOUT 60)
+
+add_test(
+    NAME PublicWording_GovernancePolicy
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_governance.py -v)
+set_tests_properties(PublicWording_GovernancePolicy PROPERTIES
+    LABELS "governance;site-data;unit;python"
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    TIMEOUT 60)
 # PLT-220: SPARK_MACOS_MIN_VERSION, every workflow deployment target, the
 # documented macOS floor/runner, and the Mach-O minimum-version parser.
 add_test(
@@ -5722,6 +5731,16 @@ if(Python3_Interpreter_FOUND)
             RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
             TIMEOUT 180)
 
+        add_test(
+            NAME public-wiki-claim-boundaries
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_public_wording.py -v)
+        set_tests_properties(public-wiki-claim-boundaries PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
+            FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+            TIMEOUT 60)
+
         # DOC-400: a generate.py publication's documents, search records, source
         # URLs and page links agree (tools/site-data/docs_parity.py, run by
         # validate_published_bundle); each hash-consistent mutation must fail.
@@ -5734,6 +5753,18 @@ if(Python3_Interpreter_FOUND)
             RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
             FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
             TIMEOUT 600)
+
+        # Direct publication generates API docs, then validates links/routes
+        # before it may replace the previous output.
+        add_test(
+            NAME site-data-publisher-docs
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_publisher.py -v)
+        set_tests_properties(site-data-publisher-docs PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"
+            FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+            TIMEOUT 60)
 
         # DOC-400: the reference site runtime verifier (tools/site-data/runtime)
         # checked against a bundle generate.py produces here plus tampered,
@@ -5755,6 +5786,10 @@ if(Python3_Interpreter_FOUND)
                 COMMAND ${SPARK_NODE_EXECUTABLE} --test
                     test/verifyBundle.test.mjs
                     test/freshness.test.mjs
+                    test/siteDataRuntime.test.mjs
+                    test/browserRuntime.test.mjs
+                    test/bootstrap.test.mjs
+                    test/siteDataRuntime.fixture.test.mjs
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/site-data/runtime)
             set_tests_properties(runtime-bundle-validation PROPERTIES
                 LABELS "readiness;site-data;unit;node"

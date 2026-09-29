@@ -158,8 +158,8 @@ Request a drain in one of these ways:
   `SparkOrchestrator define`, and never more than 60 s.
 
 A clean drain ends with `stopping=true`, then a final `live=false,
-ready=false` snapshot, and exit status 0. Exit status 3 means a module vetoed
-shutdown. The `error` field names the reason.
+ready=false` snapshot, and exit status 0. A veto of shutdown is reported with
+exit status `3`. The `error` field names the reason.
 
 Drill: `python3 tools/ops/server_recovery_drill.py --server <SparkServer> --module <game-module> --scenario drain`
 

@@ -199,7 +199,7 @@ with `SPARK_GL_EXPECT_ROW`:
 The two llvmpipe lanes set `LIBGL_ALWAYS_SOFTWARE=1` and
 `GALLIUM_DRIVER=llvmpipe`, so a host with a GPU still runs them on the software
 rasterizer instead of quietly reporting a hardware context under the llvmpipe
-label. The hardware lane runs the same 13 tests (`SPARK_TEST_EXPECT_COUNT=13`,
+label. The hardware lane runs the same test family (`SPARK_TEST_EXPECT_COUNT=13`,
 `SPARK_REQUIRE_OPENGL=1`, `RUN_SERIAL`) with `SPARK_GL_EXPECT_ROW=hardware`;
 forcing it onto llvmpipe (`GALLIUM_DRIVER=llvmpipe`) makes the row test fail.
 `SPARK_GL_HARDWARE_ROW` defaults to OFF because hosted runners have no GPU. A
@@ -535,7 +535,7 @@ These items remain documented here by design and should be removed only when the
 
 Only the default variant of each stage is built. Define-selected variants (`BLUR_HORIZONTAL`, `FXAA_PASS`, `TONEMAP_*`, ...) have no SPIR-V yet.
 
-**Windows toolchain lane.** Hosted `windows-2022` runners have no Vulkan SDK, so `SPARK_VULKAN_AVAILABLE` stays FALSE there and nothing changes for them. On a Windows host with the LunarG SDK (for example `VULKAN_SDK=C:/VulkanSDK/1.4.357.0`), the build compiles and stages the same 17 SPIR-V modules and registers CTest `VulkanShaderToolchainWindows` (`VulkanShaderToolchain_*`, exact count 4, labels `vulkan;vulkan-hardware`, `SPARK_REQUIRE_VULKAN_VALIDATION=1`), which runs the toolchain family on the host's Vulkan ICD. The SDK's glslangValidator compiles all 17 shipped stages with the build's flags and exits non-zero on a broken stage (checked locally with the 1.4.357.0 SDK).
+**Windows toolchain lane.** Hosted `windows-2022` runners have no Vulkan SDK, so `SPARK_VULKAN_AVAILABLE` stays FALSE there and nothing changes for them. On a Windows host with the LunarG SDK (for example `VULKAN_SDK=C:/VulkanSDK/1.4.357.0`), the build compiles and stages the same SPIR-V module set and registers CTest `VulkanShaderToolchainWindows` (`VulkanShaderToolchain_*`, exact count 4, labels `vulkan;vulkan-hardware`, `SPARK_REQUIRE_VULKAN_VALIDATION=1`), which runs the toolchain family on the host's Vulkan ICD. The SDK's glslangValidator compiles all 17 shipped stages with the build's flags and exits non-zero on a broken stage (checked locally with the 1.4.357.0 SDK).
 
 ### Validation-layer lane (RHI-230)
 

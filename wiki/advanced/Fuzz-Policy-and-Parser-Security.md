@@ -18,8 +18,7 @@ crash-free-duration evidence remain absent.
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
 For the recorded source-tree state it reports **136 explicitly inventoried parsers, 14
 fuzzed and 122 blocked**, **14 bound corpora with 111 seeds (118099 bytes)**, **0 deferred
-candidates and 118 OD-21 exemptions**, and **2101 source files scanned across 17
-first-party roots**. The unwired material file import path (`Material::LoadFromFile`,
+candidates and 118 OD-21 exemptions**, and **source files scanned across the declared first-party roots**. The unwired material file import path (`Material::LoadFromFile`,
 `Material::LoadTexture` and `MaterialSystem::LoadTextureFromFile`, inventoried as
 `pbr-material-file`, `wic-pbr-material-texture` and `wic-material-texture`) was deleted
 rather than fuzzed, so those three parsers left the inventory. Five more blocked records
@@ -287,9 +286,8 @@ The gate proves that:
   a non-blocking status, while blockers remain.
 
 The gate does **not** prove that the regex scanner finds every possible parser, or that
-declared limits hold at runtime. The full inventory report records 33 inventoried files
-that no detector pattern matches, found by human review, so that limitation is a number
-rather than an assumption.
+declared limits hold at runtime. The full inventory report records inventoried files that no detector pattern matches,
+found by human review. Consult that generated report for the measured gap.
 
 Two detectors cover decoders that name no parse call: `binary-reader` (a
 `Spark::BinaryReader` constructed over the input) and `bounded-field-read` (a
@@ -335,7 +333,7 @@ unjustified (under 40 characters), and parser-or-deferral-overlapping exemptions
 rejected. The first triage (2026-09-24) classified all 149 deferred candidates: 28 new
 blocked boundaries (including the collaborative-edit TCP codec, the editor/engine named
 pipe, LAN discovery beacons, game-module save-state decoders, and two tinyobj-based OBJ
-loaders), 3 files folded into existing blocked records, and 115 exemptions.
+loaders), files folded into existing blocked records, and 115 exemptions.
 
 ## Commands
 
@@ -418,7 +416,7 @@ build/fuzz-policy/fuzz-targets/SparkFuzzJsonUtils -merge=1 -max_len=4096 -timeou
 `FuzzerTests/generated/json-utils` was seeded on 2026-09-25 from 1,776 units that an
 earlier time-bounded JSON smoke had written into the seed directory. A `-merge=1` pass
 kept 773 units that add coverage (972 edges); dropping the 3 that duplicate committed
-seeds left 770 files, 57 KB.
+seeds left a reduced corpus totaling 57 KB.
 
 ## Scheduled Campaign
 

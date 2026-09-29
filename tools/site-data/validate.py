@@ -8,6 +8,7 @@ import fnmatch
 import functools
 import hashlib
 import html
+import json
 import re
 import sys
 import unicodedata
@@ -2003,7 +2004,11 @@ def validate_public_claim_text(
 
     def widened_claims(value: str) -> list[str]:
         widened: list[str] = []
-        for token in breadth_tokens:
+        # Universal claims are equally broad whether phrased as "any" (the
+        # contract vocabulary) or as "all/every" in prose.
+        universal_scope = ("all platforms", "all hosts", "all compilers", "every platform", "every host",
+                           "every compiler")
+        for token in (*breadth_tokens, *universal_scope):
             for match in re.finditer(_claim_phrase_pattern(token), value):
                 prefix = value[max(0, match.start() - 48):match.start()]
                 suffix = value[match.end():match.end() + 48]
@@ -2082,6 +2087,12 @@ def validate_public_claim_text(
     return violations
 
 
+@functools.lru_cache(maxsize=512)
+def _discovered_public_claim_errors(identifier: str, rules: str, path: str, text: str) -> tuple[str, ...]:
+    """Cache only exact content/rule pairs, so edits and rule mutations invalidate the result."""
+    return tuple(validate_public_claim_text({"id": identifier, "publicClaimRules": json.loads(rules)}, path, text))
+
+
 # Hand-written counts on the governed public surfaces ("50+ other subsystems",
 # "2,509 tests") go stale silently, because no generator owns them. Every such
 # claim must either sit in generator-owned text or resolve to a reviewed
@@ -2117,6 +2128,32 @@ PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
     rf"(?:{'|'.join(PUBLIC_NUMERIC_CLAIM_NOUNS)})\b",
     re.IGNORECASE,
 )
+
+
+def public_numeric_claim_surfaces(repo_root: Path | None = None) -> set[str]:
+    """Return every repository surface whose public prose can carry a numeric claim.
+
+    The contract keeps explicit entries for individual claims, while the surface
+    inventory is derived from the public documentation tree. This prevents a
+    newly added wiki page from silently escaping RDY-000 just because it was not
+    added to a hand-maintained allow-list. The site JSON contract is checked by
+    ``hardcoded_site_claim_errors`` as well, so it remains in this inventory for
+    one consistent public-surface definition.
+    """
+    root = REPO_ROOT if repo_root is None else repo_root
+    surfaces = set(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES)
+    catalog_path = root / "docs/site/docs-catalog.json"
+    if catalog_path.is_file():
+        catalog = load_json(catalog_path)
+        surfaces.update(catalog.get("include", {}).get("rootDocuments", []))
+    wiki_root = root / "wiki"
+    if wiki_root.is_dir():
+        surfaces.update(
+            path.relative_to(root).as_posix()
+            for path in wiki_root.rglob("*.md")
+            if path.is_file()
+        )
+    return surfaces
 # DOC-400: the hand-authored site contract files. Every mutable fact they could
 # state -- a count, a commit, a CI run, the engine version -- has a bundle
 # source (metrics, source.commit, the version single source), so a literal here
@@ -2329,6 +2366,7 @@ def public_numeric_claim_errors(
     invoked when an entry binds a metric, so pure-text checks stay cheap.
     """
     errors: list[str] = []
+    governed_surfaces = public_numeric_claim_surfaces()
     location = "readiness.publicNumericClaims"
     if not isinstance(entries, list):
         return [f"{location}: must be an array of objects"]
@@ -2363,7 +2401,7 @@ def public_numeric_claim_errors(
         ):
             continue
         surface = entry["surface"]
-        if surface not in REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES or surface in GENERATED_CLAIM_SURFACES:
+        if surface not in governed_surfaces or surface in GENERATED_CLAIM_SURFACES:
             errors.append(f"{entry_location}: {surface} is not a governed public claim surface")
             continue
         key = (surface, " ".join(entry["text"].split()))
@@ -3616,6 +3654,28 @@ class Validator:
         for message in hardcoded_site_claim_errors(documents):
             self.error("no-hardcoded-claims", message)
 
+    def validate_discovered_public_claims(self) -> None:
+        """Apply profile boundaries to all discovered pages, including newly added wiki pages."""
+        # This dependent scan requires a valid profile/claim contract. Earlier
+        # findings already reject publication; do not interpret invalid rules
+        # against the entire wiki merely to add secondary diagnostics.
+        if self.errors:
+            return
+        for profile in self.contract["readiness"].get("releaseProfiles", []):
+            # Schema errors have already been reported by validate_release_profiles.
+            if not isinstance(profile, dict) or not isinstance(profile.get("publicClaimRules"), dict):
+                continue
+            declared = profile.get("publicClaimSurfaces", [])
+            if not isinstance(declared, list):
+                continue
+            known = {value for value in declared if isinstance(value, str)}
+            rules = json.dumps(profile["publicClaimRules"], sort_keys=True)
+            for path in sorted(public_numeric_claim_surfaces() - known):
+                resolved = REPO_ROOT / path
+                if resolved.is_file():
+                    text = resolved.read_text(encoding="utf-8", errors="replace")
+                    self.errors.extend(_discovered_public_claim_errors(str(profile.get("id", "")), rules, path, text))
+
     def validate_public_numeric_claims(self) -> None:
         """Every hand-written count on a governed surface resolves to a contract entry."""
         entries = self.contract["readiness"].get("publicNumericClaims")
@@ -3623,7 +3683,7 @@ class Validator:
             self.error("readiness.publicNumericClaims", "is required")
             return
         texts: dict[str, str] = {}
-        for surface in sorted(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES):
+        for surface in sorted(public_numeric_claim_surfaces()):
             path = REPO_ROOT / surface
             if path.is_file():
                 texts[surface] = path.read_text(encoding="utf-8", errors="replace")
@@ -3850,6 +3910,13 @@ class Validator:
         )
 
         if strict_public_wording:
+            from policy import validate as validate_support_policy
+
+            try:
+                for violation in validate_support_policy(REPO_ROOT):
+                    self.error("content.legal.supportPolicy", violation)
+            except (OSError, ValueError) as error:
+                self.error("content.legal.supportPolicy", f"cannot validate policy sources: {error}")
             public_surfaces: dict[str, str] = {}
             for path in sorted(LEGAL_PUBLIC_WORDING_SURFACES):
                 resolved = REPO_ROOT / path
@@ -4183,6 +4250,7 @@ class Validator:
         for finding in check_documented_build_commands():
             self.error(f"{finding.path}:{finding.line}", finding.message)
         self.validate_public_numeric_claims()
+        self.validate_discovered_public_claims()
         self.validate_online_service_boundary()
         for message in installer_platform_ownership_errors(self.contract):
             self.error("installerPlatformOwnership", message)

@@ -57,7 +57,7 @@ TOOLS_ROOT = Path(__file__).resolve().parents[1]
 if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 import docs_contract  # noqa: E402
-from validate_docs_links import heading_ids  # noqa: E402
+from validate_docs_links import heading_ids, validate_docs_links, validate_docs_routes  # noqa: E402
 
 
 SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".m", ".mm"}
@@ -138,19 +138,21 @@ def regenerate_api_docs(source_commit: str, committed_at: str) -> None:
     part of publication and fail closed if it cannot produce the corpus.
     """
 
-    script = REPO_ROOT / "docs" / "generate-api-docs.sh"
+    # This is also the producer used by docs/generate-api-docs.sh. Calling the
+    # Python entry point keeps publication portable on hosts without Bash.
+    script = REPO_ROOT / "tools" / "docs_contract.py"
     try:
         docs_contract.assert_contained(script, REPO_ROOT, label="API documentation generator")
         docs_contract.regular_identity(script, label="API documentation generator")
     except docs_contract.ContractError as error:
-        raise SiteDataError("missing or unsafe API documentation generator: docs/generate-api-docs.sh") from error
+        raise SiteDataError("missing or unsafe API documentation generator: tools/docs_contract.py") from error
     if not script.is_file() or script.is_symlink():
-        raise SiteDataError("missing API documentation generator: docs/generate-api-docs.sh")
+        raise SiteDataError("missing API documentation generator: tools/docs_contract.py")
 
     api_root = REPO_ROOT / "docs" / "api"
     environment = api_generation_environment(source_commit, committed_at, api_root)
     result = run_bounded_process(
-        [trusted_bash(), str(script), "generate"],
+        [sys.executable, str(script), "generate-api", "--output", str(api_root)],
         cwd=REPO_ROOT,
         environment=environment,
         timeout=API_GENERATION_TIMEOUT_SECONDS,
@@ -309,6 +311,8 @@ def collect_metrics(
     panel_path = REPO_ROOT / "SparkEditor" / "Source" / "Core" / "EditorPanelFactory.cpp"
     panel_content = panel_path.read_text(encoding="utf-8", errors="ignore")
     editor_panels = len(re.findall(r"\btryRegister\s*\(\s*\"", panel_content))
+    panel_root = REPO_ROOT / "SparkEditor" / "Source" / "Panels"
+    editor_panel_headers = sum(path.name.endswith("Panel.h") for path in tracked_files(panel_root, {".h"}))
 
     palette_path = REPO_ROOT / "SparkEngine" / "Source" / "Engine" / "Scripting" / "VisualScriptNodePalette.cpp"
     palette_content = palette_path.read_text(encoding="utf-8", errors="ignore")
@@ -371,6 +375,9 @@ def collect_metrics(
     return [
         metric("code.totalLines", "C/C++ physical lines", inventory["total_lines"], code_evidence, "lines"),
         metric("code.files", "C/C++ source files", inventory["file_count"], code_evidence, "files"),
+        metric("editor.panelHeaders", "Editor panel implementation headers", editor_panel_headers,
+               source_evidence("SparkEditor/Source/Panels", "Tracked *Panel.h headers used by the architecture flowchart"),
+               "headers"),
         metric("tests.definitions", "SparkTests TEST and TEST_F definitions", inventory["test_definitions"], code_evidence, "tests"),
         metric("tests.files", "Source files defining SparkTests cases", inventory["test_files"], code_evidence, "files"),
         *execution_metrics,
@@ -1063,6 +1070,20 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
             )
 
     regenerate_api_docs(source["commit"], source["committedAt"])
+
+    # A fresh checkout has no docs/api until the producer above completes.
+    # Validate its exact-commit manifest and every authored link before touching
+    # an existing publication. Direct callers get the same gate as the CI path.
+    docs_errors = validate_docs_routes(contract["docsCatalog"])
+    docs_errors.extend(validate_docs_links(
+        contract["docsCatalog"], generated_root=REPO_ROOT / "docs" / "api", source_sha=source["commit"]
+    ))
+    if docs_errors:
+        detail = "; ".join(
+            f"{entry['source']}:{entry['line']}: {entry['target']}: {entry['error']}"
+            for entry in docs_errors[:8]
+        )
+        raise SiteDataError(f"documentation validation failed ({len(docs_errors)} errors): {detail}")
 
     output = ensure_safe_output(args.output, preserve_existing=args.preserve_existing)
     snapshot_root = output / "snapshots" / source["commit"]

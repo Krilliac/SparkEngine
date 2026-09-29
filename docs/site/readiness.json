@@ -2712,6 +2712,137 @@
       "classification": "metric",
       "owner": "unassigned",
       "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/advanced/Codebase-Bloat-Audit.md",
+      "text": "~500 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/advanced/Codebase-Bloat-Audit.md",
+      "text": "~300 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/advanced/Codebase-Bloat-Audit.md",
+      "text": "500 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/advanced/Codebase-Bloat-Audit.md",
+      "text": "300 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/development/AI-Bloat-Pattern.md",
+      "text": "~500 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/development/AI-Bloat-Pattern.md",
+      "text": "~300 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/development/AI-Bloat-Pattern.md",
+      "text": "~60 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/development/AI-Bloat-Pattern.md",
+      "text": "1 per subsystem",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/development/Code-Quality-Violations.md",
+      "text": "~60 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/development/Workflow-Patterns.md",
+      "text": "~500 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "wiki/advanced/Crash-Reporting.md",
+      "text": "512 modules",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "tools/ops/symbolicate_crash.py"
+    },
+    {
+      "surface": "wiki/subsystems/Mod-System.md",
+      "text": "4096 nodes",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Engine/Modding/ModSystemIO.cpp"
+    },
+    {
+      "surface": "wiki/getting-started/Engine-Architecture-Flowchart.md",
+      "text": "64 editor panels",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "editor.panelHeaders"
+    },
+    {
+      "surface": "wiki/getting-started/Engine-Architecture-Flowchart.md",
+      "text": "64 specialized panels",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "editor.panelHeaders"
+    },
+    {
+      "surface": "wiki/getting-started/Engine-Architecture-Flowchart.md",
+      "text": "64 panel",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "editor.panelHeaders"
+    },
+    {
+      "surface": "wiki/advanced/Wine-No-JobSystem-Breakthrough.md",
+      "text": "0  lines",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/Wine-No-JobSystem-Breakthrough.md",
+      "text": "1  lines",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "CONTRIBUTING.md",
+      "text": "~500 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "CONTRIBUTING.md",
+      "text": "~300 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "CLAUDE.md"
     }
   ]
 }

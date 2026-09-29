@@ -4,7 +4,7 @@ SparkEngine provides a water rendering system with Gerstner wave simulation for 
 
 **Source:** `SparkEngine/Source/Graphics/WaterRenderer.h`
 **Namespace:** `Spark::Graphics`
-**Tests:** `Tests/TestWaterRenderer.cpp` (6 test cases)
+**Tests:** `Tests/TestWaterRenderer.cpp`
 
 ---
 

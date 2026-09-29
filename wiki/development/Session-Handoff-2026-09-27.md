@@ -66,7 +66,7 @@ The commit subject names the work item; list a slice with `git log --oneline ori
   - **MOD-360:** a fail-closed asset-reference check for OpenWorld.
   - **MOD-370:** unattached RTS behavior trees removed.
   - **MOD-380:** Racing drives on Jolt vehicles, with barrier and checkpoint bodies.
-- **Assets:** Blender kits for all 11 game modules (`Art/Blender/<Module>/`, exported to `Assets/Models/<Short>/Kit/`) with provenance. Procedurally composed WAV music ships for Platformer, Racing, RPG and RTS (`tools/audio/compose_module_music.py`).
+- **Assets:** Blender kits for the discovered game modules (`Art/Blender/<Module>/`, exported to `Assets/Models/<Short>/Kit/`) with provenance. Procedurally composed WAV music ships for Platformer, Racing, RPG and RTS (`tools/audio/compose_module_music.py`).
 - **CI and tooling:**
   - **CI-110:** a per-check clang-tidy diagnostic budget ratchet.
   - **CI-120:** documented build commands are checked against the presets, and a strict dependency closure is derived from `dependencies.lock`.

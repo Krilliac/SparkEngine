@@ -640,7 +640,7 @@ Located at `SparkEditor/Source/Panels/TilemapEditorPanel.h`. Provides a visual t
 
 ## Testing
 
-The 2D systems are covered by the `TestSprite2DComponents` test suite located at `Tests/TestSprite2DComponents.cpp`. This file contains **35 test cases** that validate:
+The 2D systems are covered by the `TestSprite2DComponents` test suite located at `Tests/TestSprite2DComponents.cpp`. This file contains **test cases** that validate:
 
 - `SpriteRenderer` default values and `GetWorldSize()` computation
 - Sprite animation frame advancement and looping
@@ -695,6 +695,6 @@ If you need to perform physics queries from a background thread (e.g., AI pathfi
 - [Physics](Physics.md) -- 3D Jolt Physics integration and the `PhysicsSystem` ECS system
 - [Rendering and Graphics](Rendering-and-Graphics.md) -- DX11 graphics engine, shader pipeline, and 3D rendering
 - [Entity Component System](Entity-Component-System.md) -- EnTT-based ECS architecture, component registration, and system execution order
-- [SparkEditor](../gameplay-tools/SparkEditor.md) -- Editor panel architecture and the 22 subsystem panels
+- [SparkEditor](../gameplay-tools/SparkEditor.md) -- Editor panel architecture and the subsystem panels
 - [Animation](Animation.md) -- Skeletal animation, IK, and state machines (3D counterpart to sprite animation)
 - [Testing](../advanced/Testing.md) -- Test framework, CTest configuration, and test coverage

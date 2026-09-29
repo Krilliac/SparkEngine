@@ -3385,6 +3385,35 @@ class PublicNumericClaimTests(ContractTestCase):
         validator.validate_public_numeric_claims()
         self.assertEqual(validator.errors, [])
 
+    def test_every_wiki_page_is_a_governed_claim_surface(self) -> None:
+        surfaces = site_data_validate.public_numeric_claim_surfaces()
+        self.assertIn("wiki/advanced/Codebase-Observations.md", surfaces)
+        self.assertIn("wiki/development/Release-Publication-Stages.md", surfaces)
+
+    def test_validator_enumerates_a_new_wiki_surface(self) -> None:
+        source = REPO_ROOT / "wiki/advanced/Codebase-Bloat-Audit.md"
+        original_read = Path.read_text
+
+        def read(path, *args, **kwargs):
+            text = original_read(path, *args, **kwargs)
+            return text + "\nThe editor ships 123456 panels.\n" if path == source else text
+
+        with mock.patch.object(Path, "read_text", read):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_public_numeric_claims()
+        self.assertTrue(
+            any("unclaimed numeric claim '123456 panels'" in error for error in validator.errors),
+            validator.errors,
+        )
+
+    def test_claims_on_an_unlisted_wiki_page_are_rejected(self) -> None:
+        errors = self.claim_errors(
+            {"wiki/advanced/New-Public-Page.md": "The page describes 12 panels.\n"},
+            [],
+        )
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("unclaimed numeric claim '12 panels'", errors[0])
+
     def test_unclaimed_number_is_rejected(self) -> None:
         errors = self.claim_errors({self.SURFACE: "The editor ships 12 panels.\n"}, [])
         self.assertEqual(len(errors), 1, errors)

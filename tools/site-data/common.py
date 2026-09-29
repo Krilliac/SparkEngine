@@ -37,6 +37,7 @@ METRIC_IDS = {
     "code.totalLines",
     "docs.authored",
     "editor.panels",
+    "editor.panelHeaders",
     "module.fps.files",
     "module.fps.lines",
     "module.mmofps.files",
