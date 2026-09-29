@@ -7,11 +7,15 @@ real fixtures and run the checker on the linked or assembled result:
 * an ELF object built at the floor passes, while the same source built with
   -mavx2 -mfma, -mbmi/-mbmi2, -mlzcnt or -mf16c fails and names the feature;
 * the legacy-encoded extensions above the floor (AES-NI, PCLMULQDQ, SHA-NI,
-  GFNI, RDRAND, RDSEED, ADX) fail as well;
+  GFNI, RDRAND, RDSEED, ADX, XSAVE, TSX) fail as well; XGETBV is exempt only
+  inside a procedure named exactly Spark::Detail::ReadXcr0, and only XSAVE;
 * the TZCNT encoding GCC/Clang emit at the floor for ctz (REP BSF) is
   reported as informational, not as a violation;
 * --allow-symbol exempts only the named CPUID-dispatched function;
 * a PE/COFF DLL linked with lld-link is disassembled and judged the same way;
+  AVX2 in a reviewed MSVC vector_algorithms contribution (exact module path and
+  MSVC 14.44.35207 library) is exempt, a neighbouring module, another toolset
+  or another ISA family is not;
 * a non-x86 image, a missing file and an empty file are errors (exit 2),
   never a vacuous pass;
 * the instruction classifier does not mistake SSE mnemonics (pextrd, andnps)
@@ -34,8 +38,10 @@ CHECKER = REPO_ROOT / "tools" / "check_isa_baseline.py"
 
 X86_HOST = platform.machine().lower() in {"x86_64", "amd64"}
 CC = shutil.which("gcc") or shutil.which("clang")
+CXX = shutil.which("g++") or shutil.which("clang++")
 CLANG = shutil.which("clang")
 LLD_LINK = shutil.which("lld-link")
+LLVM_LIB = shutil.which("llvm-lib")
 DISASSEMBLER = shutil.which("objdump") or shutil.which("llvm-objdump")
 
 FIXTURE_SOURCE = """
@@ -53,6 +59,15 @@ float HalfToFloat(unsigned short half) { return _cvtsh_ss(half); }
 """
 
 HALF_INCLUDE = "#include <immintrin.h>\n"
+
+# The same inline asm Utils/MultiISA.h uses on GCC/Clang.
+XGETBV_SOURCE = """__attribute__((noinline)) unsigned long long {name}(void)
+{{
+    unsigned low, high;
+    __asm__ volatile("xgetbv" : "=a"(low), "=d"(high) : "c"(0));
+    return ((unsigned long long)high << 32) | low;
+}}
+"""
 
 
 def _load_checker():
@@ -92,6 +107,20 @@ class ClassifierTests(unittest.TestCase):
             "rdtsc",
             "shl %cl,%rax",
             "call 1030 <vfmadd_wrapper> # 0x1030",
+            "cpuid",
+            "rdtscp",
+            "pause",
+            "prefetcht0 (%rax)",
+            "clflush (%rax)",
+            "movnti %eax,(%rdx)",
+            "movntdq %xmm0,(%rax)",
+            "insertps $0x10,%xmm1,%xmm0",
+            "extractps $0x1,%xmm0,%eax",
+            "pmulhrsw %xmm1,%xmm0",
+            "test %eax,%eax",
+            "xchg %eax,%ebx",
+            "xorps %xmm0,%xmm0",
+            "xacquire lock incl (%rax)",
         ):
             with self.subTest(text=text):
                 self.assertIsNone(self._classify(text))
@@ -130,6 +159,70 @@ class ClassifierTests(unittest.TestCase):
         for text, feature in cases.items():
             with self.subTest(text=text):
                 self.assertEqual(self._classify(text), feature)
+
+    def test_non_v2_scalar_families_are_named(self) -> None:
+        # classify() returned None for all of these before XSAVE/TSX/... were added.
+        cases = {
+            "xgetbv": "XSAVE",
+            "xsetbv": "XSAVE",
+            "xsaveopt (%rax)": "XSAVE",
+            "xsaveopt64 (%rax)": "XSAVE",
+            "xsavec (%rax)": "XSAVE",
+            "xrstor64 (%rax)": "XSAVE",
+            "xrstors (%rax)": "XSAVE",
+            "xbegin 0x1234": "TSX",
+            "xend": "TSX",
+            "xabort $0xff": "TSX",
+            "xtest": "TSX",
+            "rdfsbase %rax": "FSGSBASE",
+            "wrgsbaseq %rax": "FSGSBASE",
+            "extrq $0x8,$0x0,%xmm0": "SSE4a",
+            "insertq %xmm1,%xmm0": "SSE4a",
+            "movntsd %xmm0,(%rax)": "SSE4a",
+            "femms": "3DNow!",
+            "pfadd %mm1,%mm0": "3DNow!",
+            "pi2fd %mm1,%mm0": "3DNow!",
+            "pf2id %mm1,%mm0": "3DNow!",
+            "clflushopt (%rax)": "CLFLUSHOPT",
+            "clwb (%rax)": "CLWB",
+            "rdpid %rax": "RDPID",
+            "umwait %ecx": "WAITPKG",
+            "tpause %ecx": "WAITPKG",
+            "movdiri %eax,(%rdx)": "MOVDIRI",
+            "movdir64b (%rax),%rdx": "MOVDIR64B",
+            "serialize": "SERIALIZE",
+            "rdpkru": "PKU",
+            "ldtilecfg (%rax)": "AMX",
+            "tileloadd (%rax,%rcx,1),%tmm0": "AMX",
+            "tdpbssd %tmm2,%tmm1,%tmm0": "AMX",
+        }
+        for text, feature in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(self._classify(text), feature)
+
+    def test_evex_encoding_needs_avx512_even_on_xmm(self) -> None:
+        # MSVC's auto-vectorizer emits vpmaxuq xmm (EVEX-only, AVX512F+VL); by its
+        # operands alone it looks like a VEX instruction.
+        cases = {
+            "62 f2 ed 08 3f d1           \tvpmaxuq\t%xmm1, %xmm2, %xmm2": "AVX-512",
+            "62 f2 ed 08 3f d1    \tvpmaxuq %xmm1,%xmm2,%xmm2": "AVX-512",
+            "c5 f9 6f c1                 \tvmovdqa\t%xmm1, %xmm0": "AVX (VEX)",
+            "66 0f 6f c1                 \tmovdqa\t%xmm1, %xmm0": None,
+            "f3 48 0f bc c7              \ttzcntq\t%rdi, %rax": "TZCNT",
+            "vmovdqa\t%xmm1, %xmm0": "AVX (VEX)",
+        }
+        for text, feature in cases.items():
+            with self.subTest(text=text):
+                evex, instruction = checker.split_raw_bytes(text)
+                self.assertEqual(checker.classify(*checker.split_instruction(instruction), evex), feature)
+
+    def test_undecodable_bytes_are_not_instructions(self) -> None:
+        # Jump tables inside MSVC .text decode as "<unknown>" (llvm) or "(bad)" (GNU).
+        lines = ["140001000: 62 f2 ff        \t<unknown>", "  140001003:\t62 ff    \t(bad)",
+                 "140001005: c5 f9 6f c1     \tvmovdqa\t%xmm1, %xmm0"]
+        result = checker.scan_lines("image", lines, [])
+        self.assertEqual(result.instructions, 1)
+        self.assertEqual([finding.feature for finding in result.violations], ["AVX (VEX)"])
 
     def test_tzcnt_is_informational(self) -> None:
         self.assertEqual(self._classify("tzcnt %edi,%eax"), "TZCNT")
@@ -245,6 +338,45 @@ class ElfFixtureTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                 self.assertIn(f"violation {feature}", result.stdout)
 
+    def _build(self, name: str, suffix: str, source: str, *flags: str) -> str:
+        path = self.tmp / f"{name}{suffix}"
+        path.write_text(source, encoding="utf-8")
+        output = self.tmp / f"{name}.o"
+        compiler = CXX if suffix == ".cpp" else CC
+        command = [compiler, "-O2", "-msse4.2", *flags, "-c", str(path), "-o", str(output)]
+        subprocess.run(command, check=True, timeout=120)
+        return str(output)
+
+    def test_xsave_and_tsx_builds_fail(self) -> None:
+        xgetbv = self._build("xgetbv", ".c", XGETBV_SOURCE.format(name="Probe"))
+        result = _run_checker(xgetbv)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("violation XSAVE", result.stdout)
+        rtm = self._build("rtm", ".c", "#include <immintrin.h>\nunsigned F(void) { return _xbegin(); }\n", "-mrtm")
+        result = _run_checker(rtm)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("violation TSX", result.stdout)
+
+    @unittest.skipUnless(CXX, "needs a C++ compiler")
+    def test_xgetbv_is_exempt_only_in_read_xcr0_and_only_for_xsave(self) -> None:
+        read_xcr0 = "namespace Spark { namespace Detail {\n%s\n} }\n"
+        allowed = self._build("readxcr0", ".cpp", read_xcr0 % XGETBV_SOURCE.format(name="ReadXcr0"))
+        result = _run_checker(allowed)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("allowed (cpuid-dispatched) XSAVE: 1", result.stdout)
+        for name, body in (("other", read_xcr0 % XGETBV_SOURCE.format(name="ReadXcr0Other")),
+                           ("outer", "namespace Spark {\n%s\n}\n" % XGETBV_SOURCE.format(name="ReadXcr0"))):
+            with self.subTest(name=name):
+                result = _run_checker(self._build(name, ".cpp", body))
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("violation XSAVE", result.stdout)
+        with_avx2 = XGETBV_SOURCE.format(name="ReadXcr0").replace(
+            "__asm__ volatile(", '__asm__ volatile("vpxor %%ymm0, %%ymm0, %%ymm0" ::: "xmm0");\n    __asm__ volatile(')
+        result = _run_checker(self._build("avx2", ".cpp", read_xcr0 % with_avx2))
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("violation AVX/AVX2 (ymm)", result.stdout)
+        self.assertIn("allowed (cpuid-dispatched) XSAVE", result.stdout)
+
     def test_llvm_objdump_agrees(self) -> None:
         llvm_objdump = shutil.which("llvm-objdump")
         if not llvm_objdump:
@@ -267,26 +399,52 @@ __declspec(dllexport) void Scale(float* out, const float* a, const float* b)
 }
 """
 
-    def _link(self, tmp: Path, name: str, *flags: str, reviewed: bool = False, extra_source: str = "") -> Path:
-        source = tmp / "pe.c"
-        contents = self.SOURCE
-        if reviewed:
-            contents = contents.replace("Scale", "__std_reverse_trivially_swappable_1")
-        source.write_text(contents + extra_source, encoding="utf-8")
-        obj = tmp / f"{name}.obj"
-        if reviewed:
-            obj = tmp / "crt" / "src" / "stl" / "vector_algorithms.obj"
-            obj.parent.mkdir(parents=True, exist_ok=True)
-        dll = tmp / f"{name}.dll"
+    # The Microsoft build path of the /MD STL's vector_algorithms.obj and the
+    # reviewed toolset's library directory, both as the PDB records them.
+    REVIEWED_OBJECT = ("Intermediate/crt/github/stl/msbuild/stl_base/md/msvcp_base_md_kernel32.vcxproj"
+                       "/objr/amd64/vector_algorithms.obj")
+
+    def _compile(self, source: Path, obj: Path, *flags: str) -> None:
+        obj.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             [CLANG, "--target=x86_64-pc-windows-msvc", "-O2", "-g", "-gcodeview",
              *flags, "-c", str(source), "-o", str(obj)],
             check=True,
             timeout=120,
         )
+
+    def _link(self, tmp: Path, name: str, *flags: str, reviewed: bool = False, extra_source: str = "",
+              toolset: str = "14.44.35207", source_text: str | None = None, suffix: str = ".c") -> Path:
+        """Link one DLL. reviewed=True puts the code in an MSVC-shaped vector_algorithms.obj
+        inside <toolset>/lib/x64/msvcprt.lib; extra_source becomes a separate neighbouring object."""
+        work = tmp / name
+        work.mkdir()
+        source = work / f"pe{suffix}"
+        contents = source_text if source_text is not None else self.SOURCE
+        if reviewed:
+            contents = contents.replace("Scale", "__std_reverse_trivially_swappable_1")
+        source.write_text(contents, encoding="utf-8")
+        inputs = []
+        if reviewed:
+            obj = work / self.REVIEWED_OBJECT
+            self._compile(source, obj, *flags)
+            library = work / "MSVC" / toolset / "lib" / "x64" / "msvcprt.lib"
+            library.parent.mkdir(parents=True)
+            subprocess.run([LLVM_LIB, f"/out:{library}", str(obj)], check=True, timeout=120)
+            inputs += ["/include:__std_reverse_trivially_swappable_1", str(library)]
+        else:
+            obj = work / f"{name}.obj"
+            self._compile(source, obj, *flags)
+            inputs.append(str(obj))
+        if extra_source:
+            neighbor = work / "neighbor.c"
+            neighbor.write_text(extra_source, encoding="utf-8")
+            self._compile(neighbor, work / "neighbor.obj", *flags)
+            inputs.insert(0, str(work / "neighbor.obj"))
+        dll = tmp / f"{name}.dll"
         pdb = tmp / f"{name}.pdb"
         subprocess.run(
-            [LLD_LINK, "/dll", "/noentry", "/nodefaultlib", "/debug", f"/pdb:{pdb}", f"/out:{dll}", str(obj)],
+            [LLD_LINK, "/dll", "/noentry", "/nodefaultlib", "/debug", f"/pdb:{pdb}", f"/out:{dll}", *inputs],
             check=True,
             timeout=120,
         )
@@ -332,17 +490,21 @@ __declspec(dllexport) void Scale(float* out, const float* a, const float* b)
             result = _run_checker("--pdb", str(second.with_suffix(".pdb")), str(first))
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
 
-    def test_pe_reviewed_vector_algorithms_ranges_are_the_only_exemption(self) -> None:
+    @unittest.skipUnless(LLVM_LIB, "needs llvm-lib for the MSVC-shaped runtime library")
+    def test_pe_reviewed_vector_algorithms_contribution_is_exempt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tmp = Path(directory)
             image = self._link(tmp, "vector_algorithms", "-mavx2", reviewed=True)
-            self.assertTrue(checker._pdb_ranges(str(image.with_suffix(".pdb")), str(image)))
+            ranges = checker._pdb_info(str(image.with_suffix(".pdb")), str(image)).ranges
+            self.assertEqual([item.symbol for item in ranges], ["<section contribution>"])
             result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
-            # This metadata fixture tests the range selector, not CPUID dispatch.
+            # This metadata fixture tests the contribution selector, not CPUID dispatch.
             # Runtime guard provenance is reviewed separately in the MSVC source.
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("allowed (cpuid-dispatched) AVX/AVX2 (ymm)", result.stdout)
 
-    def test_pe_neighbor_in_same_module_and_extra_isa_are_not_exempt(self) -> None:
+    @unittest.skipUnless(LLVM_LIB, "needs llvm-lib for the MSVC-shaped runtime library")
+    def test_pe_neighbour_module_other_toolset_and_extra_isa_are_not_exempt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tmp = Path(directory)
             neighbor = self.SOURCE.replace("Scale", "Unreviewed").replace("int _fltused = 0;", "")
@@ -350,10 +512,31 @@ __declspec(dllexport) void Scale(float* out, const float* a, const float* b)
             result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertIn("allowed (cpuid-dispatched)", result.stdout)
+            self.assertIn("Unreviewed", result.stdout)
+            image = self._link(tmp, "toolset", "-mavx2", reviewed=True, toolset="14.45.00000")
+            result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertNotIn("allowed (cpuid-dispatched)", result.stdout)
             image = self._link(tmp, "fma", "-mavx2", "-mfma", reviewed=True)
             result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertIn("violation FMA", result.stdout)
+
+    def test_pe_xgetbv_is_exempt_only_in_read_xcr0(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            body = XGETBV_SOURCE.replace("__attribute__((noinline))", "__declspec(dllexport) __declspec(noinline)")
+            source = "namespace Spark { namespace Detail {\n%s\n} }\n"
+            image = self._link(tmp, "readxcr0", "-msse4.2", suffix=".cpp",
+                               source_text=source % body.format(name="ReadXcr0"))
+            result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("allowed (cpuid-dispatched) XSAVE: 1", result.stdout)
+            image = self._link(tmp, "other", "-msse4.2", suffix=".cpp",
+                               source_text=source % body.format(name="ReadXcr0Other"))
+            result = _run_checker("--pdb", str(image.with_suffix(".pdb")), str(image))
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("violation XSAVE", result.stdout)
 
 
 @unittest.skipUnless(DISASSEMBLER, "needs objdump or llvm-objdump")
