@@ -2,12 +2,18 @@
  * @file MMOSessionGate.h
  * @brief Authenticated MMO character admission and authoritative world commands.
  *
- * Game-thread only, including NetworkManager callbacks. The module owns this gate;
- * the borrowed network/account/character/player services must outlive Shutdown().
- * Session and client-view storage is bounded to 64 slots. Admission allocates strings
- * and characters; movement uses existing player storage. Encoded outbound messages
- * allocate through NetworkManager. Once-per-second disconnect maintenance obtains
- * a bounded connection snapshot. This is a small-area development slice, not a fleet.
+ * Thread affinity: Initialize/Update/Shutdown/Send/Get* run on the game thread. The
+ * NetworkManager handlers may run on whichever thread calls NetworkManager::Update (the
+ * DedicatedServer tick thread inside SparkServer), so they only copy the datagram into a
+ * mutex-guarded, fixed-capacity inbox; every decode and all session/world mutation happen
+ * when Update() drains that inbox on the game thread. The module owns this gate; the
+ * borrowed network/account/character/player services must outlive Shutdown().
+ * Session, client-view and inbox storage are bounded (64 sessions, 128 queued datagrams,
+ * each at most MaxPacketBytes, allocated once in Initialize); datagrams arriving while the
+ * inbox is full are dropped. Admission allocates strings and characters; movement uses
+ * existing player storage. Encoded outbound messages allocate through NetworkManager.
+ * Once-per-second disconnect maintenance obtains a bounded connection snapshot. This is a
+ * small-area development slice, not a fleet.
  */
 #pragma once
 
@@ -17,6 +23,7 @@
 
 #include <array>
 #include <memory>
+#include <mutex>
 #include <string>
 
 namespace MMO
@@ -29,6 +36,7 @@ namespace MMO
     {
       public:
         static constexpr size_t MaxSessions = 64;
+        static constexpr size_t InboxCapacity = 128;
         static constexpr auto RequestType = static_cast<Spark::Net::MessageType>(1320);
         static constexpr auto ReplyType = static_cast<Spark::Net::MessageType>(1321);
 
@@ -51,6 +59,15 @@ namespace MMO
 
       private:
         struct AuthenticationState;
+        /// One received datagram awaiting game-thread processing.
+        struct Inbound
+        {
+            uint32_t senderId = 0;
+            uint32_t length = 0;
+            bool reply = false;
+            std::array<uint8_t, SessionGateWire::MaxPacketBytes> bytes{};
+        };
+        using Inbox = std::array<Inbound, InboxCapacity>;
         struct Session
         {
             uint32_t clientId = 0;
@@ -65,8 +82,11 @@ namespace MMO
         Session* FindSession(uint32_t clientId);
         Session* AcquireSession(uint32_t clientId);
         void Revoke(Session& session);
-        void ReceiveRequest(const Spark::Net::NetworkMessage& message);
-        void ReceiveReply(const Spark::Net::NetworkMessage& message);
+        void Enqueue(const Spark::Net::NetworkMessage& message, bool reply);
+        void DrainInbox();
+        void ClearInbox();
+        void ReceiveRequest(uint32_t senderId, std::span<const uint8_t> payload);
+        void ReceiveReply(std::span<const uint8_t> payload);
         SessionGateWire::Status Authenticate(Session& session, const SessionGateWire::Packet& request);
         SessionGateWire::Status Apply(Session& session, const SessionGateWire::Packet& request);
         SessionGateWire::Packet Snapshot(const Session& session) const;
@@ -78,6 +98,10 @@ namespace MMO
         MMOCharacterSystem* m_characters = nullptr;
         MMOPlayerSystem* m_players = nullptr;
         std::unique_ptr<AuthenticationState> m_authentication;
+        std::mutex m_inboxMutex;
+        std::unique_ptr<Inbox> m_inbox;      ///< Filled by network handlers under m_inboxMutex.
+        std::unique_ptr<Inbox> m_processing; ///< Swapped out of m_inbox and drained on the game thread.
+        size_t m_inboxCount = 0;
         std::array<Session, MaxSessions> m_sessions{};
         std::array<SessionGateWire::Packet, MaxSessions> m_states{};
         SessionGateWire::Packet m_lastReply{};

@@ -48,6 +48,8 @@ namespace MMO
         m_characters = &characters;
         m_players = &players;
         m_authentication = std::make_unique<AuthenticationState>(accounts);
+        m_inbox = std::make_unique<Inbox>();
+        m_processing = std::make_unique<Inbox>();
         auto& validator = network.GetPacketValidator();
         validator.RegisterSchema(RequestType, {.minPayloadSize = 1,
                                                .maxPayloadSize = MaxPacketBytes,
@@ -60,10 +62,77 @@ namespace MMO
                                              .allowedFromClient = false,
                                              .allowedFromServer = true});
         network.RegisterSensitiveHandler(RequestType, [this](const Spark::Net::NetworkMessage& message)
-                                         { ReceiveRequest(message); });
+                                         { Enqueue(message, false); });
         network.RegisterHandler(ReplyType,
-                                [this](const Spark::Net::NetworkMessage& message) { ReceiveReply(message); });
+                                [this](const Spark::Net::NetworkMessage& message) { Enqueue(message, true); });
         return true;
+    }
+
+    void MMOSessionGate::Enqueue(const Spark::Net::NetworkMessage& message, bool reply)
+    {
+        // Any thread: copy only. The schema already bounds the payload; recheck before copying.
+        if (message.payload.empty() || message.payload.size() > MaxPacketBytes)
+        {
+            return;
+        }
+        std::lock_guard lock(m_inboxMutex);
+        if (!m_inbox || m_inboxCount >= InboxCapacity)
+        {
+            return;
+        }
+        Inbound& slot = (*m_inbox)[m_inboxCount++];
+        slot.senderId = message.senderID;
+        slot.length = static_cast<uint32_t>(message.payload.size());
+        slot.reply = reply;
+        std::copy(message.payload.begin(), message.payload.end(), slot.bytes.begin());
+    }
+
+    void MMOSessionGate::DrainInbox()
+    {
+        size_t count = 0;
+        {
+            std::lock_guard lock(m_inboxMutex);
+            if (!m_inbox || !m_processing)
+            {
+                return;
+            }
+            std::swap(m_inbox, m_processing);
+            count = m_inboxCount;
+            m_inboxCount = 0;
+        }
+        for (size_t index = 0; index < count && m_network; ++index)
+        {
+            Inbound& item = (*m_processing)[index];
+            const std::span<const uint8_t> payload(item.bytes.data(), item.length);
+            if (item.reply)
+            {
+                ReceiveReply(payload);
+            }
+            else
+            {
+                ReceiveRequest(item.senderId, payload);
+            }
+            // Requests may carry credentials; never leave them in a reusable slot.
+            Spark::SecureErase(item.bytes.data(), item.length);
+            item.length = 0;
+        }
+    }
+
+    void MMOSessionGate::ClearInbox()
+    {
+        std::lock_guard lock(m_inboxMutex);
+        for (auto* inbox : {m_inbox.get(), m_processing.get()})
+        {
+            if (inbox)
+            {
+                for (auto& item : *inbox)
+                {
+                    Spark::SecureErase(item.bytes.data(), item.bytes.size());
+                    item.length = 0;
+                }
+            }
+        }
+        m_inboxCount = 0;
     }
 
     MMOSessionGate::Session* MMOSessionGate::FindSession(uint32_t clientId)
@@ -124,6 +193,7 @@ namespace MMO
         {
             m_network->UnregisterHandler(RequestType);
             m_network->UnregisterHandler(ReplyType);
+            ClearInbox();
             for (auto& session : m_sessions)
             {
                 Revoke(session);
@@ -150,7 +220,12 @@ namespace MMO
 
     void MMOSessionGate::Update(float deltaTime)
     {
-        if (!m_network || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
+        if (!m_network)
+        {
+            return;
+        }
+        DrainInbox();
+        if (!std::isfinite(deltaTime) || deltaTime <= 0.0f)
         {
             return;
         }
@@ -244,20 +319,20 @@ namespace MMO
         return Status::Ok;
     }
 
-    void MMOSessionGate::ReceiveRequest(const Spark::Net::NetworkMessage& message)
+    void MMOSessionGate::ReceiveRequest(uint32_t senderId, std::span<const uint8_t> payload)
     {
-        if (!m_network || m_network->GetRole() != Spark::Net::NetworkRole::Server || message.senderID == 0)
+        if (!m_network || m_network->GetRole() != Spark::Net::NetworkRole::Server || senderId == 0)
         {
             return;
         }
         Packet request;
-        const bool decoded = Decode(message.payload, request);
+        const bool decoded = Decode(payload, request);
         if (!decoded || request.response || request.operation == Operation::State)
         {
             Spark::SecureErase(request.password.data(), request.password.size());
             return;
         }
-        auto* session = AcquireSession(message.senderID);
+        auto* session = AcquireSession(senderId);
         if (!session)
         {
             Spark::SecureErase(request.password.data(), request.password.size());
@@ -274,7 +349,7 @@ namespace MMO
         reply.operation = request.operation;
         reply.requestId = request.requestId;
         reply.status = status;
-        SendTo(message.senderID, reply);
+        SendTo(senderId, reply);
     }
 
     void MMOSessionGate::SendTo(uint32_t clientId, const Packet& packet)
@@ -323,10 +398,10 @@ namespace MMO
         return nullptr;
     }
 
-    void MMOSessionGate::ReceiveReply(const Spark::Net::NetworkMessage& message)
+    void MMOSessionGate::ReceiveReply(std::span<const uint8_t> payload)
     {
         Packet packet;
-        if (!m_network || m_network->GetRole() != Spark::Net::NetworkRole::Client || !Decode(message.payload, packet) ||
+        if (!m_network || m_network->GetRole() != Spark::Net::NetworkRole::Client || !Decode(payload, packet) ||
             !packet.response)
         {
             return;
