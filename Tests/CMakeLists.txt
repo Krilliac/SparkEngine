@@ -5081,7 +5081,7 @@ set_tests_properties(PrototypeModuleKit_PublicConsoleBoundary PROPERTIES
 
 add_test(NAME FPSPublicSDK_GameTypes COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(FPSPublicSDK_GameTypes PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SDKGameTypes_;SPARK_TEST_EXPECT_COUNT=1"
+    ENVIRONMENT "SPARK_TEST_FILE=TestSDKGameTypes.cpp;SPARK_TEST_EXPECT_COUNT=1"
     LABELS "module;module-kit;stable-v1;fps;sdk;unit"
     TIMEOUT 60)
 
