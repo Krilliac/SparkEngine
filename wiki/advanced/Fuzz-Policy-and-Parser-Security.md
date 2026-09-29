@@ -29,9 +29,15 @@ DataTable CSV/JSON file reader, dialogue tree file reader, localization catalog 
 and SparkGameFPS snapshot batch decoder. Collaboration frames publish only after a
 complete decode; DataTable and dialogue reject files above their production byte caps
 before allocating for content; dialogue and localization preserve their prior state on
-a failed load; and the FPS runtime uses the same bounded batch decoder as its fuzz
-target. Each target has a production adapter, bounded corpus, and registered smoke.
-These bindings are structural evidence until the Linux sanitizer smokes execute.
+a failed load (a successful localization load still merges over existing entries, and a
+UTF-8 byte order mark is accepted); and the FPS runtime uses the same bounded batch decoder
+as its fuzz target. `StringTable` lives in its own translation unit (`StringTable.cpp`) so
+the localization target links the shipped loader without the language registry. Each
+target has a production adapter, an oracle beyond "does not crash", a bounded corpus with
+a declared regression seed per fixed defect, and a registered smoke. A DataTable campaign
+found that `SaveToCSV` dropped a single-column row whose cell was empty; that fix has its
+own seed and guard test. Local Linux Clang ASan/UBSan smokes are not hosted exact-SHA
+evidence.
 
 The neural CTest uses `-runs=8` to replay all eight reviewed seeds, and the crash-manifest
 CTest replays its six reviewed seeds, under ASan/UBSan without mutating the tracked

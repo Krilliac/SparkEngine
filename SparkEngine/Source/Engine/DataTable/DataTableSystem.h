@@ -516,7 +516,7 @@ namespace Spark::Data
         {
             bool need = false;
             for (char c : f)
-                if (c == ',' || c == '"' || c == '\n')
+                if (c == ',' || c == '"' || c == '\n' || c == '\r')
                 {
                     need = true;
                     break;
