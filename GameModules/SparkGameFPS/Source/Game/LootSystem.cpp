@@ -11,7 +11,6 @@
 
 #include "LootSystem.h"
 #include "Player.h"
-#include "Utils/SparkConsole.h"
 
 #include <algorithm>
 #include <cmath>

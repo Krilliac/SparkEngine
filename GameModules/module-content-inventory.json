@@ -146,11 +146,10 @@
         "SceneManager/SceneManager.h",
         "Utils/EventBus.h",
         "Utils/InvalidStateDetector.h",
-        "Utils/SparkConsole.h",
         "Utils/SparkError.h",
         "Utils/Validate.h"
       ],
-      "privateEngineHeaderCount": 40,
+      "privateEngineHeaderCount": 39,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],

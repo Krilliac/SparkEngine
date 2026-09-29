@@ -5,7 +5,6 @@
 
 #include "MultiplayerSystem.h"
 #include "Core/FPSLog.h"
-#include "Utils/SparkConsole.h"
 
 #include <algorithm>
 #include <cmath>
@@ -140,7 +139,7 @@ namespace SparkFPS
         }
 
         // A client hears Disconnect only from its server endpoint: the session is over.
-        Spark::SimpleConsole::GetInstance().Log("[FPSMultiplayer] Server closed the session");
+        FPS_CONSOLE("[FPSMultiplayer] Server closed the session", "INFO");
         Disconnect();
     }
 

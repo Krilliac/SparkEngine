@@ -13,7 +13,7 @@
 #include "Core/Platform.h"
 #include "FPSConsolePolicy.h"
 
-#include "Utils/SparkConsole.h"
+#include <Spark/IConsole.h>
 #include "Game/Game.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Shader.h"
@@ -25,6 +25,7 @@
 #include "Physics/PhysicsSystem.h"
 #include <optional>
 #include <sstream>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -32,28 +33,31 @@ namespace
 {
     std::vector<std::string> g_advancedCommandNames;
 
+    /// Registers through the host IConsole and remembers only the names the host accepted.
     class TrackedConsoleRegistrar
     {
       public:
-        explicit TrackedConsoleRegistrar(Spark::SimpleConsole& console) : m_console(console) {}
+        explicit TrackedConsoleRegistrar(Spark::IConsole& console) : m_console(console) {}
 
-        template <typename... Args> void RegisterCommand(const std::string& name, Args&&... args)
+        void RegisterCommand(const std::string& name, Spark::IConsole::CommandHandler handler, std::string_view help,
+                             std::string_view category = "General", std::string_view usage = "")
         {
-            m_console.RegisterCommand(name, std::forward<Args>(args)...);
-            g_advancedCommandNames.push_back(name);
+            if (m_console.RegisterCommand(name, std::move(handler), help, category, usage))
+            {
+                g_advancedCommandNames.push_back(name);
+            }
         }
 
       private:
-        Spark::SimpleConsole& m_console;
+        Spark::IConsole& m_console;
     };
 } // namespace
 
 namespace SparkConsole
 {
 
-    void UnregisterAdvancedCommands()
+    void UnregisterAdvancedCommands(Spark::IConsole& console)
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
         for (const auto& commandName : g_advancedCommandNames)
         {
             console.UnregisterCommand(commandName);
@@ -64,7 +68,7 @@ namespace SparkConsole
     /**
  * @brief Register all advanced console commands for the unified GraphicsEngine
  */
-    void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics)
+    void RegisterAdvancedCommands(Spark::IConsole& hostConsole, Game* game, GraphicsEngine* graphics)
     {
         if (graphics == nullptr)
         {
@@ -73,9 +77,8 @@ namespace SparkConsole
         }
         FPS_LOG_INFO("Registering advanced console commands");
 
-        UnregisterAdvancedCommands();
-        auto& simpleConsole = Spark::SimpleConsole::GetInstance();
-        TrackedConsoleRegistrar console(simpleConsole);
+        UnregisterAdvancedCommands(hostConsole);
+        TrackedConsoleRegistrar console(hostConsole);
 
         // ========================================================================
         // TEXTURE SYSTEM COMMANDS (via GraphicsEngine)
@@ -448,7 +451,7 @@ namespace SparkConsole
             },
             "Get comprehensive system metrics");
 
-        simpleConsole.Log("Advanced console commands registered for unified GraphicsEngine", "SUCCESS");
+        hostConsole.Print("Advanced console commands registered for unified GraphicsEngine", "SUCCESS");
     }
 
 } // namespace SparkConsole

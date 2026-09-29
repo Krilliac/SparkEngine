@@ -22,7 +22,6 @@
 #include "WaveSpawner.h"
 #include "ProgressionSystem.h"
 #include "LootSystem.h"
-#include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Game/CubeObject.h"

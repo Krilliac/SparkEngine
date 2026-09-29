@@ -8,7 +8,6 @@
 #include "Game/Enemy.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/Validate.h"
-#include "Utils/SparkConsole.h"
 #include <algorithm>
 #include <iostream>
 #include <memory>

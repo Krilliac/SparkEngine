@@ -37,7 +37,6 @@ using SparkEditor::WeaponType;
 class GraphicsEngine;
 namespace Spark
 {
-    class SimpleConsole;
     class Vehicle;
     class GravitySystem;
     class InteractionSystem;

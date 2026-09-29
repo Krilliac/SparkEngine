@@ -16,7 +16,6 @@
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkError.h"
 #include "Utils/Validate.h"
-#include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/TextureSystem.h"
@@ -35,8 +34,8 @@
 #include "Player.h"
 #include "Projectiles/ProjectilePool.h"
 #include "SceneManager/SceneManager.h"
-#include "Utils/SparkConsole.h"
 #include "Console/AdvancedConsoleCommands.h"
+#include <Spark/IConsole.h>
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
 #include <cmath>
@@ -283,10 +282,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     InitializeEnemies();
     InitializeGameplaySystems();
 
-    /* Register Advanced Console Commands */
-    SparkConsole::RegisterAdvancedCommands(this, m_graphics);
-
-    /* Engine system integration — audio, weather, destruction, dialogue, save */
+    /* Engine system integration — audio, weather, destruction, dialogue, save, advanced console commands */
     if (m_engineContext)
     {
         InitializeEngineSystems();
@@ -368,7 +364,11 @@ void Game::Shutdown()
 
     FPS_CONSOLE("Game::Shutdown called.", "INFO");
 
-    SparkConsole::UnregisterAdvancedCommands();
+    // Same host console InitializeEngineSystems registered the advanced commands on.
+    if (Spark::IConsole* console = m_engineContext ? m_engineContext->GetConsole() : nullptr)
+    {
+        SparkConsole::UnregisterAdvancedCommands(*console);
+    }
 
     // Subscription handles capture this Game. Detach them before destroying any
     // systems those callbacks may access.

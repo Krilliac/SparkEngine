@@ -28,10 +28,6 @@ MODULES = (
     "SparkGameRPG",
     "SparkGameRTS",
 )
-FPS_BOUNDARY_FILES = (
-    "GameModules/SparkGameFPS/Source/Core/Main.cpp",
-    "GameModules/SparkGameFPS/Source/Core/HeadlessPersistence.cpp",
-)
 SOURCE_SUFFIXES = module_content.INCLUDE_SOURCE_SUFFIXES
 PRIVATE_CONSOLE_HEADERS = (
     "Utils/SparkConsole.h",
@@ -105,18 +101,10 @@ class ModuleConsoleBoundaryTests(unittest.TestCase):
             with self.subTest(module=name):
                 self.assertEqual([], _violations(ROOT / "GameModules" / name))
 
-    def test_fps_core_boundary_files_use_public_console_and_logging_surfaces(self) -> None:
-        for relative in FPS_BOUNDARY_FILES:
-            with self.subTest(source=relative):
-                path = ROOT / relative
-                self.assertTrue(path.is_file())
-                self.assertEqual(
-                    [],
-                    _violations_in_text(
-                        relative,
-                        path.read_text(encoding="utf-8", errors="replace"),
-                    ),
-                )
+    def test_fps_sources_use_public_console_surface(self) -> None:
+        # MOD-310: every SparkGameFPS source registers commands and prints through
+        # IEngineContext::GetConsole() and Spark::ModuleLog, never the engine SimpleConsole.
+        self.assertEqual([], _violations(ROOT / "GameModules" / "SparkGameFPS"))
 
     def test_fps_sources_log_through_the_public_sdk(self) -> None:
         sources = sorted(path for path in FPS_SOURCE.rglob("*") if path.is_file() and path.suffix in SOURCE_SUFFIXES)

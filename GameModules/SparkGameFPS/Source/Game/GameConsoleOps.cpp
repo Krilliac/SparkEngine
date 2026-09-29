@@ -19,7 +19,6 @@
 
 #include "Game.h"
 #include "ClassSystem.h"
-#include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Physics/PhysicsSystem.h"

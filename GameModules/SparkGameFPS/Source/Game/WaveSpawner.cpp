@@ -11,7 +11,6 @@
 
 #include "WaveSpawner.h"
 #include "Game.h"
-#include "Utils/SparkConsole.h"
 
 #include <algorithm>
 #include <cmath>

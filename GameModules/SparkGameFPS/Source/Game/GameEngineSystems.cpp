@@ -22,7 +22,8 @@
 #include "Player.h"
 #include "FPSAssetPaths.h"
 #include "FPSQuickLoad.h"
-#include "Utils/SparkConsole.h"
+#include "Console/AdvancedConsoleCommands.h"
+#include <Spark/IConsole.h>
 
 // Engine systems
 #include "Audio/MusicManager.h"
@@ -276,6 +277,14 @@ void Game::InitializeEngineSystems()
         replay->SetRecordInterval(1.0f / 20.0f); // 20 fps recording
         replay->SetMetadata("combat_arena", "freeplay");
         FPS_CONSOLE("Replay: system configured (20fps, combat_arena)", "SUCCESS");
+    }
+
+    // ---- Advanced console commands ------------------------------------
+    // Registered through the host's public console; a host without one gets no commands.
+    // Game::Shutdown removes them from the same console before the module unloads.
+    if (auto* console = m_engineContext->GetConsole())
+    {
+        SparkConsole::RegisterAdvancedCommands(*console, this, m_graphics);
     }
 
     m_engineSystemsInitialized = true;
