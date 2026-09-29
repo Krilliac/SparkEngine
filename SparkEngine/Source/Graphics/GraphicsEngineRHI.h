@@ -10,13 +10,97 @@
 
 #ifndef SPARK_PLATFORM_WINDOWS
 
+#include "../Core/Platform.h"
 #include "RHI/RHI.h"
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace Spark::Graphics::Detail
 {
+
+    /// PerFrameConstants of Shaders/GLSL/BasicVS.glsl and BasicPS.glsl (std140, binding 0).
+    /// Matrices are stored as DirectXMath row-major XMFLOAT4X4, which GLSL reads as the
+    /// transposed column-major matrix: `M * v` in GLSL is `v * M` in DirectXMath.
+    struct BasicFrameConstants
+    {
+        DirectX::XMFLOAT4X4 view;
+        DirectX::XMFLOAT4X4 projection;
+        DirectX::XMFLOAT4X4 viewProjection;
+        DirectX::XMFLOAT3 cameraPosition;
+        float time;
+        DirectX::XMFLOAT3 cameraDirection;
+        float deltaTime;
+        DirectX::XMFLOAT2 screenResolution;
+        DirectX::XMFLOAT2 invScreenResolution;
+        DirectX::XMFLOAT3 lightDirection;
+        float lightIntensity;
+        DirectX::XMFLOAT3 lightColor;
+        float ambientIntensity;
+        DirectX::XMFLOAT3 ambientColor;
+        float padding;
+    };
+    static_assert(sizeof(BasicFrameConstants) == 288, "must match the std140 PerFrameConstants block");
+
+    /// PerObjectConstants of BasicVS.glsl / BasicPS.glsl (std140, binding 1).
+    struct BasicObjectConstants
+    {
+        DirectX::XMFLOAT4X4 world;
+        DirectX::XMFLOAT4X4 worldViewProjection;
+        DirectX::XMFLOAT4X4 worldInverseTranspose;
+        DirectX::XMFLOAT4X4 previousWorld;
+        DirectX::XMFLOAT3 objectPosition;
+        float objectScale;
+        DirectX::XMFLOAT4 objectColor;
+        DirectX::XMFLOAT4 materialProperties; ///< x metallic, y roughness, z emissive, w alpha
+        DirectX::XMFLOAT4 uvTiling;           ///< xy tiling, zw offset
+    };
+    static_assert(sizeof(BasicObjectConstants) == 320, "must match the std140 PerObjectConstants block");
+
+    /// PerMaterialConstants of BasicPS.glsl (std140, binding 2).
+    struct BasicMaterialConstants
+    {
+        DirectX::XMFLOAT4 albedoColor;
+        float metallicFactor;
+        float roughnessFactor;
+        float normalScale;
+        float occlusionStrength;
+        float emissiveFactor;
+        float alphaCutoff;
+        float padding[2];
+    };
+    static_assert(sizeof(BasicMaterialConstants) == 48, "must match the std140 PerMaterialConstants block");
+
+    /**
+     * @brief Resources of the Linux/macOS forward draw-list pass (GraphicsEngine::ProcessDrawList).
+     *
+     * Contract:
+     *   - Thread affinity: game thread only (the thread that records the frame).
+     *   - Ownership: owned by LinuxRHIState; created by GraphicsEngine::InitializeBasicShaders
+     *     after the bridge is up, released by GraphicsEngine::Shutdown before the bridge shuts down.
+     *   - Allocation: none per draw. `objectConstants` holds one PerObjectConstants buffer per
+     *     draw of the largest frame seen so far and grows only when a frame exceeds that count.
+     *     One buffer per draw is required because Vulkan reads a constant buffer when the
+     *     command buffer executes, so rewriting a single buffer between draws of one frame
+     *     would give every draw the last transform.
+     *   - Scalability: suitable for the basic forward path (hundreds of draws); instancing and
+     *     GPU-driven submission are D3D11-only today.
+     *
+     * A draw is recorded only with `pipeline` bound. Without it ProcessDrawList rejects the
+     * frame's draws, counts them in `rejectedDraws` and logs an error, and never records an
+     * unbound draw. On NullRHI the pipeline is built without shaders (the null device records
+     * no GPU work), so headless runs keep recording their draws.
+     */
+    struct BasicForwardPass
+    {
+        std::unique_ptr<Spark::RHI::IRHIPipelineState> pipeline;
+        std::unique_ptr<Spark::RHI::IRHIBuffer> frameConstants;
+        std::unique_ptr<Spark::RHI::IRHIBuffer> materialConstants;
+        std::vector<std::unique_ptr<Spark::RHI::IRHIBuffer>> objectConstants;
+        std::unique_ptr<Spark::RHI::IRHISampler> sampler;
+        uint64_t rejectedDraws = 0;
+    };
 
     struct LinuxRHIState
     {
@@ -47,6 +131,9 @@ namespace Spark::Graphics::Detail
 
         // Shared 1x1 white fallback used by the basic material path.
         std::unique_ptr<Spark::RHI::IRHITexture> defaultTexture;
+
+        // Pipeline, constant buffers and sampler of the forward draw-list pass.
+        BasicForwardPass basicForward;
     };
 
     inline LinuxRHIState& GetRHI()

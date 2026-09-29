@@ -298,7 +298,16 @@ class GraphicsEngine
      *
      * Iterates the per-frame draw list, binds meshes and materials through the
      * AssetPipeline, updates per-object constants, and issues draw calls. The
-     * draw list is cleared after processing.
+     * draw list is cleared after processing. RenderScene calls it every frame
+     * (the render-graph pipeline calls it from its geometry pass instead).
+     *
+     * Contract: game thread, inside BeginFrame/EndFrame. On Linux/macOS it is the
+     * forward pass of the RHI bridge: it binds the basic_vs/basic_ps pipeline,
+     * uploads the per-frame constants once and each draw's per-object constants
+     * into a per-draw buffer that is reused across frames, so steady-state frames
+     * allocate nothing. Draws are counted by the RHI backend, not here. Without
+     * the pipeline the frame's draws are rejected (counted and logged), never
+     * recorded unbound.
      *
      * @param viewMatrix  Camera view matrix for the current frame.
      * @param projMatrix  Camera projection matrix for the current frame.

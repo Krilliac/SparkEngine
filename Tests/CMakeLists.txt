@@ -209,6 +209,7 @@ add_executable(SparkTests
     TestSoftwareRendering.cpp
     TestRHI240OpenGLReal.cpp
     TestRHI240OpenGLGoldenReal.cpp
+    TestRHI240LinuxForwardPassReal.cpp
     TestRenderCommandRing.cpp
     TestMultiISADispatch.cpp
     TestConstantBufferDiff.cpp
@@ -1901,6 +1902,27 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
             RUN_SERIAL TRUE
             TIMEOUT 240)
     endif()
+
+    # RHI-240: the Linux forward draw-list pass (GraphicsEngine::ProcessDrawList) renders a
+    # submitted cube through its bound pipeline on a real SDL2 OpenGL window on llvmpipe, read
+    # back from the back buffer. The window needs an X server, so the lane always runs under
+    # xvfb-run when it exists; without one SDL_Init fails and SPARK_REQUIRE_OPENGL=1 fails the
+    # lane instead of skipping it. Software-rasterizer forward-pass evidence only.
+    if(SPARK_PACKAGE_HAS_SDL2)
+        find_program(SPARK_XVFB_RUN_EXECUTABLE xvfb-run)
+        set(_spark_forward_pass_display)
+        if(SPARK_XVFB_RUN_EXECUTABLE)
+            set(_spark_forward_pass_display "${SPARK_XVFB_RUN_EXECUTABLE}" -a -s "-screen 0 1280x720x24")
+        endif()
+        add_test(NAME LinuxForwardPassOpenGL
+            COMMAND ${_spark_forward_pass_display} $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(LinuxForwardPassOpenGL PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=LinuxForwardPass_OpenGL;SPARK_TEST_EXPECT_COUNT=1;SPARK_REQUIRE_OPENGL=1;LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;SDL_AUDIODRIVER=dummy"
+            LABELS "opengl;llvmpipe"
+            RUN_SERIAL TRUE
+            TIMEOUT 120)
+        spark_exclude_from_main_suite(LinuxForwardPass_OpenGL)
+    endif()
 endif()
 add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
@@ -2623,6 +2645,26 @@ if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET Spar
     # with SPARK_VULKAN_SUPPORT and the SPIR-V build, so the registration floor
     # does not count them.
     spark_exclude_from_main_suite(VulkanGolden_RHI230_)
+
+    # RHI-230: the Linux forward draw-list pass on a real SDL2 Vulkan window on Lavapipe, with
+    # VK_LAYER_KHRONOS_validation forced on by the test and zero validation errors required.
+    # Same display rule as LinuxForwardPassOpenGL (xvfb-run when present, else fail under
+    # SPARK_REQUIRE_VULKAN_VALIDATION=1).
+    if(SPARK_PACKAGE_HAS_SDL2)
+        find_program(SPARK_XVFB_RUN_EXECUTABLE xvfb-run)
+        set(_spark_forward_pass_display)
+        if(SPARK_XVFB_RUN_EXECUTABLE)
+            set(_spark_forward_pass_display "${SPARK_XVFB_RUN_EXECUTABLE}" -a -s "-screen 0 1280x720x24")
+        endif()
+        add_test(NAME LinuxForwardPassVulkan
+            COMMAND ${_spark_forward_pass_display} $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(LinuxForwardPassVulkan PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=LinuxForwardPass_Vulkan;SPARK_TEST_EXPECT_COUNT=1;SPARK_REQUIRE_VULKAN_VALIDATION=1;SDL_AUDIODRIVER=dummy"
+            LABELS "vulkan;vulkan-validation"
+            RUN_SERIAL TRUE
+            TIMEOUT 120)
+        spark_exclude_from_main_suite(LinuxForwardPass_Vulkan)
+    endif()
 endif()
 
 foreach(_remote_admin_selector IN ITEMS

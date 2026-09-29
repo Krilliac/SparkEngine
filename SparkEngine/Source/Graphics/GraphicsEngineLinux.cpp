@@ -121,6 +121,12 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     if (FAILED(CreateDefaultTexture()))
         SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GraphicsEngine (Linux): default material texture unavailable");
 
+    // Pipeline, constant buffers and sampler of the forward draw-list pass (ProcessDrawList).
+    // Without them the pass rejects its draws instead of recording them unbound.
+    if (FAILED(InitializeBasicShaders()))
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "GraphicsEngine (Linux): basic forward pipeline unavailable; mesh draws will be rejected");
+
     // Create subsystems
     m_textureSystem = std::make_unique<TextureSystem>();
     m_materialSystem = std::make_unique<MaterialSystem>();
@@ -362,6 +368,10 @@ void GraphicsEngine::Shutdown()
     // the bridge's registry stores non-owning pointers and must not be left
     // dangling. Calling RegisterRenderTarget(slot, nullptr) clears the slot.
     ReleasePlatformRenderTargets();
+    // The GPU may still read the forward pass's pipeline and buffers from the last frame.
+    if (Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice())
+        device->WaitForIdle();
+    rhi.basicForward = BasicForwardPass{};
     rhi.defaultTexture.reset();
 
     rhi.bridge.Shutdown();
