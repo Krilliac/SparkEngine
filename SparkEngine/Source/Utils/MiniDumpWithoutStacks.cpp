@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 
 namespace Spark::CrashDump
 {
@@ -38,10 +39,19 @@ namespace Spark::CrashDump
                     removal->overflow = true;
                     return TRUE;
                 }
-                const ULONG64 low = (std::min)(input->Thread.StackBase, input->Thread.StackEnd);
+                ULONG64 low = (std::min)(input->Thread.StackBase, input->Thread.StackEnd);
                 const ULONG64 high = (std::max)(input->Thread.StackBase, input->Thread.StackEnd);
+                // Remove the whole stack reservation, not just [StackEnd, StackBase). Which stack
+                // pointer DbgHelp reports here and which one it copies from can differ for the
+                // dumping thread (the supplied exception context versus its own live one), and
+                // the pages below either still hold returned frames' locals.
+                MEMORY_BASIC_INFORMATION region{};
+                if (high > low && VirtualQuery(reinterpret_cast<LPCVOID>(static_cast<ULONG_PTR>(high - 1)), &region,
+                                               sizeof(region)) != 0)
+                    low = (std::min)(low, reinterpret_cast<ULONG64>(region.AllocationBase));
                 removal->base[removal->count] = low;
-                removal->size[removal->count] = static_cast<ULONG>(high - low);
+                removal->size[removal->count] =
+                    static_cast<ULONG>((std::min)(high - low, ULONG64{(std::numeric_limits<ULONG>::max)()}));
                 ++removal->count;
             }
             else if (input->CallbackType == RemoveMemoryCallback)

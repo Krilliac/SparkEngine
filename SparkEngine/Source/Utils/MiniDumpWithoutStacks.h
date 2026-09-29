@@ -5,8 +5,10 @@
  * Thread stacks hold live locals (passwords, SCRAM keys, session tokens). MiniDumpNormal copies
  * them, MiniDumpFilterMemory still copies them verbatim, and DbgHelp ignores a cleared
  * ThreadWriteStack flag, so the only reliable way to keep them out is to hand every thread's
- * stack range back through RemoveMemoryCallback. Registers, the instruction window, the module
- * and thread lists and the exception record stay in the dump.
+ * stack back through RemoveMemoryCallback. The whole reservation goes (from its allocation base to
+ * StackBase), so neither the stack pointer DbgHelp picks for the dumping thread nor stale frames
+ * below it can put stack bytes in the file. Registers, the instruction window, the module and
+ * thread lists and the exception record stay in the dump.
  *
  * Contract: Windows only. Crash-path safe: no allocation (fixed storage for 1024 threads).
  * Not reentrant: callers serialize through Spark::StackTrace::SymbolLockLease, which every

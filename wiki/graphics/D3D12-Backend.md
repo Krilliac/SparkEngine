@@ -141,7 +141,12 @@ second into a reset list) and checks the second:
 - **Same adapter:** D3D11 takes the default adapter and D3D12 the
   largest-VRAM hardware adapter (WARP without one). Both adapters are logged;
   unless their LUIDs match or both are software adapters, the scene fails, so a
-  hybrid iGPU + dGPU host cannot compare two GPUs.
+  hybrid iGPU + dGPU host cannot compare two GPUs. WARP counts as software
+  however DXGI flags it: on a GPU-less hosted runner D3D11's hardware driver
+  type lands on the Microsoft Basic Render Driver (VendorId 0x1414, DeviceId
+  0x8C) without `DXGI_ADAPTER_FLAG_SOFTWARE` and with its own LUID, while
+  D3D12 uses `EnumWarpAdapter`. Before this was recognised, all 12 scenes failed
+  this check on hosted runners without rendering (run at `3d330173c`).
 
 These are cross-backend checks, not goldens: there are no baseline images and
 no owner-reviewed thresholds. A scene whose D3D12 feature is missing fails; no
@@ -172,8 +177,9 @@ and reverted: forcing the D3D12 sampler filter to point sampling fails
 `TexturedQuadLinear` (3,072 pixels beyond tolerance); making
 `SetConstantBuffer` a no-op fails `ConstantBufferColor` and
 `ShippedBloomExtract`; dropping the static-buffer upload copy fails
-`IndexedInstanced`. Hosted runners exercise WARP instead, which is not yet
-observed. Found on the way: `D3D11Device::CreateShader` passes `debugName` to
+`IndexedInstanced`. Hosted runners exercise WARP instead; WARP frames have not
+yet been observed, because the first hosted run stopped at the same-adapter
+check. Found on the way: `D3D11Device::CreateShader` passes `debugName` to
 `D3DCompile` as the source name and returns null without logging when it is
 empty, so the scenes set a debug name.
 

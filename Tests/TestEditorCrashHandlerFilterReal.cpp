@@ -19,9 +19,13 @@
 #include "Utils/StackTrace.h"
 
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iterator>
+#include <random>
+#include <span>
 #include <string>
 
 #ifdef _WIN32
@@ -102,6 +106,18 @@ namespace
         LPTOP_LEVEL_EXCEPTION_FILTER current = SetUnhandledExceptionFilter(nullptr);
         SetUnhandledExceptionFilter(current);
         return current;
+    }
+
+    /** @brief Memory ranges held in the MemoryListStream of the minidump image @p dump. */
+    std::span<const MINIDUMP_MEMORY_DESCRIPTOR> DumpMemoryRanges(const std::string& dump)
+    {
+        void* stream = nullptr;
+        ULONG streamSize = 0;
+        if (!MiniDumpReadDumpStream(const_cast<char*>(dump.data()), MemoryListStream, nullptr, &stream, &streamSize) ||
+            streamSize < sizeof(ULONG32))
+            return {};
+        const auto* list = static_cast<const MINIDUMP_MEMORY_LIST*>(stream);
+        return {list->MemoryRanges, list->NumberOfMemoryRanges};
     }
 } // namespace
 
@@ -230,7 +246,9 @@ TEST(EditorCrashHandler_DefaultDumpExcludesFullMemory)
 // dump (same type, raw MiniDumpWriteDump) must contain it, which proves the scan can see a leak.
 TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
 {
-    const std::string canary = "SPARKEDITORCANARY-7f3a91c2d4e5b608";
+    // Built at run time, so the image's read-only data holds no copy: the only ones are this stack
+    // array and the string's heap buffer.
+    const std::string canary = std::format("SPARKEDITORCANARY-{:016x}", std::random_device{}() * 0x9E3779B97F4A7C15ull);
     volatile char stackSecret[64] = {};
     for (size_t index = 0; index < canary.size(); ++index)
         stackSecret[index] = canary[index];
@@ -273,7 +291,34 @@ TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
 
     const std::string filtered = writeDump(std::filesystem::path(dir.Path()) / "editor.dmp", true);
     ASSERT_FALSE(filtered.empty());
-    EXPECT_TRUE(filtered.find(canary) == std::string::npos);
+
+    // No byte of this thread's stack reservation may reach the dump, whichever stack pointer DbgHelp
+    // copied from and whatever stale frames lie below it.
+    ULONG_PTR stackLow = 0;
+    ULONG_PTR stackHigh = 0;
+    GetCurrentThreadStackLimits(&stackLow, &stackHigh);
+    const auto ranges = DumpMemoryRanges(filtered);
+    ASSERT_FALSE(ranges.empty());
+    for (const MINIDUMP_MEMORY_DESCRIPTOR& range : ranges)
+    {
+        const ULONG64 start = range.StartOfMemoryRange;
+        const ULONG64 end = start + range.Memory.DataSize;
+        const bool overlapsStack = start < stackHigh && end > stackLow;
+        if (overlapsStack)
+            std::printf("  dump range [0x%llx, 0x%llx) overlaps this thread's stack [0x%llx, 0x%llx)\n", start, end,
+                        static_cast<ULONG64>(stackLow), static_cast<ULONG64>(stackHigh));
+        EXPECT_FALSE(overlapsStack);
+    }
+
+    // On failure, name the address the secret came from so another DbgHelp build is diagnosable.
+    const size_t leak = filtered.find(canary);
+    for (const MINIDUMP_MEMORY_DESCRIPTOR& range : ranges)
+    {
+        if (leak != std::string::npos && leak >= range.Memory.Rva && leak - range.Memory.Rva < range.Memory.DataSize)
+            std::printf("  canary at dump offset 0x%zx = address 0x%llx\n", leak,
+                        range.StartOfMemoryRange + (leak - range.Memory.Rva));
+    }
+    EXPECT_TRUE(leak == std::string::npos);
     EXPECT_EQ(stackSecret[0], 'S');
 }
 
