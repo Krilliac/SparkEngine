@@ -263,6 +263,25 @@ namespace SparkInstaller
         }
 
         std::error_code renameError;
+        std::error_code statusError;
+        const fs::file_status existingStatus = fs::symlink_status(path, statusError);
+        if (statusError && statusError != std::errc::no_such_file_or_directory)
+        {
+            removeTemporary();
+            return false;
+        }
+        // symlink_status reports dangling links as a present path too; do not
+        // let a replacement follow or overwrite one.
+        const auto existingType = existingStatus.type();
+        const bool hadExistingMarker = existingType != fs::file_type::not_found && existingType != fs::file_type::none;
+        if (hadExistingMarker && !fs::is_regular_file(existingStatus))
+        {
+            removeTemporary();
+            return false;
+        }
+        // Rename is atomic for the marker replacement on the supported
+        // filesystems. Non-regular targets were rejected above so a directory
+        // or link cannot be displaced by the new marker.
         fs::rename(temporaryPath, path, renameError);
         if (renameError)
         {

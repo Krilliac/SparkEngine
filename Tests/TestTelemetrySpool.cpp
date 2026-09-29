@@ -365,6 +365,77 @@ TEST(Telemetry_SpoolRecovery_UpdateRetriesAtBoundary)
     EXPECT_FALSE(fs::exists(spool.Artifact()));
 }
 
+TEST(Telemetry_SpoolRecovery_AgeBound)
+{
+    TempTelemetrySpool fixture("age-bound");
+    Spark::TelemetryDetail::TelemetrySpool spool;
+    ASSERT_TRUE(spool.Configure(fixture.Root().string(), 4096, 8, 1000) ==
+                Spark::TelemetryDetail::TelemetrySpoolResult::Success);
+
+    constexpr uint64_t now = 10000;
+    Spark::TelemetryEvent stale;
+    stale.name = "stale";
+    stale.timestamp = now - 1001;
+    stale.sessionId = "session_age";
+    stale.sequence = 1;
+    Spark::TelemetryEvent fresh;
+    fresh.name = "fresh";
+    fresh.timestamp = now - 1000;
+    fresh.sessionId = "session_age";
+    fresh.sequence = 2;
+    // A backwards wall-clock step within the bound keeps the event.
+    Spark::TelemetryEvent skewed = fresh;
+    skewed.name = "skewed";
+    skewed.sequence = 3;
+    skewed.timestamp = now + 1000;
+    Spark::TelemetryEvent future = fresh;
+    future.sequence = 4;
+    future.timestamp = now + 1001;
+    Spark::TelemetryEvent undated = fresh;
+    undated.sequence = 5;
+    undated.timestamp = 0;
+    std::vector<Spark::TelemetryEvent> restored{stale, fresh, skewed, future, undated};
+    std::vector<uint64_t> dropped;
+    EXPECT_EQ(spool.Constrain(restored, &dropped, now), 3u);
+    ASSERT_EQ(restored.size(), 2u);
+    EXPECT_EQ(restored[0].name, std::string("fresh"));
+    EXPECT_EQ(restored[1].name, std::string("skewed"));
+    ASSERT_EQ(dropped.size(), 3u);
+    EXPECT_EQ(dropped[0], 1u);
+    EXPECT_EQ(dropped[1], 4u);
+    EXPECT_EQ(dropped[2], 5u);
+}
+
+TEST(Telemetry_SpoolRecovery_ExpiredRestoreAccounting)
+{
+    TempTelemetrySpool fixture("expired-restore");
+    Spark::TelemetryDetail::TelemetrySpool spool;
+    ASSERT_TRUE(spool.Configure(fixture.Root().string(), 4096, 8) ==
+                Spark::TelemetryDetail::TelemetrySpoolResult::Success);
+    Spark::TelemetryEvent expired;
+    expired.name = "expired";
+    expired.timestamp = 1;
+    expired.sessionId = "session_expired";
+    expired.sequence = 100;
+    ASSERT_TRUE(spool.Store({expired}) == Spark::TelemetryDetail::TelemetrySpoolResult::Success);
+
+    auto& telemetry = Spark::TelemetrySystem::GetInstance();
+    TelemetryReset reset(telemetry);
+    auto config = MakeSpoolConfig(fixture.Root());
+    telemetry.Initialize(config);
+    EXPECT_EQ(telemetry.GetDeliveryStats().droppedEvents, 1u);
+    EXPECT_EQ(telemetry.GetDeliveryStats().queuedEvents, 0u);
+    EXPECT_FALSE(fs::exists(fixture.Artifact()));
+    auto backend = std::make_shared<BackendState>();
+    telemetry.RegisterBackend(
+        std::make_unique<FixedResultTelemetryBackend>(Spark::TelemetryDeliveryResult::Delivered, backend));
+    telemetry.RecordEvent("after-expiry");
+    telemetry.FlushEvents();
+    ASSERT_EQ(backend->Events().size(), 1u);
+    EXPECT_GT(backend->Events().front().sequence, expired.sequence);
+    EXPECT_EQ(telemetry.GetDeliveryStats().droppedEvents, 1u);
+}
+
 TEST(Telemetry_SpoolRecovery_CapDropAccounting)
 {
     auto& telemetry = Spark::TelemetrySystem::GetInstance();

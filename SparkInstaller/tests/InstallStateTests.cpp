@@ -95,6 +95,43 @@ namespace
         return failures;
     }
 
+    int RunNonRegularMarkerCannotBeReplacedTest()
+    {
+        const auto root = MakeTestRoot();
+        std::error_code error;
+        std::filesystem::create_directories(root, error);
+        int failures = Check(!error, "could not create non-regular-marker test root");
+        if (failures != 0)
+        {
+            return failures;
+        }
+
+        const auto marker = root / SparkInstaller::InstallState::FileName();
+        const auto replacement = StateWithCommit("replacement-commit");
+        std::filesystem::create_directory(marker, error);
+        failures += Check(!error, "could not create marker directory fixture");
+        failures += Check(!replacement.Save(root.string()), "marker directory was replaced");
+        failures += Check(std::filesystem::is_directory(marker), "marker directory fixture was removed");
+
+        std::filesystem::remove_all(root, error);
+        std::filesystem::create_directories(root, error);
+        const auto danglingTarget = root / "missing-target.json";
+        std::filesystem::create_symlink(danglingTarget, marker, error);
+        if (error)
+        {
+            // Unprivileged Windows hosts without Developer Mode cannot create
+            // symlinks; the directory case above still covers non-regular markers.
+            std::cout << "SKIP: dangling marker link case (" << error.message() << ")\n";
+            std::filesystem::remove_all(root, error);
+            return failures;
+        }
+        failures += Check(!replacement.Save(root.string()), "dangling marker link was replaced");
+        failures += Check(std::filesystem::is_symlink(marker), "dangling marker link was removed");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+
     int RunMalformedMarkerFailClosedTest()
     {
         const auto root = MakeTestRoot();
@@ -128,16 +165,15 @@ namespace
             return failures;
 
         std::ofstream marker(root / SparkInstaller::InstallState::FileName(), std::ios::binary | std::ios::trunc);
-        marker << '{'
-               << "\"schema\":1,\"ref\":\"stable-v1\",\"commit\":\"0123456789abcdef\","
+        marker << '{' << "\"schema\":1,\"ref\":\"stable-v1\",\"commit\":\"0123456789abcdef\","
                << "\"destination\":\"C:/SparkEngine\",\"generator\":\"Ninja\","
                << "\"build_type\":\"Release\",\"built_at\":\"2026-09-13T00:00:00Z\","
                << "\"installer_version\":\"1.0.0\",\"payload\":\"" << std::string(64 * 1024, 'x') << "\"}";
         marker.close();
 
         SparkInstaller::InstallState loaded;
-        failures += Check(!SparkInstaller::InstallState::Load(root.string(), loaded),
-                          "oversized install state was accepted");
+        failures +=
+            Check(!SparkInstaller::InstallState::Load(root.string(), loaded), "oversized install state was accepted");
         failures += Check(!SparkInstaller::InstallState::Exists(root.string()),
                           "oversized install state was treated as an existing install");
 
@@ -150,9 +186,14 @@ int main()
 {
     const int atomicReplacement = RunAtomicReplacementTest();
     const int invalidState = RunInvalidStateCannotReplaceValidMarkerTest();
+    const int nonRegularMarker = RunNonRegularMarkerCannotBeReplacedTest();
     const int malformedMarker = RunMalformedMarkerFailClosedTest();
     const int oversizedMarker = RunOversizedMarkerRejectedBeforeParsingTest();
-    if (atomicReplacement == 0 && invalidState == 0 && malformedMarker == 0 && oversizedMarker == 0)
+    if (atomicReplacement == 0 && invalidState == 0 && nonRegularMarker == 0 && malformedMarker == 0 &&
+        oversizedMarker == 0)
         std::cout << "SparkInstaller install-state recovery tests passed\n";
-    return atomicReplacement == 0 && invalidState == 0 && malformedMarker == 0 && oversizedMarker == 0 ? 0 : 1;
+    return atomicReplacement == 0 && invalidState == 0 && nonRegularMarker == 0 && malformedMarker == 0 &&
+                   oversizedMarker == 0
+               ? 0
+               : 1;
 }
