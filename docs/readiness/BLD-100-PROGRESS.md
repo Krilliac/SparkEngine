@@ -131,3 +131,72 @@ is empty in this shell. No engine CMake build, full engine image scan, Windows
 entry-point rebuild, Linux suite, below-floor hardware run, hosted Windows job
 or exact-commit CI was performed. No work-item JSON, generated handoff, owner
 decision or fuzz-policy file was edited.
+
+## 2026-09-29 libsodium floor and per-source flag scan (local lane)
+
+**libsodium on MSVC.** The MSVC branch of `cmake/SparkLibsodium.cmake` now
+compiles no libsodium variant above the OD-04 floor, which matches the non-MSVC
+branch. On MSVC x64, `private/common.h` (lines 240-260 at the pinned revision)
+defines `HAVE_AVXINTRIN_H`, `HAVE_WMMINTRIN_H`, `HAVE_AVX2INTRIN_H` and
+`HAVE_AVX512FINTRIN_H` unconditionally, so a compile definition cannot turn them
+off. Every `spark_sodium` source now force-includes (`/FI`) a generated
+`spark_sodium_cpu_floor.h`. That header includes `common.h`, whose include guard
+makes each source's own include a no-op, and then undefines the four macros. As
+a result the AVX, AVX2, AVX-512 and AES-NI/PCLMUL implementation files compile
+empty, the dispatchers never select them, and `runtime.c` reports none of them.
+ChaCha20 keeps its SSSE3 path and argon2 keeps its SSSE3 fill-block path. The
+engine uses no AES-GCM, AEGIS or ipcrypt.
+
+`TEST(CpuFloor_Libsodium_AboveFloorVariantsExcluded)` in
+`Tests/TestNET100Libsodium.cpp`, registered as CTest `CpuFloor_LibsodiumVariants`
+(exact count 1), asserts that after `sodium_init()` libsodium reports no AVX,
+AVX2, AVX-512F, AES-NI, PCLMUL or RDRAND, that `crypto_aead_aes256gcm_is_available()`
+is 0, and that SSE2 is 1. Before the change it failed 6 assertions on this
+lane's Ryzen 9 9900X3D MSVC 14.44 build (the lane's earlier RED run). After the
+change it passes on MSVC windows-release. It also passes on WSL
+linux-gcc-release (GCC 14.3, `ENABLE_LTO=OFF`), whose non-MSVC branch never
+compiled these variants; `CpuFloor_IsaBaseline` (ELF) passes there too.
+`NetworkSecurity_*` (11 CTests,
+including the libsodium RFC 8439 vector, handshake and tamper cases) and
+`Tests.Tools.test_network_security_csprng` (10 cases) still pass on MSVC. The
+test only has force on a host with AVX2 or AES-NI, which every local and hosted
+runner has.
+
+PE ISA scan of the rebuilt windows-release images (ENABLE_LTO=ON, MSVC 14.44,
+`tools/check_isa_baseline.py --pdb`), compared with the 2026-09-28 numbers:
+
+| Image | 2026-09-28 | 2026-09-29 | Residual by PDB module |
+|---|---|---|---|
+| SparkServer.exe | 1098 | 152 | vector_algorithms.obj 116; NetworkEncryption.obj 16; GatewayAreaControl.obj 13; PasswordHash.obj 4; ServerApplication.obj 3 (LZCNT) |
+| SparkEngine.exe | 1361 | 415 | vector_algorithms.obj 355; NetworkEncryption.obj 16; cgltf_impl.obj 12; SparkEngineWindows.obj 13; SparkEngineWindowsHeadless.obj 4 (LZCNT); rest below 4 each |
+| SparkEditor.exe | 1356 (1 AVX-512) | 409 (0 AVX-512) | vector_algorithms.obj 351; NetworkEncryption.obj 16; cgltf_impl.obj 12; EditorProcessLaunch.obj 8; PasswordHash.obj 4; others 1-3 each |
+| SparkGame.dll | 1030 | 84 | vector_algorithms.obj 76; ShowcaseLocalization.obj 5; SaveSystem.obj 2 and GameplayShowcase.obj 1 (LZCNT) |
+
+No residual instruction maps to a `spark_sodium` module. The 16 VEX
+instructions in NetworkEncryption.obj and the 4 in PasswordHash.obj are now
+MSVC's own auto-vectorized `vpsrlvq`/`vpsllvq` paths. They are guarded by
+`cmp $5, __isa_available; jl` (inspected at 0x14013f040 in SparkServer.exe),
+which puts them in the same class as the inline `__isa_available` dispatch
+described on 2026-09-28. They are not libsodium code. The single "FMA" in
+SparkEditor.exe (InspectorPanel.obj) decodes as `vfnmadd132ph (%r30), %xmm28`,
+which uses APX/AVX-512 registers. It is probably data decoded as code, but this
+has not been confirmed. Because the other residual classes remain,
+`CpuFloor_IsaBaseline` stays ELF-only and the criterion stays unmet for Windows.
+
+**Per-source-file flags.** `spark_assert_cpu_floor()` now also reads the
+`COMPILE_OPTIONS`, `COMPILE_FLAGS` and `COMPILE_DEFINITIONS` of every source of
+every non-INTERFACE target. It reads them in the target's directory scope
+(`TARGET_DIRECTORY`), skips generator-expression entries such as
+`$<TARGET_OBJECTS:...>`, and reports `<target> <source> <PROP>: <flag>`.
+`Tests/Tools/test_cpu_floor.py` gains six real-configuration cases: options,
+flags, definitions, a property set from another directory, floor-level flags
+with a `$<TARGET_OBJECTS>` entry, and the `SPARK_NATIVE_ARCH=ON` stand-down.
+All six fail against the previous module, and the whole suite (16 cases) passes.
+The real trees still configure. windows-release scans 86 targets and 3936
+target sources, windows-shipping scans 33 targets and 2302 sources, and WSL
+linux-gcc-release (GCC 14.3) scans 94 targets and 4072 sources. No ThirdParty source carries an above-floor per-source flag. Under
+`--profiling-output` the whole `spark_assert_cpu_floor()` call took 1.9 s of a
+156 s windows-release reconfigure.
+
+Not done: no hosted run, no MinSizeRel windows-shipping image scan, and no run
+on below-floor hardware or an emulator. No work-item JSON was edited.
