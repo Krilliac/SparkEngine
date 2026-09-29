@@ -40,6 +40,53 @@ def _entry(scene: str, row: str, sha: str, reviewer: str, **overrides: Any) -> d
     return entry
 
 
+class GoldenReviewPureTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.base = {
+            ("PassA", "d3d11-warp"): _entry("PassA", "d3d11-warp", "a", REVIEWED),
+        }
+
+    def test_pending_changed_entry_is_rejected(self) -> None:
+        head = dict(self.base)
+        head[("PassA", "d3d11-warp")] = _entry("PassA", "d3d11-warp", "b", PENDING)
+        errors, checked = check_golden_review.review_errors(
+            self.base, head, [("PassA", "d3d11-warp")],
+        )
+        self.assertEqual(checked, 1)
+        self.assertTrue(any("explicit reviewed" in error for error in errors))
+
+    def test_stale_reviewer_is_rejected(self) -> None:
+        head = dict(self.base)
+        head[("PassA", "d3d11-warp")] = _entry("PassA", "d3d11-warp", "b", REVIEWED)
+        errors, _ = check_golden_review.review_errors(
+            self.base, head, [("PassA", "d3d11-warp")],
+        )
+        self.assertTrue(any("reviewer record is unchanged" in error for error in errors))
+
+    def test_new_pending_baseline_cannot_self_author_review(self) -> None:
+        for reviewer in (PENDING, PENDING.replace("owner review pending", "Owner  Review Pending")):
+            entry = _entry("PassC", "d3d11-warp", "b", reviewer)
+            errors, checked = check_golden_review.review_errors({}, {("PassC", "d3d11-warp"): entry}, [])
+            self.assertEqual(checked, 1)
+            self.assertTrue(any("explicit reviewed" in error for error in errors))
+
+    def test_deletion_without_tombstone_is_rejected(self) -> None:
+        for pngs in ([], [("PassA", "d3d11-warp")]):
+            errors, checked = check_golden_review.review_errors(self.base, {}, pngs)
+            self.assertEqual(checked, 0)
+            self.assertTrue(any("deletion record" in error for error in errors))
+
+    def test_changed_entry_with_new_review_is_accepted(self) -> None:
+        head = dict(self.base)
+        head[("PassA", "d3d11-warp")] = _entry(
+            "PassA", "d3d11-warp", "b", REVIEWED.replace("2026-09-01", "2026-09-02"),
+        )
+        errors, checked = check_golden_review.review_errors(
+            self.base, head, [("PassA", "d3d11-warp")],
+        )
+        self.assertEqual((errors, checked), ([], 1))
+
+
 class GoldenReviewGateTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -99,7 +146,10 @@ class GoldenReviewGateTests(unittest.TestCase):
 
     def test_png_and_hash_change_with_new_reviewer_is_accepted(self) -> None:
         self.write_png("PassA", b"png-a-v2")
-        self.entries[0].update(baselineSha256="c" * 64, reviewer=PENDING.replace("RHI-210", "RHI-210 v2"))
+        self.entries[0].update(
+            baselineSha256="c" * 64,
+            reviewer=REVIEWED.replace("2026-09-01", "2026-09-02"),
+        )
         self.commit("rebaseline")
         code, out, err = self.run_gate()
         self.assertEqual(0, code, err)
@@ -124,19 +174,28 @@ class GoldenReviewGateTests(unittest.TestCase):
 
     def test_new_entry_is_checked_and_accepted(self) -> None:
         self.write_png("PassC", b"png-c")
-        self.entries.append(_entry("PassC", "d3d11-warp", "f", PENDING))
+        self.entries.append(_entry(
+            "PassC", "d3d11-warp", "f",
+            REVIEWED.replace("2026-09-01", "2026-09-02"),
+        ))
         self.commit("add scene")
         code, out, err = self.run_gate()
         self.assertEqual(0, code, err)
         self.assertIn("checked 1 changed entries", out)
 
-    def test_removed_entry_and_png_are_accepted(self) -> None:
+    def test_new_pending_entry_is_rejected_until_reviewed(self) -> None:
+        self.write_png("PassC", b"png-c")
+        self.entries.append(_entry("PassC", "d3d11-warp", "f", PENDING))
+        self.commit("add unreviewed scene")
+        self.assertRejected(
+            "changed baseline requires an explicit reviewed manifest entry",
+        )
+
+    def test_removed_entry_and_png_are_rejected_without_deletion_review(self) -> None:
         (self.golden / "d3d11-warp" / "PassA.png").unlink()
         self.entries.pop(0)
         self.commit("drop scene")
-        code, out, err = self.run_gate()
-        self.assertEqual(0, code, err)
-        self.assertIn("checked 0 changed entries", out)
+        self.assertRejected("without an explicit reviewed deletion record")
 
     def test_invalid_head_manifest_is_rejected(self) -> None:
         self.entries[0]["baselineSha256"] = "not-a-sha"

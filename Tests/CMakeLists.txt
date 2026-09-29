@@ -4411,6 +4411,29 @@ set_tests_properties(GoldenImage_ReviewGate PROPERTIES
     FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
     TIMEOUT 120)
 
+# CI-100/CI-110: exercise the real SARIF gate and required workflow contracts.
+add_test(NAME CI_AnalysisResultsFailClosed
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/.github/scripts/test-check-analysis-results.py)
+set_tests_properties(CI_AnalysisResultsFailClosed PROPERTIES
+    LABELS "ci;policy;python;unit"
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    TIMEOUT 120)
+add_test(NAME CI_PerformanceWorkflowContract
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/.github/scripts/test-ci-perf-contract.py)
+set_tests_properties(CI_PerformanceWorkflowContract PROPERTIES
+    LABELS "ci;policy;python;unit"
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    TIMEOUT 120)
+add_test(NAME PerformanceBudget_Hardening
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_perf_budget_hardening -v)
+set_tests_properties(PerformanceBudget_Hardening PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    LABELS "ci;policy;performance;python;unit"
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    TIMEOUT 180)
+
 # TF-110: TERRAFRONT multi-client harness (Tools/Terrafront/multiclient.py). The
 # unit test covers the audit parser, the convergence comparator and every
 # scenario verdict on every host; each TerrafrontMultiClient_<Scenario> runs a

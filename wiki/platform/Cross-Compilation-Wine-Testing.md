@@ -327,7 +327,10 @@ cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll build/linux-mingw-release/bin
 
 ## CI Integration
 
-The `build-linux-mingw-wine` CI job in `.github/workflows/build.yml` runs this automatically:
+The experimental `build-linux-mingw-wine` job in `.github/workflows/build.yml`
+runs only on manual `workflow_dispatch`. It is advisory and the last documented
+hosted Wine test run failed; see the [failure notes](../development/MinGW-Wine-Cross-Compilation.md).
+When dispatched, it:
 - Installs MinGW, Wine, Mesa Lavapipe
 - Cross-compiles with the MinGW toolchain
 - Runs tests under Wine

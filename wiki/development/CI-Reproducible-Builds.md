@@ -344,6 +344,9 @@ preset-driven and advisory.
 
 ## MinGW + Wine (job `build-linux-mingw-wine`, `continue-on-error`)
 
+This experimental lane runs only on manual `workflow_dispatch`. It is advisory;
+the last documented Wine test run failed and does not certify Windows support.
+
 Cross-compiles the Windows D3D11 code on Linux and runs it under Wine:
 
 ```bash

@@ -63,6 +63,7 @@ REQUIRED_CI_JOBS = (
     "build-linux-clang",
     "coverage",
     "clang-tidy",
+    "analysis-regressions",
     "todo-count",
     "build-installer",
     "aggregate-test-stats",

@@ -7,11 +7,13 @@ revisions. For every (scene, backendRow) entry that was added, or whose
 baselineSha256, perPixelThreshold, tolerancePercent or software flag changed,
 it fails when:
 
-  (a) the reviewer record is identical to the base revision's (after whitespace
+  (a) the changed entry lacks an explicit, non-pending review record. A changed
+      baseline cannot be promoted by an agent or an owner-review-pending marker;
+  (b) the reviewer record is identical to the base revision's (after whitespace
       normalization), so a changed baseline never inherits the old review;
-  (b) a reviewed base record (no "owner review pending") is replaced by a
+  (c) a reviewed base record (no "owner review pending") is replaced by a
       pending one, so a reviewed baseline cannot be downgraded;
-  (c) a pending record sits on a hardware row (rejected by the shared schema
+  (d) a pending record sits on a hardware row (rejected by the shared schema
       parser in Tests/Tools/test_golden_manifest.py, which both revisions go
       through, so an invalid manifest at either revision also fails).
 
@@ -19,8 +21,9 @@ It also fails when a PNG under Tests/GoldenImages changed while its manifest
 entry did not. A base or head revision that cannot be resolved, or a git query
 that fails, exits 2; the gate never passes vacuously on a missing base.
 
-This does not prove that a human reviewed the change: it proves that every
-baseline change was accompanied by a new, non-downgraded review record.
+This does not prove that the named reviewer actually reviewed the change: it
+proves that every baseline change was accompanied by a new, non-pending,
+non-downgraded review record.
 Requiring review on Tests/GoldenImages/** (CODEOWNERS or a ruleset) is an
 owner action.
 
@@ -118,6 +121,10 @@ def _normalized(reviewer: str) -> str:
     return " ".join(reviewer.split())
 
 
+def _pending(reviewer: str) -> bool:
+    return PENDING_REVIEW in _normalized(reviewer).casefold()
+
+
 def review_errors(
     base: dict[tuple[str, str], dict[str, Any]],
     head: dict[tuple[str, str], dict[str, Any]],
@@ -132,14 +139,26 @@ def review_errors(
             continue
         changed.add(key)
         label = f"{key[1]}/{key[0]}"
+        if _pending(entry["reviewer"]):
+            errors.append(
+                f"{label}: changed baseline requires an explicit reviewed "
+                f"manifest entry; {PENDING_REVIEW!r} is not review"
+            )
         if previous is not None:
             if _normalized(previous["reviewer"]) == _normalized(entry["reviewer"]):
                 errors.append(f"{label}: baseline or threshold changed but the reviewer record is unchanged")
-            if PENDING_REVIEW not in previous["reviewer"] and PENDING_REVIEW in entry["reviewer"]:
+            if not _pending(previous["reviewer"]) and _pending(entry["reviewer"]):
                 errors.append(f"{label}: a reviewed baseline cannot be replaced by one with {PENDING_REVIEW!r}")
+    for key in sorted(set(base) - set(head)):
+        errors.append(f"{key[1]}/{key[0]}: manifest entry removed without an explicit reviewed deletion record")
     for key in sorted(set(pngs)):
         removed = key in base and key not in head
-        if key not in changed and not removed:
+        if removed:
+            errors.append(
+                f"{key[1]}/{key[0]}.png: PNG and manifest entry were removed "
+                "without an explicit reviewed deletion record"
+            )
+        elif key not in changed:
             errors.append(f"{key[1]}/{key[0]}.png: PNG changed but its manifest entry did not")
     return errors, len(changed)
 
