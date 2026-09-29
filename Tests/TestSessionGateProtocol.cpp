@@ -4,7 +4,7 @@
  */
 #include "TestFramework.h"
 
-#include "GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.h"
+#include "../GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.h"
 
 #include <algorithm>
 #include <array>
@@ -48,6 +48,7 @@ TEST(SessionGateProtocol_RoundTripsEveryOperation)
         expected.targetId = 3003;
         expected.areaId = 4004;
         expected.interactionCount = 5;
+        expected.stateSequence = 6;
         expected.x = operation == Operation::Move ? 0.75F : 12.5F;
         expected.y = 23.5F;
         expected.z = operation == Operation::Move ? -0.25F : 34.5F;
@@ -57,10 +58,6 @@ TEST(SessionGateProtocol_RoundTripsEveryOperation)
         SetText(expected.username, "alice");
         SetText(expected.password, "secret");
         SetText(expected.name, "Aster");
-        if (operation == Operation::CreateCharacter)
-        {
-            expected.accountId = 1001;
-        }
 
         const std::vector<uint8_t> bytes = Encode(expected);
         ASSERT_FALSE(bytes.empty());
@@ -69,17 +66,30 @@ TEST(SessionGateProtocol_RoundTripsEveryOperation)
         ASSERT_TRUE(Decode(bytes, actual));
         EXPECT_EQ(static_cast<uint8_t>(actual.operation), static_cast<uint8_t>(expected.operation));
         EXPECT_EQ(actual.requestId, expected.requestId);
-        EXPECT_EQ(actual.accountId, expected.accountId);
-        EXPECT_EQ(actual.characterId, expected.characterId);
-        EXPECT_EQ(actual.targetId, expected.targetId);
-        EXPECT_EQ(actual.areaId, expected.areaId);
-        EXPECT_EQ(actual.interactionCount, expected.interactionCount);
-        EXPECT_EQ(actual.race, expected.race);
-        EXPECT_EQ(actual.classId, expected.classId);
-        EXPECT_NEAR(actual.x, expected.x, 0.0001F);
-        EXPECT_NEAR(actual.y, expected.y, 0.0001F);
-        EXPECT_NEAR(actual.z, expected.z, 0.0001F);
-        EXPECT_NEAR(actual.health, expected.health, 0.0001F);
+
+        // Each request carries only its own fields; everything else must decode as zero,
+        // so a client can never smuggle authority-bearing values through an unrelated field.
+        const bool credentials = operation == Operation::Register || operation == Operation::Login;
+        const bool state = operation == Operation::State;
+        const bool carriesAccount = !credentials;
+        const bool carriesCharacter = operation == Operation::EnterWorld || operation == Operation::Move ||
+                                      operation == Operation::Interact || state;
+        EXPECT_EQ(actual.accountId, carriesAccount ? expected.accountId : 0U);
+        EXPECT_EQ(actual.characterId, carriesCharacter ? expected.characterId : 0U);
+        EXPECT_EQ(actual.targetId, operation == Operation::Interact || state ? expected.targetId : 0U);
+        EXPECT_EQ(actual.areaId, operation == Operation::EnterWorld || state ? expected.areaId : 0U);
+        EXPECT_EQ(actual.interactionCount, state ? expected.interactionCount : 0U);
+        EXPECT_EQ(actual.stateSequence, state ? expected.stateSequence : 0U);
+        EXPECT_EQ(actual.race, operation == Operation::CreateCharacter ? expected.race : uint8_t{0});
+        EXPECT_EQ(actual.classId, operation == Operation::CreateCharacter ? expected.classId : uint8_t{0});
+        EXPECT_EQ(std::strcmp(actual.username.data(), credentials ? "alice" : ""), 0);
+        EXPECT_EQ(std::strcmp(actual.password.data(), credentials ? "secret" : ""), 0);
+        EXPECT_EQ(std::strcmp(actual.name.data(), operation == Operation::CreateCharacter ? "Aster" : ""), 0);
+        const bool carriesPlane = operation == Operation::Move || state;
+        EXPECT_NEAR(actual.x, carriesPlane ? expected.x : 0.0F, 0.0001F);
+        EXPECT_NEAR(actual.z, carriesPlane ? expected.z : 0.0F, 0.0001F);
+        EXPECT_NEAR(actual.y, state ? expected.y : 0.0F, 0.0001F);
+        EXPECT_NEAR(actual.health, state ? expected.health : 0.0F, 0.0001F);
     }
 }
 
@@ -99,6 +109,7 @@ TEST(SessionGateProtocol_ResponseUsesAuthoritativeSnapshot)
     expected.z = 3.0F;
     expected.health = 88.0F;
     expected.interactionCount = 9;
+    expected.stateSequence = 11;
 
     const auto bytes = Encode(expected);
     Packet actual{};
@@ -110,6 +121,7 @@ TEST(SessionGateProtocol_ResponseUsesAuthoritativeSnapshot)
     EXPECT_EQ(actual.targetId, 30U);
     EXPECT_EQ(actual.areaId, 40U);
     EXPECT_EQ(actual.interactionCount, 9U);
+    EXPECT_EQ(actual.stateSequence, 11U);
     EXPECT_NEAR(actual.x, 1.0F, 0.0001F);
     EXPECT_NEAR(actual.y, 2.0F, 0.0001F);
     EXPECT_NEAR(actual.z, 3.0F, 0.0001F);

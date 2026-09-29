@@ -1446,7 +1446,8 @@ if(ENABLE_NETWORKING)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSession.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.cpp"
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp")
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp")
     target_compile_features(SparkMMOSessionGatePeer PRIVATE cxx_std_23)
     target_include_directories(SparkMMOSessionGatePeer PRIVATE
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source"
