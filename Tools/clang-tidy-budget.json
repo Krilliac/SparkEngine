@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "description": "CI-110 clang-tidy diagnostic budget: distinct diagnostics per file and check across every shipped-product translation unit, measured with the clang-tidy CI lane configuration. The checks and total fields summarize the files map. Lower entries as diagnostics are fixed; raising one is a reviewed exception. Regenerate with Tools/clang_tidy_budget.py update.",
   "clangTidyMajorVersion": 18,
-  "measuredAt": "Local clang-tidy 18.1.3 (Ubuntu 24.04) with the clang-tidy lane's libc++ Debug configure, over all 955 shipped-product translation units of the shared working tree while HEAD moved from 1ea8275 to e82fe3a (2026-09-26). Not a hosted measurement: refresh from the first hosted clang-tidy-output artifact if counts differ. SaveSystem.cpp and SaveFileCodec.cpp re-measured locally with clang-tidy 18.1.8 and libc++ 18 headers after the SEC-120 save codec split (2026-09-28); the same setup reproduced the committed SaveSystem.cpp entries at e82fe3a.",
-  "total": 16543,
+  "measuredAt": "Local clang-tidy 18.1.3 (Ubuntu 24.04) with the clang-tidy lane's libc++ Debug configure, over all 955 shipped-product translation units of the shared working tree while HEAD moved from 1ea8275 to e82fe3a (2026-09-26). Not a hosted measurement: refresh from the first hosted clang-tidy-output artifact if counts differ. SaveSystem.cpp and SaveFileCodec.cpp re-measured locally with clang-tidy 18.1.8 and libc++ 18 headers after the SEC-120 save codec split (2026-09-28); the same setup reproduced the committed SaveSystem.cpp entries at e82fe3a. DataTableSystem.h, CollaborativeEditSession.cpp and DialogueSystem.cpp lowered after the SEC-120 parser split (2026-09-29): measured base-vs-head deltas with local clang-tidy 18.1.8 and libc++ 18 headers; DataTableSystem.h reproduced its committed count at the base.",
+  "total": 16526,
   "checks": {
     "bugprone-assignment-in-if-condition": 6,
     "bugprone-branch-clone": 62,
@@ -28,7 +28,7 @@
     "bugprone-unused-local-non-trivial-variable": 4,
     "bugprone-unused-return-value": 7,
     "bugprone-use-after-move": 4,
-    "google-build-using-namespace": 215,
+    "google-build-using-namespace": 214,
     "misc-header-include-cycle": 1,
     "misc-unused-using-decls": 3,
     "modernize-avoid-bind": 1,
@@ -62,7 +62,7 @@
     "performance-trivially-destructible": 1,
     "performance-unnecessary-copy-initialization": 7,
     "performance-unnecessary-value-param": 108,
-    "readability-braces-around-statements": 13870,
+    "readability-braces-around-statements": 13854,
     "readability-inconsistent-declaration-parameter-name": 24
   },
   "files": {
@@ -1277,7 +1277,7 @@
     "SparkEditor/Source/Communication/CollaborativeEditSession.cpp": {
       "modernize-use-auto": 1,
       "performance-unnecessary-value-param": 1,
-      "readability-braces-around-statements": 57
+      "readability-braces-around-statements": 50
     },
     "SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp": {
       "bugprone-unused-return-value": 2,
@@ -2499,14 +2499,11 @@
     },
     "SparkEngine/Source/Engine/DataTable/DataTableSystem.h": {
       "modernize-pass-by-value": 1,
-      "readability-braces-around-statements": 82
+      "readability-braces-around-statements": 73
     },
     "SparkEngine/Source/Engine/Destruction/DestructionSystem.cpp": {
       "bugprone-integer-division": 1,
       "readability-braces-around-statements": 3
-    },
-    "SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp": {
-      "google-build-using-namespace": 1
     },
     "SparkEngine/Source/Engine/Dialogue/DialogueSystem.h": {
       "performance-enum-size": 1
