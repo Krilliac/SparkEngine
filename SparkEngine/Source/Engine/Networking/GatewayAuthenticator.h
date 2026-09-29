@@ -1,10 +1,12 @@
 /**
- * @file GuardedGatewayAuthenticator.h
- * @brief Fault containment, call budget and circuit breaker around an IGatewayAuthenticator.
+ * @file GatewayAuthenticator.h
+ * @brief Admission authenticator contract and its fail-closed guard (circuit breaker, call budget).
  *
- * GatewayCoordinator installs this front around whatever authenticator it is given, so a
- * product adapter that throws, stalls or loses its backend fails closed and is observable
- * (docs/specs/online-services.md section 5.2):
+ * The authenticator seam (boundary B1 in docs/specs/online-services.md) is shared by SparkGateway's
+ * GatewayCoordinator and by game-module session gates (SparkGameMMO's MMOSessionGate), so it lives in
+ * the engine rather than in either product. Both install GuardedGatewayAuthenticator around whatever
+ * authenticator they are given, so a product adapter that throws, stalls or loses its backend fails
+ * closed and is observable (docs/specs/online-services.md section 5.2):
  * - An exception becomes a rejected admission with a fixed reason. The exception text is
  *   never surfaced or logged, because an adapter may have put the credential in it.
  * - A call slower than the budget (default 2 s, the ingress deadline) is rejected even if the
@@ -15,15 +17,17 @@
  * - A rejection reason that echoes the credential is redacted.
  *
  * Thread affinity: Authenticate() and IsReady() may run concurrently on any transport thread;
- * the counters are guarded by a mutex that is never held across the adapter call.
- * Ownership: non-owning; the wrapped authenticator must outlive this object.
+ * the guard's counters are guarded by a mutex that is never held across the adapter call.
+ * Ownership: the guard is non-owning; the wrapped authenticator must outlive it.
  * Allocation: none per call beyond the adapter's own result strings.
+ * Scalability tier: one guard per admission front (gateway process or module session gate).
  */
 
 #pragma once
 
-#include "GatewayCoordinator.h"
-#include "Utils/LogMacros.h"
+#include "../../Core/Platform.h"
+#include "../../Utils/LogMacros.h"
+#include "NetworkClientId.h"
 
 #include <algorithm>
 #include <chrono>
@@ -35,6 +39,31 @@
 
 namespace Spark::Gateway
 {
+    struct AdmissionRequest
+    {
+        Net::ClientID clientId = Net::INVALID_CLIENT;
+        std::string sessionId;
+        std::string playerName;
+        std::string credential;
+        XMFLOAT3 spawnPosition{0.0f, 0.0f, 0.0f};
+    };
+
+    struct AuthenticationResult
+    {
+        bool accepted = false;
+        std::string principalId;
+        std::string reason;
+    };
+
+    class IGatewayAuthenticator
+    {
+      public:
+        virtual ~IGatewayAuthenticator() = default;
+        /** [any transport thread, thread-safe] Validate an opaque credential. Never log it. */
+        [[nodiscard]] virtual AuthenticationResult Authenticate(const AdmissionRequest& request) = 0;
+        [[nodiscard]] virtual bool IsReady() const = 0;
+    };
+
     /** @brief Budget from spec section 5.2: 2 s per call, 5 consecutive faults open the circuit for 30 s */
     struct GatewayAuthenticatorPolicy
     {
@@ -56,6 +85,7 @@ namespace Spark::Gateway
         bool circuitOpen = false;
     };
 
+    /** @brief Fault containment, call budget and circuit breaker around an IGatewayAuthenticator. */
     class GuardedGatewayAuthenticator final : public IGatewayAuthenticator
     {
       public:
@@ -116,7 +146,9 @@ namespace Spark::Gateway
             m_health.maxCallMicroseconds = (std::max)(m_health.maxCallMicroseconds, static_cast<uint64_t>(micros));
             const bool overran = elapsed > m_policy.callBudget;
             if (overran)
+            {
                 ++m_health.budgetOverruns;
+            }
             if (threw || overran)
             {
                 RecordFault(threw ? "adapter threw" : "call exceeded its budget");
@@ -131,9 +163,13 @@ namespace Spark::Gateway
             m_health.consecutiveFaults = 0;
             m_health.circuitOpen = false;
             if (result.accepted)
+            {
                 ++m_health.accepted;
+            }
             else
+            {
                 ++m_health.rejected;
+            }
             RedactCredential(result.reason, request.credential);
             return result;
         }
@@ -157,7 +193,9 @@ namespace Spark::Gateway
             ++m_health.faults;
             ++m_health.consecutiveFaults;
             if (m_health.consecutiveFaults < m_policy.failureThreshold)
+            {
                 return;
+            }
             // Opening, or a failed probe after the cooldown: fail fast for another cooldown.
             m_health.circuitOpen = true;
             m_retryAt = std::chrono::steady_clock::now() + m_policy.cooldown;
@@ -170,11 +208,15 @@ namespace Spark::Gateway
         {
             static constexpr std::string_view Redacted = "<redacted>";
             if (credential.empty())
+            {
                 return;
+            }
             // Resume after the replacement so a credential that occurs inside it cannot loop forever.
             for (size_t pos = reason.find(credential); pos != std::string::npos;
                  pos = reason.find(credential, pos + Redacted.size()))
+            {
                 reason.replace(pos, credential.size(), Redacted);
+            }
         }
 
         IGatewayAuthenticator* m_target = nullptr;

@@ -6,7 +6,6 @@
 #include "GatewayCoordinator.h"
 
 #include "GatewayLocalAdapters.h"
-#include "GuardedGatewayAuthenticator.h"
 
 #include <algorithm>
 #include <cmath>

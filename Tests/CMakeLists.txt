@@ -1455,14 +1455,12 @@ if(ENABLE_NETWORKING)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp")
     target_compile_features(SparkMMOSessionGatePeer PRIVATE cxx_std_23)
     target_include_directories(SparkMMOSessionGatePeer PRIVATE
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source"
-        "${CMAKE_SOURCE_DIR}/SparkGateway/src")
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source")
     target_link_libraries(SparkMMOSessionGatePeer PRIVATE SparkEngineLib)
     add_dependencies(SparkTests SparkMMOSessionGatePeer)
     if(TARGET imgui)
         # MMOPlayerSystem's client input route calls the gate in the module test sources too.
         target_sources(SparkTests PRIVATE ${_spark_mmo_session_sources})
-        target_include_directories(SparkTests PRIVATE "${CMAKE_SOURCE_DIR}/SparkGateway/src")
     endif()
     target_sources(SparkTests PRIVATE
         TestNetworkStack.cpp

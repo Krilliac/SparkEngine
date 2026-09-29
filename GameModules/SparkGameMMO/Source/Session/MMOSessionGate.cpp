@@ -7,7 +7,7 @@
 #include "Account/MMOAccountSystem.h"
 #include "Character/MMOCharacterSystem.h"
 #include "Player/MMOPlayerSystem.h"
-#include "GuardedGatewayAuthenticator.h"
+#include "Engine/Networking/GatewayAuthenticator.h"
 #include "Utils/SecureMemory.h"
 
 #include <algorithm>

@@ -194,6 +194,7 @@
         "Engine/Events/EventSystem.h",
         "Engine/Localization/LocalizationSystem.h",
         "Engine/Networking/AreaServer.h",
+        "Engine/Networking/GatewayAuthenticator.h",
         "Engine/Networking/NetworkManager.h",
         "Engine/Networking/WorldServer.h",
         "Engine/Persistence/AsyncDatabase.h",
@@ -213,7 +214,7 @@
         "Utils/SecureRandom.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 29,
+      "privateEngineHeaderCount": 30,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp"
       ]
