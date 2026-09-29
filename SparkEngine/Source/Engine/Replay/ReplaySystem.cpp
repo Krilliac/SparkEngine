@@ -7,8 +7,10 @@
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -377,6 +379,56 @@ namespace Spark
             return false;
         }
 
+        bool IsFinite(const XMFLOAT3& value)
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+        }
+
+        bool IsFinite(const XMFLOAT4& value)
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w);
+        }
+
+        /// Values the byte layout can carry but playback cannot use. A negative or NaN duration
+        /// breaks std::clamp's precondition in SeekTo and the kill cam and keeps UpdatePlayback
+        /// from ever reaching the end; unsorted or NaN frame timestamps break FindFrameIndex's
+        /// std::lower_bound; non-finite entity and event values would reach the renderer and
+        /// camera. SaveToFile only writes timelines that pass (recording keeps frames ascending
+        /// and sets the duration to the last frame's timestamp).
+        bool IsPlayableReplay(const ReplayData& data)
+        {
+            if (!std::isfinite(data.duration) || data.duration < 0.0f)
+            {
+                return false;
+            }
+            float previousTimestamp = -std::numeric_limits<float>::infinity();
+            for (const ReplayFrame& frame : data.frames)
+            {
+                if (!std::isfinite(frame.timestamp) || frame.timestamp < previousTimestamp ||
+                    frame.timestamp > data.duration)
+                {
+                    return false;
+                }
+                previousTimestamp = frame.timestamp;
+                for (const ReplayEntityState& entity : frame.entities)
+                {
+                    if (!IsFinite(entity.position) || !IsFinite(entity.rotation) || !IsFinite(entity.velocity) ||
+                        !std::isfinite(entity.health))
+                    {
+                        return false;
+                    }
+                }
+            }
+            for (const ReplayEvent& event : data.events)
+            {
+                if (!std::isfinite(event.timestamp) || !IsFinite(event.position))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
     } // anonymous namespace
 
     bool ReplaySystem::SaveToFile(const std::string& filePath) const
@@ -477,6 +529,13 @@ namespace Spark
         file.read(reinterpret_cast<char*>(&loaded.version), sizeof(loaded.version));
         if (!file)
             return false;
+        if (loaded.version != kReplayVersion)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "ReplaySystem::LoadFromFile: '%s' has unsupported version %u (expected %u)",
+                           filePath.c_str(), loaded.version, kReplayVersion);
+            return false;
+        }
 
         // Metadata
         if (!ReadString(file, loaded.mapName))
@@ -551,6 +610,14 @@ namespace Spark
             file.read(reinterpret_cast<char*>(&event.position), sizeof(event.position));
             if (!ReadString(file, event.data))
                 return false;
+        }
+
+        if (!IsPlayableReplay(loaded))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "ReplaySystem::LoadFromFile: '%s' has a non-finite, negative or out-of-order timeline",
+                           filePath.c_str());
+            return false;
         }
 
         // Commit and reset playback state
