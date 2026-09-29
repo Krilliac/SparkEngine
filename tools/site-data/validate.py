@@ -35,6 +35,7 @@ from common import (
 from contract_selectors import (WorkflowJob, cmake_preset_index, command_tokens, ctest_filter_errors,
                                 preset_references, required_gate_jobs, resolve_ci_job, resolve_test_selector,
                                 workflow_jobs)
+from docs_parity import published_docs_parity_errors
 from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
@@ -1208,6 +1209,8 @@ def publication_evidence_errors(contract: dict[str, Any], workflows: set[str] | 
     errors: list[str] = []
     if not workflows:
         return [f"publicationEvidence: no workflow defines the {PUBLICATION_JOB} job"]
+    # A global release is one source commit: its profiles cannot each cite their own.
+    release_commits: set[str] = set()
     for profile in readiness.get("releaseProfiles", []):
         if not isinstance(profile, dict) or (profile.get("state") != "ready" and not global_ready):
             continue
@@ -1240,11 +1243,17 @@ def publication_evidence_errors(contract: dict[str, Any], workflows: set[str] | 
                 commits.update(reference.rsplit("@", 1)[1] for reference in references)
         if len(commits) > 1:
             errors.append(f"{location}: publication evidence cites different commits {sorted(commits)}")
+        release_commits.update(commits)
         gate = gates.get(finalization.get("gateId"))
         if gate is None or gate.get("state") != "passing" or not gate.get("evidence"):
             errors.append(
                 f"{location}: finalization gate {finalization.get('gateId')} must be passing with evidence"
             )
+    if global_ready and len(release_commits) > 1:
+        errors.append(
+            "publicationEvidence: publication evidence cites different commits across profiles "
+            f"{sorted(release_commits)}"
+        )
     return errors
 
 
@@ -4363,6 +4372,7 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
         if isinstance(search_pointer, dict):
             if bundle.get("docs", {}).get("searchPath") != search_pointer.get("path") or bundle.get("docs", {}).get("searchSha256") != search_pointer.get("sha256") or bundle.get("docs", {}).get("searchBytes") != search_pointer.get("bytes"):
                 errors.append("bundle docs search pointer differs from latest")
+        errors.extend(published_docs_parity_errors(root, bundle, latest))
 
     exact_pointer = latest.get("files", {}).get("exactCiEvidence")
     if exact_pointer is None:

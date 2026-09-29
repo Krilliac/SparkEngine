@@ -558,7 +558,7 @@
       "wave": 6,
       "area": "website",
       "owner": "unassigned",
-      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. 2026-09-24 progress: tools/site-data/runtime adds a dependency-free reference verifier (verifyBundle.mjs: 32 KiB/5 MiB/2 MiB budgets, schemaVersion, WebCrypto SHA-256 per pointer, unsafe-path refusal, displayed SHA bound to latest.source.commit) and a freshness classifier (freshness.mjs: 300 s max-age plus stale-while-revalidate mapped to current/syncing/blocked/stale/unavailable). Its node:test suite runs over a generate.py publication and hash-flip, oversize, malformed, and path-escape variants, feeding each variant to validate_published_bundle so the two validators cannot drift; it runs as the runtime-bundle-validation CTest and the site-runtime-contract job. This is a contract only: the owner-deployed site has not adopted it, so no criterion changes. 2026-09-25 progress: validate.py now rejects, by default and with no waiver list (a publicNumericClaims entry does not exempt it), any count-with-unit, 7-64 hex commit SHA, CI run ID, or release version literal in docs/site/content.json and docs/site/docs-catalog.json, so repository site copy must reference bundle metric identifiers; the no-hardcoded-claims CTest runs its fixtures. The external site's own copy is outside this repository and remains unaudited. live-docs-parity remains planned.",
+      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. 2026-09-24 progress: tools/site-data/runtime adds a dependency-free reference verifier (verifyBundle.mjs: 32 KiB/5 MiB/2 MiB budgets, schemaVersion, WebCrypto SHA-256 per pointer, unsafe-path refusal, displayed SHA bound to latest.source.commit) and a freshness classifier (freshness.mjs: 300 s max-age plus stale-while-revalidate mapped to current/syncing/blocked/stale/unavailable). Its node:test suite runs over a generate.py publication and hash-flip, oversize, malformed, and path-escape variants, feeding each variant to validate_published_bundle so the two validators cannot drift; it runs as the runtime-bundle-validation CTest and the site-runtime-contract job. This is a contract only: the owner-deployed site has not adopted it, so no criterion changes. 2026-09-25 progress: validate.py now rejects, by default and with no waiver list (a publicNumericClaims entry does not exempt it), any count-with-unit, 7-64 hex commit SHA, CI run ID, or release version literal in docs/site/content.json and docs/site/docs-catalog.json, so repository site copy must reference bundle metric identifiers; the no-hardcoded-claims CTest runs its fixtures. The external site's own copy is outside this repository and remains unaudited. 2026-09-28 progress: tools/site-data/docs_parity.py runs inside validate_published_bundle, so the prepare and publish jobs both check that search.json has exactly one record per document with its sourcePath, that each sourceUrl is pinned to the source commit and names a catalog-selected source, and that every page link is external, commit-pinned, or a /docs route or anchor present in the bundle; the live-docs-parity CTest proves each hash-consistent mutation is refused. The owner-deployed site has not adopted the bundle, so no criterion changes.",
       "dependencies": [
         "RDY-000"
       ],
@@ -645,9 +645,11 @@
           "criterionDigest": "sha256:83f4372345f3",
           "state": "unmet",
           "evidence": [
-            "tools/site-data/validate_docs_links.py"
+            "tools/site-data/validate_docs_links.py",
+            "tools/site-data/docs_parity.py",
+            "Tests/Tools/test_site_data_docs_parity.py"
           ],
-          "note": "The link validator fails at HEAD, and the live-docs parity check does not exist."
+          "note": "Repository bundle routes, search, and source links are parity-checked (live-docs-parity); the owner-deployed site has not adopted the bundle. validate_docs_links.py still fails in a clean clone until docs/api is generated."
         }
       ],
       "commands": [
@@ -704,9 +706,7 @@
         "stable-v1": "shared"
       },
       "plannedCiJobs": [],
-      "plannedTestSelectors": [
-        "live-docs-parity"
-      ]
+      "plannedTestSelectors": []
     }
   ]
 }

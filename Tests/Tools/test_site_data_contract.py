@@ -1287,8 +1287,36 @@ class ReadyPromotionTests(ContractTestCase):
         )
         gate = deploy.index('validate.py" --require-ready')
         self.assertLess(gate, deploy.index('git init "$PUBLISH_REPO"'))
-        self.assertIn('["globalRelease"]["state"] != "ready"', deploy[:gate])
         self.assertLess(deploy.index("--require-exact-evidence"), gate)
+        # The state read must fail closed: a failing read inside an `if` condition
+        # escapes `set -e` and would skip the strict gate as "not ready".
+        self.assertNotRegex(deploy, r"if\s+python3\b[^\n]*globalRelease")
+        read = deploy.index('release_state="$(python3 -I -c')
+        self.assertIn('["globalRelease"]["state"])', deploy[read:gate])
+        dispatch = deploy[deploy.index('case "$release_state" in', read) : deploy.index("esac", gate)]
+        self.assertLess(dispatch.index("ready)"), dispatch.index('validate.py" --require-ready'))
+        non_ready = sorted(site_data_validate.RELEASE_STATES - {"ready"})
+        self.assertIn("|".join(non_ready) + ")", dispatch)
+        self.assertRegex(dispatch, r"\*\)\s*\n\s*echo [^\n]*>&2\s*\n\s*exit 1")
+
+    def test_global_ready_rejects_publication_commits_that_differ_across_profiles(self) -> None:
+        self.promote_ready(self.mutable)
+        readiness = self.mutable["readiness"]
+        second = copy.deepcopy(self.profile_of(self.mutable))
+        second["id"] = "stable-v1-secondary"
+        second["publicationFinalization"]["workItemIds"] = ["REL-200-SECONDARY"]
+        readiness["releaseProfiles"].append(second)
+        finalizer = copy.deepcopy(self.items_of(self.mutable)["REL-200"])
+        finalizer["id"] = "REL-200-SECONDARY"
+        self.mutable["workItems"].append(finalizer)
+        self.assertEqual(site_data_validate.publication_evidence_errors(self.mutable), [])
+
+        for entry in finalizer["acceptanceStatus"]:
+            entry["evidence"] = ["README.md", "ci:release.yml/2@" + "1" * 40]
+        errors = site_data_validate.publication_evidence_errors(self.mutable)
+        self.assertTrue(any("different commits across profiles" in error for error in errors), errors)
+        # Each profile is internally consistent, so only the cross-profile rule fires.
+        self.assertEqual(len(errors), 1, errors)
 
 
 class ScopeNarrowingTests(ContractTestCase):
