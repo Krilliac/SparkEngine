@@ -411,6 +411,27 @@ struct VolumetricSettings {
 };
 ```
 
+### Declared post set and D3D11 pass goldens (RHI-210)
+
+On Windows, `GraphicsEngine::RenderPostProcessing` drives
+`Spark::Graphics::PostProcessingPipeline` (`SetInputSRV` / `SetDepthSRV` /
+`SetOutputRTV`, `Process`, `Render`) with the embedded HLSL in
+`PostProcessingPipelineWindowsShaders{AO,Color,Filter,Lens}.h`. The shipped
+runtime enables **no** pass by default: every settings struct in
+`PostProcessingTypes.h` defaults to `enabled = false`, and passes are turned on
+only through `pp_enable <effect>` (`SubsystemConsoleCommands.cpp`). No game
+module enables one.
+
+The declared post set with golden evidence on the `d3d11-warp` row is
+**Tonemapping (ACES), Bloom, FXAA and GTAO**. CTest `D3D11PassGolden`
+(`Tests/TestRHI210D3D11PassGoldenReal.cpp`, `D3D11PassGolden_*`, 5 tests) runs
+each pass alone through the production pipeline on a WARP device over a fixed
+64x64 HDR input, checks pixels against a CPU evaluation of the shader formula,
+and compares the frame with the reviewed baseline in
+`Tests/GoldenImages/d3d11-warp/` (owner review pending). The main
+`SparkEngineTests` run excludes the family. The other twelve passes have no
+golden yet.
+
 ---
 
 ## Shadow Mapping

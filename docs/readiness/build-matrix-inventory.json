@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3962,
+      "line": 3976,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1366,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3497,
+      "line": 3511,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3492",
+          "id": "Tests/CMakeLists.txt:3506",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4000,
+      "line": 4014,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,10 +1392,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3440,
+      "line": 3454,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3368",
+          "id": "Tests/CMakeLists.txt:3382",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1409,7 +1409,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4283,
+      "line": 4308,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1418,7 +1418,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1805,
+      "line": 1806,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1496,7 +1496,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1667,
+      "line": 1668,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2728,10 +2728,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 4926,
+      "line": 4951,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:4924",
+          "id": "Tests/CMakeLists.txt:4949",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2898,10 +2898,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1437,
+      "line": 1438,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1425",
+          "id": "Tests/CMakeLists.txt:1426",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -4819,7 +4819,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 4926,
+          "line": 4951,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4999,7 +4999,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1437,
+          "line": 1438,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -12376,7 +12376,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 3,
+        "stepCount": 4,
         "steps": [
           {
             "index": 0,
@@ -12400,7 +12400,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "320670a2c3fe90c4"
+            "runDigest": "69bd3ee0c0e7bf7f"
           },
           {
             "index": 2,
@@ -12413,6 +12413,20 @@
             "hasRun": true,
             "env": [],
             "runDigest": "b4a632ccc5611cdc"
+          },
+          {
+            "index": 3,
+            "name": "Check golden baseline review records",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "GOLDEN_BASE_SHA"
+            ],
+            "runDigest": "7210f86572bb1491"
           }
         ],
         "envNames": [],

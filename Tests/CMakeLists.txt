@@ -1144,6 +1144,7 @@ target_sources(SparkTests PRIVATE
     TestLIFE200ModuleReloadLoopReal.cpp
     TestD3D11DeviceContractsReal.cpp
     TestRHI210D3D11GoldenReal.cpp
+    TestRHI210D3D11PassGoldenReal.cpp
     TestRHI210D3D11ValidationReal.cpp
     TestRHI210D3D11DeviceLossReal.cpp
     TestSEC2RenderingHardeningReal.cpp
@@ -2734,6 +2735,19 @@ if(WIN32)
         LABELS "d3d11-golden;d3d11;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 60)
+    # RHI-210: the production PostProcessingPipeline passes (ACES tonemap, bloom,
+    # FXAA, GTAO) on WARP, compared with the d3d11-warp baselines and reviewed
+    # thresholds in Tests/GoldenImages/manifest.json (owner review pending). The
+    # device is always WARP, so exactly this lane compares them; the main suite
+    # excludes the family.
+    add_test(NAME D3D11PassGolden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11PassGolden PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI210D3D11PassGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=5;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "d3d11-golden;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+    spark_exclude_from_main_suite(D3D11PassGolden_)
     add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(D3D11_Resource PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=D3D11_Resource_;SPARK_TEST_EXPECT_COUNT=3"
@@ -4301,6 +4315,17 @@ add_test(
 set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
     LABELS "rendering;golden;unit;python"
     TIMEOUT 60)
+# PERF-100: tools/perf-budget/check_golden_review.py, the diff gate that the
+# required performance-budget-governance job runs on every PR and push, rejects
+# a baseline or threshold change that inherits or downgrades its review record.
+add_test(
+    NAME GoldenImage_ReviewGate
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_golden_review_gate.py -v)
+set_tests_properties(GoldenImage_ReviewGate PROPERTIES
+    LABELS "governance;golden;python"
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    TIMEOUT 120)
 
 # TF-110: TERRAFRONT multi-client harness (Tools/Terrafront/multiclient.py). The
 # unit test covers the audit parser, the convergence comparator and every
