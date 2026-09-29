@@ -51,7 +51,7 @@
           "criterionDigest": "sha256:6157460e42c8",
           "state": "unmet",
           "evidence": [],
-          "note": "No physical Windows evidence exists for either declared row. This needs clean-host exact-SHA runs."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No physical Windows evidence exists for either declared row. This needs clean-host exact-SHA runs."
         },
         {
           "criterionDigest": "sha256:6c6b9e8e94ea",
@@ -207,7 +207,7 @@
             "docs/readiness/OWNER-DECISIONS.md",
             "wiki/platform/System-Requirements.md"
           ],
-          "note": "OD-10 limits scope to Ubuntu 24.04 x86-64. There is no Linux certification suite, no LinuxCertification tests and no clean-host evidence."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. OD-10 limits scope to Ubuntu 24.04 x86-64. There is no Linux certification suite, no LinuxCertification tests and no clean-host evidence."
         },
         {
           "criterionDigest": "sha256:0c8c1f94727a",
@@ -324,7 +324,7 @@
           "criterionDigest": "sha256:1df84ec3f212",
           "state": "unmet",
           "evidence": [],
-          "note": "There is no notarized macOS package. Clean Mac hardware runs are needed. Deferred by OD-11."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no notarized macOS package. Clean Mac hardware runs are needed. Deferred by OD-11."
         },
         {
           "criterionDigest": "sha256:2257d1838d14",
@@ -332,7 +332,7 @@
           "evidence": [
             "Tests/TestMetalRayTracing.cpp"
           ],
-          "note": "build-macos is continue-on-error. The Metal tests are lifecycle smoke tests only, with no blocking render or content evidence."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. build-macos is continue-on-error. The Metal tests are lifecycle smoke tests only, with no blocking render or content evidence."
         },
         {
           "criterionDigest": "sha256:415123b513a2",
@@ -773,7 +773,7 @@
           "criterionDigest": "sha256:0a3989a189ef",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs a packaged scene on every supported Windows row, on hardware, with exact-SHA evidence."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on every supported Windows row, on hardware, with exact-SHA evidence."
         }
       ],
       "commands": [
@@ -871,19 +871,19 @@
           "criterionDigest": "sha256:df5ed71ca628",
           "state": "unmet",
           "evidence": [],
-          "note": "The Metal backend is incomplete. There is no declared pass set and no visual parity test. Mac hardware is needed."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The Metal backend is incomplete. There is no declared pass set and no visual parity test. Mac hardware is needed."
         },
         {
           "criterionDigest": "sha256:0f932a3b1358",
           "state": "unmet",
           "evidence": [],
-          "note": "There are no Metal resource-lifetime or synchronization tests."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There are no Metal resource-lifetime or synchronization tests."
         },
         {
           "criterionDigest": "sha256:dbbf70e01454",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs a packaged scene on certified Mac hardware."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on certified Mac hardware."
         },
         {
           "criterionDigest": "sha256:50f8aa92ac83",
@@ -892,7 +892,7 @@
             "Tests/TestMetalRayTracing.cpp",
             "SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.mm"
           ],
-          "note": "Only the ray-tracing null-device failure paths are tested, and only on macOS. There is no general explicit-unsupported-feature coverage."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Only the ray-tracing null-device failure paths are tested, and only on macOS. There is no general explicit-unsupported-feature coverage."
         }
       ],
       "commands": [
@@ -1029,7 +1029,7 @@
           "criterionDigest": "sha256:f3df062bd6ee",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs a packaged scene on supported GPUs and drivers."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on supported GPUs and drivers."
         }
       ],
       "commands": [
@@ -1127,7 +1127,7 @@
             "Tests/TestRHI230VulkanGoldenReal.cpp",
             "Tests/TestRHI230VulkanValidationReal.cpp"
           ],
-          "note": "The vulkan-lavapipe row has three baselines of shipped post-process SPIR-V (PostProcess_ACES, BloomExtract, GaussianBlur_Vertical) that match locally on Lavapipe, under agent-proposed thresholds. They are software shader goldens, not engine-renderer goldens; there is no hardware row, owner review of baselines and thresholds is pending, and no hosted run exists, so the criterion stays unmet."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The vulkan-lavapipe row has three baselines of shipped post-process SPIR-V (PostProcess_ACES, BloomExtract, GaussianBlur_Vertical) that match locally on Lavapipe, under agent-proposed thresholds."
         },
         {
           "criterionDigest": "sha256:ea058ba24c18",
@@ -1162,7 +1162,7 @@
           "criterionDigest": "sha256:92b1fcb816d0",
           "state": "unmet",
           "evidence": [],
-          "note": "There is no Vulkan package lane and no lavapipe/hardware CI rows. This needs hosted or hardware execution."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no Vulkan package lane and no lavapipe/hardware CI rows. This needs hosted or hardware execution."
         }
       ],
       "commands": [
@@ -1290,7 +1290,7 @@
           "criterionDigest": "sha256:032eb8523eaf",
           "state": "unmet",
           "evidence": [],
-          "note": "There is no packaged OpenGL scene lane or packaged-scene test."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no packaged OpenGL scene lane or packaged-scene test."
         }
       ],
       "commands": [

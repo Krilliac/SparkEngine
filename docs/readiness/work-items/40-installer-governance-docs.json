@@ -74,7 +74,7 @@
           "criterionDigest": "sha256:b2d639655345",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs Windows 11 x64 fresh-install, repair and uninstall runs. None are recorded."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs Windows 11 x64 fresh-install, repair and uninstall runs. None are recorded."
         },
         {
           "criterionDigest": "sha256:6ced6ba5de16",
@@ -94,7 +94,7 @@
           "criterionDigest": "sha256:637a4f03b8d7",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs signed published artifacts and a stable-channel signing gate."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs signed published artifacts and a stable-channel signing gate."
         },
         {
           "criterionDigest": "sha256:77a7f9025620",
@@ -174,13 +174,13 @@
           "criterionDigest": "sha256:522a2161563c",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs a real published and signed predecessor release. None exists."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a real published and signed predecessor release. None exists."
         },
         {
           "criterionDigest": "sha256:9253a832b311",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs upgrade and rollback runs on a clean Windows host."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs upgrade and rollback runs on a clean Windows host."
         },
         {
           "criterionDigest": "sha256:536c5bfd873e",
@@ -246,7 +246,7 @@
           "criterionDigest": "sha256:0c8b27a63fd0",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs evidence bound to the reviewed v0.9.0 commit."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs evidence bound to the reviewed v0.9.0 commit."
         }
       ],
       "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
@@ -350,7 +350,7 @@
           "criterionDigest": "sha256:f5a3e0f81d56",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs legal and maintainer sign-off."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs legal and maintainer sign-off."
         }
       ],
       "commands": [
@@ -613,7 +613,7 @@
           "criterionDigest": "sha256:e87c2575b050",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs the live, owner-deployed site to use the bundle. It has not adopted it."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs the live, owner-deployed site to use the bundle. It has not adopted it."
         },
         {
           "criterionDigest": "sha256:ee89c98da46a",

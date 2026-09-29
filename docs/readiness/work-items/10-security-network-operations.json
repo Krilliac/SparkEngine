@@ -979,7 +979,7 @@
           "criterionDigest": "sha256:3a1537530a6f",
           "state": "unmet",
           "evidence": [],
-          "note": "There is no relay and no private symbol publication. The canary only symbolicates a -g probe offline."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no relay and no private symbol publication. The canary only symbolicates a -g probe offline."
         },
         {
           "criterionDigest": "sha256:7ab0f4aa3ffc",
@@ -1324,7 +1324,7 @@
           "criterionDigest": "sha256:aa587eb5dfef",
           "state": "unmet",
           "evidence": [],
-          "note": "There are no certified hardware rows, and this needs exact-commit results on certified hardware."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There are no certified hardware rows, and this needs exact-commit results on certified hardware."
         }
       ],
       "commands": [

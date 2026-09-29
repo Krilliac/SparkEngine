@@ -1274,9 +1274,9 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/Tools/test_release_stages.py`, `tools/site-data/release_stages.py`, `.github/workflows/release.yml`
    - Tests run candidate_readiness_errors and finalization_contract_errors, rejecting open technical or transitive work and non-finalizer exemptions. release.yml runs validate.py --require-candidate-ready.
 4. **[unmet]** Nightly, stable, and experimental channels have explicit retention and support semantics
-   - The OD-17 policy is only recorded. Retention and support semantics are not enforced.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The OD-17 policy is only recorded. Retention and support semantics are not enforced.
 5. **[unmet]** Prove one uniquely tagged immutable nightly and the protected signed stable path independently; the repository policy and workflow topology are compatible, but live publication remains unverified
-   - Needs a live published nightly and a signed stable publication. Neither exists.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a live published nightly and a signed stable publication. Neither exists.
 
 **Required commands**
 
@@ -1357,13 +1357,13 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** A consumer verifies signature, checksum, provenance, and SBOM
    - Evidence: `.github/scripts/test_verify_published_stable_release.py`, `.github/scripts/verify_published_stable_release.py`
-   - The consumer verifier is fixture-tested, but no signed stable release has been published or verified by a consumer. The publisher key and hosted provenance are not provisioned.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The consumer verifier is fixture-tested, but no signed stable release has been published or verified by a consumer. The publisher key and hosted provenance are not provisioned.
 2. **[implemented]** Critical/high findings require owned, expiring exceptions
    - Evidence: `.github/scripts/test_verify_vulnerability_findings.py`, `.github/scripts/verify_vulnerability_findings.py`, `Tests/CMakeLists.txt`, `.github/workflows/release.yml`
    - CTest ArtifactIntegrity_VulnerabilityGate imports the production gate. It fails High/Critical findings with no exception, and expired, placeholder-owner or unused exceptions. release.yml runs the gate on the grype report.
 3. **[unmet]** Release approval is recorded
    - Evidence: `.github/scripts/test_record_release_approval.py`, `.github/scripts/record_release_approval.py`
-   - The recorder is tested only with an injected urlopen. No hosted protected stable-release approval has ever been recorded.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The recorder is tested only with an injected urlopen. No hosted protected stable-release approval has ever been recorded.
 4. **[implemented]** Unsigned artifacts cannot be promoted
    - Evidence: `.github/scripts/test_verify_release_bundle.py`, `.github/scripts/verify_release_bundle.py`, `.github/scripts/test_verify_release_bundle_workflow.py`, `.github/workflows/release.yml`
    - ArtifactIntegrity_ReleaseBundle rejects unsigned or uncovered artifacts in the real verifier. The workflow test checks release.yml re-verifies right before promotion. Windows Authenticode is not covered locally.
@@ -1742,7 +1742,7 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
    - Evidence: `SparkCrashReporter/tests/CrashReporterConsentTests.cpp`, `SparkCrashReporter/src/CrashReporterApp.cpp`, `Tests/TestTelemetrySpool.cpp`, `SparkEngine/Source/Utils/Telemetry.h`, `SparkCrashReporter/CMakeLists.txt`
    - The state is unchanged. The CTest is now registered as CrashReporter_Consent, not SparkCrashReporter.CrashReporter_Consent. Update any rationale or handoff text that uses the dotted name.
 4. **[unmet]** A synthetic release crash reaches the test relay and symbolicates to source
-   - There is no relay and no private symbol publication. The canary only symbolicates a -g probe offline.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no relay and no private symbol publication. The canary only symbolicates a -g probe offline.
 5. **[unmet]** Endpoint outage recovers within documented spool/drop bounds
    - No network endpoint exists. Spool bounds are proven only against a test backend, and telemetry.md lists this as a blocker.
 
@@ -1829,7 +1829,7 @@ Windows is the intended primary host but lacks one blocking clean-machine Shippi
 Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every declared row has exact-SHA build, install, launch, renderer, content, save, crash, upgrade, rollback, and uninstall evidence
-   - No physical Windows evidence exists for either declared row. This needs clean-host exact-SHA runs.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No physical Windows evidence exists for either declared row. This needs clean-host exact-SHA runs.
 2. **[implemented]** Unsupported combinations stay experimental
    - Evidence: `Tools/platform-cert/validate_certification.py`, `Tests/Tools/test_platform_certification.py`, `docs/certification/support-matrix.json`, `Tests/CMakeLists.txt`
    - CTest PlatformCertification and PlatformCertMatrixOnly reject extra certifiable rows, tier changes and unknown profiles on the committed two-row matrix.
@@ -1921,7 +1921,7 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestRHI210D3D11ValidationReal.cpp`, `Tests/CMakeLists.txt`, `SparkEngine/Source/Graphics/GraphicsEngine.h`, `SparkEngine/Source/Graphics/GraphicsEngineWindows.cpp`, `SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp`, `SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp`, `SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h`, `.github/workflows/build.yml`, `wiki/graphics/RHI-Abstraction-Layer.md`
    - The D3D11_Validation lane (4 tests, label d3d11-validation;d3d11-debug-layer) runs WARP and debug-layer frames under SPARK_D3D11_DEBUG_LAYER=1, with an injected-error negative control. build-windows-vs2022 installs the Graphics Tools layer before ctest. This is WARP software validation; hardware GPU rows remain open.
 4. **[unmet]** Packaged scene passes on every supported Windows row
-   - Needs a packaged scene on every supported Windows row, on hardware, with exact-SHA evidence.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on every supported Windows row, on hardware, with exact-SHA evidence.
 
 **Required commands**
 
@@ -2359,12 +2359,12 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
    - Evidence: `SparkInstaller/tests/PortableGitCacheTests.cpp`, `SparkInstaller/tests/InstallerTransactionTests.cpp`, `SparkInstaller/src/GitBootstrap.cpp`, `SparkInstaller/src/GitRunner.cpp`, `SparkInstaller/src/InstallerPreflight.cpp`, `SparkInstaller/src/Installer.cpp`, `SparkInstaller/tests/GitContractTests.cpp`, `SparkInstaller/CMakeLists.txt`, `SparkInstaller/src/Installer.h`, `SparkInstaller/src/InstallerContext.h`, `SparkInstaller/src/InstallState.h`, `SparkInstaller/README.md`, `.github/workflows/release.yml`, `.github/scripts/test-workflow-failure-propagation.py`
    - Already 'implemented' in the ledger; no state change. Add the registered selectors (Installer_Tamper, Installer_AtomicUpdate, Installer_Interrupted) and the release.yml build fix as evidence. These are local fixtures, not native Windows evidence.
 2. **[unmet]** Fresh install, repair, user-data retention, and uninstall pass on Windows 11 x64
-   - Needs Windows 11 x64 fresh-install, repair and uninstall runs. None are recorded.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs Windows 11 x64 fresh-install, repair and uninstall runs. None are recorded.
 3. **[implemented]** Capabilities match documentation exactly
    - Evidence: `SparkInstaller/README.md`, `SparkInstaller/src/InstallerPreflight.cpp`, `SparkInstaller/tests/InstallerTransactionTests.cpp`, `tools/installer/check_installer_claims.py`, `Tests/Tools/test_installer_claims.py`, `SparkInstaller/src/main.cpp`, `Tests/CMakeLists.txt`
    - Already 'implemented' in the ledger, but its note still says 'No checker ties installer capabilities to documentation claims'. The dispatcher should replace that note: the Installer_DocClaims CTest runs check_installer_claims.py against the README and the installer's literal flags and exit codes.
 4. **[unmet]** Only signed artifacts can enter the stable channel
-   - Needs signed published artifacts and a stable-channel signing gate.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs signed published artifacts and a stable-channel signing gate.
 5. **[implemented]** Experimental platform installers remain owned by their platform work
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
    - No validator enforces the ownership boundary.
@@ -2648,7 +2648,7 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`, `tools/perf-budget/run_nullrhi_soak.py`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/CMakeLists.txt`, `.github/workflows/operations-scheduled.yml`, `Tests/Tools/test_operations_scheduled_workflow.py`, `wiki/advanced/Performance-Profiling-Guide.md`
    - Commits 6f7407646 and 2f4f93f67.
 4. **[unmet]** Results attach to exact commit and certified hardware row
-   - There are no certified hardware rows, and this needs exact-commit results on certified hardware.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There are no certified hardware rows, and this needs exact-commit results on certified hardware.
 
 **Required commands**
 
@@ -3448,7 +3448,7 @@ SparkGame has real lifecycle, ECS spawn, EventBus, weather, time of day, and qui
 Progress: 4 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Lifecycle score 3
-   - There is no lifecycle score 3. SparkGame is outside every release profile, with no release-profile or required-CI evidence.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no lifecycle score 3. SparkGame is outside every release profile, with no release-profile or required-CI evidence.
 2. **[implemented]** Showcase outcome is deterministic and visible/assertable
    - Evidence: `Tests/TestSparkGameShowcase.cpp`, `GameModules/SparkGame/Source/Core/GameplayShowcaseOutcome.cpp`, `GameModules/SparkGame/Source/Core/GameplayShowcase.h`, `Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake`, `Tests/CMakeLists.txt`
    - Linux only, run at 5bbdef863: real libSparkGame gives identical outcomes at 1/64 and 1/60 s steps; headless packaged runA/runB reach exhibit=4/4 from installed meshes (weather/hour n/a, no weather or time-of-day system in the headless host). Rendering not frame-checked. No exact-commit CI.
@@ -3534,7 +3534,7 @@ FPS has a local arena, input, combat, rendering, and AI foundation, but it is no
 Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** A clean Windows install launches SparkGameFPS and completes spawn-move-kill-respawn-score in single-player
-   - This needs a clean Windows install run of the full loop. None is recorded.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. This needs a clean Windows install run of the full loop. None is recorded.
 2. **[unmet]** The module builds without SparkEngineLib or engine-source include paths
    - Evidence: `GameModules/SparkGameFPS/CMakeLists.txt`
    - The module still links SparkEngineLib and uses engine-source include paths.
@@ -3632,7 +3632,7 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp`, `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h`, `GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.cpp`, `GameModules/SparkGameMMO/Source/Core/Main.cpp`, `Tests/TestMOD320MMOPersistenceReal.cpp`, `GameModules/SparkGameMMO/module.json`
    - Character IDs come from a durable counter (f7b32256a; MMOPersistence_CharacterIdsAreUniqueWithinOneSecond, _CharacterIdCounterSurvivesColdRestart, _LegacyTimestampIdsSeedCounter). LoadWorld rebuilds guilds and Main.cpp calls it (_LoadWorldIsNotANoOp). Account passwords use Spark::PasswordHash. Remaining GetTimestamp uses are createdAt/lastLogin/session times, not identity.
 4. **[unmet]** Applicable parity scores reach 3
-   - Needs owner scoring and hosted module-MMO CI evidence.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs owner scoring and hosted module-MMO CI evidence.
 
 **Required commands**
 
@@ -3712,7 +3712,7 @@ Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestMOD330ARPGDungeonReal.cpp`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.h`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.cpp`, `GameModules/SparkGameARPG/Source/Core/Main.cpp`, `GameModules/SparkGameARPG/module.json`
    - ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, skills, cooldowns, loot and boss through the real SaveSystem; ARPGDungeon_HudRoundTripsThroughSaveRestart drives UI/ARPGHud on a real UISystem across a save/restart; forged state is rejected unchanged. All 8 ARPGDungeon_ tests passed on a local Windows Release tree; no exact-commit CI.
 3. **[unmet]** Applicable scores reach 3
-   - Needs owner scoring and hosted module-ARPG CI.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs owner scoring and hosted module-ARPG CI.
 
 **Required commands**
 
@@ -3797,7 +3797,7 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestMOD340PlatformerProgressReal.cpp`, `GameModules/SparkGamePlatformer/Source/Core/PlatformerProgress.cpp`, `GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp`, `Tests/CMakeLists.txt`
    - Levels, collected ids, counters, checkpoints, lives and abilities persist as the bounded SparkGamePlatformer.progress.v1 save entry, validated before the world restore commits. Local tests reload a real SaveSystem save field-for-field into fresh systems and reject corrupt entries unchanged. No hosted module-Platformer CI run yet.
 4. **[unmet]** Applicable scores reach 3
-   - Needs owner scoring and hosted module-Platformer CI.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs owner scoring and hosted module-Platformer CI.
 
 **Required commands**
 
@@ -3875,7 +3875,7 @@ Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
    - Evidence: `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp`, `Tests/TestMOD350RPGNPCNavigationReal.cpp`, `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.h`, `Tests/CMakeLists.txt`
    - Schedule changes walk NPCs at 3 m/s along engine NavMesh routes (NavMeshBuilder/NavMeshQuery, one bake per NPC area at module load) instead of teleporting; RPGNPCNavigation_* cover the world bake, a detour around blocked ground, unreachable posts and resuming after a restore. Patrol legs still move in straight lines and no packaged run exists.
 3. **[unmet]** Applicable scores reach 3
-   - Needs owner scoring and hosted module-RPG CI.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs owner scoring and hosted module-RPG CI.
 
 **Required commands**
 
@@ -3958,7 +3958,7 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`, `Tests/TestMOD360OpenWorldPersistenceReal.cpp`, `GameModules/SparkGameOpenWorld/asset-references.json`
    - check-module-asset-refs.py fails closed for OpenWorld and passes: all 27 source asset paths exist and match asset-references.json and assets.integrity.json. OpenWorldAssets_AllRegisteredAssetsExist checks the real registered tracks and area manifests. Ground tiles and music loops are procedural; MusicManager decodes no audio.
 4. **[unmet]** Applicable scores reach 3
-   - Needs owner scoring and hosted module-OpenWorld CI.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs owner scoring and hosted module-OpenWorld CI.
 
 **Required commands**
 
@@ -4039,7 +4039,7 @@ Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestMOD370SkirmishDeterminismReal.cpp`, `Tests/TestMOD370RTSSaveReal.cpp`, `GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp`, `GameModules/SparkGameRTS/Source/Navigation/RTSGridPathfinder.cpp`, `GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp`
    - The real skirmish simulation runs commands, economy, fog and AI waves to victory. Move and attack-move orders route around structures via deterministic grid A*; routes are hashed and saved. RTSSave tests use SaveMatch/LoadMatch on the real SaveSystem with per-tick hash equality. The engine bridge registers no unattached behavior trees; the opponent runs only in the fixed-step tick.
 3. **[unmet]** Applicable scores reach 3
-   - Needs owner scoring and hosted module-RTS CI.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs owner scoring and hosted module-RTS CI.
 
 **Required commands**
 
@@ -4121,7 +4121,7 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp`, `GameModules/SparkGameRacing/Source/Race/RacingRaceManager.cpp`, `Tests/TestMOD380RacingCompleteRaceReal.cpp`, `GameModules/SparkGameRacing/README.md`
    - A finished race saved via race_save on the real SaveSystem loads bit-identical (placings, finish, lap and best-lap times) into a restarted module, holds while it runs, and restarts into a completable race. race_load validates racing state before the World restore; edited best laps, placings or finishes are refused unchanged. Ghost state not declared (OD-15). Local runs only; no exact-commit CI.
 4. **[unmet]** Applicable scores reach 3
-   - Needs owner scoring and hosted module-Racing CI.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs owner scoring and hosted module-Racing CI.
 
 **Required commands**
 
@@ -4203,7 +4203,7 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp`, `GameModules/SparkGameVisualScript/Source/Core/Main.cpp`, `GameModules/SparkGameVisualScript/Source/Core/SparkGameVisualScript.h`, `GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/coin_pickup.wav`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/enemy_attack.wav`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/health_pickup.wav`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/pickup_respawn.wav`, `GameModules/SparkGameVisualScript/Assets/Audio/VisualScript/victory_fanfare.wav`, `GameModules/SparkGameVisualScript/Assets/manifest.json`, `GameModules/SparkGameVisualScript/CMakeLists.txt`, `GameModules/SparkGameVisualScript/module.json`, `tools/audio/compose_visualscript_cues.py`, `Tests/TestMOD390VisualScriptGameplayReal.cpp`, `Tests/TestVisualScriptCompiler.cpp`, `wiki/subsystems/Visual-Scripting.md`, `GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.h`, `GameModules/SparkGameVisualScript/README.md`, `SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h`, `SparkEngine/Source/Engine/Scripting/AngelScriptEngineHotReload.cpp`, `Tests/TestMOD390VisualScriptHotReloadReal.cpp`, `Tests/TestENG200ScriptHotReloadReal.cpp`
    - vs_reload hot-reloads each entity's script module via AngelScriptEngine::HotReloadModuleFromSource, carrying fields by the ENG-200 R1-R8 rules. Pinned by VisualScriptHotReload_* (4, module.json selector) and ScriptHotReload_ENG200_FromSourceReloadsInMemoryModule (ScriptHotReloadReal, 10). Bindings evidence (audio cues, AnimationControllers) kept. Local only; no exact-commit CI yet.
 4. **[unmet]** Applicable scores reach 3
-   - Needs owner scoring and hosted module-VisualScript CI.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs owner scoring and hosted module-VisualScript CI.
 
 **Required commands**
 
@@ -4517,7 +4517,7 @@ Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every supported Linux row passes the complete certification suite
    - Evidence: `docs/readiness/OWNER-DECISIONS.md`, `wiki/platform/System-Requirements.md`
-   - OD-10 limits scope to Ubuntu 24.04 x86-64. There is no Linux certification suite, no LinuxCertification tests and no clean-host evidence.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. OD-10 limits scope to Ubuntu 24.04 x86-64. There is no Linux certification suite, no LinuxCertification tests and no clean-host evidence.
 2. **[implemented]** Experimental rows are never summarized as supported
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `docs/site/readiness.json`, `Tests/Tools/test_public_wording.py`, `Tests/CMakeLists.txt`, `wiki/platform/System-Requirements.md`
    - Update the PLT-210 note: the generic 'Linux is supported' wording gap is closed by CTest PublicWording_ExperimentalPlatforms.
@@ -4600,10 +4600,10 @@ macOS CI is nonblocking, platform-version claims conflict, no complete Metal pat
 Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** A notarized package passes on clean supported Macs
-   - There is no notarized macOS package. Clean Mac hardware runs are needed. Deferred by OD-11.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no notarized macOS package. Clean Mac hardware runs are needed. Deferred by OD-11.
 2. **[unmet]** Metal/render/content/runtime evidence is blocking
    - Evidence: `Tests/TestMetalRayTracing.cpp`
-   - build-macos is continue-on-error. The Metal tests are lifecycle smoke tests only, with no blocking render or content evidence.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. build-macos is continue-on-error. The Metal tests are lifecycle smoke tests only, with no blocking render or content evidence.
 3. **[implemented]** Minimum-version documentation matches binaries and CI
    - Evidence: `CMakeLists.txt`, `tools/check_macos_min_version.py`, `Tests/Tools/test_macos_min_version.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `wiki/platform/System-Requirements.md`
    - Add 'MacOSBaseline_*' to PLT-220 testSelectors as a new non-planned selector. Leave MacCertification_* planned. The binary-side check runs in the continue-on-error build-macos job (OD-11), so there is no hosted exact-SHA binary record yet. Keep the status at partial if the ledger needs hosted binary evidence to call this implemented.
@@ -4911,14 +4911,14 @@ Metal is incomplete and cannot support current broad backend framing.
 Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Declared pass set executes with visual parity
-   - The Metal backend is incomplete. There is no declared pass set and no visual parity test. Mac hardware is needed.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The Metal backend is incomplete. There is no declared pass set and no visual parity test. Mac hardware is needed.
 2. **[unmet]** Resource lifetime and synchronization tests are clean
-   - There are no Metal resource-lifetime or synchronization tests.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There are no Metal resource-lifetime or synchronization tests.
 3. **[unmet]** Packaged Metal scene passes on certified Macs
-   - Needs a packaged scene on certified Mac hardware.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on certified Mac hardware.
 4. **[unmet]** Unsupported features fail explicitly
    - Evidence: `Tests/TestMetalRayTracing.cpp`, `SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.mm`
-   - Only the ray-tracing null-device failure paths are tested, and only on macOS. There is no general explicit-unsupported-feature coverage.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Only the ray-tracing null-device failure paths are tested, and only on macOS. There is no general explicit-unsupported-feature coverage.
 
 **Required commands**
 
@@ -4999,7 +4999,7 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestDXRSupport.cpp`, `SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp`, `Tests/TestRHI225D3D12FallbackReal.cpp`, `Tests/CMakeLists.txt`, `wiki/graphics/D3D12-Backend.md`
    - CTest D3D12Fallback (exact 3).
 4. **[unmet]** Packaged scene passes supported GPUs/drivers
-   - Needs a packaged scene on supported GPUs and drivers.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on supported GPUs and drivers.
 
 **Required commands**
 
@@ -5073,7 +5073,7 @@ Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** GPU-backed goldens match thresholds
    - Evidence: `Tests/GoldenImages/manifest.json`, `Tests/GoldenImages/vulkan-lavapipe`, `Tests/TestRHI230VulkanGoldenReal.cpp`, `Tests/TestRHI230VulkanValidationReal.cpp`
-   - The vulkan-lavapipe row has three baselines of shipped post-process SPIR-V (PostProcess_ACES, BloomExtract, GaussianBlur_Vertical) that match locally on Lavapipe, under agent-proposed thresholds. They are software shader goldens, not engine-renderer goldens; there is no hardware row, owner review of baselines and thresholds is pending, and no hosted run exists, so the criterion stays unmet.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The vulkan-lavapipe row has three baselines of shipped post-process SPIR-V (PostProcess_ACES, BloomExtract, GaussianBlur_Vertical) that match locally on Lavapipe, under agent-proposed thresholds.
 2. **[unmet]** Production pass matrix executes
    - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp`
    - SPIR-V is now built for every shipped GLSL stage and the Linux basic pair registers it, but the Linux passes record unbound draws, so production shadow/deferred/post passes do not render on Vulkan. There is no pass-matrix parity test.
@@ -5084,7 +5084,7 @@ Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
    - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `CMakeLists.txt`, `Tests/TestRHI230VulkanValidationReal.cpp`, `Tests/CMakeLists.txt`, `wiki/graphics/RHI-Abstraction-Layer.md`
    - Windows Vulkan builds require glslangValidator and build and ship SPIR-V. CTest VulkanShaderToolchainWindows (exact 4) registers only where the Vulkan SDK is present.
 5. **[unmet]** Packaged supported rows pass
-   - There is no Vulkan package lane and no lavapipe/hardware CI rows. This needs hosted or hardware execution.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no Vulkan package lane and no lavapipe/hardware CI rows. This needs hosted or hardware execution.
 
 **Required commands**
 
@@ -5164,7 +5164,7 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestRHI240OpenGLReal.cpp`, `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp`, `Tests/CMakeLists.txt`, `Tests/OpenGLTestSupport.h`, `wiki/graphics/RHI-Abstraction-Layer.md`
    - The llvmpipe lanes pin LIBGL_ALWAYS_SOFTWARE/GALLIUM_DRIVER. The opt-in SPARK_GL_HARDWARE_ROW lane SparkOpenGLHardwareTests (labels opengl;opengl-hardware, exact 13) fails on a software context. The local hardware row is Mesa D3D12 translation under WSL, not native driver certification.
 4. **[unmet]** Packaged scenes pass
-   - There is no packaged OpenGL scene lane or packaged-scene test.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no packaged OpenGL scene lane or packaged-scene test.
 
 **Required commands**
 
@@ -5343,7 +5343,7 @@ Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 4. **[unmet]** Security/support policy names actually published versions/channels
    - Needs versions and channels that are actually published.
 5. **[unmet]** Legal/maintainer sign-off is release evidence
-   - Needs legal and maintainer sign-off.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs legal and maintainer sign-off.
 
 **Required commands**
 
@@ -5427,7 +5427,7 @@ The existing site checks in a 22 MB generated snapshot and hardcodes capabilitie
 Progress: 0 of 7 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Repository-only wording/status/doc change appears on existing site without Sites checkpoint
-   - Needs the live, owner-deployed site to use the bundle. It has not adopted it.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs the live, owner-deployed site to use the bundle. It has not adopted it.
 2. **[unmet]** Displayed SHA equals the bundle/evidence SHA
    - Evidence: `tools/site-data/runtime/verifyBundle.mjs`
    - The reference verifier binds the SHA, but the live site has not adopted it.
@@ -5525,9 +5525,9 @@ N-1 upgrade and rollback are distinct from fresh-install correctness and cannot 
 Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** A real published signed predecessor is selected by exact tag, commit, digest, and asset identity
-   - Needs a real published and signed predecessor release. None exists.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a real published and signed predecessor release. None exists.
 2. **[unmet]** Upgrade and rollback pass on a clean supported Windows host
-   - Needs upgrade and rollback runs on a clean Windows host.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs upgrade and rollback runs on a clean Windows host.
 3. **[implemented]** Failure or interruption never replaces the working install
    - Evidence: `.github/scripts/qualify-windows-msi.py`, `.github/scripts/new-msi-failure-transform.ps1`, `.github/scripts/test_qualify_windows_msi.py`, `.github/workflows/release.yml`
    - No upgrade-interruption test against a real predecessor installer.
@@ -5604,7 +5604,7 @@ Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 2. **[unmet]** Repair and uninstall pass with no N-1 claim
    - Needs Windows repair and uninstall qualification runs.
 3. **[unmet]** Evidence is bound to the reviewed v0.9.0 source commit
-   - Needs evidence bound to the reviewed v0.9.0 commit.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs evidence bound to the reviewed v0.9.0 commit.
 
 **Required commands**
 
@@ -5685,7 +5685,7 @@ Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - CTest site-data-contract drives the production validator. It checks gates are required or excluded with a reason, excluded gates may stay blocked, and misclassified or scope-widening support claims are rejected.
 3. **[unmet]** Clean install, uninstall, repair, and recovery drills pass; REL-192 separately gates N-1 upgrade and rollback
-   - No clean install, uninstall, repair or recovery drills have passed on supported hosts. Those need Windows or hosted runs.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No clean install, uninstall, repair or recovery drills have passed on supported hosts. Those need Windows or hosted runs.
 4. **[implemented]** Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance
    - Evidence: `Tests/Tools/test_release_notes.py`, `tools/release_notes.py`, `Tests/CMakeLists.txt`, `.github/workflows/release.yml`
    - CTest ReleaseProfileRehearsal_ReleaseNotes runs tools/release_notes.py. It checks support, limitations, migrations, SHA256SUMS, signatures, SBOM and attestation provenance, and fail-closed errors.
@@ -5693,7 +5693,7 @@ Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
    - Evidence: `.github/workflows/release.yml`, `.github/scripts/test_record_release_approval.py`, `.github/scripts/test_release_stages_workflow.py`, `.github/scripts/test_workflow_privilege_boundaries.py`
    - Replace the stale note ('release-approval job does not exist'). Both jobs now exist, release needs release-approval, and neither uses continue-on-error. Execution and blocking on failure still need a hosted run. Note limit: 400 characters.
 6. **[unmet]** Named qualification sign-off is retained; the protected stable-release environment requires Krilliac owner approval with administrative bypass disabled, and independent technical verification remains separate
-   - Needs a named qualification sign-off and a hosted protected owner approval. None is retained.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a named qualification sign-off and a hosted protected owner approval. None is retained.
 
 **Required commands**
 
@@ -5768,9 +5768,9 @@ The first signed predecessor needs the same exact-SHA release rehearsal, sign-of
 Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every common qualification item and gate passes at the reviewed predecessor SHA
-   - No reviewed predecessor baseline SHA exists (baselineCommit is empty), and there is no exact-SHA hosted gate evidence.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No reviewed predecessor baseline SHA exists (baselineCommit is empty), and there is no exact-SHA hosted gate evidence.
 2. **[unmet]** Named sign-off and protected approval evidence are retained
-   - signOffEvidence is empty. A named sign-off and a hosted protected approval are both still needed.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. signOffEvidence is empty. A named sign-off and a hosted protected approval are both still needed.
 3. **[implemented]** No N-1 upgrade or rollback result is presented as predecessor evidence
    - Evidence: `Tests/Tools/test_release_stages.py`, `tools/site-data/release_stages.py`, `Tests/CMakeLists.txt`
    - nminus1_evidence_errors(), run by predecessor_candidate_readiness_errors() and validate.py, refuses REL-192/INST-131 selectors and digests and the N-1 MSI provisioner in predecessor sign-off and in predecessor-only evidence and notes. CTest ReleaseProfilePredecessorRehearsal_Qualification. No hosted run.
@@ -5838,9 +5838,9 @@ N-1 installer upgrade, rollback, and migration evidence is a v1 requirement and 
 Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Exact-SHA v1 rehearsal passes with a real immutable predecessor
-   - Needs a real immutable published predecessor and a hosted exact-SHA v1 rehearsal. Neither exists.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a real immutable published predecessor and a hosted exact-SHA v1 rehearsal. Neither exists.
 2. **[unmet]** Upgrade and rollback evidence is independently retained
-   - No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned.
 3. **[implemented]** The first predecessor path cannot satisfy this item
    - Evidence: `tools/site-data/release_stages.py`, `tools/site-data/validate.py`, `Tests/Tools/test_release_stages.py`, `Tests/Tools/test_site_data_contract.py`
    - predecessor_evidence_reuse_errors() refuses substituted v1 work that cites the predecessor baseline commit, predecessor-only selectors or digests, or the bootstrap qualifier mode, and refuses REL-192 evidenced or done before the predecessor is published. Local only; no exact-commit CI yet.
@@ -5908,11 +5908,11 @@ The predecessor publication is a distinct terminal action. It must remain incomp
 Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Artifacts are immutable and signed under the disclosed project-pinned trust model
-   - No predecessor artifacts have been published or signed. Needs a published immutable release.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No predecessor artifacts have been published or signed. Needs a published immutable release.
 2. **[unmet]** Krilliac gives required owner approval with administrative bypass disabled
-   - Needs Krilliac's owner approval in a hosted protected environment with admin bypass disabled. None is recorded.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs Krilliac's owner approval in a hosted protected environment with admin bypass disabled. None is recorded.
 3. **[unmet]** A read-only independent consumer verifies the published predecessor before v1 uses it
-   - No independent read-only consumer verification of a published predecessor exists.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No independent read-only consumer verification of a published predecessor exists.
 
 **Required commands**
 
@@ -5982,12 +5982,12 @@ Final readiness requires every profile gate at one candidate commit, supported-h
 Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every gate listed in requiredGateIds for every target release profile is passing at the candidate SHA
-   - Needs every profile gate passing at a candidate SHA. The gates are blocked and there is no hosted evidence.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs every profile gate passing at a candidate SHA. The gates are blocked and there is no hosted evidence.
 2. **[implemented]** Excluded gates may remain blocked and cannot be presented as supported
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - test_excluded_gates_and_work_may_remain_open_when_ready, plus the scope-widening and capability-classification rejection tests, exercise the production validator for this rule.
 3. **[unmet]** Published artifacts are immutable and independently verify against the exact qualified candidate
-   - No published immutable artifacts, and no independent verification against a qualified candidate.
+   - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No published immutable artifacts, and no independent verification against a qualified candidate.
 4. **[implemented]** Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `.github/workflows/site-data-publish.yml`
    - Already implemented before this lane. This lane hardens it: the deploy gate reads globalRelease.state by assignment and dispatches with a case whose unknown-state branch exits 1. Global-ready publication evidence citing different commits across profiles is rejected. Proven by site-data-contract locally only; no hosted CI evidence.

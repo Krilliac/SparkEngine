@@ -1204,13 +1204,13 @@
           "criterionDigest": "sha256:9f3c13d1441c",
           "state": "unmet",
           "evidence": [],
-          "note": "The OD-17 policy is only recorded. Retention and support semantics are not enforced."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The OD-17 policy is only recorded. Retention and support semantics are not enforced."
         },
         {
           "criterionDigest": "sha256:bfd70eb1bec7",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs a live published nightly and a signed stable publication. Neither exists."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a live published nightly and a signed stable publication. Neither exists."
         }
       ],
       "commands": [
@@ -1309,7 +1309,7 @@
             ".github/scripts/test_verify_published_stable_release.py",
             ".github/scripts/verify_published_stable_release.py"
           ],
-          "note": "The consumer verifier is fixture-tested, but no signed stable release has been published or verified by a consumer. The publisher key and hosted provenance are not provisioned."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The consumer verifier is fixture-tested, but no signed stable release has been published or verified by a consumer. The publisher key and hosted provenance are not provisioned."
         },
         {
           "criterionDigest": "sha256:8cde53f33d89",
@@ -1329,7 +1329,7 @@
             ".github/scripts/test_record_release_approval.py",
             ".github/scripts/record_release_approval.py"
           ],
-          "note": "The recorder is tested only with an injected urlopen. No hosted protected stable-release approval has ever been recorded."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The recorder is tested only with an injected urlopen. No hosted protected stable-release approval has ever been recorded."
         },
         {
           "criterionDigest": "sha256:0e3cdcb238f2",
@@ -1418,13 +1418,13 @@
           "criterionDigest": "sha256:c4c9ec9526ac",
           "state": "unmet",
           "evidence": [],
-          "note": "No reviewed predecessor baseline SHA exists (baselineCommit is empty), and there is no exact-SHA hosted gate evidence."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No reviewed predecessor baseline SHA exists (baselineCommit is empty), and there is no exact-SHA hosted gate evidence."
         },
         {
           "criterionDigest": "sha256:3a8b9de7c83b",
           "state": "unmet",
           "evidence": [],
-          "note": "signOffEvidence is empty. A named sign-off and a hosted protected approval are both still needed."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. signOffEvidence is empty. A named sign-off and a hosted protected approval are both still needed."
         },
         {
           "criterionDigest": "sha256:a94d3e17f34f",
@@ -1474,13 +1474,13 @@
           "criterionDigest": "sha256:73cde1712dcd",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs a real immutable published predecessor and a hosted exact-SHA v1 rehearsal. Neither exists."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a real immutable published predecessor and a hosted exact-SHA v1 rehearsal. Neither exists."
         },
         {
           "criterionDigest": "sha256:db2de60b6b17",
           "state": "unmet",
           "evidence": [],
-          "note": "No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned."
         },
         {"criterionDigest": "sha256:81b1fd86d0c3", "state": "implemented", "evidence": ["tools/site-data/release_stages.py", "tools/site-data/validate.py", "Tests/Tools/test_release_stages.py", "Tests/Tools/test_site_data_contract.py"], "note": "predecessor_evidence_reuse_errors() refuses substituted v1 work that cites the predecessor baseline commit, predecessor-only selectors or digests, or the bootstrap qualifier mode, and refuses REL-192 evidenced or done before the predecessor is published. Local only; no exact-commit CI yet."}
       ],
@@ -1520,19 +1520,19 @@
           "criterionDigest": "sha256:48a246fe39b7",
           "state": "unmet",
           "evidence": [],
-          "note": "No predecessor artifacts have been published or signed. Needs a published immutable release."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No predecessor artifacts have been published or signed. Needs a published immutable release."
         },
         {
           "criterionDigest": "sha256:e8d601f5ec0c",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs Krilliac's owner approval in a hosted protected environment with admin bypass disabled. None is recorded."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs Krilliac's owner approval in a hosted protected environment with admin bypass disabled. None is recorded."
         },
         {
           "criterionDigest": "sha256:21deba073030",
           "state": "unmet",
           "evidence": [],
-          "note": "No independent read-only consumer verification of a published predecessor exists."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No independent read-only consumer verification of a published predecessor exists."
         }
       ],
       "commands": ["python3 tools/site-data/validate.py --require-predecessor-candidate"],
@@ -1610,7 +1610,7 @@
           "criterionDigest": "sha256:d1ade2fca435",
           "state": "unmet",
           "evidence": [],
-          "note": "No clean install, uninstall, repair or recovery drills have passed on supported hosts. Those need Windows or hosted runs."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No clean install, uninstall, repair or recovery drills have passed on supported hosts. Those need Windows or hosted runs."
         },
         {
           "criterionDigest": "sha256:b83699f23d85",
@@ -1638,7 +1638,7 @@
           "criterionDigest": "sha256:90bdc7c18dcd",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs a named qualification sign-off and a hosted protected owner approval. None is retained."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a named qualification sign-off and a hosted protected owner approval. None is retained."
         }
       ],
       "commands": ["python3 tools/site-data/validate.py", "sha256sum -c SHA256SUMS"],
@@ -1696,7 +1696,7 @@
           "criterionDigest": "sha256:f939f3cc8af2",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs every profile gate passing at a candidate SHA. The gates are blocked and there is no hosted evidence."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs every profile gate passing at a candidate SHA. The gates are blocked and there is no hosted evidence."
         },
         {
           "criterionDigest": "sha256:22e8be2baa83",
@@ -1712,7 +1712,7 @@
           "criterionDigest": "sha256:5bbbc4190311",
           "state": "unmet",
           "evidence": [],
-          "note": "No published immutable artifacts, and no independent verification against a qualified candidate."
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No published immutable artifacts, and no independent verification against a qualified candidate."
         },
         {
           "criterionDigest": "sha256:3b70b5b3a40d",
