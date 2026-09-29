@@ -4756,7 +4756,8 @@ set_tests_properties(SupplyChain_WineSetupScriptIntegrity PROPERTIES
 # procedures (Tests/Tools/test_pe_isa_ranges.py) and inline CRT/STL code behind
 # the _Avx2WmemEnabled/__isa_available guards (test_isa_guard_dominance.py).
 # Real MSVC Release images still carry libsodium's AVX2/AES-NI variants and
-# sodium_init's XGETBV, which the MSVC branch of SparkLibsodium.cmake compiles
+# sodium_init's XGETBV, which the MSVC branch of SparkLibsodium.cmake compiles,
+# and AVX-512 loops MSVC's auto-vectorizer adds behind __isa_available >= 6
 # (docs/readiness/BLD-100-PROGRESS.md), so registering the Windows scan now
 # would fail every run.
 add_test(
