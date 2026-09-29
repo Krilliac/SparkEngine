@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **171 implemented** (66%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **172 implemented** (66%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -296,7 +296,7 @@ Close transport, true multi-client, persistence, migration, load, and operations
 | [`NET-110`](#net-110--define-and-implement-the-production-online-service-boundary) Define and implement the production online-service boundary | P1 | **in-progress** | 4/4 · 0/4 | `NET-100`, `SEC-100` | `DATA-120`, `TF-110`, `OPS-110` |
 | [`DATA-120`](#data-120--make-multiplayer-persistence-transactional-migratable-backed-up-and-recoverable) Make multiplayer persistence transactional, migratable, backed up, and recoverable | P1 | **in-progress** | 3/4 · 0/4 | `SAVE-230`, `NET-100` | `NET-110`, `TF-110`, `OPS-110` |
 | [`TF-110`](#tf-110--prove-mmofps-with-a-true-independent-multi-client-release-gate) Prove MMOFPS with a true independent multi-client release gate | P0 | **in-progress** | 4/4 · 0/4 | `NET-100`, `RDY-020`, `HEAD-220`, `RDY-010` | `TF-120`, `OPS-110` |
-| [`TF-120`](#tf-120--close-mmofps-restart-multimap-migration-topology-and-performance) Close MMOFPS restart, multimap migration, topology, and performance | P1 | **in-progress** | 2/5 · 0/5 | `TF-110`, `DATA-120`, `OPS-110` | — |
+| [`TF-120`](#tf-120--close-mmofps-restart-multimap-migration-topology-and-performance) Close MMOFPS restart, multimap migration, topology, and performance | P1 | **in-progress** | 3/5 · 0/5 | `TF-110`, `DATA-120`, `OPS-110` | — |
 | [`OPS-110`](#ops-110--add-production-server-observability-load-soak-backup-and-incident-gates) Add production server observability, load, soak, backup, and incident gates | P1 | **in-progress** | 4/4 · 0/4 | `OPS-100`, `HEAD-220`, `NET-100`, `DATA-120` | `TF-110`, `TF-120`, `NET-110` |
 
 ### Wave 4 — Module completion factory
@@ -3179,12 +3179,13 @@ Shared save storage, client scene/collision reload, topology-driven migration, t
 
 **Acceptance criteria**
 
-Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Cross-continent travel is visually/physically correct
    - No committed test proves cross-continent travel is visually and physically correct.
-2. **[unmet]** Duplicate/lost migration messages do not duplicate/lose entities
-   - Partial: the database residency fence (TFDatabaseResidency, TF120_Residency_*) makes duplicate claims and releases idempotent, refuses a second continent while the holder lives, and recovers a lost release via dead-owner takeover. The hop-handler handoff that carries migration messages is not built and the server wiring is not proven end to end, so the criterion stays open.
+2. **[implemented]** Duplicate/lost migration messages do not duplicate/lose entities
+   - Evidence: `GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseResidency.cpp`, `GameModules/SparkGameMMOFPS/Source/Net/TFHandoffParticipant.cpp`, `SparkEngine/Source/Engine/Networking/AreaHandoffDispatcher.cpp`, `SparkGateway/src/GatewayAreaControl.cpp`, `SparkServer/src/ServerApplication.cpp`, `Tests/TestHandoffParticipant.cpp`, `Tests/TestGatewayAreaControl.cpp`, `Tests/CMakeLists.txt`
+   - TerrafrontMigration_* (pinned 3/6/4/1) pass on local Windows Release, RED-proven by mutation: duplicate, reordered, lost-request/reply and source-restart cases keep one durable owner; forged/replayed/stale frames never reach the participant. Pawn authority is a test double; no live SparkServer+gateway+TF run; no exact-commit CI.
 3. **[implemented]** Forced source/destination crashes recover
    - Evidence: `Tests/TestTF120Residency.cpp`, `Tests/TF120PeerProcess.h`, `Tests/CMakeLists.txt`
    - Three POSIX process drills SIGKILL a peer SparkTests authority that holds the character, as source, as destination, and mid claim/release. The survivor reclaims with the last acknowledged commit, and a restart of the killed continent clears its own rows. Two in-process cases cover rebind and dead-owner recovery on every host. Needs the Linux GCC/ASan build to execute; not run here.

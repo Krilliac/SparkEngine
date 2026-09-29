@@ -2035,7 +2035,21 @@
           "evidence": [],
           "note": "No committed test proves cross-continent travel is visually and physically correct."
         },
-        {"criterionDigest": "sha256:00177fa65d14", "state": "unmet", "evidence": [], "note": "Partial: the database residency fence (TFDatabaseResidency, TF120_Residency_*) makes duplicate claims and releases idempotent, refuses a second continent while the holder lives, and recovers a lost release via dead-owner takeover. The hop-handler handoff that carries migration messages is not built and the server wiring is not proven end to end, so the criterion stays open."},
+        {
+          "criterionDigest": "sha256:00177fa65d14",
+          "state": "implemented",
+          "evidence": [
+            "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseResidency.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Net/TFHandoffParticipant.cpp",
+            "SparkEngine/Source/Engine/Networking/AreaHandoffDispatcher.cpp",
+            "SparkGateway/src/GatewayAreaControl.cpp",
+            "SparkServer/src/ServerApplication.cpp",
+            "Tests/TestHandoffParticipant.cpp",
+            "Tests/TestGatewayAreaControl.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "TerrafrontMigration_* (pinned 3/6/4/1) pass on local Windows Release, RED-proven by mutation: duplicate, reordered, lost-request/reply and source-restart cases keep one durable owner; forged/replayed/stale frames never reach the participant. Pawn authority is a test double; no live SparkServer+gateway+TF run; no exact-commit CI."
+        },
         {
           "criterionDigest": "sha256:1d6ff567117a",
           "state": "implemented",
@@ -2112,9 +2126,7 @@
         "terrafront-recovery",
         "terrafront-soak"
       ],
-      "plannedTestSelectors": [
-        "TerrafrontMigration_*"
-      ]
+      "plannedTestSelectors": []
     }
   ]
 }
