@@ -610,27 +610,61 @@ def _sanitizer_metadata_errors(
     return errors
 
 
-def _executed_selector_cases(root: ET.Element, selector_prefix: str) -> list[str]:
-    """Names of testcases matching the prefix that ran to a clean pass."""
-    executed: list[str] = []
+def module_test_set_errors(
+    root: ET.Element, label: str, module_name: str,
+    selector_prefix: str, expected_cases: frozenset[str],
+) -> list[str]:
+    """The module's production tests in a JUnit run: exactly the expected set, once each, passed.
+
+    A filtered run drops names, a stale binary records names the sources no
+    longer define, and a merged or repeated run records a name twice; none of
+    them is deterministic evidence that every production test ran.
+    """
+    if not expected_cases:
+        return [
+            f"{label}: no production-source test defines {selector_prefix}*, so the "
+            f"run cannot show that {module_name}'s production code executed"
+        ]
+    errors: list[str] = []
+    counts: dict[str, int] = {}
     for testcase in root.iter("testcase"):
         name = testcase.get("name")
         if not isinstance(name, str) or not name.startswith(selector_prefix):
             continue
-        if any(testcase.find(child) is not None for child in _JUNIT_UNSUCCESSFUL_CHILDREN):
-            continue
-        empty = any(
-            prop.get("name") == "empty" and prop.get("value") == "true"
-            for prop in testcase.iter("property")
+        counts[name] = counts.get(name, 0) + 1
+        outcomes = [child for child in _JUNIT_UNSUCCESSFUL_CHILDREN if testcase.find(child) is not None]
+        if outcomes:
+            errors.append(
+                f"{label}: testcase {name} did not run to a clean pass "
+                f"({', '.join(f'<{child}>' for child in outcomes)})"
+            )
+        elif any(prop.get("name") == "empty" and prop.get("value") == "true"
+                 for prop in testcase.iter("property")):
+            errors.append(f"{label}: testcase {name} is marked empty -- it asserted nothing")
+    missing = sorted(expected_cases - counts.keys())
+    if missing:
+        errors.append(
+            f"{label} is missing {len(missing)} of {len(expected_cases)} {module_name} "
+            f"production tests ({selector_prefix}*): {', '.join(missing)}"
         )
-        if not empty:
-            executed.append(name)
-    return executed
+    undefined = sorted(counts.keys() - expected_cases)
+    if undefined:
+        errors.append(
+            f"{label} records {selector_prefix}* testcases not defined in the production "
+            f"sources (a stale or foreign test binary): {', '.join(undefined)}"
+        )
+    repeated = sorted(name for name, count in counts.items() if count > 1)
+    if repeated:
+        errors.append(
+            f"{label} records {selector_prefix}* testcases more than once: {', '.join(repeated)}"
+        )
+    return errors
 
 
 def validate_sanitizer_report_bytes(
     metadata_data: bytes, junit_data: bytes | None, leaf_name: str, module_name: str,
     *, expected_sha: str | None, selector_prefix: str | None,
+    expected_cases: frozenset[str],
 ) -> list[str]:
     """Validate an ASan evidence directory's metadata and the JUnit it binds."""
     if not metadata_data:
@@ -676,27 +710,40 @@ def validate_sanitizer_report_bytes(
             "filtered ASan run is not full-suite sanitizer evidence"
         )
     errors.extend(_sanitizer_metadata_errors(metadata, expected_sha, junit_data, junit_tests))
-    if not _executed_selector_cases(root, selector_prefix):
-        errors.append(
-            f"sanitizer-report junit.xml executed no passing {selector_prefix}* test — "
-            f"the ASan run did not exercise {module_name}'s production sources"
-        )
+    errors.extend(module_test_set_errors(
+        root, "sanitizer-report junit.xml", module_name, selector_prefix, expected_cases,
+    ))
     return errors
 
 
 def validate_artifact_bytes(
     data: bytes, leaf_name: str, evidence_type: str, module_name: str,
     *, expected_sha: str | None = None, companion: bytes | None = None,
-    selector_prefix: str | None = None,
+    selector_prefix: str | None = None, expected_cases: frozenset[str] = frozenset(),
 ) -> list[str]:
     """Dispatch semantic validation for exact already-held artifact bytes.
 
     ``companion`` is the second file of a two-file evidence type (the JUnit
-    document a sanitizer-report's metadata binds); ``selector_prefix`` is the
-    module's production-test name prefix for sanitizer evidence.
+    document a sanitizer-report's metadata binds).  ``selector_prefix`` is the
+    module's production-test name prefix and ``expected_cases`` the test names
+    the production sources define for it; JUnit and sanitizer evidence must
+    record exactly that set.
     """
     if evidence_type == "junit-xml":
-        return validate_junit_xml_bytes(data, leaf_name, module_name)
+        if selector_prefix is None:
+            return [
+                f"module {module_name!r} declares no module test selector, so its "
+                "JUnit evidence cannot show that any of its production tests ran"
+            ]
+        errors = validate_junit_xml_bytes(data, leaf_name, module_name)
+        try:
+            root = _safe_parse_xml_bytes(data).getroot()
+        except Exception:
+            # validate_junit_xml_bytes already reported the parse failure.
+            return errors
+        return errors + module_test_set_errors(
+            root, f"junit-xml {leaf_name}", module_name, selector_prefix, expected_cases,
+        )
     if evidence_type == "package-smoke-log":
         return validate_package_smoke_bytes(
             data, leaf_name, module_name, expected_sha=expected_sha,
@@ -705,5 +752,6 @@ def validate_artifact_bytes(
         return validate_sanitizer_report_bytes(
             data, companion, leaf_name, module_name,
             expected_sha=expected_sha, selector_prefix=selector_prefix,
+            expected_cases=expected_cases,
         )
     return []

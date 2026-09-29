@@ -112,14 +112,16 @@ REQUIRED_INCLUDED_EVIDENCE = frozenset(
 # completion.junitSha256, so it cannot be swapped independently.
 SANITIZER_REPORT_JUNIT = "build/module-evidence/sanitizer-asan/junit.xml"
 
-# The sanitizer run is the whole SparkTests suite, most of which is not about
-# any one module.  Each included module must name a test-name prefix whose
-# tests drive its production sources (not a test-local mirror), and at least
-# one such test must have actually executed and passed under ASan.
-# FPSRespawn_* tests include SparkGameFPS headers and drive its compiled
-# RespawnSystem; Tests/Tools/test_module_evidence.py pins that every file
-# defining a selected test is production-source and registered in SparkTests.
-SANITIZER_MODULE_SELECTORS: dict[str, str] = {
+# The JUnit and sanitizer runs are the whole SparkTests suite, most of which is
+# not about any one module.  Each included module names a test-name prefix whose
+# tests drive its production sources (not a test-local mirror).  The validator
+# derives the expected name set from the production-source files that define
+# the prefix, and both the JUnit and the ASan JUnit must record exactly that
+# set, each case once and passed.  FPSRespawn_* tests include SparkGameFPS
+# headers and drive its compiled RespawnSystem; Tests/Tools/test_module_evidence.py
+# pins the derived set to the SPARK_TEST_EXPECT_COUNT that
+# FPSSinglePlayerSlice_RespawnProductionSource registers.
+MODULE_TEST_SELECTORS: dict[str, str] = {
     "SparkGameFPS": "FPSRespawn_",
 }
 
