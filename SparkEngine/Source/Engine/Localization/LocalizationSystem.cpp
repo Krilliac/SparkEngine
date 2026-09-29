@@ -139,7 +139,9 @@ namespace Spark
         std::unordered_map<std::string, std::string> parsedEntries;
         size_t parsed = 0;
         size_t pos = 0;
-        const size_t firstContent = SkipJsonSpace(content, 0);
+        // Tolerate a UTF-8 byte order mark, which Windows editors commonly write.
+        const size_t bomBytes = content.starts_with("\xEF\xBB\xBF") ? 3 : 0;
+        const size_t firstContent = SkipJsonSpace(content, bomBytes);
         const size_t lastContent = content.empty() ? 0 : content.find_last_not_of(" \t\n\r\f\v");
         if (firstContent >= content.size() || content[firstContent] != '{' || lastContent == std::string::npos ||
             content[lastContent] != '}')
@@ -195,7 +197,11 @@ namespace Spark
             return false;
         }
 
-        m_entries = std::move(parsedEntries);
+        // Publish only a fully parsed catalog; entries merge over the existing table as before.
+        for (auto& [key, value] : parsedEntries)
+        {
+            m_entries.insert_or_assign(key, std::move(value));
+        }
         return true;
     }
 

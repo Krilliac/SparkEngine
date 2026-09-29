@@ -398,6 +398,9 @@ namespace SparkFPS
         bool m_hasPendingLocalAuthority = false;
         uint32_t m_lastLocalAuthoritySequence = 0;
         uint32_t m_lastSnapshotBatch = 0;
+        /// Client: reused snapshot decode buffers, so a received batch does not allocate once warmed up.
+        std::vector<NetworkPlayerState> m_snapshotStates;
+        std::vector<PlayerScore> m_snapshotScores;
         /// Server: simulated seconds of input each player may still submit (anti speed-hack).
         std::unordered_map<uint32_t, float> m_inputBudget;
         /// Server: seconds of applied input until each player may fire again (fire-rate limit).

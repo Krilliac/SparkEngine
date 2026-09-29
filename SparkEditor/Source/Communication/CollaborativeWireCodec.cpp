@@ -94,7 +94,9 @@ namespace SparkEditor
                 const uint32_t bits = ReadU32();
                 float value = 0.0f;
                 if (!failed)
+                {
                     std::memcpy(&value, &bits, sizeof(value));
+                }
                 return value;
             }
 
@@ -128,7 +130,9 @@ namespace SparkEditor
         {
             EditMessage edit;
             if (reader.failed)
+            {
                 return edit;
+            }
             edit.type = static_cast<EditMessageType>(reader.ReadU8());
             edit.sourceEditor = reader.ReadU32();
             edit.nodeId = reader.ReadString(kCollabMaxIdentifierBytes);
@@ -161,7 +165,9 @@ namespace SparkEditor
         {
             EditorPeer peer;
             if (reader.failed)
+            {
                 return peer;
+            }
             peer.id = reader.ReadU32();
             peer.userName = reader.ReadString(kCollabMaxIdentifierBytes);
             peer.selectedNode = reader.ReadString(kCollabMaxIdentifierBytes);
@@ -200,11 +206,15 @@ namespace SparkEditor
     bool DeserializeMessage(const uint8_t* data, size_t size, InternalMessage& outMessage)
     {
         if (!data || size == 0)
+        {
             return false;
+        }
 
         Reader reader{data, size, 0, false};
         if (!reader.HasBytes(1))
+        {
             return false;
+        }
 
         InternalMessage decoded;
         decoded.type = static_cast<InternalMessageType>(reader.ReadU8());
@@ -216,10 +226,14 @@ namespace SparkEditor
         decoded.peerInfo = ReadEditorPeer(reader);
 
         if (reader.failed || reader.pos != reader.size)
+        {
             return false;
+        }
         if (static_cast<uint8_t>(decoded.type) > static_cast<uint8_t>(InternalMessageType::AuthAccepted) ||
             static_cast<uint8_t>(decoded.editMessage.type) > static_cast<uint8_t>(EditMessageType::ComponentModified))
+        {
             return false;
+        }
 
         outMessage = std::move(decoded);
         return true;

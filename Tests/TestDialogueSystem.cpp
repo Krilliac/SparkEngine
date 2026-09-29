@@ -78,6 +78,23 @@ TEST(Dialogue_RejectsOversizedValidDocumentBeforeParsing)
     std::filesystem::remove(path);
 }
 
+TEST(Dialogue_LoadsCrlfDocument)
+{
+    // Windows editors save CRLF; the bounded reader must not treat the byte count as a short read.
+    const auto path = std::filesystem::temp_directory_path() / "spark_dialogue_crlf.json";
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << "{\r\n  \"id\": \"crlf\",\r\n  \"startNode\": \"a\",\r\n"
+             << "  \"nodes\": [\r\n    { \"nodeId\": \"a\", \"type\": \"End\" }\r\n  ]\r\n}\r\n";
+    }
+
+    Spark::DialogueTree tree;
+    EXPECT_TRUE(tree.LoadFromFile(path.string()));
+    EXPECT_EQ(std::string("crlf"), tree.GetId());
+    EXPECT_EQ(static_cast<size_t>(1), tree.GetNodeCount());
+    std::filesystem::remove(path);
+}
+
 TEST(Dialogue_StartConversation)
 {
     Spark::DialogueSystem sys;

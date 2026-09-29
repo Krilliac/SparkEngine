@@ -1446,7 +1446,8 @@ if(ENABLE_NETWORKING)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerClient.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerCombat.cpp"
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp")
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FpsSnapshotCodec.cpp")
     target_compile_features(SparkFPSLANLoopbackPeer PRIVATE cxx_std_23)
     target_include_directories(SparkFPSLANLoopbackPeer PRIVATE
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
@@ -5894,7 +5895,9 @@ foreach(_spark_sec120_case IN ITEMS
     DataTable_NumericLookingStringRoundTripsAsValidJSON
     Dialogue_LoadFailureDoesNotPartiallyReplaceTree
     Dialogue_RejectsOversizedValidDocumentBeforeParsing
+    Dialogue_LoadsCrlfDocument
     StringTable_MalformedReloadIsTransactional
+    StringTable_LoadAcceptsBomAndMergesEntries
     FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits
     FPSMultiplayer_SnapshotDecoderRejectsMalformedRecordWhenBatchIsZero
 )

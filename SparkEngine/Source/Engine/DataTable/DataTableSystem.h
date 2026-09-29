@@ -371,7 +371,10 @@ namespace Spark::Data
                     const auto& col = m_columns[c];
                     const std::string v = m_rows[r].GetString(col.name);
                     o << '"' << JEsc(col.name) << "\": ";
-                    if ((col.type == ColumnType::Int || col.type == ColumnType::Float) && IsCanonicalJsonNumber(v))
+                    // An empty numeric cell keeps its historical "0"; any other value that is not a
+                    // canonical JSON number (e.g. "001") is written as a string so the output stays JSON.
+                    if ((col.type == ColumnType::Int || col.type == ColumnType::Float) &&
+                        (v.empty() || IsCanonicalJsonNumber(v)))
                     {
                         o << (v.empty() ? "0" : v);
                     }
@@ -855,6 +858,8 @@ namespace Spark::Data
             const std::streamoff fileSize = file.tellg();
             if (fileSize < 0 || fileSize > static_cast<std::streamoff>(DataTable::kMaxDocumentBytes))
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Data table file '%s' exceeds the %zu byte limit",
+                                filePath.c_str(), DataTable::kMaxDocumentBytes);
                 return false;
             }
             file.seekg(0, std::ios::beg);

@@ -170,8 +170,8 @@ namespace SparkFPS
 
         const std::vector<uint8_t>& payload = message.payload;
         uint32_t batch = 0;
-        std::vector<NetworkPlayerState> decodedStates;
-        std::vector<PlayerScore> decodedScores;
+        std::vector<NetworkPlayerState>& decodedStates = m_snapshotStates;
+        std::vector<PlayerScore>& decodedScores = m_snapshotScores;
         if (!DecodeSnapshotBatch(payload.data(), payload.size(), batch, decodedStates, decodedScores))
             return;
         if (batch <= m_lastSnapshotBatch)

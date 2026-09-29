@@ -45,7 +45,9 @@ namespace Spark
         constexpr std::streamoff kMaxFileBytes = 8 * 1024 * 1024;
         constexpr size_t kMaxNodes = 100000;
         constexpr size_t kMaxChoicesPerNode = 4096;
-        std::ifstream file(filePath);
+        // Binary mode: the byte count from tellg must match what read() returns (text mode would
+        // translate CRLF on Windows and fail every CRLF file on a short read).
+        std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "DialogueTree: failed to open file: %s", filePath.c_str());
@@ -66,7 +68,10 @@ namespace Spark
         {
             file.read(content.data(), fileSize);
             if (!file)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "DialogueTree: failed to read file: %s", filePath.c_str());
                 return false;
+            }
         }
 
         Spark::Json::Value root;
@@ -101,6 +106,8 @@ namespace Spark
 
         if (nodes.Size() > kMaxNodes)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "DialogueTree: '%s' has %zu nodes, above the %zu node limit",
+                            filePath.c_str(), nodes.Size(), kMaxNodes);
             return false;
         }
         for (size_t i = 0; i < nodes.Size(); ++i)

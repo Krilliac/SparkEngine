@@ -18,7 +18,7 @@ namespace
         file << contents;
         return path;
     }
-}
+} // namespace
 
 // ============================================================================
 // StringTable Tests
@@ -66,14 +66,26 @@ TEST(StringTable_GetAllKeys)
 
 TEST(StringTable_MalformedReloadIsTransactional)
 {
-    const auto path = WriteLocalizationFixture(
-        "spark-loc-regression.json", R"({"new":"value","broken":"unterminated})");
+    const auto path =
+        WriteLocalizationFixture("spark-loc-regression.json", R"({"new":"value","broken":"unterminated})");
     Spark::StringTable table;
     table.SetEntry("old", "preserved");
 
     EXPECT_FALSE(table.LoadFromFile(path.string()));
     EXPECT_EQ(table.GetEntry("old"), std::string("preserved"));
     EXPECT_FALSE(table.HasEntry("new"));
+    std::filesystem::remove(path);
+}
+
+TEST(StringTable_LoadAcceptsBomAndMergesEntries)
+{
+    const auto path = WriteLocalizationFixture("spark-loc-bom.json", "\xEF\xBB\xBF{ \"menu.play\": \"Play\" }\n");
+    Spark::StringTable table;
+    table.SetEntry("existing", "kept");
+
+    EXPECT_TRUE(table.LoadFromFile(path.string()));
+    EXPECT_EQ(table.GetEntry("menu.play"), std::string("Play"));
+    EXPECT_EQ(table.GetEntry("existing"), std::string("kept"));
     std::filesystem::remove(path);
 }
 

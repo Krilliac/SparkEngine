@@ -38,22 +38,36 @@ extern "C" int SparkFuzzProcessFpsSnapshot(const std::uint8_t* data, std::size_t
     {
         return 0;
     }
+    std::uint32_t batch = 0;
+    std::vector<SparkFPS::NetworkPlayerState> states;
+    std::vector<SparkFPS::PlayerScore> scores;
+    const bool accepted = SparkFPS::DecodeSnapshotBatch(data, size, batch, states, scores);
+
+    // Independent framing model: header, bounded count, exact record payload length.
     if (size < kHeaderSize)
     {
+        if (accepted)
+        {
+            InvariantFailure("decoder accepted a payload shorter than the header");
+        }
         return 0;
     }
     const std::uint32_t rawBatch = ReadRawU32(data);
     const std::uint32_t rawCount = static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8u);
     if (rawCount > SparkFPS::kMaxPlayers || size != kHeaderSize + rawCount * kRecordSize)
     {
+        if (accepted)
+        {
+            InvariantFailure("decoder accepted a payload whose framing the model rejects");
+        }
         return 0;
     }
-
-    std::uint32_t batch = 0;
-    std::vector<SparkFPS::NetworkPlayerState> states;
-    std::vector<SparkFPS::PlayerScore> scores;
-    if (!SparkFPS::DecodeSnapshotBatch(data, size, batch, states, scores))
+    if (!accepted)
     {
+        if (!states.empty() || !scores.empty())
+        {
+            InvariantFailure("a rejected batch left decoded records in the outputs");
+        }
         return 0;
     }
     if (batch != rawBatch || states.size() != rawCount || scores.size() != rawCount)

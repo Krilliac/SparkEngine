@@ -131,11 +131,18 @@ TEST(DataTable_NumericLookingStringRoundTripsAsValidJSON)
     Spark::Data::DataTable table;
     ASSERT_TRUE(table.LoadFromJSON(R"([{"id":"001"}])"));
     const std::string encoded = table.SaveToJSON();
+    // "001" is not a JSON number; it must be written as a string, not as a bare 001.
+    EXPECT_TRUE(encoded.find(R"("id": "001")") != std::string::npos);
     Spark::Data::DataTable reloaded;
     EXPECT_TRUE(reloaded.LoadFromJSON(encoded));
     const auto* row = reloaded.GetRow("001");
     ASSERT_TRUE(row != nullptr);
     EXPECT_EQ(std::string("001"), row->GetString("id"));
+
+    // An empty cell in a numeric column keeps its historical 0.
+    Spark::Data::DataTable counts;
+    ASSERT_TRUE(counts.LoadFromCSV("id,count\na,5\nb,\n"));
+    EXPECT_TRUE(counts.SaveToJSON().find(R"("count": 0)") != std::string::npos);
 }
 
 // ============================================================================
