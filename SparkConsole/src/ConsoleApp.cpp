@@ -580,7 +580,9 @@ void ConsoleApp::OnEnginePipeClosed()
 {
     PrintLog(L"Engine input reader thread terminated.");
     if (!m_running)
+    {
         return;
+    }
 
     // The engine closed (or lost) its end of the pipe: it shut down or died.
     // A pipe child has no reason to outlive it. Ending here lets the engine's
@@ -1167,7 +1169,9 @@ void ConsoleApp::AddToHistory(const std::string& typedLine, const std::string& r
                                   resolvedName != "alias" && m_commandRegistry.HasCommand(resolvedName);
     const std::string cmd = ConsoleHistoryPolicy::EntryFor(typedLine, argumentsTrusted);
     if (cmd.empty())
+    {
         return;
+    }
 
     std::lock_guard<std::mutex> lock(m_historyMutex);
 

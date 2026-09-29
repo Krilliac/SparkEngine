@@ -113,7 +113,9 @@ namespace Spark
     bool ScriptSandbox::AddAllowedFunction(const std::string& name)
     {
         if (m_functionPolicyLocked)
+        {
             return false;
+        }
         m_allowedFunctions.insert(name);
         return true;
     }
@@ -121,7 +123,9 @@ namespace Spark
     bool ScriptSandbox::AddBlockedFunction(const std::string& name)
     {
         if (m_functionPolicyLocked)
+        {
             return false;
+        }
         m_blockedFunctions.insert(name);
         return true;
     }
@@ -129,7 +133,9 @@ namespace Spark
     bool ScriptSandbox::RemoveAllowedFunction(const std::string& name)
     {
         if (m_functionPolicyLocked)
+        {
             return false;
+        }
         m_allowedFunctions.erase(name);
         return true;
     }
@@ -137,7 +143,9 @@ namespace Spark
     bool ScriptSandbox::RemoveBlockedFunction(const std::string& name)
     {
         if (m_functionPolicyLocked)
+        {
             return false;
+        }
         m_blockedFunctions.erase(name);
         return true;
     }

@@ -13,6 +13,7 @@
 #include <format>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -36,7 +37,8 @@ namespace Spark
 
         json EntityIdToJson(entt::entity entity)
         {
-            return json(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
+            // Return the integer itself: a braced json{...} would build a one-element array.
+            return static_cast<uint64_t>(static_cast<uint32_t>(entity));
         }
 
         // Accept an integer in 0..UINT32_MAX that does not name entt::null.
@@ -50,7 +52,9 @@ namespace Spark
             else
                 return false;
             if (raw > std::numeric_limits<uint32_t>::max())
+            {
                 return false;
+            }
             id = static_cast<uint32_t>(raw);
             return static_cast<entt::entity>(id) != entt::null;
         }
@@ -68,7 +72,9 @@ namespace Spark
                     float value = 0.0f;
                     std::memcpy(&value, src + i * sizeof(float), sizeof(float));
                     if (!std::isfinite(value))
+                    {
                         return false;
+                    }
                 }
                 return true;
             };
@@ -192,14 +198,18 @@ namespace Spark
         {
             std::vector<entt::entity> alive;
             for (auto&& [entity] : reg.storage<entt::entity>()->each())
+            {
                 alive.push_back(entity);
+            }
             std::sort(alive.begin(), alive.end());
 
             auto parentOf = [&reg](entt::entity entity) -> entt::entity
             {
                 const Transform* transform = reg.try_get<Transform>(entity);
                 if (!transform || transform->parent == entity || !reg.valid(transform->parent))
+                {
                     return entt::null;
+                }
                 return transform->parent;
             };
 
@@ -210,22 +220,28 @@ namespace Spark
             for (const entt::entity root : alive)
             {
                 if (parentOf(root) != entt::null)
+                {
                     continue;
+                }
                 pending.push_back(root);
                 while (!pending.empty())
                 {
                     const entt::entity entity = pending.back();
                     pending.pop_back();
                     if (!written.insert(entity).second)
+                    {
                         continue;
+                    }
                     order.push_back(entity);
                     if (const Transform* transform = reg.try_get<Transform>(entity))
                     {
                         // Push in reverse so the first child is written first.
-                        for (auto child = transform->children.rbegin(); child != transform->children.rend(); ++child)
+                        for (auto child : std::ranges::reverse_view(transform->children))
                         {
-                            if (reg.valid(*child) && parentOf(*child) == entity && !written.contains(*child))
-                                pending.push_back(*child);
+                            if (reg.valid(child) && parentOf(child) == entity && !written.contains(child))
+                            {
+                                pending.push_back(child);
+                            }
                         }
                     }
                 }
@@ -233,7 +249,9 @@ namespace Spark
             for (const entt::entity entity : alive)
             {
                 if (written.insert(entity).second)
+                {
                     order.push_back(entity);
+                }
             }
             return order;
         }
@@ -301,7 +319,9 @@ namespace Spark
     bool TrySerializeWorld(const World& world, std::string& out, std::string* error)
     {
         if (error)
+        {
             error->clear();
+        }
         try
         {
             std::optional<UnreadableField> unreadable;
@@ -395,7 +415,9 @@ namespace Spark
                     const json& parentValue = ent["parent"];
                     uint32_t parentId = 0;
                     if (ReadSerializedEntityId(parentValue, parentId))
+                    {
                         serializedParents[index] = parentId;
+                    }
                     else if (!parentValue.is_number_integer() || parentValue.get<int64_t>() != -1)
                     {
                         return Reject(error, std::format("{} has parent {}; parent must be an integer entity id or -1",
@@ -558,7 +580,9 @@ namespace Spark
                     }
                 }
                 if (const std::optional<uint32_t>& parentId = serializedParents[entityIndex - 1])
+                {
                     pending.push_back({e, *parentId});
+                }
             }
 
             // Second pass: resolve parents now that all ids exist.

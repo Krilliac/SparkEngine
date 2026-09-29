@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string_view>
 #include <system_error>
@@ -32,7 +33,7 @@ namespace Spark::SaveFileDurability
     /**
      * @brief Outcome of ReplaceFileAtomically. The commit point is the rename itself.
      */
-    enum class ReplaceOutcome
+    enum class ReplaceOutcome : std::uint8_t
     {
         NotCommitted,        ///< @p destination still names its previous contents.
         CommittedNotDurable, ///< @p destination names the staged contents, but the directory sync failed.

@@ -1353,7 +1353,9 @@ namespace SparkEditor
                         {
                             const std::optional<EditorAssetKind> kind = AssetKindForField(type, field.fieldName);
                             if (!kind || field.readOnly || !ImGui::BeginDragDropTarget())
+                            {
                                 return;
+                            }
                             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
                             {
                                 std::string reference;

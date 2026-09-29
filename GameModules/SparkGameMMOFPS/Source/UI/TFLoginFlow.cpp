@@ -151,14 +151,20 @@ namespace Terrafront
         // login was refused with SessionActive. End the session for real.
         const bool wasRemoteClient = m_ctx && LogoutStopsTransport(m_ctx->role);
         if (m_ctx && m_ctx->clientNet)
+        {
             m_ctx->clientNet->Disconnect(); // loopback: runs the authority's session cleanup directly
+        }
 #ifdef ENABLE_NETWORKING
         if (wasRemoteClient && m_ctx->world)
+        {
             m_ctx->world->StopNetworking(); // remote: the socket leave ends the server session
+        }
 #endif
         ResetToLogin();
         if (wasRemoteClient)
+        {
             m_error = "Logged out - reconnect to sign in again.";
+        }
     }
 
     void TFLoginFlow::Update(float deltaTime)

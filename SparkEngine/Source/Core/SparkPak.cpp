@@ -268,7 +268,9 @@ namespace Spark
         // A declared count the raw TOC cannot physically hold is corrupt; refusing
         // it here keeps the reserve and parse loop below proportional to real data.
         if (static_cast<uint64_t>(m_header.fileCount) * kMinTocEntryBytes > m_header.tocRawSize)
+        {
             return false;
+        }
         if (m_header.tocOffset < sizeof(PakHeader) || m_header.tocOffset >= fileSize)
             return false;
         if (m_header.tocSize > fileSize - m_header.tocOffset)
@@ -399,7 +401,9 @@ namespace Spark
         // The writer emits exactly fileCount entries; trailing bytes mean the count
         // and the TOC disagree.
         if (ptr != end)
+        {
             return false;
+        }
 
         // Build iteration list
         m_entryList.clear();

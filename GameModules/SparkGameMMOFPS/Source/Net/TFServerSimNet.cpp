@@ -62,7 +62,9 @@ namespace Terrafront
         for (const TFMsg id : kTFEnteredWorldGatedMsgs)
             routeToChokePoint(id);
         for (const TFMsg id : kTFOnboardingMsgs)
+        {
             routeToChokePoint(id);
+        }
 
         // W5 onboarding (Task 4): credential-bearing ids use the sensitive path.
         for (const TFMsg id : kTFCredentialMsgs)
@@ -88,11 +90,17 @@ namespace Terrafront
         const auto unregister = [&nm](TFMsg id)
         { nm.UnregisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id))); };
         for (const TFMsg id : kTFEnteredWorldGatedMsgs)
+        {
             unregister(id);
+        }
         for (const TFMsg id : kTFOnboardingMsgs)
+        {
             unregister(id);
+        }
         for (const TFMsg id : kTFCredentialMsgs)
+        {
             unregister(id);
+        }
         m_handlersRegistered = false;
     }
 
@@ -214,11 +222,15 @@ namespace Terrafront
                 // character's committed row alone: the sweep's result covers every player (another player's
                 // stale row fails it) and says nothing about whether this row landed.
                 if (!m_ctx->characters->PersistProgress(leavingCharacter, xp, rank, flux))
+                {
                     (void)m_ctx->progression->SaveNow();
+                }
                 progressDurable = m_ctx->characters->IsProgressCommitted(leavingCharacter, xp, rank, flux);
                 if (!progressDurable)
+                {
                     SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                     "[TF] final progression persistence failed for disconnected player %u", id);
+                }
             }
             m_activeCharacter.erase(cIt);
         }
@@ -236,9 +248,11 @@ namespace Terrafront
         // keeps the character on this continent (where it can still re-enter) until the next bind clears it.
         if (leavingCharacter != 0 && m_ctx->characters && m_ctx->progression && progressDurable &&
             !m_ctx->progression->HasParkedMeta(leavingCharacter) && !m_ctx->characters->LeaveWorld(leavingCharacter))
+        {
             SPARK_LOG_ERROR(Spark::LogCategory::Game,
                             "[TF] character %llu of disconnected player %u stays resident: releasing it failed",
                             static_cast<unsigned long long>(leavingCharacter), id);
+        }
         // W6 directives: same recycled-PlayerId hygiene for directive progress.
         if (m_ctx->directives)
             m_ctx->directives->ClearPlayer(id);

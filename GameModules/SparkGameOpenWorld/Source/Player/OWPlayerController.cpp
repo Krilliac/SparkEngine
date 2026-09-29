@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace OpenWorld
 {
@@ -45,7 +46,9 @@ namespace OpenWorld
     {
         InputManager* input = m_context ? m_context->GetInput() : nullptr;
         if (!input)
+        {
             return;
+        }
 
         constexpr int kShift = 0x10;
         auto axis = [input](int positive, int negative)
@@ -55,14 +58,18 @@ namespace OpenWorld
 
         const bool interactHeld = input->IsKeyDown('F');
         if (interactHeld && !m_interactHeld)
+        {
             TryInteract();
+        }
         m_interactHeld = interactHeld;
     }
 
     void OWPlayerController::FixedUpdate(float fixedDeltaTime)
     {
         if (!m_player || !m_world)
+        {
             return;
+        }
         if (!m_player->IsAlive())
         {
             m_player->SetLocomotion(0.0f, false);
@@ -76,9 +83,13 @@ namespace OpenWorld
         // so an exhausted player walks instead of flickering between speeds every step.
         const float stamina = m_player->GetSurvivalState().stamina;
         if (!m_sprintRequested || stamina >= kSprintRecoverStamina)
+        {
             m_sprintExhausted = false;
+        }
         else if (stamina <= 0.0f)
+        {
             m_sprintExhausted = true;
+        }
 
         const float inputLength = std::sqrt(m_forward * m_forward + m_strafe * m_strafe);
         if (inputLength <= 0.0f)
@@ -92,7 +103,7 @@ namespace OpenWorld
         const float baseSpeed = sprinting ? kSprintSpeed : kWalkSpeed;
 
         // Yaw 0 faces north (+Z) and 90 faces east (+X), matching the compass.
-        constexpr float kDegToRad = 3.14159265358979f / 180.0f;
+        constexpr float kDegToRad = std::numbers::pi_v<float> / 180.0f;
         const float yawRad = state.yaw * kDegToRad;
         const float sinYaw = std::sin(yawRad);
         const float cosYaw = std::cos(yawRad);
@@ -125,12 +136,16 @@ namespace OpenWorld
             else if (const uint32_t eventId = m_events->FindJoinableEventNear(state.posX, state.posZ, kEventJoinRange))
             {
                 if (m_events->JoinEvent(eventId))
+                {
                     result = {InteractResult::Kind::JoinEvent, eventId, 0};
+                }
             }
             else if (const Settlement* settlement = m_settlements->FindSettlementAt(state.posX, state.posZ))
             {
                 if (m_settlements->VisitSettlement(settlement->settlementId))
+                {
                     result = {InteractResult::Kind::VisitSettlement, settlement->settlementId, 0};
+                }
             }
         }
         return result;

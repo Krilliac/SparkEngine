@@ -189,7 +189,9 @@ namespace Spark::Json
                 // Truncation lands in int exactly when the value is strictly
                 // inside (INT_MIN - 1, INT_MAX + 1); both bounds are exact doubles.
                 if (std::isfinite(*val) && *val > -2147483649.0 && *val < 2147483648.0)
+                {
                     return static_cast<int>(*val);
+                }
                 SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsInt: %g does not fit in int", *val);
                 return fallback;
             }
@@ -721,7 +723,9 @@ namespace Spark::Json
                     {
                         // Raw bytes below 0x20 must be escaped inside a string.
                         if (static_cast<unsigned char>(c) < 0x20)
+                        {
                             RecordError("unescaped control character in string");
+                        }
                         result += c;
                     }
                 }

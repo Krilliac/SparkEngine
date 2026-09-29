@@ -159,7 +159,9 @@ namespace Spark::Daemon
                     std::lock_guard lock(m_mutex);
                     auto it = m_index.find(key);
                     if (it != m_index.end())
+                    {
                         EraseByIterator(it->second);
+                    }
                 }
                 DeleteBlobFile(key);
                 return MakeError("asset cache write failed");
@@ -406,7 +408,7 @@ namespace Spark::Daemon
         const std::uintmax_t fileSize = std::filesystem::file_size(file, sizeEc);
         if (sizeEc || fileSize < kBlobHeaderBytes || fileSize > kMaxPayloadSize)
             return false;
-        const size_t total = static_cast<size_t>(fileSize);
+        const auto total = static_cast<size_t>(fileSize);
 
         uint8_t lenBytes[kBlobHeaderBytes];
         in.read(reinterpret_cast<char*>(lenBytes), sizeof(lenBytes));

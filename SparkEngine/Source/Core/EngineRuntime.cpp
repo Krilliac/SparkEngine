@@ -33,7 +33,7 @@ std::vector<ModuleManager*>& EngineRuntime::ResidentModuleManagers()
 {
     // Process-lifetime by design (see the header): never destroyed, so the managers
     // stay reachable from static storage through process exit.
-    static std::vector<ModuleManager*>* const managers = new std::vector<ModuleManager*>();
+    static auto* const managers = new std::vector<ModuleManager*>();
     return *managers;
 }
 

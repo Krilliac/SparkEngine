@@ -215,7 +215,9 @@ namespace Spark::Persistence
                     continue;
                 }
                 if (i + 1 >= field.size())
+                {
                     return false;
+                }
                 ++i;
                 switch (field[i])
                 {
@@ -798,8 +800,6 @@ namespace Spark::Persistence
 
         std::unordered_map<std::string, std::string> loaded;
         std::string line;
-        std::string key;
-        std::string value;
         bool escapedFormat = false;
         size_t lineNumber = 0;
         while (std::getline(file, line))
@@ -832,6 +832,9 @@ namespace Spark::Persistence
             {
                 return reject(lineNumber, "has no key/value separator");
             }
+            // Fresh per record: both are moved into the map below.
+            std::string key;
+            std::string value;
             if (escapedFormat)
             {
                 if (!UnescapeKVField(line.substr(0, tabPos), key) || !UnescapeKVField(line.substr(tabPos + 1), value))

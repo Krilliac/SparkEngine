@@ -794,7 +794,9 @@ namespace Spark::Core::Lifecycle
         // again. Only the published engine counts: GetInstance() alone can name an
         // engine some other owner started, which is not this boot's service.
         if (ctx->GetScriptEngine() != nullptr && ctx->GetScriptEngine() == AngelScriptEngine::GetInstance())
+        {
             return true;
+        }
 
         static AngelScriptEngine s_angelScript;
         if (!s_angelScript.Initialize())
@@ -822,7 +824,9 @@ namespace Spark::Core::Lifecycle
         auto* ctx = EngineContext::Get();
         AngelScriptEngine* scriptEngine = ctx != nullptr ? ctx->GetScriptEngine() : nullptr;
         if (scriptEngine == nullptr)
+        {
             return;
+        }
         ctx->SetScriptEngine(nullptr);
         scriptEngine->Shutdown();
     }

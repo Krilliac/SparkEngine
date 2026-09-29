@@ -138,7 +138,7 @@ namespace SparkEditor
         /// Largest `.sparkprefab` TryLoad reads and Save writes. Project prefabs come from shared or
         /// downloaded projects and the parser bounds counts but not bytes, so the size is checked
         /// before any byte is read.
-        static constexpr std::uintmax_t kMaxPrefabFileBytes = 4u * 1024u * 1024u;
+        static constexpr std::uintmax_t kMaxPrefabFileBytes = std::uintmax_t{4} * 1024u * 1024u;
 
         /**
          * @brief Save the prefab to a file

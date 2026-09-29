@@ -2,20 +2,20 @@
   "schemaVersion": 1,
   "description": "CI-110 clang-tidy diagnostic budget: distinct diagnostics per file and check across every shipped-product translation unit, measured with the clang-tidy CI lane configuration. The checks and total fields summarize the files map. Lower entries as diagnostics are fixed; raising one is a reviewed exception. Regenerate with Tools/clang_tidy_budget.py update.",
   "clangTidyMajorVersion": 18,
-  "measuredAt": "Local clang-tidy 18.1.3 (Ubuntu 24.04) with the clang-tidy lane's libc++ Debug configure, over all 955 shipped-product translation units of the shared working tree while HEAD moved from 1ea8275 to e82fe3a (2026-09-26). Not a hosted measurement: refresh from the first hosted clang-tidy-output artifact if counts differ. SaveSystem.cpp and SaveFileCodec.cpp re-measured locally with clang-tidy 18.1.8 and libc++ 18 headers after the SEC-120 save codec split (2026-09-28); the same setup reproduced the committed SaveSystem.cpp entries at e82fe3a.",
-  "total": 16543,
+  "measuredAt": "Hosted clang-tidy 18.1.3 lane artifact clang-tidy-output (Build SparkEngine run 36455093181, job 109041200498) at 3d330173c1474d6becc6ce8cfd81a0fb4967e479, less the diagnostics the cifix2 clang-tidy-budget change fixed (each fixed (file, check) re-measured locally with clang-tidy 21.1.8 on the lane's libc++ Debug configure, which reproduced the hosted counts of every regressed entry except MMOPersistenceSystem.cpp bugprone-unchecked-optional-access; that entry was re-measured with clang-tidy 18.1.8: 10 at HEAD, 0 after). Stale entries the hosted run reported are lowered to its measured counts (2026-09-28). PlatformerHazardSystem.cpp braces lowered 17 -> 16 for the MOD-295 laser-toggle log removal (local clang-tidy 18, 103b76663).",
+  "total": 16304,
   "checks": {
     "bugprone-assignment-in-if-condition": 6,
     "bugprone-branch-clone": 62,
     "bugprone-empty-catch": 28,
-    "bugprone-exception-escape": 135,
+    "bugprone-exception-escape": 129,
     "bugprone-forward-declaration-namespace": 2,
     "bugprone-implicit-widening-of-multiplication-result": 112,
     "bugprone-inc-dec-in-conditions": 1,
     "bugprone-incorrect-roundings": 9,
     "bugprone-integer-division": 4,
     "bugprone-macro-parentheses": 13,
-    "bugprone-misplaced-widening-cast": 15,
+    "bugprone-misplaced-widening-cast": 8,
     "bugprone-multi-level-implicit-pointer-conversion": 4,
     "bugprone-not-null-terminated-result": 1,
     "bugprone-optional-value-conversion": 1,
@@ -34,26 +34,26 @@
     "modernize-avoid-bind": 1,
     "modernize-concat-nested-namespaces": 31,
     "modernize-deprecated-headers": 10,
-    "modernize-loop-convert": 51,
+    "modernize-loop-convert": 50,
     "modernize-macro-to-enum": 17,
     "modernize-make-unique": 3,
     "modernize-pass-by-value": 37,
-    "modernize-raw-string-literal": 78,
+    "modernize-raw-string-literal": 73,
     "modernize-redundant-void-arg": 1,
     "modernize-return-braced-init-list": 182,
-    "modernize-use-auto": 390,
+    "modernize-use-auto": 378,
     "modernize-use-default-member-init": 111,
     "modernize-use-emplace": 97,
     "modernize-use-equals-default": 20,
     "modernize-use-equals-delete": 122,
     "modernize-use-override": 10,
-    "modernize-use-starts-ends-with": 37,
-    "modernize-use-std-numbers": 56,
+    "modernize-use-starts-ends-with": 31,
+    "modernize-use-std-numbers": 49,
     "modernize-use-transparent-functors": 2,
-    "modernize-use-using": 11,
-    "performance-avoid-endl": 135,
+    "modernize-use-using": 10,
+    "performance-avoid-endl": 134,
     "performance-enum-size": 326,
-    "performance-faster-string-find": 13,
+    "performance-faster-string-find": 4,
     "performance-inefficient-string-concatenation": 17,
     "performance-inefficient-vector-operation": 7,
     "performance-move-const-arg": 11,
@@ -61,8 +61,8 @@
     "performance-no-int-to-ptr": 23,
     "performance-trivially-destructible": 1,
     "performance-unnecessary-copy-initialization": 7,
-    "performance-unnecessary-value-param": 108,
-    "readability-braces-around-statements": 13870,
+    "performance-unnecessary-value-param": 106,
+    "readability-braces-around-statements": 13688,
     "readability-inconsistent-declaration-parameter-name": 24
   },
   "files": {
@@ -103,7 +103,6 @@
       "readability-braces-around-statements": 19
     },
     "GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.cpp": {
-      "modernize-use-auto": 1,
       "readability-braces-around-statements": 13
     },
     "GameModules/SparkGameFPS/Source/Core/EngineWeatherAdapter.cpp": {
@@ -149,7 +148,7 @@
     "GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp": {
       "bugprone-empty-catch": 3,
       "google-build-using-namespace": 1,
-      "readability-braces-around-statements": 38
+      "readability-braces-around-statements": 37
     },
     "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp": {
       "google-build-using-namespace": 1,
@@ -200,8 +199,7 @@
       "performance-avoid-endl": 2
     },
     "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp": {
-      "modernize-use-std-numbers": 2,
-      "readability-braces-around-statements": 64
+      "readability-braces-around-statements": 22
     },
     "GameModules/SparkGameFPS/Source/Game/Player.cpp": {
       "google-build-using-namespace": 1,
@@ -291,8 +289,7 @@
       "readability-braces-around-statements": 25
     },
     "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp": {
-      "google-build-using-namespace": 1,
-      "modernize-use-auto": 2
+      "google-build-using-namespace": 1
     },
     "GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp": {
       "readability-braces-around-statements": 28
@@ -420,7 +417,7 @@
       "readability-braces-around-statements": 12
     },
     "GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.cpp": {
-      "readability-braces-around-statements": 27
+      "readability-braces-around-statements": 25
     },
     "GameModules/SparkGameMMOFPS/Source/Game/TFDeployablePlacement.cpp": {
       "readability-braces-around-statements": 17
@@ -584,8 +581,7 @@
       "readability-braces-around-statements": 19
     },
     "GameModules/SparkGameMMOFPS/Source/Game/TFSpectatorDrive.cpp": {
-      "modernize-use-std-numbers": 1,
-      "readability-braces-around-statements": 14
+      "readability-braces-around-statements": 12
     },
     "GameModules/SparkGameMMOFPS/Source/Game/TFSpectatorUi.cpp": {
       "readability-braces-around-statements": 2
@@ -637,8 +633,7 @@
       "readability-braces-around-statements": 12
     },
     "GameModules/SparkGameMMOFPS/Source/Game/TFVehiclePhysics.cpp": {
-      "modernize-use-std-numbers": 2,
-      "readability-braces-around-statements": 15
+      "readability-braces-around-statements": 13
     },
     "GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.cpp": {
       "google-build-using-namespace": 1,
@@ -674,12 +669,11 @@
     "GameModules/SparkGameMMOFPS/Source/Game/TFViewModelRender.cpp": {
       "bugprone-branch-clone": 4,
       "google-build-using-namespace": 3,
-      "modernize-use-std-numbers": 2,
-      "readability-braces-around-statements": 19
+      "readability-braces-around-statements": 17
     },
     "GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServer.cpp": {
       "google-build-using-namespace": 1,
-      "readability-braces-around-statements": 21
+      "readability-braces-around-statements": 20
     },
     "GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServerFx.cpp": {
       "readability-braces-around-statements": 18
@@ -737,12 +731,12 @@
       "readability-braces-around-statements": 12
     },
     "GameModules/SparkGameMMOFPS/Source/Net/TFServerSimOnboarding.cpp": {
-      "readability-braces-around-statements": 17
+      "readability-braces-around-statements": 16
     },
     "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp": {
       "google-build-using-namespace": 1,
       "modernize-use-auto": 2,
-      "readability-braces-around-statements": 84
+      "readability-braces-around-statements": 82
     },
     "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseBackup.cpp": {
       "google-build-using-namespace": 1,
@@ -872,7 +866,6 @@
     },
     "GameModules/SparkGameMMOFPS/Source/World/TFRegionSystemNet.cpp": {
       "modernize-loop-convert": 1,
-      "modernize-use-auto": 1,
       "readability-braces-around-statements": 18
     },
     "GameModules/SparkGameMMOFPS/Source/World/TFRegionSystemUi.cpp": {
@@ -1198,7 +1191,7 @@
       "performance-unnecessary-value-param": 1
     },
     "SparkConsole/src/ConsoleApp.cpp": {
-      "performance-avoid-endl": 17,
+      "performance-avoid-endl": 16,
       "readability-braces-around-statements": 12
     },
     "SparkConsole/src/main.cpp": {
@@ -1234,7 +1227,7 @@
     "SparkDaemon/src/OrchestrationService.cpp": {
       "bugprone-exception-escape": 1,
       "modernize-use-auto": 2,
-      "readability-braces-around-statements": 79
+      "readability-braces-around-statements": 78
     },
     "SparkDaemon/src/OrchestratorIdentity.cpp": {
       "readability-braces-around-statements": 17
@@ -1377,14 +1370,14 @@
     },
     "SparkEditor/Source/Core/EditorUI.cpp": {
       "bugprone-branch-clone": 1,
-      "bugprone-exception-escape": 7,
+      "bugprone-exception-escape": 1,
       "modernize-loop-convert": 1,
       "modernize-make-unique": 1,
       "modernize-raw-string-literal": 1,
       "modernize-return-braced-init-list": 1,
       "modernize-use-auto": 1,
       "performance-unnecessary-value-param": 2,
-      "readability-braces-around-statements": 97
+      "readability-braces-around-statements": 89
     },
     "SparkEditor/Source/Core/EditorUI.h": {
       "performance-enum-size": 4,
@@ -1475,7 +1468,7 @@
       "bugprone-empty-catch": 1,
       "bugprone-implicit-widening-of-multiplication-result": 1,
       "modernize-return-braced-init-list": 1,
-      "readability-braces-around-statements": 46
+      "readability-braces-around-statements": 43
     },
     "SparkEditor/Source/Panels/AudioMixerPanel.cpp": {
       "readability-braces-around-statements": 7
@@ -1629,14 +1622,14 @@
     "SparkEditor/Source/Panels/HierarchyPanel.cpp": {
       "bugprone-branch-clone": 1,
       "bugprone-exception-escape": 2,
-      "modernize-use-auto": 4,
+      "modernize-use-auto": 1,
       "modernize-use-equals-default": 1,
-      "readability-braces-around-statements": 84
+      "readability-braces-around-statements": 78
     },
     "SparkEditor/Source/Panels/InspectorComponentRenderers_Core3D.cpp": {
       "bugprone-exception-escape": 6,
       "modernize-use-auto": 8,
-      "readability-braces-around-statements": 10
+      "readability-braces-around-statements": 8
     },
     "SparkEditor/Source/Panels/InspectorComponentRenderers_Gameplay.cpp": {
       "readability-braces-around-statements": 1
@@ -1776,7 +1769,6 @@
       "readability-braces-around-statements": 12
     },
     "SparkEditor/Source/Panels/SceneImportPanel.cpp": {
-      "modernize-loop-convert": 1,
       "readability-braces-around-statements": 24
     },
     "SparkEditor/Source/Panels/SceneImportPanelDrawing.cpp": {
@@ -1875,9 +1867,7 @@
     "SparkEditor/Source/Panels/VisualScriptPanel.cpp": {
       "bugprone-branch-clone": 5,
       "google-build-using-namespace": 1,
-      "modernize-raw-string-literal": 5,
-      "performance-faster-string-find": 9,
-      "readability-braces-around-statements": 63
+      "readability-braces-around-statements": 43
     },
     "SparkEditor/Source/Panels/WeaponEditorPanel.cpp": {
       "modernize-return-braced-init-list": 1,
@@ -2126,7 +2116,7 @@
       "modernize-use-using": 2
     },
     "SparkEngine/Source/Audio/SoundEffect.cpp": {
-      "modernize-use-auto": 8,
+      "modernize-use-auto": 7,
       "readability-braces-around-statements": 8
     },
     "SparkEngine/Source/Audio/SoundEffect.h": {
@@ -2567,7 +2557,7 @@
     "SparkEngine/Source/Engine/ECS/Systems/PhaseSystemManager.h": {
       "bugprone-reserved-identifier": 1,
       "performance-enum-size": 1,
-      "readability-braces-around-statements": 8
+      "readability-braces-around-statements": 7
     },
     "SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.cpp": {
       "google-build-using-namespace": 1,
@@ -2595,7 +2585,7 @@
       "readability-braces-around-statements": 7
     },
     "SparkEngine/Source/Engine/Events/EventSystem.h": {
-      "readability-braces-around-statements": 6
+      "readability-braces-around-statements": 3
     },
     "SparkEngine/Source/Engine/Gameplay/AbilityAuras.cpp": {
       "modernize-use-auto": 2
@@ -2744,7 +2734,7 @@
     },
     "SparkEngine/Source/Engine/Networking/NetworkReplication.cpp": {
       "google-build-using-namespace": 1,
-      "readability-braces-around-statements": 24
+      "readability-braces-around-statements": 22
     },
     "SparkEngine/Source/Engine/Networking/PacketValidator.cpp": {
       "readability-braces-around-statements": 4
@@ -2803,7 +2793,7 @@
       "readability-braces-around-statements": 1
     },
     "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp": {
-      "readability-braces-around-statements": 58
+      "readability-braces-around-statements": 54
     },
     "SparkEngine/Source/Engine/Scripting/ScriptHookManager.h": {
       "performance-enum-size": 1
@@ -2824,7 +2814,7 @@
     },
     "SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp": {
       "modernize-use-emplace": 2,
-      "readability-braces-around-statements": 30
+      "readability-braces-around-statements": 9
     },
     "SparkEngine/Source/Engine/Scripting/VisualScriptNodeTypes.h": {
       "performance-enum-size": 1
@@ -2845,7 +2835,6 @@
     "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp": {
       "modernize-loop-convert": 1,
       "modernize-use-auto": 1,
-      "performance-unnecessary-value-param": 1,
       "readability-braces-around-statements": 10
     },
     "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h": {
@@ -3314,7 +3303,7 @@
       "performance-enum-size": 1
     },
     "SparkEngine/Source/Graphics/OBJStaticMeshLoader.cpp": {
-      "modernize-use-auto": 4
+      "modernize-use-auto": 1
     },
     "SparkEngine/Source/Graphics/OcclusionCulling.h": {
       "modernize-use-equals-delete": 2
@@ -3373,7 +3362,6 @@
     },
     "SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h": {
       "modernize-concat-nested-namespaces": 1,
-      "modernize-use-using": 1,
       "performance-no-int-to-ptr": 6
     },
     "SparkEngine/Source/Graphics/RHI/PipelineStateCache.h": {
@@ -3596,7 +3584,6 @@
       "readability-braces-around-statements": 8
     },
     "SparkEngine/Source/Graphics/TextureSystemLinuxTexture.cpp": {
-      "bugprone-misplaced-widening-cast": 7,
       "modernize-pass-by-value": 1
     },
     "SparkEngine/Source/Graphics/UICompositor.h": {
@@ -3784,7 +3771,7 @@
     },
     "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp": {
       "google-build-using-namespace": 1,
-      "modernize-use-auto": 5,
+      "modernize-use-auto": 4,
       "performance-move-const-arg": 2,
       "readability-braces-around-statements": 35
     },
@@ -3794,11 +3781,10 @@
     "SparkEngine/Source/SceneManager/SceneManager.cpp": {
       "bugprone-empty-catch": 1,
       "bugprone-exception-escape": 1,
-      "modernize-use-starts-ends-with": 6,
       "modernize-use-std-numbers": 1,
       "performance-no-automatic-move": 1,
-      "performance-unnecessary-value-param": 2,
-      "readability-braces-around-statements": 115
+      "performance-unnecessary-value-param": 1,
+      "readability-braces-around-statements": 60
     },
     "SparkEngine/Source/Utils/AngleUtils.h": {
       "modernize-use-std-numbers": 1,
@@ -4295,7 +4281,7 @@
     "SparkServer/src/ServerHealth.cpp": {
       "modernize-raw-string-literal": 7,
       "modernize-use-auto": 1,
-      "readability-braces-around-statements": 12
+      "readability-braces-around-statements": 11
     },
     "SparkServer/src/main.cpp": {
       "bugprone-exception-escape": 1,

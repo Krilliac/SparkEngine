@@ -67,27 +67,37 @@ namespace Spark::CrashHandlerDetail
         constexpr std::string_view prefix = "spark_crash_";
         constexpr std::size_t kSuffixLength = 32;
         if (!name.starts_with(prefix))
+        {
             return false;
+        }
         name.remove_prefix(prefix.size());
         const std::size_t separator = name.find('_');
         if (separator == 0 || separator == std::string_view::npos || separator > 10 ||
             name.size() - separator - 1 != kSuffixLength)
+        {
             return false;
+        }
 
         std::uint64_t parsed = 0;
         for (std::size_t index = 0; index < separator; ++index)
         {
             const char digit = name[index];
             if (digit < '0' || digit > '9')
+            {
                 return false;
+            }
             parsed = parsed * 10 + static_cast<std::uint64_t>(digit - '0');
         }
         if (parsed == 0 || parsed > std::numeric_limits<std::uint32_t>::max())
+        {
             return false;
+        }
         for (const char character : name.substr(separator + 1))
         {
             if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')))
+            {
                 return false;
+            }
         }
         processId = static_cast<unsigned long>(parsed);
         return true;
@@ -113,9 +123,13 @@ namespace Spark::CrashHandlerDetail
 #else
             // kill() with a negative or zero PID addresses a process group.
             if (processId == 0 || processId > static_cast<unsigned long>(INT_MAX))
+            {
                 return false;
+            }
             if (kill(static_cast<pid_t>(processId), 0) == 0)
+            {
                 return true;
+            }
             return errno != ESRCH;
 #endif
         }
@@ -185,11 +199,15 @@ namespace Spark::CrashHandlerDetail
             if (nativeName.size() > 64 ||
                 !std::all_of(nativeName.begin(), nativeName.end(), [](auto character)
                              { return character > 0 && static_cast<std::uint32_t>(character) < 0x80; }))
+            {
                 return false;
+            }
             name.clear();
             name.reserve(nativeName.size());
             for (const auto character : nativeName)
+            {
                 name.push_back(static_cast<char>(character));
+            }
             return true;
         }
 
@@ -212,14 +230,20 @@ namespace Spark::CrashHandlerDetail
             for (; !error && it != std::filesystem::directory_iterator(); it.increment(error))
             {
                 if (++entries > 4096)
+                {
                     return false;
+                }
                 std::error_code entryError;
                 const std::filesystem::file_status status = it->symlink_status(entryError);
                 if (entryError || !std::filesystem::is_regular_file(status))
+                {
                     return false;
+                }
                 const std::uintmax_t size = it->file_size(entryError);
                 if (entryError)
+                {
                     return false;
+                }
                 candidate.bytes += size;
                 candidate.empty = false;
             }
@@ -248,25 +272,37 @@ namespace Spark::CrashHandlerDetail
         for (; !error && it != std::filesystem::directory_iterator(); it.increment(error))
         {
             if (++examined > kMaxRetentionEntriesExamined)
+            {
                 break;
+            }
             const std::filesystem::directory_entry& entry = *it;
             std::string name;
             if (!Private::TryGetAsciiLeafName(entry.path(), name))
+            {
                 continue;
+            }
             unsigned long processId = 0;
             if (!ParseCrashArtifactDirectoryName(name, processId))
+            {
                 continue;
+            }
             std::error_code statusError;
             if (!std::filesystem::is_directory(entry.symlink_status(statusError)) || statusError)
+            {
                 continue; // symlinks and plain files are never followed or removed
+            }
             if (!Private::CurrentUserOwns(entry.path()) || Private::ProcessMayBeRunning(processId))
+            {
                 continue;
+            }
 
             Private::RetentionCandidate candidate;
             candidate.path = entry.path();
             candidate.lastWrite = std::filesystem::last_write_time(candidate.path, statusError);
             if (statusError || !Private::MeasureArtifactDirectory(candidate))
+            {
                 continue;
+            }
             candidates.push_back(std::move(candidate));
         }
 
@@ -292,7 +328,9 @@ namespace Spark::CrashHandlerDetail
             std::error_code removeError;
             if (std::filesystem::remove_all(candidate.path, removeError) != static_cast<std::uintmax_t>(-1) &&
                 !removeError)
+            {
                 ++removed;
+            }
         }
         return removed;
     }

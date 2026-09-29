@@ -1592,7 +1592,9 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (error)
+        {
             error->clear();
+        }
         SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !sparkprojectPath.empty(), false);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading project from '%s'", sparkprojectPath.c_str());
         std::cout << "Opening project: " << sparkprojectPath << "\n";
@@ -1639,7 +1641,9 @@ namespace SparkEditor
             {
                 std::cerr << "Project file not found: " << resolvedPath << "\n";
                 if (error)
+                {
                     *error = "Project file not found: " + resolvedPath;
+                }
                 return false;
             }
 
@@ -1655,7 +1659,9 @@ namespace SparkEditor
             if (!EnsureBuildScaffold(m_currentProject.path, m_currentProject.name))
             {
                 if (error)
+                {
                     *error = "Could not add the missing build scaffold to project '" + m_currentProject.path + "'";
+                }
                 restorePreviousProject();
                 return false;
             }
@@ -1679,7 +1685,9 @@ namespace SparkEditor
             restorePreviousProject();
             std::cerr << "Error opening project: " << e.what() << "\n";
             if (error)
+            {
                 *error = std::string("Error opening project: ") + e.what();
+            }
             return false;
         }
 
@@ -1995,7 +2003,7 @@ namespace SparkEditor
     // ------------------------------------------------------------------
     // Project file I/O (.sparkproject)
     // ------------------------------------------------------------------
-    enum class ProjectDocumentStatus
+    enum class ProjectDocumentStatus : std::uint8_t
     {
         Ok,
         Rejected,
@@ -2026,13 +2034,19 @@ namespace SparkEditor
         constexpr std::string_view kVersionKey = "\"projectFileVersion\"";
         const size_t keyPos = content.find(kVersionKey);
         if (keyPos == std::string::npos)
+        {
             return ProjectDocumentStatus::Ok;
+        }
 
         size_t valuePos = content.find_first_not_of(kWhitespace, keyPos + kVersionKey.size());
         if (valuePos != std::string::npos && content[valuePos] == ':')
+        {
             valuePos = content.find_first_not_of(kWhitespace, valuePos + 1);
+        }
         else
+        {
             valuePos = std::string::npos;
+        }
         const char* const end = content.data() + content.size();
         const char* const begin = valuePos == std::string::npos ? end : content.data() + valuePos;
         uint64_t version = 0;
@@ -2061,13 +2075,17 @@ namespace SparkEditor
     bool ProjectManager::LoadProjectFile(const std::string& sparkprojectPath, std::string* error)
     {
         if (error)
+        {
             error->clear();
+        }
         const auto report = [error](const std::string& message)
         {
             std::cerr << message << "\n";
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "%s", message.c_str());
             if (error)
+            {
                 *error = message;
+            }
         };
 
         const auto readDocument =
@@ -2102,7 +2120,9 @@ namespace SparkEditor
             {
                 auto result = m_fileCache->ReadText(path);
                 if (result.IsOk())
+                {
                     content = result.Value();
+                }
             }
             if (content.empty())
             {
@@ -2113,7 +2133,7 @@ namespace SparkEditor
                     return ProjectDocumentStatus::Rejected;
                 }
                 // Bounded read: the file may have grown after it was sized.
-                std::array<char, 16 * 1024> chunk{};
+                std::array<char, std::size_t{16} * 1024> chunk{};
                 while (file.read(chunk.data(), static_cast<std::streamsize>(chunk.size())) || file.gcount() > 0)
                 {
                     const auto received = static_cast<size_t>(file.gcount());
@@ -2166,7 +2186,9 @@ namespace SparkEditor
             std::cerr << recovered << "\n";
             SPARK_LOG_WARN(Spark::LogCategory::Editor, "%s", recovered.c_str());
             if (error)
+            {
                 *error = recovered;
+            }
         }
 
         std::string name = ExtractJsonString(content, "name");
@@ -2189,9 +2211,13 @@ namespace SparkEditor
         std::string projectRoot = PathToUtf8(projectRootPath);
 
         if (primaryStatus != ProjectDocumentStatus::Ok)
+        {
             m_recoveredProjectFilePath = normalizedProjectFile;
+        }
         else if (m_recoveredProjectFilePath == normalizedProjectFile)
+        {
             m_recoveredProjectFilePath.clear();
+        }
 
         m_currentProject = ProjectInfo{};
         m_currentProjectFilePath = normalizedProjectFile;
@@ -2320,7 +2346,9 @@ namespace SparkEditor
                 return false;
             }
             if (recoveredDocument)
+            {
                 m_recoveredProjectFilePath.clear();
+            }
 
             if (m_fileCache)
             {

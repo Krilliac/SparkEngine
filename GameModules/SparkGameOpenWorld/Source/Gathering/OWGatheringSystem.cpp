@@ -314,7 +314,9 @@ namespace OpenWorld
         for (const auto& [id, node] : m_nodes)
         {
             if (node.isDepleted)
+            {
                 continue;
+            }
             const float dx = node.posX - x;
             const float dz = node.posZ - z;
             const float distSq = dx * dx + dz * dz;

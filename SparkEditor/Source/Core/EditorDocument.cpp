@@ -90,26 +90,36 @@ namespace SparkEditor
     bool EditorDocument::Restore(const std::string& json, ::EntityID selection)
     {
         if (!m_world)
+        {
             return false;
+        }
         auto restored = std::make_unique<::World>();
         // Undo/redo and play-mode snapshots are SerializeWorld output captured in this process.
         if (!Spark::DeserializeInto(*restored, json, Spark::SceneDeserializeMode::TrustedSnapshot))
+        {
             return false;
+        }
 
         // Keep the World object's address: panels and commands hold it.
         m_world->GetRegistry() = std::move(restored->GetRegistry());
         m_selectedEntity = entt::null;
         if (m_onRestored)
+        {
             m_onRestored();
+        }
         if (selection != entt::null && m_world->GetRegistry().valid(selection))
+        {
             m_selectedEntity = selection;
+        }
         return true;
     }
 
     bool EditorDocument::CreateEntity(const std::string& menuName)
     {
         if (!m_world)
+        {
             return false;
+        }
 
         const std::string before = Spark::SerializeWorld(*m_world);
         const ::EntityID selectionBefore = m_selectedEntity;
@@ -154,12 +164,16 @@ namespace SparkEditor
             const auto& componentMap = MenuComponentTypes();
             const auto it = componentMap.find(menuName);
             if (it == componentMap.end())
+            {
                 return failUnsupported();
+            }
             auto& factory = Spark::ComponentFactory::Get();
             for (const std::string& type : it->second)
             {
                 if (!factory.IsRegistered(type))
+                {
                     return failUnsupported();
+                }
                 factory.AddComponent(type, m_world.get(), static_cast<uint32_t>(entity));
             }
         }
@@ -172,7 +186,9 @@ namespace SparkEditor
     bool EditorDocument::DeleteSelected()
     {
         if (!m_world || m_selectedEntity == entt::null || !m_world->GetRegistry().valid(m_selectedEntity))
+        {
             return false;
+        }
         const std::string before = Spark::SerializeWorld(*m_world);
         const ::EntityID selectionBefore = m_selectedEntity;
         m_world->DestroyEntity(m_selectedEntity);
@@ -184,10 +200,14 @@ namespace SparkEditor
     bool EditorDocument::RecordApplied(const std::string& before, const std::string& description)
     {
         if (!m_world || before.empty())
+        {
             return false;
+        }
         const std::string after = Spark::SerializeWorld(*m_world);
         if (after == before)
+        {
             return false;
+        }
         return CommitSnapshot(before, after, m_selectedEntity, m_selectedEntity, description);
     }
 
@@ -196,11 +216,15 @@ namespace SparkEditor
     {
         // Execute runs the redo body immediately, so the live World is the
         // restored `after` snapshot from here on: exactly what a later redo reproduces.
+        // Init-captures hold non-const strings, so moving a lambda moves its snapshot
+        // instead of copying it (a plain capture of a const& would be a const member).
         Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-            [this, after, redoSelection]() { Restore(after, redoSelection); },
-            [this, before, undoSelection]() { Restore(before, undoSelection); }, description));
+            [this, snapshot = after, redoSelection]() { Restore(snapshot, redoSelection); },
+            [this, snapshot = before, undoSelection]() { Restore(snapshot, undoSelection); }, description));
         if (m_onRecorded)
+        {
             m_onRecorded(description);
+        }
         return true;
     }
 

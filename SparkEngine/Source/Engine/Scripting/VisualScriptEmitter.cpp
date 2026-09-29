@@ -6,6 +6,7 @@
 #include "VisualScriptEmitter.h"
 
 #include <algorithm>
+#include <format>
 
 namespace Spark::Scripting::Detail
 {
@@ -36,7 +37,9 @@ namespace Spark::Scripting::Detail
         : m_debugMode(debugMode), m_errors(errors), m_budget(budget)
     {
         for (const auto& node : graph.nodes)
+        {
             m_nodes.emplace(node.id, &node); // first definition wins
+        }
         for (const auto& conn : graph.connections)
         {
             m_outgoing[conn.fromNode].push_back(&conn);
@@ -60,14 +63,18 @@ namespace Spark::Scripting::Detail
             for (uint32_t i = 0; i < static_cast<uint32_t>(node.outputs.size()); ++i)
             {
                 if (node.outputs[i].kind == PinKind::Execution)
+                {
                     pins.push_back(i);
+                }
             }
             return pins;
         }
         for (const auto* conn : Outgoing(node.id))
         {
             if (IsExecConnection(*conn) && std::find(pins.begin(), pins.end(), conn->fromPin) == pins.end())
+            {
                 pins.push_back(conn->fromPin);
+            }
         }
         std::sort(pins.begin(), pins.end());
         return pins;
@@ -80,9 +87,13 @@ namespace Spark::Scripting::Detail
         for (const auto* conn : Outgoing(node.id))
         {
             if (StepLimitReached())
+            {
                 return;
+            }
             if (conn->fromPin == pin && IsExecConnection(*conn))
+            {
                 EmitChain(conn->toNode, indent, code);
+            }
         }
     }
 
@@ -94,7 +105,9 @@ namespace Spark::Scripting::Detail
         for (const auto& node : nodes)
         {
             if (IsEventNode(node.type) || IsPureNode(node))
+            {
                 continue;
+            }
             hasStatements = true;
 
             // Wires from event nodes do not count: events are not emitted in a function body.
@@ -107,15 +120,21 @@ namespace Spark::Scripting::Detail
                                 return from && !IsEventNode(from->type) && IsExecConnection(*conn);
                             });
             if (reachedByExec)
+            {
                 continue;
+            }
 
             hasEntry = true;
             EmitChain(node.id, indent, code);
             if (StepLimitReached())
+            {
                 return;
+            }
         }
         if (hasStatements && !hasEntry)
-            m_errors.push_back("Function body has no entry statement: every statement is on an execution cycle");
+        {
+            m_errors.emplace_back("Function body has no entry statement: every statement is on an execution cycle");
+        }
     }
 
     bool VisualScriptEmitter::StepLimitReached() const
@@ -126,7 +145,9 @@ namespace Spark::Scripting::Detail
     void VisualScriptEmitter::Halt(const std::string& reason)
     {
         if (!m_budget.halted)
+        {
             m_errors.push_back(reason);
+        }
         m_budget.halted = true;
     }
 
@@ -134,7 +155,9 @@ namespace Spark::Scripting::Detail
     void VisualScriptEmitter::EmitStep(const ScriptNode& node, const std::string& indent, std::string& code)
     {
         if (m_budget.halted)
+        {
             return;
+        }
         // The limit covers the whole Compile(): source already committed by earlier
         // bodies (other events, other function emitters) plus this body so far.
         // Both terms are sizes of strings held in memory, so the sum cannot wrap.
@@ -146,7 +169,9 @@ namespace Spark::Scripting::Detail
         if (++m_budget.steps > kMaxEmittedSteps)
         {
             if (m_budget.steps == kMaxEmittedSteps + 1)
+            {
                 m_errors.push_back("Graph expands to more than " + std::to_string(kMaxEmittedSteps) + " statements");
+            }
             return;
         }
 
@@ -164,8 +189,11 @@ namespace Spark::Scripting::Detail
             const bool isBranch = node.type == ScriptNodeType::Branch;
             const std::vector<uint32_t> dataInputs = isBranch ? std::vector<uint32_t>{1} : std::vector<uint32_t>{1, 2};
             std::vector<std::string> expressions;
+            expressions.reserve(dataInputs.size());
             for (uint32_t input : dataInputs)
+            {
                 expressions.push_back(ResolveInput(node, input));
+            }
             if (dependencies.empty())
             {
                 EmitControlFlow(node, expressions, indent, code);
@@ -180,12 +208,18 @@ namespace Spark::Scripting::Detail
                                                              : std::vector<std::string>{"vsStart" + id, "vsEnd" + id};
             code += indent + "{\n";
             for (const auto& temporary : temporaries)
-                code += inner + (isBranch ? "bool " : "int ") + temporary + ";\n";
+            {
+                code += std::format("{}{}{};\n", inner, isBranch ? "bool " : "int ", temporary);
+            }
             code += inner + "{\n";
             for (const auto* dependency : dependencies)
+            {
                 EmitNode(*dependency, inner + std::string(kIndent), code);
+            }
             for (size_t i = 0; i < temporaries.size(); ++i)
+            {
                 code += inner + std::string(kIndent) + temporaries[i] + " = " + expressions[i] + ";\n";
+            }
             code += inner + "}\n";
             EmitControlFlow(node, temporaries, inner, code);
             code += indent + "}\n";
@@ -217,7 +251,9 @@ namespace Spark::Scripting::Detail
 
         code += indent + "{\n";
         for (const auto* dependency : dependencies)
+        {
             EmitNode(*dependency, inner, code);
+        }
         EmitNode(node, inner, code, hoistResult);
         code += indent + "}\n";
     }
@@ -237,10 +273,14 @@ namespace Spark::Scripting::Detail
     {
         const auto* from = FindNode(conn.fromNode);
         if (from && conn.fromPin < from->outputs.size())
+        {
             return from->outputs[conn.fromPin].kind == PinKind::Execution;
+        }
         const auto* to = FindNode(conn.toNode);
         if (to && conn.toPin < to->inputs.size())
+        {
             return to->inputs[conn.toPin].kind == PinKind::Execution;
+        }
         return true;
     }
 
@@ -249,7 +289,9 @@ namespace Spark::Scripting::Detail
         for (const auto* conn : Incoming(nodeID))
         {
             if (conn->toPin == pinIndex)
+            {
                 return conn;
+            }
         }
         return nullptr;
     }
@@ -284,7 +326,9 @@ namespace Spark::Scripting::Detail
         }
 
         if (inputIndex < node.inputs.size())
+        {
             return DefaultLiteral(node.inputs[inputIndex]);
+        }
         return "0.0f";
     }
 
@@ -314,7 +358,9 @@ namespace Spark::Scripting::Detail
         for (const auto* conn : Incoming(node.id))
         {
             if (IsExecConnection(*conn) || FindConnectionToInput(node.id, conn->toPin) != conn)
+            {
                 continue;
+            }
             inputs.push_back(conn);
         }
         std::stable_sort(inputs.begin(), inputs.end(),
@@ -323,10 +369,14 @@ namespace Spark::Scripting::Detail
         for (const auto* conn : inputs)
         {
             if (m_budget.halted)
+            {
                 return;
+            }
             const auto* producer = FindNode(conn->fromNode);
             if (!producer || !IsPureNode(*producer) || done.count(producer->id) != 0)
+            {
                 continue;
+            }
             if (!visiting.insert(producer->id).second)
             {
                 m_errors.push_back("Data cycle through node " + std::to_string(producer->id));
@@ -375,7 +425,9 @@ namespace Spark::Scripting::Detail
         }
         case ScriptNodeType::Sequence:
             for (uint32_t pin : ExecOutputPins(node))
+            {
                 EmitPinChains(node, pin, indent, code);
+            }
             break;
         default:
             break;
@@ -411,7 +463,9 @@ namespace Spark::Scripting::Detail
                 break;
             }
             if (IsEventNode(node->type))
+            {
                 break;
+            }
             if (!m_onPath.insert(current).second)
             {
                 m_errors.push_back("Execution cycle through node " + std::to_string(current));
@@ -423,17 +477,23 @@ namespace Spark::Scripting::Detail
 
             // Branch and Sequence route all of their outputs inside EmitStep.
             if (node->type == ScriptNodeType::Branch || node->type == ScriptNodeType::Sequence)
+            {
                 break;
+            }
 
             std::vector<uint32_t> next;
             for (uint32_t pin : ExecOutputPins(*node))
             {
                 if (node->type == ScriptNodeType::ForLoop && pin == 0)
+                {
                     continue; // loop body, emitted inside the loop
+                }
                 for (const auto* conn : Outgoing(node->id))
                 {
                     if (conn->fromPin == pin && IsExecConnection(*conn))
+                    {
                         next.push_back(conn->toNode);
+                    }
                 }
             }
             if (next.size() != 1)
@@ -441,7 +501,9 @@ namespace Spark::Scripting::Detail
                 for (uint32_t target : next)
                 {
                     if (StepLimitReached())
+                    {
                         break;
+                    }
                     EmitChain(target, indent, code);
                 }
                 break;
@@ -450,7 +512,9 @@ namespace Spark::Scripting::Detail
         }
 
         for (uint32_t id : entered)
+        {
             m_onPath.erase(id);
+        }
         --m_chainDepth;
     }
 

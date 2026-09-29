@@ -22,6 +22,7 @@
 #include "SceneManager/SceneManagerTypes.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -40,7 +41,7 @@ namespace Spark
     inline constexpr int kMaxLegacySphereTessellation = 256;
 
     /// Which dialect SceneManager::LoadCustom reads a .scene document as.
-    enum class SceneTextDialect
+    enum class SceneTextDialect : std::uint8_t
     {
         Versioned,    ///< "# SparkEngine Scene v1.0" header (SaveScene output).
         Ini,          ///< [Scene]/[Object]/[Camera]/[SpawnPoint] sections.

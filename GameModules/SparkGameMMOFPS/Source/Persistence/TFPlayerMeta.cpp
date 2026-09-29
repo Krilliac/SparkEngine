@@ -209,7 +209,9 @@ namespace Terrafront
             if (auto parked = m_pendingByCharacter.find(charId); parked != m_pendingByCharacter.end())
             {
                 if (parked->second.parkedProgressDurable)
+                {
                     m_resolvedParked.push_back(charId);
+                }
                 m_pendingByCharacter.erase(parked);
                 SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                 "[TF] discarded unsaved meta for disconnected character %llu: another authority "
@@ -230,7 +232,9 @@ namespace Terrafront
                           if (entry.second.dirty)
                               return false;
                           if (entry.second.parkedProgressDurable)
+                          {
                               m_resolvedParked.push_back(entry.first);
+                          }
                           return true;
                       });
         return ok;

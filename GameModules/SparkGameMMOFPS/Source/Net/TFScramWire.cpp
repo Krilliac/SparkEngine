@@ -44,7 +44,7 @@ namespace Terrafront
 
     std::string TFWireUsername(const char (&field)[32])
     {
-        return std::string(field, strnlen(field, sizeof(field)));
+        return {field, strnlen(field, sizeof(field))};
     }
 
     // ============================================================================

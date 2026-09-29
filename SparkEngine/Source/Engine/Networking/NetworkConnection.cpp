@@ -2221,8 +2221,10 @@ namespace Spark::Net
         // The duplicate trails the original by 1 ms and carries the same
         // reliable sequence, so the receiver's dedup must deliver it once.
         if (instability.ShouldDuplicate())
+        {
             instability.QueuePacket(std::vector<uint8_t>(serialized), nowMs + delayMs + 1.0f, msg.localOnly,
                                     msg.sequence, msg.ownerLifecycleEpoch, destination);
+        }
 
         if (delayMs > 0.0f)
         {

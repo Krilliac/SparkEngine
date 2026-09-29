@@ -38,7 +38,9 @@ namespace SparkEditor
             for (const WorldAssetField& entry : kWorldAssetFields)
             {
                 if (entry.component == componentType && entry.field == fieldName)
+                {
                     return &entry;
+                }
             }
             return nullptr;
         }
@@ -47,7 +49,9 @@ namespace SparkEditor
     std::optional<EditorAssetKind> AssetKindForField(std::string_view componentType, std::string_view fieldName)
     {
         if (const WorldAssetField* entry = FindWorldAssetField(componentType, fieldName))
+        {
             return entry->kind;
+        }
         return std::nullopt;
     }
 
@@ -58,29 +62,41 @@ namespace SparkEditor
     {
         const WorldAssetField* entry = FindWorldAssetField(componentType, fieldName);
         if (entry == nullptr || !IsValidEditorAssetReference(reference, entry->kind))
+        {
             return AssetDropResult::Rejected;
+        }
 
         entt::registry& registry = world.GetRegistry();
         if (entity == entt::null || !registry.valid(entity))
+        {
             return AssetDropResult::NoComponent;
+        }
         auto* renderer = registry.try_get<::MeshRenderer>(entity);
         if (renderer == nullptr)
+        {
             return AssetDropResult::NoComponent;
+        }
 
         std::string& slot = renderer->*(entry->member);
         if (slot == reference)
+        {
             return AssetDropResult::Unchanged;
+        }
 
         const std::string before = snapshot ? snapshot() : std::string{};
         if (before.empty() || !commit)
+        {
             return AssetDropResult::Rejected;
+        }
 
         std::string previous = slot;
         const bool previousDirty = renderer->worldMatrixDirty;
         slot = reference;
         renderer->worldMatrixDirty = true;
         if (commit(before, entry->undoLabel))
+        {
             return AssetDropResult::Applied;
+        }
 
         // Nothing was recorded, so the registry was not replaced and the
         // component pointer is still live: undo the write in place.

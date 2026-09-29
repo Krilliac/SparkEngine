@@ -792,11 +792,15 @@ namespace DirectX
             if (x < y)
             {
                 if (y < z)
+                {
                     return {2, 1, 0};
+                }
                 return x < z ? Rank{1, 2, 0} : Rank{1, 0, 2};
             }
             if (x < z)
+            {
                 return {2, 0, 1};
+            }
             return y < z ? Rank{0, 2, 1} : Rank{0, 1, 2};
         };
         const XMVECTOR canonical[3] = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
@@ -814,7 +818,9 @@ namespace DirectX
         const Rank order = rank(scale[0], scale[1], scale[2]);
         const int a = order.largest, b = order.middle, c = order.smallest;
         if (scale[a] < kDecompEpsilon)
+        {
             basis[a] = canonical[a];
+        }
         basis[a] = XMVector3Normalize(basis[a]);
         if (scale[b] < kDecompEpsilon)
         {
@@ -824,7 +830,9 @@ namespace DirectX
         }
         basis[b] = XMVector3Normalize(basis[b]);
         if (scale[c] < kDecompEpsilon)
+        {
             basis[c] = XMVector3Cross(basis[a], basis[b]);
+        }
         basis[c] = XMVector3Normalize(basis[c]);
 
         float det = XMVectorGetX(XMVector3Dot(basis[0], XMVector3Cross(basis[1], basis[2])));
@@ -838,7 +846,9 @@ namespace DirectX
 
         XMMATRIX rotation = XMMatrixIdentity();
         for (int row = 0; row < 3; ++row)
+        {
             rotation.r[row] = basis[row];
+        }
         *outRotQuat = XMQuaternionNormalize(XMQuaternionRotationMatrix(rotation));
 
         // An orthonormal basis has determinant 1; anything else is shear.

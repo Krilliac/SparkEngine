@@ -586,7 +586,9 @@ namespace Spark
                     pollfd room{fd, POLLOUT, 0};
                     const int ready = poll(&room, 1, static_cast<int>(std::min<long long>(waitMs, 1000)));
                     if (ready < 0 && errno != EINTR)
+                    {
                         break;
+                    }
                     continue; // Room, timeout (re-checked above) or EINTR.
                 }
 
@@ -612,9 +614,13 @@ namespace Spark
 #endif
             }
             if (masked)
+            {
                 pthread_sigmask(SIG_SETMASK, &previousMask, nullptr);
+            }
             if (deadline)
+            {
                 fcntl(fd, F_SETFL, previousFlags);
+            }
             return data.size() - remaining;
         }
     } // namespace
@@ -622,14 +628,18 @@ namespace Spark
     void Process::WriteStdin(std::string_view data)
     {
         if (!m_impl || m_impl->stdinWriteFd < 0)
+        {
             return;
+        }
         WritePipe(m_impl->stdinWriteFd, data, std::nullopt);
     }
 
     std::size_t Process::WriteStdinFor(std::string_view data, std::chrono::milliseconds timeout)
     {
         if (!m_impl || m_impl->stdinWriteFd < 0 || data.empty())
+        {
             return 0;
+        }
         return WritePipe(m_impl->stdinWriteFd, data, std::chrono::steady_clock::now() + timeout);
     }
 

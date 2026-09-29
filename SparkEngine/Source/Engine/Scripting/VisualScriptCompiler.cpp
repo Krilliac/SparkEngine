@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <format>
 #include <ios>
 #include <sstream>
 #include <string>
@@ -20,7 +21,16 @@ namespace Spark::Scripting
 {
     namespace
     {
-        using namespace Detail;
+        using Detail::EmitBudget;
+        using Detail::EscapeAngelScriptString;
+        using Detail::IsEventNode;
+        using Detail::IsVariableDefaultLiteral;
+        using Detail::kIndent;
+        using Detail::kMaxSourceBytes;
+        using Detail::PinTypeString;
+        using Detail::PropertyOr;
+        using Detail::SanitizeIdentifier;
+        using Detail::VisualScriptEmitter;
 
         /// Method name and parameter list generated for a built-in event node.
         std::pair<std::string, std::string> EventSignature(ScriptNodeType type)
@@ -211,7 +221,7 @@ namespace Spark::Scripting
                 if (eventNode->type == ScriptNodeType::OnKeyPress)
                 {
                     const std::string key = PropertyOr(*eventNode, "key", "Space");
-                    body += indent + "if (getKeyDown(\"" + EscapeAngelScriptString(key) + "\"))\n" + indent + "{\n";
+                    body += std::format("{0}if (getKeyDown(\"{1}\"))\n{0}{{\n", indent, EscapeAngelScriptString(key));
                     indent += kIndent;
                 }
                 for (uint32_t pin : emitter.ExecOutputPins(*eventNode))

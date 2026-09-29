@@ -132,7 +132,9 @@ namespace Spark
                 // start of SaveToString() output and silently renamed (or emptied)
                 // on the next load, so it is malformed.
                 if (key.starts_with("\xEF\xBB\xBF"))
+                {
                     return false;
+                }
 
                 std::string value = Trim(line.substr(eq + 1));
                 parsedSections[currentSection][key] = value;

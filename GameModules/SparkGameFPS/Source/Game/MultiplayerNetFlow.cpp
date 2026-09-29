@@ -133,13 +133,17 @@ namespace SparkFPS
     void FPSMultiplayerSystem::HandlePeerDisconnected(uint32_t clientId)
     {
         if (!m_isActive)
+        {
             return;
+        }
 
         if (m_isServer)
         {
             // The host's own player is never removed by a peer event.
             if (clientId != m_localClientId && m_playerStates.contains(clientId))
+            {
                 OnPlayerLeft(clientId);
+            }
             return;
         }
 
@@ -151,43 +155,61 @@ namespace SparkFPS
     void FPSMultiplayerSystem::HandleInputMessage(const Spark::Net::NetworkMessage& message)
     {
         if (!m_isServer || !m_isActive)
+        {
             return;
+        }
 
         // senderID is stamped by NetworkManager from the admitted endpoint, never read off the wire.
         const uint32_t clientId = message.senderID;
         if (clientId == m_localClientId || !m_playerStates.contains(clientId))
+        {
             return;
+        }
         if (message.payload.size() != PlayerInput::SerializedSize)
+        {
             return;
+        }
 
         const auto budgetIt = m_inputBudget.find(clientId);
         if (budgetIt == m_inputBudget.end() || budgetIt->second + kInputBudgetEpsilon < kInputStep)
+        {
             return;
+        }
 
         // ApplyClientInput rejects non-finite, replayed and zero-sequence input; only an applied
         // input spends one step of the player's budget.
         const PlayerInput input = PlayerInput::Deserialize(message.payload.data(), message.payload.size());
         if (ApplyClientInput(clientId, input, kInputStep))
+        {
             budgetIt->second = (std::max)(0.0f, budgetIt->second - kInputStep);
+        }
     }
 
     void FPSMultiplayerSystem::HandleSnapshotMessage(const Spark::Net::NetworkMessage& message)
     {
         if (m_isServer || !m_isActive || m_localClientId == Spark::Net::INVALID_CLIENT)
+        {
             return;
+        }
 
         const std::vector<uint8_t>& payload = message.payload;
         if (payload.size() < kSnapshotHeaderSize)
+        {
             return;
+        }
 
         size_t offset = 0;
         const uint32_t batch = Detail::ReadU32(payload.data(), offset);
         const uint32_t count =
             static_cast<uint32_t>(payload[offset]) | (static_cast<uint32_t>(payload[offset + 1]) << 8);
         if (count > kMaxPlayers || payload.size() != kSnapshotHeaderSize + count * kSnapshotRecordSize)
+        {
             return;
+        }
         if (batch <= m_lastSnapshotBatch)
+        {
             return;
+        }
 
         auto recordAt = [&payload](uint32_t index)
         { return payload.data() + kSnapshotHeaderSize + static_cast<size_t>(index) * kSnapshotRecordSize; };
@@ -198,7 +220,9 @@ namespace SparkFPS
             const NetworkPlayerState state =
                 NetworkPlayerState::Deserialize(recordAt(index), NetworkPlayerState::SerializedSize);
             if (!IsFiniteState(state) || state.sequenceNumber != batch)
+            {
                 return;
+            }
         }
         m_lastSnapshotBatch = batch;
 
@@ -213,7 +237,9 @@ namespace SparkFPS
             auto [scoreIt, inserted] = m_scores.try_emplace(state.clientId);
             PlayerScore& score = scoreIt->second;
             if (inserted)
+            {
                 score.playerName = "Player_" + std::to_string(state.clientId);
+            }
             score.clientId = state.clientId;
             score.kills = Detail::ReadU32(record, scoreOffset);
             score.deaths = Detail::ReadU32(record, scoreOffset);
@@ -228,7 +254,9 @@ namespace SparkFPS
             {
                 size_t idOffset = 0;
                 if (Detail::ReadU32(recordAt(index), idOffset) == clientId)
+                {
                     return true;
+                }
             }
             return false;
         };
@@ -248,16 +276,24 @@ namespace SparkFPS
         for (auto it = m_remoteSnapshots.begin(); it != m_remoteSnapshots.end();)
         {
             if (it->first != m_localClientId && !inBatch(it->first))
+            {
                 it = m_remoteSnapshots.erase(it);
+            }
             else
+            {
                 ++it;
+            }
         }
         for (auto it = m_scores.begin(); it != m_scores.end();)
         {
             if (it->first != m_localClientId && !inBatch(it->first))
+            {
                 it = m_scores.erase(it);
+            }
             else
+            {
                 ++it;
+            }
         }
     }
 
@@ -275,11 +311,17 @@ namespace SparkFPS
         }
 
         if (m_isServer)
+        {
             status += "Server";
+        }
         else if (IsConnected())
+        {
             status += "Client (connected, id " + std::to_string(m_localClientId) + ")";
+        }
         else
+        {
             status += "Client (connecting)";
+        }
         status += " | Players: " + std::to_string(m_playerStates.size());
         status += " | Projectiles: " + std::to_string(m_projectiles.size());
         status += " | Tick: " + std::to_string(m_tickRate) + "Hz";

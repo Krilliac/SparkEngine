@@ -85,24 +85,32 @@ namespace Terrafront::CommandDetail
         std::optional<float> ParseFiniteFloat(const std::string& text)
         {
             if (text.empty())
+            {
                 return std::nullopt;
+            }
             char* end = nullptr;
             errno = 0;
             const float value = std::strtof(text.c_str(), &end);
             if (errno != 0 || end != text.c_str() + text.size() || !std::isfinite(value))
+            {
                 return std::nullopt;
+            }
             return value;
         }
 
         std::optional<unsigned long> ParseUnsigned(const std::string& text, unsigned long maxValue)
         {
             if (text.empty() || text[0] == '-')
+            {
                 return std::nullopt;
+            }
             char* end = nullptr;
             errno = 0;
             const unsigned long value = std::strtoul(text.c_str(), &end, 0);
             if (errno != 0 || end != text.c_str() + text.size() || value > maxValue)
+            {
                 return std::nullopt;
+            }
             return value;
         }
 
@@ -110,13 +118,21 @@ namespace Terrafront::CommandDetail
         {
             const std::string kind = Lower(text);
             if (kind == "drifter")
+            {
                 return VehicleId::Drifter;
+            }
             if (kind == "aegis")
+            {
                 return VehicleId::Aegis;
+            }
             if (kind == "ravager")
+            {
                 return VehicleId::Ravager;
+            }
             if (kind == "vulture")
+            {
                 return VehicleId::Vulture;
+            }
             return std::nullopt;
         }
 
@@ -130,12 +146,18 @@ namespace Terrafront::CommandDetail
             TFObservation obs;
             obs.role = ctx.IsAuthority() ? (ctx.HasLocalPlayer() ? "host" : "server") : "client";
             if (ctx.serverSim)
+            {
                 obs.clock = ctx.serverSim->ServerTime();
+            }
             else if (ctx.clientNet)
+            {
                 obs.clock = ctx.clientNet->ClockSec();
+            }
             obs.self = ctx.localPlayer;
             if (ctx.data && ctx.data->IsLoaded())
+            {
                 obs.continentKey = ctx.data->GetContinent().key;
+            }
 
             if (ctx.players)
             {
@@ -155,7 +177,7 @@ namespace Terrafront::CommandDetail
             {
                 for (uint32_t region = 0; region < ctx.regions->RegionCount(); ++region)
                 {
-                    const RegionId id = static_cast<RegionId>(region);
+                    const auto id = static_cast<RegionId>(region);
                     obs.regionOwners.emplace_back(id, static_cast<uint8_t>(ctx.regions->OwnerOf(id)));
                 }
             }
@@ -178,7 +200,9 @@ namespace Terrafront::CommandDetail
                 obs.flux = ctx.progression->FluxOf(obs.self);
                 obs.rank = ctx.progression->RankOf(obs.self);
                 if (const TFLoadout* loadout = ctx.progression->GetLoadout(obs.self))
+                {
                     obs.loadoutPrimary = loadout->primary;
+                }
             }
             return obs;
         }
@@ -190,7 +214,9 @@ namespace Terrafront::CommandDetail
         {
             std::string out;
             if (!ctx.IsAuthority() || !ctx.players || !ctx.progression)
+            {
                 return out;
+            }
             std::vector<PlayerId> owners;
             ctx.players->ForEachAlivePawn([&owners](const PawnInfo& pawn) { owners.push_back(pawn.owner); });
             std::sort(owners.begin(), owners.end());
@@ -202,7 +228,9 @@ namespace Terrafront::CommandDetail
                 if (const auto* stats = ctx.progression->AllStats(id))
                 {
                     for (const auto& entry : *stats)
+                    {
                         kills += entry.second.kills;
+                    }
                 }
                 // Unlock keys in TFUnlockTree order ("-" when none), so a
                 // restart comparison sees the whole durable unlock set.
@@ -210,9 +238,13 @@ namespace Terrafront::CommandDetail
                 for (const TFUnlockDef& def : TFUnlockTree::All())
                 {
                     if (!ctx.progression->IsUnlocked(id, def.key))
+                    {
                         continue;
+                    }
                     if (!unlocks.empty())
+                    {
                         unlocks += ',';
+                    }
                     unlocks += def.key;
                 }
                 out += std::format("\n[TF-OBSERVE] player id={} loadout={} flux={} rank={} xp={} unlocks={} kills={}",
@@ -230,7 +262,9 @@ namespace Terrafront::CommandDetail
 #ifdef ENABLE_NETWORKING
             auto& network = Spark::Net::NetworkManager::GetInstance();
             if (!network.IsInitialized())
+            {
                 return {};
+            }
             const Spark::Net::NetworkStats stats = network.GetStats();
             const Spark::Net::InstabilitySettings impair =
                 Spark::Net::InstabilitySimulator::GetInstance().GetSettings();
@@ -256,7 +290,9 @@ namespace Terrafront::CommandDetail
             {
                 PawnInfo self{};
                 if (!ctx.players || !ctx.players->GetPawnByPlayer(ctx.localPlayer, self) || !self.alive)
+                {
                     return false;
+                }
                 std::copy(self.pos, self.pos + 3, outEye);
             }
             outEye[1] += WeaponMath::kEyeHeightM;
@@ -276,14 +312,18 @@ namespace Terrafront::CommandDetail
         {
             PawnInfo self{};
             if (!ctx.players->GetPawnByPlayer(ctx.localPlayer, self))
+            {
                 return std::nullopt;
+            }
             std::optional<PlayerId> nearest;
             float best = std::numeric_limits<float>::max();
             ctx.players->ForEachAlivePawn(
                 [&](const PawnInfo& pawn)
                 {
                     if (pawn.faction == self.faction || pawn.faction == FactionId::None)
+                    {
                         return;
+                    }
                     const float d2 = DistanceSq(pawn.pos, eye);
                     if (d2 < best)
                     {
@@ -308,7 +348,9 @@ namespace Terrafront::CommandDetail
                 [&](const PawnInfo& pawn)
                 {
                     if (pawn.faction == faction && ctx.serverSim->IsEnteredWorld(pawn.owner))
+                    {
                         pawns.push_back(pawn);
+                    }
                 });
             std::sort(pawns.begin(), pawns.end(),
                       [](const PawnInfo& a, const PawnInfo& b) { return a.owner < b.owner; });
@@ -333,14 +375,20 @@ namespace Terrafront::CommandDetail
                 [context](const std::vector<std::string>& args) -> std::string
                 {
                     if (args.size() != 3)
+                    {
                         return "[TF] usage: tf_walk <forward -1..1> <right -1..1> <seconds>";
+                    }
                     const std::optional<float> forward = ParseFiniteFloat(args[0]);
                     const std::optional<float> right = ParseFiniteFloat(args[1]);
                     const std::optional<float> seconds = ParseFiniteFloat(args[2]);
                     if (!forward || !right || !seconds || *seconds < 0.0f)
+                    {
                         return "[TF] tf_walk: forward/right must be numbers and seconds >= 0";
+                    }
                     if (!context->clientNet || !context->HasLocalPlayer())
+                    {
                         return "[TF] tf_walk: no local player on this instance";
+                    }
                     // Seated, the same input stream drives the vehicle (TFServerSim
                     // forwards it to TFVehicleSystem::ServerHandleSeatedInput).
                     context->clientNet->SetScriptedMove(*forward, *right, *seconds);
@@ -354,19 +402,27 @@ namespace Terrafront::CommandDetail
                 [context](const std::vector<std::string>& args) -> std::string
                 {
                     if (args.size() != 1)
+                    {
                         return "[TF] usage: tf_aim_at <playerId|enemy>";
+                    }
                     if (!context->clientNet || !context->players || !context->HasLocalPlayer())
+                    {
                         return "[TF] tf_aim_at: no local player on this instance";
+                    }
                     float eye[3] = {};
                     if (!LocalEye(*context, eye))
+                    {
                         return "[TF] tf_aim_at: the local pawn is not alive";
+                    }
 
                     std::optional<PlayerId> target;
                     if (Lower(args[0]) == "enemy")
                     {
                         target = NearestEnemy(*context, eye);
                         if (!target)
+                        {
                             return "[TF] tf_aim_at: no live enemy pawn in this view";
+                        }
                     }
                     else if (const std::optional<unsigned long> id = ParseUnsigned(args[0], 0xFFFFFFFFul))
                     {
@@ -379,7 +435,9 @@ namespace Terrafront::CommandDetail
 
                     PawnInfo pawn{};
                     if (!context->players->GetPawnByPlayer(*target, pawn) || !pawn.alive)
+                    {
                         return "[TF] tf_aim_at: player " + std::to_string(*target) + " has no live pawn in this view";
+                    }
                     const float aimPoint[3] = {pawn.pos[0], pawn.pos[1] + kAimTorsoHeightM, pawn.pos[2]};
                     float yaw = 0.0f;
                     float pitch = 0.0f;
@@ -395,21 +453,29 @@ namespace Terrafront::CommandDetail
                 [context](const std::vector<std::string>& args) -> std::string
                 {
                     if (args.empty() || args.size() > 3)
+                    {
                         return "[TF] usage: tf_give_raw <primaryId> [secondaryId] [toolId]";
+                    }
                     uint16_t ids[3] = {kInvalidWeapon, kInvalidWeapon, kInvalidWeapon};
                     for (size_t i = 0; i < args.size(); ++i)
                     {
                         const std::optional<unsigned long> id = ParseUnsigned(args[i], 0xFFFFul);
                         if (!id)
+                        {
                             return "[TF] tf_give_raw: bad weapon id '" + args[i] + "'";
+                        }
                         ids[i] = static_cast<uint16_t>(*id);
                     }
                     if (!ClientConnected(*context))
+                    {
                         return "[TF] not connected - use tf_host or tf_connect first";
+                    }
                     TF_LoadoutChange change{};
                     PawnInfo self{};
                     if (context->players && context->players->GetPawnByPlayer(context->localPlayer, self))
+                    {
                         change.classId = static_cast<uint8_t>(self.cls);
+                    }
                     change.primary = ids[0];
                     change.secondary = ids[1];
                     change.tool = ids[2];
@@ -427,16 +493,24 @@ namespace Terrafront::CommandDetail
                 [context](const std::vector<std::string>& args) -> std::string
                 {
                     if (args.size() != 1)
+                    {
                         return "[TF] usage: tf_vehicle_buy <drifter|aegis|ravager|vulture>";
+                    }
                     const std::optional<VehicleId> kind = ParseVehicleKind(args[0]);
                     if (!kind)
+                    {
                         return "[TF] tf_vehicle_buy: unknown vehicle '" + args[0] + "'";
+                    }
                     // The purchase channel is socket-only; the authority buys in
                     // process through tf_vehicle.
                     if (context->IsAuthority())
+                    {
                         return "[TF] tf_vehicle_buy: this instance is the authority - use tf_vehicle";
+                    }
                     if (!ClientConnected(*context))
+                    {
                         return "[TF] not connected - use tf_connect first";
+                    }
                     TF_VehPurchase request{};
                     request.vehId = static_cast<uint8_t>(*kind);
                     context->clientNet->SendMsg(static_cast<TFMsg>(kTFVehMsg_Purchase), &request, sizeof(request));
@@ -451,9 +525,13 @@ namespace Terrafront::CommandDetail
                 {
                     const std::string op = args.size() == 1 ? Lower(args[0]) : std::string();
                     if (op != "enter" && op != "exit")
+                    {
                         return "[TF] usage: tf_vehicle_seat <enter|exit>";
+                    }
                     if (!ClientConnected(*context) || !context->vehicles || !context->players)
+                    {
                         return "[TF] not connected - use tf_connect first";
+                    }
 
                     TF_VehicleSeatOp seatOp{};
                     if (op == "exit")
@@ -461,7 +539,9 @@ namespace Terrafront::CommandDetail
                         EntityId vehicle = 0;
                         uint8_t seat = 0;
                         if (!context->vehicles->GetSeatOf(context->localPlayer, vehicle, seat))
+                        {
                             return "[TF] tf_vehicle_seat: not seated";
+                        }
                         seatOp.vehicleEntity = vehicle;
                         seatOp.seatIndex = seat;
                         context->clientNet->SendMsg(TFMsg::VehicleExit, &seatOp, sizeof(seatOp));
@@ -470,7 +550,9 @@ namespace Terrafront::CommandDetail
 
                     PawnInfo self{};
                     if (!context->players->GetPawnByPlayer(context->localPlayer, self) || !self.alive)
+                    {
                         return "[TF] tf_vehicle_seat: the local pawn is not alive";
+                    }
                     std::optional<EntityId> nearest;
                     float best = std::numeric_limits<float>::max();
                     context->vehicles->ForEachVehicle(
@@ -484,7 +566,9 @@ namespace Terrafront::CommandDetail
                             }
                         });
                     if (!nearest)
+                    {
                         return "[TF] tf_vehicle_seat: no vehicle in this view";
+                    }
                     seatOp.vehicleEntity = *nearest;
                     seatOp.seatIndex = 0; // driver
                     context->clientNet->SendMsg(TFMsg::VehicleEnter, &seatOp, sizeof(seatOp));
@@ -502,14 +586,20 @@ namespace Terrafront::CommandDetail
                 {
                     FactionId faction = FactionId::None;
                     if (args.size() != 3 || !ParseFaction(args[0], faction))
+                    {
                         return "[TF] usage: tf_place_faction <mra|auc|hlx> <x> <z>";
+                    }
                     const std::optional<float> x = ParseFiniteFloat(args[1]);
                     const std::optional<float> z = ParseFiniteFloat(args[2]);
                     if (!IsServerInstance(*context) || !context->world || !context->data || !context->data->IsLoaded())
+                    {
                         return "[TF] tf_place_faction is authority-only";
+                    }
                     const float size = context->data->GetContinent().sizeM;
                     if (!x || !z || *x < 0.0f || *z < 0.0f || *x > size || *z > size)
+                    {
                         return "[TF] tf_place_faction: x and z must lie inside the continent";
+                    }
 
                     // Only pawns still in the sanctuary move, so a repeated run
                     // never drags a pawn that already left (or fights back).
@@ -517,7 +607,9 @@ namespace Terrafront::CommandDetail
                     for (const PawnInfo& pawn : EnteredPawnsOf(*context, faction))
                     {
                         if (!TFTravel_IsInSanctuary(pawn.pos[0], pawn.pos[2]))
+                        {
                             continue;
+                        }
                         const float px = std::min(*x + kPlaceSpacingM * static_cast<float>(placed), size);
                         context->serverSim->TeleportPawn(pawn.owner, px, context->world->TerrainHeightAt(px, *z), *z);
                         ++placed;
@@ -534,20 +626,28 @@ namespace Terrafront::CommandDetail
                 {
                     FactionId faction = FactionId::None;
                     if (args.size() != 2 || !ParseFaction(args[0], faction))
+                    {
                         return "[TF] usage: tf_flux_floor <mra|auc|hlx> <amount>";
+                    }
                     const std::optional<unsigned long> amount = ParseUnsigned(args[1], 0xFFFFFFFFul);
                     if (!amount)
+                    {
                         return "[TF] tf_flux_floor: bad amount '" + args[1] + "'";
+                    }
                     if (!IsServerInstance(*context) || !context->progression)
+                    {
                         return "[TF] tf_flux_floor is authority-only";
+                    }
 
                     uint32_t raised = 0;
-                    const uint32_t floor = static_cast<uint32_t>(*amount);
+                    const auto floor = static_cast<uint32_t>(*amount);
                     for (const PawnInfo& pawn : EnteredPawnsOf(*context, faction))
                     {
                         const uint32_t flux = context->progression->FluxOf(pawn.owner);
                         if (flux >= floor)
+                        {
                             continue;
+                        }
                         context->progression->ServerGrantFlux(pawn.owner, floor - flux);
                         ++raised;
                     }
@@ -563,16 +663,22 @@ namespace Terrafront::CommandDetail
                     const std::optional<float> amount =
                         args.size() == 1 ? ParseFiniteFloat(args[0]) : std::optional<float>();
                     if (!amount || *amount <= 0.0f)
+                    {
                         return "[TF] usage: tf_damage_vehicles <amount > 0>";
+                    }
                     if (!IsServerInstance(*context) || !context->vehicles)
+                    {
                         return "[TF] tf_damage_vehicles is authority-only";
+                    }
 
                     // Collect first: a lethal hit removes the record mid-iteration.
                     std::vector<EntityId> vehicles;
                     context->vehicles->ForEachVehicle([&vehicles](const TFVehicleInfo& vehicle)
                                                       { vehicles.push_back(vehicle.entity); });
                     for (const EntityId vehicle : vehicles)
+                    {
                         context->vehicles->ServerDamageVehicle(vehicle, *amount, 0, kInvalidPlayer, kInvalidWeapon);
+                    }
                     return std::format("[TF] applied {:.0f} damage to {} vehicle(s)", *amount, vehicles.size());
                 },
                 "TF-110 harness: damage every live vehicle through the authoritative damage path (authority only)", cat,

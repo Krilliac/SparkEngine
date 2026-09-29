@@ -127,7 +127,9 @@ namespace ARPG
         if (m_destructionCallbackId != 0 && m_context)
         {
             if (auto* destruction = m_context->GetDestruction())
+            {
                 destruction->RemoveDestructionCallback(m_destructionCallbackId);
+            }
         }
         m_destructionCallbackId = 0;
 

@@ -44,8 +44,6 @@
 #include <unistd.h>
 #endif
 
-using DirectX::XMFLOAT3;
-
 // Helper: convert wstring path to string for cross-platform file I/O
 static std::string WideToNarrow(const std::wstring& wide)
 {

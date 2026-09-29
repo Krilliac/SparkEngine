@@ -32,7 +32,7 @@ namespace Spark::Scripting
         constexpr size_t kMaxPinsPerNode = 64;
         constexpr size_t kMaxProperties = 64;
         constexpr size_t kMaxNameBytes = 256;
-        constexpr size_t kMaxTextBytes = 64u * 1024u;
+        constexpr size_t kMaxTextBytes = size_t{64} * 1024u;
         constexpr size_t kMaxVariables = 1024;
         constexpr size_t kMaxFunctions = 256;
         constexpr double kMaxExactInteger = 16777216.0; // 2^24: largest range a float pin default holds exactly
@@ -56,11 +56,15 @@ namespace Spark::Scripting
                          std::initializer_list<const char*> optional)
         {
             if (!object.IsObject())
+            {
                 Fail(where, "must be an object");
+            }
             for (const char* key : required)
             {
                 if (!object.HasKey(key))
+                {
                     Fail(where, std::string("missing required key '") + key + "'");
+                }
             }
             for (const auto& key : object.GetKeys())
             {
@@ -77,23 +81,33 @@ namespace Spark::Scripting
         {
             static const Json kEmpty = Json::MakeArray();
             if (!object.HasKey(key))
+            {
                 return kEmpty;
+            }
             const Json& value = object[key];
             if (!value.IsArray())
+            {
                 Fail(where + "." + key, "must be an array");
+            }
             if (value.Size() > limit)
+            {
                 Fail(where + "." + key,
                      "has " + std::to_string(value.Size()) + " elements; the limit is " + std::to_string(limit));
+            }
             return value;
         }
 
         std::string ReadString(const Json& value, const std::string& where, size_t limit)
         {
             if (!value.IsString())
+            {
                 Fail(where, "must be a string");
+            }
             const auto& text = value.AsString();
             if (text.size() > limit)
+            {
                 Fail(where, "is longer than " + std::to_string(limit) + " bytes");
+            }
             return text;
         }
 
@@ -112,7 +126,9 @@ namespace Spark::Scripting
         bool IsIdentifier(std::string_view text)
         {
             if (text.empty() || std::isdigit(static_cast<unsigned char>(text.front())))
+            {
                 return false;
+            }
             return std::all_of(text.begin(), text.end(), [](unsigned char c) { return std::isalnum(c) || c == '_'; });
         }
 
@@ -120,7 +136,9 @@ namespace Spark::Scripting
         {
             std::string text = ReadString(value, where, kMaxNameBytes);
             if (!IsIdentifier(text))
+            {
                 Fail(where, "'" + text + "' is not an identifier ([A-Za-z_][A-Za-z0-9_]*)");
+            }
             return text;
         }
 
@@ -132,10 +150,14 @@ namespace Spark::Scripting
         float ReadFloat(const Json& value, const std::string& where)
         {
             if (!value.IsNumber())
+            {
                 Fail(where, "must be a number");
+            }
             const double number = value.AsNumber();
             if (!std::isfinite(number) || std::fabs(number) > std::numeric_limits<float>::max())
+            {
                 Fail(where, "is not a finite float");
+            }
             return static_cast<float>(number);
         }
 
@@ -144,7 +166,9 @@ namespace Spark::Scripting
             const std::string name = ReadString(value, where, kMaxNameBytes);
             const auto kind = VisualScriptGraphIO::PinKindFromName(name);
             if (!kind)
+            {
                 Fail(where, "unknown pin kind '" + name + "'");
+            }
             return *kind;
         }
 
@@ -153,7 +177,9 @@ namespace Spark::Scripting
         {
             const PinKind kind = ReadPinKind(value, where);
             if (kind == PinKind::Any || (kind == PinKind::Execution && !allowVoid))
+            {
                 Fail(where, std::string("'") + VisualScriptGraphIO::PinKindName(kind) + "' is not a value type");
+            }
             return kind;
         }
 
@@ -163,7 +189,9 @@ namespace Spark::Scripting
             ScriptPin pin;
             pin.kind = ReadPinKind(object["kind"], where + ".kind");
             if (!object.HasKey("default"))
+            {
                 return pin;
+            }
 
             const Json& value = object["default"];
             const std::string at = where + ".default";
@@ -171,7 +199,9 @@ namespace Spark::Scripting
             {
             case PinKind::Bool:
                 if (!value.IsBool())
+                {
                     Fail(at, "must be a boolean for a Bool pin");
+                }
                 pin.defaultValue[0] = value.AsBool() ? 1.0f : 0.0f;
                 break;
             case PinKind::Int:
@@ -188,9 +218,13 @@ namespace Spark::Scripting
                 break;
             case PinKind::Vector3:
                 if (!value.IsArray() || value.Size() != 3)
+                {
                     Fail(at, "must be an [x, y, z] array for a Vector3 pin");
+                }
                 for (size_t i = 0; i < 3; ++i)
+                {
                     pin.defaultValue[i] = ReadFloat(value[i], at + "[" + std::to_string(i) + "]");
+                }
                 break;
             default:
                 Fail(at, std::string("a ") + VisualScriptGraphIO::PinKindName(pin.kind) + " pin has no default");
@@ -203,7 +237,9 @@ namespace Spark::Scripting
             std::vector<ScriptPin> pins;
             const Json& array = ArrayAt(object, key, where, kMaxPinsPerNode);
             for (size_t i = 0; i < array.Size(); ++i)
+            {
                 pins.push_back(ReadPin(array[i], where + "." + key + "[" + std::to_string(i) + "]"));
+            }
             return pins;
         }
 
@@ -213,21 +249,29 @@ namespace Spark::Scripting
             ScriptNode node;
             node.id = ReadUInt32(object["id"], where + ".id");
             if (node.id == 0)
+            {
                 Fail(where + ".id", "0 is reserved; node ids start at 1");
+            }
             if (node.id > VisualScriptGraphIO::kMaxNodeId)
+            {
                 Fail(where + ".id", "exceeds the largest node id " + std::to_string(VisualScriptGraphIO::kMaxNodeId));
+            }
 
             const std::string typeName = ReadString(object["type"], where + ".type", kMaxNameBytes);
             const auto type = VisualScriptGraphIO::NodeTypeFromName(typeName);
             if (!type)
+            {
                 Fail(where + ".type", "unknown node type '" + typeName + "'");
+            }
             node.type = *type;
 
             if (object.HasKey("position"))
             {
                 const Json& position = object["position"];
                 if (!position.IsArray() || position.Size() != 2)
+                {
                     Fail(where + ".position", "must be an [x, y] array");
+                }
                 node.editorX = ReadFloat(position[0], where + ".position[0]");
                 node.editorY = ReadFloat(position[1], where + ".position[1]");
             }
@@ -239,14 +283,21 @@ namespace Spark::Scripting
             {
                 const Json& properties = object["properties"];
                 if (!properties.IsObject())
+                {
                     Fail(where + ".properties", "must be an object of strings");
+                }
                 if (properties.Size() > kMaxProperties)
+                {
                     Fail(where + ".properties", "has more than " + std::to_string(kMaxProperties) + " entries");
+                }
                 for (const auto& key : properties.GetKeys())
                 {
                     if (key.empty() || key.size() > kMaxNameBytes)
+                    {
                         Fail(where + ".properties", "has an empty or oversized key");
-                    node.properties[key] = ReadString(properties[key], where + ".properties." + key, kMaxTextBytes);
+                    }
+                    node.properties[key] =
+                        ReadString(properties[key], std::format("{}.properties.{}", where, key), kMaxTextBytes);
                 }
             }
             return node;
@@ -259,7 +310,9 @@ namespace Spark::Scripting
             {
                 const Json& value = object[key];
                 if (!value.IsArray() || value.Size() != 2)
+                {
                     Fail(where + "." + key, "must be a [node, pin] array");
+                }
                 nodeId = ReadUInt32(value[0], where + "." + key + "[0]");
                 pin = ReadUInt32(value[1], where + "." + key + "[1]");
             };
@@ -280,7 +333,9 @@ namespace Spark::Scripting
                 const std::string at = where + ".nodes[" + std::to_string(i) + "]";
                 ScriptNode node = ReadNode(nodeArray[i], at);
                 if (!index.emplace(node.id, nodes.size()).second)
+                {
                     Fail(at + ".id", "duplicate node id " + std::to_string(node.id));
+                }
                 nodes.push_back(std::move(node));
             }
 
@@ -295,20 +350,30 @@ namespace Spark::Scripting
                 const auto from = index.find(conn.fromNode);
                 const auto to = index.find(conn.toNode);
                 if (from == index.end())
+                {
                     Fail(at + ".from", "names missing node " + std::to_string(conn.fromNode));
+                }
                 if (to == index.end())
+                {
                     Fail(at + ".to", "names missing node " + std::to_string(conn.toNode));
+                }
                 if (conn.fromNode == conn.toNode)
+                {
                     Fail(at, "wires node " + std::to_string(conn.fromNode) + " to itself");
+                }
 
                 const ScriptNode& source = nodes[from->second];
                 const ScriptNode& target = nodes[to->second];
                 if (conn.fromPin >= source.outputs.size())
+                {
                     Fail(at + ".from",
                          "node " + std::to_string(source.id) + " has no output pin " + std::to_string(conn.fromPin));
+                }
                 if (conn.toPin >= target.inputs.size())
+                {
                     Fail(at + ".to",
                          "node " + std::to_string(target.id) + " has no input pin " + std::to_string(conn.toPin));
+                }
 
                 const PinKind fromKind = source.outputs[conn.fromPin].kind;
                 const PinKind toKind = target.inputs[conn.toPin].kind;
@@ -319,11 +384,15 @@ namespace Spark::Scripting
                                  VisualScriptGraphIO::PinKindName(toKind));
                 }
                 if (!wiredInputs.emplace(conn.toNode, conn.toPin).second)
+                {
                     Fail(at + ".to", "input pin " + std::to_string(conn.toPin) + " of node " +
                                          std::to_string(conn.toNode) + " already has a wire");
+                }
                 if (fromKind == PinKind::Execution && !wiredExecOutputs.emplace(conn.fromNode, conn.fromPin).second)
+                {
                     Fail(at + ".from", "execution output " + std::to_string(conn.fromPin) + " of node " +
                                            std::to_string(conn.fromNode) + " already has a wire");
+                }
                 connections.push_back(conn);
             }
         }
@@ -341,7 +410,9 @@ namespace Spark::Scripting
                 parameter.name = ReadIdentifier(array[i]["name"], at + ".name");
                 parameter.type = ReadDataKind(array[i]["type"], at + ".type", false);
                 if (!names.insert(parameter.name).second)
+                {
                     Fail(at + ".name", "duplicate parameter '" + parameter.name + "'");
+                }
                 parameters.push_back(std::move(parameter));
             }
             return parameters;
@@ -354,7 +425,9 @@ namespace Spark::Scripting
                         {"description", "variables", "connections", "functions", "customEvents"});
 
             if (ReadString(root["format"], "format", kMaxNameBytes) != VisualScriptGraphIO::kFormat)
+            {
                 Fail("format", std::string("must be \"") + std::string(VisualScriptGraphIO::kFormat) + "\"");
+            }
             if (!root["version"].IsNumber() || root["version"].AsNumber() != VisualScriptGraphIO::kVersion)
             {
                 const std::string found = root["version"].IsNumber() ? std::format("{}", root["version"].AsNumber())
@@ -366,7 +439,9 @@ namespace Spark::Scripting
             VisualScriptGraph graph;
             graph.className = ReadIdentifier(root["className"], "className");
             if (root.HasKey("description"))
+            {
                 graph.description = ReadString(root["description"], "description", kMaxTextBytes);
+            }
 
             const Json& variables = ArrayAt(root, "variables", where, kMaxVariables);
             std::unordered_set<std::string> variableNames;
@@ -378,9 +453,13 @@ namespace Spark::Scripting
                 var.name = ReadIdentifier(variables[i]["name"], at + ".name");
                 var.type = ReadDataKind(variables[i]["type"], at + ".type", false);
                 if (variables[i].HasKey("default"))
+                {
                     var.defaultValue = ReadString(variables[i]["default"], at + ".default", kMaxNameBytes);
+                }
                 if (!variableNames.insert(var.name).second)
+                {
                     Fail(at + ".name", "duplicate variable '" + var.name + "'");
+                }
                 graph.variables.push_back(std::move(var));
             }
 
@@ -416,7 +495,9 @@ namespace Spark::Scripting
     std::expected<VisualScriptGraph, std::string> VisualScriptGraphIO::Parse(std::string_view text)
     {
         if (text.size() > kMaxFileBytes)
+        {
             return std::unexpected("graph is larger than " + std::to_string(kMaxFileBytes) + " bytes");
+        }
 
         Spark::Json::JsonLimits limits;
         limits.maxBytes = kMaxFileBytes;
@@ -425,7 +506,9 @@ namespace Spark::Scripting
         Json root;
         std::string error;
         if (!Spark::Json::ParseBounded(text, limits, &root, &error))
+        {
             return std::unexpected("graph is not valid JSON: " + error);
+        }
 
         try
         {
@@ -443,19 +526,27 @@ namespace Spark::Scripting
         std::error_code error;
         const auto size = std::filesystem::file_size(path, error);
         if (error)
+        {
             return std::unexpected(name + ": cannot read (" + error.message() + ")");
+        }
         if (size > kMaxFileBytes)
+        {
             return std::unexpected(name + ": larger than " + std::to_string(kMaxFileBytes) + " bytes");
+        }
 
         std::ifstream stream(path, std::ios::binary);
         std::ostringstream text;
         text << stream.rdbuf();
         if (!stream)
+        {
             return std::unexpected(name + ": cannot read");
+        }
 
         auto graph = Parse(text.str());
         if (!graph)
+        {
             return std::unexpected(name + ": " + graph.error());
+        }
         return graph;
     }
 
@@ -477,7 +568,9 @@ namespace Spark::Scripting
                               (upper.size() == 4 && (upper.starts_with("COM") || upper.starts_with("LPT")) &&
                                std::isdigit(static_cast<unsigned char>(upper[3])) != 0);
         if (reserved)
+        {
             return std::unexpected("Script name '" + std::string(scriptName) + "' is a reserved device name");
+        }
 
         return directory / (std::string(scriptName) + std::string(extension));
     }
