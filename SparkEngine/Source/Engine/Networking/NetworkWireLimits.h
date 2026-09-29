@@ -11,19 +11,25 @@ namespace Spark::Net
 {
     // IPv4 limits a UDP datagram (UDP header + payload) to 65,515 bytes.
     // After the 8-byte UDP header, sendto/recvfrom can carry at most 65,507
-    // bytes. Spark's fixed message header consumes 23 of those bytes.
-    // The same payload ceiling applies to every channel. In particular, a
-    // 5 KiB Reliable/ReliableOrdered payload is supported; fragmentation and
-    // reassembly below this UDP boundary are delegated to the IP stack.
+    // bytes. Spark's fixed message header consumes 23 of those bytes, and a
+    // ReliableOrdered message carries 4 more: its ordered-stream sequence
+    // (protocol v3), numbered independently of the reliability/ACK sequence.
+    // The same payload ceiling applies to every channel, so it is computed from
+    // the largest header. In particular, a 5 KiB Reliable/ReliableOrdered
+    // payload is supported; fragmentation and reassembly below this UDP
+    // boundary are delegated to the IP stack.
     // NET-100 (protocol v2): every datagram is one frame-kind byte plus either the plaintext
     // handshake message or a SecureChannel packet (10-byte header + 16-byte tag) around it, so
     // the payload ceiling leaves room for the largest frame (NetworkConnection.cpp asserts the
     // overhead against SECURE_PACKET_OVERHEAD).
-    inline constexpr std::size_t NETWORK_WIRE_HEADER_SIZE = 23;
+    inline constexpr std::size_t NETWORK_WIRE_HEADER_SIZE = 23;     ///< Fixed header, every channel
+    inline constexpr std::size_t NETWORK_ORDERED_SEQUENCE_SIZE = 4; ///< ReliableOrdered-only header field
+    inline constexpr std::size_t NETWORK_MAX_WIRE_HEADER_SIZE =
+        NETWORK_WIRE_HEADER_SIZE + NETWORK_ORDERED_SEQUENCE_SIZE;
     inline constexpr std::size_t NETWORK_FRAME_OVERHEAD = 1 + 10 + 16;
     inline constexpr std::size_t MAX_UDP_WIRE_DATAGRAM_SIZE = 65'507;
     inline constexpr std::size_t MAX_NETWORK_MESSAGE_PAYLOAD_SIZE =
-        MAX_UDP_WIRE_DATAGRAM_SIZE - NETWORK_WIRE_HEADER_SIZE - NETWORK_FRAME_OVERHEAD;
+        MAX_UDP_WIRE_DATAGRAM_SIZE - NETWORK_MAX_WIRE_HEADER_SIZE - NETWORK_FRAME_OVERHEAD;
 
     // Kernel buffer sizes for Spark's UDP sockets. BSD-derived stacks (macOS) refuse to send a datagram
     // larger than SO_SNDBUF and hold exactly SO_RCVBUF bytes of queued datagrams (Linux doubles the request).

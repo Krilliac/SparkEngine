@@ -1,7 +1,7 @@
 # SparkEngine Networking Wire Format Specification
 
-**Version:** 2.0 (protocol version 2, NET-100)  
-**Date:** 2026-09-27  
+**Version:** 3.0 (protocol version 3; framing from NET-100, protocol version 2)  
+**Date:** 2026-09-29  
 **Status:** Reference  
 
 ## Overview
@@ -23,7 +23,7 @@ All networking code is guarded by `ENABLE_NETWORKING` (ON by default). When disa
 | Type | Width | Description |
 |------|-------|-------------|
 | `ClientID` | `uint32_t` | Unique client identifier. `0` = `INVALID_CLIENT` |
-| `SequenceNumber` | `uint32_t` | Monotonic counter for reliable ordering |
+| `SequenceNumber` | `uint32_t` | Per-peer, per-direction counter: reliability/ACK sequence, and the separate ordered-stream sequence |
 | `NetworkTime` | `float` | Server time in seconds |
 
 ## Datagram Framing (protocol v2, NET-100)
@@ -70,8 +70,9 @@ any duplicate is `Replayed`. A sender rotates its key after 2^31 packets or 600 
 authenticated packet of the next epoch. When the 8-bit epoch space is spent the channel is
 dropped and the session ends by timeout, so a (key, nonce) pair can never repeat.
 
-**Size.** Frame overhead is 27 bytes (`NETWORK_FRAME_OVERHEAD`), so
-`MAX_NETWORK_MESSAGE_PAYLOAD_SIZE = 65507 - 23 - 27 = 65457`.
+**Size.** Frame overhead is 27 bytes (`NETWORK_FRAME_OVERHEAD`) and the largest message header is
+27 bytes (23 fixed + the 4-byte ordered sequence of a ReliableOrdered message), so
+`MAX_NETWORK_MESSAGE_PAYLOAD_SIZE = 65507 - 27 - 27 = 65453` on every channel.
 
 ## Message Structure
 
@@ -91,12 +92,22 @@ Each frame contains one `NetworkMessage`:
 | 4 | 2 | `uint16_t` | `type` | Message type enum value |
 | 6 | 1 | `uint8_t` | `channel` | Channel type (0=Unreliable, 1=Reliable, 2=ReliableOrdered) |
 | 7 | 4 | `uint32_t` | `senderID` | Originating client ID |
-| 11 | 4 | `uint32_t` | `sequence` | Sequence number for reliable ordering |
+| 11 | 4 | `uint32_t` | `sequence` | Reliability sequence (dedup, ACK, retransmit); 0 = untracked |
 | 15 | 4 | `float` | `timestamp` | Server time when created |
 | 19 | 4 | `uint32_t` | `payloadSize` | Length of payload in bytes |
-| 23 | N | `uint8_t[]` | `payload` | Raw serialized message body |
+| 23 | 4 | `uint32_t` | `orderedSequence` | **ReliableOrdered (channel 2) only**: ordered-stream sequence; 0 = deliver unordered |
+| 23 or 27 | N | `uint8_t[]` | `payload` | Raw serialized message body |
 
-**Total header size:** 23 bytes (fixed) + variable payload
+**Total header size:** 23 bytes for Unreliable and Reliable, 27 bytes for ReliableOrdered, plus
+the variable payload. `payloadSize` must equal the bytes that remain after the header.
+
+**Two sequence spaces (protocol v3).** Each peer and direction numbers two streams, both starting
+at 1 and wrapping from `0xFFFFFFFF` to 1 (0 is never assigned). Every Reliable and ReliableOrdered
+message takes the next *reliability* sequence, which `Ack` acknowledges. A ReliableOrdered message
+also takes the next *ordered* sequence, and only that sequence drives in-order delivery. Protocol
+v2 used the reliability sequence for ordering, so the first ReliableOrdered message after any
+Reliable one (every client's `ClientFinished`, for example) left a gap the receiver waited on
+forever. Both streams restart when a session ends (disconnect, kick, reconnect).
 
 Sensitive-payload ownership is intentionally absent from the wire format.
 Senders mark their local `NetworkMessage` copies with `sensitive`; receivers
@@ -121,8 +132,9 @@ are rejected before dispatch.
 - Use for: chat messages, state changes, score updates
 
 ### ReliableOrdered (2)
-- Guaranteed delivery AND in-order processing
-- Messages buffered until gaps are filled
+- Guaranteed delivery AND in-order processing, ordered by the header's `orderedSequence`
+- Messages buffered until gaps in the ordered stream are filled (at most 4096 per peer); a copy
+  older than the next expected ordered sequence is acknowledged and dropped
 - Highest overhead
 - Use for: important game events, match state transitions
 

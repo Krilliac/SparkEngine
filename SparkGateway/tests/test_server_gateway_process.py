@@ -20,7 +20,7 @@ CONNECT = 1
 CONNECT_ACCEPTED = 2
 # Connect payload prefix: handshake magic "SPNH" + protocol version (NetworkManager.h).
 HANDSHAKE_MAGIC = 0x484E5053
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 # NET-100 v2 framing (docs/specs/networking-wire-format.md): every datagram starts with a
 # frame-kind byte; Connect/ConnectAccepted travel in plaintext handshake frames.
 FRAME_HANDSHAKE = 0x01

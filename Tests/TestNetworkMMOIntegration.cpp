@@ -150,6 +150,10 @@ static std::vector<uint8_t> MakePacket(MessageType type, ChannelType channel, ui
     buf.WriteUint32(sequence);
     buf.WriteFloat(timestamp);
     buf.WriteUint32(static_cast<uint32_t>(payload.size()));
+    if (channel == ChannelType::ReliableOrdered)
+    {
+        buf.WriteUint32(0); // protocol v3 ordered sequence; 0 = deliver unordered
+    }
     if (!payload.empty())
         buf.WriteBytes(payload.data(), payload.size());
     return std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());

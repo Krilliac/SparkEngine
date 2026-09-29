@@ -507,6 +507,12 @@ namespace TestReliablePerPeer
             buf.WriteUint32(sequence);
             buf.WriteFloat(0.0f); // timestamp
             buf.WriteUint32(static_cast<uint32_t>(payload.size()));
+            // Protocol v3: ReliableOrdered carries its ordered-stream sequence. This raw peer
+            // sends only ordered traffic on that channel, so both streams share its numbering.
+            if (wireChannel == static_cast<uint8_t>(Net::ChannelType::ReliableOrdered))
+            {
+                buf.WriteUint32(sequence);
+            }
             if (!payload.empty())
                 buf.WriteBytes(payload.data(), payload.size());
 
@@ -571,8 +577,10 @@ namespace TestReliablePerPeer
             outMsg.sequence = buf.ReadUint32();
             outMsg.timestamp = buf.ReadFloat();
             uint32_t payloadLen = buf.ReadUint32();
+            outMsg.orderedSequence =
+                outMsg.channel == Net::ChannelType::ReliableOrdered ? buf.ReadUint32() : Net::SequenceNumber{0};
             if (!Net::IsNetworkPayloadSizeValid(payloadLen) ||
-                payloadLen > static_cast<size_t>(received) - Net::NETWORK_WIRE_HEADER_SIZE)
+                payloadLen > static_cast<size_t>(received) - buf.GetReadPosition())
                 return false;
             outMsg.payload.resize(payloadLen);
             if (payloadLen > 0)

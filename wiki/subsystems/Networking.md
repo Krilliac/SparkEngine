@@ -495,7 +495,7 @@ using Token = ConnectionToken;                            // TOKEN_SIZE (16) byt
 
 The repeating-key XOR "encryption" prototype (`PacketEncrypt`/`Encrypt`/`GetEncryptionKey`, `NetworkStack::Encrypt`/`Decrypt`, and the `enableEncryption` flags in `NetworkStackConfig` and `[Network]` engine settings) was deleted under NET-100. `Tests/TestNetworkSecurity.cpp` static-asserts that the API stays gone, and `Tests/Tools/test_network_security_csprng.py` (label `network-security`) fails if XOR transform code returns to these headers.
 
-> **Warning:** The `NetworkManager` UDP path (protocol version 2) authenticates the server and seals every datagram after the handshake, but NET-100 remains open: the composition has not been independently reviewed, anti-amplification cookies are missing, and SparkGateway tickets are not yet bound to the UDP session. Its primitives are libsodium's (OD-06).
+> **Warning:** The `NetworkManager` UDP path (protocol version 3) authenticates the server and seals every datagram after the handshake, but NET-100 remains open: the composition has not been independently reviewed, anti-amplification cookies are missing, and SparkGateway tickets are not yet bound to the UDP session. Its primitives are libsodium's (OD-06).
 
 ### NetworkEncryption (Advanced)
 
@@ -839,7 +839,7 @@ The reliable channel provides guaranteed delivery with duplicate detection and o
 - **ACK tracking**: Receiver tracks the highest received sequence number and a 32-bit bitfield encoding the previous 32 sequences. ACKs are sent at ~30 Hz.
 - **Retransmission**: Unacknowledged messages are retransmitted with exponential backoff (base interval doubles each retry, capped at 8x). Configurable via `SetMaxReliableRetries()` (default: 10).
 - **Duplicate detection**: Receiver maintains a set of recently received sequence numbers (pruned after 30 seconds). Duplicate packets are silently dropped.
-- **Ordered delivery**: `ReliableOrdered` messages are buffered and delivered in sequence order. Out-of-order packets are held until the gap is filled.
+- **Ordered delivery**: `ReliableOrdered` messages carry their own per-peer ordered sequence (protocol v3), separate from the reliability/ACK sequence, and are delivered in that order. Out-of-order packets are held until the gap is filled; a copy older than the next expected ordered sequence is ACKed and dropped. Before v3 both channels shared one counter, so any Reliable message (such as a client's `ClientFinished`) left a gap and ordered delivery stalled forever (`Tests/TestReliableOrderedSequenceReal.cpp`).
 - **RTT estimation**: Jacobson/Karels algorithm (RFC 6298) computes smoothed RTT and variance. Karn's algorithm skips retransmitted packets for RTT samples.
 - **Connection failure**: After `m_maxReliableRetries` retransmissions, the message is dropped and `packetsDropped` is incremented.
 
