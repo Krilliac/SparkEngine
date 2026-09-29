@@ -6,8 +6,7 @@
 #include "ARPGSkillSystem.h"
 #include "Engine/Security/MemoryIntegrity.h"
 #include "Hero/ARPGHeroSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -29,9 +28,9 @@ namespace ARPG
         m_heroSystem = heroSystem;
         RegisterSkillTrees();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG skill system initialized with %zu skills", m_allSkills.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Skill system initialized (" +
-                                                    std::to_string(m_allSkills.size()) + " skills)");
+        Spark::ModuleLog::Info(m_context, "ARPG skill system initialized with {} skills", m_allSkills.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Skill system initialized (" + std::to_string(m_allSkills.size()) + " skills)");
         return true;
     }
 
@@ -172,8 +171,8 @@ namespace ARPG
         }
 
         learned.push_back(skillId);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG skill learned: %s (id=%u)", skill->name.c_str(), skillId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Learned skill: " + skill->name);
+        Spark::ModuleLog::Info(m_context, "ARPG skill learned: {} (id={})", skill->name.c_str(), skillId);
+        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Learned skill: " + skill->name);
         return true;
     }
 
@@ -209,8 +208,7 @@ namespace ARPG
             m_cooldowns[heroId].push_back({skillId, skill->cooldown});
         }
         SPARK_BRANCH_GUARD_END("arpg_cooldown_apply")
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG skill used: %s (cd=%.1fs)", skill->name.c_str(),
-                        skill->cooldown);
+        Spark::ModuleLog::Debug(m_context, "ARPG skill used: {} (cd={:.1f}s)", skill->name.c_str(), skill->cooldown);
 
         return true;
     }

@@ -12,6 +12,7 @@
  *   - Export macros
  *   - Common math types (Vec3, Quat, Color, Mat4x4, AABB, Ray)
  *   - Input types (MouseButton, GamepadButton, InputAction)
+ *   - Shared gameplay identifiers (player classes, damage, vehicles, interactions)
  *   - Event types for pub/sub messaging
  */
 
@@ -29,3 +30,4 @@
 #include "MathTypes.h"
 #include "InputTypes.h"
 #include "EventTypes.h"
+#include "GameTypes.h"

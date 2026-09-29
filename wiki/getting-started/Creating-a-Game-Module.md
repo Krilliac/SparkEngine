@@ -73,14 +73,36 @@ The `ModuleInfo` struct provides metadata about your module:
 | `sdkVersion` | `uint32_t` | SDK version this module was built against (`SPARK_SDK_VERSION`) |
 | `loadOrder` | `int` | Initialization priority (lower = earlier, default 1000) |
 
-`SPARK_SDK_VERSION` is **6** (`SparkSDK/include/Spark/Version.h`): v5 dropped `IEngineContext`'s
+`SPARK_SDK_VERSION` is **7** (`SparkSDK/Include/Spark/Version.h`): v5 dropped `IEngineContext`'s
 `InitializeAll()` and `ShutdownAll()` (owner decision OD-01: `EngineRuntime` owns subsystem lifecycle),
-and v6 appended `IEngineContext::GetLogger()` (MOD-295).
-`IsSDKCompatible` is exact equality, so a v5 module is refused by a v6 host and a v6 module by a v5
+v6 appended `IEngineContext::GetLogger()`, and v7 appended `GetConsole()` (MOD-295).
+`IsSDKCompatible` is exact equality, so a v6 module is refused by a v7 host and a v7 module by a v6
 host — there is no forward or backward window; rebuild modules against the current SDK.
-`Spark/IEngineContext.h` pins `EngineContextVirtualCount = 89` with a `static_assert` tying
+`Spark/IEngineContext.h` pins `EngineContextVirtualCount = 90` with a `static_assert` tying
 it to the version constant: adding or removing a virtual means updating **both** together, or an old
 host will accept a module that calls off the end of its vtable.
+
+### Public console, logging and gameplay types
+
+ARPG, RPG, Racing, OpenWorld, RTS and Platformer register commands through the
+host's `IConsole` and log through `Spark::ModuleLog`. FPS's main and headless
+entrypoints also register through `IConsole`. Each module retains only the
+names the host accepted and unregisters them before releasing its state and
+context. A missing optional console leaves no registered callbacks.
+
+Include `<Spark/GameTypes.h>` for shared gameplay enums. The SDK owns the
+declarations used by the runtime, editor and FPS; the private runtime header
+only forwards to it. The former FPS copy is removed. Enum names, representation
+and values are preserved, so this extraction leaves SDK ABI v7 unchanged.
+
+These migrations do not complete the installed-SDK-only module boundary. FPS
+still needs concrete rendering, scene, input, physics and save APIs; its CMake
+target still links the engine library on Windows. Prototype integration files
+also retain private subsystem APIs. The current remaining dependencies are
+recorded in [`module-content-inventory.json`](../../GameModules/module-content-inventory.json).
+`FPSPublicSDK_PrivateIncludeRatchet`, `FPSPublicSDK_GameTypes` and
+`PrototypeModuleKit_PublicConsoleBoundary` lock in the migrated boundaries;
+full package builds and runtime smokes remain separate verification.
 
 ### IModule Method Reference
 

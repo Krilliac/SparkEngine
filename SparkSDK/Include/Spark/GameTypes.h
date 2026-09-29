@@ -1,16 +1,11 @@
 /**
- * @file GameSystemEnums.h
- * @brief Game system enumerations for Spark Engine
- * @author Spark Engine Team
- * @date 2025
- * 
- * This file contains enumerations related to game mechanics, weapon systems,
- * player states, AI behaviors, and other core game functionality.
+ * @file GameTypes.h
+ * @brief Shared gameplay identifiers for the runtime, editor and game modules.
  *
- * @note These enums use namespace SparkEditor (not SparkEngine) because they
- * are shared between the engine runtime and the editor. Graphics and input
- * enums in GraphicsEnums.h and InputEnums.h use namespace SparkEngine as they
- * are engine-internal. See AllEnums.h for the full namespace reference.
+ * These value types have no thread affinity, own no resources and allocate no
+ * memory. Namespaces, underlying types and numeric values preserve the existing
+ * gameplay and persisted-data contract. The engine compatibility header includes
+ * this file; it must not maintain a second copy of these declarations.
  */
 
 #pragma once

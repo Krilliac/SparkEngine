@@ -25,6 +25,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,7 +39,7 @@ LOCATION = "inventory"
 # Reviewed one-way ceilings for SparkGameFPS (MOD-310 target: zero). Lower them
 # together with the committed inventory whenever headers or copied files are
 # removed; never raise them.
-FPS_PRIVATE_HEADER_CEILING = 51
+FPS_PRIVATE_HEADER_CEILING = 47
 FPS_COPIED_INFRASTRUCTURE_CEILING = 1
 
 
@@ -162,6 +163,20 @@ class FPSPrivateIncludeRatchetTests(unittest.TestCase):
         self.assertFalse(module_content._is_prototype(applicability))
         self.assertTrue(module_content._is_ratcheted(FPS_MODULE, applicability))
 
+    def test_fps_gameplay_types_have_one_public_definition(self) -> None:
+        module = ROOT / "GameModules" / FPS_MODULE
+        self.assertFalse((module / "Source/Enums/GameSystemEnums.h").exists(),
+                         "Do not restore the FPS copy of the shared gameplay enum declarations")
+        public = ROOT / "SparkSDK/Include/Spark/GameTypes.h"
+        self.assertTrue(public.is_file())
+        classified = module_content.classify_module_includes(ROOT, module)
+        self.assertIn("Spark/GameTypes.h", classified["sdk"])
+        self.assertNotIn("Enums/GameSystemEnums.h", classified["engine"])
+        compatibility = ROOT / "SparkEngine/Source/Enums/GameSystemEnums.h"
+        code, _ = module_content._lex_cpp(compatibility.read_text(encoding="utf-8"))
+        self.assertIn("#include <Spark/GameTypes.h>", code)
+        self.assertNotIn("enum class", code, "The runtime must consume the same SDK declarations")
+
     def test_fps_matches_committed_inventory(self) -> None:
         entry = _committed_entries(ROOT)[FPS_MODULE]
         findings = module_content._validate_private_dependencies(ROOT, ROOT / "GameModules" / FPS_MODULE, entry, LOCATION)
@@ -256,6 +271,25 @@ class FPSBuildCouplingTests(unittest.TestCase):
             messages,
         )
         self.assertEqual([], module_content._validate_engine_build_coupling(FPS_MODULE, committed, dict(committed), LOCATION))
+
+
+class FPSBuildCouplingSpellingTests(unittest.TestCase):
+    """The installed SDK's namespaced library must not evade the real CMake ratchet."""
+
+    def test_namespaced_engine_link_is_detected(self) -> None:
+        module = ROOT / "GameModules" / FPS_MODULE
+        for library in ("Spark::SparkEngineLib", "$<LINK_ONLY:Spark::SparkEngineLib>"):
+            with self.subTest(library=library):
+                source = f"target_link_libraries({FPS_MODULE} PRIVATE {library})\n"
+                with mock.patch.object(Path, "read_text", return_value=source):
+                    coupling = module_content._engine_build_coupling(module)
+                self.assertTrue(coupling["linksSparkEngineLib"])
+                findings = module_content._validate_engine_build_coupling(
+                    FPS_MODULE, coupling,
+                    {"linksSparkEngineLib": False, "engineSourceIncludeDirectory": False}, LOCATION,
+                )
+                self.assertTrue(any("regained engine build coupling linksSparkEngineLib" in message
+                                    for _, message in findings))
 
 
 class RatchetMutationTests(unittest.TestCase):

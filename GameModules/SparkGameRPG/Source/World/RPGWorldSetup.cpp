@@ -4,8 +4,7 @@
  */
 
 #include "RPGWorldSetup.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 #include "Engine/Streaming/SeamlessAreaManager.h"
 
 #ifdef ENABLE_EDITOR
@@ -144,9 +143,9 @@ namespace RPG
         };
         m_areas.push_back(swamp);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG world defined %zu areas", m_areas.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Defined " + std::to_string(m_areas.size()) +
-                                                    " world areas");
+        Spark::ModuleLog::Info(m_context, "RPG world defined {} areas", m_areas.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG World] Defined " + std::to_string(m_areas.size()) + " world areas");
     }
 
     void RPGWorldSetup::RegisterAreasWithStreaming()
@@ -174,8 +173,8 @@ namespace RPG
             streamingMgr->RegisterArea(def, std::move(manifest));
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG areas registered with SeamlessAreaManager");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Registered areas with SeamlessAreaManager");
+        Spark::ModuleLog::Info(m_context, "RPG areas registered with SeamlessAreaManager");
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG World] Registered areas with SeamlessAreaManager");
     }
 
     void RPGWorldSetup::ConfigureOriginRebasing()
@@ -183,8 +182,8 @@ namespace RPG
         m_originSystem.SetRebasingThreshold(3000.0f);
         m_originSystem.SetEnabled(true);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG origin rebasing enabled (threshold: 3000m)");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Origin rebasing enabled (threshold: 3000m)");
+        Spark::ModuleLog::Info(m_context, "RPG origin rebasing enabled (threshold: 3000m)");
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG World] Origin rebasing enabled (threshold: 3000m)");
     }
 
     void RPGWorldSetup::Update(float deltaTime)

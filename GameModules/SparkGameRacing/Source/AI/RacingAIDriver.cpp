@@ -4,8 +4,7 @@
  */
 
 #include "RacingAIDriver.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -44,9 +43,8 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing AI driver system initialized");
-        console.LogInfo("[Racing AI] AI driver system initialized");
+        Spark::ModuleLog::Info(m_context, "Racing AI driver system initialized");
+        Spark::ModuleLog::Info(m_context, "[Racing AI] AI driver system initialized");
         return true;
     }
 
@@ -110,11 +108,12 @@ namespace Racing
             driver.aggressiveness = preset.aggressiveness;
         }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
         const char* names[] = {"Easy", "Medium", "Hard", "Expert"};
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing AI global difficulty set to: %s",
-                       names[static_cast<int>(difficulty)]);
-        console.LogInfo("[Racing AI] Global difficulty set to: " + std::string(names[static_cast<int>(difficulty)]));
+        Spark::ModuleLog::Info(m_context, "Racing AI global difficulty set to: {}",
+                               names[static_cast<int>(difficulty)]);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[Racing AI] Global difficulty set to: " +
+                                   std::string(names[static_cast<int>(difficulty)]));
     }
 
     void RacingAIDriver::UpdateRubberBanding(float playerDistance, float leadDistance, float lastDistance)
@@ -235,8 +234,8 @@ namespace Racing
 
         // Per-driver, per-frame: Trace, not Debug. A full simulated race emits ~87k of these lines,
         // which at Debug flooded the test console past the sanitizer lanes' 16 MiB capture cap.
-        SPARK_LOG_TRACE(Spark::LogCategory::Game, "Racing AI driver %u: throttle=%.2f steer=%.2f nitro=%s",
-                        state.vehicleId, state.throttle, state.steer, state.useNitro ? "yes" : "no");
+        Spark::ModuleLog::Debug(m_context, "Racing AI driver {}: throttle={:.2f} steer={:.2f} nitro={}",
+                                state.vehicleId, state.throttle, state.steer, state.useNitro ? "yes" : "no");
     }
 
     void RacingAIDriver::ComputeSteering(const AIDriverConfig& config, AIDriverState& state)

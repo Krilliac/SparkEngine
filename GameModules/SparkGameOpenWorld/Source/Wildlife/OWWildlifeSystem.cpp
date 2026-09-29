@@ -4,8 +4,7 @@
  */
 
 #include "OWWildlifeSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -30,10 +29,11 @@ namespace OpenWorld
         SpawnRegionWildlife(2); // Ironwood Forest
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Wildlife system initialized: %zu species, %zu active",
-                       m_species.size(), m_animals.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Wildlife: " + std::to_string(m_species.size()) +
-                                                    " species, " + std::to_string(m_animals.size()) + " spawned");
+        Spark::ModuleLog::Info(m_context, "Wildlife system initialized: {} species, {} active", m_species.size(),
+                               m_animals.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Wildlife: " + std::to_string(m_species.size()) + " species, " +
+                                   std::to_string(m_animals.size()) + " spawned");
         return true;
     }
 
@@ -434,8 +434,8 @@ namespace OpenWorld
             {
                 it->second.isTamed = true;
                 it->second.behavior = AnimalBehavior::Following;
-                Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Tamed " + species.name +
-                                                            " (id=" + std::to_string(instanceId) + ")");
+                Spark::ModuleLog::Info(
+                    m_context, "{}", "[OpenWorld] Tamed " + species.name + " (id=" + std::to_string(instanceId) + ")");
                 return true;
             }
         }

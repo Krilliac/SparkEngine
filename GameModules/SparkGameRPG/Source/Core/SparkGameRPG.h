@@ -17,6 +17,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace RPG
@@ -85,6 +87,7 @@ class SparkGameRPGModule : public Spark::IModule
     std::unique_ptr<RPG::RPGEngineSystems> m_engineSystems;
     std::unique_ptr<RPG::RPGDemoSession> m_demoSession;
     std::unique_ptr<RPG::RPGQuestAutopilot> m_questAutopilot; ///< Set by rpg_autoplay until rpg_autoplay off
+    std::vector<std::string> m_registeredConsoleCommands;
 };
 
 // Module exports

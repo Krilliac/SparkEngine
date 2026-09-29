@@ -4,8 +4,7 @@
  */
 
 #include "RacingHUDSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -25,9 +24,8 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing HUD system initialized");
-        console.LogInfo("[Racing HUD] HUD system initialized");
+        Spark::ModuleLog::Info(m_context, "Racing HUD system initialized");
+        Spark::ModuleLog::Info(m_context, "[Racing HUD] HUD system initialized");
         return true;
     }
 

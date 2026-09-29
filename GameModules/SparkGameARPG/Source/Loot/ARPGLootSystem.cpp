@@ -4,8 +4,7 @@
  */
 
 #include "ARPGLootSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -56,9 +55,10 @@ namespace ARPG
         m_context = context;
         BuildAffixPool();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG loot system initialized with %zu affixes", m_affixPool.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Loot system initialized (" +
-                                                    std::to_string(m_affixPool.size()) + " affixes in pool)");
+        Spark::ModuleLog::Info(m_context, "ARPG loot system initialized with {} affixes", m_affixPool.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Loot system initialized (" + std::to_string(m_affixPool.size()) +
+                                   " affixes in pool)");
         return true;
     }
 
@@ -218,8 +218,8 @@ namespace ARPG
 
         RollAffixes(item, affixCount);
         m_generatedCount++;
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG item generated: %s (level %d, %d affixes)", item.name.c_str(),
-                        item.itemLevel, affixCount);
+        Spark::ModuleLog::Debug(m_context, "ARPG item generated: {} (level {}, {} affixes)", item.name.c_str(),
+                                item.itemLevel, affixCount);
         return item;
     }
 

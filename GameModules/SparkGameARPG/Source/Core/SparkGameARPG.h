@@ -17,6 +17,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace ARPG
@@ -64,6 +66,7 @@ class SparkGameARPGModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
+    void UnregisterConsoleCommands();
     void UpdateDemoInput();
 
     Spark::IEngineContext* m_context{nullptr};
@@ -86,6 +89,7 @@ class SparkGameARPGModule : public Spark::IModule
     bool m_attackHeld{false};
     bool m_skillHeld{false};
     bool m_restartHeld{false};
+    std::vector<std::string> m_registeredConsoleCommands;
 };
 
 // Module exports

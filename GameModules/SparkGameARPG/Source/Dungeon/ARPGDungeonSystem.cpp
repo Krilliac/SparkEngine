@@ -5,8 +5,7 @@
 
 #include "ARPGDungeonSystem.h"
 #include "Engine/ECS/Components.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -31,10 +30,9 @@ namespace ARPG
         RegisterTierConfigs();
         PlaceCryptKit();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG dungeon system initialized with %zu tiers",
-                       m_tierConfigs.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Dungeon system initialized (" +
-                                                    std::to_string(m_tierConfigs.size()) + " tiers)");
+        Spark::ModuleLog::Info(m_context, "ARPG dungeon system initialized with {} tiers", m_tierConfigs.size());
+        Spark::ModuleLog::Info(
+            m_context, "{}", "[ARPG] Dungeon system initialized (" + std::to_string(m_tierConfigs.size()) + " tiers)");
         return true;
     }
 
@@ -104,10 +102,11 @@ namespace ARPG
             renderer.meshPath = prop.meshPath;
             m_kitEntities.push_back(static_cast<uint32_t>(entity));
         }
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG crypt: placed %zu kit props (ARPG Kit and ModuleKits/ARPG)",
-                       m_kitEntities.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Crypt: placed " + std::to_string(m_kitEntities.size()) +
-                                                    " kit props (ARPG Kit and ModuleKits/ARPG)");
+        Spark::ModuleLog::Info(m_context, "ARPG crypt: placed {} kit props (ARPG Kit and ModuleKits/ARPG)",
+                               m_kitEntities.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Crypt: placed " + std::to_string(m_kitEntities.size()) +
+                                   " kit props (ARPG Kit and ModuleKits/ARPG)");
     }
 
     void ARPGDungeonSystem::RemoveCryptKit()
@@ -270,8 +269,8 @@ namespace ARPG
 
         const auto* config = GetTierConfig(tier);
         std::string tierName = config ? config->name : "Unknown";
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG dungeon tier set to: %s", tierName.c_str());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Dungeon tier set to: " + tierName);
+        Spark::ModuleLog::Info(m_context, "ARPG dungeon tier set to: {}", tierName.c_str());
+        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Dungeon tier set to: " + tierName);
     }
 
     void ARPGDungeonSystem::DescendToNextFloor()
@@ -289,9 +288,9 @@ namespace ARPG
         if (level.hasBoss)
             msg += " BOSS";
         msg += ")";
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG descended to floor %d (monster level %d)", nextFloor,
-                       level.monsterLevel);
-        Spark::SimpleConsole::GetInstance().LogInfo(msg);
+        Spark::ModuleLog::Info(m_context, "ARPG descended to floor {} (monster level {})", nextFloor,
+                               level.monsterLevel);
+        Spark::ModuleLog::Info(m_context, "{}", msg);
     }
 
     std::string ARPGDungeonSystem::GetDungeonStatusString() const

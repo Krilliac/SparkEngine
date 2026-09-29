@@ -7,7 +7,7 @@
  */
 
 #pragma once
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 
 #include <vector>
 #include <string>

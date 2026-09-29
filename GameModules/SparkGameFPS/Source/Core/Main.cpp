@@ -25,7 +25,8 @@
 #include "Game/Enemy.h"
 #include "Game/FPSStateRules.h"
 #include "Engine/Events/EventSystem.h"
-#include "Utils/SparkConsole.h"
+#include <Spark/IConsole.h>
+#include <Spark/ModuleLog.h>
 #include "Utils/Validate.h"
 #include "Audio/MusicManager.h"
 #include "Engine/Destruction/DestructionSystem.h"
@@ -35,7 +36,6 @@
 #include "Engine/Replay/ReplaySystem.h"
 #include "Utils/InvalidStateDetector.h"
 #include <Spark/ModuleRegistry.h>
-#include "Engine/ECS/Components.h"
 
 #include <optional>
 #include <utility>
@@ -45,23 +45,28 @@ namespace
     class TrackedConsoleRegistrar
     {
       public:
-        TrackedConsoleRegistrar(Spark::SimpleConsole& console, std::vector<std::string>& registeredNames)
+        TrackedConsoleRegistrar(Spark::IConsole& console, std::vector<std::string>& registeredNames)
             : m_console(console), m_registeredNames(registeredNames)
         {
         }
 
         /// Registers @p name unless it is a developer command this build excludes
         /// (see SparkFPS::ConsolePolicy::kDeveloperCommands).
-        template <typename... Args> void RegisterCommand(const std::string& name, Args&&... args)
+        void RegisterCommand(const std::string& name, Spark::IConsole::CommandHandler handler, std::string_view help,
+                             std::string_view category = "General", std::string_view usage = "")
         {
             if (!SparkFPS::ConsolePolicy::ShouldRegister(name, SparkFPS::ConsolePolicy::kDeveloperCommandsEnabled))
+            {
                 return;
-            m_console.RegisterCommand(name, std::forward<Args>(args)...);
-            m_registeredNames.push_back(name);
+            }
+            if (m_console.RegisterCommand(name, std::move(handler), help, category, usage))
+            {
+                m_registeredNames.push_back(name);
+            }
         }
 
       private:
-        Spark::SimpleConsole& m_console;
+        Spark::IConsole& m_console;
         std::vector<std::string>& m_registeredNames;
     };
 } // namespace
@@ -140,7 +145,7 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
                        "SparkGameFPS module initialized for the no-render headless lifecycle");
-        Spark::SimpleConsole::GetInstance().LogSuccess("SparkGameFPS module initialized for headless source execution");
+        Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized for headless source execution");
         return true;
     }
 
@@ -234,15 +239,14 @@ bool SparkGameModule::InitializeFromContext()
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, graphics, false);
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, input, false);
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("Initializing SparkGameFPS module...");
+    Spark::ModuleLog::Info(m_context, "Initializing SparkGameFPS module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing SparkGameFPS module");
 
     g_game = new Game();
     HRESULT hr = g_game->Initialize(graphics, input);
     if (FAILED(hr))
     {
-        console.LogError("Game::Initialize() failed");
+        Spark::ModuleLog::Error(m_context, "Game::Initialize() failed");
         delete g_game;
         g_game = nullptr;
         return false;
@@ -264,7 +268,7 @@ bool SparkGameModule::InitializeFromContext()
         SPARK_LOG_WARN(Spark::LogCategory::Game,
                        "SparkGameFPS: host exposes no InvalidStateDetector; FPS state rules are not registered");
         m_initialized = true;
-        console.LogSuccess("SparkGameFPS module initialized");
+        Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized");
         return true;
     }
     Spark::InvalidStateDetector& stateDetector = *hostDetector;
@@ -305,7 +309,7 @@ bool SparkGameModule::InitializeFromContext()
          }});
 
     m_initialized = true;
-    console.LogSuccess("SparkGameFPS module initialized");
+    Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized");
     return true;
 }
 
@@ -317,10 +321,12 @@ void SparkGameModule::Shutdown()
 
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Shutting down SparkGameFPS module");
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    for (const auto& commandName : m_registeredConsoleCommands)
+    if (Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr)
     {
-        console.UnregisterCommand(commandName);
+        for (const auto& commandName : m_registeredConsoleCommands)
+        {
+            console->UnregisterCommand(commandName);
+        }
     }
     m_registeredConsoleCommands.clear();
     // Same instance the rules were added to; the module-local singleton would
@@ -340,10 +346,9 @@ void SparkGameModule::Shutdown()
     }
     ShutdownHeadlessArena();
     m_weatherAdapter.reset();
+    Spark::ModuleLog::Info(m_context, "SparkGameFPS module shut down");
     m_context = nullptr;
     m_initialized = false;
-
-    Spark::SimpleConsole::GetInstance().LogInfo("SparkGameFPS module shut down");
 }
 
 void SparkGameModule::OnResize(int width, int height)
@@ -359,8 +364,12 @@ void SparkGameModule::OnResize(int width, int height)
 // ===================================================================================
 void SparkGameModule::RegisterGameConsoleCommands()
 {
-    auto& simpleConsole = Spark::SimpleConsole::GetInstance();
-    TrackedConsoleRegistrar console(simpleConsole, m_registeredConsoleCommands);
+    Spark::IConsole* hostConsole = m_context ? m_context->GetConsole() : nullptr;
+    if (!hostConsole)
+    {
+        return;
+    }
+    TrackedConsoleRegistrar console(*hostConsole, m_registeredConsoleCommands);
     Game* game = g_game;
     Spark::IEngineContext* context = m_context;
 

@@ -5,8 +5,7 @@
 
 #include "RacingTrackSystem.h"
 #include "Engine/ECS/Components.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -36,9 +35,10 @@ namespace Racing
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing track system initialized with %zu tracks", m_tracks.size());
-        console.LogInfo("[Racing Track] Track system initialized (" + std::to_string(m_tracks.size()) + " tracks)");
+        Spark::ModuleLog::Info(m_context, "Racing track system initialized with {} tracks", m_tracks.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[Racing Track] Track system initialized (" + std::to_string(m_tracks.size()) +
+                                   " tracks)");
         return true;
     }
 
@@ -64,11 +64,11 @@ namespace Racing
             m_currentTrack = m_tracks[index];
             BuildTrackColliders();
             PlaceTrackKit();
-            auto& console = Spark::SimpleConsole::GetInstance();
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing track loaded: %s", m_currentTrack.name.c_str());
-            console.LogInfo("[Racing Track] Loaded track: " + m_currentTrack.name + " (" +
-                            std::to_string(m_currentTrack.waypoints.size()) + " waypoints, " +
-                            std::to_string(m_currentTrack.checkpoints.size()) + " checkpoints)");
+            Spark::ModuleLog::Info(m_context, "Racing track loaded: {}", m_currentTrack.name.c_str());
+            Spark::ModuleLog::Info(m_context, "{}",
+                                   "[Racing Track] Loaded track: " + m_currentTrack.name + " (" +
+                                       std::to_string(m_currentTrack.waypoints.size()) + " waypoints, " +
+                                       std::to_string(m_currentTrack.checkpoints.size()) + " checkpoints)");
         }
     }
 
@@ -311,11 +311,11 @@ namespace Racing
             }
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "Racing track '%s': placed %zu kit props from Assets/Models/Racing/Kit",
-                       m_currentTrack.name.c_str(), m_kitEntities.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[Racing Track] Placed " + std::to_string(m_kitEntities.size()) +
-                                                    " kit props from Assets/Models/Racing/Kit");
+        Spark::ModuleLog::Info(m_context, "Racing track '{}': placed {} kit props from Assets/Models/Racing/Kit",
+                               m_currentTrack.name.c_str(), m_kitEntities.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[Racing Track] Placed " + std::to_string(m_kitEntities.size()) +
+                                   " kit props from Assets/Models/Racing/Kit");
     }
 
     void RacingTrackSystem::RemoveTrackKit()

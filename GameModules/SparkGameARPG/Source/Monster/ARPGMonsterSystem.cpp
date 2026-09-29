@@ -4,8 +4,7 @@
  */
 
 #include "ARPGMonsterSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -30,10 +29,10 @@ namespace ARPG
         m_context = context;
         RegisterMonsterTemplates();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG monster system initialized with %zu templates",
-                       m_templates.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Monster system initialized (" +
-                                                    std::to_string(m_templates.size()) + " templates)");
+        Spark::ModuleLog::Info(m_context, "ARPG monster system initialized with {} templates", m_templates.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Monster system initialized (" + std::to_string(m_templates.size()) +
+                                   " templates)");
         return true;
     }
 
@@ -210,8 +209,8 @@ namespace ARPG
         }
 
         m_activeMonsters.push_back(monster);
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG monster spawned: %s (level %d, rank %d)", monster.name.c_str(),
-                        level, static_cast<int>(rank));
+        Spark::ModuleLog::Debug(m_context, "ARPG monster spawned: {} (level {}, rank {})", monster.name.c_str(), level,
+                                static_cast<int>(rank));
         return monster;
     }
 
@@ -233,8 +232,8 @@ namespace ARPG
             pack.push_back(SpawnMonster(tmpl.name, level, ARPGMonsterRank::Champion));
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Spawned elite pack: " + tmpl.name + " x" +
-                                                    std::to_string(packSize));
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Spawned elite pack: " + tmpl.name + " x" + std::to_string(packSize));
         return pack;
     }
 
@@ -256,9 +255,9 @@ namespace ARPG
         if (MonsterData* storedBoss = GetMonster(boss.monsterId))
             *storedBoss = boss;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG boss spawned: %s (Lv%d)", boss.name.c_str(), level);
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Boss spawned: " + boss.name + " (Lv" +
-                                                    std::to_string(level) + ")");
+        Spark::ModuleLog::Info(m_context, "ARPG boss spawned: {} (Lv{})", boss.name.c_str(), level);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Boss spawned: " + boss.name + " (Lv" + std::to_string(level) + ")");
         return boss;
     }
 
@@ -295,8 +294,8 @@ namespace ARPG
         MonsterData restored = monster;
         restored.monsterId = m_nextMonsterId++;
         m_activeMonsters.push_back(restored);
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG monster restored: %s (level %d, rank %d)",
-                        restored.name.c_str(), restored.level, static_cast<int>(restored.rank));
+        Spark::ModuleLog::Debug(m_context, "ARPG monster restored: {} (level {}, rank {})", restored.name.c_str(),
+                                restored.level, static_cast<int>(restored.rank));
         return restored.monsterId;
     }
 

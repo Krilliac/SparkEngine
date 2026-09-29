@@ -11,7 +11,6 @@
 #include "Hero/ARPGHeroSystem.h"
 #include "Monster/ARPGMonsterSystem.h"
 #include "Spark/IEngineContext.h"
-#include "Utils/LogMacros.h"
 
 #include <string>
 #include <string_view>
@@ -131,8 +130,8 @@ namespace ARPG
         SyncActors();
         if (m_heroEntity)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG actors: hero and %zu monster(s) placed in the World",
-                           m_monsterEntities.size());
+            Spark::ModuleLog::Info(m_context, "ARPG actors: hero and {} monster(s) placed in the World",
+                                   m_monsterEntities.size());
         }
         return true;
     }

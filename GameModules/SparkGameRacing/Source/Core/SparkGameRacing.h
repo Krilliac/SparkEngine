@@ -16,6 +16,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace Racing
@@ -78,6 +80,7 @@ class SparkGameRacingModule : public Spark::IModule
     bool m_cameraCycleHeld{false};
     bool m_restartHeld{false};
     bool m_autopilot{false}; ///< race_autopilot: the player car follows the racing line instead of the keys
+    std::vector<std::string> m_registeredConsoleCommands;
 };
 
 // Module exports

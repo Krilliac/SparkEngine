@@ -195,8 +195,8 @@ namespace OpenWorld
 
         saveSystem->SetMaxAutoSaves(3);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world persistence initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Versioned gameplay persistence ready");
+        Spark::ModuleLog::Info(m_context, "Open world persistence initialized");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Versioned gameplay persistence ready");
     }
 
     std::string OWEngineSystems::SaveGame(const std::string& slotName)

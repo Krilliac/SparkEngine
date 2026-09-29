@@ -4,8 +4,7 @@
  */
 
 #include "RacingRaceManager.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -23,9 +22,8 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing race manager initialized");
-        console.LogInfo("[Racing Race] Race manager initialized");
+        Spark::ModuleLog::Info(m_context, "Racing race manager initialized");
+        Spark::ModuleLog::Info(m_context, "[Racing Race] Race manager initialized");
         return true;
     }
 
@@ -91,10 +89,10 @@ namespace Racing
             racer.finishTime = 0.0f;
         }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Race starting: %zu racers, %u laps", m_racers.size(), totalLaps);
-        console.LogInfo("[Racing Race] Race starting: " + std::to_string(m_racers.size()) + " racers, " +
-                        std::to_string(totalLaps) + " laps");
+        Spark::ModuleLog::Info(m_context, "Race starting: {} racers, {} laps", m_racers.size(), totalLaps);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[Racing Race] Race starting: " + std::to_string(m_racers.size()) + " racers, " +
+                                   std::to_string(totalLaps) + " laps");
     }
 
     void RacingRaceManager::OnCheckpointCrossed(uint32_t vehicleId, uint32_t checkpointIndex)
@@ -347,9 +345,8 @@ namespace Racing
         {
             m_countdownTimer = 0.0f;
             m_state = RaceState::Racing;
-            auto& console = Spark::SimpleConsole::GetInstance();
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Race GO!");
-            console.LogInfo("[Racing Race] GO!");
+            Spark::ModuleLog::Info(m_context, "Race GO!");
+            Spark::ModuleLog::Info(m_context, "[Racing Race] GO!");
         }
     }
 
@@ -436,9 +433,8 @@ namespace Racing
             m_state = RaceState::Finished;
             AwardChampionshipPoints();
 
-            auto& console = Spark::SimpleConsole::GetInstance();
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Race finished!");
-            console.LogInfo("[Racing Race] Race finished!");
+            Spark::ModuleLog::Info(m_context, "Race finished!");
+            Spark::ModuleLog::Info(m_context, "[Racing Race] Race finished!");
         }
     }
 

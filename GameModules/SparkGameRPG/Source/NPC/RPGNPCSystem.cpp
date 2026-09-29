@@ -6,8 +6,7 @@
 #include "RPGNPCSystem.h"
 #include "World/RPGWorldSetup.h"
 #include "Engine/AI/NavMesh.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -67,9 +66,9 @@ namespace RPG
         m_context = context;
         RegisterDefaultNPCs();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG NPC system initialized with %zu NPCs", m_npcs.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] NPC system initialized (" + std::to_string(m_npcs.size()) +
-                                                    " NPCs)");
+        Spark::ModuleLog::Info(m_context, "RPG NPC system initialized with {} NPCs", m_npcs.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG] NPC system initialized (" + std::to_string(m_npcs.size()) + " NPCs)");
         return true;
     }
 
@@ -114,7 +113,7 @@ namespace RPG
             if (area == areas.end() || area->boundsMinY > kGroundHeight || area->boundsMaxY < kGroundHeight ||
                 !(area->boundsMaxX > area->boundsMinX) || !(area->boundsMaxZ > area->boundsMinZ))
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Game, "RPG NPC area %u has no ground to navigate", areaId);
+                Spark::ModuleLog::Error(m_context, "RPG NPC area {} has no ground to navigate", areaId);
                 allBuilt = false;
                 continue;
             }
@@ -137,7 +136,7 @@ namespace RPG
     {
         if (vertices.empty() || indices.size() < 3)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "RPG NavMesh bake for area %u has no geometry", areaId);
+            Spark::ModuleLog::Error(m_context, "RPG NavMesh bake for area {} has no geometry", areaId);
             return false;
         }
 
@@ -169,14 +168,13 @@ namespace RPG
         navigation->navMesh = Spark::AI::NavMeshBuilder::Build(vertices, indices, settings);
         if (!navigation->navMesh || navigation->navMesh->triangles.empty())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "RPG NavMesh bake for area %u produced no walkable surface",
-                            areaId);
+            Spark::ModuleLog::Error(m_context, "RPG NavMesh bake for area {} produced no walkable surface", areaId);
             return false;
         }
         navigation->query = std::make_unique<Spark::AI::NavMeshQuery>(navigation->navMesh.get());
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG NavMesh for area %u: %zu triangles", areaId,
-                       navigation->navMesh->triangles.size());
+        Spark::ModuleLog::Info(m_context, "RPG NavMesh for area {}: {} triangles", areaId,
+                               navigation->navMesh->triangles.size());
         m_areaNavigation[areaId] = std::move(navigation);
 
         // Routes planned on the replaced NavMesh are stale: replan from where each NPC stands.
@@ -200,8 +198,8 @@ namespace RPG
         const auto navigation = m_areaNavigation.find(npc.areaId);
         if (navigation == m_areaNavigation.end())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "RPG NPC %s has no NavMesh in area %u; staying put",
-                           npc.name.c_str(), npc.areaId);
+            Spark::ModuleLog::Warn(m_context, "RPG NPC {} has no NavMesh in area {}; staying put", npc.name.c_str(),
+                                   npc.areaId);
             return false;
         }
 
@@ -210,8 +208,8 @@ namespace RPG
         const Spark::AI::NavMeshHit to = query.FindNearestPoint(destination, kNavMeshSnapRadius);
         if (!from.hit || !to.hit)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "RPG NPC %s or its post is off the area %u NavMesh; staying put",
-                           npc.name.c_str(), npc.areaId);
+            Spark::ModuleLog::Warn(m_context, "RPG NPC {} or its post is off the area {} NavMesh; staying put",
+                                   npc.name.c_str(), npc.areaId);
             return false;
         }
 
@@ -221,8 +219,8 @@ namespace RPG
         const Spark::AI::PathResult path = query.FindPath(request);
         if (!path.found || path.path.empty())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "RPG NPC %s has no NavMesh path to its post; staying put",
-                           npc.name.c_str());
+            Spark::ModuleLog::Warn(m_context, "RPG NPC {} has no NavMesh path to its post; staying put",
+                                   npc.name.c_str());
             return false;
         }
 
@@ -453,10 +451,10 @@ namespace RPG
 
         npc->disposition = GetDispositionTier(npc->dispositionValue);
 
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG NPC %s disposition changed to %d", npc->name.c_str(),
-                        npc->dispositionValue);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] " + npc->name +
-                                                    " disposition: " + std::to_string(npc->dispositionValue));
+        Spark::ModuleLog::Debug(m_context, "RPG NPC {} disposition changed to {}", npc->name.c_str(),
+                                npc->dispositionValue);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG] " + npc->name + " disposition: " + std::to_string(npc->dispositionValue));
     }
 
     NPCDisposition RPGNPCSystem::GetDispositionTier(int value) const

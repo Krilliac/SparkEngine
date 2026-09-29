@@ -4,8 +4,7 @@
  */
 
 #include "OWPlayerSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -37,8 +36,8 @@ namespace OpenWorld
         UnlockFastTravel({1, "Meadow Campfire", 0.0f, 5.0f, 0.0f, 1});
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world player system initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Player system initialized");
+        Spark::ModuleLog::Info(m_context, "Open world player system initialized");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Player system initialized");
         return true;
     }
 
@@ -200,7 +199,7 @@ namespace OpenWorld
         m_fastTravelPoints.push_back(point);
         m_unlockedPointIds.insert(point.pointId);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Fast travel unlocked: " + point.name);
+        Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Fast travel unlocked: " + point.name);
     }
 
     bool OWPlayerSystem::FastTravelTo(uint32_t pointId)
@@ -211,7 +210,7 @@ namespace OpenWorld
             {
                 SetPosition(pt.x, pt.y, pt.z);
                 m_worldState.currentRegionId = pt.regionId;
-                Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Fast traveled to " + pt.name);
+                Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Fast traveled to " + pt.name);
                 return true;
             }
         }

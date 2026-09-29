@@ -4,8 +4,7 @@
  */
 
 #include "OWGatheringSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -58,10 +57,11 @@ namespace OpenWorld
         DefineCraftingRecipes();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Gathering system initialized: %zu nodes, %zu recipes", m_nodes.size(),
-                       m_recipes.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Gathering: " + std::to_string(m_nodes.size()) +
-                                                    " nodes, " + std::to_string(m_recipes.size()) + " recipes");
+        Spark::ModuleLog::Info(m_context, "Gathering system initialized: {} nodes, {} recipes", m_nodes.size(),
+                               m_recipes.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Gathering: " + std::to_string(m_nodes.size()) + " nodes, " +
+                                   std::to_string(m_recipes.size()) + " recipes");
         return true;
     }
 
@@ -346,8 +346,9 @@ namespace OpenWorld
         m_inventory.Add(node.resource, harvested);
         m_totalHarvested += harvested;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Harvested " + std::to_string(harvested) + "x " +
-                                                    std::string(ResourceName(node.resource)) + " from " + node.name);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Harvested " + std::to_string(harvested) + "x " +
+                                   std::string(ResourceName(node.resource)) + " from " + node.name);
         return harvested;
     }
 
@@ -387,7 +388,7 @@ namespace OpenWorld
                 m_inventory.Spend(ing.resource, ing.amount);
 
             m_totalCrafted++;
-            Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Crafted: " + recipe.resultName);
+            Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Crafted: " + recipe.resultName);
             return true;
         }
         return false;

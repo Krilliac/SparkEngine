@@ -21,7 +21,7 @@
 #include "Game/FPSQuickLoad.h"
 #include "Game/GameMode.h"
 #include "Game/ProgressionSystem.h"
-#include "Utils/SparkConsole.h"
+#include <Spark/IConsole.h>
 
 #include <exception>
 #include <string>
@@ -38,12 +38,18 @@ namespace
 
 void SparkGameModule::RegisterHeadlessPersistenceCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
-    const auto registerTracked = [&console, this](const std::string& name, Spark::SimpleConsole::CommandHandler handler,
-                                                  const std::string& description)
+    Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr;
+    if (!console)
     {
-        console.RegisterCommand(name, std::move(handler), description);
-        m_registeredConsoleCommands.push_back(name);
+        return;
+    }
+    const auto registerTracked = [console, this](const std::string& name, Spark::IConsole::CommandHandler handler,
+                                                 const std::string& description)
+    {
+        if (console->RegisterCommand(name, std::move(handler), description, "General", ""))
+        {
+            m_registeredConsoleCommands.push_back(name);
+        }
     };
 
     registerTracked(

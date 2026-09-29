@@ -4,8 +4,7 @@
  */
 
 #include "RPGDialogueSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -19,8 +18,9 @@ namespace RPG
         m_context = context;
         RegisterDefaultTrees();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Dialogue system initialized (" +
-                                                    std::to_string(m_trees.size()) + " dialogue trees)");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG] Dialogue system initialized (" + std::to_string(m_trees.size()) +
+                                   " dialogue trees)");
         return true;
     }
 
@@ -191,9 +191,9 @@ namespace RPG
         m_session.npcId = npcId;
         m_session.isActive = true;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG dialogue started: %s (tree=%u, npc=%u)", tree->name.c_str(),
-                       treeId, npcId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Dialogue started: " + tree->name);
+        Spark::ModuleLog::Info(m_context, "RPG dialogue started: {} (tree={}, npc={})", tree->name.c_str(), treeId,
+                               npcId);
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Dialogue started: " + tree->name);
         return true;
     }
 
@@ -219,8 +219,8 @@ namespace RPG
             if (choiceIndex >= 0 && choiceIndex < static_cast<int>(node->choices.size()))
             {
                 m_session.currentNodeId = node->choices[choiceIndex].nextNodeId;
-                SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG dialogue choice %d selected -> node %u", choiceIndex,
-                                node->choices[choiceIndex].nextNodeId);
+                Spark::ModuleLog::Debug(m_context, "RPG dialogue choice {} selected -> node {}", choiceIndex,
+                                        node->choices[choiceIndex].nextNodeId);
             }
             break;
 
@@ -233,18 +233,18 @@ namespace RPG
             m_lastCheckPassed = (statValue >= node->skillCheck.requiredValue);
             m_session.currentNodeId = m_lastCheckPassed ? node->skillCheck.passNodeId : node->skillCheck.failNodeId;
 
-            auto& console = Spark::SimpleConsole::GetInstance();
-            console.LogInfo("[RPG] Skill check (" + node->skillCheck.statName +
-                            " >= " + std::to_string(static_cast<int>(node->skillCheck.requiredValue)) +
-                            "): " + (m_lastCheckPassed ? "PASSED" : "FAILED"));
+            Spark::ModuleLog::Info(m_context, "{}",
+                                   "[RPG] Skill check (" + node->skillCheck.statName +
+                                       " >= " + std::to_string(static_cast<int>(node->skillCheck.requiredValue)) +
+                                       "): " + (m_lastCheckPassed ? "PASSED" : "FAILED"));
             break;
         }
 
         case DialogueNodeType::Reward:
             m_lastReward = node->reward;
             m_session.currentNodeId = node->nextNodeId;
-            Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Dialogue reward: +" + std::to_string(node->reward.xp) +
-                                                        " XP");
+            Spark::ModuleLog::Info(m_context, "{}",
+                                   "[RPG] Dialogue reward: +" + std::to_string(node->reward.xp) + " XP");
             break;
 
         case DialogueNodeType::End:
@@ -268,8 +268,8 @@ namespace RPG
     {
         if (m_session.isActive)
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG dialogue session ended");
-            Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Dialogue ended");
+            Spark::ModuleLog::Debug(m_context, "RPG dialogue session ended");
+            Spark::ModuleLog::Info(m_context, "{}", "[RPG] Dialogue ended");
         }
         m_session = {};
     }

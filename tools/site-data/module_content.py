@@ -270,7 +270,9 @@ def _engine_build_coupling(module_dir: Path) -> dict[str, bool]:
         if not tokens or tokens[0] != module_dir.name:
             continue
         if match.group(1).lower() == "target_link_libraries":
-            coupling["linksSparkEngineLib"] |= "SparkEngineLib" in tokens
+            coupling["linksSparkEngineLib"] |= any(
+                re.search(r"(?<!\w)(?:Spark::)?SparkEngineLib(?!\w)", token) is not None for token in tokens
+            )
         else:
             coupling["engineSourceIncludeDirectory"] |= any(
                 "ENGINE_SOURCE_DIR" in token or ENGINE_PRIVATE_ROOT.as_posix() in token for token in tokens
