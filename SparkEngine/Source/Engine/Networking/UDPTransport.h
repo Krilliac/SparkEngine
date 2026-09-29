@@ -13,6 +13,7 @@
 #pragma once
 #include "ITransport.h"
 #include "NetworkBindPolicy.h"
+#include "NetworkWireLimits.h"
 #include "../../Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
@@ -153,9 +154,9 @@ namespace Spark::Net
             }
 #endif // SPARK_PLATFORM_WINDOWS
 
-            // Enlarge OS socket buffers for game traffic
-            int sendBufSize = 65536;
-            int recvBufSize = 65536;
+            // Enlarge OS socket buffers for game traffic (sized in NetworkWireLimits.h)
+            const int sendBufSize = static_cast<int>(NETWORK_SOCKET_SEND_BUFFER_SIZE);
+            const int recvBufSize = static_cast<int>(NETWORK_SOCKET_RECEIVE_BUFFER_SIZE);
             if (setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufSize),
                            sizeof(sendBufSize)) == SOCKET_ERROR)
             {

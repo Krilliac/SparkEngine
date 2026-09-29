@@ -759,7 +759,7 @@ namespace
     /// Hostile traffic against a running server, from an endpoint that never joins. The server
     /// must refuse every datagram and count it (NetworkStats), answer each Connect with its typed
     /// rejection, and keep the round it is hosting undisturbed (Tests/TestFPSLANLoopback.cpp).
-    /// Sends are paced so the server's 64 KiB socket buffer never overflows: every datagram sent
+    /// Sends are paced so the server's socket receive buffer never overflows: every datagram sent
     /// must reach the server, or its counters could not be held against the sent totals.
     int RunIntruder(const Options& options)
     {

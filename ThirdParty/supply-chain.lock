@@ -623,7 +623,7 @@
       "class": "ci_packages",
       "license_spdx": "MIT",
       "owner": "Krilliac",
-      "justification": "PyYAML for the Windows ctest lanes' workflow-parsing and release-wiring tests, installed from the hash-pinned wheels in .github/ci-python-requirements.txt (the Ubuntu lanes use apt:python3-yaml); test time only, nothing is redistributed.",
+      "justification": "PyYAML for the Windows and macOS ctest lanes' workflow-parsing and release-wiring tests, installed from the hash-pinned wheels in .github/ci-python-requirements.txt (the Ubuntu lanes use apt:python3-yaml); test time only, nothing is redistributed.",
       "identifiers": [
         "pip:PyYAML"
       ]

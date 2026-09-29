@@ -25,6 +25,16 @@ namespace Spark::Net
     inline constexpr std::size_t MAX_NETWORK_MESSAGE_PAYLOAD_SIZE =
         MAX_UDP_WIRE_DATAGRAM_SIZE - NETWORK_WIRE_HEADER_SIZE - NETWORK_FRAME_OVERHEAD;
 
+    // Kernel buffer sizes for Spark's UDP sockets. BSD-derived stacks (macOS) refuse to send a datagram
+    // larger than SO_SNDBUF and hold exactly SO_RCVBUF bytes of queued datagrams (Linux doubles the request).
+    // The send buffer must admit one maximum datagram. The receive buffer must admit one while other
+    // peers' traffic is still queued: at 64 KiB, macOS dropped every maximum-size datagram that arrived
+    // behind even one small queued packet.
+    inline constexpr std::size_t NETWORK_SOCKET_SEND_BUFFER_SIZE = 64 * 1024;
+    inline constexpr std::size_t NETWORK_SOCKET_RECEIVE_BUFFER_SIZE = 256 * 1024;
+    static_assert(NETWORK_SOCKET_SEND_BUFFER_SIZE >= MAX_UDP_WIRE_DATAGRAM_SIZE);
+    static_assert(NETWORK_SOCKET_RECEIVE_BUFFER_SIZE >= 2 * MAX_UDP_WIRE_DATAGRAM_SIZE);
+
     [[nodiscard]] inline constexpr bool IsNetworkPayloadSizeValid(std::size_t payloadSize) noexcept
     {
         return payloadSize <= MAX_NETWORK_MESSAGE_PAYLOAD_SIZE;
