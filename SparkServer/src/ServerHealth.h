@@ -133,6 +133,8 @@ namespace Spark::Server
      * is strictly worse than a stale-but-valid one. The snapshot is staged in an
      * unpredictable, exclusively created sibling file, so a file or link planted
      * next to @p path is never followed (SaveFileDurability::PublishFileAtomically).
+     * It runs on the tick thread, so nothing is fsynced: a flush there stalls
+     * the tick and would show up in the tick-latency percentiles.
      */
     void WriteHealthFile(const std::filesystem::path& path, std::string_view json);
 } // namespace Spark::Server
