@@ -342,7 +342,19 @@ FONT_LICENSE = (
 LIBRARY_LICENSE = MIT_TEXT + "Redistribution and use in source and binary forms is permitted.\n" * 3
 
 
-def _package_notice(font_body: str | None, jolt_body: str | None, font_files: str) -> str:
+RUNTIME = "Microsoft Visual C++ Runtime"
+RUNTIME_DLLS = {"bin/msvcp140.dll": "pe\n", "bin/vcruntime140.dll": "pe\n"}
+
+
+def _runtime_entry(files: str, terms: bool = True) -> str:
+    """The inventory entry spark_thirdparty_generate_notice() writes for the MSVC runtime."""
+    entry = f"{RUNTIME}\n  Source: fixture\n  Version: MSVC 19.44 (fixture)\n  License: fixture terms\n"
+    if terms:
+        entry += "  Terms: Microsoft Visual C++ Redistributable, Distributable Code (fixture)\n"
+    return entry + f"  Files: {files}\n\n"
+
+
+def _package_notice(font_body: str | None, jolt_body: str | None, font_files: str, extra_inventory: str = "") -> str:
     """A THIRD_PARTY_NOTICES.txt in the format cmake/SparkThirdPartyAudit.cmake writes."""
     text = (
         "SparkEngine Third-Party Notices\n================================\n\n"
@@ -354,6 +366,7 @@ def _package_notice(font_body: str | None, jolt_body: str | None, font_files: st
         "Fixture Sans\n  Source: https://example.invalid/sans\n  Version: 1.0\n  License: OFL-1.1\n"
         "  Notice files: SparkEditor/Fonts/FixtureSans-LICENSE.txt\n"
         f"  Files: {font_files}\n\n"
+        f"{extra_inventory}"
         "Complete license and notice texts\n=================================\n\n"
     )
     if jolt_body is not None:
@@ -392,7 +405,23 @@ class PackageRuleSetTests(unittest.TestCase):
         self.assertEqual(unknown, [], "payload rules name components absent from ThirdParty/dependencies.lock")
         for rule in rules.payload:
             if rule.component is None:
-                self.assertTrue(rule.first_party, f"{rule.pattern.pattern} exempts payload without a reason")
+                self.assertTrue(
+                    rule.first_party or rule.system_runtime, f"{rule.pattern.pattern} exempts payload without a reason"
+                )
+        for root in rules.first_party_roots:
+            self.assertTrue(root.justification.strip(), f"{root.pattern.pattern} has no justification")
+
+    def test_runtime_rule_names_the_entry_the_audit_module_writes(self) -> None:
+        # The systemRuntime rule and spark_thirdparty_generate_notice() must agree
+        # on the entry name, or every Windows package would fail the gate.
+        rules = notices.load_package_rules(RULES_PATH)
+        runtimes = {rule.system_runtime for rule in rules.payload if rule.system_runtime}
+        self.assertEqual(runtimes, {RUNTIME})
+        self.assertIn(f'"{RUNTIME}\\n"', AUDIT_MODULE.read_text("utf-8"))
+        for dll in ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_2.dll", "concrt140.dll"):
+            with self.subTest(dll):
+                self.assertTrue(any(rule.pattern.search(f"bin/{dll}") for rule in rules.payload if rule.system_runtime))
+        self.assertFalse(any(rule.system_runtime and rule.pattern.search("bin/vcruntime140d.dll") for rule in rules.payload))
 
     def test_generator_font_inventory_uses_the_shared_rules(self) -> None:
         rules = notices.load_package_rules(RULES_PATH)
@@ -415,6 +444,20 @@ class PackageRuleSetTests(unittest.TestCase):
             "rule with both targets": {
                 **good,
                 "payloadRules": [{"pattern": "^include/", "component": "zstd", "firstParty": "why"}],
+            },
+            "runtime rule with a component": {
+                **good,
+                "payloadRules": [{"pattern": "^bin/", "component": "zstd", "systemRuntime": RUNTIME}],
+            },
+            "first-party root without justification": {**good, "firstPartyRoots": [{"pattern": "^bin/"}]},
+            "first-party root with blank justification": {
+                **good,
+                "firstPartyRoots": [{"pattern": "^bin/", "justification": "  "}],
+            },
+            "no first-party roots": {**good, "firstPartyRoots": []},
+            "asset manifest escaping the package": {
+                **good,
+                "assetManifests": [{"pattern": "^bin/", "manifest": "../m.json", "justification": "why"}],
             },
             "bad regex": {**good, "thirdPartyRoots": ["^include/("]},
             "undotted suffix": {**good, "fontSuffixes": ["ttf"]},
@@ -464,6 +507,40 @@ class LicenseInventoryPackageTests(unittest.TestCase):
             {"include/SparkEngine/ThirdParty/newlib/newlib.h": "#pragma once\n"},
             ["include/SparkEngine/ThirdParty/newlib/newlib.h: third-party install path that no payload rule maps"],
         ),
+        # GOV-400: the MSVC runtime that InstallRequiredSystemLibraries ships in bin/.
+        "runtime_without_entry": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            RUNTIME_DLLS,
+            [
+                f"bin/msvcp140.dll: system runtime '{RUNTIME}' has no THIRD_PARTY_NOTICES.txt inventory entry",
+                f"bin/vcruntime140.dll: system runtime '{RUNTIME}' has no THIRD_PARTY_NOTICES.txt inventory entry",
+            ],
+        ),
+        "runtime_entry_names_one_dll": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf", _runtime_entry("vcruntime140.dll")),
+            RUNTIME_DLLS,
+            [f"bin/msvcp140.dll: not named on the 'Files:' line of system runtime '{RUNTIME}'"],
+        ),
+        "runtime_entry_without_terms": (
+            _package_notice(
+                FONT_LICENSE,
+                LIBRARY_LICENSE,
+                "FixtureSans-Regular.ttf",
+                _runtime_entry("vcruntime140.dll,msvcp140.dll", terms=False),
+            ),
+            RUNTIME_DLLS,
+            [
+                f"bin/msvcp140.dll: system runtime '{RUNTIME}' has no 'Terms:' line",
+                f"bin/vcruntime140.dll: system runtime '{RUNTIME}' has no 'Terms:' line",
+            ],
+        ),
+        "runtime_covered": (
+            _package_notice(
+                FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf", _runtime_entry("vcruntime140.dll,msvcp140.dll")
+            ),
+            RUNTIME_DLLS,
+            [],
+        ),
     }
 
     def _run_case(self, notice: str, extra: dict[str, str]) -> tuple[Path, notices.PackageCoverage]:
@@ -485,7 +562,7 @@ class LicenseInventoryPackageTests(unittest.TestCase):
                     self.assertTrue(line.startswith(fragment), f"{line!r} does not start with {fragment!r}")
                 if not expected:
                     self.assertEqual(coverage.font_count, 1)
-                    self.assertEqual(coverage.payload_count, 3)
+                    self.assertEqual(coverage.payload_count, 3 + sum(rel.endswith(".dll") for rel in extra))
 
     def test_check_package_cli_exit_codes(self) -> None:
         notice, extra, _ = self.CASES["uncovered_font"]
@@ -503,16 +580,120 @@ class LicenseInventoryPackageTests(unittest.TestCase):
         for label, (notice, extra, _) in self.CASES.items():
             with self.subTest(label):
                 root, coverage = self._run_case(notice, extra)
-                result = subprocess.run(
-                    ["cmake", f"-DSPARK_PACKAGE_ROOT={root}", "-P", str(PACKAGE_GATE)],
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
+                self._assert_cmake_agrees(root, coverage, "open")
+
+    def _assert_cmake_agrees(self, root: Path, coverage: notices.PackageCoverage, world: str) -> None:
+        result = subprocess.run(
+            [
+                "cmake",
+                f"-DSPARK_PACKAGE_ROOT={root}",
+                f"-DSPARK_PACKAGE_NOTICE_CLASSIFICATION={world}",
+                "-P",
+                str(PACKAGE_GATE),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        flat = " ".join((result.stdout + result.stderr).split())
+        self.assertEqual(result.returncode == 0, not coverage.uncovered, flat)
+        for line in coverage.uncovered:
+            self.assertIn(" ".join(line.split()), flat, "CMake gate did not report the same file")
+        if coverage.uncovered:
+            self.assertIn(f"{len(coverage.uncovered)} shipped file(s) are not covered", flat)
+        else:
+            self.assertIn(
+                f"Validated notice coverage for {coverage.font_count} font file(s) and "
+                f"{coverage.payload_count} third-party payload file(s)",
+                flat,
+            )
+            if world == "closed":
+                self.assertIn(
+                    f"Closed world: {coverage.first_party_count} first-party file(s), "
+                    f"{coverage.asset_count} asset-manifest file(s), 0 unclassified",
+                    flat,
                 )
-                flat = " ".join((result.stdout + result.stderr).split())
-                self.assertEqual(result.returncode == 0, not coverage.uncovered, flat)
-                for line in coverage.uncovered:
-                    self.assertIn(" ".join(line.split()), flat, "CMake gate did not report the same file")
+
+    # Closed world: nothing is presumed first-party. The base fixture package
+    # (LICENSE.txt, THIRD_PARTY_NOTICES.txt, a font, Jolt headers, an engine
+    # header and the documented angelscript.h exemption) is fully classified.
+    ASSET_MANIFEST = json.dumps(
+        {
+            "version": 2,
+            "algorithm": "sha256",
+            "root": "Assets",
+            "fileCount": 2,
+            "entries": [
+                {"path": "Audio/a.wav", "sha256": "0" * 64, "size": 4, "license": "CC0-1.0", "provenance": "fixture"},
+                {"path": "Audio/b.wav", "sha256": "1" * 64, "size": 4, "license": "NOASSERTION", "provenance": "x"},
+            ],
+        },
+        indent=2,
+    )
+    CLOSED_CASES = {
+        "closed_classified": (
+            {"bin/SparkEngine.exe": "pe\n", "bin/Shaders/Lit.hlsl": "// shader\n"},
+            [],
+        ),
+        "closed_unmapped_dll": (
+            {"bin/SparkEngine.exe": "pe\n", "bin/foo.dll": "pe\n"},
+            [f"bin/foo.dll: {notices.UNCLASSIFIED}"],
+        ),
+        "closed_unmapped_share_file": (
+            {"share/Other/x.bin": "data\n"},
+            [f"share/Other/x.bin: {notices.UNCLASSIFIED}"],
+        ),
+        "closed_asset_listed_with_license": (
+            {"bin/Assets/assets.integrity.json": ASSET_MANIFEST, "bin/Assets/Audio/a.wav": "wav\n"},
+            [],
+        ),
+        "closed_asset_noassertion_and_unlisted": (
+            {
+                "bin/Assets/assets.integrity.json": ASSET_MANIFEST,
+                "bin/Assets/Audio/a.wav": "wav\n",
+                "bin/Assets/Audio/b.wav": "wav\n",
+                "bin/Assets/Audio/c.wav": "wav\n",
+            },
+            [
+                "bin/Assets/Audio/b.wav: asset manifest bin/Assets/assets.integrity.json records no identified license",
+                "bin/Assets/Audio/c.wav: not listed in asset manifest bin/Assets/assets.integrity.json",
+            ],
+        ),
+        "closed_asset_without_manifest": (
+            {"bin/Assets/Audio/a.wav": "wav\n"},
+            ["bin/Assets/Audio/a.wav: not listed in asset manifest bin/Assets/assets.integrity.json"],
+        ),
+    }
+
+    def test_closed_world_verdicts_and_cmake_parity(self) -> None:
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        rules = notices.load_package_rules(RULES_PATH)
+        for label, (extra, expected) in self.CLOSED_CASES.items():
+            with self.subTest(label):
+                root, open_world = self._run_case(notice, extra)
+                # Open world presumes these files first-party: the closed world is what finds them.
+                self.assertEqual(open_world.uncovered, [])
+                coverage = notices.check_package_coverage(root, rules, closed_world=True)
+                self.assertEqual(coverage.uncovered, expected)
+                if label == "closed_classified":
+                    # LICENSE.txt, THIRD_PARTY_NOTICES.txt, Engine.h, SparkEngine.exe, Lit.hlsl
+                    self.assertEqual(coverage.first_party_count, 5)
+                if label == "closed_asset_listed_with_license":
+                    self.assertEqual(coverage.asset_count, 2)
+                if shutil.which("cmake"):
+                    self._assert_cmake_agrees(root, coverage, "closed")
+
+    def test_closed_world_cli(self) -> None:
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        root, _ = self._run_case(notice, {"bin/foo.dll": "pe\n"})
+        self.assertEqual(_run_main("--check-package", str(root))[0], 0)
+        code, _, err = _run_main("--check-package", str(root), "--closed-world")
+        self.assertEqual(code, 1)
+        self.assertIn("bin/foo.dll: unclassified", err)
+        (root / "bin/foo.dll").unlink()
+        code, out, _ = _run_main("--check-package", str(root), "--closed-world")
+        self.assertEqual(code, 0)
+        self.assertIn("closed world: 3 first-party file(s), 0 asset-manifest file(s), 0 unclassified", out)
 
     @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
     def test_real_packaged_notice_licenses_every_entry_and_names_files(self) -> None:
@@ -550,6 +731,55 @@ class LicenseInventoryPackageTests(unittest.TestCase):
         self.assertEqual(coverage.font_count, len(fonts))
         self.assertEqual(coverage.uncovered, [])
         self.assertEqual([font for font in fonts if font not in named], [])
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
+    def test_packaged_notice_lists_the_system_runtime_it_is_given(self) -> None:
+        # The root CMakeLists.txt passes CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS; a
+        # package with those DLLs in bin/ must then pass both gates.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name) / "THIRD_PARTY_NOTICES.txt"
+        script = Path(tmp.name) / "render.cmake"
+        script.write_text(
+            f'include("{AUDIT_MODULE.as_posix()}")\n'
+            f'spark_thirdparty_generate_notice("{(REPO_ROOT / notices.MANIFEST_PATH).as_posix()}" '
+            f'"{out.as_posix()}" SYSTEM_RUNTIME_LIBS "C:/VC/Redist/MSVC/x64/VCRUNTIME140.dll" '
+            f'"C:/VC/Redist/MSVC/x64/msvcp140.dll" "C:/VC/Redist/MSVC/x64/msvcp140_atomic_wait.dll" '
+            f'SYSTEM_RUNTIME_VERSION 19.44.35211.0)\n',
+            encoding="utf-8",
+        )
+        subprocess.run(["cmake", "-P", str(script)], check=True, capture_output=True, timeout=120)
+        rules = notices.load_package_rules(RULES_PATH)
+        entries = {entry.name: entry for entry in notices.parse_package_notice(out.read_text("utf-8"), rules)}
+        runtime = entries[RUNTIME]
+        self.assertEqual(runtime.files, ["msvcp140.dll", "msvcp140_atomic_wait.dll", "vcruntime140.dll"])
+        self.assertIn("MSVC 19.44.35211.0", runtime.terms)
+        self.assertNotIn("C:/VC", out.read_text("utf-8"), "the notice must not carry build-host paths")
+
+        root = Path(tmp.name) / "pkg"
+        (root / "bin").mkdir(parents=True)
+        for dll in runtime.files:
+            (root / "bin" / dll).write_bytes(b"pe")
+        (root / "THIRD_PARTY_NOTICES.txt").write_bytes(out.read_bytes())
+        coverage = notices.check_package_coverage(root, rules)
+        self.assertEqual(coverage.uncovered, [])
+        self.assertEqual(coverage.payload_count, 3)
+        self._assert_gate_verdict(root, passes=True)
+        (root / "bin" / "concrt140.dll").write_bytes(b"pe")
+        coverage = notices.check_package_coverage(root, rules)
+        self.assertEqual(
+            coverage.uncovered, [f"bin/concrt140.dll: not named on the 'Files:' line of system runtime '{RUNTIME}'"]
+        )
+        self._assert_gate_verdict(root, passes=False)
+
+    def _assert_gate_verdict(self, root: Path, passes: bool) -> None:
+        result = subprocess.run(
+            ["cmake", f"-DSPARK_PACKAGE_ROOT={root}", "-P", str(PACKAGE_GATE)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertEqual(result.returncode == 0, passes, result.stdout + result.stderr)
 
     @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
     def test_packaged_notice_fails_closed_on_an_incomplete_font_inventory(self) -> None:

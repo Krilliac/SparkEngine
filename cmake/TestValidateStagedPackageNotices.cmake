@@ -13,6 +13,8 @@ foreach(_spark_required IN ITEMS SPARK_VALIDATOR SPARK_TEST_ROOT SPARK_BINARY_RO
     endif()
 endforeach()
 
+get_filename_component(_spark_validator_dir "${SPARK_VALIDATOR}" DIRECTORY)
+file(READ "${_spark_validator_dir}/PackageNoticeCoverageRules.json" _spark_rules_default_text)
 set(_spark_resolved_test_root "${SPARK_TEST_ROOT}")
 set(_spark_resolved_binary_root "${SPARK_BINARY_ROOT}")
 cmake_path(ABSOLUTE_PATH _spark_resolved_test_root NORMALIZE)
@@ -49,8 +51,13 @@ string(CONCAT _spark_fixture_terms_only
     "Type Foundry. This text is long enough to pass the length check but grants no\n"
     "rights, so the gate must not accept it as license text for a shipped font.\n")
 
-# _spark_write_notice(<root> <font license body|MISSING> <jolt license body|MISSING> <font files csv>)
+# _spark_write_notice(<root> <font license body|MISSING> <jolt license body|MISSING> <font files csv>
+#                     [<extra inventory entries>])
 function(_spark_write_notice _spark_root _spark_font_body _spark_jolt_body _spark_font_files)
+    set(_spark_extra_inventory "")
+    if(ARGC GREATER 4)
+        set(_spark_extra_inventory "${ARGV4}")
+    endif()
     string(CONCAT _spark_notice
         "SparkEngine Third-Party Notices\n"
         "================================\n\n"
@@ -70,6 +77,7 @@ function(_spark_write_notice _spark_root _spark_font_body _spark_jolt_body _spar
         "  License: OFL-1.1\n"
         "  Notice files: SparkEditor/Fonts/FixtureSans-LICENSE.txt\n"
         "  Files: ${_spark_font_files}\n\n"
+        "${_spark_extra_inventory}"
         "Complete license and notice texts\n"
         "=================================\n\n")
     if(NOT _spark_jolt_body STREQUAL "MISSING")
@@ -108,11 +116,14 @@ function(_spark_new_case _spark_name _spark_output)
     set(${_spark_output} "${_spark_root}" PARENT_SCOPE)
 endfunction()
 
+# The classification (open|closed) comes from _spark_world in the caller's scope.
+set(_spark_world open)
 function(_spark_run_gate _spark_root _spark_mode _spark_result_output _spark_log_output)
     execute_process(
         COMMAND "${CMAKE_COMMAND}"
             "-DSPARK_PACKAGE_ROOT=${_spark_root}"
             "-DSPARK_PACKAGE_NOTICE_COVERAGE=${_spark_mode}"
+            "-DSPARK_PACKAGE_NOTICE_CLASSIFICATION=${_spark_world}"
             -P "${SPARK_VALIDATOR}"
         RESULT_VARIABLE _spark_result
         OUTPUT_VARIABLE _spark_stdout
@@ -239,5 +250,89 @@ if(_spark_result EQUAL 0 OR NOT _spark_stderr MATCHES "must name exactly one of"
     message(FATAL_ERROR "LicenseInventory_MalformedRules: expected a rules error:\n${_spark_stdout}\n${_spark_stderr}")
 endif()
 message(STATUS "LicenseInventory_MalformedRules: rejected as expected")
+
+# 11-13. The Microsoft Visual C++ runtime that InstallRequiredSystemLibraries
+#        installs into bin/ must be named, DLL by DLL, on the 'Files:' line of a
+#        "Microsoft Visual C++ Runtime" entry that carries a 'Terms:' line.
+set(_spark_runtime "Microsoft Visual C++ Runtime")
+function(_spark_runtime_entry _spark_output _spark_files _spark_with_terms)
+    set(_spark_entry "${_spark_runtime}\n  Source: fixture\n  Version: MSVC 19.44 (fixture)\n  License: fixture terms\n")
+    if(_spark_with_terms)
+        string(APPEND _spark_entry "  Terms: Microsoft Visual C++ Redistributable, Distributable Code (fixture)\n")
+    endif()
+    set(${_spark_output} "${_spark_entry}  Files: ${_spark_files}\n\n" PARENT_SCOPE)
+endfunction()
+function(_spark_new_runtime_case _spark_name _spark_output)
+    _spark_new_case(${_spark_name} _spark_root)
+    file(WRITE "${_spark_root}/bin/vcruntime140.dll" "pe\n")
+    file(WRITE "${_spark_root}/bin/msvcp140.dll" "pe\n")
+    set(${_spark_output} "${_spark_root}" PARENT_SCOPE)
+endfunction()
+
+_spark_new_runtime_case(runtime_without_entry _spark_root)
+_spark_expect_fail(RuntimeWithoutEntry "${_spark_root}"
+    "bin/msvcp140.dll: system runtime '${_spark_runtime}' has no THIRD_PARTY_NOTICES.txt inventory entry"
+    "bin/vcruntime140.dll: system runtime '${_spark_runtime}' has no THIRD_PARTY_NOTICES.txt inventory entry")
+
+_spark_new_runtime_case(runtime_names_one_dll _spark_root)
+_spark_runtime_entry(_spark_entry "vcruntime140.dll" ON)
+_spark_write_notice("${_spark_root}" "${_spark_fixture_font_license}" "${_spark_fixture_library_license}"
+    "FixtureSans-Regular.ttf" "${_spark_entry}")
+_spark_expect_fail(RuntimeEntryNamesOneDll "${_spark_root}"
+    "1 shipped file(s) are not covered"
+    "bin/msvcp140.dll: not named on the 'Files:' line of system runtime '${_spark_runtime}'")
+
+_spark_new_runtime_case(runtime_without_terms _spark_root)
+_spark_runtime_entry(_spark_entry "vcruntime140.dll,msvcp140.dll" OFF)
+_spark_write_notice("${_spark_root}" "${_spark_fixture_font_license}" "${_spark_fixture_library_license}"
+    "FixtureSans-Regular.ttf" "${_spark_entry}")
+_spark_expect_fail(RuntimeEntryWithoutTerms "${_spark_root}"
+    "bin/vcruntime140.dll: system runtime '${_spark_runtime}' has no 'Terms:' line")
+
+_spark_new_runtime_case(runtime_covered _spark_root)
+_spark_runtime_entry(_spark_entry "vcruntime140.dll,msvcp140.dll" ON)
+_spark_write_notice("${_spark_root}" "${_spark_fixture_font_license}" "${_spark_fixture_library_license}"
+    "FixtureSans-Regular.ttf" "${_spark_entry}")
+_spark_expect_pass(RuntimeCovered "${_spark_root}")
+
+# 14. Closed world: nothing is presumed first-party. The base package is fully
+#     classified; an unmapped DLL that open world accepts is unclassified.
+_spark_new_case(closed_world _spark_root)
+file(WRITE "${_spark_root}/bin/SparkEngine.exe" "pe\n")
+file(WRITE "${_spark_root}/bin/foo.dll" "pe\n")
+_spark_expect_pass(OpenWorldPresumesFirstParty "${_spark_root}")
+set(_spark_world closed)
+_spark_expect_fail(ClosedWorldUnclassified "${_spark_root}"
+    "1 shipped file(s) are not covered"
+    "bin/foo.dll: unclassified: no font, payload, system-runtime or first-party rule covers it")
+file(REMOVE "${_spark_root}/bin/foo.dll")
+_spark_expect_pass(ClosedWorldClassified "${_spark_root}")
+_spark_run_gate("${_spark_root}" enforce _spark_result _spark_log)
+string(REGEX REPLACE "[ \t\r\n]+" " " _spark_flat "${_spark_log}")
+string(FIND "${_spark_flat}" "Closed world: 4 first-party file(s), 0 asset-manifest file(s), 0 unclassified" _spark_at)
+if(_spark_at EQUAL -1)
+    message(FATAL_ERROR "LicenseInventory_ClosedWorldCounts: expected 4 first-party files:\n${_spark_log}")
+endif()
+set(_spark_world open)
+
+# 15. A first-party root without a written justification is a rules error.
+string(JSON _spark_rules_text ERROR_VARIABLE _spark_error
+    SET "${_spark_rules_default_text}" firstPartyRoots 0 justification "\"\"")
+file(WRITE "${_spark_bad_rules}" "${_spark_rules_text}")
+execute_process(
+    COMMAND "${CMAKE_COMMAND}"
+        "-DSPARK_PACKAGE_ROOT=${_spark_root}"
+        "-DSPARK_PACKAGE_NOTICE_RULES=${_spark_bad_rules}"
+        -P "${SPARK_VALIDATOR}"
+    RESULT_VARIABLE _spark_result
+    OUTPUT_VARIABLE _spark_stdout
+    ERROR_VARIABLE _spark_stderr
+    TIMEOUT 60)
+if(_spark_error OR _spark_result EQUAL 0 OR NOT _spark_stderr MATCHES "non-empty 'justification'")
+    message(FATAL_ERROR
+        "LicenseInventory_FirstPartyRootWithoutJustification: expected a rules error:\n"
+        "${_spark_error}\n${_spark_stdout}\n${_spark_stderr}")
+endif()
+message(STATUS "LicenseInventory_FirstPartyRootWithoutJustification: rejected as expected")
 
 message(STATUS "LicenseInventory package notice-coverage contract passed")

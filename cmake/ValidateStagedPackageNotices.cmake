@@ -11,7 +11,17 @@ cmake_minimum_required(VERSION 3.25)
 #   * a file matching a payload rule is covered when the rule's component has an
 #     inventory entry with license text, or the rule is a documented first-party
 #     exemption;
-#   * a file under a third-party root that no payload rule maps is uncovered.
+#   * a file matching a systemRuntime rule (a toolchain runtime such as the
+#     Microsoft Visual C++ runtime, whose redistribution terms are not a file in
+#     the repository) is covered when the named inventory entry has a "Terms:"
+#     line and names the file on its "Files:" line;
+#   * a file under a third-party root that no payload rule maps is uncovered;
+#   * in closed-world classification, any other file must either be listed with
+#     an identified license (not NOASSERTION) in the installed asset manifest of
+#     a matching assetManifests rule (the RDY-020 assets.integrity.json), or
+#     match a justified firstPartyRoots pattern; otherwise it is reported as
+#     unclassified. Open world (the default) presumes it first-party under the
+#     root LICENSE.
 #
 # The rule set lives in cmake/PackageNoticeCoverageRules.json and is shared with
 # tools/governance/generate_third_party_notices.py (--check-package), so both
@@ -21,6 +31,7 @@ cmake_minimum_required(VERSION 3.25)
 #   cmake -DSPARK_PACKAGE_ROOT=<staged install root>
 #         [-DSPARK_PACKAGE_NOTICE_RULES=<rules json>]
 #         [-DSPARK_PACKAGE_NOTICE_COVERAGE=enforce|report]
+#         [-DSPARK_PACKAGE_NOTICE_CLASSIFICATION=open|closed]
 #         -P cmake/ValidateStagedPackageNotices.cmake
 #
 # ValidateStagedPackageExecutables.cmake includes this file after its own
@@ -105,9 +116,12 @@ function(_spark_notice_split_csv _spark_output _spark_csv)
     set(${_spark_output} "${_spark_items}" PARENT_SCOPE)
 endfunction()
 
-function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _spark_mode)
+function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _spark_mode _spark_world)
     if(NOT _spark_mode STREQUAL "enforce" AND NOT _spark_mode STREQUAL "report")
         _spark_notice_fail("SPARK_PACKAGE_NOTICE_COVERAGE must be 'enforce' or 'report', not '${_spark_mode}'")
+    endif()
+    if(NOT _spark_world STREQUAL "open" AND NOT _spark_world STREQUAL "closed")
+        _spark_notice_fail("SPARK_PACKAGE_NOTICE_CLASSIFICATION must be 'open' or 'closed', not '${_spark_world}'")
     endif()
     if(NOT IS_DIRECTORY "${_spark_root}")
         _spark_notice_fail("package root is not an existing directory: ${_spark_root}")
@@ -154,24 +168,65 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
             GET "${_spark_rules}" payloadRules ${_spark_index} component)
         string(JSON _spark_rule_first_party ERROR_VARIABLE _spark_first_party_error
             GET "${_spark_rules}" payloadRules ${_spark_index} firstParty)
+        string(JSON _spark_rule_runtime_${_spark_index} ERROR_VARIABLE _spark_runtime_error
+            GET "${_spark_rules}" payloadRules ${_spark_index} systemRuntime)
         if(_spark_component_error)
             set(_spark_rule_component_${_spark_index} "")
         endif()
         if(_spark_first_party_error)
             set(_spark_rule_first_party "")
         endif()
-        # Exactly one of component/firstParty, and a first-party exemption must
-        # say why, so an empty rule cannot silently exempt payload.
-        if(_spark_rule_component_${_spark_index} STREQUAL "" AND _spark_rule_first_party STREQUAL "")
-            set(_spark_rule_shape_error ON)
-        elseif(NOT _spark_rule_component_${_spark_index} STREQUAL "" AND NOT _spark_rule_first_party STREQUAL "")
-            set(_spark_rule_shape_error ON)
-        else()
-            set(_spark_rule_shape_error OFF)
+        if(_spark_runtime_error)
+            set(_spark_rule_runtime_${_spark_index} "")
         endif()
-        if(_spark_rule_shape_error)
-            _spark_notice_fail("payloadRules[${_spark_index}] must name exactly one of 'component' or 'firstParty'")
+        # Exactly one of component/firstParty/systemRuntime, and a first-party
+        # exemption must say why, so an empty rule cannot silently exempt payload.
+        set(_spark_rule_targets 0)
+        foreach(_spark_target IN ITEMS "${_spark_rule_component_${_spark_index}}" "${_spark_rule_first_party}"
+                                       "${_spark_rule_runtime_${_spark_index}}")
+            if(NOT _spark_target STREQUAL "")
+                math(EXPR _spark_rule_targets "${_spark_rule_targets} + 1")
+            endif()
+        endforeach()
+        if(NOT _spark_rule_targets EQUAL 1)
+            _spark_notice_fail(
+                "payloadRules[${_spark_index}] must name exactly one of 'component', 'firstParty' or 'systemRuntime'")
         endif()
+    endforeach()
+
+    # First-party roots: every entry needs a pattern and a written justification,
+    # because closed-world classification accepts whatever they match.
+    _spark_notice_json_length(_spark_first_party_count "${_spark_rules}" firstPartyRoots)
+    math(EXPR _spark_last_first_party "${_spark_first_party_count} - 1")
+    set(_spark_first_party_patterns "")
+    foreach(_spark_index RANGE ${_spark_last_first_party})
+        _spark_notice_json_get(_spark_pattern "${_spark_rules}" firstPartyRoots ${_spark_index} pattern)
+        string(JSON _spark_justification ERROR_VARIABLE _spark_justification_error
+            GET "${_spark_rules}" firstPartyRoots ${_spark_index} justification)
+        string(STRIP "${_spark_justification}" _spark_justification)
+        if(_spark_justification_error OR _spark_justification STREQUAL "" OR _spark_pattern STREQUAL "")
+            _spark_notice_fail("firstPartyRoots[${_spark_index}] must carry a pattern and a non-empty 'justification'")
+        endif()
+        list(APPEND _spark_first_party_patterns "${_spark_pattern}")
+    endforeach()
+
+    _spark_notice_json_length(_spark_asset_rule_count "${_spark_rules}" assetManifests)
+    math(EXPR _spark_last_asset_rule "${_spark_asset_rule_count} - 1")
+    foreach(_spark_index RANGE ${_spark_last_asset_rule})
+        _spark_notice_json_get(_spark_asset_pattern_${_spark_index} "${_spark_rules}"
+            assetManifests ${_spark_index} pattern)
+        _spark_notice_json_get(_spark_asset_manifest_${_spark_index} "${_spark_rules}"
+            assetManifests ${_spark_index} manifest)
+        string(JSON _spark_justification ERROR_VARIABLE _spark_justification_error
+            GET "${_spark_rules}" assetManifests ${_spark_index} justification)
+        string(STRIP "${_spark_justification}" _spark_justification)
+        if(_spark_justification_error OR _spark_justification STREQUAL "" OR
+           _spark_asset_manifest_${_spark_index} STREQUAL "" OR
+           _spark_asset_manifest_${_spark_index} MATCHES "^/|(^|/)[.][.](/|$)")
+            _spark_notice_fail(
+                "assetManifests[${_spark_index}] must name a package-relative 'manifest' and a non-empty 'justification'")
+        endif()
+        set(_spark_asset_text_${_spark_index} "<unread>")
     endforeach()
 
     # ---- packaged THIRD_PARTY_NOTICES.txt -----------------------------------
@@ -213,6 +268,7 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
             _spark_notice_decode(_spark_block_name_${_spark_block_count} "${_spark_line}")
             set(_spark_block_notices_${_spark_block_count} "")
             set(_spark_block_files_${_spark_block_count} "")
+            set(_spark_block_terms_${_spark_block_count} "")
             set(_spark_in_block ON)
         elseif(_spark_line MATCHES "^  Notice files: (.*)$")
             _spark_notice_decode(_spark_value "${CMAKE_MATCH_1}")
@@ -220,6 +276,9 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
         elseif(_spark_line MATCHES "^  Files: (.*)$")
             _spark_notice_decode(_spark_value "${CMAKE_MATCH_1}")
             _spark_notice_split_csv(_spark_block_files_${_spark_block_count} "${_spark_value}")
+        elseif(_spark_line MATCHES "^  Terms: (.*)$")
+            _spark_notice_decode(_spark_value "${CMAKE_MATCH_1}")
+            string(STRIP "${_spark_value}" _spark_block_terms_${_spark_block_count})
         endif()
     endforeach()
     if(_spark_block_count EQUAL 0)
@@ -298,6 +357,8 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
     set(_spark_uncovered "")
     set(_spark_font_count 0)
     set(_spark_payload_count 0)
+    set(_spark_first_party_files 0)
+    set(_spark_asset_files 0)
     foreach(_spark_file IN LISTS _spark_package_files)
         get_filename_component(_spark_name "${_spark_file}" NAME)
         get_filename_component(_spark_suffix "${_spark_file}" LAST_EXT)
@@ -338,18 +399,114 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
             endif()
         endforeach()
         if(_spark_matched_rule EQUAL -1)
+            set(_spark_under_third_party_root OFF)
             foreach(_spark_pattern IN LISTS _spark_root_patterns)
                 if(_spark_file MATCHES "${_spark_pattern}")
+                    set(_spark_under_third_party_root ON)
                     math(EXPR _spark_payload_count "${_spark_payload_count} + 1")
                     list(APPEND _spark_uncovered
                         "${_spark_file}: third-party install path that no payload rule maps to a dependency")
                     break()
                 endif()
             endforeach()
+            set(_spark_asset_rule -1)
+            if(NOT _spark_under_third_party_root AND _spark_world STREQUAL "closed")
+                foreach(_spark_index RANGE ${_spark_last_asset_rule})
+                    if(_spark_file MATCHES "${_spark_asset_pattern_${_spark_index}}")
+                        set(_spark_asset_rule ${_spark_index})
+                        break()
+                    endif()
+                endforeach()
+            endif()
+            if(NOT _spark_asset_rule EQUAL -1)
+                # The manifest is the canonical json.dumps(indent=2) output of
+                # tools/asset-integrity/verify_asset_integrity.py. CMake's JSON
+                # parser re-reads the whole document per query, which is too slow
+                # for a thousand entries, so each entry is located textually by
+                # its "path" member and its "license" member is read from the
+                # same object. A manifest in any other layout lists nothing, so
+                # the gate fails closed.
+                set(_spark_manifest "${_spark_asset_manifest_${_spark_asset_rule}}")
+                if(_spark_asset_text_${_spark_asset_rule} STREQUAL "<unread>")
+                    set(_spark_asset_text_${_spark_asset_rule} "")
+                    set(_spark_manifest_path "${_spark_root}/${_spark_manifest}")
+                    if(EXISTS "${_spark_manifest_path}" AND NOT IS_DIRECTORY "${_spark_manifest_path}")
+                        _spark_notice_read_bounded(_spark_asset_text_${_spark_asset_rule} "${_spark_manifest_path}"
+                            ${_SPARK_NOTICE_MAX_BYTES} "Asset manifest")
+                    endif()
+                endif()
+                get_filename_component(_spark_manifest_dir "${_spark_manifest}" DIRECTORY)
+                set(_spark_listed "${_spark_file}")
+                string(FIND "${_spark_file}" "${_spark_manifest_dir}/" _spark_prefix_at)
+                if(_spark_prefix_at EQUAL 0)
+                    string(LENGTH "${_spark_manifest_dir}/" _spark_prefix_length)
+                    string(SUBSTRING "${_spark_file}" ${_spark_prefix_length} -1 _spark_listed)
+                endif()
+                string(FIND "${_spark_asset_text_${_spark_asset_rule}}" "\"path\": \"${_spark_listed}\"," _spark_at)
+                set(_spark_license "")
+                if(NOT _spark_at EQUAL -1)
+                    string(SUBSTRING "${_spark_asset_text_${_spark_asset_rule}}" ${_spark_at} -1 _spark_entry)
+                    string(FIND "${_spark_entry}" "}" _spark_entry_end)
+                    string(SUBSTRING "${_spark_entry}" 0 ${_spark_entry_end} _spark_entry)
+                    if(_spark_entry MATCHES "\"license\": \"([^\"]*)\"")
+                        set(_spark_license "${CMAKE_MATCH_1}")
+                    endif()
+                endif()
+                if(_spark_file STREQUAL _spark_manifest)
+                    math(EXPR _spark_asset_files "${_spark_asset_files} + 1")
+                elseif(_spark_at EQUAL -1)
+                    list(APPEND _spark_uncovered "${_spark_file}: not listed in asset manifest ${_spark_manifest}")
+                elseif(_spark_license STREQUAL "" OR _spark_license STREQUAL "NOASSERTION")
+                    list(APPEND _spark_uncovered
+                        "${_spark_file}: asset manifest ${_spark_manifest} records no identified license")
+                else()
+                    math(EXPR _spark_asset_files "${_spark_asset_files} + 1")
+                endif()
+            elseif(NOT _spark_under_third_party_root AND _spark_world STREQUAL "closed")
+                set(_spark_classified OFF)
+                foreach(_spark_pattern IN LISTS _spark_first_party_patterns)
+                    if(_spark_file MATCHES "${_spark_pattern}")
+                        set(_spark_classified ON)
+                        break()
+                    endif()
+                endforeach()
+                if(_spark_classified)
+                    math(EXPR _spark_first_party_files "${_spark_first_party_files} + 1")
+                else()
+                    list(APPEND _spark_uncovered
+                        "${_spark_file}: unclassified: no font, payload, system-runtime or first-party rule covers it")
+                endif()
+            endif()
             continue()
         endif()
 
         math(EXPR _spark_payload_count "${_spark_payload_count} + 1")
+        set(_spark_runtime "${_spark_rule_runtime_${_spark_matched_rule}}")
+        if(NOT _spark_runtime STREQUAL "")
+            list(FIND _spark_component_names "${_spark_runtime}" _spark_block_index)
+            if(_spark_block_index EQUAL -1)
+                list(APPEND _spark_uncovered
+                    "${_spark_file}: system runtime '${_spark_runtime}' has no THIRD_PARTY_NOTICES.txt inventory entry")
+                continue()
+            endif()
+            math(EXPR _spark_block "${_spark_block_index} + 1")
+            if(_spark_block_terms_${_spark_block} STREQUAL "")
+                list(APPEND _spark_uncovered "${_spark_file}: system runtime '${_spark_runtime}' has no 'Terms:' line")
+                continue()
+            endif()
+            set(_spark_named OFF)
+            foreach(_spark_named_file IN LISTS _spark_block_files_${_spark_block})
+                get_filename_component(_spark_named_name "${_spark_named_file}" NAME)
+                if(_spark_named_name STREQUAL _spark_name)
+                    set(_spark_named ON)
+                endif()
+            endforeach()
+            if(NOT _spark_named)
+                list(APPEND _spark_uncovered
+                    "${_spark_file}: not named on the 'Files:' line of system runtime '${_spark_runtime}'")
+            endif()
+            continue()
+        endif()
         set(_spark_component "${_spark_rule_component_${_spark_matched_rule}}")
         if(_spark_component STREQUAL "")
             continue()
@@ -385,6 +542,11 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
     message(STATUS
         "Validated notice coverage for ${_spark_font_count} font file(s) and "
         "${_spark_payload_count} third-party payload file(s) in ${_spark_root}")
+    if(_spark_world STREQUAL "closed")
+        message(STATUS
+            "Closed world: ${_spark_first_party_files} first-party file(s), "
+            "${_spark_asset_files} asset-manifest file(s), 0 unclassified")
+    endif()
 endfunction()
 
 if(NOT DEFINED SPARK_PACKAGE_NOTICE_RULES OR SPARK_PACKAGE_NOTICE_RULES STREQUAL "")
@@ -393,6 +555,9 @@ endif()
 if(NOT DEFINED SPARK_PACKAGE_NOTICE_COVERAGE OR SPARK_PACKAGE_NOTICE_COVERAGE STREQUAL "")
     set(SPARK_PACKAGE_NOTICE_COVERAGE enforce)
 endif()
+if(NOT DEFINED SPARK_PACKAGE_NOTICE_CLASSIFICATION OR SPARK_PACKAGE_NOTICE_CLASSIFICATION STREQUAL "")
+    set(SPARK_PACKAGE_NOTICE_CLASSIFICATION open)
+endif()
 if(NOT DEFINED SPARK_PACKAGE_ROOT OR SPARK_PACKAGE_ROOT STREQUAL "")
     message(FATAL_ERROR "SPARK_PACKAGE_ROOT must name the staged install root")
 endif()
@@ -400,4 +565,5 @@ if(SPARK_PACKAGE_ROOT MATCHES "[\r\n;]")
     message(FATAL_ERROR "SPARK_PACKAGE_ROOT contains unsupported control or list characters")
 endif()
 _spark_validate_package_notice_coverage(
-    "${SPARK_PACKAGE_ROOT}" "${SPARK_PACKAGE_NOTICE_RULES}" "${SPARK_PACKAGE_NOTICE_COVERAGE}")
+    "${SPARK_PACKAGE_ROOT}" "${SPARK_PACKAGE_NOTICE_RULES}" "${SPARK_PACKAGE_NOTICE_COVERAGE}"
+    "${SPARK_PACKAGE_NOTICE_CLASSIFICATION}")
