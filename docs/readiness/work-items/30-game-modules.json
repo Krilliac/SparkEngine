@@ -521,7 +521,7 @@
             "Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake",
             "Tests/PackageSmoke/RunInstalledModuleObjective.cmake"
           ],
-          "note": "There is no packaged SparkGame smoke."
+          "note": "SparkGameShowcase_PackagedSmoke (spark_add_module_objective_test; Linux headless only) installs the runtime, runs the installed SparkEngine with the installed SparkGame, and requires the French status from the installed localization tables and a spawn count of exactly +1. It passed on a local linux-gcc-release tree. No Windows packaged run; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:bd643b216c0e",
@@ -1053,7 +1053,7 @@
             "GameModules/SparkGameARPG/Source/Core/Main.cpp",
             "GameModules/SparkGameARPG/module.json"
           ],
-          "note": "ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, learned skills, cooldowns, loot and boss through the real SaveSystem, and forged state is rejected. There is still no UI round-trip, so the criterion stays unmet."
+          "note": "ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, skills, cooldowns, loot and boss through the real SaveSystem; ARPGDungeon_HudRoundTripsThroughSaveRestart drives UI/ARPGHud on a real UISystem across a save/restart; forged state is rejected unchanged. All 8 ARPGDungeon_ tests passed on a local Windows Release tree; no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",
@@ -2063,7 +2063,7 @@
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -R TerrafrontMigration --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-gcc-release -R TerrafrontRestart --output-on-failure --no-tests=error"
+        "cmake --preset linux-gcc-release -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON && cmake --build build/linux-gcc-release && ctest --test-dir build/linux-gcc-release -R TerrafrontRestart --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "TerrafrontMigration_*",

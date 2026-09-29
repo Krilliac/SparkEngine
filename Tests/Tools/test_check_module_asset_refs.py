@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""MOD-360: tools/check-module-asset-refs.py fails closed for enforced modules.
+"""MOD-360 / RDY-020: tools/check-module-asset-refs.py fails closed for every module.
 
 Fixture repositories exercise each way an enforced module's asset references can
 be wrong -- a missing file, a case-only mismatch, a run-time-composed path
 prefix, and every disagreement between the module reference record
 (``GameModules/<Module>/asset-references.json``), the files on disk and the
 repository integrity manifest -- and require a non-zero exit for each. A module
-outside ``ENFORCED_MODULES`` with the same defect is reported but does not fail.
-The last case runs the checker against the real repository for OpenWorld.
+outside ``ENFORCED_MODULES`` fails the same way on every integrity problem; only
+a run-time-composed path prefix is reported there without failing. The last
+cases run the checker against the real repository.
 """
 from __future__ import annotations
 
@@ -107,7 +108,8 @@ class CheckModuleAssetRefsTests(unittest.TestCase):
         self.repo.write_manifests()
         code, output = self.repo.run(ENFORCED)
         self.assertEqual(code, 0, output)
-        self.assertIn("OK: SparkGameOpenWorld [enforced] 2 asset reference(s), 0 problem(s)", output)
+        self.assertIn("OK: SparkGameOpenWorld [enforced] 2 asset reference(s), 0 integrity problem(s), "
+                      "0 composed-path problem(s)", output)
 
     def test_missing_file_fails(self) -> None:
         self.repo.write_source(ENFORCED, self.valid_source + 'const char* kGone = "Assets/Audio/Music/gone.ogg";\n')
@@ -188,12 +190,55 @@ class CheckModuleAssetRefsTests(unittest.TestCase):
         self.assertIn("provenance rule 'invented-rule' is not defined", output)
         self.assertIn("attributed to a different provenance rule", output)
 
-    def test_report_only_module_warns_without_failing(self) -> None:
-        self.repo.write_source(REPORT_ONLY, 'const char* t = "Assets/Audio/Music/race.ogg";\n')
+    def test_report_only_composed_prefix_warns_without_failing(self) -> None:
+        self.repo.write_source(
+            REPORT_ONLY, self.valid_source + 'std::string p = std::string("Assets/Scenes/") + name + ".scene";\n')
+        self.repo.write_manifests(REPORT_ONLY)
         code, output = self.repo.run(REPORT_ONLY)
         self.assertEqual(code, 0, output)
-        self.assertIn(f"WARN: {REPORT_ONLY} [report-only]", output)
-        self.assertIn("Assets/Audio/Music/race.ogg does not exist", output)
+        self.assertIn(f"WARN: {REPORT_ONLY} [report-only] 2 asset reference(s), 0 integrity problem(s), "
+                      "1 composed-path problem(s)", output)
+
+    def _assert_report_only_fails(self, expected: str) -> None:
+        code, output = self.repo.run(REPORT_ONLY)
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"FAIL: {REPORT_ONLY} [report-only]", output)
+        self.assertIn(expected, output)
+
+    def test_report_only_missing_file_fails(self) -> None:
+        self.repo.write_source(REPORT_ONLY, self.valid_source + 'const char* t = "Assets/Audio/Music/race.ogg";\n')
+        self.repo.write_manifests(REPORT_ONLY)
+        self._assert_report_only_fails("Assets/Audio/Music/race.ogg does not exist")
+
+    def test_report_only_case_mismatch_fails(self) -> None:
+        self.repo.write_source(REPORT_ONLY, self.valid_source.replace("Music/theme.wav", "music/theme.wav"))
+        self.repo.references[0]["path"] = "Assets/Audio/music/theme.wav"
+        self.repo.write_manifests(REPORT_ONLY)
+        self._assert_report_only_fails("Assets/Audio/music/theme.wav does not exist (exact case)")
+
+    def test_report_only_stale_digest_fails(self) -> None:
+        self.repo.write_source(REPORT_ONLY, self.valid_source)
+        self.repo.references[0]["sha256"] = "0" * 64
+        self.repo.write_manifests(REPORT_ONLY)
+        self._assert_report_only_fails("manifest records " + "0" * 64)
+
+    def test_report_only_unrecorded_reference_fails(self) -> None:
+        self.repo.add_asset("Assets/Audio/Music/extra.wav", b"RIFF-extra", record=False)
+        self.repo.write_source(REPORT_ONLY, self.valid_source + 'const char* e = "Assets/Audio/Music/extra.wav";\n')
+        self.repo.write_manifests(REPORT_ONLY)
+        self._assert_report_only_fails("does not record referenced asset Assets/Audio/Music/extra.wav")
+
+    def test_report_only_unreferenced_record_fails(self) -> None:
+        self.repo.add_asset("Assets/Audio/Music/old.wav", b"RIFF-old")
+        self.repo.write_source(REPORT_ONLY, self.valid_source)
+        self.repo.write_manifests(REPORT_ONLY)
+        self._assert_report_only_fails("records Assets/Audio/Music/old.wav, which no module source references")
+
+    def test_report_only_missing_manifest_fails(self) -> None:
+        self.repo.write_source(REPORT_ONLY, self.valid_source)
+        self.repo.write_manifests(REPORT_ONLY)
+        (self.repo.root / "GameModules" / REPORT_ONLY / "asset-references.json").unlink()
+        self._assert_report_only_fails("asset-references.json: missing")
 
     def test_unknown_module_is_a_usage_error(self) -> None:
         self.repo.write_source(ENFORCED, self.valid_source)
@@ -208,6 +253,16 @@ class CheckModuleAssetRefsTests(unittest.TestCase):
             code = CHECKER.main(["--module", ENFORCED])
         self.assertEqual(code, 0, out.getvalue() + err.getvalue())
         self.assertIn("OK: SparkGameOpenWorld [enforced]", out.getvalue())
+
+    def test_repository_every_module_manifest_is_verified_clean(self) -> None:
+        reports, errors = CHECKER.check(REPO_ROOT, None)
+        self.assertEqual(errors, [])
+        modules = sorted(path.parent.name for path in (REPO_ROOT / "GameModules").glob("*/asset-references.json"))
+        self.assertEqual(len(modules), 11, modules)
+        self.assertEqual(sorted(report.name for report in reports), modules)
+        for report in reports:
+            self.assertEqual(report.integrity_problems, [], report.name)
+            self.assertFalse(report.failed, report.name)
 
 
 if __name__ == "__main__":

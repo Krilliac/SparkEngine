@@ -13,7 +13,7 @@ A literal that starts with ``Assets/`` but does not name a file on its own
 runtime builds the real path by concatenation or formatting, so no static check
 can prove it. In an enforced module that is a failure, not a skip.
 
-Enforced modules also carry ``GameModules/<Module>/asset-references.json``, the
+Every module also carries ``GameModules/<Module>/asset-references.json``, the
 module's reference record (the shared ``Assets/`` files it names live outside the
 module directory, so this is not a ``<Module>/Assets`` package manifest): every referenced path with its sha256, kind and the
 ``tools/asset-integrity/provenance.json`` rule that licenses it. The check
@@ -21,8 +21,13 @@ requires the record to list exactly the referenced set, each digest to match the
 file on disk, and the repository integrity manifest ``Assets/assets.integrity.json``
 to declare the same digest under the same provenance rule.
 
-Only ``ENFORCED_MODULES`` fail the check. Every other module is reported so its
-gaps stay visible, without claiming a gate for content it does not yet have.
+Problems fall into two classes. An integrity problem -- a referenced file that
+is missing or differs in case, a malformed or missing reference record, a
+recorded path no source names or a named path the record omits, sha256 drift,
+or an integrity-manifest digest or provenance-rule disagreement -- fails the
+check in every module. A composed-path problem (a prefix or format literal)
+fails only ``ENFORCED_MODULES``; every other module reports it as a warning,
+because its runtime still builds some asset paths the check cannot prove.
 
 Usage:
     python3 tools/check-module-asset-refs.py                        # all modules
@@ -92,7 +97,14 @@ class ModuleReport:
     name: str
     enforced: bool
     references: dict[str, list[str]] = field(default_factory=dict)
-    problems: list[str] = field(default_factory=list)
+    # Missing, case-altered, unrecorded or drifted references; fatal in every module.
+    integrity_problems: list[str] = field(default_factory=list)
+    # Assets/ literals the runtime completes by concatenation or formatting; fatal only when enforced.
+    composed_problems: list[str] = field(default_factory=list)
+
+    @property
+    def failed(self) -> bool:
+        return bool(self.integrity_problems) or (self.enforced and bool(self.composed_problems))
 
 
 def _exists_exact(repo_root: Path, relative: str) -> bool:
@@ -176,7 +188,7 @@ def scan_module(repo_root: Path, module_dir: Path, top_level: frozenset[str]) ->
         try:
             text = _CLOSURE._bounded_text(source, _CLOSURE.MAX_SOURCE_BYTES)
         except _CLOSURE.ClosureError as exc:
-            report.problems.append(str(exc))
+            report.integrity_problems.append(str(exc))
             continue
         for line, value in _CLOSURE.cpp_string_literals(text):
             classified = classify_literal(value, top_level)
@@ -185,14 +197,14 @@ def scan_module(repo_root: Path, module_dir: Path, top_level: frozenset[str]) ->
             kind, path = classified
             where = f"{location}:{line}"
             if kind == "prefix":
-                report.problems.append(
+                report.composed_problems.append(
                     f"{where}: {value!r} is not a complete asset path; the path is composed at run time and "
                     "cannot be verified -- name each asset as a complete literal")
                 continue
             report.references.setdefault(path, []).append(where)
     for path, sites in sorted(report.references.items()):
         if not _exists_exact(repo_root, path):
-            report.problems.append(f"{sites[0]}: {path} does not exist (exact case)")
+            report.integrity_problems.append(f"{sites[0]}: {path} does not exist (exact case)")
     return report
 
 
@@ -221,64 +233,68 @@ def verify_module_manifest(repo_root: Path, module_dir: Path, report: ModuleRepo
     manifest_path = module_dir / MODULE_MANIFEST_RELATIVE
     location = manifest_path.relative_to(repo_root).as_posix()
     if not manifest_path.is_file():
-        report.problems.append(f"{location}: missing; an enforced module must record its asset references")
+        report.integrity_problems.append(f"{location}: missing; every module must record its asset references")
         return
     try:
         document = _read_json(manifest_path)
         _, integrity = _integrity_entries(repo_root)
         rule_ids = _provenance_rule_ids(repo_root)
     except (OSError, UnicodeDecodeError, ValueError) as exc:
-        report.problems.append(f"{location}: cannot verify: {exc}")
+        report.integrity_problems.append(f"{location}: cannot verify: {exc}")
         return
     if not isinstance(document, dict) or set(document) != MODULE_MANIFEST_KEYS:
-        report.problems.append(f"{location}: must contain exactly {sorted(MODULE_MANIFEST_KEYS)}")
+        report.integrity_problems.append(f"{location}: must contain exactly {sorted(MODULE_MANIFEST_KEYS)}")
         return
     if document["manifestVersion"] != MODULE_MANIFEST_VERSION or document["module"] != report.name:
-        report.problems.append(
+        report.integrity_problems.append(
             f"{location}: manifestVersion must be {MODULE_MANIFEST_VERSION} and module must be {report.name!r}")
         return
     references = document["references"]
     if not isinstance(references, list):
-        report.problems.append(f"{location}: references must be a list")
+        report.integrity_problems.append(f"{location}: references must be a list")
         return
     recorded: dict[str, dict[str, Any]] = {}
     for index, entry in enumerate(references):
         where = f"{location}: references[{index}]"
         if not isinstance(entry, dict) or set(entry) != REFERENCE_KEYS or \
                 not all(isinstance(entry[key], str) and entry[key] for key in REFERENCE_KEYS):
-            report.problems.append(f"{where} must contain exactly non-empty strings {sorted(REFERENCE_KEYS)}")
+            report.integrity_problems.append(
+                f"{where} must contain exactly non-empty strings {sorted(REFERENCE_KEYS)}")
             continue
         path = entry["path"]
         if path in recorded:
-            report.problems.append(f"{where}: duplicate path {path}")
+            report.integrity_problems.append(f"{where}: duplicate path {path}")
             continue
         recorded[path] = entry
         if not SHA256_RE.match(entry["sha256"]):
-            report.problems.append(f"{where}: sha256 must be 64 lowercase hex digits")
+            report.integrity_problems.append(f"{where}: sha256 must be 64 lowercase hex digits")
             continue
         if entry["provenanceRule"] not in rule_ids:
-            report.problems.append(f"{where}: provenance rule {entry['provenanceRule']!r} is not defined in "
-                                   f"{PROVENANCE_POLICY_RELATIVE.as_posix()}")
+            report.integrity_problems.append(
+                f"{where}: provenance rule {entry['provenanceRule']!r} is not defined in "
+                f"{PROVENANCE_POLICY_RELATIVE.as_posix()}")
         if not _exists_exact(repo_root, path):
-            report.problems.append(f"{where}: {path} does not exist (exact case)")
+            report.integrity_problems.append(f"{where}: {path} does not exist (exact case)")
             continue
         actual = _sha256(repo_root / path)
         if actual != entry["sha256"]:
-            report.problems.append(f"{where}: {path} sha256 is {actual}, manifest records {entry['sha256']}")
+            report.integrity_problems.append(f"{where}: {path} sha256 is {actual}, manifest records {entry['sha256']}")
         declared = integrity.get(path)
         if declared is None:
-            report.problems.append(f"{where}: {path} is not declared in {INTEGRITY_MANIFEST_RELATIVE.as_posix()}")
+            report.integrity_problems.append(
+                f"{where}: {path} is not declared in {INTEGRITY_MANIFEST_RELATIVE.as_posix()}")
         elif declared.get("sha256") != actual:
-            report.problems.append(f"{where}: {path} digest differs from {INTEGRITY_MANIFEST_RELATIVE.as_posix()}")
+            report.integrity_problems.append(
+                f"{where}: {path} digest differs from {INTEGRITY_MANIFEST_RELATIVE.as_posix()}")
         elif not str(declared.get("provenance", "")).endswith(f"[{entry['provenanceRule']}]"):
-            report.problems.append(
+            report.integrity_problems.append(
                 f"{where}: {path} is attributed to a different provenance rule in "
                 f"{INTEGRITY_MANIFEST_RELATIVE.as_posix()}")
     for path in sorted(set(report.references) - set(recorded)):
-        report.problems.append(f"{location}: does not record referenced asset {path} "
-                               f"(referenced at {report.references[path][0]})")
+        report.integrity_problems.append(f"{location}: does not record referenced asset {path} "
+                                         f"(referenced at {report.references[path][0]})")
     for path in sorted(set(recorded) - set(report.references)):
-        report.problems.append(f"{location}: records {path}, which no module source references")
+        report.integrity_problems.append(f"{location}: records {path}, which no module source references")
 
 
 def check(repo_root: Path, modules: list[str] | None) -> tuple[list[ModuleReport], list[str]]:
@@ -295,8 +311,7 @@ def check(repo_root: Path, modules: list[str] | None) -> tuple[list[ModuleReport
     reports = []
     for module_dir in selected:
         report = scan_module(repo_root, module_dir, top_level)
-        if report.enforced:
-            verify_module_manifest(repo_root, module_dir, report)
+        verify_module_manifest(repo_root, module_dir, report)
         reports.append(report)
     return reports, errors
 
@@ -317,13 +332,17 @@ def main(argv: list[str] | None = None) -> int:
     failed = False
     for report in reports:
         mode = "enforced" if report.enforced else "report-only"
-        status = "FAIL" if report.problems and report.enforced else ("WARN" if report.problems else "OK")
+        problems = report.integrity_problems + report.composed_problems
+        status = "FAIL" if report.failed else ("WARN" if problems else "OK")
         print(f"{status}: {report.name} [{mode}] {len(report.references)} asset reference(s), "
-              f"{len(report.problems)} problem(s)")
-        stream = sys.stderr if report.enforced and report.problems else sys.stdout
-        for problem in report.problems:
-            print(f"  {problem}", file=stream)
-        failed = failed or (report.enforced and bool(report.problems))
+              f"{len(report.integrity_problems)} integrity problem(s), "
+              f"{len(report.composed_problems)} composed-path problem(s)")
+        for problem in report.integrity_problems:
+            print(f"  {problem}", file=sys.stderr)
+        composed_stream = sys.stderr if report.enforced else sys.stdout
+        for problem in report.composed_problems:
+            print(f"  {problem}", file=composed_stream)
+        failed = failed or report.failed
     return 1 if failed else 0
 
 

@@ -639,7 +639,7 @@ Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Zero missing or case-mismatched references in every declared manifest
    - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`
-   - Downgraded. Only the root Assets manifest is checked. The rationale cites modules referencing missing assets, and content from modules outside the profile remains unclassified. Per-module manifests are not generated.
+   - check-all verifies the root, legacy and template manifests; tools/check-module-asset-refs.py now verifies all 11 module reference records fail-closed for missing, case-altered, unrecorded or drifted paths (0 found locally). Composed Assets/ prefixes stay report-only in FPS (2), MMOFPS (26) and VisualScript (1). Not promoted here; local runs only, no exact-commit CI.
 2. **[unmet]** Every in-profile packaged module resolves assets without the repository
    - Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists.
 3. **[unmet]** Every asset has provenance/license metadata where required
@@ -807,7 +807,7 @@ A hostile audit found timestamp-only false greens, incomplete first-party source
 - `tools/docs_contract.py`
 - `tools/docs_currentness.py`
 - `tools/site-data/validate_docs_links.py`
-- `.github/workflows/site-data.yml`
+- `.github/workflows/build.yml`
 
 **Entry points**
 
@@ -832,13 +832,13 @@ Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
    - Evidence: `Tests/Tools/test_docs_health.py`
-   - The double isolated generation is tested. Being green at the exact commit needs an exact-SHA CI run.
+   - At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. State not promoted here; no exact-SHA hosted run.
 2. **[implemented]** Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
    - Evidence: `docs/generate-flowchart-content.py`, `Tests/Tools/test_docs_health.py`
    - Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff.
 3. **[implemented]** Every catalogued doc route, source, heading, image, and generated-API target resolves
-   - Evidence: `tools/site-data/validate_docs_links.py`, `.github/workflows/site-data.yml`, `Tests/Tools/test_docs_health.py`
-   - The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; site-data.yml runs it at every commit. Local only; no exact-commit CI yet.
+   - Evidence: `tools/site-data/validate_docs_links.py`, `.github/workflows/build.yml`, `Tests/Tools/test_docs_health.py`
+   - The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; the required build.yml docs-health job runs it at every commit. Local only; no exact-commit CI yet.
 4. **[implemented]** Health contains every expected generator exactly once with exit and failure counts consistent
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_currentness.py`, `tools/site-data/generate.py`
    - Tests drive production write_health and summarize_documentation_health. Missing or duplicate generators and inconsistent exit or failure counts are rejected. RepositoryEvidenceTests pins the generator manifest.
@@ -846,7 +846,7 @@ Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_contract.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
    - Two hostile test classes (docs generation, docs links) cover stale docs, symbols, macros, health, links, anchors, route collisions and repository escape against production code.
 6. **[unmet]** A stale generator, missing result, or broken link blocks CI
-   - Proving it blocks CI needs a hosted CI run. No local check can show that.
+   - docs-health is a Required CI Gate dependency in .github/workflows/build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Covered by structural and mutation tests in .github/scripts/test-workflow-failure-propagation.py only. State not promoted here; no hosted red run yet.
 
 **Required commands**
 
@@ -937,7 +937,7 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Documented subsystem commands select and execute real tests
    - Evidence: `tools/site-data/validate.py`
-   - Commands are resolved statically but never executed. The tests-unit and tests-integration jobs are still planned.
+   - Commands are still not executed. check_documented_selectors.py only resolves selections against configured trees (enabled tests, built executables): windows-release 27/27, linux-gcc-release 21/24 (SparkDaemonServiceTests unbuilt under local GCC 15.2). Its CTest registers only in preset trees, which no CI lane runs ctest over. tests-unit and tests-integration are still planned.
 2. **[implemented]** No unowned flaky exception exists
    - Evidence: `Tools/validate_test_warnings.py`, `Tests/Tools/test_validate_test_warnings.py`, `Tests/test-warning-waivers.json`, `Tests/TestLevelStreamingSystemPhaseAA.cpp`, `Tests/TestLoadingScreenReal.cpp`, `wiki/advanced/Testing.md`
    - SKIP_TEST and EXPECT_NO_CRASH exceptions have no owner or expiry enforcement.
@@ -962,7 +962,7 @@ SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml
 
 **Automated evidence**
 
-- Test selectors: `TestRegistration_*`, `GoldenImage_*`, `CoverageBudget_*`, `RunnerSemanticsReal_*`, `SparkRunSparkTestsHarness`
+- Test selectors: `TestRegistration_*`, `GoldenImage_*`, `CoverageBudget_*`, `RunnerSemanticsReal_*`, `SparkRunSparkTestsHarness`, `DocumentedTestCommands_*`
 - Required CI jobs: `tests-unit`, `tests-integration`, `coverage`, `clang-tidy`, `analyze`
 - Performance / reliability budgets:
   - Shard runtimes stay balanced within 25 percent
@@ -2376,7 +2376,7 @@ ctest --test-dir build/windows-release -C Release -L installer --output-on-failu
 **Automated evidence**
 
 - Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Interrupted`, `Installer_Uninstall`
-- Required CI jobs: `installer-windows`
+- Required CI jobs: `build-installer`, `build-windows`
 - Performance / reliability budgets:
   - Install/update time and disk overhead budgets are recorded
 
@@ -3195,7 +3195,7 @@ Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
 
 ```bash
 ctest --test-dir build/linux-gcc-release -R TerrafrontMigration --output-on-failure --no-tests=error
-ctest --test-dir build/linux-gcc-release -R TerrafrontRestart --output-on-failure --no-tests=error
+cmake --preset linux-gcc-release -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON && cmake --build build/linux-gcc-release && ctest --test-dir build/linux-gcc-release -R TerrafrontRestart --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3453,7 +3453,7 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
    - SparkGameShowcase_QuickLoadRestoresExactState loads the real module with a SaveSystem in a temp dir, quicksaves, diverges (damage, destroy, spawn), quickloads and requires the name/transform/health/tag snapshot to match exactly, the coroutine stopped and tracking rebuilt. Linux-only; local runs, no exact-commit CI.
 4. **[implemented]** Packaged smoke passes
    - Evidence: `CMakeLists.txt`, `Tests/CMakeLists.txt`, `Tests/PackageSmoke/ModuleObjectives/SparkGame.cmake`, `Tests/PackageSmoke/RunInstalledModuleObjective.cmake`
-   - There is no packaged SparkGame smoke.
+   - SparkGameShowcase_PackagedSmoke (spark_add_module_objective_test; Linux headless only) installs the runtime, runs the installed SparkEngine with the installed SparkGame, and requires the French status from the installed localization tables and a spawn count of exactly +1. It passed on a local linux-gcc-release tree. No Windows packaged run; no exact-commit CI.
 5. **[implemented]** Public label never calls it a finished game
    - Evidence: `GameModules/SparkGame/README.md`, `tools/check-module-positioning.py`, `Tests/Tools/test_check_module_positioning.py`, `Tests/CMakeLists.txt`, `GameModules/README.md`, `wiki/getting-started/Game-Modules.md`
    - criterionDigest sha256:bd643b216c0e. The checker fails on finished/playable-game or FPS/arena/shooter claims about SparkGame in the root README, module READMEs and the wiki, and when the module README loses its disclaimers. CTest: ModulePositioning_SparkGameLabelIsShowcase. It failed on GameModules/README.md:273 before the fix.
@@ -3706,7 +3706,7 @@ Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
    - ARPGDungeonPackage_ClearAndRestart passes on Windows (105 s, opt-in SPARK_ENABLE_MODULE_PACKAGE_RUNS): the installed package clears floor 5, the boss holds its identity to the clear, and a restart reloads the save. Needed the module-teardown and exec-audit fixes. Not in hosted CI yet.
 2. **[implemented]** Hero/skills/combat/loot/UI/save all round-trip
    - Evidence: `Tests/TestMOD330ARPGDungeonReal.cpp`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.h`, `GameModules/SparkGameARPG/Source/UI/ARPGHud.cpp`, `GameModules/SparkGameARPG/Source/Core/Main.cpp`, `GameModules/SparkGameARPG/module.json`
-   - ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, learned skills, cooldowns, loot and boss through the real SaveSystem, and forged state is rejected. There is still no UI round-trip, so the criterion stays unmet.
+   - ARPGDungeon_SaveRestartRestoresHeroSkillsLootAndBoss round-trips hero, skills, cooldowns, loot and boss through the real SaveSystem; ARPGDungeon_HudRoundTripsThroughSaveRestart drives UI/ARPGHud on a real UISystem across a save/restart; forged state is rejected unchanged. All 8 ARPGDungeon_ tests passed on a local Windows Release tree; no exact-commit CI.
 3. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-ARPG CI.
 
@@ -5537,7 +5537,7 @@ ctest --test-dir build/windows-release -C Release -L installer --output-on-failu
 **Automated evidence**
 
 - Test selectors: `Installer_Upgrade`, `Installer_Rollback`, `Installer_Interrupted`
-- Required CI jobs: `installer-windows`
+- Required CI jobs: `build-installer`, `build-windows`
 - Performance / reliability budgets:
 
 **Same-change updates**
@@ -5611,7 +5611,7 @@ ctest --test-dir build/windows-release -C Release -L installer --output-on-failu
 **Automated evidence**
 
 - Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Interrupted`, `Installer_Uninstall`
-- Required CI jobs: `installer-windows`
+- Required CI jobs: `build-installer`, `build-windows`
 - Performance / reliability budgets:
 
 **Same-change updates**

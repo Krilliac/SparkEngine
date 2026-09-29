@@ -4140,9 +4140,9 @@ set_tests_properties(PackageAssets_StableV1ExcludesNoAssertion PROPERTIES
     LABELS "stable-v1;asset;packaging;unit;python"
     TIMEOUT 300)
 
-# MOD-360: tools/check-module-asset-refs.py fails closed on a missing, case-altered,
-# run-time-composed or unrecorded asset reference in an enforced module, and every
-# asset SparkGameOpenWorld source names resolves (Tests/Tools/test_check_module_asset_refs.py).
+# MOD-360 / RDY-020: tools/check-module-asset-refs.py fails closed on a missing, case-altered,
+# unrecorded or drifted asset reference in every module and on a run-time-composed path in an
+# enforced module, and all 11 module reference records verify clean (Tests/Tools/test_check_module_asset_refs.py).
 add_test(
     NAME OpenWorldAssets_ReferenceCheckFailsClosed
     COMMAND ${Python3_EXECUTABLE}
@@ -4150,6 +4150,34 @@ add_test(
 set_tests_properties(OpenWorldAssets_ReferenceCheckFailsClosed PROPERTIES
     LABELS "module;openworld;asset;unit;python"
     TIMEOUT 60)
+
+# CI-110: documented ctest commands (work-item commands[] and wiki/advanced/Testing.md)
+# must select enabled tests whose executables exist in this configured tree. The
+# checker's fixture tests prove a disabled-only, unbuilt or empty selection fails.
+add_test(
+    NAME DocumentedTestCommands_CheckerFailsClosed
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_check_documented_selectors.py)
+set_tests_properties(DocumentedTestCommands_CheckerFailsClosed PROPERTIES
+    LABELS "ci;policy;python;unit"
+    TIMEOUT 120)
+# Registered only in the preset trees the documented commands target (pinned by
+# DocumentedCommandInventoryTests), so every registration has commands to check;
+# any non-zero exit, including 2 for "nothing applied", fails the test.
+set(SPARK_DOCUMENTED_SELECTOR_TREES linux-gcc-release windows-release)
+get_filename_component(_spark_documented_tree_parent "${CMAKE_BINARY_DIR}" DIRECTORY)
+get_filename_component(_spark_documented_tree_name "${CMAKE_BINARY_DIR}" NAME)
+if(_spark_documented_tree_parent STREQUAL "${CMAKE_SOURCE_DIR}/build"
+   AND _spark_documented_tree_name IN_LIST SPARK_DOCUMENTED_SELECTOR_TREES)
+    add_test(
+        NAME DocumentedTestCommands_SelectBuiltTests
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/tools/site-data/check_documented_selectors.py
+            --build-dir ${CMAKE_BINARY_DIR} --config $<CONFIG> --ctest ${CMAKE_CTEST_COMMAND})
+    set_tests_properties(DocumentedTestCommands_SelectBuiltTests PROPERTIES
+        LABELS "ci;policy;python;unit"
+        TIMEOUT 300)
+endif()
 # MOD-360: the real OWEngineSystems music tracks and OWWorldSetup area manifests name existing files.
 add_test(NAME OpenWorldAssets_RegisteredAssetsExist COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
 set_tests_properties(OpenWorldAssets_RegisteredAssetsExist PROPERTIES

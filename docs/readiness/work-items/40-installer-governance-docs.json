@@ -116,7 +116,8 @@
         "Installer_Uninstall"
       ],
       "requiredCiJobs": [
-        "installer-windows"
+        "build-installer",
+        "build-windows"
       ],
       "performanceBudgets": [
         "Install/update time and disk overhead budgets are recorded"
@@ -149,9 +150,7 @@
       "profileApplicability": {
         "stable-v1": "required"
       },
-      "plannedCiJobs": [
-        "installer-windows"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -197,7 +196,7 @@
       ],
       "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Upgrade", "Installer_Rollback", "Installer_Interrupted"],
-      "requiredCiJobs": ["installer-windows"],
+      "requiredCiJobs": ["build-installer", "build-windows"],
       "performanceBudgets": [],
       "documentationUpdates": ["SparkInstaller/README.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
       "readinessChanges": ["G05", "G08", "G17"],
@@ -206,7 +205,7 @@
       "outOfScope": ["Bootstrapping the first signed predecessor"],
       "definitionOfDone": ["Hosted exact-SHA upgrade and rollback evidence passes against a signed immutable predecessor"],
       "profileApplicability": {"stable-v1": "required"},
-      "plannedCiJobs": ["installer-windows"],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -249,7 +248,7 @@
       ],
       "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Tamper", "Installer_AtomicUpdate", "Installer_Interrupted", "Installer_Uninstall"],
-      "requiredCiJobs": ["installer-windows"],
+      "requiredCiJobs": ["build-installer", "build-windows"],
       "performanceBudgets": [],
       "documentationUpdates": ["SparkInstaller/README.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
       "readinessChanges": ["G05", "G08", "G17"],
@@ -259,7 +258,7 @@
       "definitionOfDone": ["Exact-SHA bootstrap recovery evidence passes and is reviewed"],
       "profileApplicability": {"stable-v1": "outside"},
       "predecessorOnly": true,
-      "plannedCiJobs": ["installer-windows"],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -422,7 +421,7 @@
         "tools/docs_contract.py",
         "tools/docs_currentness.py",
         "tools/site-data/validate_docs_links.py",
-        ".github/workflows/site-data.yml"
+        ".github/workflows/build.yml"
       ],
       "entryPoints": [
         "docs/update-all-docs.sh",
@@ -454,7 +453,7 @@
           "evidence": [
             "Tests/Tools/test_docs_health.py"
           ],
-          "note": "The double isolated generation is tested. Being green at the exact commit needs an exact-SHA CI run."
+          "note": "At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. State not promoted here; no exact-SHA hosted run."
         },
         {
           "criterionDigest": "sha256:59ac611c1455",
@@ -470,10 +469,10 @@
           "state": "implemented",
           "evidence": [
             "tools/site-data/validate_docs_links.py",
-            ".github/workflows/site-data.yml",
+            ".github/workflows/build.yml",
             "Tests/Tools/test_docs_health.py"
           ],
-          "note": "The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; site-data.yml runs it at every commit. Local only; no exact-commit CI yet."
+          "note": "The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; the required build.yml docs-health job runs it at every commit. Local only; no exact-commit CI yet."
         },
         {
           "criterionDigest": "sha256:d72cef64ec82",
@@ -500,7 +499,7 @@
           "criterionDigest": "sha256:e03b1b3590ef",
           "state": "unmet",
           "evidence": [],
-          "note": "Proving it blocks CI needs a hosted CI run. No local check can show that."
+          "note": "docs-health is a Required CI Gate dependency in .github/workflows/build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Covered by structural and mutation tests in .github/scripts/test-workflow-failure-propagation.py only. State not promoted here; no hosted red run yet."
         }
       ],
       "commands": [
