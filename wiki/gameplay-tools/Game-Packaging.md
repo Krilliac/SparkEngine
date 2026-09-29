@@ -18,6 +18,33 @@ The behaviours this page describes, and every `spark_cli.py` command and option 
 `Tools/spark-cli/claims.json`; the `CLI_ClaimsMatchBehavior` CTest fails when a
 claim names a missing test or a documented surface has no claim.
 
+## Installed qualification checks
+
+`tools/check-module-asset-refs.py` validates the shared provenance policy schema,
+the referenced rule's license, and its supporting evidence paths as well as
+asset hashes. Missing or relabelled license metadata fails. `NOASSERTION`
+remains truthful outside stable-v1; no license is inferred for excluded assets.
+
+For a complete Linux build, `SPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON` registers
+`PackageAssets_RepositoryUnreachable`. It installs and copies the runtime,
+mounts only that copy and system runtime directories in bubblewrap, verifies
+the source/build directories are absent, and audits strace file accesses.
+Repository lookups, asset lookups outside the installed Assets root, and missing
+successful asset opens fail. It requires bubblewrap, strace and user namespaces;
+missing prerequisites fail rather than skip. This is Linux NullRHI evidence;
+Windows D3D11 model/material rendering still needs its installed runtime run.
+
+`SPARK_ENABLE_PACKAGE_REPEATABILITY_TESTS=ON` registers
+`PackageInstall_Repeatability` on either host. It uses the configured CPack tree's
+real install rules, hashes every installed file, checks identical reinstalls,
+then invokes `SparkUninstall.cmake` twice per cycle. Two cycles must leave only
+the declared `UserData/profile.json` fixture with identical bytes and its parent
+directory. This does not invoke or qualify native MSI/NSIS repair/uninstall.
+
+The `D3D11PassGolden_*` tests cover post-processing passes. They do not supply a
+canonical installed FPS scene baseline. Canonical package rendering remains
+open until a reviewed WARP baseline and an installed-package run are available.
+
 ## Overview
 
 > **Current readiness boundary:** the repository asset-integrity check is a

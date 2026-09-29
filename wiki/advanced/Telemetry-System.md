@@ -174,7 +174,11 @@ if (telemetry.HasConsent())
 - `RecordEvent()` and `RecordTimedEvent()` check `CanRecord()` before constructing an event.
 - `SetConsent(false)` is reversible and clears the queue while holding the queue mutex.
 - A producer can pass `CanRecord()` just before revocation and enqueue after the clear because enqueue does not recheck consent under that mutex. Closing this race remains blocking OPS-100 work.
-- The in-memory queue has an event-count limit, but the current local backend has no durable retry, retention, spool-byte, or complete drop/failure accounting contract.
+- The in-memory queue and durable retry spool have explicit event/byte bounds and delivery/drop accounting. The spool owns only `spark-telemetry.spool` and its staging file, retries a retryable backend result at `retryIntervalSeconds`, and restores pending events on the next initialization. These guarantees are covered by the registered `TelemetrySpool` CTest family.
+
+### OPS-100 delivery boundary
+
+The shipped runtime has no HTTP telemetry backend: `TelemetryConfig::httpEndpoint` is reserved for future use, and the only built-in backend is `LocalFileTelemetryBackend`. A local test backend can exercise retry and recovery semantics, but it cannot establish loopback HTTP transport evidence. The durable spool has event and byte limits plus a finite seven-day default age bound (`TelemetryConfig::maxSpoolAgeSeconds`). During snapshot and system restore, events older than the bound and future-dated events are dropped and included in `droppedEvents`; events exactly at the boundary remain eligible. Expiry is evaluated during maintenance or delivery, not by a background disk sweeper while the engine is stopped. A zero age bound is rejected. Endpoint outage recovery, loopback transport evidence, and a controlled relay remain open OPS-100 work.
 
 ## Built-in Backend: LocalFileTelemetryBackend
 

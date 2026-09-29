@@ -146,6 +146,21 @@ run **SparkBuild** directly — it's the pure build-configuration TUI. Use
 **SparkInstaller** for the first-time clone + build, or to update an existing
 install to a new ref.
 
+### Recovery and package-tree repeatability evidence
+
+The installer transaction tests cover activation refusal when a destination
+contains user data, pending-install resume after a failed build, interrupted
+update rollback to the last recorded commit, and preservation of a user-data
+file during that rollback. Install-state replacement uses a temporary file and
+atomic rename on supported filesystems, and refuses non-regular marker targets.
+
+`Tests/PackageSmoke/installer_repeatability.cmake` is the local package-tree
+runner. It reuses the production manifest-driven CMake uninstall helper,
+checks repeated installs are byte-identical, runs two uninstall cycles, and
+verifies declared user data survives. This does not certify native Windows
+CPack, NSIS/MSI repair or uninstall, signing, or clean-machine behavior; those
+still require the Windows qualification job.
+
 ## Where it lives
 
 Source lives in-tree at `SparkInstaller/`. A rolling Windows nightly installer

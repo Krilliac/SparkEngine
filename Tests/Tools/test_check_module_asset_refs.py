@@ -51,7 +51,10 @@ class FixtureRepo:
         self.write_policy(["fixture-rule"])
 
     def write_policy(self, rule_ids: list[str]) -> None:
-        policy = {"version": 1, "root": "Assets", "licenses": {}, "rules": [{"id": rule} for rule in rule_ids]}
+        (self.root / "LICENSE").write_text("Fixture license evidence", encoding="utf-8")
+        policy = {"version": 1, "root": "Assets", "licenses": {"CC0-1.0": {"name": "CC0"}},
+                  "rules": [{"id": rule, "license": "CC0-1.0", "provenance": "fixture",
+                             "evidence": ["LICENSE"], "prefixes": ["Audio/", "Models/"]} for rule in rule_ids]}
         (self.root / "tools/asset-integrity/provenance.json").write_text(json.dumps(policy), encoding="utf-8")
 
     def add_asset(self, relative: str, payload: bytes, *, rule: str = "fixture-rule", record: bool = True) -> str:
@@ -60,7 +63,7 @@ class FixtureRepo:
         path.write_bytes(payload)
         digest = hashlib.sha256(payload).hexdigest()
         self.integrity.append({"path": relative.removeprefix("Assets/"), "sha256": digest,
-                               "provenance": f"fixture [{rule}]"})
+                               "license": "CC0-1.0", "provenance": f"fixture [{rule}]"})
         if record:
             self.references.append({"path": relative, "sha256": digest, "kind": "fixture", "provenanceRule": rule})
         return digest
@@ -189,6 +192,38 @@ class CheckModuleAssetRefsTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("provenance rule 'invented-rule' is not defined", output)
         self.assertIn("attributed to a different provenance rule", output)
+
+    def test_missing_license_metadata_fails(self) -> None:
+        self.repo.write_source(ENFORCED, self.valid_source)
+        del self.repo.integrity[0]["license"]
+        self.repo.write_manifests()
+        code, output = self.repo.run(ENFORCED)
+        self.assertEqual(code, 1, output)
+        self.assertIn("license differs from provenance rule", output)
+
+    def test_relabelled_license_fails(self) -> None:
+        self.repo.write_source(ENFORCED, self.valid_source)
+        self.repo.integrity[0]["license"] = "NOASSERTION"
+        self.repo.write_manifests()
+        code, output = self.repo.run(ENFORCED)
+        self.assertEqual(code, 1, output)
+        self.assertIn("license differs from provenance rule", output)
+
+    def test_missing_provenance_evidence_fails(self) -> None:
+        self.repo.write_source(ENFORCED, self.valid_source)
+        self.repo.write_manifests()
+        (self.repo.root / "LICENSE").unlink()
+        code, output = self.repo.run(ENFORCED)
+        self.assertEqual(code, 1, output)
+        self.assertIn("missing or unsafe evidence", output)
+
+    def test_duplicate_provenance_rule_fails(self) -> None:
+        self.repo.write_source(ENFORCED, self.valid_source)
+        self.repo.write_manifests()
+        self.repo.write_policy(["fixture-rule", "fixture-rule"])
+        code, output = self.repo.run(ENFORCED)
+        self.assertEqual(code, 1, output)
+        self.assertIn("duplicate rule id", output)
 
     def test_report_only_composed_prefix_warns_without_failing(self) -> None:
         self.repo.write_source(

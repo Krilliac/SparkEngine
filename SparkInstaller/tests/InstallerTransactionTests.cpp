@@ -414,6 +414,11 @@ namespace
         const fs::path destination = root / "install";
         failures += CreateFakeCheckout(destination, name);
         failures += SaveInstallState(destination, "verified-old", name);
+        const fs::path userData = destination / "user-data" / "profile.json";
+        std::error_code userDataError;
+        fs::create_directories(userData.parent_path(), userDataError);
+        failures += Check(!userDataError && WriteTextFile(userData, "player-progress-v1"),
+                          name + ": could not create external user-data fixture");
         failures += Check(WriteTextFile(destination / "force-build-failure-on-new-ref", "fail"),
                           name + ": could not create new-ref build failure fixture");
 
@@ -434,6 +439,8 @@ namespace
                           name + ": the interrupted update was not reported");
         failures += Check(log.find("rebuilt verified-old") != std::string::npos,
                           name + ": rollback did not rebuild the recorded commit\n" + log);
+        failures +=
+            Check(ReadFirstLine(userData) == "player-progress-v1", name + ": interrupted recovery replaced user data");
 
         std::error_code error;
         fs::remove_all(root, error);
@@ -766,6 +773,11 @@ namespace
                               name + ": an unbuilt install recorded install state");
             failures += Check(!HasStagingSibling(root, "install"), name + ": activation left the staging tree");
         }
+        const fs::path userData = destination / "user-data" / "profile.json";
+        std::error_code userDataError;
+        fs::create_directories(userData.parent_path(), userDataError);
+        failures += Check(!userDataError && WriteTextFile(userData, "pending-install-progress"),
+                          name + ": could not create pending-install user data");
         {
             std::string log;
             SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
@@ -810,6 +822,8 @@ namespace
                                   loaded.commit == kFakeHeadCommit,
                               name + ": resume did not record the cloned commit");
             failures += Check(!fs::exists(pendingMarker), name + ": a finished install kept its pending marker");
+            failures += Check(ReadFirstLine(userData) == "pending-install-progress",
+                              name + ": resumed activation replaced user data");
         }
 
         std::error_code error;

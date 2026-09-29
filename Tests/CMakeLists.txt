@@ -2082,7 +2082,7 @@ set_tests_properties(SparkSerializationHardeningTests PROPERTIES
 
 add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(TelemetrySpool PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT=8"
+    ENVIRONMENT "SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT=10"
     LABELS "telemetry-integration"
     RUN_SERIAL TRUE
     TIMEOUT 30)
@@ -4262,6 +4262,52 @@ add_test(
 set_tests_properties(OpenWorldAssets_ReferenceCheckFailsClosed PROPERTIES
     LABELS "module;openworld;asset;unit;python"
     TIMEOUT 60)
+
+add_test(NAME PackageAssets_RepositoryIsolationContract
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/asset_repository_isolation_tests.py)
+set_tests_properties(PackageAssets_RepositoryIsolationContract PROPERTIES
+    LABELS "stable-v1;asset;package;unit;python"
+    TIMEOUT 60)
+
+option(SPARK_ENABLE_PACKAGE_REPEATABILITY_TESTS "Register installed CPack tree repeatability qualification" OFF)
+if(TARGET SparkEngine AND SPARK_ENABLE_PACKAGE_REPEATABILITY_TESTS)
+    add_test(NAME PackageInstall_Repeatability
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_CONFIG=$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Release>"
+            "-DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/package-repeatability/$<CONFIG>"
+            -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/installer_repeatability.cmake)
+    set_tests_properties(PackageInstall_Repeatability PROPERTIES
+        LABELS "package;installer;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 1200)
+endif()
+
+add_test(NAME PackageAssets_ProvenanceMetadata
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/asset_provenance_tests.py)
+set_tests_properties(PackageAssets_ProvenanceMetadata PROPERTIES
+    LABELS "stable-v1;asset;package;unit;python"
+    TIMEOUT 60)
+
+# RDY-020: opt-in installed-consumer qualification requires bubblewrap/strace.
+# Missing tools or namespace support fail; an empty cwd alone is not isolation.
+if(SPARK_ENABLE_PACKAGE_CONSUMER_TESTS AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
+   NOT CMAKE_CROSSCOMPILING AND SPARK_HEADLESS_SUPPORT AND TARGET SparkEngine AND TARGET SparkGameFPS)
+    add_test(NAME PackageAssets_RepositoryUnreachable
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/asset_repository_isolation.py
+            --source-root ${CMAKE_SOURCE_DIR}
+            --build-dir ${CMAKE_BINARY_DIR}
+            --config "$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Release>"
+            --test-root ${CMAKE_CURRENT_BINARY_DIR}/asset-isolation/$<CONFIG>)
+    set_tests_properties(PackageAssets_RepositoryUnreachable PROPERTIES
+        LABELS "stable-v1;asset;package-consumer-linux;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
+endif()
 
 # CI-110: documented ctest commands (work-item commands[] and wiki/advanced/Testing.md)
 # must select enabled tests whose executables exist in this configured tree. The

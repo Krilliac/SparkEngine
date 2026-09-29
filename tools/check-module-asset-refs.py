@@ -89,6 +89,14 @@ def _load_closure_module() -> Any:
 
 _CLOSURE = _load_closure_module()
 
+# Keep license schema and duplicate-rule rejection identical to package assembly.
+_integrity_spec = importlib.util.spec_from_file_location(
+    "spark_asset_integrity", Path(__file__).resolve().parent / "asset-integrity" / "verify_asset_integrity.py")
+if _integrity_spec is None or _integrity_spec.loader is None:
+    raise RuntimeError("cannot load the asset provenance validator")
+_INTEGRITY = importlib.util.module_from_spec(_integrity_spec)
+_integrity_spec.loader.exec_module(_INTEGRITY)
+
 
 @dataclass
 class ModuleReport:
@@ -220,12 +228,11 @@ def _integrity_entries(repo_root: Path) -> tuple[str, dict[str, dict[str, Any]]]
     return document["root"], entries
 
 
-def _provenance_rule_ids(repo_root: Path) -> set[str]:
-    document = _read_json(repo_root / PROVENANCE_POLICY_RELATIVE)
-    rules = document.get("rules") if isinstance(document, dict) else None
-    if not isinstance(rules, list):
-        raise ValueError("provenance policy must contain a rules list")
-    return {rule["id"] for rule in rules if isinstance(rule, dict) and isinstance(rule.get("id"), str)}
+def _provenance_rules(repo_root: Path) -> dict[str, dict[str, Any]]:
+    document = _INTEGRITY.load_provenance_policy(repo_root / PROVENANCE_POLICY_RELATIVE)
+    if document["root"] != ASSET_ROOT_NAME:
+        raise ValueError("provenance policy root must be Assets")
+    return {rule["id"]: rule for rule in document["rules"]}
 
 
 def verify_module_manifest(repo_root: Path, module_dir: Path, report: ModuleReport) -> None:
@@ -238,7 +245,7 @@ def verify_module_manifest(repo_root: Path, module_dir: Path, report: ModuleRepo
     try:
         document = _read_json(manifest_path)
         _, integrity = _integrity_entries(repo_root)
-        rule_ids = _provenance_rule_ids(repo_root)
+        rules = _provenance_rules(repo_root)
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         report.integrity_problems.append(f"{location}: cannot verify: {exc}")
         return
@@ -269,10 +276,18 @@ def verify_module_manifest(repo_root: Path, module_dir: Path, report: ModuleRepo
         if not SHA256_RE.match(entry["sha256"]):
             report.integrity_problems.append(f"{where}: sha256 must be 64 lowercase hex digits")
             continue
-        if entry["provenanceRule"] not in rule_ids:
+        rule = rules.get(entry["provenanceRule"])
+        if rule is None:
             report.integrity_problems.append(
                 f"{where}: provenance rule {entry['provenanceRule']!r} is not defined in "
                 f"{PROVENANCE_POLICY_RELATIVE.as_posix()}")
+        else:
+            for evidence in rule["evidence"]:
+                _, _, evidence_error = _INTEGRITY._checked_candidate(
+                    repo_root, repo_root.resolve(), evidence, want_directory=False)
+                if evidence_error is not None:
+                    report.integrity_problems.append(
+                        f"{where}: provenance rule {rule['id']!r} has missing or unsafe evidence: {evidence}")
         if not _exists_exact(repo_root, path):
             report.integrity_problems.append(f"{where}: {path} does not exist (exact case)")
             continue
@@ -290,6 +305,8 @@ def verify_module_manifest(repo_root: Path, module_dir: Path, report: ModuleRepo
             report.integrity_problems.append(
                 f"{where}: {path} is attributed to a different provenance rule in "
                 f"{INTEGRITY_MANIFEST_RELATIVE.as_posix()}")
+        if declared is not None and rule is not None and declared.get("license") != rule["license"]:
+            report.integrity_problems.append(f"{where}: {path} license differs from provenance rule {rule['id']!r}")
     for path in sorted(set(report.references) - set(recorded)):
         report.integrity_problems.append(f"{location}: does not record referenced asset {path} "
                                          f"(referenced at {report.references[path][0]})")
