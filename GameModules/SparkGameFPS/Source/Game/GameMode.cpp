@@ -6,6 +6,7 @@
  */
 
 #include "GameMode.h"
+#include "Core/FPSLog.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
@@ -27,12 +28,11 @@ namespace Spark
                                 rules.speedMultiplier > 0.0f;
         if (!validRules)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Rejected invalid GameMode rules for '%s'",
-                            rules.modeName.c_str());
+            FPS_LOG_ERROR("Rejected invalid GameMode rules for '{}'", rules.modeName.c_str());
             return false;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing GameMode: %s", rules.modeName.c_str());
+        FPS_LOG_INFO("Initializing GameMode: {}", rules.modeName.c_str());
         m_rules = rules;
         m_roundState = RoundState::WaitingForPlayers;
         m_matchActive = false;
@@ -106,7 +106,7 @@ namespace Spark
     void GameMode::StartMatch()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Starting match");
+        FPS_LOG_INFO("Starting match");
         m_matchActive = true;
         m_currentRound = 0;
         m_alphaScore = 0;
@@ -137,7 +137,7 @@ namespace Spark
     void GameMode::EndMatch()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Ending match");
+        FPS_LOG_INFO("Ending match");
         m_matchActive = false;
         m_roundState = RoundState::MatchEnd;
         m_roundFSM.TransitionTo(RoundState::MatchEnd);

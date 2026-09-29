@@ -9,6 +9,7 @@
  */
 
 #include "AdvancedConsoleCommands.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 #include "FPSConsolePolicy.h"
 
@@ -68,7 +69,7 @@ namespace SparkConsole
     {
         SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, graphics);
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Registering advanced console commands");
+        FPS_LOG_INFO("Registering advanced console commands");
 
         UnregisterAdvancedCommands();
         auto& simpleConsole = Spark::SimpleConsole::GetInstance();

@@ -1,4 +1,5 @@
 #include "GameMechanics.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 #include "Player.h"
 #include "Utils/Assert.h"
@@ -34,7 +35,7 @@ namespace Spark
     bool DamageZoneSystem::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing DamageZoneSystem");
+        FPS_LOG_INFO("Initializing DamageZoneSystem");
         m_zones.clear();
         m_damageTickTimer = 0.0f;
         return true;

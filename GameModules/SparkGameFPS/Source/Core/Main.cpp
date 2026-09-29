@@ -11,6 +11,7 @@
  */
 
 #include "SparkGameFPS.h"
+#include "Core/FPSLog.h"
 #include "Console/FPSConsolePolicy.h"
 #include "Core/EngineWeatherAdapter.h"
 #include "Game/Game.h"
@@ -107,6 +108,9 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
     SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, context, false);
     m_context = context;
+    // Every FPS_LOG_*/FPS_CONSOLE call (Core/FPSLog.h) reaches the host through this context until
+    // Shutdown or a failed load unbinds it.
+    Spark::ModuleLog::Bind(context);
 
     if (context->IsHeadless())
     {
@@ -120,10 +124,10 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
             context->GetSaveSystem() == nullptr || context->GetFileCache() == nullptr ||
             context->GetAssetRegistry() == nullptr)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "SparkGameFPS headless context is missing required CPU-only services or exposes a "
-                            "render/input path");
+            FPS_LOG_ERROR("SparkGameFPS headless context is missing required CPU-only services or exposes a "
+                          "render/input path");
             m_context = nullptr;
+            Spark::ModuleLog::Bind(nullptr);
             return false;
         }
 
@@ -132,6 +136,7 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
         if (!LoadHeadlessArena())
         {
             m_context = nullptr;
+            Spark::ModuleLog::Bind(nullptr);
             return false;
         }
 
@@ -143,8 +148,6 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
         RegisterHeadlessPersistenceCommands();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "SparkGameFPS module initialized for the no-render headless lifecycle");
         Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized for headless source execution");
         return true;
     }
@@ -152,6 +155,7 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
     if (!InitializeFromContext())
     {
         m_context = nullptr;
+        Spark::ModuleLog::Bind(nullptr);
         return false;
     }
 
@@ -240,7 +244,6 @@ bool SparkGameModule::InitializeFromContext()
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, input, false);
 
     Spark::ModuleLog::Info(m_context, "Initializing SparkGameFPS module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing SparkGameFPS module");
 
     g_game = new Game();
     HRESULT hr = g_game->Initialize(graphics, input);
@@ -265,8 +268,7 @@ bool SparkGameModule::InitializeFromContext()
     Spark::InvalidStateDetector* hostDetector = m_context ? m_context->GetInvalidStateDetector() : nullptr;
     if (!hostDetector)
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game,
-                       "SparkGameFPS: host exposes no InvalidStateDetector; FPS state rules are not registered");
+        FPS_LOG_WARN("SparkGameFPS: host exposes no InvalidStateDetector; FPS state rules are not registered");
         m_initialized = true;
         Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized");
         return true;
@@ -319,7 +321,7 @@ void SparkGameModule::Shutdown()
     if (!m_initialized)
         return;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Shutting down SparkGameFPS module");
+    FPS_LOG_INFO("Shutting down SparkGameFPS module");
 
     if (Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr)
     {
@@ -347,6 +349,7 @@ void SparkGameModule::Shutdown()
     ShutdownHeadlessArena();
     m_weatherAdapter.reset();
     Spark::ModuleLog::Info(m_context, "SparkGameFPS module shut down");
+    Spark::ModuleLog::Bind(nullptr);
     m_context = nullptr;
     m_initialized = false;
 }

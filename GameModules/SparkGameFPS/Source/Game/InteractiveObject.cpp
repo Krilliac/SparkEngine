@@ -1,4 +1,5 @@
 #include "InteractiveObject.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 #include "Player.h"
 #include "Input/InputManager.h"
@@ -742,7 +743,7 @@ namespace Spark
     bool InteractionSystem::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing InteractionSystem");
+        FPS_LOG_INFO("Initializing InteractionSystem");
         m_objects.clear();
         m_highlightedObject = nullptr;
         return true;

@@ -1,4 +1,5 @@
 #include "Player.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 #include "Engine/Security/MemoryIntegrity.h"
 #include "VehicleSystem.h"
@@ -11,7 +12,6 @@
 #include "Projectiles/WeaponStats.h"
 #include "Projectiles/ProjectilePool.h"
 #include "Utils/MathUtils.h"
-#include "Utils/ConsoleProcessManager.h"
 #include "Game/Model.h"
 #include "FPSAssetPaths.h"
 #include "Graphics/GraphicsEngine.h"
@@ -24,36 +24,6 @@
 
 using namespace DirectX;
 
-// **FIXED: Rate-limited logging for Player to prevent console spam**
-#undef LOG_TO_CONSOLE_RATE_LIMITED
-#undef LOG_TO_CONSOLE
-#undef LOG_TO_CONSOLE_IMMEDIATE
-#define LOG_TO_CONSOLE_RATE_LIMITED(msg, type)                                                                         \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        static auto lastLogTime = std::chrono::steady_clock::now();                                                    \
-        static int logCounter = 0;                                                                                     \
-        auto now = std::chrono::steady_clock::now();                                                                   \
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count();                    \
-        if (elapsed >= 5 || logCounter < 2)                                                                            \
-        {                                                                                                              \
-            Spark::ConsoleProcessManager::GetInstance().Log(msg, type);                                                \
-            if (elapsed >= 5)                                                                                          \
-            {                                                                                                          \
-                lastLogTime = now;                                                                                     \
-                logCounter = 0;                                                                                        \
-            }                                                                                                          \
-            else                                                                                                       \
-            {                                                                                                          \
-                logCounter++;                                                                                          \
-            }                                                                                                          \
-        }                                                                                                              \
-    } while (0)
-
-// Use rate-limited logging for most messages, immediate for critical ones
-#define LOG_TO_CONSOLE(msg, type) LOG_TO_CONSOLE_RATE_LIMITED(msg, type)
-#define LOG_TO_CONSOLE_IMMEDIATE(msg, type) Spark::ConsoleProcessManager::GetInstance().Log(msg, type)
-
 // Destructor - defined here (not = default in header) so that the compiler
 // can see the full definition of Model when instantiating unique_ptr<Model>'s
 // destructor.  This is required because Player is exported with SPARK_GAME_API.
@@ -63,8 +33,8 @@ Player::~Player() = default;
 Player::Player() : m_currentWeapon(GetWeaponStats(WeaponType::PISTOL)), m_collisionSphere(GetPosition(), 0.5f)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Player constructed");
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player constructed.", L"INFO");
+    FPS_LOG_INFO("Player constructed");
+    FPS_CONSOLE("Player constructed.", "INFO");
     SetName("Player");
     m_currentAmmo = m_currentWeapon.MagazineSize;
     ASSERT_MSG(m_currentAmmo > 0, "Initial ammo must be positive");
@@ -74,7 +44,7 @@ Player::Player() : m_currentWeapon(GetWeaponStats(WeaponType::PISTOL)), m_collis
 HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, SparkEngineCamera* camera,
                            InputManager* input)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player::Initialize called.", L"OPERATION");
+    FPS_CONSOLE("Player::Initialize called.", "OPERATION");
     ASSERT_NOT_NULL(camera);
     ASSERT_NOT_NULL(input);
 
@@ -86,8 +56,7 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
     // the gameplay loop; only GPU resource creation is skipped.
     if (device == nullptr || context == nullptr)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player initialized without a D3D11 device - weapon models and mesh skipped",
-                                 L"WARNING");
+        FPS_CONSOLE("Player initialized without a D3D11 device - weapon models and mesh skipped", "WARNING");
         return S_OK;
     }
 
@@ -103,32 +72,32 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
     hr = m_pistolModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/pistol.obj"), device);
     if (FAILED(hr))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load pistol model", L"WARNING");
+        FPS_CONSOLE("Warning: Failed to load pistol model", "WARNING");
     }
 
     hr = m_rifleModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/rifle.obj"), device);
     if (FAILED(hr))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load rifle model", L"WARNING");
+        FPS_CONSOLE("Warning: Failed to load rifle model", "WARNING");
     }
 
     // For weapons without specific models, we'll use pistol as fallback
     hr = m_shotgunModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/rifle.obj"), device);
     if (FAILED(hr))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load shotgun model (using rifle fallback)", L"WARNING");
+        FPS_CONSOLE("Warning: Failed to load shotgun model (using rifle fallback)", "WARNING");
     }
 
     hr = m_rocketModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/rifle.obj"), device);
     if (FAILED(hr))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load rocket launcher model (using rifle fallback)", L"WARNING");
+        FPS_CONSOLE("Warning: Failed to load rocket launcher model (using rifle fallback)", "WARNING");
     }
 
     hr = m_grenadeModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/rifle.obj"), device);
     if (FAILED(hr))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load grenade launcher model (using rifle fallback)", L"WARNING");
+        FPS_CONSOLE("Warning: Failed to load grenade launcher model (using rifle fallback)", "WARNING");
     }
 
     if (!m_projectilePool)
@@ -137,12 +106,12 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
         m_projectilePool = m_ownedProjectilePool.get();
         ASSERT_NOT_NULL(m_projectilePool);
         hr = m_projectilePool->Initialize(device, context);
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player projectile pool initialized. HR=0x" + std::to_wstring(hr), L"INFO");
+        FPS_CONSOLE("Player projectile pool initialized. HR=0x" + std::to_string(hr), "INFO");
         ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
         if (FAILED(hr))
             return hr;
     }
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player initialization complete with weapon models.", L"INFO");
+    FPS_CONSOLE("Player initialization complete with weapon models.", "INFO");
     return GameObject::Initialize(device, context);
 }
 
@@ -241,7 +210,7 @@ void Player::RenderWeapon(const XMMATRIX& view, const XMMATRIX& proj)
             static int errorCount = 0;
             if (++errorCount <= 3)
             { // Only log first few errors
-                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Weapon model rendering error", L"WARNING");
+                FPS_CONSOLE("Warning: Weapon model rendering error", "WARNING");
             }
         }
     }
@@ -250,13 +219,13 @@ void Player::RenderWeapon(const XMMATRIX& view, const XMMATRIX& proj)
 // Damage & healing - enhanced with class system (shield, resistance, energy shield)
 void Player::TakeDamage(float dmg)
 {
-    LOG_TO_CONSOLE(L"Player::TakeDamage called. dmg=" + std::to_wstring(dmg), L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::TakeDamage called. dmg=" + std::to_string(dmg), "OPERATION");
     ASSERT_MSG(dmg >= 0.0f, "Damage must be non-negative");
 
     // Check god mode from console integration
     if (m_godModeEnabled)
     {
-        LOG_TO_CONSOLE(L"Damage blocked by god mode", L"INFO");
+        FPS_CONSOLE_RATE_LIMITED(2, 5, "Damage blocked by god mode", "INFO");
         return;
     }
 
@@ -318,49 +287,50 @@ void Player::TakeDamage(float dmg)
     // Notify console of state change
     NotifyStateChange();
 
-    LOG_TO_CONSOLE(L"Player took damage. Health=" + std::to_wstring(m_health) + L" Shield=" +
-                       std::to_wstring(m_shield) + L" Armor=" + std::to_wstring(m_armor),
-                   L"INFO");
+    FPS_CONSOLE_RATE_LIMITED(2, 5,
+                             "Player took damage. Health=" + std::to_string(m_health) +
+                                 " Shield=" + std::to_string(m_shield) + " Armor=" + std::to_string(m_armor),
+                             "INFO");
 }
 
 void Player::Heal(float amt)
 {
-    LOG_TO_CONSOLE(L"Player::Heal called. amt=" + std::to_wstring(amt), L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::Heal called. amt=" + std::to_string(amt), "OPERATION");
     ASSERT_MSG(amt >= 0.0f, "Heal amount must be non-negative");
     m_health = std::min(m_maxHealth, m_health + amt);
-    LOG_TO_CONSOLE(L"Player healed. Health=" + std::to_wstring(m_health), L"INFO");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player healed. Health=" + std::to_string(m_health), "INFO");
 }
 
 void Player::AddArmor(float amt)
 {
-    LOG_TO_CONSOLE(L"Player::AddArmor called. amt=" + std::to_wstring(amt), L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::AddArmor called. amt=" + std::to_string(amt), "OPERATION");
     ASSERT_MSG(amt >= 0.0f, "Armor amount must be non-negative");
     m_armor = std::min(m_maxArmor, m_armor + amt);
-    LOG_TO_CONSOLE(L"Player armor added. Armor=" + std::to_wstring(m_armor), L"INFO");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player armor added. Armor=" + std::to_string(m_armor), "INFO");
 }
 
 // Actions
 void Player::Jump()
 {
-    LOG_TO_CONSOLE(L"Player::Jump called.", L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::Jump called.", "OPERATION");
     if (m_isGrounded && !m_isJumping && m_stamina > 20.0f)
     {
         m_velocity.y = m_jumpHeight;
         m_isJumping = true;
         m_isGrounded = false;
         m_stamina -= 20.0f;
-        LOG_TO_CONSOLE(L"Player jumped.", L"INFO");
+        FPS_CONSOLE_RATE_LIMITED(2, 5, "Player jumped.", "INFO");
     }
 }
 
 void Player::StartReload()
 {
-    LOG_TO_CONSOLE(L"Player::StartReload called.", L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::StartReload called.", "OPERATION");
     if (!m_isReloading && m_currentAmmo < m_currentWeapon.MagazineSize)
     {
         m_isReloading = true;
         m_reloadTimer = m_currentWeapon.ReloadTime;
-        LOG_TO_CONSOLE(L"Player started reloading.", L"INFO");
+        FPS_CONSOLE_RATE_LIMITED(2, 5, "Player started reloading.", "INFO");
     }
 }
 
@@ -416,38 +386,39 @@ void Player::Fire()
     // Only log weapon firing every 2 seconds
     if (elapsed >= 2)
     {
-        LOG_TO_CONSOLE(L"Player fired weapon. Ammo=" + std::to_wstring(m_currentAmmo), L"INFO");
+        FPS_CONSOLE_RATE_LIMITED(2, 5, "Player fired weapon. Ammo=" + std::to_string(m_currentAmmo), "INFO");
         lastFireLog = now;
     }
 }
 
 void Player::ChangeWeapon(WeaponType t)
 {
-    LOG_TO_CONSOLE(L"Player::ChangeWeapon called. type=" + std::to_wstring(static_cast<int>(t)), L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::ChangeWeapon called. type=" + std::to_string(static_cast<int>(t)),
+                             "OPERATION");
     if (m_isReloading)
         return;
     m_currentWeapon = GetWeaponStats(t);
     m_currentAmmo = m_currentWeapon.MagazineSize;
     m_fireTimer = 0.0f;
-    LOG_TO_CONSOLE(L"Player weapon changed. Ammo=" + std::to_wstring(m_currentAmmo), L"INFO");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player weapon changed. Ammo=" + std::to_string(m_currentAmmo), "INFO");
 }
 
 // Hit callbacks
 void Player::OnHit(GameObject* target)
 {
-    LOG_TO_CONSOLE(L"Player::OnHit called.", L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::OnHit called.", "OPERATION");
     ASSERT_NOT_NULL(target);
     // Player was hit by target - take a default collision damage, not own weapon damage
     TakeDamage(10.0f);
-    LOG_TO_CONSOLE(L"Player hit by target.", L"INFO");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player hit by target.", "INFO");
 }
 
 void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 {
-    LOG_TO_CONSOLE(L"Player::OnHitWorld called.", L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::OnHitWorld called.", "OPERATION");
     ASSERT_MSG(std::isfinite(hitPoint.x) && std::isfinite(hitPoint.y) && std::isfinite(hitPoint.z), "Invalid hitPoint");
     // World collision - no damage from hitting world geometry
-    LOG_TO_CONSOLE(L"Player hit world.", L"INFO");
+    FPS_CONSOLE_RATE_LIMITED(2, 5, "Player hit world.", "INFO");
 }
 
 // Input handling - enhanced with class abilities, loadout slots, vehicles, and interactions
@@ -788,7 +759,7 @@ void Player::SetClass(PlayerClass classType, Spark::ClassSystem* classSystem)
     {
         const auto& def = classSystem->GetClassDefinition(classType);
         ApplyClassStats(def);
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player class set to: " + std::wstring(def.name.begin(), def.name.end()), L"SUCCESS");
+        FPS_CONSOLE("Player class set to: " + std::string(def.name.begin(), def.name.end()), "SUCCESS");
     }
 }
 
@@ -862,11 +833,12 @@ bool Player::ActivatePrimaryAbility()
             break;
         }
 
-        LOG_TO_CONSOLE(L"Primary ability activated: " +
-                           std::wstring(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type),
-                                        Spark::ClassSystem::GetAbilityName(m_primaryAbility.type) +
-                                            strlen(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type))),
-                       L"INFO");
+        FPS_CONSOLE_RATE_LIMITED(2, 5,
+                                 "Primary ability activated: " +
+                                     std::string(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type),
+                                                 Spark::ClassSystem::GetAbilityName(m_primaryAbility.type) +
+                                                     strlen(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type))),
+                                 "INFO");
         return true;
     }
     return false;
@@ -893,7 +865,7 @@ bool Player::ActivateSecondaryAbility()
             break;
         }
 
-        LOG_TO_CONSOLE(L"Secondary ability activated", L"INFO");
+        FPS_CONSOLE_RATE_LIMITED(2, 5, "Secondary ability activated", "INFO");
         return true;
     }
     return false;
@@ -1064,9 +1036,9 @@ bool Player::EnterVehicle(Spark::Vehicle* vehicle, int seatIndex)
     {
         m_currentVehicle = vehicle;
         m_vehicleSeatIndex = vehicle->GetPlayerSeatIndex(this);
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player entered vehicle: " +
-                                     std::wstring(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()),
-                                 L"SUCCESS");
+        FPS_CONSOLE("Player entered vehicle: " +
+                        std::string(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()),
+                    "SUCCESS");
         return true;
     }
     return false;
@@ -1086,7 +1058,7 @@ bool Player::ExitVehicle()
             m_camera->SetPosition(exitPos);
         m_velocity = {0, 0, 0};
 
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player exited vehicle", L"SUCCESS");
+        FPS_CONSOLE("Player exited vehicle", "SUCCESS");
         m_currentVehicle = nullptr;
         m_vehicleSeatIndex = -1;
         return true;

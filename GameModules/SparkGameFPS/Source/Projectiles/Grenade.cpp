@@ -1,9 +1,9 @@
 #include "Grenade.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Grenade.cpp
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
-#include "Utils/LogMacros.h"
 #include "Physics/PhysicsSystem.h"
 
 using DirectX::XMFLOAT3;
@@ -71,7 +71,7 @@ void Grenade::Render(const XMMATRIX& view, const XMMATRIX& projection)
 void Grenade::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Grenade thrown: fuse=%.1fs, radius=%.1f", m_fuseTime, m_explosionRadius);
+    FPS_LOG_DEBUG("Grenade thrown: fuse={:.1f}s, radius={:.1f}", m_fuseTime, m_explosionRadius);
     m_hasExploded = false;
     Projectile::Fire(startPosition, direction, speed);
 }
@@ -96,8 +96,7 @@ void Grenade::Explode()
     m_hasExploded = true;
 
     XMFLOAT3 position = GetPosition();
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Grenade detonated at (%.1f, %.1f, %.1f)", position.x, position.y,
-                   position.z);
+    FPS_LOG_INFO("Grenade detonated at ({:.1f}, {:.1f}, {:.1f})", position.x, position.y, position.z);
 
     // Apply area damage to all physics bodies within explosion radius
     if (m_physicsSystem)

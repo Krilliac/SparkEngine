@@ -41,6 +41,27 @@ PRIVATE_INCLUDE_PATTERN = re.compile(
     r"^[ \t]*#[ \t]*include[ \t]*(?:\"([^\"\n]+)\"|<([^>\n]+)>)",
     re.MULTILINE,
 )
+# MOD-310: every SparkGameFPS source logs and prints to the in-game console through
+# Spark/ModuleLog.h (Source/Core/FPSLog.h), never through the engine's macros.
+FPS_SOURCE = ROOT / "GameModules" / "SparkGameFPS" / "Source"
+FPS_PRIVATE_LOG_HEADERS = (
+    "Utils/LogMacros.h",
+    "Utils/ConsoleProcessManager.h",
+)
+FPS_PRIVATE_LOG_TOKEN = re.compile(r"\b(LOG_TO_CONSOLE\w*|SPARK_LOG_\w+)\b")
+
+
+def _fps_logging_violations_in_text(relative: str, text: str) -> list[str]:
+    """Engine-private logging a SparkGameFPS source still uses, with comments and literals ignored."""
+    findings: list[str] = []
+    code, code_without_literals = module_content._lex_cpp(text)
+    for match in PRIVATE_INCLUDE_PATTERN.finditer(code):
+        header = match.group(1) or match.group(2)
+        if header in FPS_PRIVATE_LOG_HEADERS:
+            findings.append(f"{relative}: private log header {header}")
+    for token in sorted(set(FPS_PRIVATE_LOG_TOKEN.findall(code_without_literals))):
+        findings.append(f"{relative}: engine log macro {token}")
+    return findings
 
 
 def _violations_in_text(relative: str, text: str) -> list[str]:
@@ -96,6 +117,27 @@ class ModuleConsoleBoundaryTests(unittest.TestCase):
                         path.read_text(encoding="utf-8", errors="replace"),
                     ),
                 )
+
+    def test_fps_sources_log_through_the_public_sdk(self) -> None:
+        sources = sorted(path for path in FPS_SOURCE.rglob("*") if path.is_file() and path.suffix in SOURCE_SUFFIXES)
+        self.assertGreater(len(sources), 50)
+        findings: list[str] = []
+        for path in sources:
+            relative = path.relative_to(ROOT).as_posix()
+            findings.extend(_fps_logging_violations_in_text(relative, path.read_text(encoding="utf-8", errors="replace")))
+        self.assertEqual([], findings)
+
+    def test_fps_logging_mutations_fail_by_name(self) -> None:
+        source = '#include "Utils/ConsoleProcessManager.h"\nvoid F() { SPARK_LOG_INFO(c, "x"); LOG_TO_CONSOLE(L"y", L"INFO"); }\n'
+        self.assertEqual(
+            [
+                "Source/Probe.cpp: private log header Utils/ConsoleProcessManager.h",
+                "Source/Probe.cpp: engine log macro LOG_TO_CONSOLE",
+                "Source/Probe.cpp: engine log macro SPARK_LOG_INFO",
+            ],
+            _fps_logging_violations_in_text("Source/Probe.cpp", source),
+        )
+        self.assertEqual([], _fps_logging_violations_in_text("Source/Probe.cpp", '// SPARK_LOG_INFO\nconst char* s = "LOG_TO_CONSOLE";\n'))
 
     def test_private_include_mutation_fails_by_header_name(self) -> None:
         source = ROOT / "GameModules" / "SparkGameRTS" / "Source" / "Core" / "Main.cpp"

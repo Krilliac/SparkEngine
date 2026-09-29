@@ -1,4 +1,5 @@
 #include "VehicleSystem.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 #include "Player.h"
 #include "Projectiles/ProjectilePool.h"
@@ -528,7 +529,7 @@ namespace Spark
     bool VehicleSystem::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing VehicleSystem");
+        FPS_LOG_INFO("Initializing VehicleSystem");
         InitVehicleDefinitions();
         return true;
     }

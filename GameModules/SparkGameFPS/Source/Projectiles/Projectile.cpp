@@ -1,10 +1,10 @@
 #include "Projectile.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Projectile.cpp
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/MathUtils.h"
-#include "Utils/LogMacros.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
@@ -90,8 +90,8 @@ void Projectile::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, 
     XMVECTOR velV = XMVectorScale(dirV, speed);
     XMStoreFloat3(&m_velocity, velV);
 
-    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Projectile fired: speed=%.1f, pos=(%.1f, %.1f, %.1f)", speed,
-                    startPosition.x, startPosition.y, startPosition.z);
+    FPS_LOG_DEBUG("Projectile fired: speed={:.1f}, pos=({:.1f}, {:.1f}, {:.1f})", speed, startPosition.x,
+                  startPosition.y, startPosition.z);
     m_lifeTime = 0.0f;
     m_active = true;
     SetActive(true);
@@ -120,7 +120,7 @@ void Projectile::Reset()
 void Projectile::OnHit(GameObject* target)
 {
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, target);
-    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Projectile hit target, damage=%.1f", m_damage);
+    FPS_LOG_DEBUG("Projectile hit target, damage={:.1f}", m_damage);
     Deactivate();
 }
 

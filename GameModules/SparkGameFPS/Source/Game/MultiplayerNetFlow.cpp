@@ -4,7 +4,7 @@
  */
 
 #include "MultiplayerSystem.h"
-#include "Utils/LogMacros.h"
+#include "Core/FPSLog.h"
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
@@ -46,8 +46,8 @@ namespace SparkFPS
 
         if (m_playerStates.size() > kMaxPlayers)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "FPSMultiplayerSystem: %zu players exceed the %u-player batch",
-                            m_playerStates.size(), kMaxPlayers);
+            FPS_LOG_ERROR("FPSMultiplayerSystem: {} players exceed the {}-player batch", m_playerStates.size(),
+                          kMaxPlayers);
             return;
         }
 

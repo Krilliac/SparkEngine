@@ -1,9 +1,9 @@
 #include "Bullet.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Bullet.cpp
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
-#include "Utils/LogMacros.h"
 
 using DirectX::XMFLOAT3;
 using DirectX::XMMATRIX;
@@ -31,7 +31,7 @@ HRESULT Bullet::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     // Base initialization sets up mesh and transforms
     HRESULT hr = Projectile::Initialize(device, context);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Projectile::Initialize failed in Bullet");
-    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Bullet initialized (damage=%.0f, speed=%.0f)", m_damage, m_speed);
+    FPS_LOG_DEBUG("Bullet initialized (damage={:.0f}, speed={:.0f})", m_damage, m_speed);
     return hr;
 }
 

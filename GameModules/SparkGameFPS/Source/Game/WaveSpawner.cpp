@@ -4,6 +4,7 @@
  */
 
 #include "Core/Platform.h"
+#include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif
@@ -11,7 +12,6 @@
 #include "WaveSpawner.h"
 #include "Game.h"
 #include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -42,14 +42,14 @@ namespace Spark
 
     void WaveSpawner::Initialize(const std::vector<XMFLOAT3>& spawnPoints)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing wave spawner with %zu spawn points", spawnPoints.size());
+        FPS_LOG_INFO("Initializing wave spawner with {} spawn points", spawnPoints.size());
         m_spawnPoints = spawnPoints.empty() ? MakeFallbackWaveSpawnPoints() : spawnPoints;
         m_state = WaveState::Idle;
     }
 
     void WaveSpawner::Start()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Wave spawner started (%d total waves)", m_totalWaves);
+        FPS_LOG_INFO("Wave spawner started ({} total waves)", m_totalWaves);
         m_currentWave = 0;
         m_totalEnemiesKilled = 0;
         m_state = WaveState::Countdown;
@@ -114,8 +114,7 @@ namespace Spark
             // Wave complete when all spawned enemies are dead
             if (aliveEnemies == 0 && m_enemiesSpawnedThisWave > 0)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "Wave %d complete: %d enemies killed", m_currentWave,
-                               m_enemiesKilledThisWave);
+                FPS_LOG_INFO("Wave {} complete: {} enemies killed", m_currentWave, m_enemiesKilledThisWave);
             }
             if (aliveEnemies == 0)
             {
@@ -198,8 +197,8 @@ namespace Spark
             }
         };
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Spawning wave %d: %d grunts, %d scouts, %d guards, %d heavies",
-                       wave.waveNumber, wave.gruntCount, wave.scoutCount, wave.guardCount, wave.heavyCount);
+        FPS_LOG_INFO("Spawning wave {}: {} grunts, {} scouts, {} guards, {} heavies", wave.waveNumber, wave.gruntCount,
+                     wave.scoutCount, wave.guardCount, wave.heavyCount);
         spawnGroup(EnemyType::Grunt, wave.gruntCount);
         spawnGroup(EnemyType::Scout, wave.scoutCount);
         spawnGroup(EnemyType::Guard, wave.guardCount);
@@ -207,9 +206,9 @@ namespace Spark
         spawnGroup(EnemyType::Sniper, wave.sniperCount);
         spawnGroup(EnemyType::Medic, wave.medicCount);
 
-        std::wstring msg = L"Wave " + std::to_wstring(wave.waveNumber) + L": spawned " +
-                           std::to_wstring(m_enemiesSpawnedThisWave) + L" enemies";
-        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        std::string msg = "Wave " + std::to_string(wave.waveNumber) + ": spawned " +
+                          std::to_string(m_enemiesSpawnedThisWave) + " enemies";
+        FPS_CONSOLE(msg, "INFO");
     }
 
     XMFLOAT3 WaveSpawner::GetRandomSpawnPoint() const

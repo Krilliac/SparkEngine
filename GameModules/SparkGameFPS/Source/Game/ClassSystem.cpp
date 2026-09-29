@@ -6,6 +6,7 @@
  */
 
 #include "ClassSystem.h"
+#include "Core/FPSLog.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
@@ -42,7 +43,7 @@ namespace Spark
     bool ClassSystem::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing ClassSystem with 6 classes");
+        FPS_LOG_INFO("Initializing ClassSystem with 6 classes");
         InitScout();
         InitMedic();
         InitEngineer();
