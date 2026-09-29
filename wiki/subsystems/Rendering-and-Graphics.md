@@ -424,7 +424,7 @@ module enables one.
 
 The declared post set with golden evidence on the `d3d11-warp` row is
 **Tonemapping (ACES), Bloom, FXAA and GTAO**. CTest `D3D11PassGolden`
-(`Tests/TestRHI210D3D11PassGoldenReal.cpp`, `D3D11PassGolden_*`, 5 tests) runs
+(`Tests/TestRHI210D3D11PassGoldenReal.cpp`, `D3D11PassGolden_*`) runs
 each pass alone through the production pipeline on a WARP device over a fixed
 64x64 HDR input, checks pixels against a CPU evaluation of the shader formula,
 and compares the frame with the reviewed baseline in
