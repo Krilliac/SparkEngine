@@ -680,6 +680,8 @@ add_executable(SparkTests
     TestTF120Residency.cpp
     TestTF120HandoffReservation.cpp
     TestPersistenceConcurrency.cpp
+    # DATA-120 retried writes apply exactly once (TFDatabase / TFPlayerMeta / TFCharacterSystem below)
+    TestDATA120Idempotency.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseResidency.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseBackup.cpp"
