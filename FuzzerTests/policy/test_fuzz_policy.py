@@ -2085,7 +2085,7 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "DataTable",
                 "Spark::Data::DataTableRegistry::LoadTableFromFile",
                 "datatable-system",
-                5,
+                6,
             ),
             "editor-collab-session-wire": (
                 "EditorCollaboration",

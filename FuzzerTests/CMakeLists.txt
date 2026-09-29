@@ -2065,7 +2065,7 @@ add_test(
         -max_len=8388609
         -timeout=1
         -rss_limit_mb=256
-        -runs=5
+        -runs=6
         "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/datatable-system"
 )
 set_tests_properties(FuzzDataTableSmoke PROPERTIES

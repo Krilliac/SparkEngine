@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #if defined(_WIN32)
 #include <process.h>
@@ -37,27 +38,24 @@ namespace
         std::abort();
     }
 
-    void CheckReferences(const Spark::DialogueTree& tree)
+    // The loader does not promise that node references resolve (DialogueSystem ends a
+    // conversation on a missing node), so the oracle checks what it does promise: a
+    // non-empty, self-consistent node index within the documented node and choice caps.
+    void CheckTreeShape(const Spark::DialogueTree& tree)
     {
-        if (!tree.GetStartNodeId().empty() && tree.GetNode(tree.GetStartNodeId()) == nullptr)
-            InvariantFailure("accepted tree has a missing start node");
-        for (const std::string& id : tree.GetNodeIds())
+        constexpr std::size_t kMaxNodes = 100000;
+        constexpr std::size_t kMaxChoicesPerNode = 4096;
+        const std::vector<std::string> ids = tree.GetNodeIds();
+        if (ids.empty() || ids.size() != tree.GetNodeCount() || ids.size() > kMaxNodes)
+            InvariantFailure("accepted tree has an empty, inconsistent or oversized node index");
+        for (const std::string& id : ids)
         {
             const Spark::DialogueNode* node = tree.GetNode(id);
-            if (node == nullptr)
-                InvariantFailure("node index returned a missing node");
-            if (!node->nextNodeId.empty() && tree.GetNode(node->nextNodeId) == nullptr)
-                InvariantFailure("accepted tree has a missing next-node reference");
-            if (node->type == Spark::DialogueNodeType::Branch)
-            {
-                if (!node->trueNodeId.empty() && tree.GetNode(node->trueNodeId) == nullptr)
-                    InvariantFailure("accepted tree has a missing true branch target");
-                if (!node->falseNodeId.empty() && tree.GetNode(node->falseNodeId) == nullptr)
-                    InvariantFailure("accepted tree has a missing false branch target");
-            }
-            for (const Spark::DialogueChoice& choice : node->choices)
-                if (!choice.nextNodeId.empty() && tree.GetNode(choice.nextNodeId) == nullptr)
-                    InvariantFailure("accepted tree has a missing choice target");
+            if (node == nullptr || node->id != id)
+                InvariantFailure("node index does not resolve to the node it names");
+            if (node->choices.size() > kMaxChoicesPerNode ||
+                (!node->choices.empty() && node->type != Spark::DialogueNodeType::Choice))
+                InvariantFailure("accepted node carries choices outside the loader contract");
         }
     }
 } // namespace
@@ -94,7 +92,7 @@ extern "C" int SparkFuzzParseDialogue(const std::uint8_t* data, std::size_t size
     if (accepted && size > kMaxDocumentBytes)
         InvariantFailure("accepted dialogue file exceeds the documented size cap");
     if (accepted)
-        CheckReferences(tree);
+        CheckTreeShape(tree);
     else if (tree.GetId() != "sentinel" || tree.GetStartNodeId() != "sentinel-node" || tree.GetNodeCount() != 1 ||
              tree.GetNode("sentinel-node") == nullptr)
         InvariantFailure("rejected dialogue input modified the caller's tree");

@@ -6,13 +6,13 @@
     "bound_target_count": 39,
     "corpus_count": 39,
     "max_staleness_days": 90,
-    "regression_count": 33,
-    "seed_bytes": 17044062,
-    "seed_count": 311
+    "regression_count": 34,
+    "seed_bytes": 17044068,
+    "seed_count": 312
   },
   "coverage_claim": false,
   "inputs": {
-    "corpus_manifest": "eadd76360af913ea2339a9f00665ed8e7bdfb17ebeb888c26278feb3068458b5",
+    "corpus_manifest": "f0695ee24f5e69bb60289e2984da186105f8be6de45be746a0a7f9af6c5e3156",
     "inventory": "cc8f50c0a7902692ed2f0204e19f8358086d83130d710f50eb632149f31489da"
   },
   "inventory": {

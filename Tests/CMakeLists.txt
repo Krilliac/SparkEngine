@@ -5893,6 +5893,7 @@ foreach(_spark_sec120_case IN ITEMS
     DataTable_RejectsTrailingJSONWithoutPartialRows
     DataTableRegistry_RejectsOversizedValidFileBeforeReading
     DataTable_NumericLookingStringRoundTripsAsValidJSON
+    DataTable_CsvRoundTripKeepsEmptySingleCellRow
     Dialogue_LoadFailureDoesNotPartiallyReplaceTree
     Dialogue_RejectsOversizedValidDocumentBeforeParsing
     Dialogue_LoadsCrlfDocument

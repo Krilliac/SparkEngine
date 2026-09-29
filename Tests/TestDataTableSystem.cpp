@@ -102,6 +102,18 @@ TEST(DataTable_RejectsOversizedDocumentBeforeParsing)
     EXPECT_FALSE(table.LoadFromJSON("[{}]" + oversized));
 }
 
+TEST(DataTable_CsvRoundTripKeepsEmptySingleCellRow)
+{
+    // Found by the SEC-120 DataTable fuzz campaign: a lone empty cell was saved as a
+    // blank line, which LoadFromCSV skips, so the row vanished on reload.
+    Spark::Data::DataTable table;
+    ASSERT_TRUE(table.LoadFromCSV("id\n,x\n"));
+    ASSERT_EQ(static_cast<size_t>(1), table.GetRowCount());
+    Spark::Data::DataTable reloaded;
+    EXPECT_TRUE(reloaded.LoadFromCSV(table.SaveToCSV()));
+    EXPECT_EQ(table.GetRowCount(), reloaded.GetRowCount());
+}
+
 TEST(DataTableRegistry_RejectsOversizedValidFileBeforeReading)
 {
     const auto path = std::filesystem::temp_directory_path() / "spark_datatable_oversized.csv";

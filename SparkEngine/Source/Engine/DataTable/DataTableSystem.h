@@ -240,13 +240,15 @@ namespace Spark::Data
             o << '\n';
             for (const auto& row : m_rows)
             {
+                std::string line;
                 for (size_t i = 0; i < m_columns.size(); ++i)
                 {
                     if (i)
-                        o << ',';
-                    o << QuoteCSV(row.GetString(m_columns[i].name));
+                        line += ',';
+                    line += QuoteCSV(row.GetString(m_columns[i].name));
                 }
-                o << '\n';
+                // LoadFromCSV skips blank lines, so a lone empty cell is written quoted to keep its row.
+                o << (line.empty() ? std::string("\"\"") : line) << '\n';
             }
             return o.str();
         }

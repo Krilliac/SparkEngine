@@ -741,7 +741,7 @@
       "parser_id": "datatable-system",
       "corpus_dir": "FuzzerTests/corpora/datatable-system",
       "last_verified": "2026-09-28",
-      "content_digest": "c8611e71da2b974950b89f7673ad9894b356a1b12e703691cf72fa40f996729f",
+      "content_digest": "3099b59eac6de969e8180d11cbe8bc9279a443935c946eb081880edb140d5540",
       "budget": {
         "max_input_bytes": 8388609,
         "max_parse_time_ms": 1000,
@@ -769,6 +769,12 @@
           "finding": "A numeric-looking JSON string such as 001 was inferred as an integer and serialized as an invalid bare JSON number.",
           "found_by": "review",
           "guard_test": "DataTable_NumericLookingStringRoundTripsAsValidJSON"
+        },
+        {
+          "file": "regression-empty-single-cell-row.csv",
+          "finding": "SaveToCSV wrote a single-column row with an empty cell as a blank line, which LoadFromCSV skips, so the row was lost on reload.",
+          "found_by": "campaign",
+          "guard_test": "DataTable_CsvRoundTripKeepsEmptySingleCellRow"
         }
       ]
     },
