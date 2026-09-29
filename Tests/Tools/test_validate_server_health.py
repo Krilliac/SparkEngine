@@ -173,7 +173,11 @@ class RunbookContractTests(unittest.TestCase):
     def test_serializer_emits_every_field(self) -> None:
         source = HEALTH_SOURCE.read_text(encoding="utf-8")
         body = source[source.index("std::string FormatHealthJson"):source.index("void WriteHealthFile")]
-        emitted = set(re.findall(r'\\"([A-Za-z0-9]+)\\":', body))
+        # A key is written either escaped in an ordinary literal (\"key\":) or plainly inside a
+        # raw string literal right after the object's opening brace or a separating comma ({"key": / ,"key":).
+        escaped = re.findall(r'\\"([A-Za-z0-9]+)\\":', body)
+        raw = re.findall(r'(?<=[{,])"([A-Za-z0-9]+)":', body)
+        emitted = set(escaped) | set(raw)
         self.assertEqual(emitted, set(contract.FIELDS))
 
 
