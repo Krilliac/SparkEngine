@@ -48,7 +48,7 @@ a development cross-compile path outside `stable-v1` (see
 
 | Aspect | Minimum | Recommended |
 |---|---|---|
-| **OS Version** | Any distro with glibc 2.35+ | Ubuntu 24.04 LTS (CI standard) |
+| **OS Version** | Ubuntu 24.04 LTS x86-64 is the only support row (OD-10); other distributions are unsupported | Ubuntu 24.04 LTS (CI standard) |
 | **CPU Architecture** | x86-64 only (no ARM64 Linux support today) | x86-64 with SSE4.2 |
 | **Graphics implementation paths** | Vulkan 1.3; the OpenGL RHI bootstrap requests 4.5, while SDL runtime/editor hosts request 3.3 | Vulkan 1.3 development path |
 | **Software graphics route** | Mesa llvmpipe only when explicitly selected and configured; it is not a GPU requirement or automatic fallback | Native GPU for development |
@@ -63,6 +63,15 @@ a development cross-compile path outside `stable-v1` (see
 wiring it into packaged headless hosts remains `HEAD-220` work. Linux headless
 execution is outside `stable-v1` and uncertified. Vulkan falls back to 1.3 from
 1.4 automatically at runtime.
+
+A Linux package for that row may need at most `GLIBC_2.39`, `GLIBCXX_3.4.33`,
+`CXXABI_1.3.15` and `GCC_14.0.0`, the versions stock Ubuntu 24.04 provides.
+`VerifyLinuxInstalledRuntime` and `VerifyLinuxPackagedRuntime` fail on any
+higher symbol-version need. Build release packages on Ubuntu 24.04 (or in a
+noble container). A build on a newer distribution links newer glibc symbol
+versions and does not load on 24.04. For example, Ubuntu 26.04 binds `libm`
+`atan2f`/`asinf`/`acosf`/`sqrtf` to `GLIBC_2.43`. See
+[Linux support evidence](../../docs/platform/LINUX-SUPPORT-EVIDENCE.md) §6.1.
 
 ### macOS
 
