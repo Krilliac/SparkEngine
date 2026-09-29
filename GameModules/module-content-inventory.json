@@ -229,7 +229,7 @@
       "directory": "GameModules/SparkGameMMOFPS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameMMOFPS/Source",
-      "sourceFileCount": 320,
+      "sourceFileCount": 324,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,
@@ -245,6 +245,7 @@
         "Camera/SparkEngineCamera.h",
         "Core/Platform.h",
         "Engine/ECS/Components.h",
+        "Engine/Networking/AreaHandoffParticipant.h",
         "Engine/Networking/AreaServer.h",
         "Engine/Networking/ClientPrediction.h",
         "Engine/Networking/IAreaSimulation.h",
@@ -267,6 +268,7 @@
         "Physics/PhysicsSystem.h",
         "SceneManager/SceneManager.h",
         "Utils/ConsoleVariable.h",
+        "Utils/EventBus.h",
         "Utils/JsonUtils.h",
         "Utils/LogMacros.h",
         "Utils/ScopeGuard.h",
@@ -274,7 +276,7 @@
         "Utils/SecureRandom.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 32,
+      "privateEngineHeaderCount": 34,
       "copiedInfrastructureFiles": []
     },
     {
