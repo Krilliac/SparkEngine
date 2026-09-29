@@ -6,7 +6,6 @@
 #pragma once
 
 #include "GatewayCoordinator.h"
-#include "GuardedGatewayAuthenticator.h"
 
 #include <atomic>
 #include <chrono>

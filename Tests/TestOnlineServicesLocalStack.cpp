@@ -14,7 +14,7 @@
 #include "GatewayCoordinator.h"
 #include "GatewayLocalAdapters.h"
 #include "GatewaySecurity.h"
-#include "GuardedGatewayAuthenticator.h"
+#include "Engine/Networking/GatewayAuthenticator.h"
 #include "ScopedLoggerBaseline.h"
 #include "Engine/OnlineServices/OnlineServices.h"
 #include "Utils/Logger.h"

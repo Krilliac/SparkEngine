@@ -5,7 +5,7 @@
 
 #include "TestFramework.h"
 #include "GatewayCoordinator.h"
-#include "GuardedGatewayAuthenticator.h"
+#include "Engine/Networking/GatewayAuthenticator.h"
 
 #include <chrono>
 #include <deque>

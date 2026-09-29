@@ -897,6 +897,23 @@
           "guard_test": "FPSMultiplayer_SnapshotDecoderRejectsMalformedRecordWhenBatchIsZero"
         }
       ]
+    },
+    {
+      "id": "mmo-session-gate-protocol-corpus",
+      "parser_id": "mmo-session-gate-protocol",
+      "corpus_dir": "FuzzerTests/corpora/session-gate",
+      "last_verified": "2026-09-29",
+      "content_digest": "d7020ad20a08a83426cc37eef561ad3918ee098c0f130a4240e3fb8f2f6f40bb",
+      "budget": {
+        "max_input_bytes": 512,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

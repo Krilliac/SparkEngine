@@ -2275,3 +2275,42 @@ set_tests_properties(FuzzFpsSnapshotSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# MMO::SessionGateWire::Decode is the only byte grammar the session gate (MMOSessionGate.cpp) reads
+# from a client or server peer; the harness also requires every accepted packet to re-encode canonically.
+add_executable(SparkFuzzSessionGateProtocol
+    FuzzSessionGateProtocol.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp"
+)
+target_include_directories(SparkFuzzSessionGateProtocol PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}")
+target_compile_features(SparkFuzzSessionGateProtocol PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzSessionGateProtocol PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzSessionGateProtocol PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+
+# Replay the six reviewed seeds exactly once.
+add_test(
+    NAME FuzzSessionGateProtocolSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzSessionGateProtocol>
+        -max_len=512
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=6
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/session-gate"
+)
+set_tests_properties(FuzzSessionGateProtocolSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

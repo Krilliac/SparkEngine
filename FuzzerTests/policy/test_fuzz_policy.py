@@ -131,6 +131,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzDialogue",
     "SparkFuzzLocalization",
     "SparkFuzzFpsSnapshot",
+    "SparkFuzzSessionGateProtocol",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -1919,6 +1920,41 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertEqual(corpus.budget.max_corpus_entries, 8)
         self.assertEqual(corpus.budget.max_corpus_bytes, 4096)
         self.assertEqual(corpus.budget.smoke_seconds, 10)
+
+    def test_session_gate_protocol_is_bound_directly_to_its_decoder(self) -> None:
+        # MOD-320: the session-gate codec depends on the standard library only, so the harness
+        # calls MMO::SessionGateWire::Decode itself (no libc++ production adapter) and also
+        # requires every accepted packet to re-encode byte for byte.
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        parser = next(item for item in inventory.parsers if item.parser_id == "mmo-session-gate-protocol")
+        self.assertEqual(parser.status, "fuzzed")
+        self.assertEqual(parser.trust_boundary, "untrusted-network")
+        self.assertEqual(parser.source_files, ("GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp",))
+        assert parser.target is not None
+        self.assertEqual(parser.target["harness"], "FuzzerTests/FuzzSessionGateProtocol.cpp")
+        self.assertEqual(parser.target["cmake_target"], "SparkFuzzSessionGateProtocol")
+        self.assertEqual(parser.target["test_selector"], "FuzzSessionGateProtocolSmoke")
+        self.assertEqual(parser.target["corpus_id"], "mmo-session-gate-protocol-corpus")
+        self.assertEqual(parser.target["entry_symbol"], "MMO::SessionGateWire::Decode")
+        self.assertIsNone(parser.target["binding_source"])
+        self.assertIn("SparkFuzzSessionGateProtocol", FUZZ_SMOKE_TARGETS)
+
+        corpora = corpus_manifest.load_corpora(REPO_ROOT, inventory)
+        corpus = next(item for item in corpora if item.parser_id == "mmo-session-gate-protocol")
+        self.assertEqual(corpus.corpus_dir, "FuzzerTests/corpora/session-gate")
+        self.assertEqual(corpus.seed_count, 6)
+        self.assertEqual(corpus.budget.max_input_bytes, 512)
+        self.assertEqual(corpus.budget.max_depth, 1)
+
+        cmake = (REPO_ROOT / "FuzzerTests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        target = cmake.split("add_executable(SparkFuzzSessionGateProtocol\n", 1)[1].split("add_test(", 1)[0]
+        self.assertIn("GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp", target)
+        self.assertIn("-fno-sanitize-recover=undefined", target)
+        smoke = cmake.split("NAME FuzzSessionGateProtocolSmoke\n", 1)[1].split("set_tests_properties(", 1)[0]
+        self.assertIn(f"-runs={corpus.seed_count}", smoke)
+        harness = (REPO_ROOT / "FuzzerTests" / "FuzzSessionGateProtocol.cpp").read_text(encoding="utf-8")
+        self.assertIn("MMO::SessionGateWire::Encode(packet)", harness)
+        self.assertIn("std::abort()", harness)
 
     def test_adapter_bound_targets_keep_their_production_bindings(self) -> None:
         # parser id -> (target stem, production entry symbol, corpus directory, seed count)

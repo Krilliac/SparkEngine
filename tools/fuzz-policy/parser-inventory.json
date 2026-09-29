@@ -2605,6 +2605,26 @@
         "binding_source": "FuzzerTests/FuzzDaemonFrameProduction.cpp",
         "harness_entry_symbol": "SparkFuzzRecvDaemonFrames"
       }
+    },
+    {
+      "id": "mmo-session-gate-protocol",
+      "description": "Bounded MMO session-gate network decoder used by client and server request/state dispatch.",
+      "trust_boundary": "untrusted-network",
+      "source_files": [
+        "GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp"
+      ],
+      "formats": [
+        "packet"
+      ],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzSessionGateProtocol.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzSessionGateProtocol",
+        "test_selector": "FuzzSessionGateProtocolSmoke",
+        "corpus_id": "mmo-session-gate-protocol-corpus",
+        "entry_symbol": "MMO::SessionGateWire::Decode"
+      }
     }
   ],
   "deferred_candidates": [],

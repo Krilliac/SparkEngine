@@ -8,6 +8,27 @@ SparkEngine includes an **experimental** UDP networking system for multiplayer d
 
 `NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests always set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the exact destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission. Selecting a private-LAN bind does not enable remote credential onboarding.
 
+## MMO authenticated session slice
+
+SparkGameMMO's module-owned `MMOSessionGate` handles account authentication, owned character creation,
+world entry, server-timed movement, and nearby greeting interactions over `NetworkManager`'s secure transport.
+Login reuses the gateway's guarded authenticator and `MMOAccountSystem` password hashing. Transport connection
+does not grant gameplay authority: every world command checks the connection's authenticated account and
+character ownership. The gated module refuses the older client-position upload path.
+
+`SparkServer` installs the network service before loading game modules. The MMO module adopts a host-owned
+listener or starts its own shared-headless listener on its first update, and unregisters its session handlers
+before destroying account/player services. Network clients use the `mmo_session_*` console commands;
+the login UI remains an offline showcase. This small-area slice does not supply persistent accounts,
+cross-area handoff, or collision-complete movement.
+
+The gate's network handlers may run on the `DedicatedServer` tick thread inside `SparkServer`, so they only
+copy datagrams into a bounded inbox that the module drains on the game thread.
+
+`MMOIntegratedWorld_TwoClientSessionGate` runs the real server/two-client process scenario, including
+bad-credential and foreign-character refusals and peer-observed movement/interactions. It is local evidence,
+not exact-commit CI. See the [module guide](../../GameModules/SparkGameMMO/README.md).
+
 ## Architecture
 
 The networking subsystem is composed of several layered modules that work together to provide a complete multiplayer stack:

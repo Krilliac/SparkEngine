@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "Engine/Networking/GatewayAuthenticator.h"
 #include "Engine/Networking/WorldServer.h"
 
 #include <cstdint>
@@ -24,31 +25,6 @@ namespace Spark::Gateway
     {
         Net::AreaServerConfig area;
         std::string host = "127.0.0.1";
-    };
-
-    struct AdmissionRequest
-    {
-        Net::ClientID clientId = Net::INVALID_CLIENT;
-        std::string sessionId;
-        std::string playerName;
-        std::string credential;
-        XMFLOAT3 spawnPosition{0.0f, 0.0f, 0.0f};
-    };
-
-    struct AuthenticationResult
-    {
-        bool accepted = false;
-        std::string principalId;
-        std::string reason;
-    };
-
-    class IGatewayAuthenticator
-    {
-      public:
-        virtual ~IGatewayAuthenticator() = default;
-        /** [any transport thread, thread-safe] Validate an opaque credential. Never log it. */
-        [[nodiscard]] virtual AuthenticationResult Authenticate(const AdmissionRequest& request) = 0;
-        [[nodiscard]] virtual bool IsReady() const = 0;
     };
 
     /** One registered area as the coordinator sees it when an admission is placed. */
@@ -183,9 +159,6 @@ namespace Spark::Gateway
         InvalidSession,
         InvalidState
     };
-
-    class GuardedGatewayAuthenticator;
-    struct GatewayAuthenticatorHealth;
 
     /**
      * Gateway-only session coordinator. It never owns ECS/gameplay state.
