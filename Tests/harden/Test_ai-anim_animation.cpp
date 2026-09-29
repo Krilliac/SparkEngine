@@ -12,6 +12,7 @@
 
 #include "TestFramework.h"
 
+#include "Engine/Animation/AnimationBinaryFormat.h"
 #include "Engine/Animation/AnimationSystem.h"
 
 #include <cstdint>
@@ -200,6 +201,62 @@ TEST(Animation_LoadSkeleton_RejectsUnknownVersion)
 
     std::error_code ec;
     std::filesystem::remove(path, ec);
+}
+
+TEST(Animation_DecodeClips_RejectsKeyCountBeyondInput)
+{
+    // A 60-byte file declaring 1,000,000 rotation keys. The streaming loader resized the key
+    // vector (20 MB) before reading a single key; the decoder checks the count against the
+    // bytes left first and leaves the caller's clips untouched.
+    std::vector<char> buf;
+    buf.insert(buf.end(), {'A', 'N', 'I', 'M'});
+    PutBytes(buf, uint32_t{1});         // version
+    PutBytes(buf, uint32_t{1});         // clipCount
+    PutBytes(buf, uint32_t{0});         // clip nameLen
+    PutBytes(buf, 1.0f);                // duration
+    PutBytes(buf, 30.0f);               // ticksPerSecond
+    buf.push_back(0);                   // loop
+    PutBytes(buf, uint32_t{1});         // channelCount
+    PutBytes(buf, uint32_t{0});         // boneNameLen
+    PutBytes(buf, int32_t{-1});         // boneIndex
+    PutBytes(buf, uint32_t{0});         // posKeyCount
+    PutBytes(buf, uint32_t{1'000'000}); // rotKeyCount, no keys follow
+    buf.resize(60, 0);
+    const std::vector<std::uint8_t> bytes(buf.begin(), buf.end());
+
+    std::vector<AnimationClip> clips(1);
+    clips[0].name = "sentinel";
+    std::string error;
+    EXPECT_FALSE(DecodeAnimationClipsBinary(bytes, clips, error));
+    EXPECT_FALSE(error.empty());
+    ASSERT_EQ(clips.size(), size_t{1});
+    EXPECT_EQ(clips[0].name, std::string("sentinel"));
+
+    // The same bytes with the key count matching what is present decode.
+    const size_t rotKeyCountOffset = 4 + 4 + 4 + 4 + 4 + 4 + 1 + 4 + 4 + 4 + 4;
+    std::vector<std::uint8_t> fitting(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(rotKeyCountOffset));
+    const std::uint32_t oneKey = 1;
+    const auto* oneKeyBytes = reinterpret_cast<const std::uint8_t*>(&oneKey);
+    fitting.insert(fitting.end(), oneKeyBytes, oneKeyBytes + sizeof(oneKey));
+    const float rotationKey[5] = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    const auto* rotationKeyBytes = reinterpret_cast<const std::uint8_t*>(rotationKey);
+    fitting.insert(fitting.end(), rotationKeyBytes, rotationKeyBytes + sizeof(rotationKey));
+    const std::uint32_t noScaleKeys = 0;
+    const auto* noScaleKeyBytes = reinterpret_cast<const std::uint8_t*>(&noScaleKeys);
+    fitting.insert(fitting.end(), noScaleKeyBytes, noScaleKeyBytes + sizeof(noScaleKeys));
+    EXPECT_TRUE(DecodeAnimationClipsBinary(fitting, clips, error));
+    ASSERT_EQ(clips.size(), size_t{1});
+    ASSERT_EQ(clips[0].channels.size(), size_t{1});
+    EXPECT_EQ(clips[0].channels[0].rotationKeys.size(), size_t{1});
+
+    // A skeleton declaring more bones than its bytes can hold is rejected the same way.
+    Skeleton skeleton;
+    skeleton.name = "sentinel";
+    skeleton.bones.resize(1);
+    std::vector<std::uint8_t> skel = {'S', 'K', 'E', 'L', 1, 0, 0, 0, 0xA0, 0x86, 0x01, 0x00}; // 100,000 bones
+    EXPECT_FALSE(DecodeSkeletonBinary(skel, skeleton, error));
+    EXPECT_EQ(skeleton.name, std::string("sentinel"));
+    EXPECT_EQ(skeleton.GetBoneCount(), 1u);
 }
 
 // ============================================================================
