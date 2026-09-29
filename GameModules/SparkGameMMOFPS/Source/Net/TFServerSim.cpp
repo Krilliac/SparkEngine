@@ -10,8 +10,6 @@
  *        TFClientNetHandlers split).
  */
 #include "Net/TFServerSim.h"
-#include "Core/EngineContext.h"
-#include "Engine/Networking/AreaHandoffDispatcher.h"
 #include "Net/TFServerSimConstants.h"
 
 #include "Game/TFPlayerSystem.h"
@@ -26,6 +24,7 @@
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
+#include "Utils/EventBus.h"
 #endif
 
 #ifdef SPARK_HAS_IMGUI
@@ -58,13 +57,10 @@ namespace Terrafront
         if (ctx.db)
         {
             m_handoff = std::make_unique<TFHandoffParticipant>(*ctx.db, *this);
-            if (auto* host = dynamic_cast<EngineContext*>(ctx.engine))
+            // The host (SparkServer) follows this notice on its own bus; see AreaHandoffParticipantChanged.
+            if (Spark::EventBus* hostBus = ctx.engine ? ctx.engine->GetEventBus() : nullptr)
             {
-                host->RegisterSystem<Spark::Net::IAreaHandoffParticipant>(m_handoff.get());
-                if (auto* dispatcher = host->GetSystem<Spark::Net::AreaHandoffDispatcher>())
-                {
-                    dispatcher->SetParticipant(m_handoff.get());
-                }
+                hostBus->Publish(Spark::Net::AreaHandoffParticipantChanged{m_handoff.get()});
             }
         }
 #endif
@@ -76,11 +72,18 @@ namespace Terrafront
     {
         (void)deltaTime; // authoritative work runs on the fixed step only
 #ifdef ENABLE_NETWORKING
+        // A destination authority must have its database bound before any player logs in, or it cannot accept a
+        // handoff. Opening does file I/O and logs on failure, so a failed attempt is retried at most every 5 s.
         auto& network = Spark::Net::NetworkManager::GetInstance();
-        if (m_initialized && m_ctx && m_ctx->IsAuthority() && network.IsInitialized() &&
-            network.GetRole() == Spark::Net::NetworkRole::Server)
+        if (m_initialized && m_ctx && m_ctx->IsAuthority() && m_ctx->db && !m_ctx->db->IsOpen() &&
+            network.IsInitialized() && network.GetRole() == Spark::Net::NetworkRole::Server)
         {
-            (void)EnsureAuthorityDatabaseOpen();
+            m_dbOpenRetrySeconds -= deltaTime;
+            if (m_dbOpenRetrySeconds <= 0.0f)
+            {
+                m_dbOpenRetrySeconds = 5.0f;
+                (void)EnsureAuthorityDatabaseOpen();
+            }
         }
 #endif
     }
@@ -138,15 +141,11 @@ namespace Terrafront
         if (!m_initialized)
             return;
 #ifdef ENABLE_NETWORKING
-        if (auto* host = dynamic_cast<EngineContext*>(m_ctx->engine))
+        if (m_handoff)
         {
-            if (host->GetSystem<Spark::Net::IAreaHandoffParticipant>() == m_handoff.get())
+            if (Spark::EventBus* hostBus = m_ctx->engine ? m_ctx->engine->GetEventBus() : nullptr)
             {
-                if (auto* dispatcher = host->GetSystem<Spark::Net::AreaHandoffDispatcher>())
-                {
-                    dispatcher->SetParticipant(nullptr);
-                }
-                host->RegisterSystem<Spark::Net::IAreaHandoffParticipant>(nullptr);
+                hostBus->Publish(Spark::Net::AreaHandoffParticipantChanged{nullptr});
             }
         }
         m_handoff.reset();

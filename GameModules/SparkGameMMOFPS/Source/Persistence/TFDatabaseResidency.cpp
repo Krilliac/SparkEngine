@@ -77,7 +77,6 @@ namespace Terrafront
                                                 if (!staleOperation.empty())
                                                 {
                                                     row.migrationLastOperation = staleOperation;
-                                                    row.migrationEpoch = newRevision;
                                                     row.migrationState = "aborted";
                                                     row.migrationSource = staleSource;
                                                     row.migrationDestination = staleDestination;
@@ -156,7 +155,6 @@ namespace Terrafront
                         }
                         it->migrationLastOperation = it->migrationOperation;
                         it->migrationState = "aborted";
-                        it->migrationEpoch = newRevision;
                         it->migrationOperation.clear();
                     }
                     if (IsHeldByLiveAuthority(it->residentContinent))

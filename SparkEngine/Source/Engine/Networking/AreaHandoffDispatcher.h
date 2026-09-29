@@ -1,13 +1,17 @@
+/**
+ * @file AreaHandoffDispatcher.h
+ * @brief Host-owned bridge from the authenticated area-control thread to the game-thread handoff participant.
+ */
 #pragma once
 
 #include "AreaHandoffParticipant.h"
+#include "Utils/EventBus.h"
 
-#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
-#include <mutex>
 #include <memory>
+#include <mutex>
 
 #ifdef ENABLE_NETWORKING
 namespace Spark::Net
@@ -17,8 +21,10 @@ namespace Spark::Net
      *
      * Submit is safe from control-plane threads and allocates one bounded queue
      * record per request. Pump and participant callbacks run on the game thread;
-     * the host owns this object and must clear the participant before module
-     * unload. Stop is called before destroying the participant.
+     * the host owns this object and outlives the participant it borrows. A module
+     * attaches and detaches its participant by publishing AreaHandoffParticipantChanged
+     * on the host EventBus passed to BindParticipantEvents. Stop is called before
+     * destroying the participant.
      */
     class AreaHandoffDispatcher
     {
@@ -29,6 +35,8 @@ namespace Spark::Net
         AreaHandoffDispatcher& operator=(const AreaHandoffDispatcher&) = delete;
 
         void SetParticipant(IAreaHandoffParticipant* participant);
+        /// @brief Follow AreaHandoffParticipantChanged on @p bus; the bus must outlive this dispatcher.
+        void BindParticipantEvents(Spark::EventBus& bus);
         [[nodiscard]] bool IsReady() const noexcept;
         [[nodiscard]] HandoffResult Submit(HandoffPhase phase, const HandoffRequest& request);
         void Pump();
@@ -49,6 +57,7 @@ namespace Spark::Net
         std::deque<std::shared_ptr<Pending>> m_pending;
         IAreaHandoffParticipant* m_participant = nullptr;
         bool m_stopped = false;
+        Spark::SubscriptionHandle m_participantEvents;
         static constexpr size_t kMaxPending = 1024;
     };
 } // namespace Spark::Net

@@ -2,12 +2,17 @@
 
 **Current status (TF-120): partial fenced handoff integration, not completed multi-continent travel.**
 
-OD-16 retires the reconnect design below. `TFServerSim::HandleContinentHopRequest` now refuses the
-old redirect. `SparkServer` instead connects authenticated area-control phases to `TFHandoffParticipant`
-through a game-thread dispatcher. TFDatabase schema v5 reserves a character on its source, commits
-ownership on its destination, and retains a versioned pawn checkpoint and terminal epoch for retries.
-Duplicate, reordered and dropped delivery cases are registered under `TerrafrontMigration_*`; they
-have not been run by this lane and are not exact-commit CI evidence.
+OD-16 makes the fenced SparkGateway/SparkServer handoff the production path and retires the reconnect
+design below as a production path. The reconnect redirect (`TFServerSim::HandleContinentHopRequest`)
+still answers until the fenced path reaches clients (gateway admission, client routing and scene
+replacement are unfinished); it is not a supported way to move a character between live continents.
+`SparkServer` connects authenticated area-control phases to `TFHandoffParticipant` through a game-thread
+dispatcher; the module attaches its participant by publishing `AreaHandoffParticipantChanged` on the
+host EventBus. TFDatabase schema v5 reserves a character on its source, commits ownership on its
+destination, and retains a versioned pawn checkpoint and the reservation's gateway epoch for retries.
+A reserved character cannot be released, claimed elsewhere or written, so the redirect cannot take it
+mid-handoff. Duplicate, reordered, lost-request and lost-reply cases are registered under
+`TerrafrontMigration_*`; local runs are not exact-commit CI evidence.
 
 Operators must explicitly map the gateway's assigned area IDs through `gatewayAreaId` in their
 `continents.json`. The destination must already have an authenticated connection for the same account
@@ -19,8 +24,8 @@ headless gameplay, real Jolt collision and rendered travel still require integra
 
 Shared-root hosting also retains the existing global outfit/social authority-lock limitation. This lane
 has not made two complete TERRAFRONT processes on one root a supported deployment. The existing
-provisional soak budgets remain unchanged; the deterministic capacity/loss test is only a state-transfer
-workload, not a server-time, network-throughput or RSS measurement. See
+provisional soak budgets remain unchanged; the full-capacity lost-delivery test is a state-transfer
+correctness check, not a budget, server-time, network-throughput or RSS measurement. See
 [`Area Server Architecture`](../wiki/subsystems/Area-Server-Architecture.md) for the new wiring.
 
 The sections below preserve the **historical reconnect proposal and its implementation notes**. Their

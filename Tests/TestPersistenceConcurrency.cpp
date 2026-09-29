@@ -172,73 +172,97 @@ TEST(Persistence_Concurrency_ConcurrentEconomyWritersRetainEveryDelta)
     fs::remove(path);
 }
 
+// Territory files are single-writer: authorities for one continent race for its lease. Run the race on real
+// threads twice: each round exactly one contender holds the lease, every other contender's write is refused,
+// and the next owner starts from the previous owner's committed snapshot.
 TEST(Persistence_Concurrency_ConcurrentTerritoryWritersPreserveCommittedState)
 {
     const fs::path path = FreshPath("test_data120_concurrent_territory.json");
-    const fs::path otherPath = FreshPath("test_data120_concurrent_other_territory.json");
-    constexpr int kWriters = 2;
-    std::barrier start(kWriters);
-    std::vector<std::future<bool>> workers;
-    for (int writer = 0; writer < kWriters; ++writer)
-    {
-        workers.push_back(std::async(std::launch::async,
-                                     [path, otherPath, writer, &start]
-                                     {
-                                         const fs::path& target = writer == 0 ? path : otherPath;
-                                         const std::string key = writer == 0 ? "cindral_wastes" : "other_continent";
-                                         const std::string name = writer == 0 ? "Cindral Wastes" : "Other Continent";
-                                         const FactionId finalOwner = writer == 0 ? FactionId::MRA : FactionId::HLX;
-                                         SavePaths::ExclusiveFileLock lease;
-                                         std::error_code lockEc;
-                                         if (!lease.TryLock(target, lockEc))
-                                         {
-                                             start.arrive_and_drop();
-                                             return false;
-                                         }
-                                         // Both production authority leases coexist; a second owner of either file is refused.
-                                         start.arrive_and_wait();
-                                         SavePaths::ExclusiveFileLock contender;
-                                         if (contender.TryLock(target, lockEc))
-                                         {
-                                             return false;
-                                         }
-                                         for (int sequence = 0; sequence < 8; ++sequence)
-                                         {
-                                             auto snapshot =
-                                                 TerritorySnapshot(key, name, static_cast<int>(FactionId::MRA));
-                                             snapshot["owners"][1] = Spark::Json::Value(
-                                                 static_cast<int>(sequence % 2 == 0 ? FactionId::None : finalOwner));
-                                             std::string detail;
-                                             if (!WorldSave::WriteJson(lease, target, snapshot, detail))
-                                             {
-                                                 return false;
-                                             }
-                                         }
-                                         return true;
-                                     }));
-    }
-    for (auto& worker : workers)
-    {
-        EXPECT_TRUE(worker.get());
-    }
-
     const std::vector<RegionDef> regions = TerritoryRegions();
-    for (int writer = 0; writer < kWriters; ++writer)
+    const auto ownerOnDisk = [&]() -> int
     {
         Spark::Json::Value root;
         std::string detail;
-        ASSERT_TRUE(WorldSave::ReadJson(writer == 0 ? path : otherPath,
-                                        writer == 0 ? "cindral_wastes" : "other_continent",
-                                        writer == 0 ? "Cindral Wastes" : "Other Continent", false, root,
-                                        detail) == WorldSave::ReadStatus::Loaded);
         WorldSave::TerritoryDecode decoded;
-        ASSERT_TRUE(WorldSave::DecodeTerritory(root, regions, false, decoded, detail) ==
-                    WorldSave::TerritoryDecodeResult::Loaded);
-        ASSERT_EQ(decoded.owners.size(), size_t{3});
-        EXPECT_EQ(static_cast<int>(decoded.owners[0]), static_cast<int>(FactionId::MRA));
-        EXPECT_EQ(static_cast<int>(decoded.owners[1]), static_cast<int>(writer == 0 ? FactionId::MRA : FactionId::HLX));
-        EXPECT_EQ(static_cast<int>(decoded.owners[2]), static_cast<int>(FactionId::None));
+        if (WorldSave::ReadJson(path, "cindral_wastes", "Cindral Wastes", false, root, detail) !=
+                WorldSave::ReadStatus::Loaded ||
+            WorldSave::DecodeTerritory(root, regions, false, decoded, detail) !=
+                WorldSave::TerritoryDecodeResult::Loaded ||
+            decoded.owners.size() != 3)
+        {
+            return -1;
+        }
+        return static_cast<int>(decoded.owners[1]);
+    };
+
+    constexpr FactionId kContenders[] = {FactionId::MRA, FactionId::AUC, FactionId::HLX};
+    constexpr int kWriters = 3;
+    int previousOwner = -1;
+    for (int round = 0; round < 2; ++round)
+    {
+        std::barrier attempted(kWriters);
+        std::barrier written(kWriters);
+        std::atomic<int> winners{0};
+        std::atomic<int> refusedWrites{0};
+        std::atomic<int> winnerFaction{-1};
+        std::atomic<int> ownerSeenByWinner{-2};
+        std::vector<std::future<bool>> workers;
+        for (int writer = 0; writer < kWriters; ++writer)
+        {
+            workers.push_back(std::async(
+                std::launch::async,
+                [&, writer]
+                {
+                    const FactionId faction = kContenders[writer];
+                    SavePaths::ExclusiveFileLock lease;
+                    std::error_code lockEc;
+                    const bool won = lease.TryLock(path, lockEc);
+                    if (won)
+                    {
+                        ++winners;
+                    }
+                    // Nobody releases or writes until every contender has tried to take the lease.
+                    attempted.arrive_and_wait();
+                    bool ok = true;
+                    std::string detail;
+                    if (won)
+                    {
+                        ownerSeenByWinner = ownerOnDisk();
+                        for (int sequence = 0; sequence < 8; ++sequence)
+                        {
+                            auto snapshot =
+                                TerritorySnapshot("cindral_wastes", "Cindral Wastes", static_cast<int>(FactionId::MRA));
+                            snapshot["owners"][1] =
+                                Spark::Json::Value(static_cast<int>(sequence % 2 == 0 ? FactionId::None : faction));
+                            ok = ok && WorldSave::WriteJson(lease, path, snapshot, detail);
+                        }
+                        winnerFaction = static_cast<int>(faction);
+                    }
+                    else
+                    {
+                        auto snapshot =
+                            TerritorySnapshot("cindral_wastes", "Cindral Wastes", static_cast<int>(FactionId::MRA));
+                        snapshot["owners"][1] = Spark::Json::Value(static_cast<int>(faction));
+                        if (!WorldSave::WriteJson(lease, path, snapshot, detail))
+                        {
+                            ++refusedWrites;
+                        }
+                    }
+                    // The lease is held until every contender has finished writing.
+                    written.arrive_and_wait();
+                    return ok;
+                }));
+        }
+        for (auto& worker : workers)
+        {
+            EXPECT_TRUE(worker.get());
+        }
+
+        EXPECT_EQ(winners.load(), 1);
+        EXPECT_EQ(refusedWrites.load(), kWriters - 1);
+        EXPECT_EQ(ownerSeenByWinner.load(), previousOwner);
+        EXPECT_EQ(ownerOnDisk(), winnerFaction.load());
+        previousOwner = ownerOnDisk();
     }
-    fs::remove(otherPath);
     fs::remove(path);
 }

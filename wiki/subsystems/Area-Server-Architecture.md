@@ -6,10 +6,13 @@ Inspired by HeroEngine's distributed server model, SparkEngine's area server arc
 
 ### TERRAFRONT fenced handoff integration (TF-120)
 
-`SparkServer` registers an engine-owned `AreaHandoffDispatcher` before loading modules. TERRAFRONT registers
-its `TFHandoffParticipant` through the injected `EngineContext`. Authenticated `LocalAreaControlService`
-commands are queued to the server game thread before module updates; module unload detaches the borrowed
-participant. A queued request that times out is canceled before it can change gameplay state.
+`SparkServer` creates an engine-owned `AreaHandoffDispatcher` and subscribes it to the host EventBus before
+loading modules. TERRAFRONT publishes `AreaHandoffParticipantChanged` with its `TFHandoffParticipant` on that
+bus (`IEngineContext::GetEventBus()`) in Initialize and with null in Shutdown. The bus is used because the
+host's `EngineContext::GetSystem<T>()` registry keys on per-binary type ids and cannot cross the module DLL
+boundary. The control service is given the dispatcher only when a participant is attached at startup.
+Authenticated `LocalAreaControlService` commands are queued to the server game thread before module updates.
+A queued request that times out is canceled before it can change gameplay state.
 
 The control service persists the session, epoch, phase and both area IDs. Its new `v2` state format refuses
 nonempty older state files rather than guessing their source/destination identity. Operators must resolve
@@ -20,15 +23,18 @@ TERRAFRONT requires explicit, unique `gatewayAreaId` values in the operator's `c
 the IDs actually assigned by the gateway; map IDs are not assumed to be gateway IDs. Missing, ambiguous or
 unmapped IDs fail closed. A destination also requires an authenticated connection for the same account and
 player ID before it accepts a pawn. This is an intentional boundary: automatic gateway gameplay admission,
-client routing and client scene/collision replacement are not supplied by this slice. The former TF
-reconnect redirect is refused under OD-16. This is not evidence of working player-facing continent travel.
+client routing and client scene/collision replacement are not supplied by this slice. Under OD-16 the TF
+reconnect redirect is not the production path; it still answers until the fenced path reaches clients and
+cannot take a reserved character. This is not evidence of working player-facing continent travel.
 
 The participant captures an alive, unseated sanctuary pawn, commits progression before reserving it, and
 removes its source pawn without a death event. The destination commits ownership, restores pose, velocity,
 health, shield and input sequence, resolves against its own world collision/terrain, and suppresses the
 ordinary spawn-pad teleport. Abort restores the source checkpoint; acknowledgement retires source state.
-`TerrafrontMigration_*` CTests cover durable participant operations, checkpoint validation and dispatcher
-thread/lifetime behavior. Their authority test double does not establish real Jolt collision or rendered
+`TerrafrontMigration_*` CTests cover durable participant operations (duplicate, reordered, lost-request,
+lost-reply and source-restart cases), checkpoint validation, dispatcher thread/lifetime/EventBus behavior,
+and `TerrafrontMigration_GatewayDispatch`: forged, replayed, stale-epoch, out-of-order and retargeted
+frames never reach the participant. Their authority test double does not establish real Jolt collision or rendered
 travel correctness. Runtime execution, actual socket routing and rendered evidence remain required.
 
 ## Overview

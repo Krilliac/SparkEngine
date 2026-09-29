@@ -7,6 +7,7 @@ namespace Spark::Net
 {
     AreaHandoffDispatcher::~AreaHandoffDispatcher()
     {
+        m_participantEvents.Unsubscribe();
         Stop();
     }
 
@@ -14,6 +15,12 @@ namespace Spark::Net
     {
         std::lock_guard lock(m_mutex);
         m_participant = participant;
+    }
+
+    void AreaHandoffDispatcher::BindParticipantEvents(Spark::EventBus& bus)
+    {
+        m_participantEvents = bus.Subscribe<AreaHandoffParticipantChanged>(
+            [this](const AreaHandoffParticipantChanged& changed) { SetParticipant(changed.participant); });
     }
 
     bool AreaHandoffDispatcher::IsReady() const noexcept

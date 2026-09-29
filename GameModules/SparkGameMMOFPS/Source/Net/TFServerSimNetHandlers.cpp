@@ -323,12 +323,27 @@ namespace Terrafront
         rep.port = 0;
         rep.host[0] = '\0';
 
-        // OD-16: a reconnect redirect cannot transfer authoritative ownership. Only the authenticated
-        // SparkGateway area-control participant may do that. Until gateway gameplay admission and the
-        // destination client's scene replacement are connected, refuse the old redirect path explicitly.
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[TF] player %u continent %u travel requires the authenticated gateway handoff", sender,
-                       static_cast<unsigned>(req.mapId));
+        std::string host;
+        uint16_t port = 0;
+        if (m_ctx->travel && m_ctx->travel->LookupContinentEndpoint(req.mapId, host, port))
+        {
+            // Truncate rather than reject an oversized operator-configured
+            // hostname — the wire field is a fixed 64 bytes (DNS names can
+            // exceed that; IPs/short hostnames never will in practice).
+            const size_t n = std::min(host.size(), sizeof(rep.host) - 1);
+            std::memcpy(rep.host, host.data(), n);
+            rep.host[n] = '\0';
+            rep.port = port;
+            rep.ok = 1;
+        }
+
+        if (rep.ok)
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] player %u continent-hop request: mapId %u -> %s:%u", sender,
+                           static_cast<unsigned>(req.mapId), rep.host, static_cast<unsigned>(rep.port));
+        else
+            SPARK_LOG_INFO(Spark::LogCategory::Game,
+                           "[TF] player %u continent-hop request: mapId %u -> no server configured", sender,
+                           static_cast<unsigned>(req.mapId));
 
         SendToPlayer(sender, static_cast<uint16_t>(TFMsg::ContinentHopReply), &rep, sizeof(rep), true);
     }

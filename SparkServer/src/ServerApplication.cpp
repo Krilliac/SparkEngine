@@ -581,8 +581,10 @@ namespace Spark::Server
         context->SetWorld(m_world.get());
         context->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         context->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+        // Subscribe before modules load: a participating module publishes AreaHandoffParticipantChanged on this
+        // bus from its Initialize. The EngineContext registry cannot carry it across the module DLL boundary.
         m_handoffDispatcher = std::make_unique<Net::AreaHandoffDispatcher>();
-        context->RegisterSystem<Net::AreaHandoffDispatcher>(m_handoffDispatcher.get());
+        m_handoffDispatcher->BindParticipantEvents(*runtime.eventBus);
         m_modules = std::make_unique<ModuleManager>();
         if (!LoadSelectedModules())
         {
@@ -594,7 +596,6 @@ namespace Spark::Server
             runtime.timer.reset();
             return false;
         }
-        m_handoffDispatcher->SetParticipant(context->GetSystem<Net::IAreaHandoffParticipant>());
 
         m_server = std::make_unique<Net::DedicatedServer>();
         if (!m_server->Start(m_options.server))
@@ -615,7 +616,7 @@ namespace Spark::Server
         {
             m_controlService = std::make_unique<Gateway::LocalAreaControlService>(
                 m_options.controlEndpoint, m_options.gatewayKeyFile, m_options.controlStateFile);
-            if (context->GetSystem<Net::IAreaHandoffParticipant>() != nullptr)
+            if (m_handoffDispatcher->IsReady())
             {
                 m_controlService->SetHandoffDispatcher(m_handoffDispatcher.get());
             }
@@ -728,10 +729,6 @@ namespace Spark::Server
         if (m_handoffDispatcher)
         {
             m_handoffDispatcher->Stop();
-            if (auto* context = EngineContext::Get())
-            {
-                context->RegisterSystem<Net::AreaHandoffDispatcher>(nullptr);
-            }
         }
         m_handoffDispatcher.reset();
         if (m_server)

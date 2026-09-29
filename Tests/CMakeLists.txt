@@ -2269,16 +2269,26 @@ set_tests_properties(TerrafrontMigration_Reservation PROPERTIES
 if(ENABLE_NETWORKING)
     add_test(NAME TerrafrontMigration_Participant COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(TerrafrontMigration_Participant PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_Migration_;SPARK_TEST_EXPECT_COUNT=5"
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_Migration_;SPARK_TEST_EXPECT_COUNT=6"
         LABELS "persistence;terrafront-migration"
         RUN_SERIAL TRUE
         TIMEOUT 240)
     add_test(NAME TerrafrontMigration_Dispatcher COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(TerrafrontMigration_Dispatcher PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestHandoffParticipant.cpp;SPARK_TEST_EXPECT_COUNT=3"
+        ENVIRONMENT "SPARK_TEST_FILE=TestHandoffParticipant.cpp;SPARK_TEST_EXPECT_COUNT=4"
         LABELS "network;terrafront-migration"
         RUN_SERIAL TRUE
         TIMEOUT 30)
+endif()
+if(TARGET SparkGatewayCore)
+    # Authenticated, epoch-fenced area-control frames are the only way into the game-thread participant.
+    add_test(NAME TerrafrontMigration_GatewayDispatch COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(TerrafrontMigration_GatewayDispatch PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_NAME=GatewayAreaControl_DispatchesOnlyAuthenticatedFencedPhasesToParticipant;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "gateway;security;terrafront-migration"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
 endif()
 
 # DATA-120 / TF-120: authority processes sharing one TF_SAVE_ROOT database. The

@@ -64,6 +64,19 @@ namespace Spark::Net
         [[nodiscard]] virtual HandoffResult Acknowledge(const HandoffRequest& request) = 0;
         [[nodiscard]] virtual HandoffResult Abort(const HandoffRequest& request) = 0;
     };
+
+    /**
+     * @brief Host EventBus notice that a game module attached (non-null) or detached (null) its participant.
+     *
+     * A module publishes it on the host bus from `IEngineContext::GetEventBus()` on the game thread, in its
+     * Initialize and Shutdown. The bus keys channels by `std::type_index`, which compares type names, so the
+     * notice crosses the module DLL boundary; the host's `EngineContext::GetSystem<T>()` registry does not,
+     * because its type ids are per-binary statics.
+     */
+    struct AreaHandoffParticipantChanged
+    {
+        IAreaHandoffParticipant* participant = nullptr;
+    };
 } // namespace Spark::Net
 
 #endif // ENABLE_NETWORKING

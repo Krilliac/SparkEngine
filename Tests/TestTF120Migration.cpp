@@ -10,20 +10,14 @@
 #define NOMINMAX
 #endif
 
-#ifndef SPARK_TEST_SOURCE_DIR
-#define SPARK_TEST_SOURCE_DIR "."
-#endif
-
 #include "TestFramework.h"
 
 #include "Net/TFHandoffParticipant.h"
 #include "Persistence/TFDatabase.h"
 #include "Persistence/TFSavePaths.h"
-#include "Utils/JsonUtils.h"
 
+#include <cstdio>
 #include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -32,7 +26,6 @@ using namespace Terrafront;
 using Spark::Net::AreaID;
 using Spark::Net::HandoffRequest;
 using Spark::Net::HandoffResult;
-
 
 namespace
 {
@@ -148,26 +141,6 @@ namespace
     bool Bind(TFDatabase& db, const char* continent)
     {
         return db.BindAuthority(continent);
-    }
-
-    double ReadDropBudget()
-    {
-        const fs::path budgetPath = fs::path(SPARK_TEST_SOURCE_DIR) / "Tools" / "Terrafront" / "soak_budgets.json";
-        std::ifstream input(budgetPath);
-        if (!input.is_open())
-        {
-            return -1.0;
-        }
-        std::ostringstream text;
-        text << input.rdbuf();
-        Spark::Json::Value budget;
-        std::string error;
-        if (!Spark::Json::ParseStrict(text.str(), &budget, &error) || !budget["maxDroppedPacketFraction"].IsNumber())
-        {
-            return -1.0;
-        }
-        const double fraction = budget["maxDroppedPacketFraction"].AsNumber();
-        return std::isfinite(fraction) && fraction >= 0.0 && fraction <= 1.0 ? fraction : -1.0;
     }
 } // namespace
 
@@ -291,6 +264,62 @@ TEST(TF120_Migration_AbortIsTerminalAndRetryCanReserveAgain)
     fs::remove(path);
 }
 
+// A source that dies holding a reservation is recovered by its own restart (BindAuthority). The recovered
+// abort must keep the gateway epoch it was reserved under: the gateway retries the lost Abort at that epoch,
+// and the next handoff arrives at epoch + 1, not at a database revision.
+TEST(TF120_Migration_SourceRestartRecoveryKeepsGatewayEpoch)
+{
+    const fs::path path = FreshPath("test_tf120_migration_restart.db");
+    TFDatabase seedDb;
+    ASSERT_TRUE(seedDb.Open(path));
+    const uint64_t character = Seed(seedDb);
+    ASSERT_TRUE(character != 0);
+    ASSERT_TRUE(seedDb.Close());
+
+    const HandoffRequest reserved = Request(character, 2);
+    {
+        TFDatabase crashedSourceDb;
+        ASSERT_TRUE(crashedSourceDb.Open(path));
+        ASSERT_TRUE(Bind(crashedSourceDb, "alpha"));
+        TFCharacterRecord claimed;
+        ASSERT_TRUE(crashedSourceDb.ClaimCharacter(character, claimed));
+        Authority crashedAuthority;
+        TFHandoffParticipant crashedSource(crashedSourceDb, crashedAuthority);
+        ASSERT_TRUE(crashedSource.Prepare(reserved) == HandoffResult::Applied);
+        // The process dies here: no abort, no release.
+        EXPECT_TRUE(crashedSourceDb.Close());
+    }
+
+    TFDatabase sourceDb;
+    TFDatabase destinationDb;
+    ASSERT_TRUE(sourceDb.Open(path));
+    ASSERT_TRUE(destinationDb.Open(path));
+    ASSERT_TRUE(Bind(sourceDb, "alpha")); // restart recovery aborts the orphaned reservation
+    ASSERT_TRUE(Bind(destinationDb, "beta"));
+    TFCharacterRecord row;
+    ASSERT_TRUE(sourceDb.FindCharacter(character, row));
+    EXPECT_EQ(row.migrationState, std::string("aborted"));
+    EXPECT_EQ(row.migrationEpoch, reserved.epoch);
+    EXPECT_TRUE(row.residentContinent.empty());
+
+    Authority sourceAuthority;
+    Authority destinationAuthority;
+    TFHandoffParticipant source(sourceDb, sourceAuthority);
+    TFHandoffParticipant destination(destinationDb, destinationAuthority);
+    EXPECT_TRUE(destination.Commit(reserved) == HandoffResult::Rejected);
+    EXPECT_TRUE(source.Abort(reserved) == HandoffResult::Duplicate);
+
+    TFCharacterRecord claimed;
+    ASSERT_TRUE(sourceDb.ClaimCharacter(character, claimed));
+    const HandoffRequest next = Request(character, reserved.epoch + 1);
+    EXPECT_TRUE(source.Prepare(next) == HandoffResult::Applied);
+    EXPECT_TRUE(destination.Commit(next) == HandoffResult::Applied);
+    EXPECT_EQ(destinationAuthority.installCount, 1);
+    EXPECT_TRUE(sourceDb.Close());
+    EXPECT_TRUE(destinationDb.Close());
+    fs::remove(path);
+}
+
 TEST(TF120_Migration_CorruptCheckpointLeavesDecodeOutputUntouched)
 {
     TFHandoffState state;
@@ -306,7 +335,10 @@ TEST(TF120_Migration_CorruptCheckpointLeavesDecodeOutputUntouched)
     EXPECT_EQ(state.shield, before.shield);
 }
 
-TEST(TF120_Migration_CapacityAndDeliveryLossBudget)
+// Every character the module can hold migrates through the production participants and database. Every tenth
+// Commit request is lost before delivery (the gateway retries it) and every tenth reply is lost after the
+// destination applied it (the gateway redelivers it). Neither may lose a character or give it two owners.
+TEST(TF120_Migration_FullCapacityWithLostDeliveriesHasOneOwnerEach)
 {
     const fs::path path = FreshPath("test_tf120_migration_capacity.db");
     TFDatabase sourceDb;
@@ -333,47 +365,45 @@ TEST(TF120_Migration_CapacityAndDeliveryLossBudget)
     Authority destinationAuthority;
     TFHandoffParticipant source(sourceDb, sourceAuthority);
     TFHandoffParticipant destination(destinationDb, destinationAuthority);
-    uint32_t attempts = 0;
-    uint32_t dropped = 0;
+    uint32_t lostRequests = 0;
+    uint32_t lostReplies = 0;
     for (size_t index = 0; index < characters.size(); ++index)
     {
         TFCharacterRecord claimed;
         ASSERT_TRUE(sourceDb.ClaimCharacter(characters[index], claimed));
         const HandoffRequest request = Request(characters[index]);
-        ++attempts;
         EXPECT_TRUE(source.Prepare(request) == HandoffResult::Applied);
-        ++attempts;
         EXPECT_TRUE(destination.Prepare(request) == HandoffResult::Applied);
+        EXPECT_TRUE(source.Transfer(request) == HandoffResult::Applied);
+        EXPECT_TRUE(destination.Transfer(request) == HandoffResult::Applied);
+        EXPECT_TRUE(source.Commit(request) == HandoffResult::Applied);
         if (index % 10 == 0)
         {
-            ++attempts;
-            ++dropped;
+            // The destination never saw this Commit: the source still owns the reserved character.
+            ++lostRequests;
             TFCharacterRecord stillOwned;
             ASSERT_TRUE(sourceDb.FindCharacter(characters[index], stillOwned));
             EXPECT_EQ(stillOwned.residentContinent, std::string("alpha"));
             EXPECT_EQ(stillOwned.migrationState, std::string("reserved"));
         }
-        ++attempts;
-        EXPECT_TRUE(source.Transfer(request) == HandoffResult::Applied);
-        ++attempts;
-        EXPECT_TRUE(destination.Transfer(request) == HandoffResult::Applied);
-        ++attempts;
-        EXPECT_TRUE(source.Commit(request) == HandoffResult::Applied);
-        ++attempts;
         EXPECT_TRUE(destination.Commit(request) == HandoffResult::Applied);
-        ++attempts;
+        if (index % 10 == 5)
+        {
+            ++lostReplies;
+            EXPECT_TRUE(destination.Commit(request) == HandoffResult::Duplicate);
+        }
         EXPECT_TRUE(source.Acknowledge(request) == HandoffResult::Applied);
-        ++attempts;
         EXPECT_TRUE(destination.Acknowledge(request) == HandoffResult::Applied);
     }
 
-    const double budget = ReadDropBudget();
-    ASSERT_TRUE(budget >= 0.0);
-    const double measuredFraction = static_cast<double>(dropped) / static_cast<double>(attempts);
-    std::printf("[TF120] capacity=%u attempts=%u dropped=%u fraction=%.6f owners=%zu\n", kMaxPlayers, attempts, dropped,
-                measuredFraction, destinationAuthority.installedStates.size());
-    EXPECT_TRUE(measuredFraction <= budget);
+    std::printf("[TF120] characters=%u lostRequests=%u lostReplies=%u owners=%zu installs=%d
+                ", kMaxPlayers,
+                lostRequests,
+                lostReplies, destinationAuthority.installedStates.size(), destinationAuthority.installCount);
+    EXPECT_TRUE(lostRequests > 0 && lostReplies > 0);
     EXPECT_EQ(destinationAuthority.installedStates.size(), static_cast<size_t>(kMaxPlayers));
+    EXPECT_EQ(destinationAuthority.installCount, static_cast<int>(kMaxPlayers));
+    EXPECT_EQ(sourceAuthority.captureCount, static_cast<int>(kMaxPlayers));
 
     TFDatabase observer;
     ASSERT_TRUE(observer.Open(path));
@@ -383,6 +413,7 @@ TEST(TF120_Migration_CapacityAndDeliveryLossBudget)
         ASSERT_TRUE(observer.FindCharacter(character, row));
         EXPECT_EQ(row.residentContinent, std::string("beta"));
         EXPECT_TRUE(row.migrationOperation.empty());
+        EXPECT_EQ(row.migrationState, std::string("committed"));
         TFHandoffState checkpoint;
         ASSERT_TRUE(TFHandoffState::Decode(row.migrationPayload, checkpoint));
         ASSERT_TRUE(destinationAuthority.installedStates.contains(character));

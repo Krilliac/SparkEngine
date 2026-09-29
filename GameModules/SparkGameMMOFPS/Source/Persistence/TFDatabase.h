@@ -191,14 +191,14 @@ namespace Terrafront
         uint16_t rank = 1;
         uint32_t flux = 0;
         int64_t createdAtMs = 0, lastPlayedMs = 0;
-        uint64_t revision = 0;         ///< file revision of this row's last change (0 == legacy/never rewritten)
-        std::string residentContinent; ///< schema v4 "resident": continent key it is in world on; empty == none
+        uint64_t revision = 0;              ///< file revision of this row's last change (0 == legacy/never rewritten)
+        std::string residentContinent;      ///< schema v4 "resident": continent key it is in world on; empty == none
         std::string migrationOperation;     ///< TF-120 in-flight handoff operation identity; empty == none
         std::string migrationSource;        ///< TF-120 source continent for the in-flight handoff
         std::string migrationDestination;   ///< TF-120 destination continent for the in-flight handoff
         std::string migrationPayload;       ///< TF-120 bounded opaque participant state captured by the source
         std::string migrationLastOperation; ///< TF-120 last committed operation, for duplicate commit fencing
-        uint64_t migrationEpoch = 0; ///< TF-120 terminal fence epoch, unique within this database revision history
+        uint64_t migrationEpoch = 0; ///< TF-120 gateway epoch of the last reservation; the next one must be larger
         std::string migrationState;  ///< empty, reserved, committed, or aborted
 
         // --- W6 progression expansion (additive schema; absent keys on old save

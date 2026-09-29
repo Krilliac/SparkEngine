@@ -268,6 +268,7 @@ namespace Terrafront
 #ifdef ENABLE_NETWORKING
         std::unique_ptr<TFHandoffParticipant> m_handoff;
         std::unordered_map<uint64_t, TFHandoffState> m_suspendedCharacters;
+        float m_dbOpenRetrySeconds{0.0f}; ///< Update(): countdown to the next authority-database open attempt
 #endif
     };
 

@@ -107,4 +107,26 @@ TEST(TF120_HandoffDispatcherCancelsTimedOutRequest)
     EXPECT_EQ(participant.phases.size(), size_t(0));
 }
 
+// A module cannot reach the host's EngineContext registry across its DLL boundary; it attaches and detaches its
+// participant by publishing on the host EventBus, which the dispatcher follows until it is destroyed.
+TEST(TF120_HandoffDispatcherFollowsParticipantEventsOnHostBus)
+{
+    Spark::EventBus bus;
+    RecordingParticipant participant;
+    {
+        Spark::Net::AreaHandoffDispatcher dispatcher;
+        dispatcher.BindParticipantEvents(bus);
+        EXPECT_FALSE(dispatcher.IsReady());
+        bus.Publish(Spark::Net::AreaHandoffParticipantChanged{&participant});
+        EXPECT_TRUE(dispatcher.IsReady());
+        bus.Publish(Spark::Net::AreaHandoffParticipantChanged{nullptr});
+        EXPECT_FALSE(dispatcher.IsReady());
+        bus.Publish(Spark::Net::AreaHandoffParticipantChanged{&participant});
+        EXPECT_TRUE(dispatcher.IsReady());
+    }
+    // The destroyed dispatcher unsubscribed; a late module detach must not touch it.
+    EXPECT_EQ(bus.SubscriberCount<Spark::Net::AreaHandoffParticipantChanged>(), size_t(0));
+    bus.Publish(Spark::Net::AreaHandoffParticipantChanged{nullptr});
+}
+
 #endif // ENABLE_NETWORKING
