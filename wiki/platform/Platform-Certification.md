@@ -28,7 +28,7 @@ Platform certification (PLT-200, gate G08) proves that a specific commit builds,
 | `docs/certification/plans/<rowId>.json` | Collector probe plan for each declared row |
 | `Tools/platform-cert/collect_evidence.py` | Runs a plan's probes and writes the measured record |
 | `Tools/platform-cert/pe_imports.py` | Bounded PE32+ import/delay-import reader; measures a staged package's dependency closure |
-| `Tests/Tools/test_platform_certification.py` | 136 adversarial tests |
+| `Tests/Tools/test_platform_certification.py` | Adversarial validation tests |
 
 ## Support Matrix
 
@@ -221,7 +221,7 @@ This cannot be automated away — it requires real hardware running real builds.
 python -m pytest Tests/Tools/test_platform_certification.py -v
 ```
 
-136 tests covering schema loading, strict JSON parsing (duplicate keys, NaN/Infinity), additionalProperties enforcement, timestamp bounds, compiler identity, zero-duration pass rejection, SHA-256/artifact path confinement, canonical profile coverage, complete host matching, dependency closure, collector identity, resource limits, cross-validation, and CLI modes.
+Tests cover schema loading, strict JSON parsing (duplicate keys, NaN/Infinity), additionalProperties enforcement, timestamp bounds, compiler identity, zero-duration pass rejection, SHA-256/artifact path confinement, canonical profile coverage, complete host matching, dependency closure, collector identity, resource limits, cross-validation, and CLI modes.
 
 ## Windows installer predecessor evidence
 

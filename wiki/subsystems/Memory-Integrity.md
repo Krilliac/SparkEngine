@@ -52,7 +52,7 @@ The system operates on two complementary layers:
 |------|---------------|
 | `Engine/Security/MemoryIntegrity.h` | System class, types, macros |
 | `Engine/Security/MemoryIntegrity.cpp` | Implementation, platform code scanning, console commands |
-| `Tests/TestMemoryIntegrity.cpp` | 16 unit tests |
+| `Tests/TestMemoryIntegrity.cpp` | Unit tests |
 
 ## Key Types
 
@@ -245,7 +245,7 @@ When an attacker modifies a specific function:
 
 ## Testing
 
-16 unit tests in `Tests/TestMemoryIntegrity.cpp`:
+Unit tests in `Tests/TestMemoryIntegrity.cpp`:
 
 | Test | What it verifies |
 |------|-----------------|

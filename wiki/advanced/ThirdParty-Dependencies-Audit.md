@@ -81,7 +81,31 @@ failure that names the dependency, and requires that a non-strict configure only
 | VulkanMemoryAllocator | snapshot blob | MIT | WARN | `SPARK_HAS_VMA` |
 | glad | 0.1.36 (generated loader snapshot) | MIT | WARN | `SPARK_OPENGL_SUPPORT` |
 
-Each entry pins its source/version, SPDX-compatible license, local path, required files, and a fallback path so a missing dependency degrades gracefully (e.g. Jolt → `PhysicsSystemStub.cpp`, SDL2 → headless mode, stb_image → DDS-only textures, VMA → internal allocator). In a Git checkout, each submodule version field is rendered from `git ls-tree HEAD`; source archives without repository metadata retain a descriptive gitlink marker and are still validated by their bundled files.
+Each entry pins its source/version, declared license field, local path, required files, and a fallback path so a missing dependency degrades gracefully (e.g. Jolt → `PhysicsSystemStub.cpp`, SDL2 → headless mode, stb_image → DDS-only textures, VMA → internal allocator). The free-text or choice-based license fields remain subject to GOV-400 owner/legal review; this audit does not convert them into legal classifications. In a Git checkout, each submodule version field is rendered from `git ls-tree HEAD`; source archives without repository metadata retain a descriptive gitlink marker and are still validated by their bundled files.
+
+## Packaged notice coverage
+
+`tools/governance/generate_third_party_notices.py` reproduces only license text
+that is present on disk. It fails closed for missing notice files, undeclared
+license files, repository-authored stubs, malformed manifests, and non-SPDX
+choice fields. The generated repository notice is checked for freshness.
+
+Install trees are checked by `cmake/ValidateStagedPackageNotices.cmake` using
+the shared `cmake/PackageNoticeCoverageRules.json` rules. Every shipped
+ThirdParty-derived payload must map to a declared inventory entry, and every
+editor font must be named in the packaged `THIRD_PARTY_NOTICES.txt` with its
+reproduced license text. Coverage is an inventory check; it is not legal or
+maintainer sign-off. Run the package checker separately on the actual Windows
+and Linux install roots; a source-tree inventory pass cannot establish their
+packaged coverage.
+
+The legal validator also checks the support tables in `SECURITY.md` and
+`SUPPORT.md` against the channels the workflows actually publish (`Working`, and
+the unsupported nightly prereleases while `release.yml` still publishes them) and
+the unpublished release-profile boundary (`tools/site-data/policy.py`). Every
+published channel must appear in both tables. Local Git tags do not
+establish publication. Supported-version wording needs reviewed publication
+evidence before this conservative guard can be extended.
 
 ### Submodules vs. vendored snapshots
 

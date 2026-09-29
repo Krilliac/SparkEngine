@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "include": {
-    "rootDocuments": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "TROUBLESHOOTING.md", "CODE_OF_CONDUCT.md"],
+    "rootDocuments": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "SUPPORT.md", "TROUBLESHOOTING.md", "CODE_OF_CONDUCT.md"],
     "recursiveMarkdownRoots": ["wiki", "docs", "Assets", "cmake", "GameModules", "Templates", "SparkBuild", "SparkConsole", "SparkCrashReporter", "SparkDaemon", "SparkInstaller", "SparkLauncher", "SparkSDK", "SparkShaderCompiler", "Tests", "Tools"]
   },
   "excludePrefixes": [".claude/", ".github/prompts/", "ThirdParty/"],

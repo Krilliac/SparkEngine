@@ -46,7 +46,7 @@ All files confirmed present 2026-06-08.
 - Mesh shaders: `Shaders/HLSL/MeshShaders/`
 - C++ systems: `SparkEngine/Source/Graphics/`
 - DirectStorage: `SparkEngine/Source/Engine/Streaming/`
-- Tests: `Tests/` (7 files, ~72 tests)
+- Tests: dedicated hardware-acceleration test sources in `Tests/`
 
 ## Notes
 
@@ -61,7 +61,7 @@ All files confirmed present 2026-06-08.
 
 Status changes / verifications found during freshening:
 
-- All 7 new-system header/impl pairs and all 7 test files confirmed present.
+- All 7 new-system header/impl pairs and the corresponding test files confirmed present.
 - **DXR wiring moved file:** now in `GraphicsEngineWindows.cpp` (the renderer was split per-platform), not `GraphicsEngine.cpp`. `BuildTLAS` per-frame call and `SPARK_HARDWARE_RT` gate confirmed.
 - DirectStorage still on the fallback path (SDK not linked) — confirmed by in-file comments.
 - Metal ray-tracing backend (`MetalRayTracing.mm`) now present alongside the DXR/HybridRT paths.

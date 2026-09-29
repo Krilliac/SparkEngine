@@ -56,8 +56,8 @@ All systems are present in the current tree (verified 2026-06-08).
 
 ## Context
 
-At the time of the original analysis SparkEngine had 447K+ lines of C++, 30+ working
-subsystems, and ~3,119 tests, but lacked production infrastructure: no game packaging,
+At the time of the original analysis SparkEngine had 447K+ lines of C++, working
+subsystems, and a test suite, but lacked production infrastructure: no game packaging,
 no asset validation, no format versioning, no accessibility, limited cross-platform
 input, no performance regression testing, only one project template, basic UI widgets,
 no telemetry, undocumented achievements, no shader hot-reload, and no community
@@ -73,8 +73,7 @@ Updates / status changes since the original:
 - **All 16 systems (13 + 3 bonus) still present** at the stated paths — Implemented.
 - New observation: a second `GamePackager.h` exists under `Engine/Build/` alongside the
   original `Core/GamePackager.h` — flagged above to avoid duplicate-system drift.
-- Test totals referenced in the original ("3311+ tests") are superseded — the suite has
-  grown to ~6,000 tests; the per-system test files remain in place.
+- Test totals referenced in the original are superseded; use generated metrics for current totals; the per-system test files remain in place.
 - No regressions or removals detected.
 
 ## Related Pages

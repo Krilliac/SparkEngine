@@ -45,7 +45,7 @@ The relevant failure is almost always the first `error:` or `FAILED` line in eac
 gh run view <RUN_ID> --log-failed 2>&1 | grep -nE "error:|FAILED|undefined" | head -20
 ```
 
-If the root cause is buried (e.g. CMake reports a link error but the real issue was a missing symbol upstream), also scan for the first `ninja: build stopped` and read ~40 lines above.
+If the root cause is buried (e.g. CMake reports a link error but the real issue was a missing symbol upstream), also scan for the first `ninja: build stopped` and read the preceding diagnostic context.
 
 Note: this repo also has a `report-ci-errors` job that aggregates per-job error summaries and uploads them as artifacts (each build job uploads a `ci-errors-*` / `sanitizer-report-*` artifact). When present, downloading that artifact can be faster than scraping raw logs.
 

@@ -738,7 +738,7 @@ The coroutine system is **main-thread only**. All coroutine execution, yield che
 
 ## Testing
 
-The coroutine system is covered by `Tests/TestCoroutineScheduler.cpp` with 10 test cases:
+The coroutine system is covered by `Tests/TestCoroutineScheduler.cpp` with test cases:
 
 | Test Case | Description |
 |-----------|-------------|

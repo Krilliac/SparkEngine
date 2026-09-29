@@ -84,7 +84,7 @@ python3 tools/test-editor-live.py build/bin/SparkEditor
 3. **Engine needs SDL GL attributes** — added `SDL_GL_SetAttribute` calls (GL 3.3 Core, depth 24, stencil 8) before `SDL_CreateWindow` in `RunSDL2Windowed()`, matching the editor.
 4. **Engine needs an SDL GL context** — added `SDL_GL_CreateContext` + `SDL_GL_MakeCurrent` before `GraphicsEngine::Initialize`, so the RHI can detect and reuse the existing context.
 5. **GLXBadContext on shutdown** — when SDL2 owns the GL context, GLDevice must not call `glXDestroyContext()`. Fixed with an `m_ownsGLXContext` flag — only destroy the context if the engine created it (bootstrap path).
-6. **Process pipe fd aliasing breaks stderr capture** — `pipe()` can allocate fds overlapping 0–2 when prior tests closed those fds, corrupting `dup2` redirection. Fixed with `pipe2(O_CLOEXEC)` and an alias-safe `redirectFd` helper.
+6. **Process pipe fd aliasing breaks stderr capture** — `pipe()` can allocate fds overlapping standard descriptors when earlier tests closed those fds, corrupting `dup2` redirection. Fixed with `pipe2(O_CLOEXEC)` and an alias-safe `redirectFd` helper.
 
 ### Files modified (OpenGL path)
 
@@ -148,7 +148,7 @@ DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
 - **Verified against codebase 2026-06-08.**
 - **VERIFIED present:** `tools/test-editor-live.py` exists; `SPARK_DISABLE_VULKAN` / `SPARK_DISABLE_OPENGL` / `SPARK_DISABLE_D3D11` are all handled in `SparkEngine/Source/Graphics/RHI/RHIBridge.cpp` (and `SPARK_DISABLE_VULKAN` is also referenced in `SparkEngineLinux.cpp`). SDL2 submodule confirmed at `ThirdParty/SDL2` tracking the upstream `SDL2` branch.
 - **UPDATED:** Reorganized the two 2026-04-15 session-update blocks (originally at the top as raw session logs) into a clean Vulkan-fallback section and an env-var section; stripped session-diary framing.
-- **FLAGGED — STALE counts:** the original test-coverage figures (5660/5661 suite, "21 tests" in the live editor script) are 2026-04-15 snapshots; the unit-test suite has since grown past 6,000 tests, so those numbers are treated as historical and omitted from the body.
+- **FLAGGED — STALE counts:** the original test-coverage figures are 2026-04-15 snapshots; use current generated metrics for suite totals.
 - **UNVERIFIED:** the SDL2 pin `release-2.30.0` in the original entry — the submodule now tracks the `SDL2` branch generically; the exact checked-out tag was not pinned-down here.
 
 ## Related Pages
