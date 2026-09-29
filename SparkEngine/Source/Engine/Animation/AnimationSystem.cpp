@@ -52,7 +52,7 @@ namespace Spark::Animation
         /// the Windows ANSI code page, so non-ASCII file names would not be found there.
         std::filesystem::path PathFromUtf8(const std::string& utf8)
         {
-            return std::filesystem::path(std::u8string(utf8.begin(), utf8.end()));
+            return {std::u8string(utf8.begin(), utf8.end())};
         }
 
         /// .gltf and .glb go through the fail-closed glTF importers instead of the engine binary readers.

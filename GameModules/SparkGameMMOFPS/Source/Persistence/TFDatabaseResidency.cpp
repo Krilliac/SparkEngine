@@ -29,7 +29,9 @@ namespace Terrafront
     bool TFDatabase::BindAuthority(std::string_view continentKey)
     {
         if (!m_open || !m_boundContinent.empty() || !SavePaths::IsValidContinentKey(continentKey))
+        {
             return false;
+        }
 
         std::error_code lockEc;
         if (!m_authorityLock.Lock(AuthorityLockTarget(continentKey), kLockTimeout, lockEc))
@@ -39,16 +41,20 @@ namespace Terrafront
             const bool contended = SavePaths::ExclusiveFileLock::IsContention(lockEc);
             m_status = contended ? TFDatabaseStatus::AuthorityHeld : TFDatabaseStatus::Unreadable;
             if (contended)
+            {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                 "[TF] db %s: continent '%.*s' already has a live authority (%s); bind refused",
                                 SavePaths::Utf8ForLog(m_path).c_str(), static_cast<int>(continentKey.size()),
                                 continentKey.data(), lockEc.message().c_str());
+            }
             else
+            {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                 "[TF] db %s: the authority lock for continent '%.*s' cannot be opened (%s); bind "
                                 "refused",
                                 SavePaths::Utf8ForLog(m_path).c_str(), static_cast<int>(continentKey.size()),
                                 continentKey.data(), lockEc.message().c_str());
+            }
             return false;
         }
         m_boundContinent = std::string(continentKey);
@@ -64,7 +70,9 @@ namespace Terrafront
                                             for (TFCharacterRecord& row : fresh.characters)
                                             {
                                                 if (row.residentContinent != m_boundContinent)
+                                                {
                                                     continue;
+                                                }
                                                 row.residentContinent.clear();
                                                 row.revision = newRevision;
                                                 ++cleared;
@@ -81,9 +89,11 @@ namespace Terrafront
             return false;
         }
         if (cleared != 0)
+        {
             SPARK_LOG_WARN(Spark::LogCategory::Game,
                            "[TF] db %s: continent '%s' bound; cleared %zu character(s) a dead authority left in world",
                            SavePaths::Utf8ForLog(m_path).c_str(), m_boundContinent.c_str(), cleared);
+        }
         m_status = TFDatabaseStatus::ReadyExisting;
         return true;
     }
@@ -101,7 +111,9 @@ namespace Terrafront
     bool TFDatabase::ClaimCharacter(uint64_t charId, TFCharacterRecord& out, uint64_t expectedAccountId)
     {
         if (!m_open || m_boundContinent.empty())
+        {
             return false;
+        }
 
         TFCharacterRecord claimed;
         std::string heldBy;        // live continent that keeps the character
@@ -116,7 +128,9 @@ namespace Terrafront
                 // Ownership is checked inside the transaction, so a claim can never commit for a row
                 // that is not the caller's (there is no window between a check and the claim).
                 if (it == fresh.characters.end() || (expectedAccountId != 0 && it->accountId != expectedAccountId))
+                {
                     return false;
+                }
                 if (it->residentContinent == m_boundContinent)
                 {
                     alreadyHere = true;
@@ -147,11 +161,15 @@ namespace Terrafront
             return false;
         }
         if (!committed && !alreadyHere)
+        {
             return false;
+        }
         if (!takenOverFrom.empty())
+        {
             SPARK_LOG_WARN(Spark::LogCategory::Game,
                            "[TF] character %llu taken over on '%s' from continent '%s', whose authority is dead",
                            static_cast<unsigned long long>(charId), m_boundContinent.c_str(), takenOverFrom.c_str());
+        }
         m_baseRevisions[charId] = claimed.revision;
         m_status = TFDatabaseStatus::ReadyExisting;
         out = claimed;
@@ -161,7 +179,9 @@ namespace Terrafront
     bool TFDatabase::ReleaseCharacter(uint64_t charId)
     {
         if (!m_open || m_boundContinent.empty())
+        {
             return false;
+        }
 
         bool found = false;
         bool residentHere = false;
@@ -172,17 +192,23 @@ namespace Terrafront
                          auto it = std::find_if(fresh.characters.begin(), fresh.characters.end(),
                                                 [charId](const TFCharacterRecord& c) { return c.id == charId; });
                          if (it == fresh.characters.end())
+                         {
                              return false;
+                         }
                          found = true;
                          residentHere = it->residentContinent == m_boundContinent;
                          if (!residentHere)
+                         {
                              return false; // already released or taken over: nothing to do
+                         }
                          it->residentContinent.clear();
                          it->revision = newRevision;
                          return true;
                      });
         if (!found || (residentHere && !committed))
+        {
             return false;
+        }
         m_baseRevisions.erase(charId);
         m_status = TFDatabaseStatus::ReadyExisting;
         return true;

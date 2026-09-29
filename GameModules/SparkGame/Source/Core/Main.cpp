@@ -237,9 +237,13 @@ void SparkGameDefaultModule::RegisterConsoleCommands()
         [this](const std::vector<std::string>& args) -> std::string
         {
             if (!m_showcase)
+            {
                 return "Showcase not initialized";
+            }
             if (args.empty())
+            {
                 return "Usage: showcase_language <en|fr>";
+            }
             return m_showcase->SetLanguage(args[0]);
         },
         "Switch the showcase status language", "Showcase", "showcase_language <en|fr>");

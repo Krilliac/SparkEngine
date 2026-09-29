@@ -48,7 +48,9 @@ namespace SparkFPS
             for (size_t axis = 0; axis < 3; ++axis)
             {
                 if (std::abs(dir[axis]) < 1e-8f)
+                {
                     continue;
+                }
                 const float farFace = dir[axis] > 0.0f ? hi[axis] : lo[axis];
                 exit = (std::min)(exit, (farFace - point[axis]) / dir[axis]);
             }
@@ -70,18 +72,24 @@ namespace SparkFPS
                 if (std::abs(delta) < 1e-8f)
                 {
                     if (from[axis] < lo[axis] || from[axis] > hi[axis])
+                    {
                         return false;
+                    }
                     continue;
                 }
 
                 float t1 = (lo[axis] - from[axis]) / delta;
                 float t2 = (hi[axis] - from[axis]) / delta;
                 if (t1 > t2)
+                {
                     std::swap(t1, t2);
+                }
                 entry = (std::max)(entry, t1);
                 exit = (std::min)(exit, t2);
                 if (entry > exit)
+                {
                     return false;
+                }
             }
             outEntry = entry;
             return true;
@@ -101,7 +109,9 @@ namespace SparkFPS
         for (const auto& [id, state] : m_playerStates)
         {
             if (!state.isAlive)
+            {
                 continue;
+            }
 
             Spark::Net::HistorySnapshot::EntityState entity{};
             entity.networkID = id;
@@ -118,7 +128,9 @@ namespace SparkFPS
         // Damage arrives from projectiles and from client damage reports; a NaN or
         // non-positive amount would corrupt health or heal the victim.
         if (!std::isfinite(damage) || damage <= 0.0f)
+        {
             return;
+        }
 
         // The amount is server-owned: a report or client-fired projectile can deal at most
         // the one weapon's per-hit damage, never the figure the client chose.
@@ -126,7 +138,9 @@ namespace SparkFPS
 
         auto victimIt = m_playerStates.find(victimId);
         if (victimIt == m_playerStates.end() || !victimIt->second.isAlive)
+        {
             return;
+        }
 
         if (m_isServer)
         {
@@ -134,7 +148,9 @@ namespace SparkFPS
             // default-constructed entry for an unknown id.
             auto attackerIt = m_playerStates.find(attackerId);
             if (attackerIt == m_playerStates.end() || attackerId == victimId)
+            {
                 return;
+            }
 
             const NetworkPlayerState& attacker = attackerIt->second;
             const NetworkPlayerState& victim = victimIt->second;
@@ -143,7 +159,9 @@ namespace SparkFPS
             const float dz = victim.posZ - attacker.posZ;
             const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
             if (!(distance > 1e-4f))
+            {
                 return;
+            }
 
             // Eye-to-eye ray against the lag-compensated hitboxes. The hit counts only
             // when the first box along the ray is the victim's, so another player
@@ -163,7 +181,9 @@ namespace SparkFPS
             const float halfRTT = network.GetEstimatedRTT() * 0.0005f;
             const auto result = network.ValidateHit(network.GetServerTime(), halfRTT, rayOrigin, rayDir);
             if (!result.hit || result.entityID != victimId)
+            {
                 return;
+            }
         }
 
         victimIt->second.health -= damage;
@@ -186,11 +206,15 @@ namespace SparkFPS
     void FPSMultiplayerSystem::OnProjectileFired(uint32_t clientId, const ProjectileData& proj)
     {
         if (!m_isServer)
+        {
             return;
+        }
 
         auto ownerIt = m_playerStates.find(clientId);
         if (ownerIt == m_playerStates.end() || !ownerIt->second.isAlive)
+        {
             return;
+        }
 
         ProjectileData serverProj = proj;
         serverProj.projectileId = (serverProj.projectileId == 0) ? m_nextProjectileId++ : serverProj.projectileId;
@@ -208,7 +232,9 @@ namespace SparkFPS
     void FPSMultiplayerSystem::OnPlayerDamaged(uint32_t attackerId, uint32_t victimId, float damage)
     {
         if (!m_isServer)
+        {
             return;
+        }
 
         // A report is a client claim. Beyond ValidateHit's line-of-fire check, the attacker
         // must be alive and aiming at the victim: its last applied yaw must point into the
@@ -216,21 +242,25 @@ namespace SparkFPS
         const auto attackerIt = m_playerStates.find(attackerId);
         const auto victimIt = m_playerStates.find(victimId);
         if (attackerIt == m_playerStates.end() || victimIt == m_playerStates.end() || !attackerIt->second.isAlive)
+        {
             return;
+        }
 
         const NetworkPlayerState& attacker = attackerIt->second;
         const NetworkPlayerState& victim = victimIt->second;
         const float dx = victim.posX - attacker.posX;
         const float dz = victim.posZ - attacker.posZ;
         const float planarDistance = std::sqrt(dx * dx + dz * dz);
-        const float hitboxHalfDiagonal = kHitboxHalfWidth * std::sqrt(2.0f);
+        const float hitboxHalfDiagonal = kHitboxHalfWidth * std::numbers::sqrt2_v<float>;
         if (planarDistance > hitboxHalfDiagonal)
         {
             float aimError = std::atan2(dz, dx) - attacker.yaw;
             aimError = std::remainder(aimError, 2.0f * std::numbers::pi_v<float>);
             const float allowedError = std::atan(hitboxHalfDiagonal / planarDistance) + kAimToleranceRadians;
             if (!(std::abs(aimError) <= allowedError))
+            {
                 return;
+            }
         }
 
         ValidateHit(attackerId, victimId, damage);
@@ -239,7 +269,9 @@ namespace SparkFPS
     void FPSMultiplayerSystem::UpdateProjectiles(float dt)
     {
         if (!(dt >= 0.0f && std::isfinite(dt)))
+        {
             return;
+        }
         for (auto it = m_projectiles.begin(); it != m_projectiles.end();)
         {
             auto& projectile = it->second;
@@ -260,7 +292,9 @@ namespace SparkFPS
                 for (const auto& [playerId, state] : m_playerStates)
                 {
                     if (playerId == projectile.ownerId || !state.isAlive)
+                    {
                         continue;
+                    }
 
                     DirectX::XMFLOAT3 boxMin;
                     DirectX::XMFLOAT3 boxMax;
@@ -282,9 +316,13 @@ namespace SparkFPS
             }
 
             if (despawned)
+            {
                 it = m_projectiles.erase(it);
+            }
             else
+            {
                 ++it;
+            }
         }
     }
 

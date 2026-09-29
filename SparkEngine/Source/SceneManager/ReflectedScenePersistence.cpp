@@ -64,7 +64,7 @@ namespace Spark
             try
             {
                 text.reserve(static_cast<size_t>(declaredSize));
-                constexpr size_t kChunkBytes = 1024u * 1024u;
+                constexpr size_t kChunkBytes = size_t{1024} * 1024u;
                 std::string chunk(kChunkBytes, '\0');
                 while (input)
                 {
@@ -198,7 +198,9 @@ namespace Spark
     bool SaveWorld(const World& world, const std::string& path, std::string* error)
     {
         if (error)
+        {
             error->clear();
+        }
 
         // Serialize before touching any file. A world the reader would refuse (a
         // NaN/Inf field, or a document over the size or value caps) must fail here:
@@ -211,7 +213,9 @@ namespace Spark
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "[ReflectedScene] refusing to save %s: %s", path.c_str(),
                             serializeReason.c_str());
             if (error)
+            {
                 *error = "Scene '" + path + "' was not saved: " + serializeReason + ".";
+            }
             return false;
         }
 
@@ -231,7 +235,9 @@ namespace Spark
             SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] %s failed for %s: %s", stage, path.c_str(),
                            ioError.message().c_str());
             if (error)
+            {
                 *error = "Scene '" + path + "' was not saved: " + stage + " failed: " + ioError.message() + ".";
+            }
             return false;
         };
 
@@ -291,7 +297,9 @@ namespace Spark
 
             std::string text;
             if (!ReadTextFile(candidatePath, text, reason))
+            {
                 return false;
+            }
 
             // Deserialize into an isolated world first. A malformed document
             // can fail after creating entities or components; applying that

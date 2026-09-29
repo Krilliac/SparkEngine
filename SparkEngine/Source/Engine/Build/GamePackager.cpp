@@ -62,7 +62,9 @@ namespace Spark::Build
         {
             const std::optional<std::string> extension = FileUtils::TryPathToUtf8(path.extension());
             if (!extension)
+            {
                 return false;
+            }
             const auto moduleExtension = ModuleExtension(platform);
             const auto executableExtension = ExecutableExtension(platform);
             return *extension == moduleExtension || *extension == executableExtension ||
@@ -255,7 +257,9 @@ namespace Spark::Build
         // with no UTF-8 spelling would be recorded as a placeholder, so fail instead.
         const std::optional<std::string> outputRootUtf8 = FileUtils::TryPathToUtf8(outputRoot);
         if (!outputRootUtf8)
+        {
             result.errors.emplace_back("Output directory name is not valid Unicode");
+        }
         struct ManifestLine
         {
             std::string relativePath;
@@ -265,7 +269,9 @@ namespace Spark::Build
         for (const auto& entry : fs::recursive_directory_iterator(outputRoot, ec))
         {
             if (!entry.is_regular_file(ec))
+            {
                 continue;
+            }
             const auto relative = fs::relative(entry.path(), outputRoot, ec);
             std::optional<std::string> relativeUtf8 = ec ? std::nullopt : FileUtils::TryPathToUtf8(relative);
             if (!relativeUtf8)
@@ -276,7 +282,9 @@ namespace Spark::Build
             }
             // A manifest left by an earlier run is rewritten below; it does not list itself.
             if (*relativeUtf8 == "manifest.txt")
+            {
                 continue;
+            }
             manifestLines.push_back({std::move(*relativeUtf8), static_cast<unsigned long long>(entry.file_size(ec))});
         }
         if (!result.errors.empty())
@@ -305,7 +313,9 @@ namespace Spark::Build
             std::fprintf(manifest, "# Assets: %u\n", result.assetCount);
             std::fprintf(manifest, "# DLLs: %u\n\n", result.dllCount);
             for (const ManifestLine& line : manifestLines)
+            {
                 std::fprintf(manifest, "%s %llu\n", line.relativePath.c_str(), line.sizeBytes);
+            }
             std::fclose(manifest);
         }
         else
@@ -338,7 +348,8 @@ namespace Spark::Build
             if (entry.is_regular_file(ec))
                 totalBytes += entry.file_size(ec);
         }
-        result.outputPath = *outputRootUtf8;
+        // A non-Unicode output root was already recorded as an error above; never dereference it.
+        result.outputPath = outputRootUtf8.value_or(std::string{});
         result.totalSizeMB = static_cast<float>(totalBytes) / (1024.0f * 1024.0f);
         result.success = result.errors.empty();
         return publish(result, result.success);

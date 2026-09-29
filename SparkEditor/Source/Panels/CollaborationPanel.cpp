@@ -206,7 +206,9 @@ namespace SparkEditor
                     const auto port = static_cast<uint16_t>(m_portValue);
                     if (m_collabSession &&
                         m_collabSession->Connect(m_hostAddressBuffer, port, m_userNameBuffer, m_joinCodeBuffer))
+                    {
                         m_statusMessage = "Connected to peer at " + std::string(m_hostAddressBuffer) + ".";
+                    }
                     else
                         m_statusMessage = "Failed to join peer session.";
                 }

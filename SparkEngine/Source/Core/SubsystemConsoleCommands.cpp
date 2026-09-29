@@ -323,7 +323,9 @@ namespace Spark
     {
         const std::optional<double> value = StringUtils::ParseFloatingExact<double>(text);
         if (!value || !std::isfinite(*value) || *value < lo || *value > hi)
+        {
             return std::nullopt;
+        }
         return value;
     }
 
@@ -383,7 +385,9 @@ namespace Spark
                 const char* end = begin + args[0].size();
                 const auto [ptr, ec] = std::from_chars(begin, end, seed);
                 if (ec != std::errc{} || ptr != end || seed < 0)
+                {
                     return std::string("Invalid seed '") + args[0] + "' (state unchanged). " + kUsage;
+                }
                 SetImpairmentValue("SimulatedImpairmentSeed", seed);
                 return "Impairment seed set to " + std::to_string(seed);
             },
@@ -397,7 +401,9 @@ namespace Spark
                 for (const char* key :
                      {"SimulatedLatencyMs", "SimulatedPacketLoss", "SimulatedJitterMs", "SimulatedReorderPercent",
                       "SimulatedDuplicatePercent", "SimulatedImpairmentSeed"})
+                {
                     settings.SetValue("Network", key, "0");
+                }
                 Spark::Net::ApplyImpairmentSettings(settings);
                 return Spark::Net::InstabilitySimulator::GetInstance().Console_GetStatus();
             },

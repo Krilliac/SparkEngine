@@ -212,7 +212,9 @@ void GameplayShowcase::SetupLocalization()
     localization->SetFallbackLanguage("en");
     const auto languages = localization->GetAvailableLanguages();
     if (std::find(languages.begin(), languages.end(), localization->GetCurrentLanguage()) == languages.end())
+    {
         localization->SetCurrentLanguage("en");
+    }
     console.LogInfo("[Showcase] Loaded showcase strings (en, fr); current language: " +
                     localization->GetCurrentLanguage());
 }
@@ -422,7 +424,9 @@ std::string GameplayShowcase::GetStatus() const
 
     std::string status = ShowcaseLocalization::ShowcaseText(localization, "showcase.status.title") + "\n";
     if (localization)
+    {
         status += line("showcase.status.language", localization->GetCurrentLanguage());
+    }
     status += line("showcase.status.spawned", std::to_string(m_spawnedEntities.size()));
     status += line("showcase.status.damage_events", std::to_string(m_totalDamageEvents));
     status += line("showcase.status.kill_events", std::to_string(m_totalKillEvents));
@@ -456,12 +460,16 @@ std::string GameplayShowcase::SetLanguage(const std::string& languageCode)
 {
     auto* localization = m_context ? m_context->GetLocalization() : nullptr;
     if (!localization)
+    {
         return "Localization system not available";
+    }
     if (!localization->SetCurrentLanguage(languageCode))
     {
         std::string available;
         for (const auto& code : localization->GetAvailableLanguages())
+        {
             available += (available.empty() ? "" : ", ") + code;
+        }
         return "Language '" + languageCode + "' is not loaded (available: " + available + ")";
     }
     return "Language set to " + languageCode;

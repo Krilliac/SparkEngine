@@ -35,7 +35,9 @@ namespace Spark::Gateway
         const Json::Value* FindTyped(const Json::Value& object, const std::string& key, Json::Type type)
         {
             if (!object.HasKey(key))
+            {
                 return nullptr;
+            }
             const Json::Value& value = object[key];
             return value.GetType() == type ? &value : nullptr;
         }
@@ -93,15 +95,23 @@ namespace Spark::Gateway
         Json::Value root;
         std::string parseError;
         if (!Json::ParseBounded(fixtureText, limits, &root, &parseError))
+        {
             return fail("malformed or over budget (" + parseError + ")");
+        }
         if (!root.IsObject() || !HasOnlyKeys(root, {"version", "principals"}))
+        {
             return fail("root must be an object with only 'version' and 'principals'");
+        }
         const Json::Value* version = FindTyped(root, "version", Json::Type::Number);
         if (version == nullptr || version->AsNumber() != 1.0)
+        {
             return fail("'version' must be 1");
+        }
         const Json::Value* principals = FindTyped(root, "principals", Json::Type::Array);
         if (principals == nullptr)
+        {
             return fail("'principals' must be an array");
+        }
 
         std::unordered_set<std::string> principalIds;
         for (size_t index = 0; index < principals->Size(); ++index)
@@ -110,49 +120,71 @@ namespace Spark::Gateway
             const std::string where = "principals[" + std::to_string(index) + "]";
             const Json::Value& entry = (*principals)[index];
             if (!entry.IsObject() || !HasOnlyKeys(entry, {"credential", "principalId", "entitled", "moderation"}))
+            {
                 return fail(where + " must be an object with only credential, principalId, entitled, moderation");
+            }
             const Json::Value* credential = FindTyped(entry, "credential", Json::Type::String);
             const Json::Value* principalId = FindTyped(entry, "principalId", Json::Type::String);
             const Json::Value* entitled = FindTyped(entry, "entitled", Json::Type::Bool);
             const Json::Value* moderation = FindTyped(entry, "moderation", Json::Type::String);
             if (credential == nullptr || principalId == nullptr || entitled == nullptr || moderation == nullptr)
+            {
                 return fail(where + " is missing a field or has a field of the wrong type");
+            }
             const std::string& credentialText = credential->AsString();
             const std::string& principalText = principalId->AsString();
             if (credentialText.empty() || credentialText.size() > GatewayMaximumCredentialSize ||
                 !IsPrintableAscii(credentialText))
+            {
                 return fail(where + " credential must be 1-" + std::to_string(GatewayMaximumCredentialSize) +
                             " printable ASCII characters");
+            }
             if (principalText.empty() || principalText.size() > LocalFixtureMaximumPrincipalIdSize ||
                 !IsPrintableAscii(principalText))
+            {
                 return fail(where + " principalId must be 1-" + std::to_string(LocalFixtureMaximumPrincipalIdSize) +
                             " printable ASCII characters");
+            }
             const std::string& moderationText = moderation->AsString();
             if (moderationText != "none" && moderationText != "banned")
-                return fail(where + " moderation must be \"none\" or \"banned\"");
+            {
+                return fail(where + R"( moderation must be "none" or "banned")");
+            }
             if (!principalIds.insert(principalText).second)
+            {
                 return fail(where + " repeats a principalId");
+            }
 
             Principal principal;
             principal.principalId = principalText;
             principal.entitled = entitled->AsBool();
             principal.banned = moderationText == "banned";
             if (!m_principals.emplace(credentialText, std::move(principal)).second)
+            {
                 return fail(where + " repeats a credential");
+            }
         }
     }
 
     AuthenticationResult LocalFixtureAuthenticator::Authenticate(const AdmissionRequest& request)
     {
         if (!IsReady())
+        {
             return {false, {}, "Admission fixture is not loaded"};
+        }
         const auto found = m_principals.find(request.credential);
         if (found == m_principals.end())
+        {
             return {false, {}, "Unknown credential"};
+        }
         if (found->second.banned)
+        {
             return {false, {}, "Principal is banned"};
+        }
         if (!found->second.entitled)
+        {
             return {false, {}, "Principal is not entitled"};
+        }
         return {true, found->second.principalId, {}};
     }
 
@@ -163,10 +195,14 @@ namespace Spark::Gateway
         for (const AreaSnapshot& area : areas)
         {
             if (!area.online || area.areaId == Net::INVALID_AREA || area.sessions >= area.capacity)
+            {
                 continue;
+            }
             if (best == nullptr || area.sessions < best->sessions ||
                 (area.sessions == best->sessions && area.areaId < best->areaId))
+            {
                 best = &area;
+            }
         }
         return best == nullptr ? Net::INVALID_AREA : best->areaId;
     }

@@ -424,7 +424,9 @@ namespace SparkLauncher
     std::expected<std::filesystem::path, std::string> PathFromUtf8(std::string_view text)
     {
         if (text.find('\0') != std::string_view::npos)
+        {
             return std::unexpected("Path contains an embedded NUL character");
+        }
 #ifdef _WIN32
         auto wide = WideFromUtf8(text);
         if (!wide)
@@ -494,8 +496,12 @@ namespace SparkLauncher
         // silently truncate the child's command line, and invalid UTF-8 is refused
         // as an error instead of escaping as an exception.
         for (const auto& argument : request.arguments)
+        {
             if (argument.find('\0') != std::string::npos)
+            {
                 return std::unexpected("Launch argument contains an embedded NUL character");
+            }
+        }
 #ifdef _WIN32
         std::wstring commandLine;
         AppendQuotedArgument(commandLine, request.executable.wstring());

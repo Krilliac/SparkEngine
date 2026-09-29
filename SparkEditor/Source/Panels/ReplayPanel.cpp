@@ -116,7 +116,9 @@ namespace SparkEditor
             std::optional<std::string> narrowPath = Spark::FileUtils::TryPathToNarrow(entry.path());
             std::optional<std::string> name = Spark::FileUtils::TryPathToUtf8(entry.path().filename());
             if (!narrowPath || !name)
+            {
                 continue;
+            }
 
             ReplayFileInfo info;
             info.path = std::move(*narrowPath);

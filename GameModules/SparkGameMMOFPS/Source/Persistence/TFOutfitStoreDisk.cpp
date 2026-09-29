@@ -129,7 +129,9 @@ namespace Terrafront
         {
             uint32_t schemaVersion = 0;
             if (!ReadUnsigned(root["schemaVersion"], schemaVersion) || schemaVersion == 0)
+            {
                 return LoadResult::Corrupt;
+            }
             if (schemaVersion > kSchemaVersion)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game,

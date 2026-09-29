@@ -56,9 +56,13 @@ void SparkGameModule::RegisterHeadlessPersistenceCommands()
         [this](const std::vector<std::string>& args) -> std::string
         {
             if (args.empty())
+            {
                 return "Usage: xp <amount>";
+            }
             if (!m_headlessProgression)
+            {
                 return "Progression not initialized";
+            }
             int amount;
             try
             {
@@ -92,7 +96,9 @@ std::string SparkGameModule::HeadlessQuickSave() const
     Spark::SaveSystem* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
     World* world = m_context ? m_context->GetWorld() : nullptr;
     if (!saveSystem || !world)
+    {
         return "Save system unavailable: engine exposes no save system or world";
+    }
 
     Spark::FPSLocalProfile profile;
     profile.playTimeSeconds = m_headlessPlayTime;
@@ -122,7 +128,9 @@ std::string SparkGameModule::HeadlessQuickSave() const
     profile.WriteTo(customState);
 
     if (!saveSystem->Save(kQuickSaveSlot, *world, metadata, customState))
+    {
         return std::string("Quick save FAILED to write slot '") + kQuickSaveSlot + "'";
+    }
     return std::string("Quick save written to slot '") + kQuickSaveSlot + "'";
 }
 
@@ -131,9 +139,13 @@ std::string SparkGameModule::HeadlessQuickLoad()
     Spark::SaveSystem* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
     World* world = m_context ? m_context->GetWorld() : nullptr;
     if (!saveSystem || !world)
+    {
         return "Save system unavailable: engine exposes no save system or world";
+    }
     if (!saveSystem->SaveExists(kQuickSaveSlot))
+    {
         return std::string("No quicksave found in slot '") + kQuickSaveSlot + "'";
+    }
 
     // The profile is validated before the world is replaced, so a rejected profile block
     // leaves both the world and this host's progression and scoreboard as they were.
@@ -154,9 +166,13 @@ std::string SparkGameModule::HeadlessQuickLoad()
     // scoreboard are the state this host owns.
     m_headlessPlayTime = profile.playTimeSeconds;
     if (m_headlessProgression)
+    {
         m_headlessProgression->RestoreProgress(profile.progressionXP);
+    }
     if (m_headlessMode)
+    {
         m_headlessMode->RestorePlayerScore(kLocalPlayer, profile.kills, profile.deaths, profile.score);
+    }
 
     // Report the level re-derived from XP, as the windowed host does.
     const int restoredLevel = m_headlessProgression ? m_headlessProgression->GetLevel() : profile.progressionLevel;

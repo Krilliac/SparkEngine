@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -41,7 +42,7 @@ namespace Spark
         std::string PathToUtf8(const std::filesystem::path& path)
         {
             const std::u8string utf8 = path.u8string();
-            return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
         }
 
         /// True when @p path is a Windows reparse point (symlink, junction, mount point, or any
@@ -69,9 +70,13 @@ namespace Spark
             const fs::file_status status = entry.symlink_status(ec);
             // An exact type match rejects file_type::symlink and MSVC's file_type::junction.
             if (ec || status.type() != fs::file_type::directory)
+            {
                 return false;
+            }
             if (IsReparsePointOrUnreadable(entry.path()))
+            {
                 return false;
+            }
             const fs::path canonicalEntry = fs::canonical(entry.path(), ec);
             return !ec && canonicalEntry.parent_path() == canonicalRoot;
         }
@@ -86,7 +91,9 @@ namespace Spark
             namespace fs = std::filesystem;
             std::error_code ec;
             if (!entry.is_directory(ec) || ec)
+            {
                 return std::nullopt; // plain files (and dangling links) in the mods root are not mods
+            }
 
             // Reject symlinks, junctions and other reparse points, and anything whose real
             // location is not directly under the mods root, so a crafted mods directory cannot
@@ -106,7 +113,9 @@ namespace Spark
             fs::path manifestPath = entry.path() / "mod.json";
             const fs::file_status manifestStatus = fs::symlink_status(manifestPath, ec);
             if (manifestStatus.type() == fs::file_type::not_found)
+            {
                 return std::nullopt;
+            }
             if (ec || manifestStatus.type() != fs::file_type::regular || IsReparsePointOrUnreadable(manifestPath))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Core,
@@ -117,7 +126,7 @@ namespace Spark
             return manifestPath;
         }
 
-        enum class ModScriptScan
+        enum class ModScriptScan : std::uint8_t
         {
             None,   ///< No script content found
             Found,  ///< A Scripts/ directory or an .as file is present
@@ -136,14 +145,20 @@ namespace Spark
         {
             using CharT = std::filesystem::path::value_type;
             if (native.size() != lowerAscii.size())
+            {
                 return false;
+            }
             for (size_t i = 0; i < native.size(); ++i)
             {
                 CharT c = native[i];
                 if (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
+                {
                     c = static_cast<CharT>(c - static_cast<CharT>('A') + static_cast<CharT>('a'));
+                }
                 if (c != static_cast<CharT>(static_cast<unsigned char>(lowerAscii[i])))
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -160,28 +175,40 @@ namespace Spark
                 std::error_code ec;
                 const fs::path root = FileUtils::PathFromUtf8(modPath);
                 if (root.empty())
+                {
                     return ModScriptScan::Unknown;
+                }
                 fs::recursive_directory_iterator it(root, fs::directory_options::none, ec);
                 if (ec)
+                {
                     return ModScriptScan::Unknown;
+                }
 
                 const fs::recursive_directory_iterator end;
                 size_t inspected = 0;
                 while (it != end)
                 {
                     if (++inspected > kMaxModEntriesInspected)
+                    {
                         return ModScriptScan::Unknown;
+                    }
 
                     const fs::path& entryPath = it->path();
                     std::error_code typeEc;
                     if (it->is_directory(typeEc) && NativeEqualsAsciiNoCase(entryPath.filename().native(), "scripts"))
+                    {
                         return ModScriptScan::Found;
+                    }
                     if (NativeEqualsAsciiNoCase(entryPath.extension().native(), ".as"))
+                    {
                         return ModScriptScan::Found;
+                    }
 
                     it.increment(ec);
                     if (ec)
+                    {
                         return ModScriptScan::Unknown;
+                    }
                 }
                 return ModScriptScan::None;
             }

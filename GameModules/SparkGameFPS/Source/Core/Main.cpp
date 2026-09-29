@@ -55,7 +55,9 @@ namespace
         template <typename... Args> void RegisterCommand(const std::string& name, Args&&... args)
         {
             if (!SparkFPS::ConsolePolicy::ShouldRegister(name, SparkFPS::ConsolePolicy::kDeveloperCommandsEnabled))
+            {
                 return;
+            }
             m_console.RegisterCommand(name, std::forward<Args>(args)...);
             m_registeredNames.push_back(name);
         }
@@ -407,7 +409,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Game not available";
             const std::optional<float> scale = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
             if (!scale)
+            {
                 return "Error: time scale must be a finite number, got '" + args[0] + "'";
+            }
             game->SetTimeScale(*scale);
             return "Time scale set to " + std::to_string(*scale);
         },
@@ -425,7 +429,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
             const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
             const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
             if (!x || !y || !z)
+            {
                 return "Error: player_tp coordinates must be finite numbers";
+            }
             game->TeleportPlayer(*x, *y, *z);
             return "Teleported to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
         },
@@ -443,7 +449,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
             const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
             const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[3]);
             if (!x || !y || !z)
+            {
                 return "Error: spawn coordinates must be finite numbers";
+            }
             const bool ok = game->SpawnObject(args[0], *x, *y, *z);
             return ok ? "Spawned " + args[0] : "Failed to spawn '" + args[0] + "'";
         },
@@ -749,7 +757,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: audio_volume <master|sfx|music> <0.0-1.0>";
             const std::optional<float> parsedVolume = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
             if (!parsedVolume)
+            {
                 return "Invalid volume value: " + args[1];
+            }
             const float vol = *parsedVolume;
             auto& mixer = Spark::Audio::AudioBusMixer::GetInstance();
             if (args[0] == "master")
@@ -924,7 +934,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Sequence not found: " + args[0];
             const std::optional<float> seconds = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
             if (!seconds)
+            {
                 return "Invalid time value: " + args[1];
+            }
             seq->SetTime(*seconds);
             return "Seeked " + args[0] + " to " + args[1] + "s";
         },
@@ -1004,7 +1016,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: replay_seek <seconds>";
             const std::optional<float> t = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
             if (!t)
+            {
                 return "Invalid time value: " + args[0];
+            }
             Spark::ReplaySystem::GetInstance().SeekTo(*t);
             return "Seeked to " + args[0] + "s";
         },
@@ -1018,7 +1032,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: replay_speed <multiplier>";
             const std::optional<float> speed = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
             if (!speed)
+            {
                 return "Invalid speed value: " + args[0];
+            }
             Spark::ReplaySystem::GetInstance().SetPlaybackSpeed(*speed);
             return "Playback speed set to " + std::to_string(*speed) + "x";
         },
@@ -1092,7 +1108,9 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Wave spawner not initialized";
             const std::optional<float> scale = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
             if (!scale)
+            {
                 return "Invalid scale value: " + args[0];
+            }
             if (!Spark::WaveComposition::IsValidDifficultyScale(*scale))
             {
                 return "Difficulty scale must be between 1.0 and 3.0";

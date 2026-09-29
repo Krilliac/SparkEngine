@@ -295,7 +295,7 @@ DirectX::XMFLOAT3 ASGetPosition(EntityID entity)
 
 void ASSetPosition(EntityID entity, const DirectX::XMFLOAT3& pos)
 {
-    if (Transform* transform = FindScriptComponent<Transform>(entity))
+    if (auto* transform = FindScriptComponent<Transform>(entity))
         transform->position = pos;
 }
 
@@ -307,7 +307,7 @@ DirectX::XMFLOAT3 ASGetRotation(EntityID entity)
 
 void ASSetRotation(EntityID entity, const DirectX::XMFLOAT3& rot)
 {
-    if (Transform* transform = FindScriptComponent<Transform>(entity))
+    if (auto* transform = FindScriptComponent<Transform>(entity))
         transform->rotation = rot;
 }
 
@@ -319,7 +319,7 @@ float ASGetHealth(EntityID entity)
 
 void ASSetHealth(EntityID entity, float health)
 {
-    if (HealthComponent* component = FindScriptComponent<HealthComponent>(entity))
+    if (auto* component = FindScriptComponent<HealthComponent>(entity))
         component->health = health;
 }
 

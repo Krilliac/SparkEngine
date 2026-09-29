@@ -163,7 +163,7 @@ namespace Spark::Server
     std::string FormatHealthJson(const ServerHealth& health)
     {
         std::ostringstream stream;
-        stream << "{\"schema\":\"" << HealthSchema << "\",\"live\":" << JsonBool(health.live)
+        stream << R"({"schema":")" << HealthSchema << R"(","live":)" << JsonBool(health.live)
                << ",\"ready\":" << JsonBool(health.ready) << ",\"draining\":" << JsonBool(health.draining)
                << ",\"stopping\":" << JsonBool(health.stopping) << ",\"port\":" << health.port
                << ",\"players\":" << health.players << ",\"ticks\":" << health.ticks

@@ -34,18 +34,24 @@ namespace Spark::Scripting::Detail
         std::string FloatLiteral(float value)
         {
             if (!std::isfinite(value))
+            {
                 return "0.0f";
+            }
 
             std::string fixed = std::to_string(value);
             if (std::strtof(fixed.c_str(), nullptr) == value)
+            {
                 return fixed + "f";
+            }
 
             char buffer[32];
             const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), value);
             std::string shortest(buffer, error == std::errc{} ? end : buffer);
             const size_t exponent = shortest.find('e');
             if (shortest.find('.') == std::string::npos)
+            {
                 shortest.insert(exponent == std::string::npos ? shortest.size() : exponent, ".0");
+            }
             return shortest + "f";
         }
     } // namespace
@@ -80,7 +86,9 @@ namespace Spark::Scripting::Detail
             default:
                 // Other raw control characters are stripped rather than emitted.
                 if (c >= 0x20)
+                {
                     out += static_cast<char>(c);
+                }
                 break;
             }
         }
@@ -96,19 +104,27 @@ namespace Spark::Scripting::Detail
     std::string SanitizeIdentifier(const std::string& raw, const char* fallback)
     {
         if (raw.empty())
+        {
             return fallback;
+        }
 
         std::string out;
         out.reserve(raw.size());
         for (unsigned char c : raw)
         {
             if (std::isalnum(c) || c == '_')
+            {
                 out += static_cast<char>(c);
+            }
             else
+            {
                 out += '_';
+            }
         }
         if (std::isdigit(static_cast<unsigned char>(out[0])))
+        {
             out.insert(out.begin(), '_');
+        }
 
         return out;
     }
@@ -166,7 +182,9 @@ namespace Spark::Scripting::Detail
     bool IsVariableDefaultLiteral(PinKind kind, std::string_view text)
     {
         if (text.empty())
+        {
             return true;
+        }
 
         switch (kind)
         {
@@ -180,36 +198,50 @@ namespace Spark::Scripting::Detail
         {
             std::string_view rest = text.starts_with('-') ? text.substr(1) : text;
             if (rest.ends_with('f'))
+            {
                 rest.remove_suffix(1);
+            }
             const size_t exponent = rest.find_first_of("eE");
             std::string_view mantissa = rest.substr(0, exponent);
             if (exponent != std::string_view::npos)
             {
                 std::string_view power = rest.substr(exponent + 1);
                 if (power.starts_with('-') || power.starts_with('+'))
+                {
                     power.remove_prefix(1);
+                }
                 if (!IsDigits(power))
+                {
                     return false;
+                }
             }
             const size_t dot = mantissa.find('.');
             if (dot == std::string_view::npos)
+            {
                 return IsDigits(mantissa);
+            }
             return IsDigits(mantissa.substr(0, dot)) && IsDigits(mantissa.substr(dot + 1));
         }
         case PinKind::String:
         {
             if (text.size() < 2 || text.front() != '"' || text.back() != '"')
+            {
                 return false;
+            }
             const std::string_view inner = text.substr(1, text.size() - 2);
             for (size_t i = 0; i < inner.size(); ++i)
             {
                 const auto c = static_cast<unsigned char>(inner[i]);
                 if (c < 0x20 || c == '"')
+                {
                     return false;
+                }
                 if (c == '\\')
                 {
                     if (i + 1 >= inner.size() || std::string_view("\\\"nrt").find(inner[i + 1]) == std::string::npos)
+                    {
                         return false;
+                    }
                     ++i;
                 }
             }
@@ -235,7 +267,9 @@ namespace Spark::Scripting::Detail
     bool IsPureNode(const ScriptNode& node)
     {
         if (IsEventNode(node.type) || IsActionNode(node.type))
+        {
             return false;
+        }
         switch (node.type)
         {
         case ScriptNodeType::SetVariable:
@@ -256,7 +290,9 @@ namespace Spark::Scripting::Detail
         for (uint32_t i = 0; i < static_cast<uint32_t>(node.outputs.size()); ++i)
         {
             if (node.outputs[i].kind != PinKind::Execution)
+            {
                 return i;
+            }
         }
         return 0;
     }
@@ -270,7 +306,9 @@ namespace Spark::Scripting::Detail
     {
         const auto it = node.properties.find(key);
         if (it != node.properties.end() && !it->second.empty())
+        {
             return it->second;
+        }
         return fallback;
     }
 

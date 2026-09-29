@@ -164,7 +164,7 @@ namespace Spark::Graphics::Detail
                 // weakly_canonical resolves symlinks, so a link inside the
                 // directory that points out of it is refused here too.
                 std::error_code ec;
-                const std::filesystem::path resolved = std::filesystem::weakly_canonical(m_directory / relative, ec);
+                std::filesystem::path resolved = std::filesystem::weakly_canonical(m_directory / relative, ec);
                 if (ec)
                 {
                     return std::nullopt;

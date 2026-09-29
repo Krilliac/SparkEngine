@@ -37,17 +37,17 @@ namespace Spark::SaveFileDurability
         constexpr int kMaxStagingCreateAttempts = 3;
 
         /// Chunk size for CopyFileAtomically's streamed copy.
-        constexpr std::size_t kCopyChunkBytes = 64 * 1024;
+        constexpr std::size_t kCopyChunkBytes = std::size_t{64} * 1024;
 
 #if defined(_WIN32)
         std::error_code LastWindowsError()
         {
-            return std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return {static_cast<int>(::GetLastError()), std::system_category()};
         }
 #else
         std::error_code LastPosixError()
         {
-            return std::error_code(errno, std::generic_category());
+            return {errno, std::generic_category()};
         }
 #endif
 
@@ -152,7 +152,9 @@ namespace Spark::SaveFileDurability
                     if (written < 0)
                     {
                         if (errno == EINTR)
+                        {
                             continue;
+                        }
                         error = LastPosixError();
                         return false;
                     }
@@ -216,7 +218,9 @@ namespace Spark::SaveFileDurability
                 m_handle = INVALID_HANDLE_VALUE;
 #else
                 if (m_fd >= 0)
+                {
                     ::close(m_fd);
+                }
                 m_fd = -1;
 #endif
             }
@@ -241,7 +245,9 @@ namespace Spark::SaveFileDurability
                 if (file.TryCreate(staging, createError))
                 {
                     if (file.VerifyFreshRegularFile(error))
+                    {
                         return true;
+                    }
                     file.CloseQuietly();
                     std::error_code removeError;
                     std::filesystem::remove(staging, removeError);
@@ -298,7 +304,9 @@ namespace Spark::SaveFileDurability
                 break;
             }
             if (!error)
+            {
                 error = std::make_error_code(std::errc::io_error);
+            }
             RemoveQuietly(staging);
             return false;
         }
@@ -308,7 +316,9 @@ namespace Spark::SaveFileDurability
     {
         ExclusiveStagingFile file;
         if (!CreateStaging(file, staging, error))
+        {
             return false;
+        }
         if (!file.Write(bytes.data(), bytes.size(), error))
         {
             file.CloseQuietly();
@@ -387,7 +397,9 @@ namespace Spark::SaveFileDurability
         {
             ExclusiveStagingFile file;
             if (!CreateStaging(file, staging, error))
+            {
                 return false;
+            }
 
             std::vector<char> chunk(kCopyChunkBytes);
             while (input)
@@ -433,7 +445,9 @@ namespace Spark::SaveFileDurability
         staging += ".tmp";
 
         if (!WriteStagingFile(staging, bytes, error))
+        {
             return false;
+        }
 
         if (retainBackup)
         {
@@ -483,7 +497,9 @@ namespace Spark::SaveFileDurability
         if (!WriteStagingFile(staging, bytes, error))
         {
             if (!error)
+            {
                 error = std::make_error_code(std::errc::io_error);
+            }
             return false;
         }
         return Publish(staging, destination, error);

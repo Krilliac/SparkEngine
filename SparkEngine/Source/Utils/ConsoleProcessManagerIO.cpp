@@ -309,7 +309,9 @@ namespace Spark
         std::string name;
         tokens >> name;
         if (name.empty())
+        {
             return {};
+        }
 
         // quit/assert_mode/assert_test/crash_test belong to this manager (quit
         // routes into the platform loop through m_shutdownRequestHandler). Every
@@ -333,7 +335,9 @@ namespace Spark
         // Finish the previous batch before taking a new one; while the child is
         // not draining, the queue keeps absorbing lines under its drop-oldest cap.
         if (!FlushPendingWrite())
+        {
             return;
+        }
 
         std::queue<std::string> messagesToSend;
         uint64_t dropped = 0;

@@ -354,7 +354,9 @@ namespace Spark
         {
             const std::streamoff position = file.tellg();
             if (position < 0 || position > fileEnd)
+            {
                 return 0;
+            }
             return static_cast<uint64_t>(fileEnd - position);
         }
 
@@ -364,7 +366,9 @@ namespace Spark
         {
             const uint64_t remaining = BytesRemaining(file, fileEnd);
             if (count <= remaining / recordBytes)
+            {
                 return true;
+            }
             SPARK_LOG_WARN(Spark::LogCategory::Core,
                            "ReplaySystem::LoadFromFile: '%s' declares %u %s (>= %llu bytes each) but only %llu bytes "
                            "remain in the file",
@@ -489,7 +493,9 @@ namespace Spark
         if (!file || frameCount > kMaxFrameCount)
             return false;
         if (!CountFitsRemaining(filePath, "frames", frameCount, kFrameRecordMinBytes, file, fileEnd))
+        {
             return false;
+        }
 
         loaded.frames.resize(frameCount);
         for (uint32_t f = 0; f < frameCount; ++f)
@@ -503,7 +509,9 @@ namespace Spark
             if (!file || entityCount > kMaxEntityCount)
                 return false;
             if (!CountFitsRemaining(filePath, "entities", entityCount, kEntityRecordBytes, file, fileEnd))
+            {
                 return false;
+            }
 
             frame.entities.resize(entityCount);
             for (uint32_t e = 0; e < entityCount; ++e)
@@ -527,7 +535,9 @@ namespace Spark
         if (!file || eventCount > kMaxEventCount)
             return false;
         if (!CountFitsRemaining(filePath, "events", eventCount, kEventRecordMinBytes, file, fileEnd))
+        {
             return false;
+        }
 
         loaded.events.resize(eventCount);
         for (uint32_t i = 0; i < eventCount; ++i)

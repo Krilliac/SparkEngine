@@ -717,7 +717,9 @@ namespace SparkEditor
             // the full path has a narrow spelling, its stem does too.
             std::optional<std::string> narrowPath = Spark::FileUtils::TryPathToNarrow(p);
             if (!narrowPath)
+            {
                 continue;
+            }
 
             LayoutInfo info;
             info.name = p.stem().string();

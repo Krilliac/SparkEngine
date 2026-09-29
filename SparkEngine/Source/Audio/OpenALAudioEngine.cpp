@@ -75,15 +75,25 @@ namespace Spark::Audio
     int SelectOpenALWavFormat(const WAVEFORMATEX& format)
     {
         if (format.wFormatTag != WAVE_FORMAT_PCM)
+        {
             return 0;
+        }
         if (format.nChannels == 1 && format.wBitsPerSample == 8)
+        {
             return AL_FORMAT_MONO8;
+        }
         if (format.nChannels == 1 && format.wBitsPerSample == 16)
+        {
             return AL_FORMAT_MONO16;
+        }
         if (format.nChannels == 2 && format.wBitsPerSample == 8)
+        {
             return AL_FORMAT_STEREO8;
+        }
         if (format.nChannels == 2 && format.wBitsPerSample == 16)
+        {
             return AL_FORMAT_STEREO16;
+        }
         return 0;
     }
 

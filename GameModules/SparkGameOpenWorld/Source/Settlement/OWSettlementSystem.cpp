@@ -286,7 +286,9 @@ namespace OpenWorld
     {
         const Settlement* nearest = GetNearestSettlement(x, z);
         if (!nearest)
+        {
             return nullptr;
+        }
         const float dx = x - nearest->centerX;
         const float dz = z - nearest->centerZ;
         return dx * dx + dz * dz <= nearest->radius * nearest->radius ? nearest : nullptr;
@@ -296,9 +298,13 @@ namespace OpenWorld
     {
         const Settlement* settlement = GetSettlement(settlementId);
         if (!settlement)
+        {
             return false;
+        }
         if (m_visitedSettlements.insert(settlementId).second)
+        {
             Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Visited settlement: " + settlement->name);
+        }
         return true;
     }
 
@@ -412,7 +418,9 @@ namespace OpenWorld
             if (s.hasInn)
                 ss << " | Inn";
             if (IsSettlementVisited(s.settlementId))
+            {
                 ss << " | Visited";
+            }
             ss << "\n";
         }
         return ss.str();

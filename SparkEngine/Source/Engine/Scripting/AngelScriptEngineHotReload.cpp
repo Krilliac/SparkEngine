@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <format>
 #include <utility>
 
 std::string AngelScriptEngine::GetModuleFilePath(const std::string& moduleName) const
@@ -134,8 +135,8 @@ void AngelScriptEngine::RestoreFields(asIScriptObject* object, const std::vector
         if (old->typeDecl != newDecl)
         {
             ++report.dropped; // R5: retyped
-            AddNote(report.notes, location + "." + name + ": retyped from " + old->typeDecl + " to " + newDecl +
-                                      ", constructor value kept");
+            AddNote(report.notes, std::format("{}.{}: retyped from {} to {}, constructor value kept", location, name,
+                                              old->typeDecl, newDecl));
             continue;
         }
 
@@ -144,8 +145,9 @@ void AngelScriptEngine::RestoreFields(asIScriptObject* object, const std::vector
         {
             ++report.dropped; // R4
             AddNote(report.notes,
-                    location + "." + name + ": " + newDecl +
-                        " is not carried across reload (handle or reference type), constructor value kept");
+                    std::format("{}.{}: {} is not carried across reload (handle or reference type), constructor "
+                                "value kept",
+                                location, name, newDecl));
             continue;
         }
 

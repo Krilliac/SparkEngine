@@ -49,7 +49,9 @@ namespace Spark
                 bool HasRequiredGLVersion()
                 {
                     if (GLAD_GL_VERSION_4_5)
+                    {
                         return true;
+                    }
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
                                     "OpenGL 4.5 core is required but the current context provides %d.%d",
                                     GLVersion.major, GLVersion.minor);
@@ -1084,7 +1086,9 @@ namespace Spark
                         return false;
                     }
                     if (!HasRequiredGLVersion())
+                    {
                         return false; // host owns the context; leave it alone
+                    }
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
@@ -1233,7 +1237,9 @@ namespace Spark
                         return false;
                     }
                     if (!HasRequiredGLVersion())
+                    {
                         return false; // host owns the context; leave it alone
+                    }
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
@@ -2196,7 +2202,9 @@ namespace Spark
                 // Same contract as the other backends: drop an out-of-range or null upload
                 // rather than hand the driver a pointer it would read past.
                 if (!glBuf || !data || !IsBufferRangeValid(glBuf->GetSize(), offset, size))
+                {
                     return;
+                }
                 glNamedBufferSubData(glBuf->GetGLBuffer(), static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size),
                                      data);
             }
@@ -2229,18 +2237,24 @@ namespace Spark
                         glCompressedTextureSubImage3D(glTex->GetGLTexture(), mipLevel, 0, 0, layer, w, h, 1,
                                                       internalFormat, imageSize, data);
                     else
+                    {
                         glCompressedTextureSubImage2D(glTex->GetGLTexture(), mipLevel, 0, 0, w, h, internalFormat,
                                                       imageSize, data);
+                    }
                 }
                 else
                 {
                     const GLenum format = ConvertFormat(pixelFormat);
                     const GLenum formatType = ConvertFormatType(pixelFormat);
                     if (layered)
+                    {
                         glTextureSubImage3D(glTex->GetGLTexture(), mipLevel, 0, 0, layer, w, h, 1, format, formatType,
                                             data);
+                    }
                     else
+                    {
                         glTextureSubImage2D(glTex->GetGLTexture(), mipLevel, 0, 0, w, h, format, formatType, data);
+                    }
                 }
                 glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
             }

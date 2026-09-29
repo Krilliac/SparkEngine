@@ -24,7 +24,9 @@ namespace Spark
         void AuditAssetReference(const std::string& reference, HostSceneLoadReport& report)
         {
             if (reference.empty() || !std::string_view(reference).starts_with(kProjectAssetPrefix))
+            {
                 return;
+            }
 
             ++report.assetRefs;
             if (report.projectRoot.empty())
@@ -36,7 +38,9 @@ namespace Spark
             const auto resolved = ResolveProjectAssetPath(report.projectRoot, reference);
             std::error_code ec;
             if (!resolved || !std::filesystem::is_regular_file(resolved->nativePath, ec) || ec)
+            {
                 ++report.assetsMissing;
+            }
         }
     } // namespace
 
@@ -57,7 +61,9 @@ namespace Spark
         }
 
         if (const auto root = DeriveProjectRootFromScenePath(scenePath))
+        {
             report.projectRoot = *root;
+        }
 
         report.entities = world.GetEntityCount();
         for (auto entity : world.GetEntitiesWith<::Transform, ::MeshRenderer>())

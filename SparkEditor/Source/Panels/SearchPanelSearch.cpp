@@ -66,7 +66,9 @@ namespace SparkEditor
             // Indexed paths are UTF-8 search/display text. path::string() throws on Windows
             // for a name the ANSI code page cannot spell, which escaped the render path.
             if (std::optional<std::string> assetPath = Spark::FileUtils::TryPathToUtf8(it->path()))
+            {
                 m_assetIndex.push_back(std::move(*assetPath));
+            }
         }
 
         // A failed increment leaves the iterator equal to end, so the error must be read after the

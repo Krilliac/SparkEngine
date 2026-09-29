@@ -56,10 +56,10 @@ namespace Spark::Scripting
     class VisualScriptGraphIO
     {
       public:
-        static constexpr std::string_view kFormat = "spark.vscript"; ///< Value of the "format" key
-        static constexpr int kVersion = 1;                           ///< Only supported "version"
-        static constexpr size_t kMaxFileBytes = 8u * 1024u * 1024u;  ///< Larger files are rejected unread
-        static constexpr uint32_t kMaxNodeId = (1u << 24) - 1u;      ///< Largest accepted node id (ids start at 1)
+        static constexpr std::string_view kFormat = "spark.vscript";       ///< Value of the "format" key
+        static constexpr int kVersion = 1;                                 ///< Only supported "version"
+        static constexpr size_t kMaxFileBytes = size_t{8} * 1024u * 1024u; ///< Larger files are rejected unread
+        static constexpr uint32_t kMaxNodeId = (1u << 24) - 1u; ///< Largest accepted node id (ids start at 1)
 
         /**
          * @brief Parse and validate .vscript text

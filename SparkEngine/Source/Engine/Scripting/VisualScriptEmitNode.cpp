@@ -19,9 +19,13 @@ namespace Spark::Scripting::Detail
         {
             std::string value = PropertyOr(node, key, "");
             if (!value.empty())
+            {
                 return value;
+            }
             if (node.properties.empty())
+            {
                 return fallback;
+            }
             return std::min_element(node.properties.begin(), node.properties.end(),
                                     [](const auto& a, const auto& b) { return a.first < b.first; })
                 ->second;
@@ -40,7 +44,9 @@ namespace Spark::Scripting::Detail
             ScriptPin pin;
             pin.kind = kind;
             if (!node.outputs.empty())
+            {
                 pin = node.outputs[0];
+            }
             line(PinTypeString(kind) + " " + out(0) + " = " + DefaultLiteral(pin) + ";");
         };
 
@@ -211,11 +217,17 @@ namespace Spark::Scripting::Detail
                                                                            : "event";
             const std::string literal = "\"" + EscapeAngelScriptString(PropertyOrSmallestKey(node, key, "")) + "\"";
             if (node.type == ScriptNodeType::PlaySound)
+            {
                 line("playSound(selfEntity, " + literal + ");");
+            }
             else if (node.type == ScriptNodeType::PlayAnimation)
+            {
                 line("playAnimation(selfEntity, " + literal + ");");
+            }
             else
+            {
                 line("fireEvent(" + literal + ");");
+            }
             break;
         }
         case ScriptNodeType::SpawnEntity:
@@ -253,19 +265,29 @@ namespace Spark::Scripting::Detail
             for (uint32_t i = 0; i < static_cast<uint32_t>(node.inputs.size()); ++i)
             {
                 if (node.inputs[i].kind == PinKind::Execution)
+                {
                     continue;
+                }
                 if (!args.empty())
+                {
                     args += ", ";
+                }
                 args += input(i);
             }
             const uint32_t result = FirstDataOutput(node);
             const std::string call = function + "(" + args + ");";
             if (OutputKind(node, result, PinKind::Execution) == PinKind::Execution)
+            {
                 line(call);
+            }
             else if (assignHoistedResult)
+            {
                 line(out(result) + " = " + call);
+            }
             else
+            {
                 line(PinTypeString(node.outputs[result].kind) + " " + out(result) + " = " + call);
+            }
             break;
         }
         case ScriptNodeType::ReturnValue:
@@ -275,11 +297,17 @@ namespace Spark::Scripting::Detail
             const auto value = std::find_if(node.inputs.begin(), node.inputs.end(),
                                             [](const ScriptPin& pin) { return pin.kind != PinKind::Execution; });
             if (node.inputs.empty())
+            {
                 line("return " + input(0) + ";");
+            }
             else if (value == node.inputs.end())
+            {
                 line("return;");
+            }
             else
+            {
                 line("return " + input(static_cast<uint32_t>(value - node.inputs.begin())) + ";");
+            }
             break;
         }
 

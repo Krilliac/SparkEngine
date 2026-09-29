@@ -70,7 +70,9 @@ namespace Spark::Graphics
         decoded.samplerCount = r.Read<uint32_t>();
 
         if (r.HasError())
+        {
             return false;
+        }
         out = std::move(decoded);
         return true;
     }

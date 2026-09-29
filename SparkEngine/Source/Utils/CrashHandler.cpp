@@ -2000,9 +2000,13 @@ namespace
         {
             const ssize_t count = write(fd, data, length);
             if (count < 0 && errno == EINTR)
+            {
                 continue;
+            }
             if (count <= 0)
+            {
                 return;
+            }
             data += count;
             length -= static_cast<size_t>(count);
         }
@@ -2025,7 +2029,9 @@ namespace
             value /= base;
         } while (value != 0 && position > 0);
         while (sizeof(buffer) - position < minDigits && position > 0)
+        {
             buffer[--position] = '0';
+        }
         SignalSafeWrite(fd, buffer + position, sizeof(buffer) - position);
     }
 
@@ -2077,18 +2083,24 @@ namespace
     int OpenSignalReportLog(std::uint64_t reportSequence)
     {
         if (g_artifactRootHandle < 0)
+        {
             return -1;
+        }
         size_t length = 0;
         const auto append = [&](const char* text)
         {
             for (; *text != '\0' && length + 1 < sizeof(g_signalLogName); ++text)
+            {
                 g_signalLogName[length++] = *text;
+            }
         };
         append(g_signalLogPrefix);
         append("_");
         constexpr char kDigits[] = "0123456789abcdef";
         for (int shift = 60; shift >= 0 && length + 1 < sizeof(g_signalLogName); shift -= 4)
+        {
             g_signalLogName[length++] = kDigits[(reportSequence >> shift) & 0xF];
+        }
         append(".log");
         g_signalLogName[length] = '\0';
 
@@ -2165,7 +2177,9 @@ namespace
         if (g_stallSignalReportForTesting)
         {
             for (;;)
+            {
                 pause();
+            }
         }
 
         const std::string logName = g_signalLogName;
@@ -2245,7 +2259,9 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
     // Prevent re-entrant crashes (e.g. crash inside the handler itself).
     // sig_atomic_t is the only type guaranteed safe in signal handlers.
     if (g_inSignalHandler)
+    {
         TerminateWithFatalSignal(sig);
+    }
     g_inSignalHandler = 1;
 
     // A deadlocked report must still end the process.

@@ -238,7 +238,9 @@ namespace Spark::ECS
         const uint32_t magic = reader.Read<uint32_t>();
         const uint32_t version = reader.Read<uint32_t>();
         if (reader.HasError() || magic != PrefabFileHeader::kMagic || version != PrefabFileHeader::kVersion)
+        {
             return false;
+        }
 
         std::string name = reader.ReadString();
         const uint32_t compCount = reader.Read<uint32_t>();
@@ -259,7 +261,9 @@ namespace Spark::ECS
             components.push_back(std::move(comp));
         }
         if (reader.HasError())
+        {
             return false;
+        }
 
         m_name = std::move(name);
         m_components = std::move(components);

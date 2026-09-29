@@ -137,7 +137,7 @@ namespace Spark
                 return {};
             }
 #else
-            return fs::path(path);
+            return {path};
 #endif
         }
 
@@ -197,10 +197,14 @@ namespace Spark
             {
                 std::string narrow = path.string();
                 if (fs::path(narrow) == path)
+                {
                     return narrow;
+                }
             }
             catch (const std::system_error&)
             {
+                // The active code page cannot spell this name, so no narrow string reopens it.
+                return std::nullopt;
             }
             return std::nullopt;
         }
@@ -381,6 +385,8 @@ namespace Spark
                     }
                     catch (const std::system_error&)
                     {
+                        // The caller's encoding cannot spell this name, so it could never be reopened.
+                        continue;
                     }
                 }
                 return files;

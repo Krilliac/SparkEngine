@@ -121,7 +121,9 @@ namespace SparkEditor
             // path::string() throws for it, which ended the scan): leave it out. Once
             // the narrow spelling exists, generic_string() on it cannot throw.
             if (!Spark::FileUtils::TryPathToNarrow(it->path()))
+            {
                 continue;
+            }
 
             SceneFileEntry entry;
             entry.diskPath = it->path().generic_string();

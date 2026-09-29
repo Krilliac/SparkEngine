@@ -243,7 +243,9 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
 
     std::vector<BYTE> audio(dataSize);
     if (FAILED(ReadChunkData(data, size, dataPos, audio.data(), dataSize)))
+    {
         return E_FAIL;
+    }
 
     m_format = format;
     m_audioData = std::move(audio);

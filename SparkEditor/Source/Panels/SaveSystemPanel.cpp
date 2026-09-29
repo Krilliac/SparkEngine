@@ -109,7 +109,9 @@ namespace SparkEditor
             // page cannot spell, which ended the refresh (and the frame) on a stray file.
             std::optional<std::string> slotName = Spark::FileUtils::TryPathToUtf8(entry.path().stem());
             if (!slotName)
+            {
                 continue;
+            }
 
             SaveSlotInfo info;
             info.slotName = std::move(*slotName);

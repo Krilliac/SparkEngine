@@ -56,7 +56,7 @@ namespace Spark::Net
     constexpr size_t SERVER_IDENTITY_FILE_SIZE = 96;
     constexpr uint32_t SERVER_IDENTITY_FILE_VERSION = 1;
     constexpr size_t KNOWN_HOSTS_MAX_ENTRIES = 4096;
-    constexpr size_t KNOWN_HOSTS_MAX_BYTES = 1024 * 1024;
+    constexpr size_t KNOWN_HOSTS_MAX_BYTES = size_t{1024} * 1024;
 
     /** @brief Why a trust-store operation failed. Every value means "do not trust". */
     enum class TrustStoreError : uint8_t

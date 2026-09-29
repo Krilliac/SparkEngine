@@ -625,8 +625,10 @@ std::vector<std::string> Game::GetAvailableScenes() const
                         const std::u8string scenePath = entry.path().u8string();
                         scenes.emplace_back(reinterpret_cast<const char*>(scenePath.data()), scenePath.size());
                     }
-                    catch (const std::system_error&)
+                    catch (const std::system_error& error)
                     {
+                        SPARK_LOG_WARN(Spark::LogCategory::Game, "Skipping a scene file whose name is not UTF-8: %s",
+                                       error.what());
                     }
                 }
             }

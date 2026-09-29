@@ -131,7 +131,9 @@ namespace SparkConsole
                     const std::optional<float> mb = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
                     constexpr float kMaxBudgetMb = 1024.0f * 1024.0f; // 1 TiB: far above any real budget.
                     if (!mb || *mb < 0.0f || *mb > kMaxBudgetMb)
+                    {
                         return "Invalid number: " + args[1];
+                    }
                     textureSystem->Console_SetMemoryBudget(static_cast<size_t>(*mb));
                     return "Texture memory budget set to: " + args[1] + " MB";
                 }
@@ -227,7 +229,9 @@ namespace SparkConsole
                 {
                     const std::optional<float> exposure = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
                     if (!exposure)
+                    {
                         return "Invalid number: " + args[1];
+                    }
                     postProcessing->Console_SetExposure(*exposure);
                     return "Exposure set to: " + args[1];
                 }
@@ -308,7 +312,9 @@ namespace SparkConsole
                     const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
                     const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[3]);
                     if (!x || !y || !z)
+                    {
                         return "Invalid number in arguments";
+                    }
                     physicsSystem->Console_SetGravity(*x, *y, *z);
                     return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";
                 }

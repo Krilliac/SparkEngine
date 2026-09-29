@@ -154,7 +154,9 @@ namespace Spark::Daemon
             auto it = m_index.find(key);
             entrySurvived = (it != m_index.end());
             if (m_diskBacked && entrySurvived)
+            {
                 blobCopyForDisk = it->second->blob;
+            }
         }
 
         if (m_diskBacked)

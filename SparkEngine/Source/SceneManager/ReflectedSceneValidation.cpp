@@ -26,7 +26,9 @@ namespace Spark::ReflectedSceneDetail
             for (const FieldInfo& field : type.fields)
             {
                 if (field.fieldName == name)
+                {
                     return &field;
+                }
             }
             return nullptr;
         }
@@ -37,15 +39,21 @@ namespace Spark::ReflectedSceneDetail
             {
                 const uint64_t raw = value.get<uint64_t>();
                 if (raw > std::numeric_limits<uint32_t>::max())
+                {
                     return false;
+                }
                 id = static_cast<uint32_t>(raw);
                 return static_cast<entt::entity>(id) != entt::null;
             }
             if (!value.is_number_integer())
+            {
                 return false;
+            }
             const int64_t raw = value.get<int64_t>();
             if (raw < 0 || static_cast<uint64_t>(raw) > std::numeric_limits<uint32_t>::max())
+            {
                 return false;
+            }
             id = static_cast<uint32_t>(raw);
             return static_cast<entt::entity>(id) != entt::null;
         }
@@ -58,10 +66,14 @@ namespace Spark::ReflectedSceneDetail
                 return parentId >= -1;
             }
             if (!value.is_number_unsigned())
+            {
                 return false;
+            }
             const uint64_t raw = value.get<uint64_t>();
             if (raw > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+            {
                 return false;
+            }
             parentId = static_cast<int64_t>(raw);
             return true;
         }
@@ -70,7 +82,9 @@ namespace Spark::ReflectedSceneDetail
     bool Reject(std::string* error, std::string message)
     {
         if (error)
+        {
             *error = std::move(message);
+        }
         return false;
     }
 
@@ -134,7 +148,9 @@ namespace Spark::ReflectedSceneDetail
         const int64_t fileVersion = versionValue.get<int64_t>();
         const int64_t supportedVersion = legacyScene ? kLegacyEditorSceneVersion : kCurrentSceneVersion;
         if (fileVersion == supportedVersion)
+        {
             return true;
+        }
 
         const std::string action = fileVersion > supportedVersion
                                        ? "open it with the newer SparkEngine build that wrote it"
@@ -153,7 +169,9 @@ namespace Spark::ReflectedSceneDetail
     bool IsRoundTrippableField(const FieldInfo& field)
     {
         if (!field.serialized)
+        {
             return false;
+        }
         switch (field.type)
         {
         case FieldType::Bool:
@@ -204,7 +222,9 @@ namespace Spark::ReflectedSceneDetail
                 return Reject(error, std::format("{} {} has invalid id {}", kRecovery, where, entity["id"].dump()));
             }
             if (!entityIds.insert(entityId).second)
+            {
                 return Reject(error, std::format("{} {} repeats id {}", kRecovery, where, entityId));
+            }
             if (!ReadStrictParentId(entity["parent"], parentId))
             {
                 return Reject(error,

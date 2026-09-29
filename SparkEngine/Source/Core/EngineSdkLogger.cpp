@@ -13,7 +13,9 @@ namespace
     {
         auto& logger = Spark::Logger::Get();
         if (!logger.ShouldLog(level, Spark::LogCategory::Game))
+        {
             return;
+        }
         // Modules have no engine source location to report; the category says who logged.
         logger.Log(level, Spark::LogCategory::Game, "", 0, "", message ? message : "");
     }
