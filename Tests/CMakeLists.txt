@@ -4590,13 +4590,18 @@ set_tests_properties(SupplyChain_WineSetupScriptIntegrity PROPERTIES
 # fixtures and passes floor-only builds. CpuFloor_IsaBaseline disassembles this
 # tree's linked engine, editor, server and game-module images and fails on any
 # above-floor instruction that reached them (SparkCpuFloor.cmake only sees flags).
-# The image scan is ELF-only: MSVC links the STL's CPUID-dispatched AVX2
-# vector_algorithms code statically into every image, and an MSVC PE carries no
-# COFF symbol table, so --allow-symbol cannot exempt that code without a
-# PDB-aware lookup. Windows images are not scanned until one exists.
+# The image scan is ELF-only for now. tools/check_isa_baseline.py can scan an
+# MSVC PE against its matching PDB, exempting only the reviewed CPUID-dispatched
+# MSVC runtime procedure ranges (Tests/Tools/test_pe_isa_ranges.py), but real
+# MSVC Release images still carry unreviewed above-floor code (libsodium's
+# AVX2/AES-NI variants, which the MSVC branch of SparkLibsodium.cmake compiles,
+# the UCRT's _Avx2WmemEnabled wmemchr/wmemcmp, <bit>'s LZCNT dispatch and the
+# symbol-less vector_algorithms ranges; docs/readiness/BLD-100-PROGRESS.md).
+# Registering it for Windows before those are resolved would fail every run.
 add_test(
     NAME CpuFloor_IsaBaselineChecker
-    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_check_isa_baseline -v
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest
+        Tests.Tools.test_check_isa_baseline Tests.Tools.test_pe_isa_ranges -v
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
     LABELS "build;shipping;unit;python"
@@ -4716,7 +4721,9 @@ endif()
 # copies configured with this tree's generator and the windows-shipping cache
 # values, SparkCooker built in MinSizeRel (the only configuration with /Brepro
 # and /d1trimfile among the ones Shipping uses) without any compiler cache, and
-# bin/MinSizeRel compared: PE sections, COFF timestamp and RSDS identity. PDBs
+# bin/MinSizeRel and lib/MinSizeRel compared: PE sections, COFF timestamp, RSDS
+# identity and static-library members. OD-24 normalizes only the equal-length
+# build-root strings inside library members' CodeView .debug$S sections. PDBs
 # are not compared (not byte-reproducible; the image's RSDS record names them).
 # It runs only under `ctest -C MinSizeRel`, so the Debug/Release CI lanes do not
 # pay for two clean MSVC builds; the reproducibility-windows job compares two
@@ -4747,6 +4754,8 @@ if(MSVC)
             --target SparkCooker
             --config MinSizeRel
             --scan bin/MinSizeRel
+            --scan lib/MinSizeRel
+            --normalize-coff-build-root
             --
             ${_spark_repro_generator_args}
             -DCMAKE_CONFIGURATION_TYPES=MinSizeRel

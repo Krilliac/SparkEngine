@@ -6,7 +6,7 @@ produce equivalent outputs. This tool writes a normalized manifest of the
 eligible outputs under a root and compares two of them:
 
 * Eligible outputs are regular files whose content identifies them as ELF
-  (images, split ``.debug`` files, objects), PE/COFF images (EXE/DLL) or ``ar``
+  (images, split ``.debug`` files, objects), PE images (EXE/DLL), COFF objects or ``ar``
   archives (static libraries on both toolchains). Other files, symlinks and
   PDBs are not eligible: an MSVC PDB is not byte-reproducible, and the image's
   RSDS record, which /Brepro derives from content, is what identifies it.
@@ -18,15 +18,22 @@ eligible outputs under a root and compares two of them:
   file headers, so a difference can be located without the files.
 * No absolute path, timestamp or host detail is recorded, so equivalent trees
   produce byte-identical manifests.
+* OD-24: with an explicit build root, only that exact byte string inside
+  .debug$S sections of COFF/BigObj members of .lib archives is replaced by
+  an equal-length fixed placeholder. Every other byte remains exact. Schema
+  version 2 records each affected member's name, ordinal and root byte length;
+  regenerate version 1 manifests before comparing with this tool.
 
 Two manifests are equivalent when they list the same paths with the same
 content. The comparison reports every missing, extra and differing file, and
 for a differing file its identity changes and its first differing section.
 
 Subcommands:
-    manifest ROOT --output FILE        write the manifest of ROOT
+    manifest ROOT --output FILE [--build-root ROOT]
+                                      write the manifest of ROOT
     compare  A.json B.json [--report]  compare two manifests
-    trees    ROOT_A ROOT_B [--report]  manifest both roots and compare them
+    trees    ROOT_A ROOT_B [--report] [--build-root-a ROOT --build-root-b ROOT]
+                                      manifest both roots and compare them
     two-tree --source DIR --work DIR --target T [--scan REL] [--config CFG]
              [-- CMAKE ARGS]
              copy DIR into two differently named and nested source trees,
@@ -58,27 +65,31 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from shipping_symbol_manifest import FormatError, inspect_elf, inspect_pe  # noqa: E402
 
-SCHEMA = "spark.build-output-manifest/1"
+SCHEMA = "spark.build-output-manifest/2"
 
 ELF_MAGIC = b"\x7fELF"
 AR_MAGIC = b"!<arch>\n"
 AR_HEADER_BYTES = 60
 MAX_ELF_SECTIONS = 65535
 MAX_PE_SECTIONS = 96
+MAX_BIGOBJ_SECTIONS = 1 << 20
 MAX_DEBUG_ENTRIES = 64
 IMAGE_DEBUG_TYPE_REPRO = 16
 MAX_AR_MEMBERS = 1 << 20
 MAX_NAME_TABLE_BYTES = 64 * 1024 * 1024
 HASH_CHUNK = 1024 * 1024
 
-ENTRY_KEYS = {"path", "kind", "size", "sha256", "identity", "sections"}
+ENTRY_KEYS = {"path", "kind", "size", "sha256", "identity", "sections", "normalizedMembers"}
 IDENTITY_KEYS = {
     "elf": {"machine", "buildId"},
     "pe": {"machine", "timestamp", "codeView", "repro"},
     "ar": set(),
+    "coff": {"machine"},
 }
 CODEVIEW_KEYS = {"guid", "age", "pdb"}
 SECTION_KEYS = {"name", "size", "sha256"}
+NORMALIZED_MEMBER_KEYS = {"member", "index", "rootLength"}
+PLACEHOLDER = b"<SPARK_BUILD_ROOT>"
 # Sections whose bytes follow from the rest of the file: never the root cause
 # of a difference while any other section also differs.
 DERIVED_SECTIONS = {
@@ -194,8 +205,97 @@ def _pe_layout(handle, file_size: int) -> tuple[int, int, list[tuple[str, int, i
     return machine, timestamp, sections, table_offset + 40 * section_count
 
 
-def _ar_members(handle, file_size: int) -> list[dict]:
+def _coff_debug_ranges(member: bytes) -> list[tuple[int, int]]:
+    """Recognize x86 COFF/BigObj and return only unaliased .debug$S raw bytes."""
+    if len(member) < 20:
+        return []
+    bigobj = member[:4] == b"\x00\x00\xff\xff"
+    if bigobj:
+        class_id = bytes.fromhex("c7a1bad1eebaa94baf20faf66aa4dcb8")
+        if (len(member) < 56 or struct.unpack_from("<H", member, 4)[0] != 2
+                or member[12:28] != class_id or any(member[28:44])):
+            return []
+        machine = struct.unpack_from("<H", member, 6)[0]
+        section_count, symbol_offset, symbol_count = struct.unpack_from("<III", member, 44)
+        table_offset, symbol_bytes = 56, 20
+    else:
+        machine, section_count, _, symbol_offset, symbol_count, optional_size, flags = struct.unpack_from(
+            "<HHIIIHH", member)
+        if optional_size != 0 or flags & 0x0002:
+            return []
+        table_offset, symbol_bytes = 20, 18
+    if machine not in (0x14C, 0x8664) or not 0 < section_count <= MAX_BIGOBJ_SECTIONS:
+        return []
+    table_end = table_offset + section_count * 40
+    if table_end > len(member):
+        return []
+    occupied = [(0, table_end)]
+    debug_ranges = []
+
+    def add_range(offset: int, size: int) -> bool:
+        if offset < table_end or offset > len(member) or size > len(member) - offset:
+            return False
+        if size:
+            occupied.append((offset, offset + size))
+        return True
+
+    for index in range(section_count):
+        section = table_offset + index * 40
+        size, offset, reloc, lines, reloc_count, line_count, flags = struct.unpack_from(
+            "<IIIIHHI", member, section + 16)
+        if size and not (offset == 0 and flags & 0x80):  # uninitialized .bss has no file bytes
+            if not add_range(offset, size):
+                return []
+            if member[section:section + 8] == b".debug$S":
+                debug_ranges.append((offset, size))
+        if flags & 0x01000000:  # IMAGE_SCN_LNK_NRELOC_OVFL: first relocation stores the count
+            if reloc_count != 0xFFFF or reloc < table_end or reloc + 10 > len(member):
+                return []
+            reloc_count = struct.unpack_from("<I", member, reloc)[0]
+            if reloc_count <= 0xFFFF:
+                return []
+        if reloc_count and not add_range(reloc, reloc_count * 10):
+            return []
+        if line_count and not add_range(lines, line_count * 6):
+            return []
+    if symbol_offset or symbol_count:
+        if not symbol_offset or not add_range(symbol_offset, symbol_count * symbol_bytes):
+            return []
+        strings = symbol_offset + symbol_count * symbol_bytes
+        if strings + 4 > len(member):
+            return []
+        string_size = struct.unpack_from("<I", member, strings)[0]
+        if string_size < 4 or not add_range(strings, string_size):
+            return []
+    occupied.sort()
+    if any(start < previous_end for (start, _), (_, previous_end) in zip(occupied[1:], occupied)):
+        return []
+    return debug_ranges
+
+
+def _replace_build_root(data: bytes, build_root: bytes) -> tuple[bytes, bool]:
+    if not build_root:
+        raise InputError("build root must not be empty")
+    replacement = (PLACEHOLDER * ((len(build_root) + len(PLACEHOLDER) - 1) // len(PLACEHOLDER)))[:len(build_root)]
+    result = bytearray(data)
+    changed = False
+    for offset, size in _coff_debug_ranges(data):
+        section = data[offset : offset + size]
+        start = 0
+        while True:
+            relative = section.find(build_root, start)
+            if relative < 0:
+                break
+            result[offset + relative : offset + relative + len(build_root)] = replacement
+            changed = True
+            start = relative + len(build_root)
+    return bytes(result), changed
+
+
+def _ar_members(handle, file_size: int, build_root: bytes | None = None) -> tuple[list[dict], str, list[dict]]:
     members = []
+    normalized_members = []
+    archive_digest = hashlib.sha256(AR_MAGIC)
     long_names = b""
     offset = len(AR_MAGIC)
     while offset < file_size:
@@ -230,14 +330,24 @@ def _ar_members(handle, file_size: int) -> list[dict]:
             name = raw_name.rstrip("/")
         # The member header (timestamp, uid, gid, mode) is hashed with the data:
         # a deterministic archive has zeros there, a nondeterministic one differs.
+        raw_member = _read(handle, data_offset, size, file_size)
+        normalized_member = raw_member
+        if build_root is not None and name not in ("<symbol-index>", "<long-names>"):
+            normalized_member, changed = _replace_build_root(raw_member, build_root)
+            if changed:
+                normalized_members.append({"member": name, "index": len(members), "rootLength": len(build_root)})
         digest = hashlib.sha256(header)
-        digest.update(bytes.fromhex(_hash_range(handle, data_offset, size, file_size)))
+        digest.update(normalized_member)
         members.append({"name": name, "size": size, "sha256": digest.hexdigest()})
+        archive_digest.update(header)
+        archive_digest.update(normalized_member)
+        if size & 1:
+            archive_digest.update(_read(handle, data_offset + size, 1, file_size))
         offset = data_offset + size + (size & 1)
-    return members
+    return members, archive_digest.hexdigest(), normalized_members
 
 
-def describe(path: Path) -> dict | None:
+def describe(path: Path, build_root: bytes | None = None) -> dict | None:
     """Return the manifest entry fields for an eligible file, or None."""
     with path.open("rb") as handle:
         handle.seek(0, os.SEEK_END)
@@ -266,10 +376,29 @@ def describe(path: Path) -> dict | None:
             sections = [_section(handle, "<pe-headers>", 0, headers_end, file_size)]
             sections += [_section(handle, name, offset, size, file_size) for name, offset, size in layout]
         elif head == AR_MAGIC:
-            identity, kind, sections = {}, "ar", _ar_members(handle, file_size)
+            archive_root = build_root if path.suffix.lower() == ".lib" else None
+            members, normalized_digest, normalized_members = _ar_members(handle, file_size, archive_root)
+            identity, kind, sections = {}, "ar", members
+        elif head[:2] in (b"\x64\x86", b"\x4c\x01") or head[:4] == b"\x00\x00\xff\xff":
+            # Standalone COFF objects are exact inputs, even when --build-root
+            # is supplied. OD-24 only authorizes normalization inside .lib.
+            header = _read(handle, 0, 20, file_size)
+            if head[:4] == b"\x00\x00\xff\xff":
+                header = _read(handle, 0, 56, file_size)
+                if header[12:28] != bytes.fromhex("c7a1bad1eebaa94baf20faf66aa4dcb8"):
+                    return None
+                machine = struct.unpack_from("<H", header, 6)[0]
+            else:
+                machine = struct.unpack_from("<H", header)[0]
+            identity, kind = {"machine": f"coff-{machine:#06x}"}, "coff"
+            sections = [_section(handle, "<coff-object>", 0, file_size, file_size)]
         else:
             return None
-        return {"kind": kind, "size": file_size, "identity": identity, "sections": sections}
+        result = {"kind": kind, "size": file_size, "identity": identity, "sections": sections, "normalizedMembers": []}
+        if kind == "ar":
+            result["normalizedMembers"] = normalized_members
+            result["normalizedDigest"] = normalized_digest
+        return result
 
 
 def _debug_entry_types(handle, file_size: int) -> list[int] | None:
@@ -329,9 +458,12 @@ def _sha256(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_manifest(root: Path) -> dict:
+def build_manifest(root: Path, build_root: Path | str | None = None) -> dict:
     if not root.is_dir():
         raise InputError(f"not a directory: {root}")
+    build_root_bytes = None if build_root is None else os.fsencode(str(build_root))
+    if build_root_bytes == b"":
+        raise InputError("build root must not be empty")
     entries = []
     errors = []
     for directory, subdirectories, files in os.walk(root, followlinks=False):
@@ -342,12 +474,14 @@ def build_manifest(root: Path) -> dict:
                 continue
             relative = path.relative_to(root).as_posix()
             try:
-                fields = describe(path)
+                fields = describe(path, build_root_bytes)
             except (FormatError, OSError, struct.error, UnicodeDecodeError, ValueError) as error:
                 errors.append(f"{relative}: {error}")
                 continue
             if fields is not None:
-                entries.append({"path": relative, "sha256": _sha256(path), **fields})
+                normalized_digest = fields.pop("normalizedDigest", None)
+                digest = normalized_digest if normalized_digest is not None else _sha256(path)
+                entries.append({"path": relative, "sha256": digest, **fields})
     if errors:
         raise InputError("malformed eligible outputs:\n  " + "\n  ".join(errors))
     if not entries:
@@ -392,6 +526,20 @@ def validate_manifest(manifest: object) -> None:
             isinstance(section, dict) and set(section) == SECTION_KEYS for section in sections
         ):
             raise InputError(f"{location} sections must be objects with exactly name, size and sha256")
+        normalized_members = entry["normalizedMembers"]
+        if (entry["kind"] != "ar" and normalized_members) or not isinstance(normalized_members, list) or not all(
+            isinstance(member, dict)
+            and set(member) == NORMALIZED_MEMBER_KEYS
+            and isinstance(member["member"], str)
+            and member["member"]
+            and type(member["index"]) is int
+            and 0 <= member["index"] < len(sections)
+            and sections[member["index"]]["name"] == member["member"]
+            and type(member["rootLength"]) is int
+            and member["rootLength"] > 0
+            for member in normalized_members
+        ):
+            raise InputError(f"{location} normalizedMembers is invalid")
 
 
 def load_manifest(path: Path) -> dict:
@@ -435,6 +583,14 @@ def _first_difference(left: dict, right: dict) -> tuple[str, list[str]]:
 
 
 def compare_manifests(left: dict, right: dict) -> dict:
+    left_lengths = {member["rootLength"] for entry in left["entries"] for member in entry.get("normalizedMembers", [])}
+    right_lengths = {
+        member["rootLength"]
+        for entry in right["entries"]
+        for member in entry.get("normalizedMembers", [])
+    }
+    if left_lengths and right_lengths and left_lengths != right_lengths:
+        raise InputError("build roots used for normalized .lib members have different byte lengths")
     left_entries = {entry["path"]: entry for entry in left["entries"]}
     right_entries = {entry["path"]: entry for entry in right["entries"]}
     differing = []
@@ -519,6 +675,7 @@ def _run_logged(command: list[str], log: Path, environment: dict[str, str]) -> N
 
 
 def two_tree(args: argparse.Namespace) -> int:
+    normalize_coff_build_root = getattr(args, "normalize_coff_build_root", False)
     source = args.source.resolve()
     work = args.work.resolve()
     if not (source / "CMakeLists.txt").is_file():
@@ -531,8 +688,14 @@ def two_tree(args: argparse.Namespace) -> int:
 
     # Different names, lengths and depths: any absolute or build-relative path
     # that leaks into an output makes the two trees differ.
-    trees = [(work / "a" / "src", work / "a" / "build"),
-             (work / "tree-b" / "nested" / "src", work / "tree-b" / "out" / "obj" / "build")]
+    if normalize_coff_build_root:
+        trees = [(work / "a" / "src", work / "a" / "build"),
+                 (work / "b" / "src", work / "b" / "build")]
+        if len(os.fsencode(str(trees[0][1]))) != len(os.fsencode(str(trees[1][1]))):
+            raise InputError("normalized two-tree build roots must have the same byte length")
+    else:
+        trees = [(work / "a" / "src", work / "a" / "build"),
+                 (work / "tree-b" / "nested" / "src", work / "tree-b" / "out" / "obj" / "build")]
     # Hermetic inner builds: only the configure arguments choose flags, and no
     # compiler cache can hand back an object built for the other tree.
     environment = dict(os.environ, CCACHE_DISABLE="1")
@@ -564,7 +727,7 @@ def two_tree(args: argparse.Namespace) -> int:
     for label, (_, tree_build) in zip(("a", "b"), trees):
         combined: list[dict] = []
         for scan in args.scan:
-            manifest = build_manifest(tree_build / scan)
+            manifest = build_manifest(tree_build / scan, tree_build if normalize_coff_build_root else None)
             combined += [dict(entry, path=f"{scan}/{entry['path']}") for entry in manifest["entries"]]
         manifest = {"schema": SCHEMA, "entries": sorted(combined, key=lambda entry: entry["path"])}
         validate_manifest(manifest)
@@ -592,6 +755,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest_parser = commands.add_parser("manifest", help="write the manifest of one output root")
     manifest_parser.add_argument("root", type=Path)
     manifest_parser.add_argument("--output", type=Path, required=True)
+    manifest_parser.add_argument("--build-root", type=Path)
 
     compare_parser = commands.add_parser("compare", help="compare two manifests")
     compare_parser.add_argument("first", type=Path)
@@ -602,6 +766,8 @@ def main(argv: list[str] | None = None) -> int:
     trees_parser.add_argument("first", type=Path)
     trees_parser.add_argument("second", type=Path)
     trees_parser.add_argument("--report", type=Path)
+    trees_parser.add_argument("--build-root-a", type=Path)
+    trees_parser.add_argument("--build-root-b", type=Path)
 
     two_tree_parser = commands.add_parser("two-tree", help="build a target in two source copies and compare")
     two_tree_parser.add_argument("--source", type=Path, required=True)
@@ -612,12 +778,14 @@ def main(argv: list[str] | None = None) -> int:
     two_tree_parser.add_argument("--cmake", default=shutil.which("cmake") or "cmake")
     two_tree_parser.add_argument("--jobs", type=int, default=os.cpu_count() or 2)
     two_tree_parser.add_argument("--config", help="configuration to build in a multi-config tree")
+    two_tree_parser.add_argument("--normalize-coff-build-root", action="store_true",
+                                 help="normalize the build-root bytes in .debug$S sections of .lib members")
     two_tree_parser.add_argument("cmake_args", nargs=argparse.REMAINDER, help="-- then configure arguments")
 
     args = parser.parse_args(argv)
     try:
         if args.command == "manifest":
-            manifest = build_manifest(args.root.resolve())
+            manifest = build_manifest(args.root.resolve(), args.build_root)
             _write_json(args.output, manifest)
             print(f"build-output manifest: {len(manifest['entries'])} output(s) -> {args.output}")
             return 0
@@ -625,7 +793,16 @@ def main(argv: list[str] | None = None) -> int:
             report = compare_manifests(load_manifest(args.first), load_manifest(args.second))
             return _finish(report, str(args.first), str(args.second), args.report)
         if args.command == "trees":
-            report = compare_manifests(build_manifest(args.first.resolve()), build_manifest(args.second.resolve()))
+            if (args.build_root_a is None) != (args.build_root_b is None):
+                raise InputError("--build-root-a and --build-root-b must be supplied together")
+            if args.build_root_a is not None and len(os.fsencode(str(args.build_root_a))) != len(
+                os.fsencode(str(args.build_root_b))
+            ):
+                raise InputError("build roots must have the same byte length")
+            report = compare_manifests(
+                build_manifest(args.first.resolve(), args.build_root_a),
+                build_manifest(args.second.resolve(), args.build_root_b),
+            )
             return _finish(report, str(args.first), str(args.second), args.report)
         if args.cmake_args and args.cmake_args[0] == "--":
             args.cmake_args = args.cmake_args[1:]

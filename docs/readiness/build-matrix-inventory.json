@@ -589,7 +589,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2719,
+      "line": 2729,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -616,7 +616,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3669,
+      "line": 3679,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1348,7 +1348,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2719,
+      "line": 2729,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1469,7 +1469,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3669,
+      "line": 3679,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2211,10 +2211,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1778,
+      "line": 1788,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1764",
+          "id": "CMakeLists.txt:1774",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2249,24 +2249,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1749,
+      "line": 1759,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1652",
+          "id": "CMakeLists.txt:1662",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1747",
+          "id": "CMakeLists.txt:1757",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1748",
+          "id": "CMakeLists.txt:1758",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2360,10 +2360,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1766,
+      "line": 1776,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1764",
+          "id": "CMakeLists.txt:1774",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2728,10 +2728,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5104,
+      "line": 5113,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5102",
+          "id": "Tests/CMakeLists.txt:5111",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2833,10 +2833,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1513,
+      "line": 1523,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1512",
+          "id": "CMakeLists.txt:1522",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2851,10 +2851,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1515,
+      "line": 1525,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1512",
+          "id": "CMakeLists.txt:1522",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2870,10 +2870,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1496,
+      "line": 1506,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1495",
+          "id": "CMakeLists.txt:1505",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2888,7 +2888,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1469,
+      "line": 1479,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3667,7 +3667,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1883,
+      "line": 1893,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3727,10 +3727,10 @@
       "target": "SparkSpirvShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1958,
+      "line": 1968,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1899",
+          "id": "CMakeLists.txt:1909",
           "branch": 0,
           "branches": [
             "SPARK_VULKAN_AVAILABLE"
@@ -3891,17 +3891,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2436,
+      "line": 2446,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2431",
+          "id": "CMakeLists.txt:2441",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2435",
+          "id": "CMakeLists.txt:2445",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -4189,7 +4189,7 @@
       "target": "uninstall",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 2782,
+      "line": 2792,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4293,7 +4293,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1778,
+          "line": 1788,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4347,7 +4347,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1749,
+          "line": 1759,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -4455,7 +4455,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1766,
+          "line": 1776,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4859,7 +4859,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5104,
+          "line": 5113,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4977,7 +4977,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1513,
+          "line": 1523,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4985,7 +4985,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1515,
+          "line": 1525,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5003,7 +5003,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1496,
+          "line": 1506,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5021,7 +5021,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1469,
+          "line": 1479,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6277,7 +6277,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1883,
+          "line": 1893,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -6385,7 +6385,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1958,
+          "line": 1968,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -6605,7 +6605,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2436,
+          "line": 2446,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6937,7 +6937,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2782,
+          "line": 2792,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -10856,19 +10856,19 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "e96e931afd53b102"
+            "runDigest": "c02983c50229d1a6"
           },
           {
             "index": 5,
             "name": "Compare the two Shipping builds",
             "id": "",
             "uses": "",
-            "shell": "bash",
+            "shell": "pwsh",
             "if": "absent",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "e9517754ca7d3433"
+            "runDigest": "c7272930cc71bcc1"
           },
           {
             "index": 6,
@@ -15568,7 +15568,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../../../reproducibility-b-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -15589,7 +15589,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../../../reproducibility-b-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -15616,10 +15616,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "install",
-        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix ../../../reproducibility-stage-b",
+        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-b",
         "commandProvenance": "literal",
         "configuration": "MinSizeRel",
-        "prefix": "../../../reproducibility-stage-b",
+        "prefix": "../reproducibility-stage-b",
         "component": "",
         "commandIndex": 2
       },
@@ -17706,7 +17706,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../../../reproducibility-b-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -18845,7 +18845,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../../../reproducibility-b-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -20949,7 +20949,7 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --preset windows-shipping 2>&1 | tee ../../../reproducibility-b-configure.log",
+      "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
       "commandProvenance": "literal",
       "options": {},
       "preset": "windows-shipping",

@@ -2295,13 +2295,13 @@ jobs:
     - name: Checkout the first tree
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        path: a
+        path: tree-a
         submodules: recursive
 
     - name: Checkout the second tree
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        path: tree-b/nested/src
+        path: tree-b
         submodules: recursive
 
     - name: Setup MSVC
@@ -2309,7 +2309,7 @@ jobs:
 
     - name: Build and stage Shipping in the first tree
       shell: bash
-      working-directory: a
+      working-directory: tree-a
       run: |
         set -euo pipefail
         cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log
@@ -2319,22 +2319,28 @@ jobs:
 
     - name: Build and stage Shipping in the second tree
       shell: bash
-      working-directory: tree-b/nested/src
+      working-directory: tree-b
       run: |
         set -euo pipefail
-        cmake --preset windows-shipping 2>&1 | tee ../../../reproducibility-b-configure.log
-        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../../../reproducibility-b-build.log
-        cmake --install build/windows-shipping --config MinSizeRel --prefix ../../../reproducibility-stage-b
+        cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log
+        cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-b
 
     - name: Compare the two Shipping builds
-      shell: bash
+      shell: pwsh
       run: |
-        set -euo pipefail
-        python a/tools/compare_build_outputs.py manifest reproducibility-stage-a --output reproducibility/manifest-a.json
-        python a/tools/compare_build_outputs.py manifest reproducibility-stage-b --output reproducibility/manifest-b.json
-        python a/tools/compare_build_outputs.py compare \
-          reproducibility/manifest-a.json reproducibility/manifest-b.json \
+        # OD-24 permits only equal-length build-root strings in .lib CodeView
+        # sections. Native Windows spelling must match the /Z7 object bytes.
+        $rootA = (Resolve-Path 'tree-a/build/windows-shipping').Path
+        $rootB = (Resolve-Path 'tree-b/build/windows-shipping').Path
+        python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-a --build-root "$rootA" --output reproducibility/manifest-a.json
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-b --build-root "$rootB" --output reproducibility/manifest-b.json
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python tree-a/tools/compare_build_outputs.py compare `
+          reproducibility/manifest-a.json reproducibility/manifest-b.json `
           --report reproducibility/report.json
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Upload reproducibility evidence
       if: always()
