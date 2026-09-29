@@ -449,13 +449,11 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:dab94757cd15",
-          "state": "implemented",
+          "state": "unmet",
           "evidence": [
-            "docs/update-all-docs.sh",
-            "tools/docs_currentness.py",
             "Tests/Tools/test_docs_health.py"
           ],
-          "note": "At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. No exact-SHA hosted run."
+          "note": "At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. State not promoted here; no exact-SHA hosted run."
         },
         {
           "criterionDigest": "sha256:59ac611c1455",
@@ -499,14 +497,9 @@
         },
         {
           "criterionDigest": "sha256:e03b1b3590ef",
-          "state": "implemented",
-          "evidence": [
-            ".github/workflows/build.yml",
-            ".github/scripts/test-workflow-failure-propagation.py",
-            "tools/site-data/validate_docs_links.py",
-            "tools/docs_currentness.py"
-          ],
-          "note": "docs-health is a Required CI Gate dependency in build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Structural and mutation tests only, and no hosted red run yet."
+          "state": "unmet",
+          "evidence": [],
+          "note": "docs-health is a Required CI Gate dependency in .github/workflows/build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Covered by structural and mutation tests in .github/scripts/test-workflow-failure-propagation.py only. State not promoted here; no hosted red run yet."
         }
       ],
       "commands": [

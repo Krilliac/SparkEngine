@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **162 implemented** (63%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **158 implemented** (61%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -248,9 +248,9 @@ Establish the only source of readiness truth and make CI report reality.
 |---|---|---|---|---|---|
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 3/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 2/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
-| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 3/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
+| [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 2/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 1/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
-| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 6/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
+| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 4/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
 
@@ -258,7 +258,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 
 | Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |
 |---|---|---|---|---|---|
-| [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 4/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
+| [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 3/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
 | [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | 5/8 · 0/8 | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
 | [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | 3/4 · 0/4 | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 3/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
@@ -634,11 +634,11 @@ Several modules reference missing music/models/scenes, depend on path case that 
 
 **Acceptance criteria**
 
-Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[implemented]** Zero missing or case-mismatched references in every declared manifest
-   - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`, `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`
-   - check-all verifies the root, legacy and template manifests; check-module-asset-refs.py now verifies all 11 module asset-references.json records and fails on any missing, case-altered, unrecorded or drifted reference (0 found locally). Composed Assets/ prefixes stay report-only in FPS (2), MMOFPS (26) and VisualScript (1). Local runs only; no exact-commit CI.
+1. **[unmet]** Zero missing or case-mismatched references in every declared manifest
+   - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`
+   - check-all verifies the root, legacy and template manifests; tools/check-module-asset-refs.py now verifies all 11 module reference records fail-closed for missing, case-altered, unrecorded or drifted paths (0 found locally). Composed Assets/ prefixes stay report-only in FPS (2), MMOFPS (26) and VisualScript (1). Not promoted here; local runs only, no exact-commit CI.
 2. **[unmet]** Every in-profile packaged module resolves assets without the repository
    - Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists.
 3. **[unmet]** Every asset has provenance/license metadata where required
@@ -827,11 +827,11 @@ A hostile audit found timestamp-only false greens, incomplete first-party source
 
 **Acceptance criteria**
 
-Progress: 6 of 6 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
 
-1. **[implemented]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
-   - Evidence: `docs/update-all-docs.sh`, `tools/docs_currentness.py`, `Tests/Tools/test_docs_health.py`
-   - At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. No exact-SHA hosted run.
+1. **[unmet]** docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
+   - Evidence: `Tests/Tools/test_docs_health.py`
+   - At 3d330173c, a clean WSL Ubuntu clone ran LC_ALL=C.UTF-8 TZ=UTC bash docs/update-all-docs.sh check with the exact source SHA exported: exit 0, both isolated generations reported all 9 generators current, links valid, and the tracked-file status was identical before and after. State not promoted here; no exact-SHA hosted run.
 2. **[implemented]** Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
    - Evidence: `docs/generate-flowchart-content.py`, `Tests/Tools/test_docs_health.py`
    - Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff.
@@ -844,9 +844,8 @@ Progress: 6 of 6 implemented, 0 evidenced at an exact commit.
 5. **[implemented]** Hostile stale-doc, symbol, macro, health, link, anchor, route, and confinement fixtures pass
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_contract.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
    - Two hostile test classes (docs generation, docs links) cover stale docs, symbols, macros, health, links, anchors, route collisions and repository escape against production code.
-6. **[implemented]** A stale generator, missing result, or broken link blocks CI
-   - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-workflow-failure-propagation.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
-   - docs-health is a Required CI Gate dependency in build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Structural and mutation tests only, and no hosted red run yet.
+6. **[unmet]** A stale generator, missing result, or broken link blocks CI
+   - docs-health is a Required CI Gate dependency in .github/workflows/build.yml (needs and EXPECTED_REQUIRED_JOBS_JSON), whose push runs never cancel a SHA; it left site-data.yml. Covered by structural and mutation tests in .github/scripts/test-workflow-failure-propagation.py only. State not promoted here; no hosted red run yet.
 
 **Required commands**
 
@@ -933,11 +932,11 @@ One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking
 
 **Acceptance criteria**
 
-Progress: 4 of 5 implemented, 0 evidenced at an exact commit.
+Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
-1. **[implemented]** Documented subsystem commands select and execute real tests
-   - Evidence: `tools/site-data/validate.py`, `tools/site-data/contract_selectors.py`, `tools/site-data/check_documented_selectors.py`, `Tests/Tools/test_check_documented_selectors.py`, `Tests/CMakeLists.txt`
-   - check_documented_selectors.py resolved every applicable documented ctest command: windows-release 27/27 (59 not applicable); linux-gcc-release 21/24 (2 planned debt, 60 not applicable), the 3 misses being SparkDaemonServiceTests, unbuilt under local GCC 15.2 -Werror (clean with GCC 14). Local configured trees only; no hosted run.
+1. **[unmet]** Documented subsystem commands select and execute real tests
+   - Evidence: `tools/site-data/validate.py`
+   - Commands are still not executed. check_documented_selectors.py only resolves selections against configured trees (enabled tests, built executables): windows-release 27/27, linux-gcc-release 21/24 (SparkDaemonServiceTests unbuilt under local GCC 15.2). Its CTest registers only in preset trees, which no CI lane runs ctest over. tests-unit and tests-integration are still planned.
 2. **[implemented]** No unowned flaky exception exists
    - Evidence: `Tools/validate_test_warnings.py`, `Tests/Tools/test_validate_test_warnings.py`, `Tests/test-warning-waivers.json`, `Tests/TestLevelStreamingSystemPhaseAA.cpp`, `Tests/TestLoadingScreenReal.cpp`, `wiki/advanced/Testing.md`
    - SKIP_TEST and EXPECT_NO_CRASH exceptions have no owner or expiry enforcement.

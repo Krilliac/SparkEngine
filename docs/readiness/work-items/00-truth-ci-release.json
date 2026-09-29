@@ -345,14 +345,12 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:dbf6a5ff40ba",
-          "state": "implemented",
+          "state": "unmet",
           "evidence": [
             "Tests/Tools/test_asset_integrity.py",
-            "tools/asset-integrity/verify_asset_integrity.py",
-            "tools/check-module-asset-refs.py",
-            "Tests/Tools/test_check_module_asset_refs.py"
+            "tools/asset-integrity/verify_asset_integrity.py"
           ],
-          "note": "check-all verifies the root, legacy and template manifests; check-module-asset-refs.py now verifies all 11 module asset-references.json records and fails on any missing, case-altered, unrecorded or drifted reference (0 found locally). Composed Assets/ prefixes stay report-only in FPS (2), MMOFPS (26) and VisualScript (1). Local runs only; no exact-commit CI."
+          "note": "check-all verifies the root, legacy and template manifests; tools/check-module-asset-refs.py now verifies all 11 module reference records fail-closed for missing, case-altered, unrecorded or drifted paths (0 found locally). Composed Assets/ prefixes stay report-only in FPS (2), MMOFPS (26) and VisualScript (1). Not promoted here; local runs only, no exact-commit CI."
         },
         {
           "criterionDigest": "sha256:5a3bf0f4851d",
@@ -636,15 +634,11 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:3aa012b16686",
-          "state": "implemented",
+          "state": "unmet",
           "evidence": [
-            "tools/site-data/validate.py",
-            "tools/site-data/contract_selectors.py",
-            "tools/site-data/check_documented_selectors.py",
-            "Tests/Tools/test_check_documented_selectors.py",
-            "Tests/CMakeLists.txt"
+            "tools/site-data/validate.py"
           ],
-          "note": "check_documented_selectors.py resolved every applicable documented ctest command: windows-release 27/27 (59 not applicable); linux-gcc-release 21/24 (2 planned debt, 60 not applicable), the 3 misses being SparkDaemonServiceTests, unbuilt under local GCC 15.2 -Werror (clean with GCC 14). Local configured trees only; no hosted run."
+          "note": "Commands are still not executed. check_documented_selectors.py only resolves selections against configured trees (enabled tests, built executables): windows-release 27/27, linux-gcc-release 21/24 (SparkDaemonServiceTests unbuilt under local GCC 15.2). Its CTest registers only in preset trees, which no CI lane runs ctest over. tests-unit and tests-integration are still planned."
         },
         {
           "criterionDigest": "sha256:6023a2a14b43",
