@@ -316,6 +316,25 @@ this up next:
    session, and is a much larger change (co-owned by the scene-load path,
    `LoadSceneAndTerrain`/`LoadSanctuaryScene`) than this pass's scope.
 
+   **Fail-closed guard (TF-120).** Until that reload exists, a client never
+   enters a world it did not load. `TFServerSim::SendWorldWelcome` first sends
+   `TFMsg::ContinentIdentity` (`0x5490`, S->C reliable,
+   `TF_ContinentIdentity{char key[64]}`, the new `0x5490-0x5493` block in
+   `Net/TFNetProtocolIds.h`) with the hosted continent's `continents.json`
+   key. `TFClientNet::OnContinentIdentity` compares it with the continent it
+   loaded at boot. On a mismatch it logs
+   `[TF] server hosts continent '<server>' but this client loaded '<local>'; restart with TF_CONTINENT=<server>`
+   and disconnects (`TFClientNet::Disconnect` plus `NetworkManager::Disconnect`),
+   and the connection's lifecycle change drops the `TF_WorldWelcome` queued
+   behind it, so the client neither enters the world nor spawns. A server that
+   never sends the message leaves the client unguarded. The frozen
+   `TF_WorldWelcome` and `TF_ContinentInfo` layouts are unchanged. A hop to
+   another continent therefore now ends at a refusal instead of a pawn on the
+   wrong lattice, and the player must restart the client with the right
+   `TF_CONTINENT`. The multi-client harness proves it with
+   `TerrafrontMultiClient_ContinentMismatchRefused` (`continent_mismatch`, opt-in
+   with `SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS`).
+
 3. **FIXED (follow-up pass).** `TFLoginFlow`'s state machine previously did
    not reset on disconnect: `TFFlowState m_state` only advanced via the
    onboarding reply sinks, and nothing set it back to `TFFlowState::Login`

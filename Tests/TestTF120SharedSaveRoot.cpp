@@ -5,9 +5,9 @@
  *        absolute writes, and must survive a peer crashing mid-transaction.
  *
  * Every test drives the production TFDatabase against a real file. The
- * multi-process cases (POSIX) spawn fresh SparkTests processes as peer
- * authorities; each opens its own TFDatabase exactly as a second continent
- * server would. Peers are exec'd rather than bare fork()s of this runner: the
+ * multi-process cases (POSIX and Windows, TF120PeerProcess.h) spawn fresh
+ * SparkTests processes as peer authorities; each opens its own TFDatabase
+ * exactly as a second continent server would. Peers are exec'd rather than bare fork()s of this runner: the
  * suite's other threads (async logger, job workers) may hold locks at fork
  * time, and a forked child that logs or allocates would then deadlock.
  */
@@ -29,9 +29,7 @@
 #include <vector>
 
 using namespace Terrafront;
-#ifndef _WIN32
 using namespace TF120Peer;
-#endif
 
 namespace
 {
@@ -484,7 +482,6 @@ TEST(TF120_SharedRoot_StaleCharacterDoesNotBlockOtherCharactersInMetaSweep)
     EXPECT_TRUE(continentB.Close());
 }
 
-#ifndef _WIN32
 namespace
 {
     constexpr int kInterleavePeers = 4;
@@ -539,7 +536,7 @@ namespace
         std::fflush(stdout);
     }
 
-    /// Peer role: commit as fast as possible until SIGKILLed, so the kill
+    /// Peer role: commit as fast as possible until killed (SIGKILL / TerminateProcess), so the kill
     /// lands inside a transaction (holding the lock, mid tmp-write or just
     /// before the rename).
     void RunHammerPeer()
@@ -726,4 +723,3 @@ TEST(TF120_SharedRoot_PeerKilledMidTransactionLeavesCommittedStateUsable)
     ASSERT_TRUE(restarted.FindCharacter(charId, durable));
     EXPECT_EQ(durable.xp, lastXp);
 }
-#endif

@@ -269,6 +269,12 @@ frozen `static_assert` sizes in `Net/TFNetProtocol.h`
 TF_RegisterRequest/TF_CharBrief/TF_CharListReply/TF_CharCreateRequest/
 TF_CharOpReply/TF_CharDeleteRequest/TF_EnterWorldRequest`).
 
+TF-120: `ContinentIdentity = 0x5490` (S->C, reliable, `TF_ContinentIdentity
+{char key[64]}`) goes out just before `TF_WorldWelcome` and names the
+continent the server hosts. A client that loaded another continent at boot
+refuses it: it logs the refusal and disconnects before it enters the world
+(docs/TERRAFRONT_MULTIMAP.md §4, gap 2).
+
 NET-100: login is SCRAM-SHA-256 and registration sends a client-derived
 verifier (`Net/TFScramWire.h`), so no TERRAFRONT message carries a password;
 `TFClientNet::BeginLogin` / `TFClientNet::Register` are the client entry

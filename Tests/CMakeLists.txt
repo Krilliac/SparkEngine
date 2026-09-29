@@ -2225,6 +2225,20 @@ set_tests_properties(TF120_Residency PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 120)
 
+# DATA-120 / TF-120: authority processes sharing one TF_SAVE_ROOT database. The
+# two spawned-peer cases (TF120PeerProcess.h) run on every platform, so the
+# count is the same everywhere. A peer that cannot spawn SKIPs its case, which
+# the runner does not count as a failure, so the skip fails the CTest here.
+# RUN_SERIAL: fixed Saves/ paths, and on Windows the peers inherit a scoped
+# copy of this process's environment.
+add_test(NAME TF120_SharedRoot COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(TF120_SharedRoot PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_SharedRoot_;SPARK_TEST_EXPECT_COUNT=8"
+    FAIL_REGULAR_EXPRESSION "cannot spawn a peer;[0-9]+ skipped"
+    LABELS "persistence;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 240)
+
 # Security: SparkDaemon shader/asset cache hardening. The pinned count fails the
 # lane if the family silently stops being compiled in.
 add_test(NAME SecDaemonCacheHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
@@ -4294,7 +4308,9 @@ set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
 # real dedicated server plus two headless clients (onboard + spawn + walk,
 # combat kill/respawn, forged loadouts, reconnect, territory flips, vehicle life
 # cycle) and fails unless both clients agree with the server at every checkpoint
-# and the scenario's authoritative outcome holds.
+# and the scenario's authoritative outcome holds. ContinentMismatchRefused (TF-120)
+# runs one client booted on another continent than the server's: it must refuse
+# the server's TF_ContinentIdentity and never spawn.
 # The process runs are timing-sensitive (three processes on one host) and have
 # not yet run on hosted Linux or 2-core runners, so they are opt-in and stay out of the
 # required full-ctest lanes until a dedicated job enables it:
@@ -4320,7 +4336,8 @@ if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEA
             ForgedStateRejectedAndAudited:forged_state
             ReconnectRestoresAllowedState:reconnect
             TerritoryReplicates:territory
-            VehicleLifecycle:vehicle_lifecycle)
+            VehicleLifecycle:vehicle_lifecycle
+            ContinentMismatchRefused:continent_mismatch)
         string(REPLACE ":" ";" _tf_run "${_tf_run}")
         list(GET _tf_run 0 _tf_name)
         list(GET _tf_run 1 _tf_scenario)

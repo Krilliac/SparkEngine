@@ -25,6 +25,7 @@
 #include "Persistence/TFOutfitStore.h"
 #include "Persistence/TFSavePaths.h"
 #include "Persistence/TFWorldSave.h"
+#include "TF120PeerProcess.h"
 #include "Utils/JsonUtils.h"
 #include "Utils/Process.h"
 
@@ -51,9 +52,6 @@
 #include <windows.h>
 #else
 #include <unistd.h>
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
 #endif
 
 using namespace Terrafront;
@@ -431,125 +429,23 @@ namespace
     constexpr const char* kDrillDbEnv = "SPARK_DATA120_DRILL_DB";
     constexpr const char* kDrillBackupEnv = "SPARK_DATA120_DRILL_BACKUP";
     constexpr const char* kDrillCharEnv = "SPARK_DATA120_DRILL_CHAR";
-    /// The parent's test selection, dropped so the child runs exactly one test.
-    constexpr const char* kParentSelection[] = {"SPARK_TEST_FILE", "SPARK_TEST_EXPECT_COUNT", "SPARK_TEST_EXCLUDE",
-                                                "SPARK_TEST_LIMIT"};
 
     SavePaths::DurableCommitStage s_crashStage = SavePaths::DurableCommitStage::StagedAndSynced;
     fs::path s_crashTarget;
 
-    std::string EnvOrEmpty(const char* name)
-    {
-        const char* value = std::getenv(name);
-        return value ? value : "";
-    }
+    using TF120Peer::EnvOrEmpty;
 
-    fs::path TestBinaryPath()
-    {
-#ifdef _WIN32
-        std::wstring buffer(512, L'\0');
-        for (;;)
-        {
-            const DWORD size = ::GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-            if (size == 0)
-                return {};
-            if (size < buffer.size() - 1)
-            {
-                buffer.resize(size);
-                return fs::path(buffer);
-            }
-            if (buffer.size() >= 32768)
-                return {};
-            buffer.resize(buffer.size() * 2);
-        }
-#elif defined(__APPLE__)
-        uint32_t size = 0;
-        _NSGetExecutablePath(nullptr, &size);
-        std::string buffer(size, '\0');
-        if (_NSGetExecutablePath(buffer.data(), &size) != 0)
-            return {};
-        return fs::path(buffer.c_str());
-#else
-        std::error_code error;
-        const fs::path self = fs::read_symlink("/proc/self/exe", error);
-        return error ? fs::path{} : self;
-#endif
-    }
-
-#ifdef _WIN32
-    /// Sets (or, for an empty value, removes) one variable of this process's environment and restores it.
-    /// Spark::Process::Builder has no environment API; a child launched inside the scope inherits it.
-    class ScopedEnvironmentVariable
-    {
-      public:
-        ScopedEnvironmentVariable(const char* name, const std::string& value) : m_name(name)
-        {
-            if (const char* previous = std::getenv(name))
-            {
-                m_wasSet = true;
-                m_previous = previous;
-            }
-            _putenv_s(m_name, value.c_str());
-        }
-        ~ScopedEnvironmentVariable() { _putenv_s(m_name, m_wasSet ? m_previous.c_str() : ""); }
-        ScopedEnvironmentVariable(const ScopedEnvironmentVariable&) = delete;
-        ScopedEnvironmentVariable& operator=(const ScopedEnvironmentVariable&) = delete;
-
-      private:
-        const char* m_name;
-        bool m_wasSet = false;
-        std::string m_previous;
-    };
-
-    /// UTF-8 form of a path, as Spark::Process::Builder expects on Windows.
-    std::string Utf8(const fs::path& path)
-    {
-        const std::u8string text = path.u8string();
-        return std::string(text.begin(), text.end());
-    }
-#endif
-
-    /// Launch a fresh SparkTests process that runs only `testName`, which sees
-    /// `role` in SPARK_DATA120_DRILL_ROLE and plays the dying writer. The child
-    /// is exec'd rather than a bare fork() of this runner: the runner's other
-    /// threads (async logger, job workers) may hold locks at fork time, and a
-    /// forked child that logs or allocates could deadlock. On Windows the child
-    /// inherits a scoped copy of this process's environment (the drill CTests
-    /// run RUN_SERIAL, so nothing else reads it meanwhile); on POSIX it goes
-    /// through env(1).
+    /// Launch a fresh SparkTests process (TF120Peer::SpawnPeer) that runs only `testName`, which sees
+    /// `role` in SPARK_DATA120_DRILL_ROLE and plays the dying writer.
     std::expected<Spark::Process, std::string> SpawnDrillChild(const char* testName, const std::string& role,
                                                                const fs::path& db, uint64_t charId,
                                                                const fs::path& backup = {})
     {
-        const fs::path self = TestBinaryPath();
-        if (self.empty())
-            return std::unexpected(std::string("cannot resolve the test binary path"));
-
-        const std::pair<const char*, std::string> drillEnvironment[] = {
-            {"SPARK_TEST_NAME", testName},
-            {kDrillRoleEnv, role},
-            {kDrillDbEnv, fs::absolute(db).string()},
-            {kDrillBackupEnv, backup.empty() ? std::string() : fs::absolute(backup).string()},
-            {kDrillCharEnv, std::to_string(charId)},
-        };
-#ifdef _WIN32
-        std::vector<std::unique_ptr<ScopedEnvironmentVariable>> scoped;
-        for (const char* selection : kParentSelection)
-            scoped.push_back(std::make_unique<ScopedEnvironmentVariable>(selection, std::string()));
-        for (const auto& [name, value] : drillEnvironment)
-            scoped.push_back(std::make_unique<ScopedEnvironmentVariable>(name, value));
-        Spark::Process::Builder builder(Utf8(self));
-        builder.WorkingDirectory(Utf8(fs::current_path()));
-#else
-        Spark::Process::Builder builder("env");
-        for (const char* selection : kParentSelection)
-            builder.Arg("-u").Arg(selection);
-        for (const auto& [name, value] : drillEnvironment)
-            builder.Arg(std::string(name) + "=" + value);
-        builder.Arg(self.string()).WorkingDirectory(fs::current_path().string());
-#endif
-        builder.CaptureStdout().MergeStderrIntoStdout();
-        return builder.Launch();
+        return TF120Peer::SpawnPeer(
+            testName,
+            {std::string(kDrillRoleEnv) + "=" + role, std::string(kDrillDbEnv) + "=" + fs::absolute(db).string(),
+             std::string(kDrillBackupEnv) + "=" + (backup.empty() ? std::string() : fs::absolute(backup).string()),
+             std::string(kDrillCharEnv) + "=" + std::to_string(charId)});
     }
 
     /// Wait up to 60 s for the child while draining its output (so a full pipe

@@ -355,6 +355,20 @@ namespace Terrafront
 
     void TFServerSim::SendWorldWelcome(PlayerId player)
     {
+        // TF-120: name the hosted continent first, so a client that booted another continent's scene and lattice
+        // refuses before it enters the world (TFClientNet::OnContinentIdentity).
+        if (m_ctx->data && m_ctx->data->IsLoaded())
+        {
+            const std::string& key = m_ctx->data->GetContinent().key;
+            TF_ContinentIdentity identity{};
+            if (!key.empty() && key.size() < sizeof(identity.key))
+            {
+                std::memcpy(identity.key, key.data(), key.size());
+                SendToPlayer(player, static_cast<uint16_t>(TFMsg::ContinentIdentity), &identity, sizeof(identity),
+                             true);
+            }
+        }
+
         TF_WorldWelcome w{};
         w.yourPlayerId = player;
         w.yourFaction = static_cast<uint8_t>(GetPlayerFaction(player));

@@ -163,6 +163,14 @@ namespace Terrafront
         // Net/TFNetProtocolOnboarding.h). The block is now full.
         LoginChallenge = 0x548E, // S->C  TF_LoginChallenge
         LoginProof = 0x548F,     // C->S  TF_LoginProof
+
+        // 0x5490-0x5493: continent-identity block (TF-120, docs/TERRAFRONT_MULTIMAP.md).
+        // TF_WorldWelcome and TF_ContinentInfo are frozen and carry no continent key
+        // (TF_ContinentInfo's mapId is positional), so the server names the continent
+        // it hosts in its own message, sent just before TF_WorldWelcome. A client that
+        // loaded another continent's scene and lattice disconnects instead of entering
+        // the world. Struct in Net/TFNetProtocol.h. 0x5491-0x5493 free.
+        ContinentIdentity = 0x5490, // S->C  TF_ContinentIdentity (reliable)
     };
 
     /**

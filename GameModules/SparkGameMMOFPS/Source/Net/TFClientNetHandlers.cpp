@@ -12,8 +12,10 @@
 #include "Net/TFClientNet.h"
 #include "Net/TFChatRules.h"
 
+#include "Data/TFDataTables.h" // TF-120: the continent this client loaded, for TF_ContinentIdentity
 #include "Game/TFPlayerSystem.h"
-#include "Net/TFRedeployProtocol.h" // W7 ui-map-keys: redeploy reply -> map screen
+#include "Net/TFRedeployProtocol.h"  // W7 ui-map-keys: redeploy reply -> map screen
+#include "Persistence/TFSavePaths.h" // TF-120: IsValidContinentKey
 #include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h" // W7 ui-map-keys: OnRedeployReply sink
 #include "UI/TFLoginFlow.h" // W5 onboarding (Task 6): direct reply-sink forwarding
@@ -21,6 +23,7 @@
 
 #include "Utils/LogMacros.h"
 #include "Utils/SecureMemory.h"
+#include "Utils/SparkConsole.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -29,6 +32,7 @@
 #include <algorithm>
 #include <cstring>
 #include <optional>
+#include <string>
 
 namespace Terrafront
 {
@@ -50,6 +54,8 @@ namespace Terrafront
 
         route(TFMsg::WorldWelcome,
               [this](const NetworkMessage& m) { OnWorldWelcome(m.payload.data(), m.payload.size()); });
+        route(TFMsg::ContinentIdentity,
+              [this](const NetworkMessage& m) { OnContinentIdentity(m.payload.data(), m.payload.size()); });
         route(TFMsg::SpawnReply, [this](const NetworkMessage& m) { OnSpawnReply(m.payload.data(), m.payload.size()); });
         route(TFMsg::HitConfirm, [this](const NetworkMessage& m) { OnHitConfirm(m.payload.data(), m.payload.size()); });
         route(TFMsg::DamageEvent,
@@ -101,10 +107,11 @@ namespace Terrafront
         // owns untouched.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (TFMsg id : {TFMsg::WorldWelcome, TFMsg::SpawnReply, TFMsg::HitConfirm, TFMsg::DamageEvent,
-                         TFMsg::KillEvent, TFMsg::XPEvent, TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg,
-                         TFMsg::SquadMsg, TFMsg::LoginChallenge, TFMsg::LoginReply, TFMsg::RegisterReply,
-                         TFMsg::CharListReply, TFMsg::CharCreateReply, TFMsg::CharDeleteReply, TFMsg::RedeployReply})
+        for (TFMsg id :
+             {TFMsg::WorldWelcome, TFMsg::ContinentIdentity, TFMsg::SpawnReply, TFMsg::HitConfirm, TFMsg::DamageEvent,
+              TFMsg::KillEvent, TFMsg::XPEvent, TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg, TFMsg::SquadMsg,
+              TFMsg::LoginChallenge, TFMsg::LoginReply, TFMsg::RegisterReply, TFMsg::CharListReply,
+              TFMsg::CharCreateReply, TFMsg::CharDeleteReply, TFMsg::RedeployReply})
         {
             nm.UnregisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)));
         }
@@ -229,6 +236,38 @@ namespace Terrafront
         m_ctx->inWorld = true;
         if (m_ctx->loginFlow)
             m_ctx->loginFlow->OnEnteredWorld();
+    }
+
+    void TFClientNet::OnContinentIdentity(const void* data, size_t size)
+    {
+        if (size != sizeof(TF_ContinentIdentity) || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return;
+        TF_ContinentIdentity identity;
+        std::memcpy(&identity, data, sizeof(identity));
+        const char* end = static_cast<const char*>(std::memchr(identity.key, '\0', sizeof(identity.key)));
+        const std::string serverKey(identity.key, end ? static_cast<size_t>(end - identity.key) : 0);
+        const std::string& localKey = m_ctx->data->GetContinent().key;
+        if (!end || !SavePaths::IsValidContinentKey(serverKey))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] malformed continent identity from the server ignored");
+            return;
+        }
+        if (serverKey == localKey)
+            return;
+
+        // The scene, collision and region lattice were built for localKey at boot (tf_continent is
+        // RequiresRestart), so entering this server's world would put the pawn on the wrong continent.
+        const std::string refusal = "[TF] server hosts continent '" + serverKey + "' but this client loaded '" +
+                                    localKey + "'; restart with TF_CONTINENT=" + serverKey;
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "%s", refusal.c_str());
+        Spark::SimpleConsole::GetInstance().LogWarning(refusal);
+        // NetworkManager::Update invokes this observer from a copy with its API lock released and stops the rest
+        // of the batch once the connection's lifecycle changes, so disconnecting here also drops the
+        // TF_WorldWelcome queued behind this message. Same pair as TFTravelSystem::ApplyPendingContinentHop.
+        Disconnect();
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        if (nm.IsInitialized())
+            nm.Disconnect();
     }
 
     void TFClientNet::OnSpawnReply(const void* data, size_t size)
