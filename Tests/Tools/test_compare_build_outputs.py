@@ -95,6 +95,17 @@ def _coff_member(debug_data: bytes, offset: int = 60) -> bytes:
     return header + section + bytes(offset - len(header) - len(section)) + debug_data
 
 
+def _coff_sections(sections: list[tuple[bytes, bytes]]) -> bytes:
+    """A COFF object whose named sections hold the given raw bytes, in order."""
+    header = struct.pack("<HHIIIHH", 0x8664, len(sections), 0, 0, 0, 0, 0)
+    offset = len(header) + 40 * len(sections)
+    table = b""
+    for name, data in sections:
+        table += name.ljust(8, b"\0") + struct.pack("<IIIIIIHHI", len(data), 0, len(data), offset, 0, 0, 0, 0, 0)
+        offset += len(data)
+    return header + table + b"".join(data for _, data in sections)
+
+
 def _long_name_archive(names: list[str], terminator: bytes) -> bytes:
     """An archive whose members all use the "//" long-name table.
 
@@ -254,6 +265,21 @@ class CoffNormalizationTests(unittest.TestCase):
         self.assertEqual(recorded, [])
         self.assertEqual(normalized_digest, hashlib.sha256(archive).hexdigest())
 
+    def test_root_in_other_sections_of_the_same_member_stays_exact(self) -> None:
+        # MSVC /Z7 also writes the build directory into .debug$T (LF_BUILDINFO
+        # strings); OD-24 does not cover it, nor any code or data section.
+        root = b"C:\\build\\alpha"
+        member = _coff_sections([(b".text", b"code " + root), (b".debug$T", b"cwd " + root),
+                                 (b".debug$S", b"obj " + root), (b".rdata", root)])
+        normalized, changed = tool._replace_build_root(member, root)
+        self.assertTrue(changed)
+        self.assertEqual(normalized.count(root), 3)
+        self.assertEqual(len(normalized), len(member))
+        debug_s = member.index(b"obj " + root) + 4
+        self.assertNotEqual(normalized[debug_s:debug_s + len(root)], root)
+        self.assertEqual(normalized[:debug_s], member[:debug_s])
+        self.assertEqual(normalized[debug_s + len(root):], member[debug_s + len(root):])
+
     def test_non_lib_coff_archive_is_not_normalized(self) -> None:
         root = b"C:\\build\\alpha"
         archive = _ar_archive(_coff_member(root), 0)
@@ -320,7 +346,6 @@ class CoffNormalizationTests(unittest.TestCase):
             tool.compare_manifests(short, long)
 
 
-
 class ManifestSchemaTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = Path(tempfile.mkdtemp(prefix="spark-compare-outputs-"))
@@ -335,6 +360,44 @@ class ManifestSchemaTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
         return root
+
+    def test_od24_manifest_records_normalized_members_and_keeps_other_bytes_exact(self) -> None:
+        def library(root: bytes, text: bytes = b"code", debug_t: bytes = b"types") -> bytes:
+            return _ar_archive(_coff_sections([(b".text", text), (b".debug$T", debug_t),
+                                               (b".debug$S", b"obj " + root + b"\\x.obj")]), 0)
+
+        first_root, second_root = "C:\\work\\a\\build", "C:\\work\\b\\build"
+        first = self._tree("a", {"lib/x.lib": library(first_root.encode())})
+        second = self._tree("b", {"lib/x.lib": library(second_root.encode())})
+        left = tool.build_manifest(first, first_root)
+        right = tool.build_manifest(second, second_root)
+        tool.validate_manifest(left)
+        self.assertEqual(left["entries"][0]["normalizedMembers"],
+                         [{"member": "obj.o", "index": 0, "rootLength": len(first_root)}])
+        self.assertTrue(tool.compare_manifests(left, right)["equivalent"])
+        self.assertFalse(tool.compare_manifests(tool.build_manifest(first), tool.build_manifest(second))["equivalent"],
+                         "without --build-root nothing is normalized")
+
+        # Same normalized .debug$S but a different code byte, each tree's build
+        # root in .debug$T, or a shifted layout: each still differs.
+        variants = {
+            "code": (library(first_root.encode()), library(second_root.encode(), text=b"cod3")),
+            "types": (library(first_root.encode(), debug_t=first_root.encode()),
+                      library(second_root.encode(), debug_t=second_root.encode())),
+            "layout": (library(first_root.encode()), library(second_root.encode(), text=b"code!")),
+        }
+        for label, (data_a, data_b) in variants.items():
+            with self.subTest(label=label):
+                pair = [tool.build_manifest(self._tree(f"v-{label}-{side}", {"lib/x.lib": data}), root)
+                        for side, data, root in (("a", data_a, first_root), ("b", data_b, second_root))]
+                self.assertFalse(tool.compare_manifests(*pair)["equivalent"])
+
+        # The same archive under a non-.lib name is compared exactly.
+        renamed = [self._tree(f"r-{label}", {"lib/libx.a": library(root.encode())})
+                   for label, root in (("a", first_root), ("b", second_root))]
+        manifests = [tool.build_manifest(tree, root) for tree, root in zip(renamed, (first_root, second_root))]
+        self.assertEqual(manifests[0]["entries"][0]["normalizedMembers"], [])
+        self.assertFalse(tool.compare_manifests(*manifests)["equivalent"])
 
     def test_archive_member_timestamp_is_reported_at_that_member(self) -> None:
         first = self._tree("a", {"lib/libx.a": _ar_archive(b"\x01\x02\x03", 0), "notes.txt": b"x"})
@@ -359,13 +422,6 @@ class ManifestSchemaTests(unittest.TestCase):
         broken[second : second + 16] = f"{'/999':<16}".encode("ascii")
         with self.assertRaisesRegex(tool.InputError, "long name points outside the name table"):
             tool.build_manifest(self._tree("bad", {"lib/bad.lib": bytes(broken)}))
-
-
-
-
-
-
-
 
     def test_pe_timestamp_and_codeview_identity(self) -> None:
         guid = uuid.UUID("12345678-1234-5678-9abc-def012345678")

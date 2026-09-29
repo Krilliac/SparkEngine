@@ -303,6 +303,16 @@ __declspec(dllexport) void Scale(float* out, const float* a, const float* b)
             floor = _run_checker("--pdb", str(floor_dll.with_suffix(".pdb")), str(floor_dll))
             self.assertEqual(floor.returncode, 0, floor.stdout + floor.stderr)
 
+    def test_pe_ignores_allow_symbol_regex(self) -> None:
+        # A PE exemption comes only from reviewed PDB ranges, never from a regex.
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            dll = self._link(tmp, "regex", "-mavx2")
+            result = _run_checker("--allow-symbol", ".*", "--pdb", str(dll.with_suffix(".pdb")), str(dll))
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("violation AVX/AVX2 (ymm)", result.stdout)
+            self.assertNotIn("allowed (cpuid-dispatched)", result.stdout)
+
     def test_pe_requires_matching_pdb(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tmp = Path(directory)
