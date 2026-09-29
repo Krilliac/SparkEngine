@@ -9,7 +9,7 @@
 #include "RacingTrackSystem.h"
 #include "Physics/PhysicsBody.h"
 #include "Physics/PhysicsSystem.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 #include "Vehicle/RacingVehicleSystem.h"
 
 #include <algorithm>
@@ -139,9 +139,9 @@ namespace Racing
         BuildCheckpointGates(*physics);
         physics->OptimizeBroadPhase();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "Racing track '%s': built %zu static colliders (%zu barrier pieces) and %zu checkpoint gates",
-                       m_currentTrack.name.c_str(), m_colliders.size(), m_barrierCount, m_checkpointGates.size());
+        Spark::ModuleLog::Info(
+            m_context, "Racing track '{}': built {} static colliders ({} barrier pieces) and {} checkpoint gates",
+            m_currentTrack.name.c_str(), m_colliders.size(), m_barrierCount, m_checkpointGates.size());
     }
 
     void RacingTrackSystem::BuildBarriers(PhysicsSystem& physics)
@@ -297,9 +297,9 @@ namespace Racing
             std::shared_ptr<PhysicsBody> body = physics.CreateBody(gate);
             if (!body)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                                "Racing track '%s': checkpoint %zu has no sensor gate; no lap can be completed",
-                                m_currentTrack.name.c_str(), index);
+                Spark::ModuleLog::Error(m_context,
+                                        "Racing track '{}': checkpoint {} has no sensor gate; no lap can be completed",
+                                        m_currentTrack.name, index);
                 continue;
             }
             m_checkpointGates.push_back({std::move(body), static_cast<uint32_t>(index)});

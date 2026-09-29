@@ -6,7 +6,6 @@
  */
 
 #include "GameMode.h"
-#include "Utils/ContainerUtils.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
@@ -226,7 +225,7 @@ namespace Spark
 
     void GameMode::AddPlayer(const std::string& name, Team team)
     {
-        if (!Spark::ContainerUtils::Contains(m_playerScores, name))
+        if (!m_playerScores.contains(name))
         {
             PlayerScore score;
             score.playerName = name;

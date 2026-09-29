@@ -18,8 +18,7 @@
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/Gameplay/AbilitySystem.h"
 #include "Graphics/WeatherSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -95,8 +94,8 @@ namespace ARPG
         SetupWeather();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG engine systems integration initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Engine systems integration initialized");
+        Spark::ModuleLog::Info(m_context, "ARPG engine systems integration initialized");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Engine systems integration initialized");
         return true;
     }
 
@@ -151,13 +150,13 @@ namespace ARPG
         m_registeredProcCount = 0;
 
         m_initialized = false;
-        m_context = nullptr;
         m_heroes = nullptr;
         m_combat = nullptr;
         m_loot = nullptr;
         m_dungeon = nullptr;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG engine systems integration shut down");
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Engine systems integration shut down");
+        Spark::ModuleLog::Info(m_context, "ARPG engine systems integration shut down");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Engine systems integration shut down");
+        m_context = nullptr;
     }
 
     void ARPGEngineSystems::RenderDebugUI()
@@ -198,9 +197,9 @@ namespace ARPG
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityDamagedEvent>(
             [this](const Spark::EntityDamagedEvent& e)
             {
-                Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Entity " + std::to_string(e.entityId) + " took " +
-                                                            std::to_string(e.damage) +
-                                                            " damage from: " + e.damageSource);
+                Spark::ModuleLog::Info(m_context, "{}",
+                                       "[ARPG] Entity " + std::to_string(e.entityId) + " took " +
+                                           std::to_string(e.damage) + " damage from: " + e.damageSource);
             }));
 
         // Award XP to heroes on kill and trigger loot drops
@@ -221,8 +220,8 @@ namespace ARPG
                 }
             }));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG EventBus: 2 subscriptions registered");
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] EventBus: 2 subscriptions registered");
+        Spark::ModuleLog::Info(m_context, "ARPG EventBus: 2 subscriptions registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] EventBus: 2 subscriptions registered");
     }
 
     // =========================================================================
@@ -273,7 +272,7 @@ namespace ARPG
                 }
             });
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Destruction: 3 fracture patterns registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Destruction: 3 fracture patterns registered");
     }
 
     // =========================================================================
@@ -322,8 +321,8 @@ namespace ARPG
         bossConfig.canUseCover = false;
         ai->RegisterBehavior("arpg_boss_phases", Spark::AI::FPSBehaviors::CreateCombatBehavior(bossConfig));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG AI: 3 behavior trees registered");
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] AI: 3 behavior trees registered");
+        Spark::ModuleLog::Info(m_context, "ARPG AI: 3 behavior trees registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] AI: 3 behavior trees registered");
     }
 
     // =========================================================================
@@ -360,7 +359,7 @@ namespace ARPG
             m_hasAnimationBridge = true;
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Animation: live hero state machine registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Animation: live hero state machine registered");
     }
 
     // =========================================================================
@@ -372,9 +371,10 @@ namespace ARPG
         m_actionCoroutineName =
             "arpg.hero_action_recovery." + std::to_string(static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this)));
         const bool available = m_context->GetCoroutineScheduler() != nullptr;
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            available ? "[ARPG] Coroutines: hero action recovery connected"
-                      : "[ARPG] Coroutines: scheduler unavailable, using deterministic local recovery");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               available
+                                   ? "[ARPG] Coroutines: hero action recovery connected"
+                                   : "[ARPG] Coroutines: scheduler unavailable, using deterministic local recovery");
     }
 
     // =========================================================================
@@ -386,7 +386,7 @@ namespace ARPG
         auto* abilities = m_context->GetAbilities();
         if (!abilities)
         {
-            Spark::SimpleConsole::GetInstance().LogWarning("[ARPG] Abilities: engine registry unavailable");
+            Spark::ModuleLog::Warn(m_context, "[ARPG] Abilities: engine registry unavailable");
             return;
         }
 
@@ -396,7 +396,7 @@ namespace ARPG
         m_registeredAbilityCount = 4;
         m_registeredAuraCount = 4;
         m_registeredProcCount = 1;
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Abilities: 4 abilities, 4 auras, 1 proc registered");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Abilities: 4 abilities, 4 auras, 1 proc registered");
     }
 
     void ARPGEngineSystems::PlayHeroAction(ARPGHeroAction action)
@@ -493,7 +493,7 @@ namespace ARPG
         // Set default dungeon weather to foggy/dark atmosphere
         weather->SetWeather(Spark::WeatherType::Fog, 0.4f, 2.0f);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Weather: dungeon atmosphere configured");
+        Spark::ModuleLog::Info(m_context, "[ARPG] Weather: dungeon atmosphere configured");
     }
 
 } // namespace ARPG

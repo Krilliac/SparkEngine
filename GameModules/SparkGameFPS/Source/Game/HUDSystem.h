@@ -19,7 +19,7 @@
 #include <deque>
 #include <chrono>
 #include <functional>
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 
 // Forward declarations
 class Player;

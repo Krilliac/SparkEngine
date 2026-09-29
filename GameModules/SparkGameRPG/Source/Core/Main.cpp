@@ -16,8 +16,8 @@
 #include "Combat/RPGCombatSystem.h"
 #include "Inventory/RPGInventorySystem.h"
 #include "NPC/RPGNPCSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
+#include <Spark/IConsole.h>
 #include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
@@ -30,6 +30,8 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace
@@ -101,15 +103,14 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[RPG] Loading Spark RPG module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module loading — initializing 8 subsystems");
+    Spark::ModuleLog::Info(m_context, "[RPG] Loading Spark RPG module...");
+    Spark::ModuleLog::Info(m_context, "RPG module loading — initializing 8 subsystems");
 
     // Initialize the world area setup (registers areas with streaming)
     m_worldSetup = std::make_unique<RPG::RPGWorldSetup>();
     if (!m_worldSetup->Initialize(context))
     {
-        console.LogError("[RPG] Failed to initialize world setup");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize world setup");
         return false;
     }
 
@@ -117,7 +118,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_characterSystem = std::make_unique<RPG::RPGCharacterSystem>();
     if (!m_characterSystem->Initialize(context))
     {
-        console.LogError("[RPG] Failed to initialize character system");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize character system");
         return false;
     }
 
@@ -125,7 +126,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_combatSystem = std::make_unique<RPG::RPGCombatSystem>();
     if (!m_combatSystem->Initialize(context))
     {
-        console.LogError("[RPG] Failed to initialize combat system");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize combat system");
         return false;
     }
 
@@ -133,7 +134,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_gameplayBridge = std::make_unique<RPG::RPGGameplayBridge>();
     if (!m_gameplayBridge->Initialize(context, m_characterSystem.get()))
     {
-        console.LogError("[RPG] Failed to initialize gameplay bridge");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize gameplay bridge");
         return false;
     }
 
@@ -141,7 +142,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_inventorySystem = std::make_unique<RPG::RPGInventorySystem>();
     if (!m_inventorySystem->Initialize(context))
     {
-        console.LogError("[RPG] Failed to initialize inventory system");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize inventory system");
         return false;
     }
 
@@ -149,14 +150,14 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_npcSystem = std::make_unique<RPG::RPGNPCSystem>();
     if (!m_npcSystem->Initialize(context))
     {
-        console.LogError("[RPG] Failed to initialize NPC system");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize NPC system");
         return false;
     }
 
     // Bake each NPC area's NavMesh so schedule changes walk NPCs to their posts instead of teleporting them
     if (!m_npcSystem->BuildAreaNavigation(m_worldSetup->GetAreas()))
     {
-        console.LogError("[RPG] Failed to build NPC area navigation");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to build NPC area navigation");
         return false;
     }
 
@@ -164,14 +165,14 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_engineSystems = std::make_unique<RPG::RPGEngineSystems>();
     if (!m_engineSystems->Initialize(context))
     {
-        console.LogWarning("[RPG] Engine systems integration partially failed (non-fatal)");
+        Spark::ModuleLog::Warn(m_context, "[RPG] Engine systems integration partially failed (non-fatal)");
     }
 
     m_demoSession = std::make_unique<RPG::RPGDemoSession>();
     if (!m_demoSession->Initialize(m_characterSystem.get(), m_combatSystem.get(), m_inventorySystem.get(),
                                    m_npcSystem.get(), m_worldSetup.get()))
     {
-        console.LogError("[RPG] Failed to initialize playable demo session");
+        Spark::ModuleLog::Error(m_context, "[RPG] Failed to initialize playable demo session");
         return false;
     }
 
@@ -212,13 +213,14 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
                            }});
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module loaded successfully — 8 subsystems active");
-    console.LogInfo("[RPG] Spark RPG module loaded successfully (8 subsystems)");
-    console.LogInfo("[RPG] Areas: " + std::to_string(m_worldSetup->GetAreaCount()) +
-                    " | Classes: " + std::to_string(m_characterSystem->GetClassCount()) +
-                    " | Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
-                    " | Quests: " + std::to_string(m_gameplayBridge->GetRegisteredQuestCount()) +
-                    " | NPCs: " + std::to_string(m_npcSystem->GetNPCCount()));
+    Spark::ModuleLog::Info(m_context, "RPG module loaded successfully — 8 subsystems active");
+    Spark::ModuleLog::Info(m_context, "[RPG] Spark RPG module loaded successfully (8 subsystems)");
+    Spark::ModuleLog::Info(m_context, "{}",
+                           "[RPG] Areas: " + std::to_string(m_worldSetup->GetAreaCount()) +
+                               " | Classes: " + std::to_string(m_characterSystem->GetClassCount()) +
+                               " | Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
+                               " | Quests: " + std::to_string(m_gameplayBridge->GetRegisteredQuestCount()) +
+                               " | NPCs: " + std::to_string(m_npcSystem->GetNPCCount()));
     return true;
 }
 
@@ -231,9 +233,8 @@ void SparkGameRPGModule::OnUnload()
     // them before the module image is unmapped during hot unload/reload.
     Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("RPG");
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[RPG] Unloading Spark RPG module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module shutting down");
+    Spark::ModuleLog::Info(m_context, "[RPG] Unloading Spark RPG module...");
+    Spark::ModuleLog::Info(m_context, "RPG module shutting down");
 
     UnregisterConsoleCommands();
 
@@ -280,10 +281,10 @@ void SparkGameRPGModule::OnUnload()
         m_worldSetup.reset();
     }
 
+    Spark::ModuleLog::Info(m_context, "RPG module unloaded");
+    Spark::ModuleLog::Info(m_context, "[RPG] Spark RPG module unloaded");
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module unloaded");
-    console.LogInfo("[RPG] Spark RPG module unloaded");
 }
 
 void SparkGameRPGModule::OnUpdate(float deltaTime)
@@ -344,218 +345,221 @@ void SparkGameRPGModule::OnImGui()
 
 void SparkGameRPGModule::RegisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
+    auto* console = m_context ? m_context->GetConsole() : nullptr;
+    const auto registerCommand = [this, console](std::string_view name, Spark::IConsole::CommandHandler handler)
+    {
+        if (console && console->RegisterCommand(name, std::move(handler), "", "General", ""))
+        {
+            m_registeredConsoleCommands.emplace_back(name);
+        }
+    };
 
-    console.RegisterCommand("rpg_status",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                if (!m_worldSetup)
-                                    return "RPG module not initialized";
+    registerCommand("rpg_status",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        if (!m_worldSetup)
+                            return "RPG module not initialized";
 
-                                std::string status = "=== Spark RPG Status ===\n";
-                                status += "Areas: " + std::to_string(m_worldSetup->GetAreaCount()) + "\n";
-                                status += "Classes: " + std::to_string(m_characterSystem->GetClassCount()) + "\n";
-                                status += "Items: " + std::to_string(m_inventorySystem->GetItemCount()) + "\n";
-                                status +=
-                                    "Quests: " + std::to_string(m_gameplayBridge->GetRegisteredQuestCount()) + "\n";
-                                status += "NPCs: " + std::to_string(m_npcSystem->GetNPCCount()) + "\n";
-                                status +=
-                                    "Active combats: " + std::to_string(m_combatSystem->GetActiveCombatCount()) + "\n";
-                                status += "\n" + m_demoSession->GetStatusString() + "\n";
-                                return status;
-                            });
+                        std::string status = "=== Spark RPG Status ===\n";
+                        status += "Areas: " + std::to_string(m_worldSetup->GetAreaCount()) + "\n";
+                        status += "Classes: " + std::to_string(m_characterSystem->GetClassCount()) + "\n";
+                        status += "Items: " + std::to_string(m_inventorySystem->GetItemCount()) + "\n";
+                        status += "Quests: " + std::to_string(m_gameplayBridge->GetRegisteredQuestCount()) + "\n";
+                        status += "NPCs: " + std::to_string(m_npcSystem->GetNPCCount()) + "\n";
+                        status += "Active combats: " + std::to_string(m_combatSystem->GetActiveCombatCount()) + "\n";
+                        status += "\n" + m_demoSession->GetStatusString() + "\n";
+                        return status;
+                    });
 
-    console.RegisterCommand("rpg_play", [this](const std::vector<std::string>&) -> std::string
-                            { return m_demoSession->GetStatusString(); });
+    registerCommand("rpg_play", [this](const std::vector<std::string>&) -> std::string
+                    { return m_demoSession->GetStatusString(); });
 
-    console.RegisterCommand("rpg_restart",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                RPG::CharacterClass characterClass = RPG::CharacterClass::Warrior;
-                                if (!args.empty() && !ParseCharacterClass(args[0], characterClass))
-                                {
-                                    return "Usage: rpg_restart [warrior|mage|ranger|cleric|rogue|paladin]";
-                                }
-                                return m_demoSession->Reset(characterClass);
-                            });
+    registerCommand("rpg_restart",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        RPG::CharacterClass characterClass = RPG::CharacterClass::Warrior;
+                        if (!args.empty() && !ParseCharacterClass(args[0], characterClass))
+                        {
+                            return "Usage: rpg_restart [warrior|mage|ranger|cleric|rogue|paladin]";
+                        }
+                        return m_demoSession->Reset(characterClass);
+                    });
 
-    console.RegisterCommand("rpg_travel",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                uint32_t areaId = 0;
-                                if (args.size() != 1 || !ParseUint(args[0], areaId))
-                                {
-                                    return "Usage: rpg_travel <area-id>";
-                                }
-                                return m_demoSession->Travel(areaId);
-                            });
+    registerCommand("rpg_travel",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        uint32_t areaId = 0;
+                        if (args.size() != 1 || !ParseUint(args[0], areaId))
+                        {
+                            return "Usage: rpg_travel <area-id>";
+                        }
+                        return m_demoSession->Travel(areaId);
+                    });
 
-    console.RegisterCommand("rpg_attack",
-                            [this](const std::vector<std::string>&) -> std::string { return m_demoSession->Attack(); });
+    registerCommand("rpg_attack",
+                    [this](const std::vector<std::string>&) -> std::string { return m_demoSession->Attack(); });
 
-    console.RegisterCommand("rpg_flee",
-                            [this](const std::vector<std::string>&) -> std::string { return m_demoSession->Flee(); });
+    registerCommand("rpg_flee",
+                    [this](const std::vector<std::string>&) -> std::string { return m_demoSession->Flee(); });
 
-    console.RegisterCommand("rpg_rest",
-                            [this](const std::vector<std::string>&) -> std::string { return m_demoSession->Rest(); });
+    registerCommand("rpg_rest",
+                    [this](const std::vector<std::string>&) -> std::string { return m_demoSession->Rest(); });
 
-    console.RegisterCommand("rpg_talk",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                uint32_t npcId = 0;
-                                if (args.size() != 1 || !ParseUint(args[0], npcId))
-                                {
-                                    return "Usage: rpg_talk <npc-id>";
-                                }
-                                return m_demoSession->Talk(npcId);
-                            });
+    registerCommand("rpg_talk",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        uint32_t npcId = 0;
+                        if (args.size() != 1 || !ParseUint(args[0], npcId))
+                        {
+                            return "Usage: rpg_talk <npc-id>";
+                        }
+                        return m_demoSession->Talk(npcId);
+                    });
 
-    console.RegisterCommand("rpg_use",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                uint32_t itemId = 0;
-                                if (args.size() != 1 || !ParseUint(args[0], itemId))
-                                {
-                                    return "Usage: rpg_use <item-id>";
-                                }
-                                return m_demoSession->UseItem(itemId);
-                            });
+    registerCommand("rpg_use",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        uint32_t itemId = 0;
+                        if (args.size() != 1 || !ParseUint(args[0], itemId))
+                        {
+                            return "Usage: rpg_use <item-id>";
+                        }
+                        return m_demoSession->UseItem(itemId);
+                    });
 
-    console.RegisterCommand("rpg_accept",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                uint32_t questId = 0;
-                                if (args.size() != 1 || !ParseUint(args[0], questId))
-                                {
-                                    return "Usage: rpg_accept <quest-id>";
-                                }
-                                return m_demoSession->AcceptQuest(questId);
-                            });
+    registerCommand("rpg_accept",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        uint32_t questId = 0;
+                        if (args.size() != 1 || !ParseUint(args[0], questId))
+                        {
+                            return "Usage: rpg_accept <quest-id>";
+                        }
+                        return m_demoSession->AcceptQuest(questId);
+                    });
 
     // Automated player for packaged runs: one rest/travel/attack/flee session action per frame until the
     // quest completes. With no arguments it reports progress.
-    console.RegisterCommand(
-        "rpg_autoplay",
-        [this](const std::vector<std::string>& args) -> std::string
-        {
-            constexpr const char* usage = "Usage: rpg_autoplay <quest-id> [quarry name] | rpg_autoplay off";
-            if (args.empty())
-            {
-                return m_questAutopilot ? m_questAutopilot->GetStatusString() : usage;
-            }
-            if (args[0] == "off")
-            {
-                m_questAutopilot.reset();
-                return "Autoplay off";
-            }
-            uint32_t questId = 0;
-            if (!ParseUint(args[0], questId) || !Spark::Gameplay::QuestSystem::GetInstance().GetQuestDef(questId))
-            {
-                return usage;
-            }
-            std::string quarry;
-            for (size_t index = 1; index < args.size(); ++index)
-            {
-                quarry += (index > 1 ? " " : "") + args[index];
-            }
-            m_questAutopilot = std::make_unique<RPG::RPGQuestAutopilot>(questId, quarry);
-            return "Autoplay started for quest " + std::to_string(questId) +
-                   (quarry.empty() ? std::string(", fighting every encounter") : ", hunting " + quarry);
-        });
+    registerCommand("rpg_autoplay",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        constexpr const char* usage = "Usage: rpg_autoplay <quest-id> [quarry name] | rpg_autoplay off";
+                        if (args.empty())
+                        {
+                            return m_questAutopilot ? m_questAutopilot->GetStatusString() : usage;
+                        }
+                        if (args[0] == "off")
+                        {
+                            m_questAutopilot.reset();
+                            return "Autoplay off";
+                        }
+                        uint32_t questId = 0;
+                        if (!ParseUint(args[0], questId) ||
+                            !Spark::Gameplay::QuestSystem::GetInstance().GetQuestDef(questId))
+                        {
+                            return usage;
+                        }
+                        std::string quarry;
+                        for (size_t index = 1; index < args.size(); ++index)
+                        {
+                            quarry += (index > 1 ? " " : "") + args[index];
+                        }
+                        m_questAutopilot = std::make_unique<RPG::RPGQuestAutopilot>(questId, quarry);
+                        return "Autoplay started for quest " + std::to_string(questId) +
+                               (quarry.empty() ? std::string(", fighting every encounter") : ", hunting " + quarry);
+                    });
 
-    console.RegisterCommand("rpg_areas", [this](const std::vector<std::string>&) -> std::string
-                            { return m_worldSetup->GetAreaListString(); });
+    registerCommand("rpg_areas", [this](const std::vector<std::string>&) -> std::string
+                    { return m_worldSetup->GetAreaListString(); });
 
-    console.RegisterCommand("rpg_classes", [this](const std::vector<std::string>&) -> std::string
-                            { return m_characterSystem->GetClassListString(); });
+    registerCommand("rpg_classes", [this](const std::vector<std::string>&) -> std::string
+                    { return m_characterSystem->GetClassListString(); });
 
-    console.RegisterCommand("rpg_quests", [this](const std::vector<std::string>&) -> std::string
-                            { return Spark::Gameplay::QuestSystem::GetInstance().Console_GetStatus(); });
+    registerCommand("rpg_quests", [this](const std::vector<std::string>&) -> std::string
+                    { return Spark::Gameplay::QuestSystem::GetInstance().Console_GetStatus(); });
 
-    console.RegisterCommand("rpg_npcs", [this](const std::vector<std::string>&) -> std::string
-                            { return m_npcSystem->GetNPCListString(); });
+    registerCommand("rpg_npcs",
+                    [this](const std::vector<std::string>&) -> std::string { return m_npcSystem->GetNPCListString(); });
 
-    console.RegisterCommand("rpg_items", [this](const std::vector<std::string>&) -> std::string
-                            { return m_inventorySystem->GetItemListString(); });
+    registerCommand("rpg_items", [this](const std::vector<std::string>&) -> std::string
+                    { return m_inventorySystem->GetItemListString(); });
 
-    console.RegisterCommand("rpg_help",
-                            [](const std::vector<std::string>&) -> std::string
-                            {
-                                return "RPG playable commands:\n"
-                                       "  rpg_play\n"
-                                       "  rpg_restart [warrior|mage|ranger|cleric|rogue|paladin]\n"
-                                       "  rpg_travel <area-id> | rpg_attack | rpg_flee | rpg_rest | rpg_talk <npc-id>\n"
-                                       "  rpg_use <item-id> | rpg_accept <quest-id>\n"
-                                       "  rpg_autoplay <quest-id> [quarry name] | rpg_autoplay off\n"
-                                       "  rpg_areas | rpg_classes | rpg_items | rpg_quests | rpg_npcs\n"
-                                       "  rpg_save <slot> | rpg_load <slot> | rpg_weather <type> | rpg_time <hour>";
-                            });
+    registerCommand("rpg_help",
+                    [](const std::vector<std::string>&) -> std::string
+                    {
+                        return "RPG playable commands:\n"
+                               "  rpg_play\n"
+                               "  rpg_restart [warrior|mage|ranger|cleric|rogue|paladin]\n"
+                               "  rpg_travel <area-id> | rpg_attack | rpg_flee | rpg_rest | rpg_talk <npc-id>\n"
+                               "  rpg_use <item-id> | rpg_accept <quest-id>\n"
+                               "  rpg_autoplay <quest-id> [quarry name] | rpg_autoplay off\n"
+                               "  rpg_areas | rpg_classes | rpg_items | rpg_quests | rpg_npcs\n"
+                               "  rpg_save <slot> | rpg_load <slot> | rpg_weather <type> | rpg_time <hour>";
+                    });
 
     // Engine system integration commands
-    console.RegisterCommand("rpg_save",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (!m_engineSystems)
-                                    return "Engine systems not initialized";
-                                std::string slot = args.empty() ? "slot1" : args[0];
-                                return m_engineSystems->SaveGame(slot, m_demoSession->SerializeState());
-                            });
+    registerCommand("rpg_save",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (!m_engineSystems)
+                            return "Engine systems not initialized";
+                        std::string slot = args.empty() ? "slot1" : args[0];
+                        return m_engineSystems->SaveGame(slot, m_demoSession->SerializeState());
+                    });
 
-    console.RegisterCommand("rpg_load",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (!m_engineSystems)
-                                    return "Engine systems not initialized";
-                                std::string slot = args.empty() ? "slot1" : args[0];
-                                std::string demoState;
-                                const std::string result =
-                                    m_engineSystems->LoadGame(slot, demoState, [this](const std::string& candidate)
-                                                              { return m_demoSession->CanRestoreState(candidate); });
-                                if (!demoState.empty() && !m_demoSession->RestoreState(demoState))
-                                    return "RPG demo restore failed after validated world load: " + slot;
-                                return result;
-                            });
+    registerCommand("rpg_load",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (!m_engineSystems)
+                            return "Engine systems not initialized";
+                        std::string slot = args.empty() ? "slot1" : args[0];
+                        std::string demoState;
+                        const std::string result =
+                            m_engineSystems->LoadGame(slot, demoState, [this](const std::string& candidate)
+                                                      { return m_demoSession->CanRestoreState(candidate); });
+                        if (!demoState.empty() && !m_demoSession->RestoreState(demoState))
+                            return "RPG demo restore failed after validated world load: " + slot;
+                        return result;
+                    });
 
-    console.RegisterCommand("rpg_weather",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (!m_engineSystems)
-                                    return "Engine systems not initialized";
-                                if (args.empty())
-                                    return "Usage: rpg_weather <clear|cloudy|rain|snow|fog|storm>";
-                                return m_engineSystems->SetWeather(args[0]);
-                            });
+    registerCommand("rpg_weather",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (!m_engineSystems)
+                            return "Engine systems not initialized";
+                        if (args.empty())
+                            return "Usage: rpg_weather <clear|cloudy|rain|snow|fog|storm>";
+                        return m_engineSystems->SetWeather(args[0]);
+                    });
 
-    console.RegisterCommand("rpg_time",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (!m_engineSystems)
-                                    return "Engine systems not initialized";
-                                if (args.empty())
-                                    return "Usage: rpg_time <hour> (0-24)";
-                                float hour = 0.0f;
-                                try
-                                {
-                                    hour = std::stof(args[0]);
-                                }
-                                catch (...)
-                                {
-                                    return "Invalid hour value: " + args[0];
-                                }
-                                return m_engineSystems->SetTime(hour);
-                            });
+    registerCommand("rpg_time",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (!m_engineSystems)
+                            return "Engine systems not initialized";
+                        if (args.empty())
+                            return "Usage: rpg_time <hour> (0-24)";
+                        float hour = 0.0f;
+                        try
+                        {
+                            hour = std::stof(args[0]);
+                        }
+                        catch (...)
+                        {
+                            return "Invalid hour value: " + args[0];
+                        }
+                        return m_engineSystems->SetTime(hour);
+                    });
 }
 
 void SparkGameRPGModule::UnregisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
-    constexpr std::array<const char*, 21> commandNames{
-        "rpg_status", "rpg_play", "rpg_restart", "rpg_travel",  "rpg_attack",  "rpg_rest",   "rpg_flee",
-        "rpg_talk",   "rpg_use",  "rpg_accept",  "rpg_areas",   "rpg_classes", "rpg_quests", "rpg_npcs",
-        "rpg_items",  "rpg_save", "rpg_load",    "rpg_weather", "rpg_time",    "rpg_help",   "rpg_autoplay",
-    };
-    for (const char* commandName : commandNames)
+    if (auto* console = m_context ? m_context->GetConsole() : nullptr)
     {
-        console.UnregisterCommand(commandName);
+        for (const std::string& commandName : m_registeredConsoleCommands)
+        {
+            console->UnregisterCommand(commandName);
+        }
     }
+    m_registeredConsoleCommands.clear();
 }

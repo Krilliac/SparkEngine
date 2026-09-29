@@ -4,8 +4,7 @@
  */
 
 #include "OWWorldSetup.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 #include "Engine/Streaming/SceneManifest.h"
 #include "Engine/Streaming/SeamlessAreaManager.h"
 
@@ -237,9 +236,9 @@ namespace OpenWorld
             m_regions.push_back(r);
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world defined %zu biome regions", m_regions.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Defined " + std::to_string(m_regions.size()) +
-                                                    " biome regions");
+        Spark::ModuleLog::Info(m_context, "Open world defined {} biome regions", m_regions.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Defined " + std::to_string(m_regions.size()) + " biome regions");
     }
 
     void OWWorldSetup::DefineRoadNetwork()
@@ -260,7 +259,7 @@ namespace OpenWorld
         addRoad(9, "Summit Trail", 3, 8, 0.2f, false);
         addRoad(10, "Frozen Ridge", 5, 8, 0.1f, false);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world defined %zu roads", m_roads.size());
+        Spark::ModuleLog::Info(m_context, "Open world defined {} roads", m_roads.size());
     }
 
     void OWWorldSetup::RegisterAreasWithStreaming()
@@ -306,8 +305,8 @@ namespace OpenWorld
             streamingMgr->RegisterArea(def, std::move(manifest));
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world areas registered with SeamlessAreaManager");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Registered areas with SeamlessAreaManager");
+        Spark::ModuleLog::Info(m_context, "Open world areas registered with SeamlessAreaManager");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Registered areas with SeamlessAreaManager");
     }
 
     void OWWorldSetup::ConfigureOriginRebasing()
@@ -316,8 +315,8 @@ namespace OpenWorld
         m_originSystem.SetRebasingThreshold(4000.0f);
         m_originSystem.SetEnabled(true);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world origin rebasing enabled (threshold: 4000m)");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Origin rebasing enabled (threshold: 4000m)");
+        Spark::ModuleLog::Info(m_context, "Open world origin rebasing enabled (threshold: 4000m)");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Origin rebasing enabled (threshold: 4000m)");
     }
 
     void OWWorldSetup::Update(float deltaTime)

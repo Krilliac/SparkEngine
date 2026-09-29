@@ -10,8 +10,7 @@
 #include "Physics/PhysicsBody.h"
 #include "Physics/PhysicsSystem.h"
 #include "Physics/VehiclePhysics.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -37,19 +36,19 @@ namespace Racing
         PhysicsSystem* physics = context ? context->GetPhysics() : nullptr;
         if (!physics || !physics->GetJoltSystem())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "Racing vehicle system needs the engine's live Jolt PhysicsSystem; none is available");
-            Spark::SimpleConsole::GetInstance().LogError(
-                "[Racing Vehicle] No live Jolt physics world: Racing vehicles cannot be simulated");
+            Spark::ModuleLog::Error(
+                m_context, "Racing vehicle system needs the engine's live Jolt PhysicsSystem; none is available");
+            Spark::ModuleLog::Error(m_context,
+                                    "[Racing Vehicle] No live Jolt physics world: Racing vehicles cannot be simulated");
             return false;
         }
 
         m_physics = physics;
         m_stepCount = 0;
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing vehicle system initialized on the shared Jolt world");
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[Racing Vehicle] Vehicle system initialized (Jolt vehicles, 6 vehicle types)");
+        Spark::ModuleLog::Info(m_context, "Racing vehicle system initialized on the shared Jolt world");
+        Spark::ModuleLog::Info(m_context,
+                               "[Racing Vehicle] Vehicle system initialized (Jolt vehicles, 6 vehicle types)");
         return true;
     }
 
@@ -124,12 +123,12 @@ namespace Racing
         vehicle.isPlayer = isPlayer;
         if (!BuildChassis(vehicle, pose, 0.0f))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Racing vehicle %s: Jolt chassis creation failed", name.c_str());
+            Spark::ModuleLog::Error(m_context, "Racing vehicle {}: Jolt chassis creation failed", name.c_str());
             return 0;
         }
         m_vehicles.push_back(vehicle);
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing vehicle created: %s (id=%u, player=%s)", name.c_str(),
-                        vehicle.id, isPlayer ? "yes" : "no");
+        Spark::ModuleLog::Debug(m_context, "Racing vehicle created: {} (id={}, player={})", name.c_str(), vehicle.id,
+                                isPlayer ? "yes" : "no");
         return vehicle.id;
     }
 

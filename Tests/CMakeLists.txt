@@ -44,6 +44,7 @@ endif()
 # Test executable
 add_executable(SparkTests
     TestMain.cpp
+    TestSDKGameTypes.cpp
     TestMathUtils.cpp
     TestObjectPool.cpp
     TestECSWorld.cpp
@@ -5013,15 +5014,27 @@ set_tests_properties(PrototypeModuleKit_Helpers PROPERTIES
 unset(_spark_prototype_kit_count)
 
 # MOD-310: the same ratchet on the stable-v1 SparkGameFPS module, under a
-# reviewed one-way ceiling (51 engine-private headers, 1 copied file at intro).
+# reviewed one-way ceiling in test_module_private_dependencies.py.
 add_test(
     NAME FPSPublicSDK_PrivateIncludeRatchet
     COMMAND ${Python3_EXECUTABLE} -B
         ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_private_dependencies.py
-        FPSPrivateIncludeRatchetTests FPSBuildCouplingTests)
+        FPSPrivateIncludeRatchetTests FPSBuildCouplingTests FPSBuildCouplingSpellingTests)
 set_tests_properties(FPSPublicSDK_PrivateIncludeRatchet PROPERTIES
     LABELS "module;stable-v1;fps;sdk;readiness;unit;python"
     TIMEOUT 120)
+
+add_test(NAME PrototypeModuleKit_PublicConsoleBoundary
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/SDK/test_module_console_boundary.py)
+set_tests_properties(PrototypeModuleKit_PublicConsoleBoundary PROPERTIES
+    LABELS "module;module-kit;prototype-module-kit;sdk;unit;python"
+    TIMEOUT 60)
+
+add_test(NAME FPSPublicSDK_GameTypes COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(FPSPublicSDK_GameTypes PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SDKGameTypes_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "module;module-kit;stable-v1;fps;sdk;unit"
+    TIMEOUT 60)
 
 # MOD-290: per-module test registration is generated from each module's
 # module.json rather than hand-written. Every declared {prefix, count} selector

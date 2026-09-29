@@ -12,7 +12,7 @@
 #pragma once
 #include "Core/Platform.h"
 
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 #include "ClassAbilityState.h"
 #include "Projectiles/WeaponStats.h"
 #ifdef SPARK_PLATFORM_WINDOWS

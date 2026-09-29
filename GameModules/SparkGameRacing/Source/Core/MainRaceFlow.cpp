@@ -17,7 +17,7 @@
 #include "Camera/RacingCameraSystem.h"
 #include "HUD/RacingHUDSystem.h"
 #include "Input/InputManager.h"
-#include "Utils/SparkConsole.h"
+#include <Spark/ModuleLog.h>
 #include <algorithm>
 #include <vector>
 
@@ -28,7 +28,7 @@ bool SparkGameRacingModule::SetupDefaultRaceRoster()
 
     if (!Racing::SetupRaceRoster({*m_vehicleSystem, *m_trackSystem, *m_raceManager, *m_aiDriver}, m_context))
     {
-        Spark::SimpleConsole::GetInstance().LogError("[Racing] Could not build the race grid's Jolt vehicles");
+        Spark::ModuleLog::Error(m_context, "[Racing] Could not build the race grid's Jolt vehicles");
         return false;
     }
     return true;

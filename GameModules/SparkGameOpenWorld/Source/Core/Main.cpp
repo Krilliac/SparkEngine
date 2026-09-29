@@ -16,14 +16,16 @@
 #include "Settlement/OWSettlementSystem.h"
 #include "Gathering/OWGatheringSystem.h"
 #include "Events/OWDynamicEventSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
+#include <Spark/IConsole.h>
 #include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/AIComponents.h"
 
 #include <Spark/ModuleDllMain.h>
+#include <string_view>
+#include <utility>
 
 // =============================================================================
 // Module exports
@@ -60,15 +62,14 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[OpenWorld] Loading Spark Open World module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Open World module loading - initializing 8 subsystems");
+    Spark::ModuleLog::Info(m_context, "[OpenWorld] Loading Spark Open World module...");
+    Spark::ModuleLog::Info(m_context, "Open World module loading - initializing 8 subsystems");
 
     // 1. World setup (regions, roads, streaming, origin rebasing)
     m_worldSetup = std::make_unique<OpenWorld::OWWorldSetup>();
     if (!m_worldSetup->Initialize(context))
     {
-        console.LogError("[OpenWorld] Failed to initialize world setup");
+        Spark::ModuleLog::Error(m_context, "[OpenWorld] Failed to initialize world setup");
         return false;
     }
 
@@ -76,7 +77,7 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
     m_playerSystem = std::make_unique<OpenWorld::OWPlayerSystem>();
     if (!m_playerSystem->Initialize(context))
     {
-        console.LogError("[OpenWorld] Failed to initialize player system");
+        Spark::ModuleLog::Error(m_context, "[OpenWorld] Failed to initialize player system");
         return false;
     }
 
@@ -84,7 +85,7 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
     m_explorationSystem = std::make_unique<OpenWorld::OWExplorationSystem>();
     if (!m_explorationSystem->Initialize(context))
     {
-        console.LogError("[OpenWorld] Failed to initialize exploration system");
+        Spark::ModuleLog::Error(m_context, "[OpenWorld] Failed to initialize exploration system");
         return false;
     }
     m_explorationSystem->SetDiscoveryCallback(
@@ -99,7 +100,7 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
     m_wildlifeSystem = std::make_unique<OpenWorld::OWWildlifeSystem>();
     if (!m_wildlifeSystem->Initialize(context))
     {
-        console.LogError("[OpenWorld] Failed to initialize wildlife system");
+        Spark::ModuleLog::Error(m_context, "[OpenWorld] Failed to initialize wildlife system");
         return false;
     }
 
@@ -107,7 +108,7 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
     m_settlementSystem = std::make_unique<OpenWorld::OWSettlementSystem>();
     if (!m_settlementSystem->Initialize(context))
     {
-        console.LogError("[OpenWorld] Failed to initialize settlement system");
+        Spark::ModuleLog::Error(m_context, "[OpenWorld] Failed to initialize settlement system");
         return false;
     }
 
@@ -115,7 +116,7 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
     m_gatheringSystem = std::make_unique<OpenWorld::OWGatheringSystem>();
     if (!m_gatheringSystem->Initialize(context))
     {
-        console.LogError("[OpenWorld] Failed to initialize gathering system");
+        Spark::ModuleLog::Error(m_context, "[OpenWorld] Failed to initialize gathering system");
         return false;
     }
 
@@ -123,7 +124,7 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
     m_eventSystem = std::make_unique<OpenWorld::OWDynamicEventSystem>();
     if (!m_eventSystem->Initialize(context))
     {
-        console.LogError("[OpenWorld] Failed to initialize dynamic event system");
+        Spark::ModuleLog::Error(m_context, "[OpenWorld] Failed to initialize dynamic event system");
         return false;
     }
 
@@ -133,15 +134,13 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
                                    *m_wildlifeSystem, *m_eventSystem);
     if (!m_engineSystems->Initialize(context))
     {
-        console.LogWarning("[OpenWorld] Engine systems integration partially failed (non-fatal)");
+        Spark::ModuleLog::Warn(m_context, "[OpenWorld] Engine systems integration partially failed (non-fatal)");
     }
 
     // Player input drives movement across the regions and interaction with nodes, events and settlements.
     m_playerController = std::make_unique<OpenWorld::OWPlayerController>();
     m_playerController->Initialize(context, *m_playerSystem, *m_worldSetup, *m_gatheringSystem, *m_eventSystem,
                                    *m_settlementSystem);
-
-    RegisterConsoleCommands();
 
     // Register OpenWorld-specific state validation rules
     auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
@@ -179,30 +178,42 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
                            }});
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Open World module loaded successfully - 8 subsystems active");
-    console.LogInfo("[OpenWorld] Module loaded successfully (8 subsystems)");
-    console.LogInfo("[OpenWorld] Regions: " + std::to_string(m_worldSetup->GetRegionCount()) +
-                    " | POIs: " + std::to_string(m_explorationSystem->GetPOICount()) +
-                    " | Species: " + std::to_string(m_wildlifeSystem->GetSpeciesCount()) +
-                    " | Settlements: " + std::to_string(m_settlementSystem->GetSettlementCount()) +
-                    " | Nodes: " + std::to_string(m_gatheringSystem->GetNodeCount()) +
-                    " | Recipes: " + std::to_string(m_gatheringSystem->GetRecipeCount()) +
-                    " | Events: " + std::to_string(m_eventSystem->GetTemplateCount()));
+    RegisterConsoleCommands();
+    Spark::ModuleLog::Info(m_context, "Open World module loaded successfully - 8 subsystems active");
+    Spark::ModuleLog::Info(m_context, "[OpenWorld] Module loaded successfully (8 subsystems)");
+    Spark::ModuleLog::Info(m_context, "{}",
+                           "[OpenWorld] Regions: " + std::to_string(m_worldSetup->GetRegionCount()) +
+                               " | POIs: " + std::to_string(m_explorationSystem->GetPOICount()) +
+                               " | Species: " + std::to_string(m_wildlifeSystem->GetSpeciesCount()) +
+                               " | Settlements: " + std::to_string(m_settlementSystem->GetSettlementCount()) +
+                               " | Nodes: " + std::to_string(m_gatheringSystem->GetNodeCount()) +
+                               " | Recipes: " + std::to_string(m_gatheringSystem->GetRecipeCount()) +
+                               " | Events: " + std::to_string(m_eventSystem->GetTemplateCount()));
     return true;
 }
 
 void SparkGameOpenWorldModule::OnUnload()
 {
     if (!m_initialized)
+    {
         return;
+    }
+
+    if (auto* console = m_context ? m_context->GetConsole() : nullptr)
+    {
+        for (const auto& command : m_registeredConsoleCommands)
+        {
+            console->UnregisterCommand(command);
+        }
+    }
+    m_registeredConsoleCommands.clear();
 
     // Validation callbacks are std::functions implemented in this DLL. Drop
     // them before the module image is unmapped during hot unload/reload.
     Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("OpenWorld");
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[OpenWorld] Unloading Spark Open World module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Open World module shutting down");
+    Spark::ModuleLog::Info(m_context, "[OpenWorld] Unloading Spark Open World module...");
+    Spark::ModuleLog::Info(m_context, "Open World module shutting down");
 
     // Shutdown in reverse initialization order; the controller references the systems below.
     m_playerController.reset();
@@ -247,10 +258,10 @@ void SparkGameOpenWorldModule::OnUnload()
         m_worldSetup.reset();
     }
 
-    m_context = nullptr;
+    Spark::ModuleLog::Info(m_context, "Open World module unloaded");
+    Spark::ModuleLog::Info(m_context, "[OpenWorld] Module unloaded");
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Open World module unloaded");
-    console.LogInfo("[OpenWorld] Module unloaded");
+    m_context = nullptr;
 }
 
 void SparkGameOpenWorldModule::OnUpdate(float deltaTime)
@@ -322,10 +333,23 @@ void SparkGameOpenWorldModule::OnImGui()
 
 void SparkGameOpenWorldModule::RegisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
+    auto* console = m_context ? m_context->GetConsole() : nullptr;
+    if (!console)
+    {
+        return;
+    }
+    const auto registerCommand = [this, console](std::string_view name, Spark::IConsole::CommandHandler handler,
+                                                 std::string_view help = {}, std::string_view category = "General",
+                                                 std::string_view usage = {})
+    {
+        if (console->RegisterCommand(name, std::move(handler), help, category, usage))
+        {
+            m_registeredConsoleCommands.emplace_back(name);
+        }
+    };
 
     // --- Status ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_status",
         [this](const std::vector<std::string>&) -> std::string
         {
@@ -346,16 +370,16 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         "Show open world module status", "OpenWorld");
 
     // --- World ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_regions", [this](const std::vector<std::string>&) -> std::string
         { return m_worldSetup->GetRegionListString(); }, "List world regions", "OpenWorld");
 
     // --- Player ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_player", [this](const std::vector<std::string>&) -> std::string
         { return m_playerSystem->GetStatusString(); }, "Show player status", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_eat",
         [this](const std::vector<std::string>&) -> std::string
         {
@@ -364,7 +388,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         },
         "Eat food", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_drink",
         [this](const std::vector<std::string>&) -> std::string
         {
@@ -373,7 +397,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         },
         "Drink water", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_teleport",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -394,7 +418,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         },
         "Teleport player", "OpenWorld", "ow_teleport <x> <y> <z>");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_fast_travel",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -418,24 +442,24 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         "Fast travel to a discovered point", "OpenWorld");
 
     // --- Exploration ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_explore", [this](const std::vector<std::string>&) -> std::string
         { return m_explorationSystem->GetExplorationString(); }, "Show exploration progress", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_pois", [this](const std::vector<std::string>&) -> std::string
         { return m_explorationSystem->GetPOIListString(); }, "List all points of interest", "OpenWorld");
 
     // --- Wildlife ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_wildlife", [this](const std::vector<std::string>&) -> std::string
         { return m_wildlifeSystem->GetWildlifeString(); }, "Show wildlife summary", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_species", [this](const std::vector<std::string>&) -> std::string
         { return m_wildlifeSystem->GetSpeciesListString(); }, "List animal species", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_tame",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -455,15 +479,15 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         "Tame a wildlife animal", "OpenWorld");
 
     // --- Settlements ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_settlements", [this](const std::vector<std::string>&) -> std::string
         { return m_settlementSystem->GetSettlementListString(); }, "List settlements", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_camps", [this](const std::vector<std::string>&) -> std::string
         { return m_settlementSystem->GetCampListString(); }, "List player camps", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_place_camp",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -474,7 +498,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         },
         "Place a camp at current position", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_upgrade_camp",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -493,19 +517,19 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         "Upgrade a player camp", "OpenWorld");
 
     // --- Gathering / Crafting ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_nodes", [this](const std::vector<std::string>&) -> std::string
         { return m_gatheringSystem->GetNodeListString(); }, "List resource nodes", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_inventory", [this](const std::vector<std::string>&) -> std::string
         { return m_gatheringSystem->GetInventoryString(); }, "Show resource inventory", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_recipes", [this](const std::vector<std::string>&) -> std::string
         { return m_gatheringSystem->GetRecipeListString(); }, "List crafting recipes", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_harvest",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -524,7 +548,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         },
         "Harvest a resource node", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_craft",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -543,15 +567,15 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         "Craft an item", "OpenWorld");
 
     // --- Events ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_events", [this](const std::vector<std::string>&) -> std::string
         { return m_eventSystem->GetActiveEventsString(); }, "Show active world events", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_event_types", [this](const std::vector<std::string>&) -> std::string
         { return m_eventSystem->GetEventListString(); }, "List event types", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_trigger_event",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -572,7 +596,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         "Trigger a world event", "OpenWorld");
 
     // --- Engine integration ---
-    console.RegisterCommand(
+    registerCommand(
         "ow_save",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -581,7 +605,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         },
         "Save game", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_load",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -590,7 +614,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         },
         "Load game", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_weather",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -600,7 +624,7 @@ void SparkGameOpenWorldModule::RegisterConsoleCommands()
         },
         "Set weather", "OpenWorld");
 
-    console.RegisterCommand(
+    registerCommand(
         "ow_time",
         [this](const std::vector<std::string>& args) -> std::string
         {

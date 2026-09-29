@@ -16,6 +16,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace OpenWorld
 {
@@ -76,6 +78,7 @@ class SparkGameOpenWorldModule : public Spark::IModule
     std::unique_ptr<OpenWorld::OWDynamicEventSystem> m_eventSystem;
     std::unique_ptr<OpenWorld::OWEngineSystems> m_engineSystems;
     std::unique_ptr<OpenWorld::OWPlayerController> m_playerController;
+    std::vector<std::string> m_registeredConsoleCommands;
 };
 
 // Module exports

@@ -68,11 +68,9 @@
         "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
         "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
-        "Utils/LogMacros.h",
-        "Utils/SparkConsole.h"
+        "Utils/InvalidStateDetector.h"
       ],
-      "privateEngineHeaderCount": 20,
+      "privateEngineHeaderCount": 18,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp"
       ]
@@ -82,7 +80,7 @@
       "directory": "GameModules/SparkGameFPS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameFPS/Source",
-      "sourceFileCount": 81,
+      "sourceFileCount": 80,
       "moduleLocalContentState": "root-dependent",
       "releaseClassification": "shipping",
       "cmakeDeclarationParseError": false,
@@ -111,7 +109,6 @@
         }
       ],
       "privateEngineHeaders": [
-        "Audio/AudioEngine.h",
         "Audio/MusicManager.h",
         "Camera/SparkEngineCamera.h",
         "Core/FaultIsolation.h",
@@ -119,10 +116,8 @@
         "Core/framework.h",
         "Engine/AI/BehaviorTree.h",
         "Engine/Cinematic/Sequencer.h",
-        "Engine/Coroutine/CoroutineScheduler.h",
         "Engine/Destruction/DestructionSystem.h",
         "Engine/Dialogue/DialogueSystem.h",
-        "Engine/ECS/Components.h",
         "Engine/Events/EventSystem.h",
         "Engine/Networking/ClientPrediction.h",
         "Engine/Networking/NetworkManager.h",
@@ -152,7 +147,6 @@
         "Utils/AngleUtils.h",
         "Utils/Assert.h",
         "Utils/ConsoleProcessManager.h",
-        "Utils/ContainerUtils.h",
         "Utils/EventBus.h",
         "Utils/InvalidStateDetector.h",
         "Utils/LogMacros.h",
@@ -163,7 +157,7 @@
         "Utils/StateMachine.h",
         "Utils/Validate.h"
       ],
-      "privateEngineHeaderCount": 51,
+      "privateEngineHeaderCount": 47,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],
@@ -310,11 +304,9 @@
         "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
         "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
-        "Utils/LogMacros.h",
-        "Utils/SparkConsole.h"
+        "Utils/InvalidStateDetector.h"
       ],
-      "privateEngineHeaderCount": 19,
+      "privateEngineHeaderCount": 17,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.cpp"
       ]
@@ -385,11 +377,9 @@
         "Physics/PhysicsSystem.h",
         "Physics/VehiclePhysics.h",
         "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
-        "Utils/LogMacros.h",
-        "Utils/SparkConsole.h"
+        "Utils/InvalidStateDetector.h"
       ],
-      "privateEngineHeaderCount": 17,
+      "privateEngineHeaderCount": 15,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp"
       ]
@@ -429,11 +419,9 @@
         "Engine/World/WorldOriginSystem.h",
         "Graphics/WeatherSystem.h",
         "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
-        "Utils/LogMacros.h",
-        "Utils/SparkConsole.h"
+        "Utils/InvalidStateDetector.h"
       ],
-      "privateEngineHeaderCount": 21,
+      "privateEngineHeaderCount": 19,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
       ]

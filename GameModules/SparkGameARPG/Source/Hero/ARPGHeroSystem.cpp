@@ -4,8 +4,7 @@
  */
 
 #include "ARPGHeroSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -23,9 +22,9 @@ namespace ARPG
         m_context = context;
         RegisterClassTemplates();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG hero system initialized with %zu classes", m_classDefs.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Hero system initialized (" +
-                                                    std::to_string(m_classDefs.size()) + " classes)");
+        Spark::ModuleLog::Info(m_context, "ARPG hero system initialized with {} classes", m_classDefs.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Hero system initialized (" + std::to_string(m_classDefs.size()) + " classes)");
         return true;
     }
 
@@ -224,8 +223,8 @@ namespace ARPG
         uint32_t id = hero.heroId;
         m_heroes[id] = hero;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG hero created: %s (%s)", name.c_str(), classDef->name.c_str());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Hero created: " + name + " (" + classDef->name + ")");
+        Spark::ModuleLog::Info(m_context, "ARPG hero created: {} ({})", name.c_str(), classDef->name.c_str());
+        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Hero created: " + name + " (" + classDef->name + ")");
         return id;
     }
 
@@ -286,9 +285,8 @@ namespace ARPG
             hero.mana = hero.maxMana;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG %s reached level %d", hero.name.c_str(), hero.level);
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] " + hero.name + " reached level " +
-                                                    std::to_string(hero.level));
+        Spark::ModuleLog::Info(m_context, "ARPG {} reached level {}", hero.name.c_str(), hero.level);
+        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] " + hero.name + " reached level " + std::to_string(hero.level));
     }
 
     void ARPGHeroSystem::AllocateAttribute(uint32_t heroId, const std::string& attribute)

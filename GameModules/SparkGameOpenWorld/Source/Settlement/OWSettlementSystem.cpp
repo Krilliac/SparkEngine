@@ -4,8 +4,7 @@
  */
 
 #include "OWSettlementSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -25,10 +24,10 @@ namespace OpenWorld
         DefineSettlements();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Settlement system initialized: %zu settlements",
-                       m_settlements.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Settlements: " + std::to_string(m_settlements.size()) +
-                                                    " | NPCs: " + std::to_string(GetTotalNPCCount()));
+        Spark::ModuleLog::Info(m_context, "Settlement system initialized: {} settlements", m_settlements.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Settlements: " + std::to_string(m_settlements.size()) +
+                                   " | NPCs: " + std::to_string(GetTotalNPCCount()));
         return true;
     }
 
@@ -303,7 +302,7 @@ namespace OpenWorld
         }
         if (m_visitedSettlements.insert(settlementId).second)
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Visited settlement: " + settlement->name);
+            Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Visited settlement: " + settlement->name);
         }
         return true;
     }
@@ -322,8 +321,8 @@ namespace OpenWorld
 
         m_camps[camp.campId] = camp;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Camp '" + name +
-                                                    "' placed (id=" + std::to_string(camp.campId) + ")");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Camp '" + name + "' placed (id=" + std::to_string(camp.campId) + ")");
         return camp.campId;
     }
 
@@ -348,8 +347,9 @@ namespace OpenWorld
         if (camp.tier >= CampTier::Cabin)
             camp.hasCraftingStation = true;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Camp '" + camp.name + "' upgraded to tier " +
-                                                    std::to_string(static_cast<int>(camp.tier)));
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Camp '" + camp.name + "' upgraded to tier " +
+                                   std::to_string(static_cast<int>(camp.tier)));
         return true;
     }
 
