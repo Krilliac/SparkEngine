@@ -62,9 +62,9 @@ section checksums. OD-24 forbids normalizing those bytes. This implements the
 comparator policy, not Windows clean-build equivalence; no reproducibility
 criterion promotion is proposed from these probes.
 
-`CpuFloor_IsaBaseline` is now registered for Windows MSVC trees with explicit
-image/PDB pairs and LLVM tool paths. Missing tooling or PDBs fails execution.
-The scanner validates PE/PDB GUID and age, streams `llvm-pdbutil` procedure
+`tools/check_isa_baseline.py` now scans Windows PE images; each needs its
+matching PDB (`--pdb IMAGE=PDB`) and `llvm-pdbutil`, and a missing or mismatched
+PDB is a tool error (exit 2). The scanner validates PE/PDB GUID and age, streams `llvm-pdbutil` procedure
 records, interprets their section offsets as decimal, and restricts exemptions
 to exact reviewed procedure/module pairs and half-open executable byte ranges.
 Only AVX/AVX2 is allowed there; other ISA families and neighboring functions
@@ -79,6 +79,33 @@ paths were observed in locally linked `/MT`, `/MD` and `/MDd` fixtures; unknown
 module variants/functions fail closed until reviewed. These source files were
 read locally; no external service was contacted.
 
+`CpuFloor_IsaBaseline` stays ELF-only. Scanning the real MSVC Release images of
+the local windows-release tree (ENABLE_LTO=ON) with their PDBs fails:
+SparkServer.exe 1098 above-floor instructions, SparkGame.dll 1030,
+SparkEngine.exe 1361 and SparkEditor.exe 1356 (one AVX-512) remain after the reviewed ranges
+(SparkServer: 11 exempted). Attributed through the SparkServer PDB:
+
+- libsodium AVX2 and AES-NI implementations (`salsa20_xmm6int-avx2`,
+  `chacha20_dolbeau-avx2`, `aegis128l_aesni`, `aegis256_aesni`; 1046 of 1109).
+  The MSVC branch of cmake/SparkLibsodium.cmake compiles them, while its
+  non-MSVC branch documents that above-floor variants are excluded because this
+  scan rejects them even behind CPUID. The same bytes are in every image that
+  links spark_sodium; SecureChannel::Seal/Open and PasswordHash also carry VEX
+  instructions under LTCG.
+- The UCRT's inline `wmemchr`/`wmemcmp`, whose AVX2 paths are guarded by
+  `_Avx2WmemEnabled`, compiled into engine objects (GatewayAreaControl.obj).
+- `lzcnt` in EnTT code via MSVC `<bit>` countl_zero, which dispatches on
+  `__isa_available` inline in engine objects.
+- 116 instructions in vector_algorithms.obj contributions with no S_GPROC32
+  record in the PDB, so no reviewed range can cover them.
+
+Only the libsodium case is a build-configuration defect; the others are
+CPUID-guarded code that the reviewed-range mechanism cannot identify (inline in
+arbitrary modules, or without procedure records). Registering the Windows scan
+before these are resolved or separately reviewed would fail every Windows CTest
+run, so the criterion "Unsupported CPU features are not silently required" is not
+met for Windows. The scan has not been run on a MinSizeRel windows-shipping tree.
+
 Local validation: the focused Python comparator/range/classifier/wiring suite
 passes. Linked clang/lld PE fixtures pass at the floor and in an allowlisted
 range, and reject ordinary AVX2, adjacent unreviewed AVX2, FMA inside an otherwise
@@ -86,6 +113,16 @@ allowed function, and missing/mismatched PDBs. Native MSVC `/MT`, `/MD` and `/MD
 fixtures pass with their actual STL/CRT PDB ranges. The pre-change scanner rejects
 the guarded native fixture, and the pre-change comparator cannot equate the
 synthetic archives that differ only by the permitted root bytes.
+
+A real two-directory MSVC 14.44 `/Z7 /O1 /Brepro /d1trimfile` single-object
+`lib /Brepro` probe with equal-length build roots and relative member names
+reproduces the remaining differences: the root in `.debug$S` is normalized and
+that section then matches, but the member still differs in (1) the COFF header
+TimeDateStamp, which /Brepro derives from content that includes the build root;
+(2) `.debug$T`, whose LF_STRING_ID record holds `<build root>\predefined C++`;
+and (3) `.chks64`, the per-section checksums. When lib.exe receives absolute
+object paths, the member names in the `//` long-name table also carry the root.
+None of these is inside OD-24's scope.
 
 The ordinary temporary-directory suites cannot fully execute here: the sandbox
 returns Access denied on nested temporary paths and their cleanup. The CPU

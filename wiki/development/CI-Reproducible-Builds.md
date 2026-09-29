@@ -332,11 +332,13 @@ OD-24; broadening the comparator to hide them is not permitted.
 
 ### Windows CPU instruction checks
 
-`CpuFloor_IsaBaseline` scans the linked engine, editor, server and game modules
-on Windows MSVC trees as well as ELF trees. Windows passes each target's PDB
-explicitly; missing tools or PDBs fail the test instead of removing it.
-Install LLVM's `llvm-objdump` and `llvm-pdbutil`, or set
-`SPARK_ISA_DISASSEMBLER` and `SPARK_ISA_PDBUTIL` to their executable paths.
+`tools/check_isa_baseline.py` scans Windows PE images when each is given its
+matching PDB (`--pdb IMAGE=PDB`) and LLVM's `llvm-objdump` and `llvm-pdbutil`
+are available; a missing or mismatched PDB is a tool error. `CpuFloor_IsaBaseline`
+is still registered for ELF trees only: real MSVC Release images carry
+above-floor code the reviewed ranges do not cover (libsodium's AVX2/AES-NI
+variants, UCRT `wmemchr`/`wmemcmp`, `<bit>` LZCNT dispatch, symbol-less
+vector_algorithms ranges), listed in `docs/readiness/BLD-100-PROGRESS.md`.
 
 The scanner binds each PE to its PDB by RSDS GUID and age. Exemptions require
 an exact reviewed MSVC procedure name, compiler module provenance, and a PDB
