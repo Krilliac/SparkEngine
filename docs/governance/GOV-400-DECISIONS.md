@@ -227,7 +227,17 @@ These choices change `ThirdParty/` or its locks, which the SEC-110 lane owns.
   fonts, and `ValidateStagedPackageExecutables.cmake` now runs it in `enforce`
   mode by default. Before the flip, a path mirror of a local MSVC
   `windows-shipping` install reported only the 7 fonts as uncovered, and none
-  once the fonts were added. A Linux install has not been measured yet.
+  once the fonts were added. A Linux install was measured on 2026-09-28 at
+  commit `90106eb62`: `linux-gcc-release`, GCC 14.3, `BUILD_TESTS=OFF`,
+  `ENABLE_LTO=OFF`, Ubuntu 26.04 under WSL2, `cmake --install` into a scratch
+  prefix of 2914 files. Both checks passed with no rule change:
+  `ValidateStagedPackageNotices.cmake` reported "Validated notice coverage for
+  7 font file(s) and 581 third-party payload file(s)", and `--check-package`
+  reported "notice coverage ok: 7 font file(s) and 581 third-party payload
+  file(s)". A probe file added under `include/SparkEngine/ThirdParty/` made
+  both fail and name it, so the pass is not vacuous. This measures coverage
+  only. The stub, Jolt snapshot and SPDX items above remain open owner
+  choices, and the CPack archive itself was not run through the gate.
 - **SPDX fields:** rewrite the free-text `license` fields as SPDX expressions
   once the choices in the inventory table are made.
 - **Files that change:** `ThirdParty/dependencies.lock`;

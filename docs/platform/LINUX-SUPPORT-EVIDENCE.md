@@ -201,6 +201,12 @@ The script fails on any of the following:
 * a library the package ships in `<prefix>/lib` (today `libSDL2-2.0.so.0`)
   that resolves anywhere else;
 * a symlink that leaves the prefix;
+* a symbol-version need (`readelf -V`, every ELF in the prefix, vendored
+  libraries included) on glibc, `libstdc++` or `libgcc_s` above the Ubuntu
+  24.04 (OD-10) ceilings `GLIBC_2.39`, `GLIBCXX_3.4.33`, `CXXABI_1.3.15` and
+  `GCC_14.0.0`, compared per dotted component. `ldd` only proves that the build
+  host can load an image. An image built against a newer glibc or a newer GCC's
+  `libstdc++` passes `ldd` there and then fails to load on stock noble;
 * a `.sparkabi` sidecar whose `binary_sha256` does not hash its installed
   module;
 * a run of the installed `SparkEngine -headless` with the installed
@@ -270,6 +276,71 @@ held 36 ELF images, including 18 split `symbols/*.debug` files, and 1 module
 sidecar. It resolved the same host libraries as the table above, and the
 installed run printed the same records. The full 11-module shipping set was
 not built.
+
+#### Symbol-version ceiling and the packaged run (2026-09-28)
+
+The ceiling rule was added because `ldd` cannot see a toolchain dependency.
+The ceilings are one commented constant block in the script, taken from the
+noble packages: `libc6` 2.39, and `libstdc++6`/`libgcc-s1` 14.x in noble and
+noble-updates. They were **not** re-read from a noble host, because none was
+available. They follow the libstdc++ ABI history, in which GCC 14.1 added
+`GLIBCXX_3.4.33` and `CXXABI_1.3.15` and GCC 15 adds `GLIBCXX_3.4.34`.
+
+`LinuxInstalledRuntime_ClosureDetection` gained three checks:
+
+* a copy of the build-tree engine with one `GLIBCXX_3.4.NN` need rewritten in
+  place to `GLIBCXX_3.4.34`, which must fail with `requires GLIBCXX_3.4.34 from
+  libstdc++.so.6, above the Ubuntu 24.04 (OD-10) ceiling`;
+* a `readelf -V` parser case (needs only, never definitions);
+* ceiling comparison cases (`GLIBC_2.4` is below `GLIBC_2.39`, and a
+  non-numeric tag must be named).
+
+**RED proof.** With the rule's violation append removed, the patched real
+engine copy produced **no** violation at all, because `ldd` on this host
+accepts it. The self test then failed only on the new case.
+
+Local run, 2026-09-28:
+
+* **Head:** `wave7/plt210-linux-toolchain-ceiling-and-gov400-notices`.
+* **Build:** `linux-gcc-release` with GCC 14.3 (`-DCMAKE_CXX_COMPILER=g++-14`,
+  because the preset's `g++` is GCC 15 on this host), `ENABLE_LTO=OFF`, and
+  `BUILD_TESTS=ON`. Only `SparkCollabProcessSmoke` failed to build: a GCC 14
+  `-Werror=stringop-overflow` report in a test-only target that is not
+  installed.
+* **Host:** Ubuntu **26.04** LTS under WSL2, glibc 2.43, `libstdc++.so.6.0.35`
+  (GCC 16 runtime).
+
+| CTest | Result |
+|---|---|
+| `LinuxPackagedRuntime_RequiresCPackConfig` | Passed |
+| `VerifyLinuxInstalledRuntime` | **Failed**, correctly: 30 ELF images and 11 sidecars. The only violations are 13 `requires GLIBC_2.43 from libm.so.6, above the Ubuntu 24.04 (OD-10) ceiling GLIBC_2.39`. |
+| `VerifyLinuxPackagedRuntime` | **Failed**, correctly. `cpack -G TGZ` produced exactly one archive, `SparkEngine-0.9.0-Linux-x86_64-Release.tar.gz`. It was extracted, and 29 ELF images and 11 sidecars were checked. The only violations are the same `GLIBC_2.43` ceiling (12 images). |
+| `LinuxInstalledRuntime_ClosureDetection` | **Failed**, correctly. The clean positive control is a real image from this host, and it needs `GLIBC_2.43`. Every negative case, including the new one, passed. |
+
+Both closure runs still launched the extracted or installed `SparkEngine
+-headless` with `SparkGameFPS` from `/` with an empty environment. Both printed
+`SPARK_HEADLESS_LIFECYCLE initialized=1 updated=8 fixed=9 rendered=0
+unloaded=1 faults=0` and a clean `SPARK_MODULE_LIFECYCLE module=SparkGameFPS`
+record. The package therefore loads on the host that built it. The ceiling
+rule is what shows that the same package would not load on the support row.
+
+The glibc 2.43 need comes from `atan2f`, `asinf`, `acosf` and `sqrtf`, which
+bind to new `GLIBC_2.43` versions in `libm`. It is independent of the
+compiler: a GCC 15 build on the same host needs the same versions. The GCC 14
+images need at most `GLIBCXX_3.4.31`, `CXXABI_1.3.15` and `GCC_4.3.0`, all
+within the ceilings.
+
+**Consequence.** A Linux release package for the OD-10 row must be built on
+Ubuntu 24.04, or in a noble container or sysroot. The CI `ubuntu-24.04`
+runners satisfy this. A build on a newer distribution cannot. A passing run
+on a clean noble host is still open.
+
+Host libraries outside the prefix are unchanged by this rule. That covers
+glibc, `libstdc++`, `libgcc_s`, and the GL/X11 client libraries (`libGL`,
+`libGLX`, `libGLdispatch`, `libX11`, `libxcb`, `libXau`, `libXdmcp`). They are
+host-system libraries, not repository or toolchain dependencies. The package
+still needs them at load time (§7 item 6), and the ceiling applies only to the
+glibc and GCC runtime libraries.
 
 ### 6.2 Sanitizer and bounded-soak evidence for the shared headless FPS/NullRHI path (HEAD-220)
 
