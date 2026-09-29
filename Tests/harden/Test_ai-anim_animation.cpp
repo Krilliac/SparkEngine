@@ -1,6 +1,7 @@
 // Test_ai-anim_animation.cpp - Hardening regression tests for the Animation subsystem.
 //
-// Covers two audit findings:
+// Covers two audit findings, plus the SEC-120 .skel/.sanim value checks (unknown versions,
+// non-finite or negative clip timing, unsorted or non-finite key times):
 //   * P1: AnimationManager::LoadSkeleton did `bones.reserve(boneCount)` with boneCount
 //         read straight from an untrusted .skel file — a corrupt count near 0xFFFFFFFF
 //         triggered a multi-GB allocation (bad_alloc / DoS) before the read loop ran.
@@ -16,6 +17,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -37,27 +39,79 @@ namespace
     {
         std::vector<char> buf;
         buf.insert(buf.end(), {'S', 'K', 'E', 'L'});
-        PutBytes(buf, uint32_t{1});        // version
-        PutBytes(buf, declaredBoneCount);  // boneCount (untrusted)
+        PutBytes(buf, uint32_t{1});       // version
+        PutBytes(buf, declaredBoneCount); // boneCount (untrusted)
 
         for (uint32_t i = 0; i < realBones; ++i)
         {
             const std::string name = "bone";
             PutBytes(buf, static_cast<uint32_t>(name.size()));
             buf.insert(buf.end(), name.begin(), name.end());
-            PutBytes(buf, int32_t{-1});     // parentIndex
+            PutBytes(buf, int32_t{-1}); // parentIndex
             XMFLOAT4X4 identity;
             XMStoreFloat4x4(&identity, XMMatrixIdentity());
-            PutBytes(buf, identity);        // offsetMatrix
-            PutBytes(buf, identity);        // localBindPose
+            PutBytes(buf, identity); // offsetMatrix
+            PutBytes(buf, identity); // localBindPose
         }
 
-        std::filesystem::path path =
-            std::filesystem::temp_directory_path() / ("spark_harden_" + tag + ".skel");
+        std::filesystem::path path = std::filesystem::temp_directory_path() / ("spark_harden_" + tag + ".skel");
         std::ofstream out(path, std::ios::binary | std::ios::trunc);
         out.write(buf.data(), static_cast<std::streamsize>(buf.size()));
         out.close();
         return path.string();
+    }
+
+    std::string WriteTempFile(const std::vector<char>& buf, const std::string& fileName)
+    {
+        const std::filesystem::path path = std::filesystem::temp_directory_path() / ("spark_harden_" + fileName);
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out.write(buf.data(), static_cast<std::streamsize>(buf.size()));
+        out.close();
+        return path.string();
+    }
+
+    // A .sanim with one clip holding one channel, matching AnimationManager::LoadAnimations'
+    // binary layout. The channel carries one position key per entry of `positionKeyTimes`
+    // and one identity rotation and unit scale key at time 0.
+    std::vector<char> OneClipAnimation(float duration, float ticksPerSecond, const std::vector<float>& positionKeyTimes)
+    {
+        std::vector<char> buf;
+        buf.insert(buf.end(), {'A', 'N', 'I', 'M'});
+        PutBytes(buf, uint32_t{1}); // version
+        PutBytes(buf, uint32_t{1}); // clipCount
+        const std::string clipName = "walk";
+        PutBytes(buf, static_cast<uint32_t>(clipName.size()));
+        buf.insert(buf.end(), clipName.begin(), clipName.end());
+        PutBytes(buf, duration);
+        PutBytes(buf, ticksPerSecond);
+        buf.push_back(1);           // loop
+        PutBytes(buf, uint32_t{1}); // channelCount
+        const std::string boneName = "root";
+        PutBytes(buf, static_cast<uint32_t>(boneName.size()));
+        buf.insert(buf.end(), boneName.begin(), boneName.end());
+        PutBytes(buf, int32_t{0}); // boneIndex
+        PutBytes(buf, static_cast<uint32_t>(positionKeyTimes.size()));
+        for (const float time : positionKeyTimes)
+        {
+            PutBytes(buf, time);
+            PutBytes(buf, XMFLOAT3{0.0f, 0.0f, 0.0f});
+        }
+        PutBytes(buf, uint32_t{1}); // rotKeyCount
+        PutBytes(buf, 0.0f);
+        PutBytes(buf, XMFLOAT4{0.0f, 0.0f, 0.0f, 1.0f});
+        PutBytes(buf, uint32_t{1}); // sclKeyCount
+        PutBytes(buf, 0.0f);
+        PutBytes(buf, XMFLOAT3{1.0f, 1.0f, 1.0f});
+        return buf;
+    }
+
+    size_t LoadedClipCount(const std::vector<char>& buf, const std::string& fileName)
+    {
+        const std::string path = WriteTempFile(buf, fileName);
+        const size_t count = AnimationManager::GetInstance().LoadAnimations(path).size();
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+        return count;
     }
 } // namespace
 
@@ -93,6 +147,56 @@ TEST(Animation_LoadSkeleton_AcceptsValidSkeleton)
     EXPECT_TRUE(skeleton != nullptr);
     if (skeleton)
         EXPECT_EQ(skeleton->GetBoneCount(), 2u);
+
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
+// ============================================================================
+// SEC-120 animation-skel-sanim: values the layout can carry but playback cannot use.
+// ============================================================================
+
+TEST(Animation_LoadAnimations_RejectsNonFiniteClipTiming)
+{
+    // Playback computes fmod(time, duration) and time / duration from these fields.
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    EXPECT_EQ(LoadedClipCount(OneClipAnimation(nan, 30.0f, {0.0f}), "nan_duration.sanim"), 0u);
+    EXPECT_EQ(LoadedClipCount(OneClipAnimation(-1.0f, 30.0f, {0.0f}), "negative_duration.sanim"), 0u);
+    EXPECT_EQ(LoadedClipCount(OneClipAnimation(1.0f, inf, {0.0f}), "infinite_rate.sanim"), 0u);
+    // The same clip with finite timing loads, so the rejections above are about the timing alone.
+    EXPECT_EQ(LoadedClipCount(OneClipAnimation(1.0f, 30.0f, {0.0f}), "finite_timing.sanim"), 1u);
+}
+
+TEST(Animation_LoadAnimations_RejectsDecreasingKeyTimes)
+{
+    // Key sampling searches key times assuming they are sorted ascending (AnimationTypes.h).
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    EXPECT_EQ(LoadedClipCount(OneClipAnimation(1.0f, 30.0f, {1.0f, 0.5f}), "decreasing_keys.sanim"), 0u);
+    EXPECT_EQ(LoadedClipCount(OneClipAnimation(1.0f, 30.0f, {0.0f, nan}), "nan_key.sanim"), 0u);
+    // Equal and ascending key times stay loadable.
+    EXPECT_EQ(LoadedClipCount(OneClipAnimation(1.0f, 30.0f, {0.0f, 0.5f, 0.5f, 1.0f}), "sorted_keys.sanim"), 1u);
+}
+
+TEST(Animation_LoadSkeleton_RejectsUnknownVersion)
+{
+    std::vector<char> buf;
+    buf.insert(buf.end(), {'S', 'K', 'E', 'L'});
+    PutBytes(buf, uint32_t{7}); // version: every engine-written .skel is version 1
+    PutBytes(buf, uint32_t{1}); // boneCount
+    const std::string name = "root";
+    PutBytes(buf, static_cast<uint32_t>(name.size()));
+    buf.insert(buf.end(), name.begin(), name.end());
+    PutBytes(buf, int32_t{-1});
+    XMFLOAT4X4 identity;
+    XMStoreFloat4x4(&identity, XMMatrixIdentity());
+    PutBytes(buf, identity);
+    PutBytes(buf, identity);
+    const std::string path = WriteTempFile(buf, "version7.skel");
+
+    auto skeleton = AnimationManager::GetInstance().LoadSkeleton(path);
+    ASSERT_TRUE(skeleton != nullptr);
+    EXPECT_EQ(skeleton->GetBoneCount(), 0u);
 
     std::error_code ec;
     std::filesystem::remove(path, ec);
