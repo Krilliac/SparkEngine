@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """Check the conservative pre-release support table against repository policy.
 
-This offline guard does not prove publication. It permits the configured Working
+The offline guard does not prove publication. It permits the configured Working
 development channel, the nightly prerelease channel the release workflow publishes
 from it, and the explicitly unpublished stable-v1 profile. Naming a supported
 version needs a future reviewed publication-evidence contract; neither local tags
 nor removing a disclaimer can authorize that claim.
+
+validate_against_releases() is the published-release half: given the GitHub
+releases list (``policy.py --published-releases <json>`` in the build workflow's
+license-compliance job), the tables must name what is actually published, no
+more and no less.
 """
 
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import re
 from pathlib import Path
+from typing import Any
 
 VERSION_LITERAL = re.compile(r"\bv?[0-9]+\.[0-9]+(?:\.(?:[0-9]+|x))?(?:[-+][0-9A-Za-z.-]+)?\b")
 POLICY_STATUS = {
@@ -108,21 +116,116 @@ def validate_support_text(text: str, channels: set[str]) -> list[str]:
     return errors
 
 
-def validate(repo_root: Path) -> list[str]:
+def _nightly_tag_pattern() -> re.Pattern[str]:
+    """The release workflow's own nightly tag rule, imported rather than duplicated."""
+    helper = Path(__file__).resolve().parents[2] / ".github" / "scripts" / "nightly_release_tag.py"
+    spec = importlib.util.spec_from_file_location("nightly_release_tag", helper)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"cannot load {helper}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.TAG_RE
+
+
+# The pre-run-identity nightly prerelease tag, still published on the releases page.
+LEGACY_NIGHTLY_TAG = "nightly"
+
+
+def published_releases(releases: Any) -> list[tuple[str, bool]]:
+    """Return (tag, prerelease) for every non-draft release in GitHub REST release JSON.
+
+    Accepts the ``GET /repos/{repo}/releases`` array, or the list of such pages
+    that ``gh api --paginate --slurp`` writes. Anything else raises ValueError, so
+    a failed or truncated fetch can never read as "nothing is published".
+    """
+    if not isinstance(releases, list):
+        raise ValueError("published releases must be a JSON array")
+    if releases and all(isinstance(page, list) for page in releases):
+        releases = [release for page in releases for release in page]
+    published: list[tuple[str, bool]] = []
+    for index, release in enumerate(releases):
+        if not isinstance(release, dict):
+            raise ValueError(f"published release {index} is not an object")
+        tag, draft, prerelease = release.get("tag_name"), release.get("draft"), release.get("prerelease")
+        if not isinstance(tag, str) or not tag or type(draft) is not bool or type(prerelease) is not bool:
+            raise ValueError(f"published release {index} lacks a tag_name, draft or prerelease field")
+        if not draft:
+            published.append((tag, prerelease))
+    return published
+
+
+def validate_against_releases(security: str, support: str, releases: Any) -> list[str]:
+    """GOV-400: the policy tables name exactly the channels the releases page publishes.
+
+    Drafts are ignored. The ``nightly`` row needs a published prerelease with a
+    nightly tag; any other published prerelease, or any published stable
+    release, is a publication the tables do not name, and a stable release also
+    makes the "no supported version has been published" status false. Working is
+    a configured development branch, not a release, and is checked offline.
+    """
+    published = published_releases(releases)
+    nightly_tag = _nightly_tag_pattern()
+    nightly = [tag for tag, prerelease in published if prerelease and (
+        tag == LEGACY_NIGHTLY_TAG or nightly_tag.fullmatch(tag))]
+    other_prereleases = [tag for tag, prerelease in published if prerelease and tag not in nightly]
+    stable = [tag for tag, prerelease in published if not prerelease]
+    errors: list[str] = []
+    for label, text in (("SECURITY.md", security), ("SUPPORT.md", support)):
+        declared = {channel for channel, _ in _table_rows(text)}
+        if "nightly" in declared and not nightly:
+            errors.append(f"{label} names an unpublished channel nightly: no nightly prerelease is published")
+        if nightly and "nightly" not in declared:
+            errors.append(f"{label} must declare the published nightly prerelease channel")
+        for tag in other_prereleases:
+            errors.append(f"{label} does not name published prerelease {tag}")
+        for tag in stable:
+            errors.append(f"{label} does not name published release {tag}")
+        if stable and POLICY_STATUS["stable-v1"] in text:
+            errors.append(f"{label} says no supported version has been published, but {', '.join(stable)} is")
+    return errors
+
+
+def validate(repo_root: Path, releases: Any = None) -> list[str]:
+    """Offline policy checks, plus the published-release checks when ``releases`` is given."""
     channels = configured_development_channels(repo_root)
     security = (repo_root / "SECURITY.md").read_text(encoding="utf-8")
     support = (repo_root / "SUPPORT.md").read_text(encoding="utf-8")
-    return validate_security_text(security, channels) + validate_support_text(support, channels)
+    errors = validate_security_text(security, channels) + validate_support_text(support, channels)
+    if releases is not None:
+        errors += validate_against_releases(security, support, releases)
+    return errors
 
 
-def main() -> int:
+def load_releases(path: Path) -> Any:
+    """Read a bounded releases JSON file; an unreadable, empty or invalid file is an error."""
+    from common import decode_json_bytes, read_bytes_stable
+
+    limit = 8 * 1024 * 1024
+    return decode_json_bytes(read_bytes_stable(path, limit, "published releases"), "published releases", limit)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--published-releases",
+        type=Path,
+        metavar="JSON",
+        help="GitHub releases JSON (the REST array, or gh api --paginate --slurp pages) the tables must match",
+    )
+    args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[2]
-    errors = validate(root)
+    try:
+        releases = load_releases(args.published_releases) if args.published_releases is not None else None
+        errors = validate(root, releases)
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f"ERROR: cannot check the policy tables against published releases: {error}")
+        return 1
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("governance policy tables match the published development channels and pre-release boundary")
+    scope = "published releases" if releases is not None else "published development channels"
+    print(f"governance policy tables match the {scope} and pre-release boundary")
     return 0
 
 
