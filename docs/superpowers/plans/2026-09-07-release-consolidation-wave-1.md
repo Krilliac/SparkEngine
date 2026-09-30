@@ -93,7 +93,7 @@ Expected: all existing stable-v1, exact-CI, canonical-badge, and SEC-120 safegua
 Completed as reviewed integration commit `8ecc7d1379080c79fe7c0afa18926f255d9f3c3f`
 (`fix(ci): harden release acceptance publication gate`), incorporating the isolated
 candidate with review corrections. Local re-verification on 2026-09-07 passed
-47 acceptance-gate tests and 60 workflow-failure-propagation tests. Windows fixture
+the acceptance-gate and workflow-failure-propagation suites. Windows fixture
 execution required Git Bash and a process-local `python3` mapping to installed
 Python, since the Windows Store alias was not a usable interpreter. These local
 regressions do not prove hosted CI, publication, or stable-v1 readiness.

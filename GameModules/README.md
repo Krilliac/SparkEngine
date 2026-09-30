@@ -209,7 +209,7 @@ tracked under RDY-015) has an `ExperimentalModuleLifecycle_<Module>` CTest on
 Linux. The test runs `cmake/RunSparkExperimentalModuleLifecycle.cmake`, which
 launches the real `SparkEngine` host on the SDL path with NullRHI and
 `-require-game`. The run passes only if the host exits 0, prints one
-`SPARK_MODULE_READY count=1` line, and then prints one post-teardown
+`SPARK_MODULE_READY count=1` record, and then prints one post-teardown
 `SPARK_MODULE_LIFECYCLE module=<Module> ...` record in which every phase
 (create, load, update, fixed, render, unload, destroy) is at least 1 and
 `faults=0`. The runner sets 120000 frames because fixed steps follow a 60 Hz

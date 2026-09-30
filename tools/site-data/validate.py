@@ -26,6 +26,7 @@ from common import (
     REPO_ROOT,
     SCHEMA_VERSION,
     SiteDataError,
+    collect_document_sources,
     decode_json_bytes,
     load_contract,
     load_json,
@@ -2218,6 +2219,53 @@ PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
 )
 
 
+def published_catalog_documents(root: Path, catalog: dict[str, Any]) -> set[str]:
+    """Use the publisher's inventory, including generated documents."""
+    return {path.relative_to(root).as_posix() for path in collect_document_sources(catalog, root)}
+
+
+def generated_public_documents(root: Path, published: set[str]) -> set[str]:
+    """Outputs governed by their producers, checked by validate_generated_public_documents.
+
+    The handoff quotes the structured readiness contract; API pages are rebuilt
+    from source before publication. Neither is a hand-authored claim surface.
+    """
+    from render_handoff import OUTPUT_PATH
+
+    handoff = OUTPUT_PATH.relative_to(REPO_ROOT).as_posix()
+    # This is the API producer's output in the existing documentation contract,
+    # not an additional exclusion in the publication catalog.
+    manifest_path = root / "docs/generated-docs-manifest.json"
+    manifest = load_json(manifest_path) if manifest_path.is_file() else {}
+    api_roots = tuple(
+        output["path"].rstrip("/") + "/"
+        for generator in manifest.get("generators", []) if generator.get("id") == "api-docs"
+        for output in generator.get("outputs", []) if output.get("tree") is True
+    )
+    return {path for path in published if path == handoff or path.startswith(api_roots)}
+
+
+def validate_generated_public_documents(contract: dict[str, Any]) -> None:
+    """Fail closed on edits or missing provenance in generated published pages."""
+    import docs_contract
+    from render_handoff import OUTPUT_PATH, render_handoff
+
+    published = published_catalog_documents(REPO_ROOT, contract["docsCatalog"])
+    generated = generated_public_documents(REPO_ROOT, published)
+    handoff = OUTPUT_PATH.relative_to(REPO_ROOT).as_posix()
+    if handoff in generated and OUTPUT_PATH.read_text(encoding="utf-8") != render_handoff(contract):
+        raise SiteDataError(f"{handoff} is stale; run tools/site-data/render_handoff.py")
+    if generated - {handoff}:
+        # Bind the declared API output to the real producer's destination. Moving
+        # a prose directory into the manifest must not exempt it from claim checks.
+        api_root = REPO_ROOT / "docs/api"
+        if any(not path.startswith("docs/api/") for path in generated - {handoff}):
+            raise SiteDataError("API output in the docs manifest differs from the site-data producer")
+        errors = docs_contract.validate_api_manifest(api_root)
+        if errors:
+            raise SiteDataError("Generated public API documents: " + "; ".join(errors))
+
+
 def public_numeric_claim_surfaces(repo_root: Path | None = None) -> set[str]:
     """Return every repository surface whose public prose can carry a numeric claim.
 
@@ -2233,7 +2281,8 @@ def public_numeric_claim_surfaces(repo_root: Path | None = None) -> set[str]:
     catalog_path = root / "docs/site/docs-catalog.json"
     if catalog_path.is_file():
         catalog = load_json(catalog_path)
-        surfaces.update(catalog.get("include", {}).get("rootDocuments", []))
+        published = published_catalog_documents(root, catalog)
+        surfaces.update(published - generated_public_documents(root, published))
     wiki_root = root / "wiki"
     if wiki_root.is_dir():
         surfaces.update(
@@ -4426,6 +4475,7 @@ def validate_contract(
         docs=docs,
         capability=capability,
     )
+    validate_generated_public_documents(contract)
     return contract
 
 

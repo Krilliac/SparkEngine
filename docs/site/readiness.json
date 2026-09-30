@@ -2843,6 +2843,13 @@
       "classification": "static-fact",
       "owner": "unassigned",
       "evidencePath": "CLAUDE.md"
+    },
+    {
+      "surface": "GameModules/README.md",
+      "text": "11 in-tree module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
     }
   ]
 }

@@ -16,7 +16,7 @@ This plan covers activating existing systems and adding new GPU-driven capabilit
 ### Already Active
 | System | Technology | Status |
 |--------|-----------|--------|
-| SIMD Math | DirectXMath (SSE2/AVX auto) | Pervasive across 250+ files |
+| SIMD Math | DirectXMath (SSE2/AVX auto) | Pervasive across the engine |
 | Multi-ISA Dispatch | `MultiISA.h` SSE2/SSE4/AVX/AVX2 | Framework active, hot paths use it |
 | Job System | `JobSystem.h` thread pool + ParallelFor | Wired into engine startup |
 | Parallel ECS | `ParallelSystemExecutor` | Concurrent system execution |
@@ -54,7 +54,7 @@ This plan covers activating existing systems and adding new GPU-driven capabilit
 
 **Goal:** Move particle simulation from CPU to GPU compute shaders.
 
-**Current state:** `ParticleSystem.cpp` (1,240 lines) runs all simulation on CPU.
+**Current state:** `ParticleSystem.cpp` runs all simulation on CPU.
 `GPUParticleTypes.h` defines GPU-uploadable particle structures.
 
 **New files:**
@@ -84,7 +84,7 @@ GPU: Emit CS -> Simulate CS -> Sort CS -> Indirect Draw
 
 **Goal:** Offload skeletal mesh vertex skinning from VS to compute shader.
 
-**Current state:** `AnimationSystem.cpp` (1,409 lines) computes bone matrices on CPU,
+**Current state:** `AnimationSystem.cpp` computes bone matrices on CPU,
 uploads to constant buffer, vertex shader applies skinning.
 
 **New files:**
@@ -133,7 +133,7 @@ D3D12 and Vulkan backends have queue separation capability.
 **Goal:** Eliminate per-draw CPU overhead with GPU-generated draw commands.
 
 **Current state:**
-- `MeshClusterSystem.h` (820 lines) defines Nanite-style cluster DAG
+- `MeshClusterSystem.h` defines Nanite-style cluster DAG
 - `GPUOcclusionCulling` has HiZ infrastructure
 - `GPUSceneBuffer` has per-instance transforms
 - `ExecuteIndirect`/`DrawIndexedInstancedIndirect` in RHI
@@ -175,7 +175,7 @@ DXR wired into `GraphicsEngine::RenderScene()` behind `#ifdef SPARK_HARDWARE_RT`
 
 **Goal:** Move light-to-cluster assignment from CPU to compute shader.
 
-**Current state:** `ClusteredLightCulling.cpp` (281 lines) does CPU-side assignment.
+**Current state:** `ClusteredLightCulling.cpp` does CPU-side assignment.
 
 **New files:**
 - `Shaders/HLSL/Compute/ClusterCull.hlsl` - Light assignment compute shader

@@ -59,8 +59,9 @@ owning item. Only that owner's cmake commands may name it, and never a ctest
 tree. The entry is an error once the preset exists, the owner is `done`, or the
 owner stops naming it.
 
-Hand-written counts are governed too. `validate.py` scans every wiki Markdown
-page and the required public surfaces for a number followed (within two words)
+Hand-written counts are governed too. `validate.py` uses the publisher's document
+discovery to scan the catalog's root documents and recursive Markdown roots,
+alongside every wiki page and the required public surfaces, for a number followed (within two words)
 by tests, files, panels, modules, subsystems, backends, lines or nodes, including
 `N+`, `~N` and `N/M` forms and phrases wrapped across lines. `<!-- AUTO:* -->`
 blocks, the fully generated `wiki/advanced/Codebase-Statistics.md`, and the
@@ -83,10 +84,17 @@ An entry whose text no longer occurs, or holds no claim, is an error, so
 rewording a page retires its entry in the same change. Prefer removing
 per-file line counts over registering them: they drift with every edit.
 
+Generated publication is checked against its producer: the readiness handoff
+must equal `render_handoff.py` output, and generated API pages must pass the
+API manifest integrity check. The API output declared by the docs manifest must
+match the site-data producer's destination. Publication regenerates the API corpus
+and verifies its source metadata before bundling it. These checks govern generated
+counts and quoted acceptance criteria; they do not authorize new prose claims.
+
 The architecture flowchart's panel-header inventory is bound to
 `editor.panelHeaders`. The separate `editor.panels` metric counts factory
 registrations; they describe different inventories. Profile-scope and forbidden
-readiness wording are checked on newly discovered wiki pages too, without
+readiness wording are checked on every discovered authored catalog page too, without
 requiring every page to discuss a release profile.
 
 CTest runs the whole contract suite as `site-data-contract`. The faster

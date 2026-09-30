@@ -195,7 +195,7 @@ angles in 1/10000 rad); `TFMsg` is for events and commands only.
 
 ### Data tables
 
-`Assets/MMOFPS/Data/` contains 11 JSON data files. The core data-table loader
+`Assets/MMOFPS/Data/` holds the module's JSON data tables. The core data-table loader
 validates its required tables (unique ids, closed vocabularies, conduit
 symmetry, complete initial ownership) and fails the load loudly; supplemental
 tables are validated by their owning systems. Hot-reload the core set in-game

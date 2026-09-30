@@ -647,6 +647,26 @@ jobs:
         set -euo pipefail
         timeout 3m python3 tools/site-data/validate.py --legal
 
+    - name: Check support policy against published releases
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        # GOV-400: SECURITY.md/SUPPORT.md must name what the releases page actually
+        # publishes. A failed fetch fails this job; it is never read as "no releases".
+        RELEASES_JSON="$RUNNER_TEMP/published-releases.json"
+        for attempt in 1 2 3; do
+          if gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases" > "$RELEASES_JSON"; then
+            break
+          fi
+          if test "$attempt" -eq 3; then
+            echo "Could not list published releases for the support-policy check." >&2
+            exit 1
+          fi
+          sleep 10
+        done
+        timeout 1m python3 tools/site-data/policy.py --published-releases "$RELEASES_JSON"
+
   # ===========================================================================
   # Linux Build — GCC with AddressSanitizer + UBSan + LSan
   # ===========================================================================

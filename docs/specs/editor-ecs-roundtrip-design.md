@@ -187,5 +187,5 @@ structural, not hand-maintained.
 2. Asset workflow (thumbnails, drag-drop, inspector asset pickers honoring `isAssetPath`).
 3. Placement (drag model → spawn) + script attachment (`Script.scriptPath` → `AttachScript` at load).
 4. TERRAFRONT de-hardcode: migrate the hardcoded C++ paths/values (soldier/prop/skybox/terrain-tex
-   meshes, the faction-material switch duplicated in 4 files, viewmodel/FX magic numbers, wind audio)
+   meshes, the faction-material switch duplicated across several files, viewmodel/FX magic numbers, wind audio)
    onto the canonical data model + load its scene through the new loader.
