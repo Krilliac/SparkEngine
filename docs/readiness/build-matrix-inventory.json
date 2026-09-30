@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4297,
+      "line": 4312,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1366,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3733,
+      "line": 3748,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3728",
+          "id": "Tests/CMakeLists.txt:3743",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4335,
+      "line": 4350,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1392,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4504,
+      "line": 4519,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1401,10 +1401,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3676,
+      "line": 3691,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3604",
+          "id": "Tests/CMakeLists.txt:3619",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1418,7 +1418,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4762,
+      "line": 4777,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1427,7 +1427,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1871,
+      "line": 1875,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1505,7 +1505,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1733,
+      "line": 1737,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2620,10 +2620,10 @@
       "target": "SparkCrashArtifactSandboxProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2194,
+      "line": 2198,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2193",
+          "id": "Tests/CMakeLists.txt:2197",
           "branch": 0,
           "branches": [
             "MSVC AND NOT CMAKE_CROSSCOMPILING"
@@ -2756,10 +2756,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5442,
+      "line": 5457,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5440",
+          "id": "Tests/CMakeLists.txt:5455",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4965,7 +4965,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2194,
+          "line": 2198,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5073,7 +5073,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5442,
+          "line": 5457,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

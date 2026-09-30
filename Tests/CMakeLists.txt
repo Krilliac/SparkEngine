@@ -1627,10 +1627,14 @@ if(TARGET SparkServerCore)
 endif()
 if(ENABLE_NETWORKING)
     # TF-120: production participants and host dispatcher; no mirrored handoff state machine.
+    # TestTF120Travel.cpp carries a moving pawn between two continent processes over the real
+    # continent terrain (TFTerrainModel.cpp) and movement step.
     target_sources(SparkTests PRIVATE
         TestHandoffParticipant.cpp
         TestTF120Migration.cpp
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Net/TFHandoffParticipant.cpp")
+        TestTF120Travel.cpp
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Net/TFHandoffParticipant.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/World/TFTerrainModel.cpp")
 endif()
 if(TARGET SparkGatewayCore)
     target_sources(SparkTests PRIVATE
@@ -2346,6 +2350,17 @@ if(ENABLE_NETWORKING)
         LABELS "persistence;terrafront-migration"
         RUN_SERIAL TRUE
         TIMEOUT 240)
+    # Cross-continent travel: a running, jumping pawn reserved by a peer SparkTests process (the source
+    # continent) is installed here on the other continent's real ground and continues the source's trajectory
+    # tick for tick; an off-pad checkpoint is refused by both sides. A peer that cannot spawn fails the
+    # process case (it never skips); the regex also fails the CTest on any skip.
+    add_test(NAME TerrafrontMigration_Travel COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(TerrafrontMigration_Travel PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_Travel_;SPARK_TEST_EXPECT_COUNT=3"
+        FAIL_REGULAR_EXPRESSION "cannot spawn a peer;[0-9]+ skipped"
+        LABELS "persistence;terrafront-migration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
     add_test(NAME TerrafrontMigration_Dispatcher COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(TerrafrontMigration_Dispatcher PROPERTIES
         ENVIRONMENT "SPARK_TEST_FILE=TestHandoffParticipant.cpp;SPARK_TEST_EXPECT_COUNT=4"

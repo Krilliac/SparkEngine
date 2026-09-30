@@ -22,6 +22,17 @@ input sequence, plus separately committed character progression/meta. It is not 
 of every transient gameplay system. The authority adapters in the focused tests are test doubles;
 headless gameplay, real Jolt collision and rendered travel still require integration evidence.
 
+Physical continuity (TF-120). Each continent authority simulates its own analytic ground
+(`World/TFTerrainModel.h`, parameters from that continent's scene), and only the Sanctuary Haven pad
+(inside `kTFSanctuaryPlateauRadius`) is the same ground everywhere; the rest of the sanctuary rectangle
+differs by meters between Cindral Wastes and Veyra Highlands. A checkpoint is therefore carried only from
+the pad (`TFHandoff_CanCarry` in `Net/TFHandoffContinuity.h`, applied by both capture and install), and
+a destination whose own scene terrain failed to load refuses to install. `TerrafrontMigration_Travel`
+runs a peer SparkTests process as the Cindral Wastes authority: it runs and jumps a pawn on the real
+terrain and reserves it through the production participant, and the Veyra Highlands side installs it and
+continues the jump tick for tick like the source would have. Pawn stores are test doubles there, Jolt
+bodies are not built, and client presentation after a hop remains the fail-closed refusal below.
+
 Shared-root hosting also retains the existing global outfit/social authority-lock limitation. This lane
 has not made two complete TERRAFRONT processes on one root a supported deployment. The existing
 provisional soak budgets remain unchanged; the full-capacity lost-delivery test is a state-transfer

@@ -2040,8 +2040,13 @@
         {
           "criterionDigest": "sha256:a5dd739a2bd9",
           "state": "unmet",
-          "evidence": [],
-          "note": "No committed test proves cross-continent travel is visually and physically correct."
+          "evidence": [
+            "Tests/TestTF120Travel.cpp",
+            "GameModules/SparkGameMMOFPS/Source/Net/TFHandoffContinuity.h",
+            "GameModules/SparkGameMMOFPS/Source/World/TFTerrainModel.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "Physical half only: TerrafrontMigration_Travel carries a running, jumping pawn from a peer process over real continent terrain and matches the source's trajectory tick for tick; off-pad checkpoints are refused. Pawn stores are test doubles, no Jolt bodies. Unmet: the client never reloads the destination scene, so visual travel is unproven."
         },
         {
           "criterionDigest": "sha256:00177fa65d14",
