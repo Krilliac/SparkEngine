@@ -442,7 +442,7 @@
           "criterionDigest": "sha256:0f617b06e0ee",
           "state": "unmet",
           "evidence": [],
-          "note": "Mobile is unsupported. There is no packaged sample, device matrix or mobile lifecycle tests."
+          "note": "Out of scope by OD-28 (2026-09-30): platform outside stable-v1 (OD-25), outside this repository's control. Mobile is unsupported. There is no packaged sample, device matrix or mobile lifecycle tests."
         },
         {
           "criterionDigest": "sha256:bf1959f18749",
@@ -543,7 +543,7 @@
           "criterionDigest": "sha256:f23d762818e0",
           "state": "unmet",
           "evidence": [],
-          "note": "VR is a stub. There is no OpenXR runtime, no packaged headset sample and no OpenXR tests."
+          "note": "Out of scope by OD-28 (2026-09-30): platform outside stable-v1 (OD-25), outside this repository's control. VR is a stub. There is no OpenXR runtime, no packaged headset sample and no OpenXR tests."
         },
         {
           "criterionDigest": "sha256:e6a6acf179e6",
@@ -666,7 +666,7 @@
           "criterionDigest": "sha256:0f1ac5c1b8e3",
           "state": "unmet",
           "evidence": [],
-          "note": "There are no confidential controls. This needs platform agreements and owner action."
+          "note": "Out of scope by OD-28 (2026-09-30): depends on platform agreements (OD-25), outside this repository's control. There are no confidential controls. This needs platform agreements and owner action."
         }
       ],
       "commands": [

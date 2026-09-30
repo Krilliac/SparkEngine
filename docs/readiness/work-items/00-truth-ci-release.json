@@ -925,7 +925,7 @@
           "criterionDigest": "sha256:588a2f8df8d0",
           "state": "unmet",
           "evidence": [],
-          "note": "No protected external attestation verifier has accepted a Working artifact. This needs a hosted run."
+          "note": "Out of scope by OD-28 (2026-09-30): depends on a protected external attestation verifier, outside this repository's control. No protected external attestation verifier has accepted a Working artifact. This needs a hosted run."
         }
       ],
       "commands": [

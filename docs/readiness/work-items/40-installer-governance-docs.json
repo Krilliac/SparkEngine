@@ -321,13 +321,13 @@
             "Tests/Tools/test_third_party_notices.py",
             "cmake/ValidateStagedPackageNotices.cmake"
           ],
-          "note": "The notice gate exists, but the editor fonts are not covered. Notice obligations also need legal review."
+          "note": "Out of scope by OD-28 (2026-09-30): depends on legal review of notice obligations (the editor-font notice gap is still repo work), outside this repository's control. The notice gate exists, but the editor fonts are not covered. Notice obligations also need legal review."
         },
         {
           "criterionDigest": "sha256:a2569b9a17e2",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs a legal classification that someone has reviewed."
+          "note": "Out of scope by OD-28 (2026-09-30): depends on a reviewed legal classification, outside this repository's control. Needs a legal classification that someone has reviewed."
         },
         {
           "criterionDigest": "sha256:6b0f854510e7",
@@ -344,7 +344,7 @@
           "criterionDigest": "sha256:451e0e4cba68",
           "state": "unmet",
           "evidence": [],
-          "note": "Needs versions and channels that are actually published."
+          "note": "Out of scope by OD-28 (2026-09-30): depends on actually published versions and channels, outside this repository's control. Needs versions and channels that are actually published."
         },
         {
           "criterionDigest": "sha256:f5a3e0f81d56",

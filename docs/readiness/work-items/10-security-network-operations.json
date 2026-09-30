@@ -985,7 +985,7 @@
           "criterionDigest": "sha256:7ab0f4aa3ffc",
           "state": "unmet",
           "evidence": [],
-          "note": "No network endpoint exists. Spool bounds are proven only against a test backend, and telemetry.md lists this as a blocker."
+          "note": "Out of scope by OD-28 (2026-09-30): depends on a real telemetry network endpoint, outside this repository's control. No network endpoint exists. Spool bounds are proven only against a test backend, and telemetry.md lists this as a blocker."
         }
       ],
       "commands": [
@@ -1293,7 +1293,7 @@
           "criterionDigest": "sha256:3950e9bda498",
           "state": "unmet",
           "evidence": [],
-          "note": "All metrics are pending_measurement and none has an accepted baseline, so no budget can block a regression."
+          "note": "Out of scope by OD-28 (2026-09-30): depends on certified hardware rows for accepted baselines, outside this repository's control. All metrics are pending_measurement and none has an accepted baseline, so no budget can block a regression."
         },
         {
           "criterionDigest": "sha256:f4be3e4b59ef",

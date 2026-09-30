@@ -1081,7 +1081,7 @@ Progress: 5 of 8 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/Tools/test_build_matrix_parity.py`, `Tools/buildmatrix/inventory.py`, `Tools/buildmatrix/capture_provenance.py`
    - Tests drive inventory.extract_codemodel_targets and reject a mismatched source tree, build directory, generator, cache or commit, caller-asserted commits, and changed, linked or traversing reply files.
 8. **[unmet]** No same-job OIDC token, mutable workflow or checkout, provenance JSON, artifact path, or artifact hash can self-author producer-verified evidence; a protected external attestation verifier is independently evidenced
-   - No protected external attestation verifier has accepted a Working artifact. This needs a hosted run.
+   - Out of scope by OD-28 (2026-09-30): depends on a protected external attestation verifier, outside this repository's control. No protected external attestation verifier has accepted a Working artifact. This needs a hosted run.
 
 **Required commands**
 
@@ -1744,7 +1744,7 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 4. **[unmet]** A synthetic release crash reaches the test relay and symbolicates to source
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no relay and no private symbol publication. The canary only symbolicates a -g probe offline.
 5. **[unmet]** Endpoint outage recovers within documented spool/drop bounds
-   - No network endpoint exists. Spool bounds are proven only against a test backend, and telemetry.md lists this as a blocker.
+   - Out of scope by OD-28 (2026-09-30): depends on a real telemetry network endpoint, outside this repository's control. No network endpoint exists. Spool bounds are proven only against a test backend, and telemetry.md lists this as a blocker.
 
 **Required commands**
 
@@ -2640,7 +2640,7 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Budgets block regressions
-   - All metrics are pending_measurement and none has an accepted baseline, so no budget can block a regression.
+   - Out of scope by OD-28 (2026-09-30): depends on certified hardware rows for accepted baselines, outside this repository's control. All metrics are pending_measurement and none has an accepted baseline, so no budget can block a regression.
 2. **[implemented]** Golden changes require reviewed baseline update
    - Evidence: `tools/perf-budget/check_golden_review.py`, `Tests/Tools/test_golden_review_gate.py`, `.github/scripts/test-ci-perf-contract.py`, `.github/workflows/build.yml`
    - The required performance-budget-governance job rejects changed or new entries with pending or unchanged review records, PNG changes without manifest changes, and removals; 5 tests fail on the base tool. Local only; no exact-commit CI.
@@ -4686,7 +4686,7 @@ Touch input and quality scaling are framework pieces, not an iOS/Android platfor
 Progress: 1 of 2 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** If supported, packaged sample installs, resumes, renders, saves, handles input/audio, and meets budgets on declared devices
-   - Mobile is unsupported. There is no packaged sample, device matrix or mobile lifecycle tests.
+   - Out of scope by OD-28 (2026-09-30): platform outside stable-v1 (OD-25), outside this repository's control. Mobile is unsupported. There is no packaged sample, device matrix or mobile lifecycle tests.
 2. **[implemented]** If deferred, all public wording remains planned/unsupported
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `docs/site/readiness.json`, `Tests/Tools/test_public_wording.py`, `Tests/CMakeLists.txt`, `wiki/platform/Mobile-Platform.md`
    - deferred_platform_support_errors keeps platform.mobile unsupported and blocked while PLT-230 is open. deferred_platform_claim_errors scans the global public surfaces plus the capability's documentation pages, and is wired into Validator.validate(). Covered by the registered CTest PublicWording_DeferredPlatforms. The qualifier check is per sentence and loose; see nonblocking.
@@ -4762,7 +4762,7 @@ VR/OpenXR is a framework stub without runtime initialization, interaction, stere
 Progress: 1 of 2 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** If supported, a packaged sample initializes, tracks, interacts, renders both eyes, recovers focus, and meets budgets
-   - VR is a stub. There is no OpenXR runtime, no packaged headset sample and no OpenXR tests.
+   - Out of scope by OD-28 (2026-09-30): platform outside stable-v1 (OD-25), outside this repository's control. VR is a stub. There is no OpenXR runtime, no packaged headset sample and no OpenXR tests.
 2. **[implemented]** Otherwise wording remains framework/planned
    - Evidence: `tools/site-data/validate.py`, `docs/site/readiness.json`, `Tests/Tools/test_public_wording.py`, `Tests/CMakeLists.txt`
    - platform.vr stays unsupported/blocked, and OpenXR/SteamVR/Meta Quest/VR-headset support claims without a framework/planned qualifier are rejected. The live pass includes wiki/platform/VR-Support.md.
@@ -4841,7 +4841,7 @@ Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_public_wording.py`, `Tests/CMakeLists.txt`, `wiki/platform/Accessibility.md`
    - console_certification_implication_errors() (tools/site-data/validate.py, run by Validator.validate) rejects console runner/job/matrix/option/preset identifiers in workflows and CMake, and unqualified console-plus-certification wording in public docs, wiki and engine source. CTest PublicWording_ConsoleCertification covers unit cases and the live tree. A dead console enum header remains.
 3. **[unmet]** Authorized work has separate confidential controls
-   - There are no confidential controls. This needs platform agreements and owner action.
+   - Out of scope by OD-28 (2026-09-30): depends on platform agreements (OD-25), outside this repository's control. There are no confidential controls. This needs platform agreements and owner action.
 
 **Required commands**
 
@@ -5334,14 +5334,14 @@ Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every distributed dependency/file has an identified license and fulfilled notice obligation
    - Evidence: `Tests/Tools/test_third_party_notices.py`, `cmake/ValidateStagedPackageNotices.cmake`
-   - The notice gate exists, but the editor fonts are not covered. Notice obligations also need legal review.
+   - Out of scope by OD-28 (2026-09-30): depends on legal review of notice obligations (the editor-font notice gap is still repo work), outside this repository's control. The notice gate exists, but the editor fonts are not covered. Notice obligations also need legal review.
 2. **[unmet]** Website terminology matches reviewed classification
-   - Needs a legal classification that someone has reviewed.
+   - Out of scope by OD-28 (2026-09-30): depends on a reviewed legal classification, outside this repository's control. Needs a legal classification that someone has reviewed.
 3. **[implemented]** Packages include root license, notices, and required third-party texts
    - Evidence: `Tests/Tools/test_third_party_notices.py`, `cmake/SparkThirdPartyAudit.cmake`, `cmake/ValidateStagedPackageExecutables.cmake`, `docs/governance/GOV-400-DECISIONS.md`
    - The package does not include the editor-font texts yet.
 4. **[unmet]** Security/support policy names actually published versions/channels
-   - Needs versions and channels that are actually published.
+   - Out of scope by OD-28 (2026-09-30): depends on actually published versions and channels, outside this repository's control. Needs versions and channels that are actually published.
 5. **[unmet]** Legal/maintainer sign-off is release evidence
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs legal and maintainer sign-off.
 
