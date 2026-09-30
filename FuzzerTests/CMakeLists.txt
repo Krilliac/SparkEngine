@@ -2799,6 +2799,8 @@ set_tests_properties(FuzzOrchestratorIdentitySmoke PROPERTIES
 # RTSPersistenceCodec.cpp decodes the save slot's custom state and RTSPersistence.cpp
 # validates it; RTSCommandSystem.cpp supplies IsCommandValid. Apply and Capture, which
 # need the live systems, are never referenced and --gc-sections drops them.
+# RTSPersistence.h reaches Spark/Version.h through the RTS system headers, so the
+# target reuses the Spark/GeneratedVersion.h generated for SparkFuzzReflectedScene.
 add_executable(SparkFuzzRTSPersistence
     FuzzRTSPersistence.cpp
     FuzzRTSPersistenceProduction.cpp
@@ -2817,6 +2819,7 @@ target_include_directories(SparkFuzzRTSPersistence PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source"
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
 )
 target_compile_features(SparkFuzzRTSPersistence PRIVATE cxx_std_23)
 target_compile_definitions(SparkFuzzRTSPersistence PRIVATE SPARK_SHIPPING=1)

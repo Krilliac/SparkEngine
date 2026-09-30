@@ -1,6 +1,6 @@
 {
   "closure_blockers": [
-    "86 inventoried parsers have no fuzz target"
+    "87 inventoried parsers have no fuzz target"
   ],
   "corpus": {
     "bound_target_count": 50,
@@ -13,10 +13,10 @@
   "coverage_claim": false,
   "inputs": {
     "corpus_manifest": "20c6abec8b8bd53ed141900c84fd139e6fab42a702162b559cc70eac5944a865",
-    "inventory": "898ebc68e5ca77f3173c1ade2bd9c0662fcee79781d30c9e49de252b37d3b663"
+    "inventory": "9a9314d1d71393be0a5261e7cb43c2f5e8ad29a85ca3d105f282e6dd5d4f9a1d"
   },
   "inventory": {
-    "blocked_count": 86,
+    "blocked_count": 87,
     "candidate_count": 301,
     "deferred_candidate_count": 0,
     "excluded_files": [],
@@ -45,7 +45,7 @@
     },
     "exempt_candidate_count": 120,
     "fuzzed_count": 50,
-    "parser_count": 136,
+    "parser_count": 137,
     "scan_roots": [
       "SparkEngine/Source",
       "SparkEditor/Source",

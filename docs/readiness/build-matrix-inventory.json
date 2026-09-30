@@ -3266,7 +3266,7 @@
       "target": "SparkFuzzRTSPersistence",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2802,
+      "line": 2804,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5857,7 +5857,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2802,
+          "line": 2804,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

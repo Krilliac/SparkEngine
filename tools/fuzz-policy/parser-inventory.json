@@ -2149,8 +2149,7 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.cpp",
-        "GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.h",
-        "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+        "GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.h"
       ],
       "formats": [
         "database-row"
@@ -2165,6 +2164,22 @@
         "entry_symbol": "MMO::DecodeCharacterRecord",
         "binding_source": "FuzzerTests/FuzzMMOCharacterRecordProduction.cpp",
         "harness_entry_symbol": "SparkFuzzDecodeMMOCharacterRecord"
+      }
+    },
+    {
+      "id": "mmo-persistence-rows",
+      "description": "SparkGameMMO inventory, guild and guild-member rows and character-id key suffixes decoded from the persisted AsyncDatabase key-value store (the character row itself is mmo-character-record).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+      ],
+      "formats": [
+        "database-row"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness drives ParseInventoryRecord, ParseGuildRecord, ParseGuildMemberRecord or ParseIdPair; split from mmo-character-record when its codec moved to MMOCharacterRecord.cpp.",
+        "ticket": "SEC-120"
       }
     },
     {
