@@ -504,7 +504,10 @@ def read_regular_bytes(path: Path, *, label: str, maximum: int) -> bytes:
             )
             if not opened_identity_matches(before, opened_identity):
                 raise ContractError(f"{label} changed before it could be opened: {path}")
-            payload = stream.read(maximum + 1)
+            # One byte past the observed size, never maximum + 1: BufferedReader
+            # allocates the whole requested length up front (128 MiB per generated
+            # page), and a file that grew still reads long and fails the size check.
+            payload = stream.read(min(before.size, maximum) + 1)
     except ContractError:
         raise
     except OSError as exc:
