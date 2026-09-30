@@ -163,8 +163,9 @@ class RepositoryInventoryTests(unittest.TestCase):
         configs = self.data["workflowCmakeConfigs"]
         # reproducibility-windows (BLD-100) configures windows-shipping twice.
         # golden-linux (CI-110), service-contract (NET-110) and build-macos-shipping
-        # (PLT-220) each own one leg.
-        self.assertEqual(len(configs), 35)
+        # (PLT-220) each own one leg. TelemetrySpool (OPS-100A) reuses the
+        # security-runtime configure instead of owning a second linux-shipping leg.
+        self.assertEqual(len(configs), 34)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -190,7 +191,6 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "reproducibility-windows",
                 "security-runtime",
                 "service-contract",
-                "telemetry-integration",
             ],
         )
         single_leg_presets = {

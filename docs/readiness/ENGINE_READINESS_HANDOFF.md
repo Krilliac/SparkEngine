@@ -1758,7 +1758,7 @@ python3 -m unittest discover -s Tests/Tools -p 'test_ops100_symbolication.py'
 **Automated evidence**
 
 - Test selectors: `CrashManifest_PathEscape`, `CrashManifest_SecretRedaction`, `CrashReporter_Consent`, `CrashReporter_Symbolication`, `Telemetry_SpoolRecovery`, `CrashRedaction_*`, `FreezeDetector_*`
-- Required CI jobs: `crash-security`, `crash-canary`, `telemetry-integration`
+- Required CI jobs: `crash-security`, `crash-canary`, `security-runtime`
 - Performance / reliability budgets:
   - Crash handling is bounded and avoids deadlock/allocation in compromised process context
   - Telemetry queue has explicit byte/event limits
