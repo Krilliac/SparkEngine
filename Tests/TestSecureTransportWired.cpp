@@ -308,7 +308,23 @@ TEST(SecureTransport_Handshake_LowOrderHelloFloodDoesNoCryptoWork)
     EXPECT_EQ(stats.handshakeResponsesComputed, 0u); // no keygen, scalar multiplication or signature
     EXPECT_EQ(stats.handshakeFailures, static_cast<uint32_t>(kFlood));
     EXPECT_TRUE(server.GetClientSlots().empty()); // no slot held, not even transiently
+    // The server sent every reject inside Update(), but loopback delivery is asynchronous on
+    // macOS (lo0 input runs on its own thread), so a single non-blocking drain can run ahead of
+    // the last few. Wait a bounded time for all of them; any extra reject still fails the count.
     int rejects = 0;
+    const auto rejectDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (rejects < kFlood && std::chrono::steady_clock::now() < rejectDeadline)
+    {
+        auto datagram = attacker.Socket().Receive();
+        if (!datagram)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            continue;
+        }
+        auto message = attacker.Open(*datagram);
+        if (message && message->type == MessageType::ConnectRejected)
+            ++rejects;
+    }
     while (auto datagram = attacker.Socket().Receive())
     {
         auto message = attacker.Open(*datagram);
