@@ -3053,23 +3053,20 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libegl-dev libegl-mesa0 libgl1-mesa-dri libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
         # noble-updates moves Mesa independently of the reviewed baselines
         # (0ubuntu0.24.04.3 replaced .2 there on 2026-09-30 while .2 stayed
-        # published in noble-security), so install every installed Mesa binary
-        # at the reviewed build instead of whatever the newest pocket carries.
-        # They must move together: most depend on mesa-libgallium at the exact
-        # same version. A binary Ubuntu no longer publishes at that build is
-        # left as it is, and the next step then fails on the pin.
-        mesa_pins=()
-        native_arch=$(dpkg --print-architecture)
-        while read -r status package source; do
-          package=${package%":$native_arch"}
-          if [ "$status" = ii ] && [ "$source" = mesa ] \
-            && apt-cache show "$package=$SPARK_GOLDEN_MESA_VERSION" > /dev/null 2>&1; then
-            mesa_pins+=("$package=$SPARK_GOLDEN_MESA_VERSION")
-          fi
-        done < <(dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package} ${source:Package}\n')
-        if [ "${#mesa_pins[@]}" -gt 0 ]; then
-          sudo apt-get install -y --allow-downgrades "${mesa_pins[@]}"
-        fi
+        # published in noble-security), so install the reviewed build of every
+        # Mesa binary the line above pulls in instead of whatever the newest
+        # pocket carries. They must move together: most depend on
+        # mesa-libgallium at the exact same version. The list is explicit so
+        # the supply-chain check sees every package name; the next step fails
+        # if any installed Mesa binary is still not the reviewed build.
+        sudo apt-get install -y --allow-downgrades \
+          libegl-mesa0="$SPARK_GOLDEN_MESA_VERSION" \
+          libgbm-dev="$SPARK_GOLDEN_MESA_VERSION" \
+          libgbm1="$SPARK_GOLDEN_MESA_VERSION" \
+          libgl1-mesa-dri="$SPARK_GOLDEN_MESA_VERSION" \
+          libglx-mesa0="$SPARK_GOLDEN_MESA_VERSION" \
+          mesa-libgallium="$SPARK_GOLDEN_MESA_VERSION" \
+          mesa-vulkan-drivers="$SPARK_GOLDEN_MESA_VERSION"
 
     - name: Assert the reviewed Mesa build
       run: |
@@ -3081,6 +3078,14 @@ jobs:
             exit 1
           fi
         done
+        # The drivers load the other Mesa libraries (mesa-libgallium, libgbm1, ...)
+        # at run time, so every installed Mesa binary must be the reviewed build.
+        stray=$(dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package} ${source:Package} ${Version}\n' \
+          | awk -v reviewed="$SPARK_GOLDEN_MESA_VERSION" '$1 == "ii" && $3 == "mesa" && $4 != reviewed')
+        if [ -n "$stray" ]; then
+          echo "::error::Mesa binaries not at the reviewed build $SPARK_GOLDEN_MESA_VERSION: $(echo "$stray" | tr '\n' ' ')"
+          exit 1
+        fi
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
