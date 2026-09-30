@@ -798,6 +798,11 @@ namespace
     }
 } // namespace
 
+// POSIX only: an unprivileged Windows process cannot create a file symlink (the only link a
+// mod.json can be swapped for there), and a registered skip is not an option. The Windows
+// handle checks are exercised by the directory-swap test below, whose junction needs no
+// privilege.
+#ifndef _WIN32
 TEST(SEC3Gameplay_ModScanRefusesManifestSwappedForSymlinkAfterCheck)
 {
     ScratchDir dir("mods_manifest_swap");
@@ -817,15 +822,11 @@ TEST(SEC3Gameplay_ModScanRefusesManifestSwappedForSymlinkAfterCheck)
         ASSERT_TRUE(control.GetModInfo("victim") != nullptr);
     }
 
-    // The replacement link is staged before the scan, so a platform that cannot create
-    // file symlinks stops here and never inside the probe.
+    // The replacement link is staged before the scan, so the probe only has to rename it.
     const fs::path staged = dir.path / "staged-link";
     std::error_code linkError;
     fs::create_symlink(outside, staged, linkError);
-    if (linkError)
-    {
-        SKIP_TEST("cannot create a file symlink here (Windows without Developer Mode): " + linkError.message());
-    }
+    ASSERT_FALSE(static_cast<bool>(linkError));
 
     bool swapped = false;
     size_t probeCalls = 0;
@@ -851,6 +852,7 @@ TEST(SEC3Gameplay_ModScanRefusesManifestSwappedForSymlinkAfterCheck)
     EXPECT_TRUE(mods.GetModInfo("plain") != nullptr);
     EXPECT_EQ(published, size_t{1});
 }
+#endif
 
 // The same window for the mod directory itself: a plain directory that passed the checks is
 // replaced by a link (a junction on Windows, which needs no privilege, so this never skips)
