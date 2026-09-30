@@ -998,6 +998,11 @@ namespace Spark::Net
         /// Receive raw data from socket (non-blocking)
         int ReceiveRaw(std::vector<uint8_t>& outData, sockaddr_in& outSender);
 
+        /// ReceiveRaw's recvfrom target, sized to MAX_UDP_WIRE_DATAGRAM_SIZE once and reused so a
+        /// receive costs O(datagram), not a fresh 64 KiB value-initialised buffer per call. Each
+        /// datagram's bytes are erased from it as soon as they are copied out. Guarded by m_apiMutex.
+        std::vector<uint8_t> m_receiveScratch;
+
         SOCKET m_socket = INVALID_SOCKET;
         sockaddr_in m_serverAddress{};
 
