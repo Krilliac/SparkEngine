@@ -5,9 +5,10 @@
 
 #include "MMOCharacterRecord.h"
 
+#include "Utils/StringUtils.h"
+
 #include <charconv>
 #include <cmath>
-#include <exception>
 #include <format>
 #include <string_view>
 #include <system_error>
@@ -64,23 +65,17 @@ namespace MMO
             return true;
         }
 
-        bool ParseFiniteFloat(const std::string& text, float& out)
+        /// Whole-token finite float: the shortest form std::format writes (subnormals included,
+        /// which std::stof refused with out_of_range) and nothing it never writes.
+        bool ParseFiniteFloat(std::string_view text, float& out)
         {
-            try
-            {
-                size_t used = 0;
-                const float value = std::stof(text, &used);
-                if (used != text.size() || !std::isfinite(value))
-                {
-                    return false;
-                }
-                out = value;
-                return true;
-            }
-            catch (const std::exception&)
+            const std::optional<float> value = Spark::StringUtils::ParseFloatingExact<float>(text);
+            if (!value || !std::isfinite(*value))
             {
                 return false;
             }
+            out = *value;
+            return true;
         }
 
         bool IsStorableName(const std::string& name)
@@ -91,7 +86,7 @@ namespace MMO
 
     std::optional<std::string> EncodeCharacterRecord(const CharacterRecordFields& fields)
     {
-        const float floats[] = {fields.posX,   fields.posY,      fields.posZ, fields.rotY,    fields.health,
+        const float floats[] = {fields.posX,      fields.posY, fields.posZ,    fields.rotY,    fields.health,
                                 fields.maxHealth, fields.mana, fields.maxMana, fields.playTime};
         for (const float value : floats)
         {

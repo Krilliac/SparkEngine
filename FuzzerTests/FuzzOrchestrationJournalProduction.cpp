@@ -159,8 +159,8 @@ namespace
         std::set<std::string> committed;
         for (const Daemon::JournalMutation& mutation : state.mutations)
         {
-            if (mutation.clientInstance.empty() || mutation.clientInstance.size() > Daemon::kMaximumClientInstanceLength ||
-                mutation.sequence == 0)
+            if (mutation.clientInstance.empty() ||
+                mutation.clientInstance.size() > Daemon::kMaximumClientInstanceLength || mutation.sequence == 0)
             {
                 InvariantFailure("accepted a committed mutation with a malformed client key");
             }

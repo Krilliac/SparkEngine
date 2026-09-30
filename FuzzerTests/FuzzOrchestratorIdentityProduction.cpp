@@ -161,8 +161,7 @@ extern "C" int SparkFuzzAcquireOrchestratorIdentity(const std::uint8_t* data, st
         }
     }
     std::error_code permissionError;
-    fs::permissions(state, fs::perms::owner_read | fs::perms::owner_write, fs::perm_options::replace,
-                    permissionError);
+    fs::permissions(state, fs::perms::owner_read | fs::perms::owner_write, fs::perm_options::replace, permissionError);
     if (permissionError)
     {
         return 0;

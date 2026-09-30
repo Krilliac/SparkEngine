@@ -21,6 +21,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -892,6 +893,34 @@ TEST(MMOPersistence_CharacterRowKeepsExactFloatsThroughColdRestart)
     EXPECT_EQ(loaded.playTime, save.playTime);
     restarted.Shutdown();
     fs::remove(path);
+}
+
+TEST(MMOPersistence_CharacterRowKeepsSubnormalFloats)
+{
+    // The encoder writes a subnormal stat as its shortest form ("1e-40"); std::stof threw
+    // out_of_range on it, so the saved character could never load again.
+    MMO::CharacterRecordFields fields;
+    fields.name = "Drifter";
+    fields.posX = std::numeric_limits<float>::denorm_min();
+    fields.rotY = -1.0e-40f;
+    const std::optional<std::string> row = MMO::EncodeCharacterRecord(fields);
+    ASSERT_TRUE(row.has_value());
+    MMO::CharacterRecordFields decoded;
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(*row, decoded));
+    EXPECT_EQ(decoded.posX, fields.posX);
+    EXPECT_EQ(decoded.rotY, fields.rotY);
+
+    // Values that underflow to zero or overflow are still refused, as are forms the
+    // encoder never writes (leading space, plus sign, hex).
+    const std::string refused[] = {
+        "Drifter|0|1|0|1|1e-60|1|0|0|100|100|50|50|0|0", "Drifter|0|1|0|1|1e40|1|0|0|100|100|50|50|0|0",
+        "Drifter|0|1|0|1| 1|1|0|0|100|100|50|50|0|0",    "Drifter|0|1|0|1|+1|1|0|0|100|100|50|50|0|0",
+        "Drifter|0|1|0|1|0x1p3|1|0|0|100|100|50|50|0|0",
+    };
+    for (const std::string& stored : refused)
+    {
+        EXPECT_FALSE(MMO::DecodeCharacterRecord(stored, decoded));
+    }
 }
 
 TEST(MMOPersistence_UnstorableCharacterIsNotSaved)

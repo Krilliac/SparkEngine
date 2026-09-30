@@ -2662,6 +2662,7 @@ set_source_files_properties(
 )
 target_include_directories(SparkFuzzMMOCharacterRecord PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
 )
 target_compile_features(SparkFuzzMMOCharacterRecord PRIVATE cxx_std_23)
 target_compile_options(SparkFuzzMMOCharacterRecord PRIVATE
