@@ -490,7 +490,9 @@ namespace
         ASSERT_TRUE(MaxChannelDifference(clear, ClearRgb()) > 24);
         for (const auto& [column, row] :
              {std::pair{2, 2}, std::pair{kWidth - 3, 2}, std::pair{2, kHeight - 3}, std::pair{kWidth - 3, kHeight - 3}})
+        {
             EXPECT_TRUE(MaxChannelDifference(PixelAt(frame.rgba, column, row), clear) <= 2);
+        }
 
         const auto [column, row] = ProjectedCubeCentre();
         const Rgb referenceCube = PixelAt(reference.rgba, column, row);
@@ -522,8 +524,10 @@ namespace
             backend == Backend::OpenGL ? Spark::RHI::GraphicsBackend::OpenGL : Spark::RHI::GraphicsBackend::Vulkan;
         const auto active = Spark::Graphics::Detail::GetRHI().bridge.GetActiveBackend();
         if (active != expected)
+        {
             SkipOrFail(backend,
                        "the RHI bridge came up on " + Spark::Graphics::Detail::GetRHI().bridge.GetBackendName());
+        }
     }
 } // namespace
 
@@ -541,7 +545,9 @@ namespace
 
         GraphicsEngine engine;
         if (FAILED(engine.Initialize(host.window)))
+        {
             SkipOrFail(Backend::OpenGL, "GraphicsEngine::Initialize failed on the OpenGL window");
+        }
         RequireActiveBackend(Backend::OpenGL);
         std::printf("[RHI-240 FORWARD] OpenGL GL_RENDERER=\"%s\"\n",
                     reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
@@ -607,10 +613,14 @@ namespace
             WindowHost host(Backend::Vulkan);
             GraphicsEngine engine;
             if (FAILED(engine.Initialize(host.window)))
+            {
                 SkipOrFail(Backend::Vulkan, "GraphicsEngine::Initialize failed on the Vulkan window");
+            }
             RequireActiveBackend(Backend::Vulkan);
             if (!Spark::Graphics::Detail::GetRHI().bridge.GetCapabilities().isSoftwareDevice)
+            {
                 SkipOrFail(Backend::Vulkan, "the Vulkan device is not Lavapipe");
+            }
 
             body(engine);
             engine.Shutdown();
@@ -626,14 +636,20 @@ namespace
         size_t errors = 0;
         for (size_t at = report.find("Validation Error"); at != std::string::npos;
              at = report.find("Validation Error", at + 1))
+        {
             ++errors;
+        }
         if (report.find("Validation Layer Active") == std::string::npos)
+        {
             SkipOrFail(Backend::Vulkan,
                        "VK_LAYER_KHRONOS_validation did not report itself active in " + validationLog.string());
+        }
         std::printf("[RHI-240 FORWARD] Vulkan validation (%s): layer active, %zu validation error(s)\n", tag.c_str(),
                     errors);
         if (errors != 0)
+        {
             std::printf("[RHI-240 FORWARD] Vulkan validation report:\n%s\n", report.c_str());
+        }
         EXPECT_EQ(errors, size_t(0));
     }
 } // namespace

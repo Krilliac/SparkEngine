@@ -22,6 +22,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 using namespace DirectX;
@@ -243,6 +244,69 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     m_statistics.totalObjects = static_cast<uint32_t>(objects.size());
     m_statistics.visibleObjects = static_cast<uint32_t>(visibleObjects.size());
     m_statistics.culledObjects = m_statistics.totalObjects - m_statistics.visibleObjects;
+}
+
+// ============================================================================
+// Tone-mapping post pass — Linux/RHI
+// ============================================================================
+
+bool Spark::Graphics::Detail::CreateTonemapPass(LinuxRHIState& rhi, const Spark::RHI::RHIPipelineStateDesc& forwardDesc,
+                                                Spark::RHI::IRHIShader* forwardVs, Spark::RHI::IRHIShader* forwardPs,
+                                                bool headless)
+{
+    using Spark::RHI::PixelFormat;
+    using Spark::RHI::RHIShaderStage;
+
+    Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice();
+    Spark::RHI::IRHITexture* backBuffer = rhi.bridge.GetBackBuffer();
+    if (!device || !rhi.hdrLighting)
+    {
+        return false;
+    }
+
+    // The Linux RHI backends read GLSL (OpenGL) or its SPIR-V (Vulkan); there is no HLSL
+    // version of these two stages, and no D3D backend on this path.
+    rhi.bridge.RegisterShader("fullscreen_vs", RHIShaderStage::Vertex, "", "Shaders/GLSL/FullscreenQuad.glsl",
+                              "Shaders/SPIRV/FullscreenQuad.vert.spv", "main");
+    rhi.bridge.RegisterShader("post_tonemap_ps", RHIShaderStage::Pixel, "", "Shaders/GLSL/PostProcess.glsl",
+                              "Shaders/SPIRV/PostProcess.frag.spv", "main");
+    Spark::RHI::IRHIShader* vs = headless ? nullptr : rhi.bridge.GetShader("fullscreen_vs");
+    Spark::RHI::IRHIShader* ps = headless ? nullptr : rhi.bridge.GetShader("post_tonemap_ps");
+    if (!headless && (!vs || !ps))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load the tone-mapping shaders via RHI");
+        return false;
+    }
+
+    Spark::RHI::RHIPipelineStateDesc hdrDesc = forwardDesc;
+    hdrDesc.renderTargetFormats[0] = rhi.hdrLighting->GetFormat();
+    hdrDesc.debugName = "BasicForwardPassHDR";
+    auto hdrPipeline = device->CreatePipelineState(hdrDesc, forwardVs, forwardPs);
+
+    // Full-screen triangle from the vertex index: no vertex input, no depth.
+    Spark::RHI::RHIPipelineStateDesc desc;
+    desc.numRenderTargets = 1;
+    desc.renderTargetFormats[0] = backBuffer ? backBuffer->GetFormat() : PixelFormat::R8G8B8A8_UNORM;
+    desc.depthStencilFormat = PixelFormat::Unknown;
+    desc.depthStencil.depthEnable = false;
+    desc.depthStencil.depthWrite = false;
+    desc.rasterizer.cullMode = Spark::RHI::RHICullMode::None;
+    desc.debugName = "TonemapPass";
+    auto pipeline = device->CreatePipelineState(desc, vs, ps);
+
+    auto constants = rhi.bridge.CreateConstantBuffer(sizeof(PostProcessConstants));
+    auto sampler = rhi.bridge.CreateSamplerLinearClamp();
+    if (!hdrPipeline || !pipeline || !constants || !sampler)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create the tone-mapping post pass resources");
+        return false;
+    }
+
+    rhi.basicForward.hdrPipeline = std::move(hdrPipeline);
+    rhi.tonemap.pipeline = std::move(pipeline);
+    rhi.tonemap.constants = std::move(constants);
+    rhi.tonemap.sampler = std::move(sampler);
+    return true;
 }
 
 void GraphicsEngine::RenderPostProcessing()

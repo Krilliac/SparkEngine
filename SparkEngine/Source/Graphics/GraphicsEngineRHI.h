@@ -203,6 +203,18 @@ namespace Spark::Graphics::Detail
     void CreatePlatformRenderTargets(uint32_t width, uint32_t height);
     void ReleasePlatformRenderTargets();
 
+    /**
+     * Builds the tone-mapping post pass (LinuxRHIState::tonemap) and the forward pipeline variant
+     * that renders the scene into the HDR target it reads (BasicForwardPass::hdrPipeline).
+     * @p forwardDesc, @p forwardVs and @p forwardPs are the basic forward pass's description and
+     * shaders; @p headless builds the pipelines without shaders, as the NullRHI path does.
+     * Defined in GraphicsRenderPipelinesLinux.cpp beside the pass it records; called once from
+     * GraphicsEngine::InitializeBasicShaders.
+     * @return false, with the pass left empty, when any part is missing.
+     */
+    bool CreateTonemapPass(LinuxRHIState& rhi, const Spark::RHI::RHIPipelineStateDesc& forwardDesc,
+                           Spark::RHI::IRHIShader* forwardVs, Spark::RHI::IRHIShader* forwardPs, bool headless);
+
 } // namespace Spark::Graphics::Detail
 
 #endif // !SPARK_PLATFORM_WINDOWS
