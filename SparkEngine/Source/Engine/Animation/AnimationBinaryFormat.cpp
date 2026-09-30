@@ -18,7 +18,8 @@ namespace Spark::Animation
     {
         // Smallest encoding of one record, used to reject a declared count before anything is
         // allocated for it: a count is plausible only if that many minimal records still fit.
-        constexpr std::size_t kBoneRecordMinBytes = sizeof(std::uint32_t) + sizeof(std::int32_t) + 2 * 64;
+        constexpr std::size_t kBoneRecordMinBytes =
+            sizeof(std::uint32_t) + sizeof(std::int32_t) + 2 * sizeof(XMFLOAT4X4);
         constexpr std::size_t kClipRecordMinBytes =
             sizeof(std::uint32_t) + 2 * sizeof(float) + 1 + sizeof(std::uint32_t);
         constexpr std::size_t kChannelRecordMinBytes =
@@ -97,11 +98,11 @@ namespace Spark::Animation
         /// and any physics driven from bone transforms.
         bool IsFiniteMatrix(const XMFLOAT4X4& matrix)
         {
-            for (int row = 0; row < 4; ++row)
+            for (const auto& row : matrix.m)
             {
-                for (int column = 0; column < 4; ++column)
+                for (const float value : row)
                 {
-                    if (!std::isfinite(matrix.m[row][column]))
+                    if (!std::isfinite(value))
                     {
                         return false;
                     }

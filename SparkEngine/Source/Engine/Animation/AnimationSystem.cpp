@@ -30,7 +30,7 @@ namespace Spark::Animation
     {
         /// Largest .skel or .sanim file the binary loaders will read. Far above any real skeleton
         /// or clip set; the decoders bound every allocation by the bytes actually read.
-        constexpr std::uintmax_t kMaxAnimationAssetBytes = 256u * 1024u * 1024u;
+        constexpr std::uintmax_t kMaxAnimationAssetBytes = std::uintmax_t{256} * 1024u * 1024u;
 
         /// Read an animation asset whole. The stat is only a fast reject: the file can be replaced or
         /// keep growing after it, so the read itself is capped at the size stat reported plus one byte,
