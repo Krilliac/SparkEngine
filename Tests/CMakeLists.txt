@@ -3868,6 +3868,33 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         RUN_SERIAL TRUE
         TIMEOUT 300)
 
+    # Exercise the actual PowerShell gate, including its fallback rejection,
+    # without requiring GPU rendering for the parser/pixel fixture cases.
+    add_test(
+        NAME FPSVisibleFrame_CheckerContract
+        COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+            -NoProfile -NonInteractive -File
+            "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestFPSVisibleFrame.ps1"
+            -WorkRoot "${CMAKE_CURRENT_BINARY_DIR}/fps-visible-checker/$<CONFIG>")
+    set_tests_properties(FPSVisibleFrame_CheckerContract PROPERTIES
+        LABELS "module;fps;scene;contract"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+
+    # Both paths render a plausible arena. Remove only the copied authored
+    # scene, require identity-based rejection, restore it, then require GREEN.
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(
+        NAME FPSVisibleFrame_AuthoredAndFallback
+        COMMAND ${Python3_EXECUTABLE} -B
+            "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunFPSVisibleFrameProbe.py"
+            --package-bin "$<TARGET_FILE_DIR:SparkEngine>"
+            --work-root "${CMAKE_CURRENT_BINARY_DIR}/fps-visible/$<CONFIG>")
+    set_tests_properties(FPSVisibleFrame_AuthoredAndFallback PROPERTIES
+        LABELS "module;fps;d3d11;scene;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+
     # Copy the built FPS runtime to a fresh package-like directory, edit only
     # its copied scene, and inspect post-update game/wave state plus rendered
     # frames. Fresh-process and same-process material edits also catch stale

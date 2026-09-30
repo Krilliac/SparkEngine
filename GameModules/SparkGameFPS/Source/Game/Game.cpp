@@ -103,9 +103,11 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     // SceneManager setup
     m_sceneManager = std::make_unique<SceneManager>(graphics, input);
-    bool sceneLoaded = m_sceneManager->LoadScene(Spark::FPSAssets::Resolve(L"Scenes/level1.scene"));
+    const std::wstring authoredScenePath = Spark::FPSAssets::Resolve(L"Scenes/level1.scene");
+    bool sceneLoaded = m_sceneManager->LoadScene(authoredScenePath);
     std::wstring sceneMsg = L"SceneManager::LoadScene returned: " + std::wstring(sceneLoaded ? L"SUCCESS" : L"FAILURE");
     LOG_TO_CONSOLE_IMMEDIATE(sceneMsg, L"INFO");
+    LogSceneIdentity(sceneLoaded, authoredScenePath);
 
     // Scene material paths are authored data, but the project root is trusted
     // module state. Bind that root immediately after scene construction so
@@ -308,6 +310,35 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
                              L"SUCCESS");
 
     return S_OK;
+}
+
+void Game::LogSceneIdentity(bool sceneLoaded, const std::wstring& scenePath) const
+{
+    // CreateCombatArena() renders a plausible arena whether or not the authored
+    // scene loaded, so a rendered frame alone cannot tell the two apart. Package
+    // smokes require this exact marker (Tests/PackageSmoke/CheckFPSVisibleFrame.ps1)
+    // as positive evidence that the authored scene, not the fallback, is live.
+    // LOG_TO_CONSOLE_IMMEDIATE narrows wchar_t values byte by byte. The audit
+    // trail is UTF-8, and the smoke compares this path to the package directory.
+    const auto utf8Path = std::filesystem::path(scenePath).u8string();
+    const std::string path(utf8Path.begin(), utf8Path.end());
+    auto& console = Spark::SimpleConsole::GetInstance();
+    if (!sceneLoaded || !m_sceneManager)
+    {
+        console.LogWarning("FPS scene identity: procedural fallback arena (authored scene failed to load from " + path +
+                           ")");
+        return;
+    }
+
+    // Keep the scene label on one line with unambiguous quote delimiters.
+    std::string sceneName;
+    for (const char ch : m_sceneManager->GetMetadata().sceneName)
+    {
+        const auto byte = static_cast<unsigned char>(ch);
+        sceneName.push_back((byte >= 0x20 && byte < 0x7F && byte != '"') ? ch : '?');
+    }
+    console.LogInfo(std::format("FPS scene identity: authored scene \"{}\" ({} nodes) from {}", sceneName,
+                                m_sceneManager->GetNodeCount(), path));
 }
 
 void Game::BindSceneMaterialRoots()

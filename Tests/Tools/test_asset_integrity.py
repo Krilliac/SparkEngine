@@ -500,6 +500,26 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
         self.assertIn("ReparsePoint", smoke_text)
         self.assertIn("IS_SYMLINK", smoke_text)
         self.assertIn("-test-frames 8", smoke_text)
+        # The procedural fallback arena passes every pixel test, so the visible
+        # frame check must also read the run's scene identity marker.
+        self.assertIn('-LogPath "${_run_root}/exec_audit.log"', smoke_text)
+        self.assertIn('-ExpectedSceneDirectory "${_assets}/Scenes"', smoke_text)
+
+    def test_fps_visible_frame_callers_require_authored_scene_identity(self) -> None:
+        check_text = (REPO_ROOT / "Tests" / "PackageSmoke" / "CheckFPSVisibleFrame.ps1").read_text(encoding="utf-8")
+        self.assertIn("FPS scene identity: procedural fallback arena", check_text)
+        self.assertIn("FPS scene identity: authored scene", check_text)
+        game_text = (REPO_ROOT / "GameModules" / "SparkGameFPS" / "Source" / "Game" / "Game.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("FPS scene identity: procedural fallback arena", game_text)
+        self.assertIn('FPS scene identity: authored scene \\"{}\\" ({} nodes) from {}', game_text)
+        for script_name in ("RunInstalledFPSD3D11.cmake", "VerifyFPSAuthoredScene.cmake"):
+            text = (REPO_ROOT / "Tests" / "PackageSmoke" / script_name).read_text(encoding="utf-8")
+            calls = text.count("CheckFPSVisibleFrame.ps1")
+            self.assertGreater(calls, 0, script_name)
+            self.assertEqual(text.count("-LogPath "), calls, script_name)
+            self.assertEqual(text.count("-ExpectedSceneDirectory "), calls, script_name)
 
     def test_installed_fps_d3d11_path_policy_contract(self) -> None:
         script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSD3D11.cmake"
