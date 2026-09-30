@@ -56,7 +56,8 @@ bool SparkGameDefaultModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    Spark::ModuleLog::Info(m_context, "[Default] Loading Spark Engine Showcase module...");
+    // cmake/RunSparkLinuxSDLConsoleStartup.cmake orders this OnLoad line against SimpleConsole startup.
+    Spark::ModuleLog::Info(m_context, "[Default] Loading SparkGame showcase module");
 
     // Initialize the gameplay showcase
     m_showcase = std::make_unique<GameplayShowcase>();
