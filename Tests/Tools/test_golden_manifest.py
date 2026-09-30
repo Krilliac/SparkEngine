@@ -366,9 +366,8 @@ class GoldenManifestDriftTests(unittest.TestCase):
 
     def test_pending_review_cannot_back_a_hardware_row(self) -> None:
         entry = copy_of(self.manifest()["entries"][0])
-        entry.update(backendRow="d3d11-hw", software=False)
-        self.assertIn("reviewer", entry)
-        self.assertIn(PENDING_REVIEW, entry["reviewer"])
+        # The live entries are owner-reviewed now; plant a pending record explicitly.
+        entry.update(backendRow="d3d11-hw", software=False, reviewer=f"agent capture; {PENDING_REVIEW}")
         errors = entry_errors(0, entry)
         self.assertEqual(1, len(errors), errors)
         self.assertIn("cannot back hardware row", errors[0])
