@@ -334,9 +334,17 @@ OD-24; broadening the comparator to hide them is not permitted.
 
 `tools/check_isa_baseline.py` scans Windows PE images when each is given its
 matching PDB (`--pdb IMAGE=PDB`) and LLVM's `llvm-objdump` and `llvm-pdbutil`
-are available; a missing or mismatched PDB is a tool error. `CpuFloor_IsaBaseline`
-is still registered for ELF trees only. Real MSVC Release images still carry
-three kinds of residual:
+are available; a missing or mismatched PDB is a tool error. On Windows MSVC,
+`cmake/SparkIsaBaseline.cmake` registers `CpuFloor_IsaBaseline` from the root
+`SPARK_SHIPPED_IMAGE_TARGETS` inventory when the distribution CPU floor applies.
+It pairs each configured image with that configuration's `TARGET_PDB_FILE`.
+The custom target works with `BUILD_TESTS=OFF`; Windows Shipping CI invokes it
+after building the products. With tests enabled it also registers a CTest.
+Missing tools, missing files and remaining findings fail the scan. Existing ELF
+registration remains in `Tests/CMakeLists.txt`.
+
+Real MSVC images still carry these residuals (including local MinSizeRel
+artifacts with LTO disabled):
 
 - libsodium's AVX2/AES-NI variants and `sodium_init`'s XGETBV, which the MSVC
   branch of `cmake/SparkLibsodium.cmake` compiles.
@@ -344,7 +352,8 @@ three kinds of residual:
   `__isa_available >= 6`. They appear in the STL's `__std_minmax_disp` and in
   `cgltf_calc_index_bound`.
 - MSVC x64 switch tables inside `.text` that happen to decode as above-floor
-  instructions.
+  instructions, and bytes the disassembler cannot decode. Neither is excused
+  without proof of which bytes are data.
 
 The per-image residuals are in `docs/readiness/BLD-100-PROGRESS.md`.
 
@@ -360,19 +369,24 @@ scoped to named ISA families and to reviewed provenance:
   `S_GPROC32` record.
 - **Exact procedure/module pairs.** `memcpy`/`memset` are exempt for AVX/AVX2.
   vcruntime's `__isa_available_init` and `Spark::Detail::ReadXcr0` are exempt
-  for XSAVE only.
+  for XGETBV only; other XSAVE-family instructions still fail.
 - **Guard dominance.** This covers CRT/STL code the headers inline into
   arbitrary procedures: UCRT `wmemchr`/`wmemcmp` behind `_Avx2WmemEnabled`
   (AVX/AVX2), and `<bit>` `countl_zero` behind `__isa_available >= 5`
   (LZCNT). Such an instruction is exempt when the guard edge is the only way to
   reach it from its procedure's entry. The analysis builds the procedure's
   control-flow graph from the disassembly. It fails closed on indirect jumps,
-  guards in callers, unmatched compare shapes and code with no procedure
-  record.
+  guards in callers, unmatched compare shapes, undecodable bytes and code with
+  no procedure record. Guard storage must fit inside the section's virtual
+  data extent, including the loader's zero-filled tail.
 
 The scanner reads raw instruction bytes, so an EVEX-encoded xmm instruction
-counts as AVX-512 and never as AVX. FMA, AVX-512, BMI, other extensions and
-unknown runtime functions remain failures everywhere. `--allow-symbol` affects ELF only. New toolchain or
+counts as AVX-512 and never as AVX. VAES, VPCLMULQDQ, GFNI and XOP rotations
+cannot inherit AVX/AVX2 exemptions; mask-register instructions include k0.
+LLVM's separate prefix records are joined only to contiguous instruction bytes.
+Undecodable bytes remain failures and are reported separately from identified
+above-floor instructions. FMA, AVX-512, BMI, other extensions and
+unknown runtime functions remain failures under these PE mechanisms. `--allow-symbol` affects ELF only. New toolchain or
 runtime variants need a new review.
 
 `CpuFloor_IsaBaselineChecker` covers linked PE fixtures, the PDB contribution

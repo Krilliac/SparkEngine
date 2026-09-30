@@ -163,14 +163,16 @@ Two further checks cover what configure-time flag checks cannot see:
   game-module images. `CpuFloor_IsaBaselineChecker` proves the scanner on ELF
   and PE fixtures built with and without the extensions.
   **Windows images are not scanned in CTest yet.** The image scan is
-  registered only for ELF toolchains. The scanner can check an MSVC image
+  registered for ELF and applicable Windows MSVC builds. The scanner checks an MSVC image
   against its PDB, with reviewed exemptions for the MSVC runtime's
   CPUID-dispatched code (see
   [CI-Reproducible-Builds](../development/CI-Reproducible-Builds.md)). The
   local Release images still contain libsodium's AVX2 and AES-NI variants,
   which the MSVC build of libsodium compiles, and AVX-512 loops that MSVC's
   auto-vectorizer adds behind a runtime `__isa_available` check. A registered
-  Windows scan would therefore fail.
+  Windows scan therefore fails until the product findings and undecodable
+  bytes are resolved. Shipping CI invokes the scan's custom target even with
+  `BUILD_TESTS=OFF`; it requires matching PDBs and LLVM tools.
 - **Startup check.** The `SparkEngine` (Windows and POSIX), `SparkEditor` and
   `SparkServer` entry points call
   `Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures())`

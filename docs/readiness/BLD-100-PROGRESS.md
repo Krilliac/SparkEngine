@@ -286,3 +286,124 @@ Debug/libc++ configuration. It checked the five Linux TUs that include
 `GameplayLifecycleShared.cpp`, `SparkEngineLinux.cpp`,
 `CpuNeuralInference.cpp`). The lane head and 256603c both give 2025
 diagnostics with identical per-check counts, so no budget entry changes.
+
+## 2026-09-30 continuation: fail-closed scan and Windows registration
+
+The three lane commits already ported onto `aecd0356343c20535c59807c9438c0409f9a34d1`
+were retained. Review of their scanner found failures that synthetic positive
+fixtures had missed:
+
+- Undecodable bytes were discarded, including between a guard comparison and
+  its branch. They could hide a newer ISA instruction or a flag/control-flow
+  change. They now fail the scan and invalidate guard reasoning for that
+  procedure. Reports distinguish undecodable bytes from identified ISA findings.
+- VAES, VPCLMULQDQ, GFNI and XOP rotations inherited AVX exemptions. They now
+  have separate feature classifications. AVX-512 mask operations using k0 are
+  classified too. The reviewed XSAVE procedure ranges now authorize XGETBV
+  only, not XSETBV or save/restore operations.
+- PDB guard offsets were not checked against section bounds. The whole
+  four-byte guard must now fit. A real SparkCooker PDB places its zero-valued
+  guard in the virtual, zero-filled tail of .data; that is valid data storage,
+  while executable ranges still require actual file bytes.
+- LLVM emits LOCK as a separate address record. The parser now joins only
+  contiguous prefix/instruction bytes, preserving the instruction entry address.
+  Orphan prefixes and undecodable following bytes still fail.
+- Procedure lookup walked every preceding procedure for instructions in gaps.
+  A prefix maximum of extent ends bounds that search without changing overlap
+  handling; regression coverage includes both gaps and nested extents.
+
+The new negative regressions were run against the old implementation and failed
+before each fix. Two existing expectations were strengthened: VAES is no longer
+classified as ordinary AVX, and undecodable records must remain failures rather
+than disappearing. No reviewed range, ISA exemption or readiness state was added.
+
+`cmake/SparkIsaBaseline.cmake` registers the Windows MSVC scan from the existing
+`SPARK_SHIPPED_IMAGE_TARGETS` inventory, using configuration-specific image/PDB
+pairs. It follows the existing distribution-floor applicability predicate.
+`CpuFloor_IsaBaseline` is both a custom target and, when `BUILD_TESTS=ON`, a
+CTest. The Windows Shipping CI job invokes the custom target even though its
+preset disables tests. Missing tools, PDBs or images fail; residual findings
+are no longer a reason to omit Windows registration. The generated build-matrix
+inventory was regenerated. Configuration-only fixtures use `LANGUAGES NONE`
+and capture registration arguments; they do not prove MSVC generator-expression
+resolution or a real build of the new custom target.
+
+### Actual Shipping artifact scans
+
+The existing `build/windows-shipping/CMakeCache.txt` identifies this worktree as
+its source, MinSizeRel, `SPARK_NATIVE_ARCH=OFF`, `BUILD_TESTS=OFF`, and
+`ENABLE_LTO=OFF`. No C++ build or CTest was run during this continuation. These
+previously linked artifacts establish local scanner behavior, not fresh
+same-commit or default-LTO Shipping qualification.
+
+Every existing product PE in `build/windows-shipping/bin/MinSizeRel` was scanned
+with LLVM and its matching PDB. Standalone SparkBuild test executables are not
+products in the authoritative shipped-image list. Results from the final scanner:
+
+| Image | Identified above-floor instructions | Undecodable records | Exit |
+|---|---:|---:|---:|
+| SparkAutomation.exe | 0 | 0 | 0 |
+| SparkBuild.exe | 0 | 1 | 1 |
+| SparkConsole.exe | 0 | 0 | 0 |
+| SparkCooker.exe | 0 | 76 | 1 |
+| SparkCrashReporter.exe | 0 | 70 | 1 |
+| SparkEditor.exe | 2800 | 1022 | 1 |
+| SparkEngine.exe | 2796 | 591 | 1 |
+| SparkGameFPS.dll | 959 | 448 | 1 |
+| SparkInstaller.exe | 0 | 55 | 1 |
+| SparkLauncher.exe | 2 | 205 | 1 |
+| SparkShaderCompiler.exe | 0 | 0 | 0 |
+| SparkWorker.exe | 0 | 0 | 0 |
+
+Commands, image/PDB/scanner SHA-256 hashes and per-image logs are retained locally
+under `build/isa-review/final.json` and `build/isa-review/*.final.log`. Findings
+include libsodium AES/AVX variants (including AVX-512 in `fill_block`), LZCNT
+helpers and data/instruction ambiguity inside .text. Their counts are decoder
+findings, not proof that each byte sequence is executable. Resolving the product
+code/build findings and proving code-versus-data boundaries remain necessary;
+silently excluding these bytes is not acceptable.
+
+### Verification commands for integration
+
+The focused Python and configuration-only suite passed locally, as did inventory
+currentness, standard `validate.py`, and `git diff --check`. `validate.py --docs`
+reported four errors for the absent generated `docs/api` root and its references
+from `docs/README.md`; the full documentation gate remains unverified here.
+
+Pure Python and configuration-only verification (no C++ compilation):
+
+```powershell
+python -B -m unittest Tests.Tools.test_check_isa_baseline.ClassifierTests Tests.Tools.test_pe_isa_ranges Tests.Tools.test_isa_guard_dominance Tests.Tools.test_isa_fail_closed Tests.Tools.test_isa_scan_registration -v
+python Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json --output build/isa-review/inventory-check.json
+python tools/site-data/validate.py
+git diff --check
+```
+
+For a RED control, load the original `f7c894bdb` scanner into the test module
+without changing the working tree, then run the new negative regressions:
+
+```powershell
+python -B -c "import subprocess,unittest; from Tests.Tools.test_check_isa_baseline import checker; old=subprocess.check_output(['git','show','f7c894bdb:tools/check_isa_baseline.py'],text=True); exec(compile(old,checker.__file__,'exec'),checker.__dict__); unittest.main(module='Tests.Tools.test_isa_fail_closed',argv=['red-control'])"
+```
+
+The corrected scanner makes that regression module GREEN. The actual product
+scan must remain RED until the residuals above are resolved. Definitive Windows
+MSVC integration, through the normal vcvars/build-preflight wrapper:
+
+```powershell
+cmake --preset windows-shipping -DENABLE_LTO=ON
+cmake --build build/windows-shipping --config MinSizeRel --target CpuFloor_IsaBaseline --parallel 1
+cmake --preset windows-release -DENABLE_LTO=ON
+cmake --build build/windows-release --config Release --target SparkTests CpuFloor_IsaBaseline --parallel 1
+ctest --test-dir build/windows-release -C Release -R '^CpuFloor_IsaBaseline(Checker)?$' --output-on-failure
+$env:SPARK_TEST_NAME='MultiISA_CpuFloor_'
+$env:SPARK_TEST_EXPECT_COUNT='7'
+& .\build\windows-release\bin\Release\SparkTests.exe --warn-is-error
+$env:SPARK_TEST_NAME=$null
+$env:SPARK_TEST_EXPECT_COUNT=$null
+```
+
+Shipping has `BUILD_TESTS=OFF`: its verification command is the custom target,
+not a CTest invocation that would select nothing. A clean LTO-on rebuild,
+compiled fixture suite, below-floor execution and exact-SHA hosted CI remain
+unverified. BLD-100 remains open.
