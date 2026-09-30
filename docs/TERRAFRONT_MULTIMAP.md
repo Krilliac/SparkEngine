@@ -287,7 +287,7 @@ This is safe to ship with zero risk to the single-continent path (every new
 branch is gated behind `host`/`port` being configured on the SERVER side,
 which is never true today) and exposes the redirect plumbing for isolated-root
 testing. It does not make two shared-state continent authorities
-production-ready; §2.3 remains a hard prerequisite.
+safe to run in production; §2.3 remains a hard prerequisite.
 
 ## 4. Known gaps (found during investigation, NOT fixed by this lane)
 

@@ -25,6 +25,7 @@ from common import (
     SCHEMA_VERSION,
     SiteDataError,
     canonical_json_bytes,
+    collect_document_sources as _collect_document_sources,
     extract_excerpt,
     extract_headings,
     extract_title,
@@ -467,28 +468,7 @@ def classify(source_path: str, catalog: dict[str, Any]) -> tuple[str, str, str]:
 
 
 def collect_document_sources(catalog: dict[str, Any]) -> list[Path]:
-    include = catalog["include"]
-    candidates: set[Path] = set()
-    for value in include.get("rootDocuments", []):
-        path = REPO_ROOT / value
-        if path.is_file():
-            candidates.add(path)
-    for value in include.get("recursiveMarkdownRoots", []):
-        root = REPO_ROOT / value
-        if root.is_file() and root.suffix.lower() == ".md":
-            candidates.add(root)
-        elif root.is_dir():
-            candidates.update(path for path in root.rglob("*.md") if path.is_file())
-
-    excluded_paths = set(catalog.get("excludePaths", []))
-    excluded_prefixes = tuple(catalog.get("excludePrefixes", []))
-    result = []
-    for path in candidates:
-        source_path = path.relative_to(REPO_ROOT).as_posix()
-        if source_path in excluded_paths or source_path.startswith(excluded_prefixes):
-            continue
-        result.append(path)
-    return sorted(result)
+    return _collect_document_sources(catalog, REPO_ROOT)
 
 
 def normalize_html(markdown: str) -> str:

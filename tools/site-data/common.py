@@ -61,6 +61,30 @@ class SiteDataError(RuntimeError):
     """A contract or generation error suitable for a concise CI message."""
 
 
+def collect_document_sources(catalog: dict[str, Any], repo_root: Path | None = None) -> list[Path]:
+    """The shared publication inventory for generation and public-claim validation."""
+    repo_root = REPO_ROOT if repo_root is None else repo_root
+    include = catalog["include"]
+    candidates = {
+        repo_root / value
+        for value in include.get("rootDocuments", [])
+        if (repo_root / value).is_file()
+    }
+    for value in include.get("recursiveMarkdownRoots", []):
+        root = repo_root / value
+        if root.is_file() and root.suffix.lower() == ".md":
+            candidates.add(root)
+        elif root.is_dir():
+            candidates.update(path for path in root.rglob("*.md") if path.is_file())
+    excluded_paths = set(catalog.get("excludePaths", []))
+    excluded_prefixes = tuple(catalog.get("excludePrefixes", []))
+    return sorted(
+        path for path in candidates
+        if path.relative_to(repo_root).as_posix() not in excluded_paths
+        and not path.relative_to(repo_root).as_posix().startswith(excluded_prefixes)
+    )
+
+
 MAX_CONTRACT_JSON_BYTES = 8 * 1024 * 1024
 
 

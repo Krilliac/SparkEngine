@@ -3410,6 +3410,110 @@ class PublicNumericClaimTests(ContractTestCase):
             validator.errors,
         )
 
+    def test_every_published_catalog_document_is_a_governed_claim_surface(self) -> None:
+        # RDY-000: the docs catalog publishes every Markdown file under its recursive
+        # roots, not just the root documents and wiki/, so each one is governed.
+        surfaces = site_data_validate.public_numeric_claim_surfaces()
+        for path in (
+            "SparkBuild/README.md",
+            "GameModules/README.md",
+            "docs/platform/LINUX-SUPPORT-EVIDENCE.md",
+            "docs/readiness/OWNER-DECISIONS.md",
+        ):
+            self.assertIn(path, surfaces)
+        # Generator-owned and catalog-excluded documents are not hand-written surfaces.
+        self.assertNotIn("docs/readiness/ENGINE_READINESS_HANDOFF.md", surfaces)
+        self.assertNotIn("CLAUDE.md", surfaces)
+        self.assertFalse([path for path in surfaces if path.startswith(("docs/api/", "ThirdParty/", ".claude/"))])
+
+    def test_governed_surfaces_cover_every_document_the_site_publishes(self) -> None:
+        catalog = json.loads((REPO_ROOT / "docs/site/docs-catalog.json").read_text(encoding="utf-8"))
+        published = {
+            path.relative_to(REPO_ROOT).as_posix() for path in site_data_generate.collect_document_sources(catalog)
+        }
+        generated = site_data_validate.generated_public_documents(REPO_ROOT, published)
+        self.assertEqual(published - generated - site_data_validate.public_numeric_claim_surfaces(), set())
+
+    def test_generated_handoff_cannot_hide_an_added_public_claim(self) -> None:
+        original_read = Path.read_text
+
+        def read(path, *args, **kwargs):
+            text = original_read(path, *args, **kwargs)
+            return text + "\nProduction-ready with 123456 modules.\n" if path == HANDOFF_PATH else text
+
+        with mock.patch.object(Path, "read_text", read), self.assertRaisesRegex(SiteDataError, "handoff.py"):
+            site_data_validate.validate_generated_public_documents(self.mutable)
+
+    def test_invalid_generated_api_provenance_is_rejected(self) -> None:
+        import docs_contract
+
+        published = {"docs/api/README.md"}
+        with mock.patch.object(site_data_validate, "published_catalog_documents", return_value=published), \
+                mock.patch.object(docs_contract, "validate_api_manifest", return_value=["manifest mismatch"]), \
+                self.assertRaisesRegex(SiteDataError, "manifest mismatch"):
+            site_data_validate.validate_generated_public_documents(self.mutable)
+
+    def test_generated_api_manifest_cannot_exempt_an_authored_directory(self) -> None:
+        manifest = {"generators": [{"id": "api-docs", "outputs": [{"path": "SparkBuild", "tree": True}]}]}
+        with mock.patch.object(site_data_validate, "load_json", return_value=manifest), \
+                self.assertRaisesRegex(SiteDataError, "differs from the site-data producer"):
+            site_data_validate.validate_generated_public_documents(self.mutable)
+
+    def test_catalog_discovery_honors_file_roots_and_exclusions(self) -> None:
+        catalog = {
+            "include": {
+                "rootDocuments": ["README.md", "CLAUDE.md", "README.md"],
+                "recursiveMarkdownRoots": ["docs/readiness/OWNER-DECISIONS.md", "docs/specs"],
+            },
+            "excludePaths": ["CLAUDE.md"],
+            "excludePrefixes": ["docs/specs/"],
+        }
+        self.assertEqual(
+            {"README.md", "docs/readiness/OWNER-DECISIONS.md"},
+            site_data_validate.published_catalog_documents(REPO_ROOT, catalog),
+        )
+        catalog["excludePrefixes"] = []
+        self.assertIn("docs/specs/telemetry.md", site_data_validate.published_catalog_documents(REPO_ROOT, catalog))
+
+    def test_claims_in_a_published_non_wiki_document_are_rejected(self) -> None:
+        source = REPO_ROOT / "SparkBuild/README.md"
+        original_read = Path.read_text
+
+        def read(path, *args, **kwargs):
+            text = original_read(path, *args, **kwargs)
+            return text + "\nToggle 123456 modules.\n" if path == source else text
+
+        with mock.patch.object(Path, "read_text", read):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_public_numeric_claims()
+        self.assertTrue(
+            any(
+                error.startswith("SparkBuild/README.md:") and "unclaimed numeric claim '123456 modules'" in error
+                for error in validator.errors
+            ),
+            validator.errors,
+        )
+
+    def test_profile_wording_in_a_published_non_wiki_document_is_rejected(self) -> None:
+        source = REPO_ROOT / "docs/platform/LINUX-SUPPORT-EVIDENCE.md"
+        original_read = Path.read_text
+
+        def read(path, *args, **kwargs):
+            text = original_read(path, *args, **kwargs)
+            return text + "\nThe Linux port is production-ready.\n" if path == source else text
+
+        with mock.patch.object(Path, "read_text", read):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_discovered_public_claims()
+        self.assertTrue(
+            any(
+                error.startswith("docs/platform/LINUX-SUPPORT-EVIDENCE.md:")
+                and "forbidden unqualified claim" in error
+                for error in validator.errors
+            ),
+            validator.errors,
+        )
+
     def test_claims_on_an_unlisted_wiki_page_are_rejected(self) -> None:
         errors = self.claim_errors(
             {"wiki/advanced/New-Public-Page.md": "The page describes 12 panels.\n"},

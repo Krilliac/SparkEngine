@@ -41,7 +41,7 @@ Vulkan SDK was found).
   `SparkEditor`, `SparkConsole`, `SparkServer`, `SparkGateway`, `SparkDaemon`,
   `SparkLauncher`, `SparkInstaller`, `SparkBuild`, `SparkCooker`,
   `SparkWorker`, `SparkAutomation`, `SparkShaderCompiler`,
-  `SparkCrashReporter`, and all 11 game modules (`lib*.so` + `.sparkabi`).
+  `SparkCrashReporter`, and all in-tree game modules (`lib*.so` + `.sparkabi`).
   The build emitted 713 compiler warnings, none fatal.
 * **Known broken: `SparkTests` fails to link** with the preset as shipped:
   `multiple definition of ...` (thousands of symbols, reported as
@@ -72,7 +72,7 @@ the base source before this run). "After" means head `3e5da14` (the same fixes o
 | Suite | Before | After | Rebased |
 |---|---|---|---|
 | CTest entries | **83 / 83 passed**, 0 failed, 0 not run (65.6 s) | **83 / 83 passed**, 0 failed, 0 not run (63.2 s) | **86 / 86 passed** (base added 3 entries; 63.9 s) |
-| `SparkEngineTests` (in-binary tests, JUnit) | 7277 run, **0 failed, 9 skipped** | 7289 run (+12 new PLT-210 tests), **0 failed, 9 skipped** | 7306 run, **0 failed, 9 skipped**; all 12 PLT-210 tests pass |
+| `SparkEngineTests` (in-binary tests, JUnit) | 7277 run, **0 failed, 9 skipped** | 7289 run (including the new PLT-210 coverage), **0 failed, 9 skipped** | 7306 run, **0 failed, 9 skipped**; every PLT-210 test passes |
 | `SparkEngineLoadTests` (load lane) | 22 / 22 | 22 / 22 | 22 / 22 |
 
 The 9 skips are the same in all three runs. After the rebase the stock `SparkTests` link still fails the same way (two whole-archive groups). All are declared skips:
@@ -94,7 +94,7 @@ running the real executables, not by the suite.
 | 3 | **Detached children were never reaped.** Each one stayed a zombie of the launcher (3 zombies in the pre-fix harness). | Double fork: the intermediate child is reaped and the grandchild is re-parented to init. | `PLT210_ProcessPosix_DetachedChildLeavesNoZombie` |
 | 4 | **Detached children inherited the launcher's stdio.** `SparkCrashReporter` (launched detached by the engine) held the engine's stdout, so a supervisor reading stdout to EOF **hung forever**: the reporter waits for an engine PID that stays a zombie until the supervisor calls `waitpid`. | Uncaptured stdio of a detached child goes to `/dev/null`. `ProcessLinux.cpp`. | `PLT210_ProcessPosix_DetachedChildDoesNotHoldLauncherStdout`, and end to end in `PLT210_Module_MMOFPSLoadsInHeadlessEngine` (which hung before this fix) |
 | 5 | **`SparkConsole --engine-pipe` fed its own display back to the engine as commands.** Its prompt, key echo, engine-log echo, duplicate notices and results went to stdout, which is the engine's command channel. The pipe-mode keyboard thread also read stdin, which is the engine's log pipe. Each 120-frame headless run logged **107–186 `Unknown command`** results, and engine error messages (e.g. module load failures) were consumed instead of shown. | In `SparkConsole/src/ConsoleApp.cpp` (POSIX branches), display output goes to stderr (batch mode keeps stdout), and keyboard input is read from `/dev/tty`, disabled when there is no controlling terminal. After the fix, **0** `Unknown command` in every run. | `PLT210_SparkConsole_EnginePipeStdoutCarriesOnlyCommands` (launches the built `SparkConsole` the way the engine does) |
-| 6 | **`libSparkGameMMOFPS.so` failed `dlopen(RTLD_NOW)`**: `undefined symbol GraphicsEngine::SetBasicBlendMode` (also `SetBasicDepthMode` and `GetOrCreateSoftCircleShadowSRV`). They were declared for all platforms but defined only in the D3D11 source. | Linux definitions following the existing basic-path no-op/`nullptr` pattern, in `SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp`. A symbol audit (`nm -D`) of all 11 modules against the engine executable now shows no unresolved engine symbols. | `PLT210_Module_MMOFPSLoadsInHeadlessEngine` (real engine + `-require-game`), `PLT210_GraphicsBasicPath_MMOFPSSurfaceDefinedOnLinux` |
+| 6 | **`libSparkGameMMOFPS.so` failed `dlopen(RTLD_NOW)`**: `undefined symbol GraphicsEngine::SetBasicBlendMode` (also `SetBasicDepthMode` and `GetOrCreateSoftCircleShadowSRV`). They were declared for all platforms but defined only in the D3D11 source. | Linux definitions following the existing basic-path no-op/`nullptr` pattern, in `SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp`. A symbol audit (`nm -D`) of all in-tree modules against the engine executable now shows no unresolved engine symbols. | `PLT210_Module_MMOFPSLoadsInHeadlessEngine` (real engine + `-require-game`), `PLT210_GraphicsBasicPath_MMOFPSSurfaceDefinedOnLinux` |
 | 7 | **Every AngelScript build failed on x86-64 System V**: "Don't support returning type 'Vector3' by value from application in native calling convention on this platform". `XMFLOAT3` is returned in XMM registers there and was registered without `asOBJ_APP_CLASS_ALLFLOATS`. This blocked `SparkGameVisualScript`. | Add `asOBJ_APP_CLASS_ALLFLOATS` in `SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp` `RegisterMathTypes` (other platforms ignore the flag). | `PLT210_AngelScript_Vector3ReturnByValueCompiles` and `..._Vector3ReturnedValuesSurviveNativeCall` (both **failed** on the base and pass after; the second round-trips real `Transform` values through native calls) |
 
 Also checked and found clean: no case-mismatched `#include "..."` paths
@@ -157,9 +157,9 @@ Notes:
   plus this change (local, not CI):
   * From `bin/`: `xvfb-run -a env SPARK_RHI_BACKEND=opengl ./SparkEngine -game
     $PWD/libSparkGameFPS.so -require-game -test-frames 30 -no-subprocess`
-    exits 0 on "OpenGL 4.5 (Core Profile) Mesa 25.2.8 … llvmpipe". It logs
-    exactly one "Initialized on Linux via RHI (OpenGL)" and no NullRHI
-    selection.
+    exits 0 on "OpenGL 4.5 (Core Profile) Mesa 25.2.8 … llvmpipe" rather
+    than NullRHI: it logs exactly one "Initialized on Linux via RHI (OpenGL)"
+    and no NullRHI selection.
   * The same command with `DISPLAY` unset and no Xvfb exits 1. SDL picks its
     `offscreen` driver, which reports "SDL_CreateWindow failed: Could not load
     EGL library", and the refusal follows.
@@ -272,7 +272,7 @@ The `linux-shipping` preset (MinSizeRel, `STRIP_DEBUG_SYMBOLS=ON`) was also
 configured and built locally, with `-DSPARK_GAME_MODULES=SparkGameFPS` to
 limit build time, and its install was checked. The script ran once in install
 mode and once in standalone mode on that prefix, and both passed. The prefix
-held 36 ELF images, including 18 split `symbols/*.debug` files, and 1 module
+held 36 ELF images, including 18 split `symbols/*.debug` files, and one module
 sidecar. It resolved the same host libraries as the table above, and the
 installed run printed the same records. The full 11-module shipping set was
 not built.
@@ -389,7 +389,7 @@ slice's working-tree changes (the commit that adds this section). Same host as
 §1 (gVisor, 4 vCPU, no GPU), GCC 13.3.0, CMake 4.4.3, Python 3.11.15, Unix
 Makefiles, ccache.
 
-**What the runs check.** The `nullrhi-headless` label (12 tests): the strict
+**What the runs check.** The `nullrhi-headless` label: the strict
 lifecycle parser and `NullRHI_Linux_FPSLifecycle`; the shutdown harness
 (`HeadlessShutdown_Graceful`, `_ForcedRecovery`, `_BootInterrupted`, i.e.
 SIGTERM, SIGKILL-then-restart and kill-during-boot); `NullRHIResourceLifetime`
@@ -507,11 +507,11 @@ install-closure run (the full test suite ran on GCC 13 Release only); distributi
 ## 9. Bounded support statement
 
 On **Ubuntu 24.04 x86-64 with GCC 13.3 in Release**, SparkEngine **builds**
-(all product targets and 11 game modules). Its **test suite passes** (83/83
-CTest entries, 7289 in-binary tests, 0 failures), but only when `SparkTests`
+(all product targets and the in-tree game modules). Its **test suite passes** (83/83
+CTest entries, 0 failures; in-binary results are in §2), but only when `SparkTests`
 is relinked around the CMake 3.28 duplicate whole-archive defect. **Headless
-runtime** loads 10 of 11 game modules end to end, and the eleventh
-(`SparkGameVisualScript`) loads once its assets are staged. The **editor starts
+runtime** loads the game modules end to end; `SparkGameVisualScript` needs its
+assets staged first. The **editor starts
 on Mesa software OpenGL**. Linux engine rendering, packaging, installation,
 GPUs, audio and input are **unverified**. Linux therefore remains
 **experimental / not certified**, and must not be summarized as supported.

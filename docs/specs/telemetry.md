@@ -61,7 +61,7 @@ The validator pins the supplied non-reparse root; accepts only immediate `teleme
 
 JSON is strict UTF-8 with duplicate keys, non-finite numbers, excessive depth, excessive collections, and oversized strings rejected. Events require `name`, `timestamp`, `sessionId`, and `properties`; timestamps and optional sequences must be true uint64 integers (not booleans or floats); properties must be a bounded string-to-string object. Filename time and filesystem modification time are checked independently for retention and future skew. The shared secret policy covers GitHub, AWS, OpenAI, Anthropic, bearer/URL/PEM, and structured credential fields without printing secret previews.
 
-The validator's 50 MiB aggregate, 1 MiB file, 1,000-entry, seven-day retention, event/property, archive, and wall-time limits are **Python-only offline policy** for exported `telemetry_*.json` files. The C++ runtime does not enforce those export-file retention limits. Passing this tool is not evidence of outage recovery, durable retry, drop accounting, or consent correctness; the C++ tests above are the evidence for those.
+The validator's 50 MiB aggregate, 1 MiB per-file, 1,000-entry, seven-day retention, event/property, archive, and wall-time limits are **Python-only offline policy** for exported `telemetry_*.json` files. The C++ runtime does not enforce those export-file retention limits. Passing this tool is not evidence of outage recovery, durable retry, drop accounting, or consent correctness; the C++ tests above are the evidence for those.
 
 ## OPS-100 blockers
 

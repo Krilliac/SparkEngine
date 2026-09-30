@@ -26,7 +26,7 @@ Approved by the project owner (Krilliac) in the release-readiness session on
 | OD-07 | DATA-120 | SQLite remains the production persistence adapter. | The encryption-at-rest and secret owner is still unassigned; this decision does not cover it. |
 | OD-08 | NET-110 | Identity, matchmaking, fleet, entitlement and billing services are out of engine scope. | Document the service boundary; the engine ships no hosted online services. |
 | OD-09 | RDY-020 | The TERRAFRONT assets without recorded provenance (`NOASSERTION`) are excluded from the stable-v1 package. | Packaging and the stable-v1 asset manifest must not include them; their provenance stays an open question outside stable-v1. |
-| OD-10 | PLT-210 | Linux support row is Ubuntu 24.04 LTS, x86-64 only. | Other distributions and ARM64 are unsupported for stable-v1. |
+| OD-10 | PLT-210 | Linux support row is Ubuntu 24.04 LTS, x86-64 only. | Other distributions and ARM64 are unsupported in that row. Linux stays experimental and outside stable-v1. |
 | OD-11 | PLT-220 | macOS is deferred from stable-v1. If pursued later, Apple Silicon only. | macOS stays experimental; no macOS certification work for stable-v1. |
 | OD-12 | PLT-230, PLT-240, PLT-250 | Mobile, OpenXR and console support are deferred from stable-v1. | These items record a deferral; no platform work is scheduled for stable-v1. |
 | OD-13 | ENG-200 | ENG-200 is scheduled after the stable-v1 items. | No stable-v1 capacity is assigned to it. |
