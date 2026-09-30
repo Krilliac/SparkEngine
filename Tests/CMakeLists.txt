@@ -2149,7 +2149,7 @@ set_tests_properties(TelemetrySpool PROPERTIES
 # linked mod directories refused, and mod folder names outside the ANSI code page scanned.
 add_test(NAME SparkSEC3GameplayHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkSEC3GameplayHardening PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=17"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=18"
     LABELS "security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)

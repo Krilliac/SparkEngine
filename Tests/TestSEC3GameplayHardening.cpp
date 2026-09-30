@@ -9,7 +9,8 @@
 //       sandboxed loader runs.
 //   #12 ReplaySystem::LoadFromFile resized frames/entities/events to header counts before
 //       checking that the file actually held them. It also accepted any version, a NaN or
-//       negative duration, unsorted frame timestamps and non-finite entity/event values
+//       negative duration, unsorted frame timestamps and non-finite entity/event values,
+//       and SaveToFile wrote files that the loader then refused
 //       (SEC-120 replay-system fuzz target).
 //   #13 StringTable::LoadFromFile read files of any size and scanned them with a recursive
 //       std::regex that a single long value could drive into stack exhaustion.
@@ -445,6 +446,29 @@ TEST(SEC3Gameplay_ReplayRejectsCountsBeyondFileSize)
         EXPECT_FALSE(replay.LoadFromFile(path.string()));
         EXPECT_TRUE(log.Contains("1000000 events"));
     }
+}
+
+TEST(SEC3Gameplay_ReplayWriterRejectsUnreloadableMetadata)
+{
+    ScratchDir dir("replay_write_limit");
+    const fs::path path = dir.path / "metadata.replay";
+    Spark::ReplaySystem writer;
+    writer.SetMetadata(std::string(Spark::kMaxStringLength + 1, 'm'), "mode");
+    writer.StartRecording();
+    writer.RecordFrame({}, 0.0f);
+    writer.StopRecording();
+
+    // The old writer reported success even though the loader refused this string length.
+    LogCapture log;
+    EXPECT_FALSE(writer.SaveToFile(path.string()));
+    EXPECT_FALSE(fs::exists(path));
+    EXPECT_TRUE(log.Contains("loadable version-1 format limits"));
+
+    writer.SetMetadata("map", "mode");
+    ASSERT_TRUE(writer.SaveToFile(path.string()));
+    Spark::ReplaySystem reader;
+    ASSERT_TRUE(reader.LoadFromFile(path.string()));
+    EXPECT_EQ(reader.GetFrameCount(), size_t{1});
 }
 
 TEST(SEC3Gameplay_ReplayRoundTripStillLoads)

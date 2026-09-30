@@ -393,8 +393,7 @@ namespace Spark
         /// breaks std::clamp's precondition in SeekTo and the kill cam and keeps UpdatePlayback
         /// from ever reaching the end; unsorted or NaN frame timestamps break FindFrameIndex's
         /// std::lower_bound; non-finite entity and event values would reach the renderer and
-        /// camera. SaveToFile only writes timelines that pass (recording keeps frames ascending
-        /// and sets the duration to the last frame's timestamp).
+        /// camera. SaveToFile also checks this before writing.
         bool IsPlayableReplay(const ReplayData& data)
         {
             if (!std::isfinite(data.duration) || data.duration < 0.0f)
@@ -429,11 +428,46 @@ namespace Spark
             return true;
         }
 
+        /// Refuse to write a file that the bounded version-1 loader would reject (version, string
+        /// lengths, counts, timeline and values). Checked before opening the destination, so a
+        /// refused save leaves any existing file alone.
+        bool IsWritableReplay(const ReplayData& data)
+        {
+            if (data.version != kReplayVersion || data.mapName.size() > kMaxStringLength ||
+                data.gameMode.size() > kMaxStringLength || data.frames.size() > kMaxFrameCount ||
+                data.events.size() > kMaxEventCount)
+            {
+                return false;
+            }
+            for (const ReplayFrame& frame : data.frames)
+            {
+                if (frame.entities.size() > kMaxEntityCount)
+                {
+                    return false;
+                }
+            }
+            for (const ReplayEvent& event : data.events)
+            {
+                if (event.type.size() > kMaxStringLength || event.data.size() > kMaxStringLength)
+                {
+                    return false;
+                }
+            }
+            return IsPlayableReplay(data);
+        }
+
     } // anonymous namespace
 
     bool ReplaySystem::SaveToFile(const std::string& filePath) const
     {
         std::lock_guard lock(m_mutex);
+
+        if (!IsWritableReplay(m_data))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "ReplaySystem::SaveToFile: replay exceeds the loadable version-1 format limits");
+            return false;
+        }
 
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open())
