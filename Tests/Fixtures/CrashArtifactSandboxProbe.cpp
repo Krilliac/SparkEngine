@@ -56,7 +56,7 @@ namespace
     int Fail(int code, const char* step)
     {
         std::fprintf(stderr, "[CrashArtifactSandboxProbe] FAIL %s (exit %d, GetLastError=%lu)\n", step, code,
-                     GetLastError());
+                     static_cast<unsigned long>(GetLastError()));
         return code;
     }
 
@@ -260,7 +260,7 @@ namespace
     {
         const TokenFacts facts = ReadTokenFacts();
         std::fprintf(stdout, "[CrashArtifactSandboxProbe] %s: appContainer=%d integrity=0x%lx\n", kind,
-                     facts.appContainer ? 1 : 0, facts.integrityRid);
+                     facts.appContainer ? 1 : 0, static_cast<unsigned long>(facts.integrityRid));
         if (requireSandbox && (!facts.tokenQueryValid || !facts.appContainerQueryValid || !facts.integrityQueryValid))
         {
             return Fail(kNotSandboxed, "child token identity queries did not complete");
@@ -430,7 +430,8 @@ namespace
             exitCode = kChildLaunchFailed;
         }
         CloseHandle(process.hProcess);
-        std::fprintf(stdout, "[CrashArtifactSandboxProbe] %s child exit=%lu\n", kind, exitCode);
+        std::fprintf(stdout, "[CrashArtifactSandboxProbe] %s child exit=%lu\n", kind,
+                     static_cast<unsigned long>(exitCode));
         return static_cast<int>(exitCode);
     }
 
