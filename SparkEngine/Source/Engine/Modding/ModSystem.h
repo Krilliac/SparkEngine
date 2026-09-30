@@ -222,7 +222,7 @@ namespace Spark
 
         /// Upper bound on a mod manifest or mod config file. A manifest is a hand-written
         /// document; 64 KB matches DynamicPluginHost's kMaximumMetadataBytes.
-        static constexpr std::size_t kMaxManifestBytes = 64u * 1024u;
+        static constexpr std::size_t kMaxManifestBytes = std::size_t{64} * std::size_t{1024};
 
       private:
         /// Parses manifest bytes already read from the mod directory. @p path only labels
