@@ -24,9 +24,9 @@ namespace Spark
     namespace
     {
         /// A mod manifest / mod config is a hand-written document, never a data
-        /// dump. 64 KB matches DynamicPluginHost's kMaximumMetadataBytes; depth 16
-        /// is far above the two levels these documents actually use.
-        constexpr size_t MAX_MOD_JSON_BYTES = 64u * 1024u;
+        /// dump (see ModSystem::kMaxManifestBytes); depth 16 is far above the two
+        /// levels these documents actually use.
+        constexpr size_t MAX_MOD_JSON_BYTES = ModSystem::kMaxManifestBytes;
         constexpr Json::JsonLimits MOD_JSON_LIMITS{.maxBytes = MAX_MOD_JSON_BYTES, .maxDepth = 16u, .maxNodes = 4096u};
 
         /// A mod id is a map key, a log argument, a SaveConfig field and a UI label, so it
@@ -47,12 +47,12 @@ namespace Spark
                                });
         }
 
-        /// Read a manifest whole, refusing an oversized file from its directory
-        /// entry BEFORE any of its bytes are pulled into memory. A mod directory is
-        /// untrusted input: without this a 4 GB mod.json is read into a std::string
-        /// and then into a Value tree several times larger before any field is
-        /// inspected.
-        bool ReadModManifestFile(const std::string& path, std::string& outContent)
+        /// Read the mod config file whole, refusing an oversized file from its
+        /// directory entry BEFORE any of its bytes are pulled into memory. The config
+        /// path is engine configuration, not the untrusted mods tree, so it is opened
+        /// by path; mod manifests are read by ScanForMods through the held mods-root
+        /// handle instead (ModSystem.cpp).
+        bool ReadModConfigFile(const std::string& path, std::string& outContent)
         {
             // Engine path strings are UTF-8; the narrow std::filesystem / fstream constructors
             // would decode them in the Windows ANSI code page and miss a non-ASCII mod folder.
@@ -140,7 +140,7 @@ namespace Spark
         SPARK_LOG_INFO(Spark::LogCategory::Game, "ModSystem::LoadConfig from '%s'", filePath.c_str());
 
         std::string content;
-        if (!ReadModManifestFile(filePath, content))
+        if (!ReadModConfigFile(filePath, content))
         {
             return false;
         }
@@ -195,14 +195,8 @@ namespace Spark
         return true;
     }
 
-    bool ModSystem::ParseModJson(const std::string& path, ModInfo& info)
+    bool ModSystem::ParseModJson(const std::string& content, const std::string& path, ModInfo& info)
     {
-        std::string content;
-        if (!ReadModManifestFile(path, content))
-        {
-            return false;
-        }
-
         Json::Value root;
         std::string parseError;
         if (!Json::ParseBounded(content, MOD_JSON_LIMITS, &root, &parseError))

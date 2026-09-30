@@ -26,6 +26,7 @@
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#include <cstddef>
 #include <cstdint>
 
 namespace Spark
@@ -91,7 +92,11 @@ namespace Spark
      *          preview image, dependencies, path) of a known mod but never its load
      *          state: enabled, loaded, loadOrder and ModState are kept, so an Active mod
      *          stays Active and UnloadAll still unloads it. Mods absent from the
-     *          directory stay registered.
+     *          directory stay registered. The mods root is held open for the whole scan
+     *          and each manifest is opened relative to it without following links; the
+     *          checks that decide acceptance are made on the opened handles, so a mod
+     *          directory or mod.json swapped for a link after the path checks is refused
+     *          rather than read through.
      * @param modsDirectory Path to scan (e.g. "Data/Mods/").
      * @return Number of mod ids this scan published.
      */
@@ -202,9 +207,29 @@ namespace Spark
         /** @brief List all mods (console integration). */
         std::string Console_ListMods() const;
 
-      private:
-        bool ParseModJson(const std::string& path, ModInfo& info);
+        // --- Test seam ---
 
+        /**
+     * @brief Install a probe ScanForMods calls for each candidate mod directory after the
+     *        directory and its mod.json passed the path-level checks and immediately before
+     *        the manifest is opened.
+     * @details The probe receives the UTF-8 path of the mod directory. It exists so a test
+     *          can replay a concurrent swap of the directory or its mod.json inside the
+     *          check-to-use window deterministically instead of racing a second thread.
+     *          Production code never installs one. Pass an empty function to remove it.
+     */
+        void SetManifestOpenProbeForTesting(std::function<void(const std::string&)> probe);
+
+        /// Upper bound on a mod manifest or mod config file. A manifest is a hand-written
+        /// document; 64 KB matches DynamicPluginHost's kMaximumMetadataBytes.
+        static constexpr std::size_t kMaxManifestBytes = std::size_t{64} * std::size_t{1024};
+
+      private:
+        /// Parses manifest bytes already read from the mod directory. @p path only labels
+        /// log messages; nothing is reopened by it.
+        bool ParseModJson(const std::string& content, const std::string& path, ModInfo& info);
+
+        std::function<void(const std::string&)> m_manifestOpenProbe;
         std::unordered_map<std::string, ModInfo> m_mods;
         std::unordered_map<std::string, ModState> m_modStates;
         std::vector<std::function<void(const std::string&)>> m_loadCallbacks;

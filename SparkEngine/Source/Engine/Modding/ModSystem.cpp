@@ -11,6 +11,7 @@
 #include "../../Utils/Validate.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -29,6 +30,11 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 namespace Spark
@@ -36,6 +42,319 @@ namespace Spark
 
     namespace
     {
+        /// Outcome of reading one mod's manifest through the held mods-root handle.
+        enum class ManifestRead : std::uint8_t
+        {
+            Read,    ///< The manifest bytes were read from a plain file inside a plain mod directory
+            Missing, ///< The mod directory holds no mod.json (any more)
+            Refused  ///< A link, a non-regular file, an escape, an oversized file or an I/O error
+        };
+
+#ifdef _WIN32
+        /// Owns one Win32 handle.
+        class ScopedHandle
+        {
+          public:
+            explicit ScopedHandle(HANDLE handle) : m_handle(handle) {}
+            ~ScopedHandle()
+            {
+                if (IsValid())
+                {
+                    ::CloseHandle(m_handle);
+                }
+            }
+            ScopedHandle(const ScopedHandle&) = delete;
+            ScopedHandle& operator=(const ScopedHandle&) = delete;
+            ScopedHandle(ScopedHandle&& other) noexcept : m_handle(other.m_handle)
+            {
+                other.m_handle = INVALID_HANDLE_VALUE;
+            }
+            ScopedHandle& operator=(ScopedHandle&&) = delete;
+
+            [[nodiscard]] HANDLE Get() const { return m_handle; }
+            [[nodiscard]] bool IsValid() const { return m_handle != nullptr && m_handle != INVALID_HANDLE_VALUE; }
+
+          private:
+            HANDLE m_handle;
+        };
+
+        /// NT-namespace final path of an open handle, or empty when it cannot be queried.
+        std::wstring FinalPathOf(HANDLE handle)
+        {
+            std::wstring buffer(512, L'\0');
+            for (;;)
+            {
+                const DWORD length = ::GetFinalPathNameByHandleW(
+                    handle, buffer.data(), static_cast<DWORD>(buffer.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+                if (length == 0)
+                {
+                    return {};
+                }
+                if (length < buffer.size())
+                {
+                    buffer.resize(length);
+                    return buffer;
+                }
+                buffer.resize(static_cast<size_t>(length) + 1);
+            }
+        }
+
+        /// True when @p child names an entry directly inside @p parent (both final paths).
+        bool IsDirectChildPath(const std::wstring& child, std::wstring parent)
+        {
+            while (!parent.empty() && parent.back() == L'\\')
+            {
+                parent.pop_back();
+            }
+            return !parent.empty() && child.size() > parent.size() + 1 &&
+                   child.compare(0, parent.size(), parent) == 0 && child[parent.size()] == L'\\' &&
+                   child.find(L'\\', parent.size() + 1) == std::wstring::npos;
+        }
+
+        /// Opens a directory for listing without following a reparse point in its last component
+        /// (unless @p allowReparse) and without FILE_SHARE_DELETE, which pins it: while the
+        /// handle is open the directory cannot be renamed, deleted or replaced.
+        ScopedHandle OpenPinnedDirectory(const std::filesystem::path& path, bool allowReparse)
+        {
+            const DWORD flags = FILE_FLAG_BACKUP_SEMANTICS | (allowReparse ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
+            ScopedHandle handle(::CreateFileW(path.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, flags,
+                                              nullptr));
+            if (!handle.IsValid())
+            {
+                return ScopedHandle(INVALID_HANDLE_VALUE);
+            }
+            BY_HANDLE_FILE_INFORMATION info{};
+            if (!::GetFileInformationByHandle(handle.Get(), &info) ||
+                (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+                (!allowReparse && (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0))
+            {
+                return ScopedHandle(INVALID_HANDLE_VALUE);
+            }
+            return handle;
+        }
+#else
+        /// Owns one POSIX file descriptor.
+        class ScopedFd
+        {
+          public:
+            explicit ScopedFd(int fd) : m_fd(fd) {}
+            ~ScopedFd()
+            {
+                if (m_fd >= 0)
+                {
+                    ::close(m_fd);
+                }
+            }
+            ScopedFd(const ScopedFd&) = delete;
+            ScopedFd& operator=(const ScopedFd&) = delete;
+            ScopedFd(ScopedFd&&) = delete;
+            ScopedFd& operator=(ScopedFd&&) = delete;
+
+            [[nodiscard]] int Get() const { return m_fd; }
+
+          private:
+            int m_fd;
+        };
+#endif
+
+        /// Holds the canonical mods root open for one scan and reads each mod's manifest
+        /// through it. Every acceptance decision is made on what was actually opened, and the
+        /// bytes are read from that same handle. POSIX opens the mod directory with openat()
+        /// relative to the held root fd and mod.json relative to that directory fd, both
+        /// O_NOFOLLOW, then fstat()s the file. Windows pins the root and the mod directory with
+        /// handles that deny FILE_SHARE_DELETE (so neither can be renamed or replaced while
+        /// open), opens both without following a reparse point, and checks attributes and final
+        /// paths on the handles. The path checks in AcceptedModManifest are only an early,
+        /// well-logged reject; a swap after them is caught here instead of being read through.
+        class ModsRootReader
+        {
+          public:
+            explicit ModsRootReader(const std::filesystem::path& canonicalRoot)
+#ifdef _WIN32
+                : m_root(canonicalRoot), m_handle(OpenPinnedDirectory(canonicalRoot, /*allowReparse=*/true))
+            {
+                if (m_handle.IsValid())
+                {
+                    m_final = FinalPathOf(m_handle.Get());
+                }
+            }
+#else
+                : m_handle(::open(canonicalRoot.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC))
+            {
+            }
+#endif
+
+            [[nodiscard]] bool IsOpen() const
+            {
+#ifdef _WIN32
+                return m_handle.IsValid() && !m_final.empty();
+#else
+                return m_handle.Get() >= 0;
+#endif
+            }
+
+            /// Reads <root>/@p directoryName/mod.json into @p content, bounded to
+            /// ModSystem::kMaxManifestBytes. @p display labels log messages only.
+            ManifestRead Read(const std::filesystem::path& directoryName, const std::string& display,
+                              std::string& content) const;
+
+          private:
+            static ManifestRead Refuse(const std::string& display, const char* why)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "ModSystem: refusing mod '%s': %s", display.c_str(), why);
+                return ManifestRead::Refused;
+            }
+
+#ifdef _WIN32
+            std::filesystem::path m_root;
+            ScopedHandle m_handle;
+            std::wstring m_final;
+#else
+            ScopedFd m_handle;
+#endif
+        };
+
+#ifdef _WIN32
+        ManifestRead ModsRootReader::Read(const std::filesystem::path& directoryName, const std::string& display,
+                                          std::string& content) const
+        {
+            // The pinned mod directory cannot be renamed or replaced while it is open, and it
+            // must still be a plain (non-reparse) directory directly inside the pinned root.
+            const ScopedHandle directory = OpenPinnedDirectory(m_root / directoryName, /*allowReparse=*/false);
+            if (!directory.IsValid())
+            {
+                return Refuse(display, "the mod directory is no longer a plain directory");
+            }
+            const std::wstring directoryFinal = FinalPathOf(directory.Get());
+            if (!IsDirectChildPath(directoryFinal, m_final))
+            {
+                return Refuse(display, "the mod directory no longer resolves directly inside the mods root");
+            }
+
+            const std::filesystem::path manifestPath = m_root / directoryName / L"mod.json";
+            const ScopedHandle file(::CreateFileW(manifestPath.c_str(), GENERIC_READ,
+                                                  FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                                  FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+            if (!file.IsValid())
+            {
+                const DWORD error = ::GetLastError();
+                if (error == ERROR_FILE_NOT_FOUND)
+                {
+                    return ManifestRead::Missing;
+                }
+                return Refuse(display, "mod.json cannot be opened");
+            }
+            BY_HANDLE_FILE_INFORMATION info{};
+            if (::GetFileType(file.Get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(file.Get(), &info) ||
+                (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0)
+            {
+                return Refuse(display, "mod.json is a link or not a regular file");
+            }
+            if (!IsDirectChildPath(FinalPathOf(file.Get()), directoryFinal))
+            {
+                return Refuse(display, "mod.json does not resolve inside the mod directory");
+            }
+            const std::uint64_t size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U) | info.nFileSizeLow;
+            if (size > ModSystem::kMaxManifestBytes)
+            {
+                return Refuse(display, "mod.json is above the manifest size limit");
+            }
+
+            // The size above is a fast reject; the read itself is bounded to one byte past the
+            // limit, which is what caps memory if the file grows while it is read.
+            content.assign(ModSystem::kMaxManifestBytes + 1, '\0');
+            size_t total = 0;
+            while (total < content.size())
+            {
+                DWORD got = 0;
+                const DWORD request = static_cast<DWORD>(content.size() - total);
+                if (!::ReadFile(file.Get(), content.data() + total, request, &got, nullptr))
+                {
+                    content.clear();
+                    return Refuse(display, "mod.json could not be read");
+                }
+                if (got == 0)
+                {
+                    break;
+                }
+                total += got;
+            }
+            content.resize(total);
+            if (total > ModSystem::kMaxManifestBytes)
+            {
+                content.clear();
+                return Refuse(display, "mod.json grew past the manifest size limit while it was read");
+            }
+            return ManifestRead::Read;
+        }
+#else
+        ManifestRead ModsRootReader::Read(const std::filesystem::path& directoryName, const std::string& display,
+                                          std::string& content) const
+        {
+            // One path component, opened relative to the held root without following a link:
+            // whatever now sits at that name must itself be a directory inside the root.
+            const ScopedFd directory(
+                ::openat(m_handle.Get(), directoryName.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+            if (directory.Get() < 0)
+            {
+                return Refuse(display, "the mod directory is no longer a plain directory");
+            }
+
+            // O_NONBLOCK keeps a FIFO planted as mod.json from blocking the open; the fstat
+            // below refuses it (and every other non-regular file) on the opened descriptor.
+            const ScopedFd file(
+                ::openat(directory.Get(), "mod.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC));
+            if (file.Get() < 0)
+            {
+                if (errno == ENOENT)
+                {
+                    return ManifestRead::Missing;
+                }
+                return Refuse(display, "mod.json is a link or cannot be opened");
+            }
+            struct stat info = {};
+            if (::fstat(file.Get(), &info) != 0 || !S_ISREG(info.st_mode))
+            {
+                return Refuse(display, "mod.json is not a regular file");
+            }
+            if (info.st_size < 0 || static_cast<std::uint64_t>(info.st_size) > ModSystem::kMaxManifestBytes)
+            {
+                return Refuse(display, "mod.json is above the manifest size limit");
+            }
+
+            // The size above is a fast reject; the read itself is bounded to one byte past the
+            // limit, which is what caps memory if the file grows while it is read.
+            content.assign(ModSystem::kMaxManifestBytes + 1, '\0');
+            size_t total = 0;
+            while (total < content.size())
+            {
+                const ssize_t got = ::read(file.Get(), content.data() + total, content.size() - total);
+                if (got < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                if (got < 0)
+                {
+                    content.clear();
+                    return Refuse(display, "mod.json could not be read");
+                }
+                if (got == 0)
+                {
+                    break;
+                }
+                total += static_cast<size_t>(got);
+            }
+            content.resize(total);
+            if (total > ModSystem::kMaxManifestBytes)
+            {
+                content.clear();
+                return Refuse(display, "mod.json grew past the manifest size limit while it was read");
+            }
+            return ManifestRead::Read;
+        }
+#endif
+
         /// UTF-8 rendering of a native path. Never path::string(): on Windows that converts
         /// through the ANSI code page and throws for a name the code page cannot represent.
         std::string PathToUtf8(const std::filesystem::path& path)
@@ -205,6 +524,16 @@ namespace Spark
             return 0;
         }
 
+        // The root is trusted configuration; it is opened once here and every manifest is
+        // read relative to that handle, so nothing below it is re-resolved by path.
+        const ModsRootReader reader(canonicalRoot);
+        if (!reader.IsOpen())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "ModSystem: cannot open mods directory '%s'",
+                           modsDirectory.c_str());
+            return 0;
+        }
+
         // Every accepted manifest is parsed before anything is published, so an id that
         // two directories claim is known before either could shadow the other.
         std::map<std::string, std::vector<ModInfo>> scanned;
@@ -215,8 +544,18 @@ namespace Spark
             try
             {
                 const std::optional<fs::path> manifestPath = AcceptedModManifest(*it, canonicalRoot);
+                if (!manifestPath)
+                {
+                    continue;
+                }
+                if (m_manifestOpenProbe)
+                {
+                    m_manifestOpenProbe(PathToUtf8(it->path()));
+                }
+                std::string content;
                 ModInfo info;
-                if (manifestPath && ParseModJson(PathToUtf8(*manifestPath), info))
+                if (reader.Read(it->path().filename(), PathToUtf8(it->path()), content) == ManifestRead::Read &&
+                    ParseModJson(content, PathToUtf8(*manifestPath), info))
                 {
                     info.path = PathToUtf8(it->path());
                     std::string id = info.id;
@@ -346,6 +685,11 @@ namespace Spark
     void ModSystem::OnModUnloaded(std::function<void(const std::string&)> callback)
     {
         m_unloadCallbacks.push_back(std::move(callback));
+    }
+
+    void ModSystem::SetManifestOpenProbeForTesting(std::function<void(const std::string&)> probe)
+    {
+        m_manifestOpenProbe = std::move(probe);
     }
 
 } // namespace Spark
