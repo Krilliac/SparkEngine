@@ -271,6 +271,12 @@ namespace SparkInstaller
                 {
                     return false;
                 }
+                // JSON integers have no leading zeros ("01"), which from_chars accepts.
+                const char* digits = *first == '-' ? first + 1 : first;
+                if (end - digits > 1 && *digits == '0')
+                {
+                    return false;
+                }
                 m_pos += static_cast<std::size_t>(end - first);
                 out = value;
                 return true;

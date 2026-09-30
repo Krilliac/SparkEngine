@@ -246,7 +246,9 @@ target has hosted runtime evidence yet.
   strings, so every Windows destination read back with doubled backslashes and a ref
   holding a quote was cut short at the backslash. It also matched keys inside other
   values. `Load` is now a strict tokenizer for exactly the object `Save` writes: each key
-  once, no unknown keys, only `Save`'s escapes, and `std::from_chars` for the schema.
+  once, no unknown keys, only `Save`'s escapes, and `std::from_chars` for the schema
+  (without JSON's forbidden leading zeros, which a 60-second `SparkFuzzInstallState`
+  campaign found `from_chars` alone accepts as `01`).
   `Load` also refuses a compact document that would exceed the 64 KiB limit when
   `Save` writes it again; `Save` refuses raw controls it cannot encode and oversized
   output before replacing an existing marker. The pending marker used to be read

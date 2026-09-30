@@ -263,6 +263,10 @@ namespace
         failures += ExpectDocument("schema 99999999999999999999", StateDocument("99999999999999999999", ""), false);
         failures += ExpectDocument("schema 2", StateDocument("2", ""), false);
         failures += ExpectDocument("schema 1.5", StateDocument("1.5", ""), false);
+        // JSON has no leading zeros; from_chars alone reads "01" as 1 (SparkFuzzInstallState finding).
+        failures += ExpectDocument("schema 01", StateDocument("01", ""), false);
+        failures += ExpectDocument("schema 001", StateDocument("001", ""), false);
+        failures += ExpectDocument("schema -01", StateDocument("-01", ""), false);
         return failures;
     }
 
