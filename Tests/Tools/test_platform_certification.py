@@ -2174,15 +2174,20 @@ class TestPackageLocalThirdPartyCertifies(BundleTestCase):
 class TestCollectorMeasuresTheClosure(PackageTestCase):
     """collect_evidence records what the walk measured, never the plan's list."""
 
+    @staticmethod
+    def _row_closure() -> list[dict[str, str]]:
+        # A passing row probe must satisfy the same authority as its bundle.
+        # The old two-CRT fixture omitted libraries required by this row.
+        plan = collector.load_plan(REPO_ROOT / "docs/certification/plans" / f"{NULLRHI_ID}.json")
+        return pe_imports.parse_declaration(plan).closure
+
     def _plan(self, **extra: Any) -> Path:
         plan = {
             "schemaVersion": 1,
             "rowId": NULLRHI_ID,
             "probes": {"launch": {"command": [sys.executable, "-c", "pass"]}},
             "firstPartyImages": ["SparkEngine.exe"],
-            "dependencyClosure": self.closure(
-                ("msvcp140.dll", "vcredist"), ("vcruntime140.dll", "vcredist")
-            ),
+            "dependencyClosure": self._row_closure(),
         }
         plan.update(extra)
         path = self.tmp / "plan.json"
@@ -2202,7 +2207,8 @@ class TestCollectorMeasuresTheClosure(PackageTestCase):
         return probe, closure, artifact_dir
 
     def test_a_consistent_package_yields_a_measured_passing_probe(self) -> None:
-        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "vcruntime140.dll"]))
+        names = [entry["name"] for entry in self._row_closure()]
+        self.stage("SparkEngine.exe", build_pe(names))
         probe, closure, artifact_dir = self._measure(self._plan())
 
         self.assertEqual((probe["status"], probe["exitCode"]), ("pass", 0))
@@ -2214,7 +2220,7 @@ class TestCollectorMeasuresTheClosure(PackageTestCase):
             graph_paths[0], f"dependency_closure/{hashlib.sha256(graph_bytes).hexdigest()}.imports.json"
         )
 
-        self.assertEqual([entry["name"] for entry in closure], ["msvcp140.dll", "vcruntime140.dll"])
+        self.assertEqual([entry["name"] for entry in closure], names)
         finding = json.loads((artifact_dir / closure[0]["path"]).read_bytes())
         self.assertEqual(
             finding["imports"],
@@ -2236,11 +2242,22 @@ class TestCollectorMeasuresTheClosure(PackageTestCase):
         )
 
     def test_an_undeclared_import_makes_the_probe_fail(self) -> None:
-        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "vcruntime140.dll", "SDL2.dll"]))
+        names = [entry["name"] for entry in self._row_closure()]
+        self.stage("SparkEngine.exe", build_pe(names + ["SDL2.dll"]))
         self.stage("SDL2.dll", build_pe())
         probe, closure, _artifact_dir = self._measure(self._plan())
         self.assertEqual((probe["status"], probe["exitCode"]), ("fail", 1))
         self.assertIn("package-local 'sdl2.dll' (imported by SparkEngine.exe) is neither", probe["detail"])
+        self.assertIsNotNone(closure)
+
+    def test_an_incomplete_row_declaration_makes_the_probe_fail(self) -> None:
+        self.stage("SparkEngine.exe", build_pe(["msvcp140.dll", "vcruntime140.dll"]))
+        plan = self._plan(dependencyClosure=self.closure(
+            ("msvcp140.dll", "vcredist"), ("vcruntime140.dll", "vcredist")
+        ))
+        probe, closure, _artifact_dir = self._measure(plan)
+        self.assertEqual((probe["status"], probe["exitCode"]), ("fail", 1))
+        self.assertIn("dependencyClosure is missing 'vcruntime140_1.dll'", probe["detail"])
         self.assertIsNotNone(closure)
 
     def test_an_unmeasurable_package_records_no_closure(self) -> None:
@@ -3168,6 +3185,7 @@ class TestRowProbePlans(unittest.TestCase):
         for row_id in (D3D11_ID, NULLRHI_ID):
             plan = copy.deepcopy(self._plan(row_id))
             plan["uncoveredCategories"].pop("dependency_closure", None)
+            plan.pop("dependencyClosure", None)
             self.assertIn(
                 "category 'dependency_closure' is neither probed nor declared uncovered",
                 self._errors(plan),
@@ -3184,6 +3202,32 @@ class TestRowProbePlans(unittest.TestCase):
             "category 'dependency_closure' is neither probed nor declared uncovered",
             self._errors(plan),
         )
+
+    def test_windows_row_plans_declare_a_measured_closure(self) -> None:
+        """PLT-200: each Windows row declares the closure its package walk measured.
+
+        The declaration must name every platformRuntime library the authority
+        requires for the row, carry versions the authority's patterns accept,
+        and no longer list dependency_closure as uncovered.  Whether the names
+        match the real package is proven by WindowsCertification_PackageDependencyClosure,
+        which walks a freshly staged package against these plans.
+        """
+        for row_id in (D3D11_ID, NULLRHI_ID):
+            plan = self._plan(row_id)
+            declaration = pe_imports.parse_declaration(plan)
+            self.assertTrue(declaration.closure, row_id)
+            self.assertIn("sparkengine.exe", declaration.first_party, row_id)
+            self.assertNotIn("dependency_closure", plan.get("uncoveredCategories", {}), row_id)
+            declared = {entry["name"].casefold(): entry for entry in declaration.closure}
+            for entry in AUTHORITY.document["platformRuntime"]:
+                name = entry["name"].casefold()
+                if row_id in entry["requiredForRows"]:
+                    self.assertIn(name, declared, f"{row_id} omits required {name}")
+                if name in declared:
+                    self.assertEqual(declared[name]["source"], entry["source"], f"{row_id} {name}")
+                    pattern = da.compile_version_pattern(entry)
+                    self.assertIsNotNone(pattern, name)
+                    self.assertRegex(declared[name]["version"], pattern, f"{row_id} {name}")
 
 
 class TestLedgerConsistency(BundleTestCase):

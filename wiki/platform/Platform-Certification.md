@@ -140,11 +140,10 @@ command that already exists; categories with no implementation are listed under
 | | `launch` | `ctest --test-dir build/windows-shipping -C MinSizeRel -R ^NullRHI_Windows_FPSLifecycle$ --no-tests=error` |
 | `win11-x64-msvc143-d3d11` | `build` | same Shipping build |
 | | `content`, `save` | `ctest ... -R ^FPSPackage_InstalledRuntime$ --no-tests=error` |
+| both | `dependency_closure` | `collect_evidence.py --package-root <staged bin/>` against the plan's declared closure |
 
 Uncovered today: `install`/`uninstall`/`upgrade`/`rollback` (the MSI qualifier needs per-run
-arguments and predecessor packages; INST-130, REL-100 and REL-110), `crash` (OPS-100), and
-`dependency_closure` (the measurement exists, see below, but no MSVC package has been walked, so
-no plan can yet declare the closure it would be compared against). The NullRHI row
+arguments and predecessor packages; INST-130, REL-100 and REL-110) and `crash` (OPS-100). The NullRHI row
 also leaves out `save`, because the only save/reload proof runs D3D11 WARP. The D3D11 row also
 leaves out `launch` and `renderer`, because every D3D11 test forces WARP, plus `input` and
 `audio`. The validator refuses to certify a row with any category missing, so both rows stay
@@ -190,6 +189,46 @@ depends on the package, which the bundle does not carry. The validator trusts th
 attested collector run and pins it only to a package-root image of the same name. The plan's
 `firstPartyImages` list is also a declaration. It is checked against OS-owned, runtime and
 third-party names, but not against the build's real targets.
+
+#### The declared Windows closure
+
+Both Windows row plans retain the historical `firstPartyImages` and `dependencyClosure`
+declaration from the 256603c1c Shipping install on 2026-09-29. This is a regression baseline,
+not current-tree evidence. **Remeasurement of the current Shipping install remains pending.**
+The prior lane's image counts are not used as proof. No readiness status is promoted here.
+
+CTest `WindowsCertification_PackageDependencyClosure` installs the component set from
+`cmake/SparkCPackOptions.cmake` into a unique prefix. It requires MinSizeRel and is registered
+for the `windows-shipping` product set. The required `build-windows-shipping` CI job calls the
+same driver directly, including when `BUILD_TESTS=OFF`.
+
+The driver applies both existing checks:
+
+- `tools/pe_import_closure.py` requires imported CRT DLLs beside the importing image and checks
+  OS imports against System32 on Windows. A VC runtime installed on the developer host cannot
+  satisfy a missing packaged DLL.
+- `Tools/platform-cert/pe_imports.py` records the import and delay-import graph, verifies the
+  first-party images and declared dependencies, and applies the row's dependency authority
+  rules for names, sources, versions and duplicates. Shipped OS-owned images are refused even
+  when nothing imports them.
+
+Each run retains JSON import graphs (including image SHA-256 and size), install logs and checker
+logs beneath `build/windows-shipping/package-closure/MinSizeRel/run-*` when run through CTest.
+The install subtree is removed only after both checks pass; failed stages remain for diagnosis.
+CI uses `build/shipping-closure/run-*` and uploads the reports as `shipping-closure-<commit>`.
+These reports describe the measured bytes; physical-host certification still needs the attested
+collector workflow below.
+
+From an MSVC developer shell, after the Shipping build has completed:
+
+```powershell
+ctest --test-dir build/windows-shipping -C MinSizeRel `
+  -R '^WindowsCertification_PackageDependencyClosure$' --no-tests=error --output-on-failure
+```
+
+A new import or missing DLL must be investigated before updating the declaration. Never copy a
+prior graph as evidence for a new tree. `pe_imports.py` does not read DLL file versions: refresh
+those declaration values from the newly staged CRT and the measurement host's System32 files.
 
 The reader is bounded: 512 MiB per image, 96 sections, 16 data directories, 4096 descriptors per
 directory, and 255-byte names. Truncated headers, an RVA outside every section, PE32 or non-AMD64
@@ -269,3 +308,4 @@ the v0.9.0 qualification step fails closed.
 - **Created:** 2026-08-28 for PLT-200
 - **Commit:** `360c05e883d4d5d1c0d050455a5cbb226cce3ffc`
 - **Status:** Infrastructure complete; evidence collection pending
+- **Updated:** 2026-09-30: fresh-stage closure enforcement and retained reports; current-tree measurement pending

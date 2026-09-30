@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4274,
+      "line": 4297,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4312,
+      "line": 4335,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1392,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4481,
+      "line": 4504,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1418,7 +1418,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4722,
+      "line": 4745,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2756,10 +2756,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5388,
+      "line": 5411,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5386",
+          "id": "Tests/CMakeLists.txt:5409",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -5023,7 +5023,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5388,
+          "line": 5411,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -10804,7 +10804,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 20,
+        "stepCount": 22,
         "steps": [
           {
             "index": 0,
@@ -10868,6 +10868,30 @@
           },
           {
             "index": 5,
+            "name": "Verify Shipping runtime dependency closure (PLT-200)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "b9e48a9367a24c28"
+          },
+          {
+            "index": 6,
+            "name": "Upload Windows Shipping dependency closure",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 7,
             "name": "Upload Windows Shipping private symbols",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -10879,7 +10903,7 @@
             "runDigest": ""
           },
           {
-            "index": 6,
+            "index": 8,
             "name": "Capture Windows Shipping provenance",
             "id": "",
             "uses": "",
@@ -10891,7 +10915,7 @@
             "runDigest": "eaaff83d3b3b01dd"
           },
           {
-            "index": 7,
+            "index": 9,
             "name": "Verify Shipping is a distinct configuration (BLD-100)",
             "id": "",
             "uses": "",
@@ -10903,7 +10927,7 @@
             "runDigest": "8963db5f9c2a7690"
           },
           {
-            "index": 8,
+            "index": 10,
             "name": "Install the Windows Shipping SDK for the consumer profile",
             "id": "",
             "uses": "",
@@ -10915,7 +10939,7 @@
             "runDigest": "36f226b69437d456"
           },
           {
-            "index": 9,
+            "index": 11,
             "name": "Configure and build the Windows validation lane",
             "id": "",
             "uses": "",
@@ -10927,7 +10951,7 @@
             "runDigest": "5605dbef17f25623"
           },
           {
-            "index": 10,
+            "index": 12,
             "name": "Capture Windows validation provenance",
             "id": "",
             "uses": "",
@@ -10939,7 +10963,7 @@
             "runDigest": "3460874c75995c44"
           },
           {
-            "index": 11,
+            "index": 13,
             "name": "Configure and build the installed SDK consumer lane",
             "id": "",
             "uses": "",
@@ -10951,7 +10975,7 @@
             "runDigest": "9cd61c1b24e1a4ef"
           },
           {
-            "index": 12,
+            "index": 14,
             "name": "Capture installed SDK consumer provenance",
             "id": "",
             "uses": "",
@@ -10963,7 +10987,7 @@
             "runDigest": "22ba85fa35d4e34d"
           },
           {
-            "index": 13,
+            "index": 15,
             "name": "Generate the configured build-matrix inventory",
             "id": "",
             "uses": "",
@@ -10975,7 +10999,7 @@
             "runDigest": "e3982ce2ce04dc8f"
           },
           {
-            "index": 14,
+            "index": 16,
             "name": "Check the configured build matrix",
             "id": "build-matrix-parity",
             "uses": "",
@@ -10987,7 +11011,7 @@
             "runDigest": "847469c7e07435aa"
           },
           {
-            "index": 15,
+            "index": 17,
             "name": "Package Windows Shipping MSI for package-smoke consumer",
             "id": "",
             "uses": "",
@@ -10999,7 +11023,7 @@
             "runDigest": "9d7b1cdb557b7c1f"
           },
           {
-            "index": 16,
+            "index": 18,
             "name": "Upload exact Windows Shipping MSI for package smoke",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11011,7 +11035,7 @@
             "runDigest": ""
           },
           {
-            "index": 17,
+            "index": 19,
             "name": "Upload Windows Shipping MSI packaging diagnostics",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11023,7 +11047,7 @@
             "runDigest": ""
           },
           {
-            "index": 18,
+            "index": 20,
             "name": "Upload build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11035,7 +11059,7 @@
             "runDigest": ""
           },
           {
-            "index": 19,
+            "index": 21,
             "name": "Record build-matrix evidence",
             "id": "",
             "uses": "",
@@ -15568,8 +15592,27 @@
       },
       {
         "job": "build-windows-shipping",
+        "step": "Verify Shipping runtime dependency closure (PLT-200)",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "other",
+        "command": "cmake  \"-DSPARK_ENGINE_BUILD_DIR=${{ github.workspace }}/build/windows-shipping\"  \"-DSPARK_SOURCE_ROOT=${{ github.workspace }}\"  -DSPARK_CONFIG=MinSizeRel  \"-DSPARK_TEST_ROOT=${{ github.workspace }}/build/shipping-closure\"  \"-DSPARK_PYTHON_EXECUTABLE=$(python -c 'import sys; print(sys.executable)')\"  -P Tests/PackageSmoke/VerifyWindowsPackageClosure.cmake",
+        "commandProvenance": "literal",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
         "step": "Install the Windows Shipping SDK for the consumer profile",
-        "stepIndex": 8,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15591,7 +15634,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 9,
+        "stepIndex": 11,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15612,7 +15655,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 9,
+        "stepIndex": 11,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15639,7 +15682,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15667,7 +15710,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15694,7 +15737,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15717,7 +15760,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Package Windows Shipping MSI for package-smoke consumer",
-        "stepIndex": 15,
+        "stepIndex": 17,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17851,7 +17894,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 9,
+        "stepIndex": 11,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17872,7 +17915,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -18962,7 +19005,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 9,
+        "stepIndex": 11,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -18989,7 +19032,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -19970,7 +20013,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 11,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20505,7 +20548,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture Windows Shipping provenance",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20533,7 +20576,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture Windows validation provenance",
-        "stepIndex": 10,
+        "stepIndex": 12,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20561,7 +20604,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture installed SDK consumer provenance",
-        "stepIndex": 12,
+        "stepIndex": 14,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20589,7 +20632,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Generate the configured build-matrix inventory",
-        "stepIndex": 13,
+        "stepIndex": 15,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20621,7 +20664,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check the configured build matrix",
-        "stepIndex": 14,
+        "stepIndex": 16,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20649,7 +20692,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check the configured build matrix",
-        "stepIndex": 14,
+        "stepIndex": 16,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -21054,7 +21097,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the Windows validation lane",
-      "stepIndex": 9,
+      "stepIndex": 11,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",
@@ -21075,7 +21118,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the installed SDK consumer lane",
-      "stepIndex": 11,
+      "stepIndex": 13,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",
