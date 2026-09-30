@@ -36,13 +36,17 @@ Committed baselines:
 Both Linux rows are compared in `.github/workflows/build.yml` CI by the
 Mesa-pinned `golden-linux` job. It is advisory (not a `required-ci-gate`
 dependency) until its first hosted pass, and becomes required after that pass is
-recorded. It fails first if the runner's `libgl1-mesa-dri` or
-`mesa-vulkan-drivers` is not `25.2.8-0ubuntu0.24.04.2`, and then runs
+recorded. It installs the Mesa binaries it uses at `25.2.8-0ubuntu0.24.04.2`
+explicitly (on 2026-09-30 `noble-updates` moved to `.3`, a Wayland-EGL-only
+change, while `noble-security` still publishes `.2`, the same build), fails if
+`libgl1-mesa-dri`, `mesa-vulkan-drivers` or any other installed Mesa binary is
+still not `25.2.8-0ubuntu0.24.04.2`, and then runs
 `ctest -L '^(opengl-golden|vulkan-golden)$'`. Until that promotion,
 `build-linux-gcc` and `build-linux-clang` also keep running both golden CTest
 entries, so a required job still compares the baselines; promotion excludes them
-there and makes `golden-linux` the single comparison. If Ubuntu moves Mesa,
-re-render and re-review the baselines as described below.
+there and makes `golden-linux` the single comparison. If Ubuntu stops publishing
+the reviewed build (or the owner chooses a newer one), re-render and re-review
+the baselines as described below.
 
 - `d3d11-warp/`: `PostPass_TonemapACES`, `PostPass_Bloom`, `PostPass_FXAA`
   and `PostPass_GTAO`, the production `PostProcessingPipeline` passes (embedded
